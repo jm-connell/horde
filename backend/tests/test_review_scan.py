@@ -1,11 +1,14 @@
 """Manual Import-page folder scan: new files and skipped (unimported) videos."""
 
+import threading
 from pathlib import Path
 
 from sqlmodel import Session
 
 from app.models import Video
-from app.services import scanner
+from app.services import metadata, scanner
+from app.services.ffmpeg_progress import FfmpegCancelled
+from app.services.workers import BackgroundWorker
 
 
 def _write_media(path: Path, size: int = 256) -> None:
@@ -33,7 +36,7 @@ def test_scan_ingests_file_not_in_library(client, init_db, monkeypatch):
     assert body["added"] == 1
     assert body["requeued"] == 0
 
-    queue = client.get("/api/review").json()
+    queue = client.get("/api/review").json()["items"]
     assert len(queue) == 1
     assert queue[0]["file_path"] == "imports/dropped.mp4"
     assert queue[0]["needs_review"] is True
@@ -49,7 +52,9 @@ def test_scan_requeues_skipped_manual_import(client, add_video, monkeypatch):
         file_path="imports/parked.mp4",
         write_file=True,
     )
-    assert skipped.id not in {row["id"] for row in client.get("/api/review").json()}
+    assert skipped.id not in {
+        row["id"] for row in client.get("/api/review").json()["items"]
+    }
 
     resp = client.post("/api/review/scan")
     assert resp.status_code == 200
@@ -57,7 +62,7 @@ def test_scan_requeues_skipped_manual_import(client, add_video, monkeypatch):
     assert body["added"] == 0
     assert body["requeued"] == 1
 
-    queue = client.get("/api/review").json()
+    queue = client.get("/api/review").json()["items"]
     assert [row["id"] for row in queue] == [skipped.id]
     assert queue[0]["needs_review"] is True
 
@@ -75,7 +80,7 @@ def test_scan_does_not_requeue_library_video(client, add_video, init_db, monkeyp
     resp = client.post("/api/review/scan")
     assert resp.status_code == 200
     assert resp.json() == {"added": 0, "requeued": 0}
-    assert client.get("/api/review").json() == []
+    assert client.get("/api/review").json()["items"] == []
 
     with Session(init_db["engine"]) as session:
         row = session.get(Video, ready.id)
@@ -120,12 +125,10 @@ def test_scan_does_not_requeue_youtube_download_without_channel(
     resp = client.post("/api/review/scan")
     assert resp.status_code == 200
     assert resp.json() == {"added": 0, "requeued": 0}
-    assert client.get("/api/review").json() == []
+    assert client.get("/api/review").json()["items"] == []
 
 
-def test_scan_readds_file_after_db_row_deleted(
-    client, add_video, init_db, monkeypatch
-):
+def test_scan_readds_file_after_db_row_deleted(client, add_video, init_db, monkeypatch):
     _stub_ingest(monkeypatch)
     video = add_video(
         title="Removed",
@@ -137,13 +140,45 @@ def test_scan_readds_file_after_db_row_deleted(
     deleted = client.delete(f"/api/videos/{video.id}?delete_file=false")
     assert deleted.status_code == 204
     assert (init_db["downloads"] / "imports" / "removed.mp4").exists()
-    assert client.get("/api/review").json() == []
+    assert client.get("/api/review").json()["items"] == []
 
     resp = client.post("/api/review/scan")
     assert resp.status_code == 200
     assert resp.json()["added"] == 1
     assert resp.json()["requeued"] == 0
-    queue = client.get("/api/review").json()
+    queue = client.get("/api/review").json()["items"]
     assert len(queue) == 1
     assert queue[0]["file_path"] == "imports/removed.mp4"
     assert queue[0]["needs_review"] is True
+
+
+def test_stopping_the_poller_ends_the_thumbnail_grab_of_a_new_file(
+    init_db, monkeypatch
+):
+    _stub_ingest(monkeypatch)
+    monkeypatch.setattr(scanner, "grab_frame", metadata.grab_frame)
+    monkeypatch.setattr(metadata, "ffmpeg_bin", lambda: "ffmpeg")
+    monkeypatch.setattr(
+        "app.services.sprites.enqueue_sprite_generation", lambda *a, **k: None
+    )
+    _write_media(init_db["downloads"] / "imports" / "slow.mp4")
+    grabbing = threading.Event()
+
+    release = threading.Event()
+
+    def blocked_ffmpeg(_cmd, *, timeout, cancel_event=None, **_kw):
+        # Like a real ffmpeg: runs until it is cancelled (or, with no cancel event,
+        # until the safety release below).
+        grabbing.set()
+        (cancel_event or release).wait(10)
+        raise FfmpegCancelled()
+
+    monkeypatch.setattr(metadata, "run_ffmpeg", blocked_ffmpeg)
+    worker = BackgroundWorker("scanner-poller", scanner._polling_loop)
+    worker.start()
+    try:
+        assert grabbing.wait(10), "the poller never reached the thumbnail grab"
+        assert worker.stop(timeout=5), "scanner-poller did not stop"
+    finally:
+        release.set()
+        worker.stop(timeout=15)

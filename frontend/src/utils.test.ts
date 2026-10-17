@@ -3,6 +3,7 @@ import {
   dedupeSubtitleTracks,
   effectiveSourceUrl,
   formatSize,
+  safeHref,
   formatTimestamp,
   formatUsdCost,
   formatOpenRouterPerMillion,
@@ -76,7 +77,9 @@ describe("watchProcessingLabel", () => {
   it("joins in-flight summary and preview work", () => {
     expect(watchProcessingLabel({})).toBeNull();
     expect(watchProcessingLabel({ processing_summary: true })).toBe("summary");
-    expect(watchProcessingLabel({ processing_chapters: true })).toBe("chapters");
+    expect(watchProcessingLabel({ processing_chapters: true })).toBe(
+      "chapters"
+    );
     expect(watchProcessingLabel({ processing_sprites: true })).toBe("previews");
     expect(
       watchProcessingLabel({
@@ -167,9 +170,9 @@ describe("misc helpers", () => {
     expect(formatViewCount(1_500_000)).toBe("1.5M views");
     expect(formatCompactCount(23_000)).toBe("23K");
     expect(formatLikeRatio(92, 8)).toBe("92%");
-    expect(
-      joinDotList(["Sep 5, 2026", "83K views", "99%", "", null])
-    ).toBe("Sep 5, 2026 · 83K views · 99%");
+    expect(joinDotList(["Sep 5, 2026", "83K views", "99%", "", null])).toBe(
+      "Sep 5, 2026 · 83K views · 99%"
+    );
   });
   it("effectiveSourceUrl falls back to path id", () => {
     expect(
@@ -231,9 +234,9 @@ describe("youtubeListThumbnailUrl", () => {
 describe("youtubeVideoIdFromUrl", () => {
   it("parses watch, short, and ytimg URLs", () => {
     expect(youtubeVideoIdFromUrl("dQw4w9WgXcQ")).toBe("dQw4w9WgXcQ");
-    expect(
-      youtubeVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?t=12")
-    ).toBe("dQw4w9WgXcQ");
+    expect(youtubeVideoIdFromUrl("https://youtu.be/dQw4w9WgXcQ?t=12")).toBe(
+      "dQw4w9WgXcQ"
+    );
     expect(
       youtubeVideoIdFromUrl(
         "https://i.ytimg.com/vi/dQw4w9WgXcQ/maxresdefault.jpg"
@@ -247,5 +250,24 @@ describe("moveItem", () => {
     expect(moveItem(["a", "b", "c", "d"], 0, 2)).toEqual(["b", "c", "a", "d"]);
     expect(moveItem(["a", "b", "c"], 2, 0)).toEqual(["c", "a", "b"]);
     expect(moveItem(["a", "b"], 0, 0)).toEqual(["a", "b"]);
+  });
+});
+
+describe("safeHref", () => {
+  it("passes http and https URLs", () => {
+    expect(safeHref("https://example.com/a?b=1")).toBe(
+      "https://example.com/a?b=1"
+    );
+    expect(safeHref(" http://example.com ")).toBe("http://example.com/");
+  });
+
+  it("drops every other scheme and bad input", () => {
+    expect(safeHref("javascript:alert(1)")).toBeUndefined();
+    expect(safeHref("JaVaScRiPt:alert(1)")).toBeUndefined();
+    expect(safeHref("data:text/html,<script>")).toBeUndefined();
+    expect(safeHref("//evil.example/x")).toBeUndefined();
+    expect(safeHref("not a url")).toBeUndefined();
+    expect(safeHref("")).toBeUndefined();
+    expect(safeHref(null)).toBeUndefined();
   });
 });

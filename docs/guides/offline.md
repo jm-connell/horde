@@ -19,7 +19,13 @@ YouTube app's downloads work.
 
 After the first visit, the UI (scripts, styles, icons) is cached by a service
 worker. Later launches don't re-download it, even on a slow connection;
-updates are fetched in the background and apply on the next launch.
+new versions are fetched in the background but never swapped in under you:
+an **Update available** notice with a **Reload** button appears, and the new
+version starts when you press it (or the next time every Horde tab has been
+closed). Tabs that were open before an update keep working until reloaded,
+because the previous version's files are kept for one release. If you are
+coming from a release older than this one, fully close the app (all tabs) once:
+the old service worker has no update prompt.
 
 ## Downloading videos
 
@@ -45,6 +51,11 @@ The old behaviour — saving the raw file to the device's Downloads folder — i
 still available as **•••** → **Save file to device**, **Save files** in
 library select mode, and **Save file** on device download job cards.
 
+!!! note "Storage full"
+    If the device runs out of space during a download, Horde removes the
+    partial download, marks it as failed and shows how much storage is free.
+    Remove other offline videos and retry.
+
 !!! note "Storage"
     Horde asks the browser to keep downloads persistent, but the OS may still
     reclaim space when the device is very low on storage. iOS keeps far more
@@ -66,7 +77,20 @@ In **offline mode**:
 
 - Home shows only downloaded videos, and they play from local storage.
 - Playlists, History, Download and Import are greyed out.
-- Watch progress is saved locally and synced to the server when you're back.
+- Downloaded videos resume where **you** left off, not where someone else
+  using the device did: each account has its own place in a saved video.
+  Opened while online, a saved video resumes from your latest position on any
+  device (or from a newer one this device has not sent yet).
+- Watch progress is saved locally and synced to the server when you're back,
+  to the account that was signed in while you watched. It is sent with the
+  time you watched, so it never rewinds a video you have since watched further
+  on another device. If someone else signs
+  in on the device first, your positions wait for you (for up to 30 days)
+  instead of landing in their history.
+  If the signed-in account changes while positions are syncing (another tab
+  signs in), the sync stops and carries on for the new account.
+  A position the server refuses for good (the video was deleted) is dropped;
+  one that hits a server error stays queued and is retried next time.
 
 If Horde went offline **by itself** (server unreachable), it keeps checking in
 the background with a tiny `/api/ping` request (backing off from 3 s to once a
@@ -131,8 +155,8 @@ This stays private to your tailnet: nothing is exposed to the internet.
 
 Any reverse proxy with a trusted certificate works, for example
 [Caddy](../ops/remote-access.md#caddy-basic-auth), Nginx Proxy Manager or
-Traefik. Horde has **no login**, so if the hostname is reachable from the
-internet, put authentication on the proxy as the remote-access guide
+Traefik. Horde has its own sign-in, but if the hostname is reachable from the
+internet, also put authentication on the proxy as the remote-access guide
 describes.
 
 ### Check that it worked

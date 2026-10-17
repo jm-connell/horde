@@ -1,5 +1,6 @@
 import { useState } from "react";
 
+import { getItem, setItem } from "../storage";
 /**
  * Plain-language explanation of why offline features need HTTPS, with setup
  * pointers. Shown on the Offline page, when tapping Download over plain
@@ -20,8 +21,8 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
       <div className="space-y-2 text-sm text-gray-300">
         <p>
           This browser isn&apos;t letting Horde store videos on the device.
-          Private / incognito windows usually block it — try a normal window,
-          or install Horde to your home screen.
+          Private / incognito windows usually block it — try a normal window, or
+          install Horde to your home screen.
         </p>
       </div>
     );
@@ -36,20 +37,26 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
         <strong>https://</strong> addresses.
       </p>
       <p>
-        You&apos;re using <code className="text-gray-100">{window.location.origin}</code>,
-        which is plain http, so these features are off. Everything else works
+        You&apos;re using{" "}
+        <code className="text-gray-100">{window.location.origin}</code>, which
+        is plain http, so these features are off. Everything else works
         normally.
       </p>
       {!compact && (
         <>
-          <p className="font-medium text-gray-200">To turn them on, reach Horde over HTTPS:</p>
+          <p className="font-medium text-gray-200">
+            To turn them on, reach Horde over HTTPS:
+          </p>
           <ul className="list-disc space-y-1 pl-5">
             <li>
-              <strong>Tailscale</strong> (easiest): enable HTTPS certificates
-              in the Tailscale admin console, run{" "}
+              <strong>Tailscale</strong> (easiest): enable HTTPS certificates in
+              the Tailscale admin console, run{" "}
               <code className="text-gray-100">tailscale serve --bg 8686</code>{" "}
               on the Horde host, then open{" "}
-              <code className="text-gray-100">https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net</code>.
+              <code className="text-gray-100">
+                https://&lt;machine&gt;.&lt;tailnet&gt;.ts.net
+              </code>
+              .
             </li>
             <li>
               <strong>Reverse proxy</strong> with a certificate (Caddy, Nginx
@@ -75,11 +82,7 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
 const NOTICE_KEY = "horde:httpsNoticeDismissed";
 
 function readDismissed(): boolean {
-  try {
-    return localStorage.getItem(NOTICE_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return getItem(NOTICE_KEY) === "1";
 }
 
 /** One-time Home notice when Horde is opened over plain http. */
@@ -89,11 +92,8 @@ export function HttpsNotice() {
   if (dismissed || isSecure()) return null;
   const dismiss = () => {
     setDismissed(true);
-    try {
-      localStorage.setItem(NOTICE_KEY, "1");
-    } catch {
-      // Blocked storage: the notice just comes back next visit.
-    }
+    // Blocked storage: the notice just comes back next visit.
+    setItem(NOTICE_KEY, "1");
   };
   return (
     <div
@@ -103,8 +103,7 @@ export function HttpsNotice() {
       <div className="flex items-start gap-3">
         <p className="min-w-0 flex-1 text-gray-200">
           <strong>Offline videos &amp; the installable app are off</strong>{" "}
-          because Horde is open over plain http. They need an https://
-          address.{" "}
+          because Horde is open over plain http. They need an https:// address.{" "}
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}

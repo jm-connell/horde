@@ -7,6 +7,7 @@ import {
   itemProgress,
   useConnectivity,
   useOfflineDownloads,
+  useOfflineResumePositions,
 } from "../offline/hooks";
 import { offlineManager } from "../offline/manager";
 import HttpsHelp from "../components/HttpsHelp";
@@ -24,6 +25,7 @@ function Thumb({ item, className }: { item: OfflineItem; className: string }) {
     <div className={`relative overflow-hidden bg-ink-800 ${className}`}>
       {failed ? null : (
         <img
+          decoding="async"
           src={thumbUrl(item)}
           alt=""
           loading="lazy"
@@ -72,11 +74,16 @@ function DownloadingRow({
           : "Downloading";
   return (
     <li className="ui-panel flex gap-3 rounded-lg border border-ink-700 bg-ink-900 p-3">
-      <Thumb item={item} className="h-14 w-24 shrink-0 rounded-lg sm:h-16 sm:w-28" />
+      <Thumb
+        item={item}
+        className="h-14 w-24 shrink-0 rounded-lg sm:h-16 sm:w-28"
+      />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium text-gray-100">{item.video.title}</p>
+        <p className="truncate text-sm font-medium text-gray-100">
+          {item.video.title}
+        </p>
         {item.video.channel ? (
-          <p className="truncate text-xs text-gray-500">{item.video.channel}</p>
+          <p className="truncate text-xs text-muted">{item.video.channel}</p>
         ) : null}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-700">
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
@@ -91,17 +98,26 @@ function DownloadingRow({
         </p>
         <div className="mt-2 flex flex-wrap gap-2">
           {item.status === "downloading" || item.status === "queued" ? (
-            <button className={btn} onClick={() => offlineManager.pause(item.videoId)}>
+            <button
+              className={btn}
+              onClick={() => offlineManager.pause(item.videoId)}
+            >
               Pause
             </button>
           ) : null}
           {item.status === "paused" ? (
-            <button className={btn} onClick={() => offlineManager.resume(item.videoId)}>
+            <button
+              className={btn}
+              onClick={() => offlineManager.resume(item.videoId)}
+            >
               Resume
             </button>
           ) : null}
           {item.status === "error" ? (
-            <button className={btn} onClick={() => void offlineManager.download(item.video)}>
+            <button
+              className={btn}
+              onClick={() => void offlineManager.download(item.video)}
+            >
               Retry
             </button>
           ) : null}
@@ -119,15 +135,18 @@ function DownloadingRow({
 
 function DownloadedCard({
   item,
+  positionSec,
   onRemove,
 }: {
   item: OfflineItem;
+  /** The signed-in account's place in it, on this device. */
+  positionSec: number;
   onRemove: (item: OfflineItem) => void;
 }) {
   const v = item.video;
   const dur = v.duration_sec;
   const resume =
-    v.last_position_sec > 0 && dur ? Math.min(100, (v.last_position_sec / dur) * 100) : 0;
+    positionSec > 0 && dur ? Math.min(100, (positionSec / dur) * 100) : 0;
   return (
     <li className="group relative">
       <Link to={`/watch/${item.videoId}`} className="block">
@@ -140,21 +159,37 @@ function DownloadedCard({
           ) : null}
           {resume > 0 ? (
             <div className="absolute inset-x-0 bottom-0 h-1 bg-black/50">
-              <div className="h-full bg-accent" style={{ width: `${resume}%` }} />
+              <div
+                className="h-full bg-accent"
+                style={{ width: `${resume}%` }}
+              />
             </div>
           ) : null}
         </div>
-        <p className="mt-2 line-clamp-2 pr-7 text-sm font-medium text-gray-100">{v.title}</p>
-        {v.channel ? <p className="truncate text-xs text-gray-500">{v.channel}</p> : null}
+        <p className="mt-2 line-clamp-2 pr-7 text-sm font-medium text-gray-100">
+          {v.title}
+        </p>
+        {v.channel ? (
+          <p className="truncate text-xs text-muted">{v.channel}</p>
+        ) : null}
       </Link>
       <button
         type="button"
         aria-label={`Remove ${v.title} from this device`}
         title="Remove download"
         onClick={() => onRemove(item)}
-        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-gray-500 hover:bg-red-500/10 hover:text-red-400"
+        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-400"
       >
-        <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
           <path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v6M14 10v6" />
         </svg>
       </button>
@@ -162,11 +197,18 @@ function DownloadedCard({
   );
 }
 
-export default function OfflinePage({ embedded = false }: { embedded?: boolean }) {
+export default function OfflinePage({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
   const snap = useOfflineDownloads();
+  const positions = useOfflineResumePositions();
   const conn = useConnectivity();
   const remove = useRemove();
-  const [quota, setQuota] = useState<{ usage?: number; quota?: number } | null>(null);
+  const [quota, setQuota] = useState<{ usage?: number; quota?: number } | null>(
+    null
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -203,7 +245,10 @@ export default function OfflinePage({ embedded = false }: { embedded?: boolean }
     .join(" · ");
 
   return (
-    <div data-horde="offline-page" className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6">
+    <div
+      data-horde="offline-page"
+      className="mx-auto w-full max-w-[1600px] px-4 py-4 sm:px-6"
+    >
       {embedded ? (
         conn.status === "offline" ? (
           <div className="ui-panel mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-4 py-3">
@@ -220,9 +265,11 @@ export default function OfflinePage({ embedded = false }: { embedded?: boolean }
           </div>
         ) : null
       ) : (
-        <h1 className="mb-1 text-xl font-semibold text-gray-100">Offline videos</h1>
+        <h1 className="mb-1 text-xl font-semibold text-gray-100">
+          Offline videos
+        </h1>
       )}
-      <p className="mb-5 text-xs text-gray-500">{summary}</p>
+      <p className="mb-5 text-xs text-muted">{summary}</p>
 
       {snap.unsupported ? (
         <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
@@ -236,7 +283,7 @@ export default function OfflinePage({ embedded = false }: { embedded?: boolean }
       {!snap.unsupported && snap.ready && snap.items.length === 0 ? (
         <div className="py-16 text-center">
           <p className="text-lg text-gray-200">No downloads yet</p>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-muted">
             Tap Download on any video to save it for offline viewing.
           </p>
         </div>
@@ -267,7 +314,12 @@ export default function OfflinePage({ embedded = false }: { embedded?: boolean }
           </h2>
           <ul className="grid grid-cols-1 gap-x-4 gap-y-6 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {done.map((item) => (
-              <DownloadedCard key={item.videoId} item={item} onRemove={remove} />
+              <DownloadedCard
+                key={item.videoId}
+                item={item}
+                positionSec={positions.get(item.videoId) ?? 0}
+                onRemove={remove}
+              />
             ))}
           </ul>
         </section>

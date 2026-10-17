@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { backdropClick } from "../utils";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import LoadingIndicator from "./LoadingIndicator";
 import {
@@ -234,13 +242,12 @@ export default function ImageCropModal({
     return () => ro.disconnect();
   }, [src]);
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && !busy) onCancel();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [busy, onCancel]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, {
+    onEscape: () => {
+      if (!busy) onCancel();
+    },
+  });
 
   useEffect(() => {
     const el = viewportRef.current;
@@ -344,16 +351,18 @@ export default function ImageCropModal({
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={() => {
+      role="presentation"
+      onClick={backdropClick(() => {
         if (!busy) onCancel();
-      }}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="image-crop-title"
+      })}
     >
       <div
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6"
-        onClick={(event) => event.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="image-crop-title"
+        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto outline-none rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -371,7 +380,7 @@ export default function ImageCropModal({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="text-gray-500 hover:text-gray-300 disabled:opacity-50"
+            className="text-muted hover:text-gray-300 disabled:opacity-50"
             aria-label="Close"
           >
             ×
@@ -391,6 +400,7 @@ export default function ImageCropModal({
         >
           {src && !loadError ? (
             <img
+              decoding="async"
               ref={imageElRef}
               src={src}
               alt=""
@@ -441,7 +451,7 @@ export default function ImageCropModal({
           <div>
             <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
               <span>Zoom</span>
-              <span className="tabular-nums text-gray-500">
+              <span className="tabular-nums text-muted">
                 {crop.zoom.toFixed(2)}×
               </span>
             </span>
@@ -453,11 +463,10 @@ export default function ImageCropModal({
                 title="Zoom out"
                 onClick={() =>
                   setCrop((prev) =>
-                    zoomAtPoint(
-                      cropInput(prev),
-                      prev.zoom / ZOOM_STEP,
-                      { x: 0, y: 0 }
-                    )
+                    zoomAtPoint(cropInput(prev), prev.zoom / ZOOM_STEP, {
+                      x: 0,
+                      y: 0,
+                    })
                   )
                 }
                 className={controlButtonClass}
@@ -487,11 +496,10 @@ export default function ImageCropModal({
                 title="Zoom in"
                 onClick={() =>
                   setCrop((prev) =>
-                    zoomAtPoint(
-                      cropInput(prev),
-                      prev.zoom * ZOOM_STEP,
-                      { x: 0, y: 0 }
-                    )
+                    zoomAtPoint(cropInput(prev), prev.zoom * ZOOM_STEP, {
+                      x: 0,
+                      y: 0,
+                    })
                   )
                 }
                 className={controlButtonClass}
@@ -504,7 +512,7 @@ export default function ImageCropModal({
           <div>
             <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
               <span>Rotate</span>
-              <span className="tabular-nums text-gray-500">
+              <span className="tabular-nums text-muted">
                 {Math.round(crop.rotationDeg)}°
               </span>
             </span>

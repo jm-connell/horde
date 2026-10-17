@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api, thumbnailUrl } from "../api";
 import type { ChannelStat, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
@@ -54,6 +54,7 @@ export default function VideoEditForm({
   requireChannel = false,
   focusField,
 }: Props) {
+  const fieldId = useId();
   const notesRef = useRef<HTMLTextAreaElement>(null);
   const [draft, setDraft] = useState<DraftState>(toDraft(video));
   const [saving, setSaving] = useState(false);
@@ -117,6 +118,7 @@ export default function VideoEditForm({
     setCandidates([]);
     setCandIndex(0);
     setError(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when switching videos; a refreshed `video` object must not clobber in-progress edits
   }, [video.id]);
 
   const set = (key: keyof DraftState, value: string) =>
@@ -233,7 +235,9 @@ export default function VideoEditForm({
         setThumbVersion((v) => v + 1);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not generate thumbnails");
+      setError(
+        err instanceof Error ? err.message : "Could not generate thumbnails"
+      );
     } finally {
       setCandLoading(false);
     }
@@ -258,9 +262,9 @@ export default function VideoEditForm({
   const stats = [resLabel, sizeLabel, durLabel].filter(Boolean).join(" · ");
 
   const inputClass =
-    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent";
+    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
   const labelClass =
-    "mb-1 block text-xs font-medium uppercase tracking-wide text-gray-500";
+    "mb-1 block text-xs font-medium uppercase tracking-wide text-muted";
 
   const activeCand = candidates[candIndex];
   const previewSrc = activeCand
@@ -276,12 +280,16 @@ export default function VideoEditForm({
           <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-ink-800">
             {previewSrc ? (
               <img
+                loading="lazy"
+                decoding="async"
+                width={320}
+                height={180}
                 src={previewSrc}
                 alt={video.title}
                 className="h-full w-full object-cover"
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-ink-600">
+              <div className="flex h-full items-center justify-center text-muted">
                 No thumbnail
               </div>
             )}
@@ -309,7 +317,7 @@ export default function VideoEditForm({
               </>
             )}
           </div>
-          <div className="mt-3 space-y-1 text-xs text-gray-500">
+          <div className="mt-3 space-y-1 text-xs text-muted">
             <p className="truncate" title={video.file_path}>
               {video.file_path}
             </p>
@@ -345,6 +353,7 @@ export default function VideoEditForm({
           <div className="mt-2">
             <span className={labelClass}>Or thumbnail URL</span>
             <input
+              aria-label="Thumbnail URL"
               value={draft.thumbnail_url}
               onChange={(e) => set("thumbnail_url", e.target.value)}
               placeholder="https://..."
@@ -356,10 +365,11 @@ export default function VideoEditForm({
         <div className="space-y-3">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>
+              <label htmlFor={`${fieldId}-title`} className={labelClass}>
                 Title{requireChannel ? " *" : ""}
               </label>
               <input
+                id={`${fieldId}-title`}
                 value={draft.title}
                 onChange={(e) => set("title", e.target.value)}
                 className={inputClass}
@@ -383,8 +393,11 @@ export default function VideoEditForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Tags (comma separated)</label>
+              <label htmlFor={`${fieldId}-tags`} className={labelClass}>
+                Tags (comma separated)
+              </label>
               <input
+                id={`${fieldId}-tags`}
                 value={draft.tags}
                 onChange={(e) => set("tags", e.target.value)}
                 placeholder="music, live, 2024"
@@ -392,8 +405,11 @@ export default function VideoEditForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Publish date</label>
+              <label htmlFor={`${fieldId}-published_at`} className={labelClass}>
+                Publish date
+              </label>
               <input
+                id={`${fieldId}-published_at`}
                 type="date"
                 value={draft.published_at}
                 onChange={(e) => set("published_at", e.target.value)}
@@ -404,8 +420,11 @@ export default function VideoEditForm({
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
-              <label className={labelClass}>Source URL</label>
+              <label htmlFor={`${fieldId}-source_url`} className={labelClass}>
+                Source URL
+              </label>
               <input
+                id={`${fieldId}-source_url`}
                 value={draft.source_url}
                 onChange={(e) => set("source_url", e.target.value)}
                 placeholder="https://..."
@@ -413,8 +432,11 @@ export default function VideoEditForm({
               />
             </div>
             <div>
-              <label className={labelClass}>Channel URL</label>
+              <label htmlFor={`${fieldId}-channel_url`} className={labelClass}>
+                Channel URL
+              </label>
               <input
+                id={`${fieldId}-channel_url`}
                 value={draft.channel_url}
                 onChange={(e) => set("channel_url", e.target.value)}
                 placeholder="https://..."
@@ -424,8 +446,11 @@ export default function VideoEditForm({
           </div>
 
           <div>
-            <label className={labelClass}>Description</label>
+            <label htmlFor={`${fieldId}-description`} className={labelClass}>
+              Description
+            </label>
             <textarea
+              id={`${fieldId}-description`}
               value={draft.description}
               onChange={(e) => set("description", e.target.value)}
               rows={3}
@@ -435,9 +460,15 @@ export default function VideoEditForm({
 
           <div>
             <div className="mb-1 flex items-baseline justify-between gap-2">
-              <label className={labelClass + " mb-0"}>Notes</label>
+              <label
+                htmlFor={`${fieldId}-notes`}
+                className={labelClass + " mb-0"}
+              >
+                Notes
+              </label>
             </div>
             <textarea
+              id={`${fieldId}-notes`}
               ref={notesRef}
               value={draft.notes}
               onChange={(e) => set("notes", e.target.value)}

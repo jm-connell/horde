@@ -1,12 +1,14 @@
 """Library query helpers: filter, sort, continue-watching, tags, channels."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from app.services import library
 
 
 def _ago(days: int = 0, hours: int = 0) -> datetime:
-    return datetime.now(timezone.utc) - timedelta(days=days, hours=hours)
+    return datetime.now(UTC) - timedelta(days=days, hours=hours)
 
 
 def test_query_excludes_review_when_flagged(session, add_video):
@@ -97,52 +99,78 @@ def test_query_sort_title_and_file_size(session, add_video):
     assert sizes == [30, 20, 10]
 
 
-def test_continue_watching_skips_short_and_finished(session, add_video):
-    now = datetime.now(timezone.utc)
-    in_row = add_video(
-        title="Midway",
-        duration_sec=100.0,
-        last_position_sec=40.0,
-        last_watched_at=now,
+def test_continue_watching_skips_short_and_finished(
+    session, add_video, admin_user, set_watch
+):
+    now = datetime.now(UTC)
+    in_row = add_video(title="Midway", duration_sec=100.0)
+    set_watch(admin_user, in_row, 40.0, now)
+    set_watch(admin_user, add_video(title="Just opened", duration_sec=100.0), 10.0, now)
+    set_watch(admin_user, add_video(title="Finished", duration_sec=100.0), 95.0, now)
+    set_watch(
+        admin_user, add_video(title="Stale", duration_sec=100.0), 40.0, _ago(days=30)
     )
-    add_video(
-        title="Just opened",
-        duration_sec=100.0,
-        last_position_sec=10.0,
-        last_watched_at=now,
-    )
-    add_video(
-        title="Finished",
-        duration_sec=100.0,
-        last_position_sec=95.0,
-        last_watched_at=now,
-    )
-    add_video(
-        title="Stale",
-        duration_sec=100.0,
-        last_position_sec=40.0,
-        last_watched_at=_ago(days=30),
-    )
-    rows = library.query_videos(session, continue_watching=True)
+    rows = library.query_videos(session, continue_watching=True, user_id=admin_user.id)
     assert [v.id for v in rows] == [in_row.id]
 
 
-def test_expire_stale_progress(session, add_video):
-    stale = add_video(
-        title="Old",
-        last_position_sec=50.0,
-        last_watched_at=_ago(days=30),
-    )
-    fresh = add_video(
-        title="New",
-        last_position_sec=50.0,
-        last_watched_at=datetime.now(timezone.utc),
-    )
+def test_watch_state_queries_need_a_user(session):
+    with pytest.raises(ValueError, match="user_id"):
+        library.query_videos(session, continue_watching=True)
+    with pytest.raises(ValueError, match="user_id"):
+        library.query_videos(session, sort="last_watched_at")
+
+
+def test_last_watched_sort_uses_the_callers_history(
+    session, add_video, admin_user, member_user, set_watch
+):
+    a, b = add_video(title="A"), add_video(title="B")
+    set_watch(admin_user, a, 10.0, _ago(days=2))
+    set_watch(admin_user, b, 10.0, _ago(days=1))
+    set_watch(member_user, a, 10.0, _ago(hours=1))
+    order = lambda uid: [  # noqa: E731
+        v.title
+        for v in library.query_videos(
+            session, sort="last_watched_at", order="desc", user_id=uid
+        )
+    ]
+    assert order(admin_user.id) == ["B", "A"]
+    assert order(member_user.id) == ["A", "B"]
+
+
+def test_expire_stale_progress(session, add_video, admin_user, set_watch):
+    from app.models import UserVideoState
+
+    stale, fresh = add_video(title="Old"), add_video(title="New")
+    set_watch(admin_user, stale, 50.0, _ago(days=30))
+    set_watch(admin_user, fresh, 50.0, datetime.now(UTC))
     library.expire_stale_progress(session)
-    session.refresh(stale)
-    session.refresh(fresh)
-    assert stale.last_position_sec == 0.0
-    assert fresh.last_position_sec == 50.0
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 0.0
+    assert session.get(UserVideoState, (admin_user.id, fresh.id)).position_sec == 50.0
+
+
+def test_the_scanner_tick_expires_stale_progress(
+    session, add_video, admin_user, set_watch, monkeypatch
+):
+    """Expiry left the progress ping; the scanner's periodic pass must still run it."""
+    from app.logging_config import FailureLog
+    from app.models import UserVideoState
+    from app.services import scanner
+
+    stale = add_video(title="Old")
+    set_watch(admin_user, stale, 50.0, _ago(days=30))
+    monkeypatch.setattr(scanner, "scan_once", lambda **_k: None)
+    worker = type("W", (), {"stopping": False})()
+    failures = FailureLog(scanner.logger, "test")
+
+    scanner._scan_pass(worker, failures, failures, expire_progress=False)
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 50.0
+
+    scanner._scan_pass(worker, failures, failures, expire_progress=True)
+    session.expire_all()
+    assert session.get(UserVideoState, (admin_user.id, stale.id)).position_sec == 0.0
 
 
 def test_channel_stats_skips_review_and_sorts(session, add_video):
@@ -155,7 +183,7 @@ def test_channel_stats_skips_review_and_sorts(session, add_video):
         title="Review junk",
         channel="Alpha",
         needs_review=True,
-        added_at=datetime.now(timezone.utc),
+        added_at=datetime.now(UTC),
         file_path="imports/junk.mp4",
     )
     rows = library.channel_stats(session, sort="video_count", order="desc")
@@ -191,15 +219,12 @@ def test_rename_channel(session, add_video):
     add_video(title="B", channel="Old")
     add_video(title="C", channel="Keep")
     assert library.rename_channel(session, "Old", "New") == 2
-    names = {
-        v.channel
-        for v in library.query_videos(session, needs_review=False)
-    }
+    names = {v.channel for v in library.query_videos(session, needs_review=False)}
     assert names == {"New", "Keep"}
 
 
 def test_youtube_library_map_includes_published_at(session, add_video):
-    published = datetime(2020, 5, 1, tzinfo=timezone.utc)
+    published = datetime(2020, 5, 1, tzinfo=UTC)
     video = add_video(
         title="Dated",
         channel="LTT",

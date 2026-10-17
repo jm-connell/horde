@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import { usePlaybackSession } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
@@ -66,7 +67,10 @@ function likeRatioTitle(
   return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
 }
 
-function watchHref(entry: ChannelFeedEntry, channelName: string): string | null {
+function watchHref(
+  entry: ChannelFeedEntry,
+  channelName: string
+): string | null {
   if (entry.in_library && entry.video_id != null) {
     return `/watch/${entry.video_id}`;
   }
@@ -96,7 +100,11 @@ function FeedMetaRow({
   onDownload: () => void;
   onChannelClick?: () => void;
 }) {
-  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
+  const { can } = useAuth();
+  const dateLabel = formatPublishedAt(
+    entry.published_at,
+    entry.published_label
+  );
   const views =
     entry.view_count != null ? formatViewCount(entry.view_count) : "";
   const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
@@ -110,8 +118,12 @@ function FeedMetaRow({
         className="min-w-0 truncate text-xs leading-4 text-gray-400"
       />
       <span
-        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-gray-500"
-        title={likeTip ? `${stats}${stats ? " · " : ""}${likeTip}` : stats || undefined}
+        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-muted"
+        title={
+          likeTip
+            ? `${stats}${stats ? " · " : ""}${likeTip}`
+            : stats || undefined
+        }
       >
         {stats || "\u00a0"}
       </span>
@@ -120,7 +132,7 @@ function FeedMetaRow({
           <span className="text-xs font-medium leading-none text-emerald-400">
             Downloaded
           </span>
-        ) : (
+        ) : can("download") ? (
           <button
             type="button"
             onClick={(e) => {
@@ -133,9 +145,9 @@ function FeedMetaRow({
           >
             {downloading ? "Downloading" : "Download"}
           </button>
-        )}
+        ) : null}
         {maxRes ? (
-          <span className="ml-auto shrink-0 text-[10px] font-medium text-gray-500">
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted">
             {maxRes}
           </span>
         ) : null}
@@ -175,13 +187,16 @@ function FeedThumbnail({
         >
           {thumbSrc ? (
             <img
+              decoding="async"
+              width={320}
+              height={180}
               src={thumbSrc}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-ink-600">
+            <div className="flex h-full w-full items-center justify-center text-muted">
               <span className="text-4xl">▶</span>
             </div>
           )}
@@ -196,18 +211,16 @@ function FeedThumbnail({
         </div>
         <div
           className={`pointer-events-none absolute inset-0 z-10 flex items-center justify-center transition-opacity ${
-            previewing
-              ? "opacity-0"
-              : "opacity-0 group-hover:opacity-100"
+            previewing ? "opacity-0" : "opacity-0 group-hover:opacity-100"
           }`}
         >
-          <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-gray-100 ring-1 ring-white/20">
+          <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20">
             ▶
           </span>
         </div>
         {showDuration && duration && (
           <span
-            className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+            className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ${
               previewing ? "bottom-3.5" : "bottom-2"
             }`}
           >
@@ -244,10 +257,11 @@ export default function ChannelFeedCard({
   searchQuery?: string;
   onChannelClick?: (hit: { name: string; url: string | null }) => void;
 }) {
+  const { can } = useAuth();
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const { current } = usePlayback();
+  const { current } = usePlaybackSession();
   const libraryVideoId = videoId ?? entry.video_id ?? null;
   const previewSrc =
     inLibrary && libraryVideoId != null ? streamUrl(libraryVideoId) : null;
@@ -272,7 +286,10 @@ export default function ChannelFeedCard({
     return maxResCache.get(entry.url) ?? "";
   });
   const viewCount = entry.view_count;
-  const dateLabel = formatPublishedAt(entry.published_at, entry.published_label);
+  const dateLabel = formatPublishedAt(
+    entry.published_at,
+    entry.published_label
+  );
   const href = watchHref(
     {
       ...entry,
@@ -374,7 +391,7 @@ export default function ChannelFeedCard({
               />
             </span>
             <p
-              className="truncate text-xs leading-4 text-gray-500"
+              className="truncate text-xs leading-4 text-muted"
               title={
                 listLikeTip
                   ? `${listStats}${listStats ? " · " : ""}${listLikeTip}`
@@ -386,25 +403,27 @@ export default function ChannelFeedCard({
           </div>
           <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
             {!inLibrary ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  onDownload();
-                }}
-                disabled={downloading}
-                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
-              >
-                {downloading ? "Downloading" : "Download"}
-              </button>
+              can("download") ? (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onDownload();
+                  }}
+                  disabled={downloading}
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+                >
+                  {downloading ? "Downloading" : "Download"}
+                </button>
+              ) : null
             ) : (
               <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">
                 Downloaded
               </span>
             )}
             {maxRes && (
-              <span className="pb-0.5 text-[10px] font-medium text-gray-500">
+              <span className="pb-0.5 text-[10px] font-medium text-muted">
                 {maxRes}
               </span>
             )}

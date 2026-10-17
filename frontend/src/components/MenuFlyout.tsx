@@ -5,6 +5,7 @@ import {
   type HTMLAttributes,
   type ReactNode,
 } from "react";
+import { useMenuKeyboard, type MenuBehavior } from "../hooks/useMenuKeyboard";
 import { UI_MENU_SURFACE } from "../uiMenu";
 import Collapse from "./Collapse";
 import OverlayScrollThumb from "./OverlayScrollThumb";
@@ -33,7 +34,10 @@ export function useMenuPresence(open: boolean): boolean {
       setPresent(false);
       return;
     }
-    const t = window.setTimeout(() => setPresent(false), MENU_FLYOUT_UNMOUNT_MS);
+    const t = window.setTimeout(
+      () => setPresent(false),
+      MENU_FLYOUT_UNMOUNT_MS
+    );
     return () => window.clearTimeout(t);
   }, [open]);
 
@@ -45,17 +49,27 @@ export function MenuFlyout({
   open = true,
   unmountOnExit = true,
   className = "",
+  menu,
   children,
   ...rest
 }: {
   open?: boolean;
   /** When false, stay mounted while the parent owns exit timing. */
   unmountOnExit?: boolean;
+  /**
+   * Accessible menu/popup behaviour: role, focus on open, arrow keys, Escape
+   * and Tab handling. Menu items must be role="menuitem*" elements. Omit for
+   * widgets that bring their own semantics (combobox lists, listboxes).
+   */
+  menu?: MenuBehavior;
 } & HTMLAttributes<HTMLDivElement>) {
   const present = useMenuPresence(open);
+  const surfaceRef = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(() =>
     prefersReducedMotion() ? open : false
   );
+  // Wait for `expanded`: the collapsed content is inert and cannot take focus.
+  useMenuKeyboard(surfaceRef, open && present && expanded, menu);
 
   useEffect(() => {
     setExpanded(open);
@@ -70,7 +84,15 @@ export function MenuFlyout({
         durationClass="duration-150"
         className="motion-reduce:transition-none"
       >
-        <div className={`w-full overflow-hidden ${UI_MENU_SURFACE}`}>
+        <div
+          ref={surfaceRef}
+          role={menu ? (menu.kind === "popup" ? "dialog" : "menu") : undefined}
+          aria-label={menu?.label}
+          aria-orientation={
+            menu && menu.kind !== "popup" ? "vertical" : undefined
+          }
+          className={`w-full overflow-hidden ${UI_MENU_SURFACE}`}
+        >
           {children}
         </div>
       </Collapse>

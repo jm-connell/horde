@@ -3,17 +3,27 @@
 from __future__ import annotations
 
 import logging
-import threading
-import time
-from datetime import timedelta
-from typing import Optional
+from datetime import datetime, timedelta
 
-from sqlmodel import Session, select
+from sqlalchemy import func
+from sqlmodel import Session, col, select
 
-from ...database import engine
-from ...models import AiJob, AiJobKind, AiJobStatus, Video, VideoAiMeta, as_utc, utcnow
+from ...context import current, get_engine
+from ...logging_config import FailureLog, job_context
+from ...models import (
+    AiJob,
+    AiJobKind,
+    AiJobStatus,
+    UserVideoState,
+    Video,
+    VideoAiMeta,
+    as_utc,
+    utcnow,
+)
 from .. import app_settings
-from . import embeddings, tasks, text as ai_text
+from ..workers import BackgroundWorker
+from . import embeddings, tasks
+from . import text as ai_text
 from .provider import (
     get_embed_provider,
     get_llm_provider,
@@ -23,11 +33,7 @@ from .provider import (
 
 logger = logging.getLogger(__name__)
 
-_stop = threading.Event()
-_thread: Optional[threading.Thread] = None
-_timer_thread: Optional[threading.Thread] = None
-_wake = threading.Event()
-_blocked_reason: Optional[str] = None
+#: Callers outside this module nudge the worker through ``wake_worker()``.
 _WAITING_NOTE_PREFIX = "waiting: "
 _WAITING_STAMP_AGE_SEC = 120
 
@@ -35,18 +41,18 @@ _WAITING_STAMP_AGE_SEC = 120
 def _active_job_exists(
     session: Session,
     kind: AiJobKind,
-    video_id: Optional[int],
-    catalog_video_id: Optional[int] = None,
+    video_id: int | None,
+    catalog_video_id: int | None = None,
 ) -> bool:
     statement = select(AiJob).where(
         AiJob.kind == kind,
-        AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running]),  # type: ignore[attr-defined]
+        col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]),
     )
     if catalog_video_id is not None:
         statement = statement.where(AiJob.catalog_video_id == catalog_video_id)
     elif video_id is None:
-        statement = statement.where(AiJob.video_id.is_(None))  # type: ignore[attr-defined]
-        statement = statement.where(AiJob.catalog_video_id.is_(None))  # type: ignore[attr-defined]
+        statement = statement.where(col(AiJob.video_id).is_(None))
+        statement = statement.where(col(AiJob.catalog_video_id).is_(None))
     else:
         statement = statement.where(AiJob.video_id == video_id)
     return session.exec(statement).first() is not None
@@ -54,12 +60,12 @@ def _active_job_exists(
 
 def enqueue_job(
     kind: AiJobKind,
-    video_id: Optional[int] = None,
+    video_id: int | None = None,
     *,
-    catalog_video_id: Optional[int] = None,
+    catalog_video_id: int | None = None,
     force: bool = False,
-) -> Optional[int]:
-    with Session(engine) as session:
+) -> int | None:
+    with Session(get_engine()) as session:
         if not force and _active_job_exists(
             session, kind, video_id, catalog_video_id=catalog_video_id
         ):
@@ -77,7 +83,7 @@ def enqueue_job(
         session.commit()
         session.refresh(job)
         job_id = job.id
-    _wake.set()
+    current().ai.wake.set()
     return job_id
 
 
@@ -109,14 +115,12 @@ def enqueue_for_video(
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
     if ai.get("ai_summaries", True) and (ollama_on or or_on):
         should_summarize = False
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is not None and ai_text.has_subtitle_text(video):
                 meta = session.get(VideoAiMeta, video_id)
                 has_summary = bool(
-                    meta is not None
-                    and meta.summary
-                    and str(meta.summary).strip()
+                    meta is not None and meta.summary and str(meta.summary).strip()
                 )
                 should_summarize = not has_summary
         if should_summarize:
@@ -128,7 +132,7 @@ def enqueue_for_video(
         and (ollama_on or or_on)
     ):
         should_chapters = False
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             video = session.get(Video, video_id)
             if video is not None:
                 from ..chapters import skip_reason as chapters_skip_reason
@@ -152,7 +156,7 @@ def _failed_video_ids(session: Session, kind: AiJobKind) -> set[int]:
         select(AiJob.video_id).where(
             AiJob.kind == kind,
             AiJob.status == AiJobStatus.error,
-            AiJob.video_id.is_not(None),  # type: ignore[attr-defined]
+            col(AiJob.video_id).is_not(None),
         )
     ).all()
     return {vid for vid in rows if vid is not None}
@@ -160,7 +164,7 @@ def _failed_video_ids(session: Session, kind: AiJobKind) -> set[int]:
 
 def enqueue_missing_embeds(
     *,
-    limit: Optional[int] = None,
+    limit: int | None = None,
     skip_failed: bool = False,
     skip_empty_document: bool = False,
 ) -> dict:
@@ -177,7 +181,7 @@ def enqueue_missing_embeds(
         batch_limit = limit
     # Multiple passes so large libraries don't stop after one batch.
     for _ in range(50):
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             exclude = (
                 _failed_video_ids(session, AiJobKind.embed_video)
                 if skip_failed
@@ -218,7 +222,7 @@ def maybe_enqueue_index_catchup() -> dict:
     return enqueue_missing_embeds(skip_failed=True, skip_empty_document=True)
 
 
-def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
+def enqueue_reindex_embeds(*, limit: int | None = None) -> dict:
     """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -231,7 +235,7 @@ def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
     if limit is not None:
         batch_limit = limit
     for _ in range(50):
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             need = embeddings.videos_needing_embed(session, limit=batch_limit)
             # Clear stale embed_error so retry/reindex starts clean.
             for video_id in need:
@@ -259,7 +263,7 @@ def enqueue_reindex_embeds(*, limit: Optional[int] = None) -> dict:
     )
 
 
-def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
+def enqueue_missing_tags(*, limit: int | None = None) -> dict:
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
     if not ai.get("enrich_tags", True):
@@ -272,9 +276,9 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
     cutoff = now - timedelta(days=rescan_days)
     # (priority, enriched_at_or_min, video_id) — missing first, then oldest stale.
     candidates: list[tuple[int, object, int]] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(
-            select(Video).where(Video.needs_review == False)  # noqa: E712
+            select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
         for video in videos:
             if video.id is None:
@@ -282,9 +286,7 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
             meta = session.get(VideoAiMeta, video.id)
             if meta is not None and meta.tags_locked:
                 continue
-            enriched_at = (
-                as_utc(meta.tags_enriched_at) if meta is not None else None
-            )
+            enriched_at = as_utc(meta.tags_enriched_at) if meta is not None else None
             if enriched_at is None:
                 candidates.append((0, now, video.id))
             elif enriched_at < cutoff:
@@ -297,7 +299,7 @@ def enqueue_missing_tags(*, limit: Optional[int] = None) -> dict:
     return _result(breakdown, empty="No videos needing AI tag review")
 
 
-def enqueue_full_tag_refresh(*, limit: Optional[int] = None) -> dict:
+def enqueue_full_tag_refresh(*, limit: int | None = None) -> dict:
     """Re-queue tag enrich for unlocked videos (clears tags_enriched_at)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
     ai = app_settings.ai_settings()
@@ -307,9 +309,9 @@ def enqueue_full_tag_refresh(*, limit: Optional[int] = None) -> dict:
     if limit is not None:
         tag_limit = limit
     ids: list[int] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(
-            select(Video).where(Video.needs_review == False)  # noqa: E712
+            select(Video).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
         for video in videos:
             if video.id is None:
@@ -364,19 +366,25 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
 
     need_embed: list[int] = []
     need_tags: list[int] = []
-    with Session(engine) as session:
-        recent_ids = list(
+    with Session(get_engine()) as session:
+        recent_rows = list(
             session.exec(
-                select(Video.id).where(
-                    Video.needs_review == False,  # noqa: E712
+                select(col(Video.id)).where(
+                    Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
                     or_(
-                        Video.added_at >= cutoff,
-                        Video.last_watched_at >= cutoff,
+                        col(Video.added_at) >= cutoff,
+                        # Watched by anyone: this is shared indexing work, so the
+                        # latest watch over all users decides.
+                        col(Video.id).in_(
+                            select(UserVideoState.video_id).where(
+                                col(UserVideoState.last_watched_at) >= cutoff
+                            )
+                        ),
                     ),
                 )
             ).all()
         )
-        recent_ids = [vid for vid in recent_ids if vid is not None]
+        recent_ids = [vid for vid in recent_rows if vid is not None]
 
         need_embed_all = set(embeddings.videos_needing_embed(session, limit=limit * 2))
         for vid in recent_ids:
@@ -389,7 +397,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
             rescan_days = app_settings.clamp_tag_rescan_days(ai.get("tag_rescan_days"))
             now = utcnow()
             tag_cutoff = now - timedelta(days=rescan_days)
-            tag_candidates: list[tuple[int, object, int]] = []
+            tag_candidates: list[tuple[int, datetime, int]] = []
             for vid in recent_ids:
                 meta = session.get(VideoAiMeta, vid)
                 if meta is not None and meta.tags_locked:
@@ -419,7 +427,7 @@ def enqueue_all_recent(*, days: int = 30, limit: int = 2000) -> dict:
 
 
 def enqueue_video_tag_refresh(video_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None or video.needs_review:
             return False
@@ -448,13 +456,14 @@ def _result(breakdown: dict[str, int], *, empty: str) -> dict:
 
 
 def queue_depth() -> int:
-    with Session(engine) as session:
-        rows = session.exec(
-            select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
-            )
-        ).all()
-        return len(rows)
+    with Session(get_engine()) as session:
+        return int(
+            session.exec(
+                select(func.count())
+                .select_from(AiJob)
+                .where(col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]))
+            ).one()
+        )
 
 
 def queue_breakdown() -> dict[str, int]:
@@ -467,10 +476,10 @@ def queue_breakdown() -> dict[str, int]:
         "chapters": 0,
         "running": 0,
     }
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running])
             )
         ).all()
         for job in rows:
@@ -482,34 +491,62 @@ def queue_breakdown() -> dict[str, int]:
 
 
 def error_count() -> int:
-    with Session(engine) as session:
-        rows = session.exec(
-            select(AiJob).where(AiJob.status == AiJobStatus.error)
-        ).all()
-        return len(rows)
+    with Session(get_engine()) as session:
+        return int(
+            session.exec(
+                select(func.count())
+                .select_from(AiJob)
+                .where(AiJob.status == AiJobStatus.error)
+            ).one()
+        )
 
 
-def blocked_reason() -> Optional[str]:
-    return _blocked_reason
+def blocked_reason() -> str | None:
+    return current().ai.blocked_reason
 
 
-def _set_blocked_reason(reason: Optional[str]) -> None:
-    global _blocked_reason
-    _blocked_reason = reason
+def _set_blocked_reason(reason: str | None) -> None:
+    current().ai.blocked_reason = reason
 
 
-def _job_title(session: Session, job: AiJob) -> Optional[str]:
-    if job.video_id:
-        video = session.get(Video, job.video_id)
-        if video is not None:
-            return video.title
-    if job.catalog_video_id:
-        from ...models import ChannelCatalogVideo
+def _job_titles(session: Session, jobs: list[AiJob]) -> dict[int, str | None]:
+    """Titles for ``jobs`` keyed by job id, loaded with two IN queries."""
+    from ...models import ChannelCatalogVideo
 
-        cv = session.get(ChannelCatalogVideo, job.catalog_video_id)
-        if cv is not None:
-            return cv.title
-    return None
+    video_ids = {j.video_id for j in jobs if j.video_id}
+    catalog_ids = {j.catalog_video_id for j in jobs if j.catalog_video_id}
+    videos: dict[int, str | None] = {}
+    if video_ids:
+        videos = {
+            vid: title
+            for vid, title in session.exec(
+                select(col(Video.id), col(Video.title)).where(
+                    col(Video.id).in_(video_ids)
+                )
+            ).all()
+            if vid is not None
+        }
+    catalog: dict[int, str | None] = {}
+    if catalog_ids:
+        catalog = {
+            cid: title
+            for cid, title in session.exec(
+                select(
+                    col(ChannelCatalogVideo.id), col(ChannelCatalogVideo.title)
+                ).where(col(ChannelCatalogVideo.id).in_(catalog_ids))
+            ).all()
+            if cid is not None
+        }
+    out: dict[int, str | None] = {}
+    for job in jobs:
+        title = None
+        if job.video_id and job.video_id in videos:
+            title = videos[job.video_id]
+        elif job.catalog_video_id and job.catalog_video_id in catalog:
+            title = catalog[job.catalog_video_id]
+        if job.id is not None:
+            out[job.id] = title
+    return out
 
 
 def queue_stats() -> dict:
@@ -523,10 +560,10 @@ def queue_stats() -> dict:
     deferred = 0
     waiting = 0
     running = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.queued, AiJobStatus.running])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running])
             )
         ).all()
         for job in rows:
@@ -554,13 +591,14 @@ def queue_stats() -> dict:
 def recent_failures(*, limit: int = 10) -> list[dict]:
     limit = max(1, min(int(limit), 50))
     out: list[dict] = []
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.error)
-            .order_by(AiJob.updated_at.desc())
+            .order_by(col(AiJob.updated_at).desc())
             .limit(limit)
         ).all()
+        titles = _job_titles(session, list(rows))
         for job in rows:
             kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
             out.append(
@@ -569,10 +607,12 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
                     "kind": kind,
                     "video_id": job.video_id,
                     "catalog_video_id": job.catalog_video_id,
-                    "title": _job_title(session, job),
+                    "title": titles.get(job.id) if job.id is not None else None,
                     "attempts": job.attempts,
                     "error": job.error,
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                    "updated_at": job.updated_at.isoformat()
+                    if job.updated_at
+                    else None,
                 }
             )
     return out
@@ -580,12 +620,12 @@ def recent_failures(*, limit: int = 10) -> list[dict]:
 
 def list_jobs(
     *,
-    status: Optional[str] = None,
+    status: str | None = None,
     limit: int = 50,
 ) -> list[dict]:
     limit = max(1, min(int(limit), 200))
-    with Session(engine) as session:
-        statement = select(AiJob).order_by(AiJob.updated_at.desc()).limit(limit)
+    with Session(get_engine()) as session:
+        statement = select(AiJob).order_by(col(AiJob.updated_at).desc()).limit(limit)
         if status:
             try:
                 st = AiJobStatus(status)
@@ -594,14 +634,17 @@ def list_jobs(
             statement = (
                 select(AiJob)
                 .where(AiJob.status == st)
-                .order_by(AiJob.updated_at.desc())
+                .order_by(col(AiJob.updated_at).desc())
                 .limit(limit)
             )
         rows = session.exec(statement).all()
+        titles = _job_titles(session, list(rows))
         out: list[dict] = []
         for job in rows:
             kind = job.kind.value if hasattr(job.kind, "value") else str(job.kind)
-            st_val = job.status.value if hasattr(job.status, "value") else str(job.status)
+            st_val = (
+                job.status.value if hasattr(job.status, "value") else str(job.status)
+            )
             out.append(
                 {
                     "id": job.id,
@@ -609,19 +652,23 @@ def list_jobs(
                     "status": st_val,
                     "video_id": job.video_id,
                     "catalog_video_id": job.catalog_video_id,
-                    "title": _job_title(session, job),
+                    "title": titles.get(job.id) if job.id is not None else None,
                     "attempts": job.attempts,
                     "error": job.error,
                     "run_after": job.run_after.isoformat() if job.run_after else None,
-                    "created_at": job.created_at.isoformat() if job.created_at else None,
-                    "updated_at": job.updated_at.isoformat() if job.updated_at else None,
+                    "created_at": job.created_at.isoformat()
+                    if job.created_at
+                    else None,
+                    "updated_at": job.updated_at.isoformat()
+                    if job.updated_at
+                    else None,
                 }
             )
         return out
 
 
 def retry_job(job_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(AiJob, job_id)
         if job is None:
             return False
@@ -634,13 +681,13 @@ def retry_job(job_id: int) -> bool:
         job.updated_at = utcnow()
         session.add(job)
         session.commit()
-    _wake.set()
+    current().ai.wake.set()
     return True
 
 
 def retry_failed_jobs() -> int:
     reset = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.error)
         ).all()
@@ -655,12 +702,12 @@ def retry_failed_jobs() -> int:
         if reset:
             session.commit()
     if reset:
-        _wake.set()
+        current().ai.wake.set()
     return reset
 
 
 def cancel_job(job_id: int) -> bool:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(AiJob, job_id)
         if job is None:
             return False
@@ -679,10 +726,10 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     keep_days = max(0, int(keep_days))
     cutoff = utcnow() - timedelta(days=keep_days) if keep_days else None
     deleted = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(
-                AiJob.status.in_([AiJobStatus.error, AiJobStatus.cancelled])  # type: ignore[attr-defined]
+                col(AiJob.status).in_([AiJobStatus.error, AiJobStatus.cancelled])
             )
         ).all()
         for job in rows:
@@ -699,12 +746,12 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     return deleted
 
 
-def current_job_info() -> Optional[dict]:
-    with Session(engine) as session:
+def current_job_info() -> dict | None:
+    with Session(get_engine()) as session:
         job = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.running)
-            .order_by(AiJob.updated_at.desc())
+            .order_by(col(AiJob.updated_at).desc())
             .limit(1)
         ).first()
         if job is None:
@@ -751,7 +798,7 @@ def current_job_info() -> Optional[dict]:
         return info
 
 
-def current_job_label() -> Optional[str]:
+def current_job_label() -> str | None:
     info = current_job_info()
     if info is None:
         return None
@@ -779,7 +826,7 @@ def _job_runnable(
     return False
 
 
-def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> Optional[str]:
+def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> str | None:
     if not llm_ok and not embed_ok:
         return "No AI provider reachable (enable Ollama or OpenRouter)"
     if not embed_ok:
@@ -793,7 +840,7 @@ def _stamp_waiting_jobs(reason: str) -> None:
     """Annotate old queued jobs that cannot run yet (no attempt burn)."""
     note = f"{_WAITING_NOTE_PREFIX}{reason}"[:500]
     cutoff = utcnow() - timedelta(seconds=_WAITING_STAMP_AGE_SEC)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.queued)
         ).all()
@@ -813,7 +860,7 @@ def _stamp_waiting_jobs(reason: str) -> None:
 
 
 def _clear_waiting_notes() -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.queued)
         ).all()
@@ -834,7 +881,7 @@ def _compute_blocked_reason(
     llm_ok: bool,
     embed_ok: bool,
     has_queued: bool,
-) -> Optional[str]:
+) -> str | None:
     if paused:
         return "AI queue is paused"
     try:
@@ -843,14 +890,15 @@ def _compute_blocked_reason(
         budget = budget_status()
         if budget.get("blocked"):
             return "OpenRouter weekly budget hard limit reached"
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        # Runs on every idle pass of the worker, so keep it out of the warnings.
+        logger.debug("could not read the AI budget status", exc_info=True)
     if not has_queued:
         return None
     wait = _waiting_reason(llm_ok=llm_ok, embed_ok=embed_ok)
     if wait and (not llm_ok or not embed_ok):
         # Only report blocked when something in queue actually needs the missing side.
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             rows = session.exec(
                 select(AiJob).where(AiJob.status == AiJobStatus.queued)
             ).all()
@@ -864,15 +912,13 @@ def _compute_blocked_reason(
     return None
 
 
-def _next_job(
-    session: Session, *, llm_ok: bool, embed_ok: bool
-) -> Optional[AiJob]:
+def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> AiJob | None:
     now = utcnow()
     jobs = session.exec(
         select(AiJob)
         .where(AiJob.status == AiJobStatus.queued)
-        .where((AiJob.run_after.is_(None)) | (AiJob.run_after <= now))  # type: ignore[attr-defined]
-        .order_by(AiJob.created_at.asc())
+        .where((col(AiJob.run_after).is_(None)) | (col(AiJob.run_after) <= now))
+        .order_by(col(AiJob.created_at).asc())
         .limit(32)
     ).all()
     for job in jobs:
@@ -907,22 +953,24 @@ def _process_one() -> bool:
         return False
 
     if not llm_ok and not embed_ok:
-        reason = _waiting_reason(llm_ok=False, embed_ok=False) or "No AI provider reachable"
+        reason = (
+            _waiting_reason(llm_ok=False, embed_ok=False) or "No AI provider reachable"
+        )
         _set_blocked_reason(reason if has_queued else None)
         if has_queued:
             _stamp_waiting_jobs(reason)
         return False
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = _next_job(session, llm_ok=llm_ok, embed_ok=embed_ok)
         if job is None:
-            reason = _compute_blocked_reason(
+            blocked = _compute_blocked_reason(
                 paused=False, llm_ok=llm_ok, embed_ok=embed_ok, has_queued=has_queued
             )
-            _set_blocked_reason(reason)
-            if reason and has_queued:
-                _stamp_waiting_jobs(reason)
-            elif not reason:
+            _set_blocked_reason(blocked)
+            if blocked and has_queued:
+                _stamp_waiting_jobs(blocked)
+            elif not blocked:
                 _clear_waiting_notes()
             return False
         _set_blocked_reason(None)
@@ -936,6 +984,18 @@ def _process_one() -> bool:
         video_id = job.video_id
         catalog_video_id = job.catalog_video_id
 
+    with job_context(f"ai-{job_id}"):
+        _run_claimed_job(job_id, kind, video_id, catalog_video_id)
+    return True
+
+
+def _run_claimed_job(
+    job_id: int | None,
+    kind: AiJobKind,
+    video_id: int | None,
+    catalog_video_id: int | None,
+) -> None:
+    """Run one AI job that ``_process_one`` has already marked running."""
     _clear_waiting_notes()
 
     kind_key = kind.value if hasattr(kind, "value") else str(kind)
@@ -949,7 +1009,11 @@ def _process_one() -> bool:
             ai_engine = embed_backend_name() or "ollama"
         else:
             ai_engine = llm_backend_name() or "ollama"
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug(
+            "could not resolve the AI backend name for the activity entry",
+            exc_info=True,
+        )
         ai_engine = "ollama"
 
     act = None
@@ -964,15 +1028,16 @@ def _process_one() -> bool:
             detail=detail,
             video_id=video_id,
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("could not start an activity entry for an AI job", exc_info=True)
         act = None
 
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             skip_reason = tasks.dispatch(
                 session, kind, video_id, catalog_video_id=catalog_video_id
             )
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(AiJob, job_id)
             if job is not None:
                 if skip_reason:
@@ -986,12 +1051,12 @@ def _process_one() -> bool:
                 session.commit()
         if act is not None:
             act.finish(detail=detail)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("AI job %s failed: %s", job_id, exc)
+    except Exception as exc:
+        logger.warning("AI job %s failed", job_id, exc_info=True)
         from .provider import invalidate_resolved_url
 
         invalidate_resolved_url()
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             job = session.get(AiJob, job_id)
             if job is not None:
                 job.error = str(exc)[:500]
@@ -1005,7 +1070,6 @@ def _process_one() -> bool:
                 session.commit()
         if act is not None:
             act.finish(status="failed", error=str(exc)[:500])
-    return True
 
 
 def _maybe_pending_category_refresh() -> None:
@@ -1022,21 +1086,23 @@ def _maybe_pending_category_refresh() -> None:
     enqueue_refresh_categories(force=True)
 
 
-def _worker_loop() -> None:
-    while not _stop.is_set():
+def _worker_loop(worker: BackgroundWorker) -> None:
+    loop_failures = FailureLog(logger, "AI worker loop error")
+    while not worker.stopping:
         try:
             worked = _process_one()
-        except Exception:  # noqa: BLE001
-            logger.exception("AI worker loop error")
+            loop_failures.ok()
+        except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+            loop_failures.failed()
             worked = False
         if worked:
             continue
         try:
             _maybe_pending_category_refresh()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.exception("Pending category refresh failed")
-        _wake.wait(timeout=2.0)
-        _wake.clear()
+        if worker.wait_for_wake(2.0):
+            return
 
 
 def _maybe_run_daily() -> None:
@@ -1065,55 +1131,49 @@ def _maybe_run_daily() -> None:
         app_settings.save({"ai": {"last_daily_run": today}})
 
 
-def _timer_loop() -> None:
-    while not _stop.is_set():
+def _timer_loop(worker: BackgroundWorker) -> None:
+    failures = FailureLog(logger, "AI timer loop error")
+    while not worker.stopping:
+        pause = 60.0
         try:
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
-            if (
-                (ai.get("enabled", True) or openrouter_configured())
-                and not ai.get("paused")
+            if (ai.get("enabled", True) or openrouter_configured()) and not ai.get(
+                "paused"
             ):
                 if schedule == "timer":
                     hours = float(ai.get("timer_hours") or 6)
                     hours = max(0.25, min(hours, 168.0))
                     enqueue_library_backlog(force=False)
                     enqueue_job(AiJobKind.refresh_categories, None, force=False)
-                    deadline = time.time() + hours * 3600
-                    while time.time() < deadline and not _stop.is_set():
-                        time.sleep(5)
+                    if worker.sleep(hours * 3600):
+                        return
                     continue
                 if schedule == "set_time":
                     _maybe_run_daily()
                 if schedule == "on_download":
                     maybe_enqueue_index_catchup()
             # Poll frequently for set_time / schedule changes
-            for _ in range(12):
-                if _stop.is_set():
-                    break
-                time.sleep(5)
-        except Exception:  # noqa: BLE001
-            logger.exception("AI timer loop error")
-            time.sleep(30)
+            failures.ok()
+        except Exception:  # noqa: BLE001 - FailureLog logs the traceback
+            failures.failed()
+            pause = 30.0
+        if worker.sleep(pause):
+            return
 
 
-def start_ai_worker() -> None:
-    global _thread, _timer_thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(target=_worker_loop, name="horde-ai-worker", daemon=True)
-    _thread.start()
-    _timer_thread = threading.Thread(
-        target=_timer_loop, name="horde-ai-timer", daemon=True
-    )
-    _timer_thread.start()
+def create_workers() -> list[BackgroundWorker]:
+    """The job runner and the scheduler that feeds it (registered in this order)."""
+    return [
+        BackgroundWorker("horde-ai-worker", _worker_loop, wake_event=current().ai.wake),
+        BackgroundWorker("horde-ai-timer", _timer_loop),
+    ]
 
 
 def recover_ai_jobs() -> int:
     """Requeue AI jobs left in running after a process crash/restart."""
     reset = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(AiJob).where(AiJob.status == AiJobStatus.running)
         ).all()
@@ -1127,14 +1187,9 @@ def recover_ai_jobs() -> int:
             session.commit()
     if reset:
         logger.info("Recovered %s stuck AI job(s) → queued", reset)
-        _wake.set()
+        current().ai.wake.set()
     return reset
 
 
-def stop_ai_worker() -> None:
-    _stop.set()
-    _wake.set()
-
-
 def wake_worker() -> None:
-    _wake.set()
+    current().ai.wake.set()

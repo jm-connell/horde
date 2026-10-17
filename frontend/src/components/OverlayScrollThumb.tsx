@@ -51,7 +51,12 @@ export default function OverlayScrollThumb({
     const apply = (next: OverlayThumbLayout | null) => {
       setThumb((prev) => {
         if (prev === next) return prev;
-        if (prev && next && prev.top === next.top && prev.height === next.height) {
+        if (
+          prev &&
+          next &&
+          prev.top === next.top &&
+          prev.height === next.height
+        ) {
           return prev;
         }
         return next;
@@ -77,14 +82,19 @@ export default function OverlayScrollThumb({
       };
 
       update();
-      const scrollOpts: AddEventListenerOptions = { passive: true, capture: true };
+      const scrollOpts: AddEventListenerOptions = {
+        passive: true,
+        capture: true,
+      };
       window.addEventListener("scroll", onScroll, scrollOpts);
       document.addEventListener("scroll", onScroll, scrollOpts);
       document.documentElement.addEventListener("scroll", onScroll, scrollOpts);
       window.addEventListener("pointermove", onPointerMove, { passive: true });
       window.addEventListener("resize", update);
       window.addEventListener("load", update);
-      document.addEventListener("pointermove", onPointerMove, { passive: true });
+      document.addEventListener("pointermove", onPointerMove, {
+        passive: true,
+      });
       document.addEventListener("pointerleave", onPointerLeave);
       document.addEventListener("fullscreenchange", update);
       // html/body/#root are height:100%, so their box never grows. Watch the

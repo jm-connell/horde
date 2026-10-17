@@ -29,7 +29,10 @@ function urlFromChunk(part: string): string {
 export function parseDownloadUrlList(text: string): string[] {
   const trimmed = text.trim();
   if (!trimmed) return [];
-  const parts = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+  const parts = trimmed
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   const urls: string[] = [];
   const seen = new Set<string>();
   for (const part of parts) {
@@ -99,8 +102,9 @@ export function clipboardEventToText(
  * False on plain HTTP LAN (typical live Horde) — localhost/HTTPS only.
  */
 export function clipboardReadAvailable(
-  nav: { clipboard?: { readText?: unknown; read?: unknown } } | undefined =
-    typeof navigator === "undefined" ? undefined : navigator
+  nav:
+    | { clipboard?: { readText?: unknown; read?: unknown } }
+    | undefined = typeof navigator === "undefined" ? undefined : navigator
 ): boolean {
   const clipboard = nav?.clipboard;
   if (!clipboard) return false;

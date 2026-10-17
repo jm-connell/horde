@@ -34,14 +34,14 @@ backend source ──► /app/app
 
 ## Non-Docker / local development
 
-For day-to-day coding you typically run Vite and Uvicorn separately (see [Local development](../getting-started/local-dev.md)). The repo can also keep a committed or copied `backend/static` tree so a plain backend process can serve a prebuilt UI without Docker — useful for quick checks and for environments that run the Python app directly.
+For day-to-day coding you typically run Vite and Uvicorn separately (see [Local development](../getting-started/local-dev.md)). `npm run build:sync` copies a production build into `backend/static` (gitignored, never committed) so a plain backend process can serve a prebuilt UI without Docker — useful for quick checks and for environments that run the Python app directly.
 
 !!! note "Strict docs build"
     The docs stage uses `mkdocs build --strict`. Broken links or nav entries fail the image build, which keeps the in-app wiki honest.
 
 ## Why one container
 
-- Matches the [single-admin](no-auth.md) / one-homelab-box mental model
+- Matches the [accounts](../ops/authentication.md) / one-homelab-box mental model
 - Dockge / Compose stacks stay short: one service, two volumes (`/downloads`, `/app/data`)
 - No version skew between “API image” and “UI image”
 - Wiki and app ship together — docs match the build you are running

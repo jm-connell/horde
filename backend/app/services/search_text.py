@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from functools import lru_cache
-from typing import Any, Sequence
+from typing import Any
 
 from sqlalchemy import and_, or_
 
-_TOKEN_RE = re.compile(r"[a-z0-9]+", re.I)
+# A word is a run of Unicode letters and digits (no underscore), so accented and
+# non-Latin text tokenizes the way FTS5's unicode61 tokenizer indexes it.
+_WORD = r"[^\W_]"
+_TOKEN_RE = re.compile(rf"{_WORD}+")
 
 STOPWORDS = frozenset(
     {
@@ -137,7 +141,7 @@ def word_boundary_regexp(variants: Sequence[str]) -> str | None:
     alts = [re.escape(v) for v in variants if v]
     if not alts:
         return None
-    return rf"(?i)(?<![a-z0-9])(?:{'|'.join(alts)})(?![a-z0-9])"
+    return rf"(?i)(?<!{_WORD})(?:{'|'.join(alts)})(?!{_WORD})"
 
 
 @lru_cache(maxsize=256)
@@ -175,12 +179,29 @@ def keyword_match_clause(query: str, *fields: Any) -> Any:
         ]
         if not per_field:
             continue
-        token_clauses.append(
-            or_(*per_field) if len(per_field) > 1 else per_field[0]
-        )
+        token_clauses.append(or_(*per_field) if len(per_field) > 1 else per_field[0])
     if not token_clauses:
         return None
     return and_(*token_clauses) if len(token_clauses) > 1 else token_clauses[0]
+
+
+def fts_match_expression(query: str) -> str | None:
+    """FTS5 MATCH expression equivalent to ``keyword_match_clause``.
+
+    AND across query tokens; each token is an OR of its whole-word variants.
+    Returns None when the query has no word characters (FTS5 would tokenize it
+    to nothing), so the caller can fall back to a literal scan. Terms are
+    double-quoted, so user input is never parsed as FTS5 syntax.
+    """
+    if not _TOKEN_RE.search(query or ""):
+        return None
+    groups = []
+    for token in tokenize_query(query):
+        if not _TOKEN_RE.fullmatch(token):
+            return None
+        terms = " OR ".join(f'"{variant}"' for variant in token_variants(token))
+        groups.append(f"({terms})")
+    return " AND ".join(groups) or None
 
 
 def _group_in_hay(hay: str, variants: Sequence[str]) -> bool:
@@ -198,9 +219,7 @@ def phrase_in_hay(hay: str, phrase: str) -> bool:
     if len(parts) == 1:
         return _group_in_hay(hay, token_variants(parts[0]))
     body = r"\s+".join(re.escape(p) for p in parts)
-    return (
-        re.search(rf"(?i)(?<![a-z0-9]){body}(?![a-z0-9])", hay) is not None
-    )
+    return re.search(rf"(?i)(?<!{_WORD}){body}(?!{_WORD})", hay) is not None
 
 
 def query_in_text(query: str, text: str) -> bool:

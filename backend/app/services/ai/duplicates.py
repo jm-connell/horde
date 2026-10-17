@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings
-from . import embeddings, text as ai_text
+from . import embeddings
+from . import text as ai_text
 from .provider import get_llm_provider, resolve_llm_model
+
+logger = logging.getLogger(__name__)
 
 
 def _parse_json_object(raw: str) -> dict[str, Any]:
@@ -50,7 +54,7 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
         return result
 
     # Embedding similarity as a fast signal (Ollama indexes only).
-    embed_score: Optional[float] = None
+    embed_score: float | None = None
     if a.id is not None and b.id is not None:
         va = embeddings.video_centroid(session, a.id)
         vb = embeddings.video_centroid(session, b.id)
@@ -96,7 +100,8 @@ def score_pair(session: Session, a: Video, b: Video) -> dict[str, Any]:
             result["ai_reason"] = reason[:200]
         if result["ai_score"] is None and result["ai_confidence"] is not None:
             result["ai_score"] = result["ai_confidence"]
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
+        logger.warning("AI duplicate confirmation failed", exc_info=True)
         result["ai_error"] = str(exc)[:200]
     return result
 

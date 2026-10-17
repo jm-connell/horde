@@ -2,13 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Optional
+import logging
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..database import get_session
+from ..auth import current_user, require_admin
+from ..context import get_session
+from ..response_schemas import (
+    AiApplyWorkloadResult,
+    AiCategoriesRead,
+    AiClearFailedResult,
+    AiConnectionTest,
+    AiJobAction,
+    AiRetryFailedResult,
+    OpenRouterConnectionTest,
+    PausedResponse,
+    RecommendationsRead,
+)
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
@@ -19,47 +32,50 @@ from ..services.ai.provider import (
     test_connection,
     test_openrouter_connection,
 )
-from .videos import _to_read
+from ..services.auth.accounts import AuthUser
+from .video_serialize import to_read_many as _to_read_many
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["ai"])
 
 
 class AiCurrentJob(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
-    video_id: Optional[int] = None
-    title: Optional[str] = None
-    channel: Optional[str] = None
+    video_id: int | None = None
+    title: str | None = None
+    channel: str | None = None
     has_thumbnail: bool = False
-    model: Optional[str] = None
+    model: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    run_after: Optional[str] = None
+    error: str | None = None
+    run_after: str | None = None
 
 
 class AiJobFailure(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
-    video_id: Optional[int] = None
-    catalog_video_id: Optional[int] = None
-    title: Optional[str] = None
+    video_id: int | None = None
+    catalog_video_id: int | None = None
+    title: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    updated_at: Optional[str] = None
+    error: str | None = None
+    updated_at: str | None = None
 
 
 class AiJobRow(BaseModel):
-    id: Optional[int] = None
+    id: int | None = None
     kind: str
     status: str
-    video_id: Optional[int] = None
-    catalog_video_id: Optional[int] = None
-    title: Optional[str] = None
+    video_id: int | None = None
+    catalog_video_id: int | None = None
+    title: str | None = None
     attempts: int = 0
-    error: Optional[str] = None
-    run_after: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    error: str | None = None
+    run_after: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class AiStatusRead(BaseModel):
@@ -67,21 +83,21 @@ class AiStatusRead(BaseModel):
     provider: str
     ready: bool
     reachable: bool
-    base_url: Optional[str] = None
+    base_url: str | None = None
     embed_model: str
     chat_model: str
     embed_model_present: bool
     chat_model_present: bool
     pulling: list[str] = Field(default_factory=list)
-    last_error: Optional[str] = None
+    last_error: str | None = None
     paused: bool = False
     schedule: str = "on_download"
     indexed_videos: int = 0
     total_videos: int = 0
     queue_depth: int = 0
     queue_breakdown: dict[str, int] = Field(default_factory=dict)
-    current_job: Optional[AiCurrentJob] = None
-    blocked_reason: Optional[str] = None
+    current_job: AiCurrentJob | None = None
+    blocked_reason: str | None = None
     runnable_count: int = 0
     deferred_count: int = 0
     waiting_count: int = 0
@@ -90,11 +106,11 @@ class AiStatusRead(BaseModel):
     workload_profile: str = "normal"
     recommended_profile: str = "normal"
     profile_locked: bool = False
-    lock_reason: Optional[str] = None
-    workload_warning: Optional[str] = None
+    lock_reason: str | None = None
+    workload_warning: str | None = None
     vram_tier: str = "unknown"
-    gpu_name: Optional[str] = None
-    vram_total_bytes: Optional[int] = None
+    gpu_name: str | None = None
+    vram_total_bytes: int | None = None
     gpu_source: str = "unknown"
     invent_sample_size: int = 100
     invent_budget_chars: int = 28000
@@ -106,23 +122,23 @@ class AiStatusRead(BaseModel):
     openrouter_scope: str = "specialized"
     openrouter_embed_model: str = "openai/text-embedding-3-small"
     ollama_prefer_embeddings: bool = False
-    llm_backend: Optional[str] = None
-    embed_backend: Optional[str] = None
+    llm_backend: str | None = None
+    embed_backend: str | None = None
 
 
 class AiTestRequest(BaseModel):
-    base_url: Optional[str] = None
+    base_url: str | None = None
 
 
 class OpenRouterTestRequest(BaseModel):
-    api_key: Optional[str] = None
+    api_key: str | None = None
 
 
 class OpenRouterModelRow(BaseModel):
     id: str
     name: str = ""
-    prompt_per_million: Optional[float] = None
-    completion_per_million: Optional[float] = None
+    prompt_per_million: float | None = None
+    completion_per_million: float | None = None
 
 
 def _openrouter_model_row(row: dict[str, Any]) -> OpenRouterModelRow:
@@ -136,7 +152,7 @@ class OpenRouterModelsResponse(BaseModel):
 
 
 class AiApplyWorkloadRequest(BaseModel):
-    profile: Optional[Literal["light", "normal", "heavy"]] = None
+    profile: Literal["light", "normal", "heavy"] | None = None
 
 
 class AiProcessRequest(BaseModel):
@@ -158,8 +174,68 @@ class AiProcessResult(BaseModel):
     detail: str = ""
 
 
+#: Setup details a member's screens never read, reset to their declared defaults.
+#: Members keep ``enabled`` / ``ready`` / ``reachable`` / ``paused`` and the queue
+#: counts (the library's AI shelf) and ``openrouter_enabled`` /
+#: ``openrouter_api_key_set`` (the player decides which AI features to offer).
+_MEMBER_HIDDEN_DEFAULTS = (
+    "schedule",
+    "workload_profile",
+    "recommended_profile",
+    "profile_locked",
+    "vram_tier",
+    "gpu_source",
+    "invent_sample_size",
+    "invent_budget_chars",
+    "models_match_profile",
+    "openrouter_reachable",
+    "ollama_prefer_embeddings",
+)
+
+
+def _member_view(status: AiStatusRead) -> AiStatusRead:
+    """What a non-administrator sees: readiness and queue progress, not the setup.
+
+    Provider type and address, schedule, model names, GPU details and error texts
+    (which can quote a URL or a key fragment) stay with the administrator.
+    """
+    defaults = {
+        name: AiStatusRead.model_fields[name].get_default(call_default_factory=True)
+        for name in _MEMBER_HIDDEN_DEFAULTS
+    }
+    current = status.current_job
+    if current is not None:
+        current = current.model_copy(update={"error": None, "model": None})
+    return status.model_copy(
+        update={
+            "base_url": None,
+            "last_error": None,
+            "embed_model": "",
+            "chat_model": "",
+            "openrouter_model": "",
+            "openrouter_embed_model": "",
+            "current_job": current,
+            "recent_failures": [],
+            "pulling": [],
+            "blocked_reason": None,
+            "openrouter_scope": "specialized",
+            "llm_backend": None,
+            "embed_backend": None,
+            "workload_warning": None,
+            "lock_reason": None,
+            "gpu_name": None,
+            "vram_total_bytes": None,
+            "provider": "",
+            **defaults,
+        }
+    )
+
+
 @router.get("/status", response_model=AiStatusRead)
-def ai_status(session: Session = Depends(get_session)):
+def ai_status(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     from ..services import app_settings
     from ..services.ai import workload as ai_workload
 
@@ -192,7 +268,7 @@ def ai_status(session: Session = Depends(get_session)):
             error=current.get("error"),
             run_after=current.get("run_after"),
         )
-    return AiStatusRead(
+    result = AiStatusRead(
         **status.__dict__,
         queue_breakdown=breakdown,
         current_job=current_job,
@@ -201,7 +277,9 @@ def ai_status(session: Session = Depends(get_session)):
         deferred_count=int(stats.get("deferred_count") or 0),
         waiting_count=int(stats.get("waiting_count") or 0),
         error_count=int(stats.get("error_count") or 0),
-        recent_failures=[AiJobFailure(**row) for row in worker.recent_failures(limit=10)],
+        recent_failures=[
+            AiJobFailure(**row) for row in worker.recent_failures(limit=10)
+        ],
         workload_profile=runtime.profile,
         recommended_profile=runtime.recommended_profile,
         profile_locked=runtime.profile_locked,
@@ -215,9 +293,14 @@ def ai_status(session: Session = Depends(get_session)):
         invent_budget_chars=runtime.invent_budget_chars,
         models_match_profile=models_match,
     )
+    return result if user.is_admin else _member_view(result)
 
 
-@router.post("/apply-workload")
+@router.post(
+    "/apply-workload",
+    response_model=AiApplyWorkloadResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
     """Apply a workload profile: resolve models for the Ollama GPU, save, optional pull."""
     from ..services import app_settings
@@ -239,8 +322,11 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
             try:
                 ensure_models(provider)
                 pulled = True
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.warning(
+                    "could not pull the recommended AI models",
+                    exc_info=True,
+                )
 
     embed_changed = prev_embed != runtime.embed_model
     return {
@@ -255,26 +341,43 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
     }
 
 
-@router.post("/test")
+@router.post(
+    "/test",
+    response_model=AiConnectionTest,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_admin)],
+)
 def ai_test(payload: AiTestRequest):
     return test_connection(payload.base_url)
 
 
-@router.post("/openrouter/test")
+@router.post(
+    "/openrouter/test",
+    response_model=OpenRouterConnectionTest,
+    response_model_exclude_unset=True,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest()):
     return test_openrouter_connection(payload.api_key)
 
 
-@router.get("/openrouter/models", response_model=OpenRouterModelsResponse)
+@router.get(
+    "/openrouter/models",
+    response_model=OpenRouterModelsResponse,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_models():
     try:
         models = list_openrouter_models()
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc) or "Could not list models") from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=str(exc) or "Could not list models"
+        ) from exc
     embed_models: list[dict[str, Any]] = []
     try:
         embed_models = list_openrouter_embedding_models()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("OpenRouter embedding model list unavailable", exc_info=True)
         embed_models = []
     return OpenRouterModelsResponse(
         presets=openrouter_preset_list(),
@@ -294,13 +397,17 @@ class OpenRouterCostsRead(BaseModel):
     d30_calls: int = 0
     y1_calls: int = 0
     all_calls: int = 0
-    weekly_budget_usd: Optional[float] = None
+    weekly_budget_usd: float | None = None
     hard_limit: bool = False
     over_budget: bool = False
     blocked: bool = False
 
 
-@router.get("/openrouter/costs", response_model=OpenRouterCostsRead)
+@router.get(
+    "/openrouter/costs",
+    response_model=OpenRouterCostsRead,
+    dependencies=[Depends(require_admin)],
+)
 def ai_openrouter_costs():
     from ..services.ai.cost_ledger import budget_status, window_analytics
 
@@ -325,7 +432,9 @@ def ai_openrouter_costs():
     )
 
 
-@router.post("/process", response_model=AiProcessResult)
+@router.post(
+    "/process", response_model=AiProcessResult, dependencies=[Depends(require_admin)]
+)
 def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     invalidate_resolved_url()
     action = payload.action
@@ -346,8 +455,10 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
             result = worker.enqueue_library_backlog(force=True)
         else:
             result = worker.enqueue_library_backlog(force=True)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc) or "Enqueue failed") from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=str(exc) or "Enqueue failed"
+        ) from exc
     return AiProcessResult(
         enqueued=result["enqueued"],
         breakdown=result["breakdown"],
@@ -355,7 +466,9 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
     )
 
 
-@router.post("/pause")
+@router.post(
+    "/pause", response_model=PausedResponse, dependencies=[Depends(require_admin)]
+)
 def ai_pause():
     from ..services import app_settings
 
@@ -363,7 +476,9 @@ def ai_pause():
     return {"paused": True}
 
 
-@router.post("/resume")
+@router.post(
+    "/resume", response_model=PausedResponse, dependencies=[Depends(require_admin)]
+)
 def ai_resume():
     from ..services import app_settings
 
@@ -372,9 +487,11 @@ def ai_resume():
     return {"paused": False}
 
 
-@router.get("/jobs", response_model=list[AiJobRow])
+@router.get(
+    "/jobs", response_model=list[AiJobRow], dependencies=[Depends(require_admin)]
+)
 def ai_list_jobs(
-    status: Optional[str] = Query(default=None),
+    status: str | None = Query(default=None),
     limit: int = Query(default=50, ge=1, le=200),
 ):
     try:
@@ -384,38 +501,55 @@ def ai_list_jobs(
     return [AiJobRow(**row) for row in rows]
 
 
-@router.post("/jobs/retry-failed")
+@router.post(
+    "/jobs/retry-failed",
+    response_model=AiRetryFailedResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_retry_failed():
     count = worker.retry_failed_jobs()
     return {"ok": True, "retried": count}
 
 
-@router.post("/jobs/clear-failed")
+@router.post(
+    "/jobs/clear-failed",
+    response_model=AiClearFailedResult,
+    dependencies=[Depends(require_admin)],
+)
 def ai_clear_failed(keep_days: int = Query(default=0, ge=0, le=365)):
     deleted = worker.clear_failed_jobs(keep_days=keep_days)
     return {"ok": True, "deleted": deleted}
 
 
-@router.post("/jobs/{job_id}/retry")
+@router.post(
+    "/jobs/{job_id}/retry",
+    response_model=AiJobAction,
+    dependencies=[Depends(require_admin)],
+)
 def ai_retry_job(job_id: int):
     if not worker.retry_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not retryable")
     return {"ok": True, "id": job_id}
 
 
-@router.post("/jobs/{job_id}/cancel")
+@router.post(
+    "/jobs/{job_id}/cancel",
+    response_model=AiJobAction,
+    dependencies=[Depends(require_admin)],
+)
 def ai_cancel_job(job_id: int):
     if not worker.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not cancellable")
     return {"ok": True, "id": job_id}
 
 
-@router.get("/recommendations")
+@router.get("/recommendations", response_model=RecommendationsRead)
 def ai_recommendations(
-    category: Optional[str] = Query(default=None),
+    category: str | None = Query(default=None),
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     status = build_status()
     if not status.ready:
@@ -432,7 +566,7 @@ def ai_recommendations(
                     "title": "",
                     "kind": "category",
                     "seed_video_id": None,
-                    "videos": [_to_read(v, session) for v in result.videos],
+                    "videos": _to_read_many(result.videos, session, viewer=user),
                 }
             )
         return {
@@ -442,7 +576,7 @@ def ai_recommendations(
         }
 
     page = recommend.homepage_recommendations_page(
-        session, limit=limit, offset=offset
+        session, user_id=user.id, limit=limit, offset=offset
     )
     return {
         "categories": recommend.list_categories(session),
@@ -451,7 +585,7 @@ def ai_recommendations(
                 "title": "",
                 "kind": "for_you",
                 "seed_video_id": None,
-                "videos": [_to_read(v, session) for v in page.videos],
+                "videos": _to_read_many(page.videos, session, viewer=user),
             }
         ]
         if page.videos
@@ -460,6 +594,6 @@ def ai_recommendations(
     }
 
 
-@router.get("/categories")
+@router.get("/categories", response_model=AiCategoriesRead)
 def ai_categories(session: Session = Depends(get_session)):
     return {"categories": recommend.list_categories(session)}

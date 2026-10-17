@@ -5,15 +5,15 @@ from __future__ import annotations
 import logging
 import subprocess
 import threading
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import activity, scanner
 from .encode_probe import EncoderChoice, pick_encoder, probe_encode_capabilities
 from .ffmpeg_bin import ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .fsutil import safe_rel, safe_unlink
 from .mp4_compat import codec_family, is_aac_audio, probe_media
-from .paths import to_rel_path
 from .ytdlp_formats import is_audio_preset, normalize_video_codec
 
 logger = logging.getLogger(__name__)
@@ -31,21 +31,21 @@ class TranscodeError(RuntimeError):
         super().__init__(f"Postprocessing: {message}")
 
 
-def is_h264_video(name: Optional[str]) -> bool:
+def is_h264_video(name: str | None) -> bool:
     return codec_family(name) in _H264_FAM
 
 
-def is_hevc_video(name: Optional[str]) -> bool:
+def is_hevc_video(name: str | None) -> bool:
     return codec_family(name) in _HEVC_FAM
 
 
 def encode_target(
     job_codec: str,
-    video_codec: Optional[str],
-    height: Optional[int],
+    video_codec: str | None,
+    height: int | None,
     *,
     preset: str = "",
-) -> Optional[str]:
+) -> str | None:
     """Return 'h264' when the downloaded file should be re-encoded in place, else None.
 
     Only the ``h264_convert`` mode rewrites originals. ≤1080p tiers already
@@ -144,9 +144,13 @@ def ffmpeg_transcode_cmd(
             ]
         )
     elif name == "hevc_amf":
-        cmd.extend(["-c:v", "hevc_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"])
+        cmd.extend(
+            ["-c:v", "hevc_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"]
+        )
     elif name == "h264_amf":
-        cmd.extend(["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"])
+        cmd.extend(
+            ["-c:v", "h264_amf", "-quality", "quality", "-rc", "cqp", "-qp_i", "20"]
+        )
     elif name == "hevc_videotoolbox":
         cmd.extend(["-c:v", "hevc_videotoolbox", "-q:v", "65"])
     elif name == "h264_videotoolbox":
@@ -165,7 +169,9 @@ def ffmpeg_transcode_cmd(
             ]
         )
     else:
-        cmd.extend(["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-profile:v", "high"])
+        cmd.extend(
+            ["-c:v", "libx264", "-preset", "medium", "-crf", "20", "-profile:v", "high"]
+        )
 
     cmd.extend(["-pix_fmt", "yuv420p"])
     if name.startswith("hevc_") or name == "libx265":
@@ -183,30 +189,23 @@ def ffmpeg_transcode_cmd(
     return cmd
 
 
-def _safe_rel(path: Path) -> Optional[str]:
-    try:
-        return to_rel_path(path)
-    except ValueError:
-        return None
-
-
-def _safe_unlink(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
 def transcode_video(
     path: Path,
     target: str,
     *,
-    encoder: Optional[EncoderChoice] = None,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    encoder: EncoderChoice | None = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
-    """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure."""
+    """Re-encode ``path`` to H.264 or H.265 MP4. Raises TranscodeError on failure.
+
+    ``on_replace(new_path)`` is for callers whose database row points at
+    ``path``: it runs once the new file is in place and *before* the original is
+    removed, with the scanner ignoring both names. If it raises, a new file at a
+    different path is deleted again, the original stays, and the error propagates.
+    """
     if not path.exists():
         raise TranscodeError("source file missing")
     caps = probe_encode_capabilities()
@@ -220,13 +219,18 @@ def transcode_video(
 
     probe = probe_media(path)
     has_audio = bool(probe and probe.audio_codec)
-    transcode_audio = bool(probe and probe.audio_codec and not is_aac_audio(probe.audio_codec))
+    transcode_audio = bool(
+        probe and probe.audio_codec and not is_aac_audio(probe.audio_codec)
+    )
 
     dest = path if path.suffix.lower() == ".mp4" else path.with_suffix(".mp4")
     tmp = dest.with_name(f"{dest.stem}.xcode.{threading.get_ident()}.mp4")
-    tmp_rel = _safe_rel(tmp)
+    tmp_rel = safe_rel(tmp)
+    dest_rel = safe_rel(dest) if dest != path else None
     if tmp_rel:
         scanner.mark_active(tmp_rel)
+    if dest_rel:
+        scanner.mark_active(dest_rel)
 
     cmd = ffmpeg_transcode_cmd(
         path,
@@ -258,20 +262,29 @@ def transcode_video(
                 logger.warning("transcode failed (%s): %s", choice.name, err[-800:])
                 raise TranscodeError(f"ffmpeg {choice.name} failed") from exc
             tmp.replace(dest)
+        if on_replace is not None:
+            try:
+                on_replace(dest)
+            except BaseException:
+                if dest != path:
+                    safe_unlink(dest)
+                raise
         if dest != path:
-            _safe_unlink(path)
+            safe_unlink(path)
         return dest
     except FfmpegCancelled:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise
     except subprocess.TimeoutExpired as exc:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise TranscodeError("ffmpeg transcode timed out") from exc
     except OSError as exc:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise TranscodeError(f"ffmpeg transcode failed: {exc}") from exc
     finally:
         if tmp_rel:
             scanner.unmark_active(tmp_rel)
+        if dest_rel:
+            scanner.unmark_active(dest_rel)
         if tmp.exists():
-            _safe_unlink(tmp)
+            safe_unlink(tmp)

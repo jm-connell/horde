@@ -15,13 +15,7 @@ describe("enabledSponsorBlockCategories", () => {
         intro: false,
         filler: true,
       })
-    ).toEqual([
-      "sponsor",
-      "selfpromo",
-      "interaction",
-      "outro",
-      "filler",
-    ]);
+    ).toEqual(["sponsor", "selfpromo", "interaction", "outro", "filler"]);
   });
 });
 

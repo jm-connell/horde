@@ -23,11 +23,20 @@ URL
 
 ## Module split
 
-Download-related code is split for maintainability (façades may still re-export):
+Download-related code is split for maintainability. The queue, the yt-dlp attempt loop and the library commit live in the `services/downloads/` package; `downloader.py` is a compatibility façade that only re-exports the names callers used to import from it. The old `start_download` shim had no callers and was removed in the split; use `jobs.enqueue_download` (or `downloader.enqueue_download`).
 
 | Module | Role |
 |--------|------|
-| `downloader.py` | `DownloadQueue`, ffmpeg postprocess queue, finalize, playlist import / subscribe attach |
+| `downloads/queue.py` | `DownloadQueue`: FIFO dispatch, global pause, cancel, quality restart, stuck-job reaper. It is handed the job runner instead of importing it |
+| `downloads/runner.py` | `run_download`: the yt-dlp attempt loop (format selectors, one cookie retry, recovery of a finished file), then the hand-off to the postprocess queue |
+| `downloads/ffmpeg_queue.py` | `FfmpegQueue`: bounded postprocess stage so a slow encode does not hold a download slot |
+| `downloads/postprocess.py` | `PostprocessTask` and the ffmpeg steps: Safari remux, H.264 transcode, loudness normalisation, quality check |
+| `downloads/finalize.py` | `complete_download`: promote from staging, commit the library row (`commit_library_video`), queue AI, catalog, subtitles, thumbnail and sidecar work |
+| `downloads/jobs.py` | Job rows: duplicate detection, retry preparation, quality change, `job_mutate_lock` |
+| `downloads/playlist_import.py`, `playlist_attach.py` | Playlist import as ordinary queue jobs; placing a finished download at its playlist position |
+| `downloads/progress.py` | `progress_store` and the yt-dlp progress / postprocessor hooks |
+| `downloads/staging.py`, `artifacts.py` | Per-job staging and `_device` dirs, output templates, promoting into the library; finding and cleaning yt-dlp output files |
+| `downloads/lifecycle.py`, `errors.py`, `dbwrite.py`, `spec.py`, `infodict.py`, `subtitles.py` | Ending a job (cancel / requeue / fail), exceptions and the yt-dlp logger, locked-database retries, the `JobSpec` snapshot of a job row, info-dict helpers, subtitle fetch |
 | `job_metadata.py` | Background title/preset fill for cheap-enqueued jobs |
 | `ffmpeg_progress.py` | ffmpeg `-progress` / `out_time` parsing and cancel |
 | `ytdlp_extract.py` | Download-card preview, channel feed fetch, channel search |
@@ -47,11 +56,14 @@ Download-related code is split for maintainability (façades may still re-export
 ## yt-dlp
 
 - Format presets: `best`, height caps (`2160p`…`480p`), `audio`. Default selectors prefer AV1 then AAC; `format_sort` is `res`, `fps`, `hdr:12`, `vcodec:av01`, `lang`, `acodec:mp4a`, `vbr`, `abr`. After download-meta extract, Horde pins the original-language audio `format_id` (same scoring as stream preview) so autodubs lose to the source track. The Settings **playback compatibility** mode (`video_codec` on the job) picks the selector: `av1` as above; `h264_native` uses YouTube `avc1` and caps every video preset at 1080p; `h264_convert` uses `avc1` at ≤1080p and AV1 at 1440p/4K, then re-encodes; `sidecar` downloads AV1 like `av1` and fetches a second H.264 file afterwards. Legacy `h264`/`h265` normalize to `h264_convert`. Existing library files are not rewritten.
-- Output template under `DOWNLOADS_DIR`:
+- Output template (rooted in the job's `DOWNLOADS_DIR/.horde-staging/{job_id}/`, then promoted into the library; see [storage layout](../ops/storage-layout.md)):
 
   ```text
-  %(uploader)s/%(upload_date>%Y)s/%(title)s [%(id)s].%(ext)s
+  <channel>/%(upload_date>%Y|Unknown year)s/%(title).150B [%(id).64B].%(ext)s
   ```
+
+  The channel folder is chosen in Python (`services/outtmpl.py`) to match `Video.channel`; the title budget shrinks until yt-dlp's own rendering leaves room for suffixes under 255 bytes. File-name matching for cleanup (`paths.video_stem` / `belongs_to_stem`) is exact on the full stem, never a prefix scan.
+- Job robustness: the worker body is total (any failure ends the job in `error`, DB writes retry "database is locked"), and a reaper requeues `downloading` jobs no worker or ffmpeg stage owns. Scanner marks are held until the postprocess stage finishes. Playlist import enqueues normal jobs tagged with `playlist_id`; order is kept through ascending job ids (no position column on jobs).
 
 - Extractor args use yt-dlp’s default YouTube player clients minus `android_vr` (those CDN URLs now 403 after ~60s of range requests). bgutil POT is attached when `YTDLP_POT_BASE_URL` is set. Cookies (see [YouTube access](../ops/youtube-access.md)) stay off until a specific video is blocked as age-restricted or members-only; that one extract/download is retried with cookies.
 - `POST /api/downloads` and `/bulk` insert a job and return immediately (catalog autodownload already did this). Title/presets fill on a background worker that uses the **low-priority** extract gate. Interactive `GET /preview` jumps that gate. Preview, download-meta, and stream preview share the same `url` cache key.

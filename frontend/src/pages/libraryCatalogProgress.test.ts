@@ -32,7 +32,9 @@ describe("catalogDenominator", () => {
     );
   });
   it("uses the real total when it is under the cap", () => {
-    expect(catalogDenominator({ ...base, total: 80, maxVideos: 1000 })).toBe(80);
+    expect(catalogDenominator({ ...base, total: 80, maxVideos: 1000 })).toBe(
+      80
+    );
   });
 });
 
@@ -74,9 +76,9 @@ describe("formatCatalogProgress", () => {
         status: "error",
       })
     ).toBe("Index failed (12/80)");
-    expect(
-      formatCatalogProgress({ ...base, status: "error" })
-    ).toBe("Index failed");
+    expect(formatCatalogProgress({ ...base, status: "error" })).toBe(
+      "Index failed"
+    );
   });
 });
 
@@ -84,7 +86,12 @@ describe("showChannelIndexButton", () => {
   it("hides when the catalog is complete, at the cap, or already indexing", () => {
     expect(showChannelIndexButton(null)).toBe(false);
     expect(
-      showChannelIndexButton({ ...base, complete: true, indexed: 80, total: 80 })
+      showChannelIndexButton({
+        ...base,
+        complete: true,
+        indexed: 80,
+        total: 80,
+      })
     ).toBe(false);
     expect(
       showChannelIndexButton({
@@ -102,7 +109,12 @@ describe("showChannelIndexButton", () => {
   it("shows when the catalog is missing, incomplete, or failed", () => {
     expect(showChannelIndexButton(base)).toBe(true);
     expect(
-      showChannelIndexButton({ ...base, indexed: 40, total: 80, status: "idle" })
+      showChannelIndexButton({
+        ...base,
+        indexed: 40,
+        total: 80,
+        status: "idle",
+      })
     ).toBe(true);
     expect(
       showChannelIndexButton({ ...base, indexed: 12, status: "error" })
@@ -142,23 +154,19 @@ describe("formatMatchReasonTip", () => {
         { source: "description", snippet: "wifi hotspot in the cab" },
         "wifi"
       )
-    ).toBe('Matched “wifi” in the description: “wifi hotspot in the cab”');
+    ).toBe("Matched “wifi” in the description: “wifi hotspot in the cab”");
     expect(
       formatMatchReasonTip(
         { source: "description", snippet: "install of the lights" },
         "hyprland install guide"
       )
-    ).toBe(
-      'Matched “install” in the description: “install of the lights”'
-    );
+    ).toBe("Matched “install” in the description: “install of the lights”");
     expect(
       formatMatchReasonTip(
         { source: "description", snippet: "A walk through the new office" },
         "hyprland install guide"
       )
-    ).toBe(
-      "Matched in the description: “A walk through the new office”"
-    );
+    ).toBe("Matched in the description: “A walk through the new office”");
     expect(
       formatMatchReasonTip(
         { source: "captions", snippet: "put a wifi hotspot in" },
@@ -175,14 +183,17 @@ describe("formatMatchReasonTip", () => {
 
   it("hides the badge for title hits and keeps other sources", () => {
     expect(
-      visibleMatchReasonTip({ source: "title", snippet: "WiFi routers" }, "wifi")
+      visibleMatchReasonTip(
+        { source: "title", snippet: "WiFi routers" },
+        "wifi"
+      )
     ).toBeNull();
     expect(
       visibleMatchReasonTip(
         { source: "description", snippet: "wifi hotspot" },
         "wifi"
       )
-    ).toBe('Matched “wifi” in the description: “wifi hotspot”');
+    ).toBe("Matched “wifi” in the description: “wifi hotspot”");
     expect(visibleMatchReasonTip(null, "wifi")).toBeNull();
     expect(visibleMatchReasonTip({ source: "youtube" }, "paint")).toBe(
       "Found on YouTube (not in the local catalog)."

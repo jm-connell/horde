@@ -72,6 +72,8 @@ select.ui-select-chevron {
   --ink-600: 42 49 63;
   --accent: 34 211 238;
   --accent-soft: 103 232 249;
+  --text-muted: 135 138 145;
+  --accent-text: 34 211 238;
   --accent-deep: 8 145 178;
 }
 
@@ -84,6 +86,8 @@ select.ui-select-chevron {
   --ink-600: 32 32 44;
   --accent: 34 211 238;
   --accent-soft: 103 232 249;
+  --text-muted: 127 128 134;
+  --accent-text: 34 211 238;
   --accent-deep: 8 145 178;
 }
 
@@ -97,6 +101,8 @@ select.ui-select-chevron {
   --ink-600: 16 56 20;
   --accent: 74 222 128;
   --accent-soft: 134 239 172;
+  --text-muted: 128 143 133;
+  --accent-text: 74 222 128;
   --accent-deep: 34 197 94;
 }
 
@@ -110,6 +116,8 @@ select.ui-select-chevron {
   --ink-600: 76 86 106;
   --accent: 136 192 208;
   --accent-soft: 163 210 222;
+  --text-muted: 187 191 198;
+  --accent-text: 185 218 227;
   --accent-deep: 94 153 175;
 }
 
@@ -123,6 +131,8 @@ select.ui-select-chevron {
   --ink-600: 148 163 184;
   --accent: 20 184 166;
   --accent-soft: 45 212 191;
+  --text-muted: 95 102 117;
+  --accent-text: 12 107 96;
   --accent-deep: 100 116 139;
 }
 
@@ -136,6 +146,8 @@ select.ui-select-chevron {
   --ink-600: 71 85 105;
   --accent: 99 102 241;
   --accent-soft: 129 140 248;
+  --text-muted: 151 158 182;
+  --accent-text: 161 163 247;
   --accent-deep: 79 70 229;
 }
 
@@ -149,6 +161,8 @@ select.ui-select-chevron {
   --ink-600: 80 80 120;
   --accent: 0 245 255;
   --accent-soft: 100 250 255;
+  --text-muted: 157 157 170;
+  --accent-text: 0 245 255;
   --accent-deep: 0 200 210;
 }
 
@@ -162,6 +176,8 @@ select.ui-select-chevron {
   --ink-600: 120 90 74;
   --accent: 255 107 53;
   --accent-soft: 255 154 102;
+  --text-muted: 188 169 152;
+  --accent-text: 255 165 132;
   --accent-deep: 234 88 12;
 }
 
@@ -175,6 +191,8 @@ select.ui-select-chevron {
   --ink-600: 100 116 108;
   --accent: 34 197 94;
   --accent-soft: 74 222 128;
+  --text-muted: 161 177 169;
+  --accent-text: 103 215 144;
   --accent-deep: 22 163 74;
 }
 
@@ -188,6 +206,8 @@ select.ui-select-chevron {
   --ink-600: 100 116 139;
   --accent: 96 165 250;
   --accent-soft: 147 197 253;
+  --text-muted: 168 175 183;
+  --accent-text: 152 196 252;
   --accent-deep: 59 130 246;
 }
 
@@ -201,6 +221,8 @@ select.ui-select-chevron {
   --ink-600: 168 162 158;
   --accent: 133 77 14;
   --accent-soft: 234 88 12;
+  --text-muted: 93 88 82;
+  --accent-text: 114 66 12;
   --accent-deep: 79 70 229;
 }
 
@@ -214,6 +236,8 @@ select.ui-select-chevron {
   --ink-600: 100 116 139;
   --accent: 14 165 233;
   --accent-soft: 56 189 248;
+  --text-muted: 75 93 109;
+  --accent-text: 8 92 130;
   --accent-deep: 30 64 175;
 }
 
@@ -227,6 +251,8 @@ select.ui-select-chevron {
   --ink-600: 168 162 158;
   --accent: 167 139 250;
   --accent-soft: 74 222 128;
+  --text-muted: 82 89 101;
+  --accent-text: 89 74 132;
   --accent-deep: 124 58 237;
 }
 
@@ -312,29 +338,14 @@ body {
 }
 
 [data-theme="light"] .text-gray-400,
-[data-theme="light"] .text-gray-500,
 [data-theme="light"] .hover\:text-gray-400:hover,
-[data-theme="light"] .hover\:text-gray-500:hover,
 [data-theme="earthy"] .text-gray-400,
-[data-theme="earthy"] .text-gray-500,
 [data-theme="earthy"] .hover\:text-gray-400:hover,
-[data-theme="earthy"] .hover\:text-gray-500:hover,
 [data-theme="frozen"] .text-gray-400,
-[data-theme="frozen"] .text-gray-500,
 [data-theme="frozen"] .hover\:text-gray-400:hover,
-[data-theme="frozen"] .hover\:text-gray-500:hover,
 [data-theme="mocha"] .text-gray-400,
-[data-theme="mocha"] .text-gray-500,
-[data-theme="mocha"] .hover\:text-gray-400:hover,
-[data-theme="mocha"] .hover\:text-gray-500:hover {
+[data-theme="mocha"] .hover\:text-gray-400:hover {
   color: #606060;
-}
-
-[data-theme="light"] .placeholder-gray-500::placeholder,
-[data-theme="earthy"] .placeholder-gray-500::placeholder,
-[data-theme="frozen"] .placeholder-gray-500::placeholder,
-[data-theme="mocha"] .placeholder-gray-500::placeholder {
-  color: #909090;
 }
 
 /* Theme-specific primary text colors */
@@ -366,6 +377,28 @@ body {
   color: #374151;
 }
 
+/* Accent used as TEXT colour: the raw accent can fail AA on some surfaces
+   (teal on white, indigo on dark navy), so text uses a per-theme adjusted
+   --accent-text that keeps the hue. Fills, rings and borders keep --accent. */
+.text-accent,
+.hover\:text-accent:hover,
+.group:hover .group-hover\:text-accent {
+  color: rgb(var(--accent-text));
+}
+
+/* text-gray-400 is secondary text; on these mid-tone dark themes it falls
+   below 4.5:1, so it uses the AA-safe muted colour there. */
+[data-theme="nord"] .text-gray-400,
+[data-theme="nord"] .hover\:text-gray-400:hover,
+[data-theme="sunset"] .text-gray-400,
+[data-theme="sunset"] .hover\:text-gray-400:hover,
+[data-theme="forest"] .text-gray-400,
+[data-theme="forest"] .hover\:text-gray-400:hover,
+[data-theme="slate"] .text-gray-400,
+[data-theme="slate"] .hover\:text-gray-400:hover {
+  color: rgb(var(--text-muted));
+}
+
 /* Neon Cyber: subtle glow on accent controls */
 [data-theme="cyber"] input[type="range"].accent-scrubber::-webkit-slider-thumb {
   box-shadow: 0 0 10px rgb(var(--accent) / 0.8);
@@ -395,17 +428,23 @@ input[type="range"].accent-scrubber::-webkit-slider-thumb {
   border-radius: 9999px;
   background: rgb(var(--accent));
   box-shadow: 0 0 8px rgb(var(--accent) / 0.6);
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
   transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25), 0 0 10px rgb(var(--accent) / 0.7);
+  box-shadow:
+    0 0 0 4px rgb(var(--accent) / 0.25),
+    0 0 10px rgb(var(--accent) / 0.7);
 }
 
 input[type="range"].accent-scrubber::-webkit-slider-thumb:active {
   transform: scale(1.2);
-  box-shadow: 0 0 0 5px rgb(var(--accent) / 0.3), 0 0 12px rgb(var(--accent) / 0.8);
+  box-shadow:
+    0 0 0 5px rgb(var(--accent) / 0.3),
+    0 0 12px rgb(var(--accent) / 0.8);
 }
 
 input[type="range"].accent-scrubber::-moz-range-thumb {
@@ -414,7 +453,9 @@ input[type="range"].accent-scrubber::-moz-range-thumb {
   border: none;
   border-radius: 9999px;
   background: rgb(var(--accent));
-  transition: transform 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
 }
 
 input[type="range"].accent-scrubber::-moz-range-thumb:hover {
@@ -736,7 +777,8 @@ html[data-translucent-panels="on"] header.ui-panel {
 /* Stronger fill for overlays that need readable text over effects.
    Same default panel color, higher opacity — no accent wash.
    Cards stay on the transparency slider — their fill is behind a thumbnail. */
-html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-panel-legible,
+html[data-translucent-panels="on"][data-panel-legibility="on"]
+  .ui-panel-legible,
 html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-menu {
   background-color: rgb(var(--ink-900) / 0.88) !important;
   backdrop-filter: blur(var(--ui-panel-blur, 12px));
@@ -803,7 +845,8 @@ html[data-translucent-panels="on"] .ui-up-next-scrim {
   background-color: rgb(0 0 0 / 0.12);
 }
 
-html[data-translucent-panels="on"][data-panel-legibility="on"] .ui-up-next-scrim {
+html[data-translucent-panels="on"][data-panel-legibility="on"]
+  .ui-up-next-scrim {
   background-color: rgb(0 0 0 / 0.55);
 }
 
@@ -849,23 +892,30 @@ html[data-hover-motion="glow"] .ui-card:hover {
     0 0 24px rgb(var(--accent) / 0.18);
 }
 
-html[data-hover-motion="subtle"] button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+html[data-hover-motion="subtle"]
+  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
 html[data-hover-motion="subtle"] .ui-interactive:hover,
 html[data-hover-motion="subtle"] select:hover,
-html[data-hover-motion="subtle"] input:not([type="range"]):not([type="color"]):hover {
+html[data-hover-motion="subtle"]
+  input:not([type="range"]):not([type="color"]):hover {
   filter: brightness(1.06);
 }
 
-html[data-hover-motion="lift"] button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+html[data-hover-motion="lift"]
+  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
 html[data-hover-motion="lift"] .ui-interactive:hover,
 html[data-hover-motion="lift"] select:hover {
   transform: translateY(-1px);
 }
 
-html[data-hover-motion="glow"] button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+html[data-hover-motion="glow"]
+  button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
+    .ui-player-chrome
+  ):hover,
 html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
 html[data-hover-motion="glow"] select:hover,
-html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]):hover {
+html[data-hover-motion="glow"]
+  input:not([type="range"]):not([type="color"]):hover {
   box-shadow:
     0 0 0 1px rgb(var(--accent) / 0.25),
     0 0 16px rgb(var(--accent) / 0.12);
@@ -883,7 +933,9 @@ html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
 }
 
 html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press,
-html[data-hover-motion="glow"] .ui-panel-toggle:focus-visible .ui-panel-toggle-press {
+html[data-hover-motion="glow"]
+  .ui-panel-toggle:focus-visible
+  .ui-panel-toggle-press {
   box-shadow:
     0 0 0 1px rgb(var(--accent) / 0.35),
     0 0 18px rgb(var(--accent) / 0.16);
@@ -892,7 +944,10 @@ html[data-hover-motion="glow"] .ui-panel-toggle:focus-visible .ui-panel-toggle-p
 /* Button press feedback (always on unless reduced motion).
    Panel headers use .ui-panel-toggle so only the label/arrow scale, not the
    full-width hover background. */
-html[data-button-press="on"] button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(.ui-player-chrome):not(.youtube-search-chip):active,
+html[data-button-press="on"]
+  button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
+    .ui-player-chrome
+  ):not(.youtube-search-chip):active,
 html[data-button-press="on"] .ui-interactive:not(.ui-panel-toggle):active,
 html[data-button-press="on"] a.ui-card:active:not([data-preview-scrubbing]) {
   transform: scale(0.97);
@@ -1485,4 +1540,3 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   display: inline-block;
   animation: horde-processing-ellipsis 1.2s ease-in-out infinite;
 }
-

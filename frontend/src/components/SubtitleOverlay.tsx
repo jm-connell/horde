@@ -134,8 +134,7 @@ export default function SubtitleOverlay({
     if (!stack) return;
 
     const rowEls = stack.querySelectorAll(".subtitle-overlay-line");
-    const rowAt = (index: number) =>
-      rowEls[index] as HTMLElement | undefined;
+    const rowAt = (index: number) => rowEls[index] as HTMLElement | undefined;
     const rowHeight = (index: number) => rowAt(index)?.offsetHeight ?? 0;
     const rowStep = (index: number) => {
       const a = rowAt(index);
@@ -203,7 +202,7 @@ export default function SubtitleOverlay({
       el.removeEventListener("transitionend", onEnd);
       slideGenRef.current += 1;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rollupSig is the cue identity
+    // rollupSig is the cue identity.
   }, [view.length, rollupSig]);
 
   useEffect(() => {
@@ -317,11 +316,7 @@ export default function SubtitleOverlay({
   measureLiftRef.current = () => {
     if (!controlsVisible) suppressLiftRef.current = false;
     if (
-      !captionLiftActive(
-        controlsVisible,
-        dragging,
-        suppressLiftRef.current
-      )
+      !captionLiftActive(controlsVisible, dragging, suppressLiftRef.current)
     ) {
       setLiftPx((prev) => (prev === 0 ? prev : 0));
       return;

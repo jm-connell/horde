@@ -25,7 +25,9 @@ function video(extra: Partial<Video> = {}): Video {
 }
 
 function mockDecoding(result: { supported: boolean; smooth: boolean }) {
-  const decodingInfo = vi.fn().mockResolvedValue({ ...result, powerEfficient: false });
+  const decodingInfo = vi
+    .fn()
+    .mockResolvedValue({ ...result, powerEfficient: false });
   vi.stubGlobal("navigator", { mediaCapabilities: { decodingInfo } });
   return decodingInfo;
 }
@@ -37,21 +39,39 @@ afterEach(() => {
 
 describe("chooseRendition", () => {
   it("plays the original when it decodes smoothly", () => {
-    expect(chooseRendition("smooth", { has_compat: true })).toEqual({ rendition: "original" });
-  });
-  it("uses the sidecar when the device cannot decode the original", () => {
-    expect(chooseRendition("unsupported", { has_compat: true })).toEqual({ rendition: "compat" });
-    expect(chooseRendition("unsupported", { has_compat: false })).toEqual({ rendition: null });
-  });
-  it("prefers smooth 1080p H.264 over a stuttering original", () => {
-    expect(chooseRendition("rough", { has_compat: true })).toEqual({ rendition: "compat" });
-    expect(chooseRendition("rough", { has_compat: false })).toEqual({ rendition: "original" });
-  });
-  it("honours try-anyway and unknown support", () => {
-    expect(chooseRendition("unsupported", { has_compat: false }, { forceOriginal: true })).toEqual({
+    expect(chooseRendition("smooth", { has_compat: true })).toEqual({
       rendition: "original",
     });
-    expect(chooseRendition("unknown", { has_compat: false })).toEqual({ rendition: "original" });
+  });
+  it("uses the sidecar when the device cannot decode the original", () => {
+    expect(chooseRendition("unsupported", { has_compat: true })).toEqual({
+      rendition: "compat",
+    });
+    expect(chooseRendition("unsupported", { has_compat: false })).toEqual({
+      rendition: null,
+    });
+  });
+  it("prefers smooth 1080p H.264 over a stuttering original", () => {
+    expect(chooseRendition("rough", { has_compat: true })).toEqual({
+      rendition: "compat",
+    });
+    expect(chooseRendition("rough", { has_compat: false })).toEqual({
+      rendition: "original",
+    });
+  });
+  it("honours try-anyway and unknown support", () => {
+    expect(
+      chooseRendition(
+        "unsupported",
+        { has_compat: false },
+        { forceOriginal: true }
+      )
+    ).toEqual({
+      rendition: "original",
+    });
+    expect(chooseRendition("unknown", { has_compat: false })).toEqual({
+      rendition: "original",
+    });
   });
 });
 
@@ -73,17 +93,27 @@ describe("checkOriginalSupport", () => {
   });
   it("uses video/webm for webm/mkv and unknown without a codec string", async () => {
     const decodingInfo = mockDecoding({ supported: true, smooth: true });
-    await checkOriginalSupport(video({ file_path: "a.mkv", codec_string: "vp09.00.40.08" }));
-    expect(decodingInfo.mock.calls[0][0].video.contentType).toBe('video/webm; codecs="vp09.00.40.08"');
-    expect(await checkOriginalSupport(video({ codec_string: null }))).toBe("unknown");
+    await checkOriginalSupport(
+      video({ file_path: "a.mkv", codec_string: "vp09.00.40.08" })
+    );
+    expect(decodingInfo.mock.calls[0][0].video.contentType).toBe(
+      'video/webm; codecs="vp09.00.40.08"'
+    );
+    expect(await checkOriginalSupport(video({ codec_string: null }))).toBe(
+      "unknown"
+    );
   });
 });
 
 describe("helpers", () => {
   it("labels codecs for people", () => {
     expect(codecLabel(video())).toBe("AV1");
-    expect(codecLabel(video({ vcodec: "h264", bit_depth: 10 }))).toBe("10-bit H.264");
-    expect(codecLabel(video({ vcodec: "h264", bit_depth: 8 }))).toBe("4K H.264");
+    expect(codecLabel(video({ vcodec: "h264", bit_depth: 10 }))).toBe(
+      "10-bit H.264"
+    );
+    expect(codecLabel(video({ vcodec: "h264", bit_depth: 8 }))).toBe(
+      "4K H.264"
+    );
   });
   it("estimates sidecar size like the server", () => {
     // 600 s × (5 Mbps + 160 kbps) / 8

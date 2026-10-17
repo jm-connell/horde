@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import logging
 import re
-from typing import Any, Optional
+from typing import Any
+
+logger = logging.getLogger(__name__)
 
 # Audio-only bitrate caps (kbps). Shown as labeled presets when the source has audio.
 AUDIO_ABR_TIERS: tuple[int, ...] = (160, 128, 64)
@@ -63,7 +67,8 @@ def compat_copy_cap() -> int:
 
         ui = (load() or {}).get("ui") or {}
         mode = normalize_compat_resolution(ui.get("compat_copy_resolution"))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("compat resolution setting unreadable; using 1080p", exc_info=True)
         mode = "1080p"
     return H264_MAX_SHORT_SIDE if mode == "source" else COMPAT_MAX_HEIGHT
 
@@ -88,7 +93,8 @@ def default_download_video_codec() -> str:
 
         ui = (load() or {}).get("ui") or {}
         return normalize_video_codec(ui.get("download_video_codec"))
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("download codec setting unreadable; using av1", exc_info=True)
         return "av1"
 
 
@@ -96,13 +102,7 @@ def _pair(height_filter: str, *, h264: bool = False) -> str:
     """Video+audio selector: preferred codec + AAC, then that codec, then any."""
     h = height_filter
     pref = _H264 if h264 else _AV1
-    return (
-        f"bv*{h}{pref}+ba{_AAC}/"
-        f"bv*{h}{pref}+ba/"
-        f"bv*{h}+ba{_AAC}/"
-        f"bv*{h}+ba/"
-        f"b{h}"
-    )
+    return f"bv*{h}{pref}+ba{_AAC}/bv*{h}{pref}+ba/bv*{h}+ba{_AAC}/bv*{h}+ba/b{h}"
 
 
 QUALITY_FORMATS = {
@@ -116,14 +116,13 @@ QUALITY_FORMATS = {
     "audio": f"ba{_AAC}/ba/b",
     **{
         f"audio-{abr}": (
-            f"ba{_AAC}[abr<={abr}]/ba[abr<={abr}]/"
-            f"bestaudio[abr<={abr}]/ba/b"
+            f"ba{_AAC}[abr<={abr}]/ba[abr<={abr}]/bestaudio[abr<={abr}]/ba/b"
         )
         for abr in AUDIO_ABR_TIERS
     },
 }
 
-PRESET_MAX_HEIGHT: dict[str, Optional[int]] = {
+PRESET_MAX_HEIGHT: dict[str, int | None] = {
     "best": None,
     "2160p": 2160,
     "1440p": 1440,
@@ -139,8 +138,26 @@ STANDARD_HEIGHTS = (2160, 1440, 1080, 720, 480)
 # Must match download YoutubeDL opts so preview sizes pick the same stream.
 # vcodec:av01 beats a fatter VP9/H.264 at the same height; AAC for iPhone MP4.
 # lang before abr so dubbed higher-bitrate tracks lose to the original.
-FORMAT_SORT = ["res", "fps", "hdr:12", "vcodec:av01", "lang", "acodec:mp4a", "vbr", "abr"]
-FORMAT_SORT_H264 = ["res", "fps", "hdr:12", "vcodec:h264", "lang", "acodec:mp4a", "vbr", "abr"]
+FORMAT_SORT = [
+    "res",
+    "fps",
+    "hdr:12",
+    "vcodec:av01",
+    "lang",
+    "acodec:mp4a",
+    "vbr",
+    "abr",
+]
+FORMAT_SORT_H264 = [
+    "res",
+    "fps",
+    "hdr:12",
+    "vcodec:h264",
+    "lang",
+    "acodec:mp4a",
+    "vbr",
+    "abr",
+]
 
 
 def is_audio_preset(preset: str) -> bool:
@@ -162,7 +179,7 @@ def uses_native_h264(preset: str, codec: str) -> bool:
     return max_h <= 1080
 
 
-def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
+def effective_max_height(preset: str, codec: str = "av1") -> int | None:
     """Preset height cap after the compat mode is applied (native H.264 tops out at 1080p)."""
     max_h = PRESET_MAX_HEIGHT.get(preset)
     if is_audio_preset(preset):
@@ -172,7 +189,7 @@ def effective_max_height(preset: str, codec: str = "av1") -> Optional[int]:
     return max_h
 
 
-def compat_format_spec(max_height: Optional[int] = None, *, vertical: bool = False) -> str:
+def compat_format_spec(max_height: int | None = None, *, vertical: bool = False) -> str:
     """yt-dlp selector for the native H.264 sidecar (≤1080p avc1 + AAC when offered).
 
     ``max_height`` is the short-side cap; vertical video caps width instead so a
@@ -180,11 +197,7 @@ def compat_format_spec(max_height: Optional[int] = None, *, vertical: bool = Fal
     """
     cap = min(max_height or COMPAT_MAX_HEIGHT, COMPAT_MAX_HEIGHT)
     h = f"[width<={cap}]" if vertical else f"[height<={cap}]"
-    return (
-        f"bv*{h}{_H264}+ba{_AAC}/"
-        f"bv*{h}{_H264}+ba/"
-        f"b{h}{_H264}"
-    )
+    return f"bv*{h}{_H264}+ba{_AAC}/bv*{h}{_H264}+ba/b{h}{_H264}"
 
 
 def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
@@ -193,8 +206,10 @@ def format_sort_for(preset: str, codec: str = "av1") -> list[str]:
     return list(FORMAT_SORT)
 
 
-def _primary_spec(preset: str, *, h264: bool, max_height: Optional[int] = None) -> str:
-    pair = lambda filt: _pair(filt, h264=h264)
+def _primary_spec(preset: str, *, h264: bool, max_height: int | None = None) -> str:
+    def pair(filt: str) -> str:
+        return _pair(filt, h264=h264)
+
     audio = QUALITY_FORMATS.get(preset) if is_audio_preset(preset) else None
     if audio:
         return audio
@@ -353,7 +368,9 @@ def decode_available_presets(raw: str | None) -> list[str]:
     return [str(p) for p in data if p]
 
 
-def quality_from_preview(requested: str, preview: dict[str, Any] | None) -> tuple[str, str | None]:
+def quality_from_preview(
+    requested: str, preview: dict[str, Any] | None
+) -> tuple[str, str | None]:
     """Return (resolved_preset, encoded available_presets) from a preview dict."""
     available: list[str] = []
     if isinstance(preview, dict):
@@ -379,14 +396,10 @@ def score_audio_format(fmt: dict[str, Any], original_lang: str) -> int:
     """Higher is better. Prefers original language over a fatter dubbed track."""
     score = 0
     abr = fmt.get("abr") or fmt.get("tbr") or 0
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         score += int(float(abr))
-    except (TypeError, ValueError):
-        pass
-    try:
+    with contextlib.suppress(TypeError, ValueError):
         score += int(fmt.get("asr") or 0) // 100
-    except (TypeError, ValueError):
-        pass
     acodec = str(fmt.get("acodec") or "")
     if _is_mp4_audio_codec(acodec):
         score += 2_000
@@ -408,9 +421,9 @@ def score_audio_format(fmt: dict[str, Any], original_lang: str) -> int:
         score += 20_000
     elif "original" in blob:
         score += 15_000
-    elif lang in ("", "und") and not original_lang:
-        score += 5_000
-    elif lang == "en" and not original_lang:
+    elif (
+        lang in ("", "und") and not original_lang or lang == "en" and not original_lang
+    ):
         score += 5_000
     elif lang and original_lang and lang != original_lang:
         score -= 10_000
@@ -421,7 +434,7 @@ def pick_original_audio_format(
     info: dict[str, Any] | None,
     *,
     require_mp4: bool = False,
-) -> Optional[dict[str, Any]]:
+) -> dict[str, Any] | None:
     """Choose the original-language audio track when YouTube offers autodubs."""
     if not isinstance(info, dict):
         return None

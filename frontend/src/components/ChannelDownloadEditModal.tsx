@@ -1,12 +1,10 @@
+import { useId, useRef } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import ChannelPicker from "./ChannelPicker";
-import {
-  mergePinnedPreset,
-  PRESET_ORDER,
-  presetOptionLabel,
-} from "../presets";
+import { mergePinnedPreset, PRESET_ORDER, presetOptionLabel } from "../presets";
 import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
-import { youtubeThumbnailUrl } from "../utils";
+import { backdropClick, youtubeThumbnailUrl } from "../utils";
 import ThemedSelect from "./ThemedSelect";
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
@@ -26,6 +24,11 @@ export default function ChannelDownloadEditModal({
   onSave: (patch: Partial<PendingChannelDownload>) => void;
   onDownloadNow: () => void;
 }) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: onClose });
+  const titleInputId = useId();
+  const noteInputId = useId();
+  const dialogTitleId = useId();
   const preview = item.preview;
   const qualityOptions =
     preview && !preview.is_playlist && preview.available_presets.length > 0
@@ -39,18 +42,28 @@ export default function ChannelDownloadEditModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
+      role="presentation"
+      onClick={backdropClick(onClose)}
     >
       <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
-        onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogTitleId}
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold text-gray-100">Edit download</h2>
+          <h2
+            id={dialogTitleId}
+            className="text-lg font-semibold text-gray-100"
+          >
+            Edit download
+          </h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300"
+            className="text-muted hover:text-gray-300"
             aria-label="Close"
           >
             ×
@@ -60,6 +73,10 @@ export default function ChannelDownloadEditModal({
         <div className="mb-4 flex gap-3">
           {thumbSrc && (
             <img
+              loading="lazy"
+              decoding="async"
+              width={112}
+              height={64}
               src={thumbSrc}
               alt=""
               className="h-16 w-28 shrink-0 rounded-lg object-cover"
@@ -72,15 +89,18 @@ export default function ChannelDownloadEditModal({
 
         <div className="space-y-3">
           <div>
-            <label className={labelClass}>Title</label>
+            <label htmlFor={titleInputId} className={labelClass}>
+              Title
+            </label>
             <input
+              id={titleInputId}
               value={item.title}
               onChange={(e) => onSave({ title: e.target.value })}
               className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
             />
           </div>
           <div>
-            <label className={labelClass}>Channel</label>
+            <span className={labelClass}>Channel</span>
             <ChannelPicker
               value={item.channel}
               onChange={(channel) => onSave({ channel })}
@@ -89,7 +109,7 @@ export default function ChannelDownloadEditModal({
             />
           </div>
           <div>
-            <label className={labelClass}>Resolution</label>
+            <span className={labelClass}>Resolution</span>
             <ThemedSelect
               aria-label="Resolution"
               value={item.preset}
@@ -104,9 +124,12 @@ export default function ChannelDownloadEditModal({
           </div>
           <div>
             <div className="mb-1 flex items-baseline justify-between gap-2">
-              <label className={labelClass + " mb-0"}>Note</label>
+              <label htmlFor={noteInputId} className={labelClass + " mb-0"}>
+                Note
+              </label>
             </div>
             <textarea
+              id={noteInputId}
               value={item.notes}
               onChange={(e) => onSave({ notes: e.target.value })}
               rows={3}

@@ -145,9 +145,7 @@ def test_description_pass_skips_cookies_error_and_continues(session, monkeypatch
     gated = _video(
         session, catalog, yt_id="age11111111", title="Gated clip", position=0
     )
-    _video(
-        session, catalog, yt_id="ok111111111", title="Public match", position=1
-    )
+    _video(session, catalog, yt_id="ok111111111", title="Public match", position=1)
 
     def fake_extract(url, opts, **_kwargs):
         if gated.yt_id in url:
@@ -216,9 +214,7 @@ def test_index_catalog_continues_after_age_restricted_page(session, monkeypatch)
     assert catalog.last_error
     assert "continued indexing" in catalog.last_error
     videos = session.exec(
-        select(ChannelCatalogVideo).where(
-            ChannelCatalogVideo.catalog_id == catalog.id
-        )
+        select(ChannelCatalogVideo).where(ChannelCatalogVideo.catalog_id == catalog.id)
     ).all()
     assert [row.yt_id for row in videos] == ["ok111111111"]
 
@@ -276,13 +272,11 @@ def test_fetch_channel_feed_ignores_per_video_errors(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "yt_dlp", types.SimpleNamespace(YoutubeDL=DummyYDL)
     )
-    from app.services.ytdlp_extract import fetch_channel_feed
     import app.services.ytdlp_extract as extract
+    from app.services.ytdlp_extract import fetch_channel_feed
 
     extract._feed_cache.clear()
-    result = fetch_channel_feed(
-        "https://www.youtube.com/@karrigan", offset=0, limit=2
-    )
+    result = fetch_channel_feed("https://www.youtube.com/@karrigan", offset=0, limit=2)
     assert captured.get("ignoreerrors") is True
     assert "cookiefile" not in captured
     assert "cookiesfrombrowser" not in captured

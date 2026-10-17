@@ -10,7 +10,9 @@ def test_playlist_crud_and_items(client, add_video):
     assert empty.status_code == 200
     assert empty.json() == []
 
-    created = client.post("/api/playlists", json={"name": "  Mix  ", "description": "d"})
+    created = client.post(
+        "/api/playlists", json={"name": "  Mix  ", "description": "d"}
+    )
     assert created.status_code == 200
     playlist = created.json()
     assert playlist["name"] == "Mix"
@@ -64,17 +66,18 @@ def test_playlist_crud_and_items(client, add_video):
 
 
 def test_import_subscribe_and_duplicate(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
+    from app.services.downloads import playlist_import
 
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_playlist",
         lambda url: (
             "Build Log",
             ["https://www.youtube.com/watch?v=aaaaaaaaaa1"],
         ),
     )
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
 
     created = client.post(
         "/api/playlists/import",
@@ -103,9 +106,9 @@ def test_import_subscribe_and_duplicate(client, monkeypatch):
 
 
 def test_import_one_shot_is_not_subscribed(client, monkeypatch):
-    from app.services import downloader
+    from app.services.downloads import playlist_import
 
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
     created = client.post(
         "/api/playlists/import",
         json={
@@ -127,9 +130,9 @@ def test_sync_requires_subscription(client):
 
 def test_patch_subscribe_youtube_playlist(client, monkeypatch):
     from app.api import playlists as playlists_api
-    from app.services import downloader
+    from app.services.downloads import playlist_import
 
-    monkeypatch.setattr(downloader, "start_playlist_import", lambda *a, **k: None)
+    monkeypatch.setattr(playlist_import, "start_playlist_import", lambda *a, **k: None)
     monkeypatch.setattr(playlists_api, "start_playlist_sync", lambda *a, **k: None)
     created = client.post(
         "/api/playlists/import",
@@ -160,7 +163,7 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
     from sqlmodel import select
 
     from app.models import Playlist, PlaylistItem, PlaylistSource
-    from app.services import downloader
+    from app.services.downloads import jobs
     from app.services.playlist_sync import sync_subscribed_playlist
 
     video = add_video(title="Part 1", yt_id="abcdefghijk")
@@ -191,13 +194,13 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
     )
 
     created_jobs: list[int] = []
-    original_enqueue = downloader.enqueue_download
+    original_enqueue = jobs.enqueue_download
 
     def _track_enqueue(job_id: int) -> None:
         created_jobs.append(job_id)
         original_enqueue(job_id)
 
-    monkeypatch.setattr(downloader, "enqueue_download", _track_enqueue)
+    monkeypatch.setattr(jobs, "enqueue_download", _track_enqueue)
 
     sync_subscribed_playlist(pid)
     session.expire_all()
@@ -215,7 +218,9 @@ def test_sync_attaches_existing_library_video(session, add_video, monkeypatch):
 
 def test_playlist_404s(client):
     assert client.get("/api/playlists/1").status_code == 404
-    assert client.post("/api/playlists/1/items", json={"video_id": 1}).status_code == 404
+    assert (
+        client.post("/api/playlists/1/items", json={"video_id": 1}).status_code == 404
+    )
     assert client.patch("/api/playlists/1", json={"name": "x"}).status_code == 404
     assert client.delete("/api/playlists/1").status_code == 404
     assert client.get("/api/playlists/1/thumbnail").status_code == 404
@@ -325,10 +330,10 @@ def test_add_item_url_uses_existing_library_video(client, add_video):
 
 
 def test_add_item_url_queues_download(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "bbbbbbbbbb1",
@@ -352,9 +357,10 @@ def test_add_item_url_queues_download(client, monkeypatch):
 
 
 def test_attach_completed_download_to_playlist(session, add_video):
-    from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
-    from app.services.downloader import _attach_download_to_playlist
     from sqlmodel import select
+
+    from app.models import DownloadJob, JobStatus, Playlist, PlaylistItem
+    from app.services.downloads.playlist_attach import attach_download_to_playlist
 
     video = add_video(title="Fresh")
     playlist = Playlist(name="Mix")
@@ -371,7 +377,7 @@ def test_attach_completed_download_to_playlist(session, add_video):
     session.commit()
     session.refresh(job)
 
-    _attach_download_to_playlist(job.id, video.id)
+    attach_download_to_playlist(job.id, video.id)
     session.expire_all()
     items = list(
         session.exec(

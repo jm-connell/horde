@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import platform
 import shutil
 import subprocess
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+
+from ..auth import current_user
+from ..response_schemas import SystemStatsRead
+from ..schemas import SystemActivityRead
+from ..services.auth.accounts import AuthUser
+from . import member_view
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/system", tags=["system"])
 
@@ -19,13 +28,13 @@ def _looks_like_arch_string(name: str) -> bool:
     return bool(re.search(r"Family\s+\d+\s+Model", name, re.I))
 
 
-def _cpu_model() -> Optional[str]:
+def _cpu_model() -> str | None:
     # Windows: marketing name from registry (not platform.processor arch string).
     try:
         import sys
 
         if sys.platform == "win32":
-            import winreg  # type: ignore
+            import winreg
 
             key = winreg.OpenKey(
                 winreg.HKEY_LOCAL_MACHINE,
@@ -38,8 +47,11 @@ def _cpu_model() -> Optional[str]:
                     return name
             finally:
                 winreg.CloseKey(key)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from the Windows registry",
+            exc_info=True,
+        )
 
     # Linux
     try:
@@ -49,8 +61,11 @@ def _cpu_model() -> Optional[str]:
                     name = line.split(":", 1)[1].strip()
                     if name:
                         return name
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from /proc/cpuinfo",
+            exc_info=True,
+        )
 
     # macOS
     try:
@@ -64,21 +79,27 @@ def _cpu_model() -> Optional[str]:
         name = (result.stdout or "").strip()
         if name:
             return name
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model via sysctl",
+            exc_info=True,
+        )
 
     try:
         name = platform.processor().strip()
         if name and not _looks_like_arch_string(name):
             return name
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read the CPU model from platform",
+            exc_info=True,
+        )
     return None
 
 
-def _cpu_temp() -> Optional[float]:
+def _cpu_temp() -> float | None:
     try:
-        import psutil  # type: ignore
+        import psutil
 
         temps = psutil.sensors_temperatures(fahrenheit=False)
         if not temps:
@@ -95,8 +116,11 @@ def _cpu_temp() -> Optional[float]:
             for e in entries:
                 if e.current is not None:
                     return float(e.current)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read CPU temperature sensors",
+            exc_info=True,
+        )
     return None
 
 
@@ -110,19 +134,22 @@ def _cpu_ram() -> dict[str, Any]:
         "ram_percent": None,
     }
     try:
-        import psutil  # type: ignore
+        import psutil
 
         out["cpu_percent"] = float(psutil.cpu_percent(interval=None))
         mem = psutil.virtual_memory()
         out["ram_used_bytes"] = int(mem.used)
         out["ram_total_bytes"] = int(mem.total)
         out["ram_percent"] = float(mem.percent)
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "could not read CPU and memory usage",
+            exc_info=True,
+        )
     return out
 
 
-def host_gpu() -> Optional[dict[str, Any]]:
+def host_gpu() -> dict[str, Any] | None:
     """Return local GPU stats (NVIDIA / AMD / Intel), or None if unavailable."""
     from ..services.ai.workload import probe_local_gpu
 
@@ -134,8 +161,8 @@ nvidia_gpu = host_gpu
 _nvidia_gpu = host_gpu
 
 
-@router.get("/stats")
-def system_stats():
+@router.get("/stats", response_model=SystemStatsRead)
+def system_stats(user: AuthUser = Depends(current_user)):
     cpu_ram = _cpu_ram()
     gpu = host_gpu()
     encode = None
@@ -143,21 +170,25 @@ def system_stats():
         from ..services.encode_probe import probe_encode_capabilities
 
         encode = probe_encode_capabilities().to_dict()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("encode capabilities unavailable", exc_info=True)
         encode = None
     disk = None
     try:
-        from ..config import DOWNLOADS_DIR
+        from ..context import get_paths
 
-        usage = shutil.disk_usage(DOWNLOADS_DIR)
+        usage = shutil.disk_usage(get_paths().downloads)
         disk = {
             "total_bytes": usage.total,
             "used_bytes": usage.used,
             "free_bytes": usage.free,
         }
-    except Exception:  # noqa: BLE001
-        pass
-    return {
+    except Exception:
+        # The Settings page polls this endpoint.
+        logger.debug(
+            "could not read disk usage of %s", get_paths().downloads, exc_info=True
+        )
+    payload = {
         "cpu_percent": cpu_ram["cpu_percent"],
         "cpu_model": cpu_ram["cpu_model"],
         "cpu_temp_c": cpu_ram["cpu_temp_c"],
@@ -169,18 +200,20 @@ def system_stats():
         "disk": disk,
         "encode": encode,
     }
+    return payload if user.is_admin else member_view.stats(payload)
 
 
-@router.get("/activity")
-def system_activity():
+@router.get("/activity", response_model=SystemActivityRead)
+def system_activity(user: AuthUser = Depends(current_user)):
     """Live + recent background tasks (ffmpeg, downloads, AI, catalog, …)."""
     from ..services import activity
 
     snap = activity.snapshot()
     cpu = _cpu_ram().get("cpu_percent")
-    return {
+    payload = {
         "running": snap["running"],
         "recent": snap["recent"],
         "queued": snap["queued"],
         "cpu_percent": cpu,
     }
+    return payload if user.is_admin else member_view.activity(payload)

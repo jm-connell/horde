@@ -10,7 +10,11 @@ import {
 import { offlineManager } from "../offline/manager";
 import type { Video } from "../types";
 
-export function DownloadIcon({ className = "h-4 w-4" }: { className?: string }) {
+export function DownloadIcon({
+  className = "h-4 w-4",
+}: {
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -27,7 +31,11 @@ export function DownloadIcon({ className = "h-4 w-4" }: { className?: string }) 
   );
 }
 
-export function DownloadedIcon({ className = "h-4 w-4" }: { className?: string }) {
+export function DownloadedIcon({
+  className = "h-4 w-4",
+}: {
+  className?: string;
+}) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -57,7 +65,15 @@ export function ProgressRing({
   const c = 2 * Math.PI * r;
   return (
     <svg viewBox="0 0 24 24" className={`${className} -rotate-90`} aria-hidden>
-      <circle cx="12" cy="12" r={r} fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+      <circle
+        cx="12"
+        cy="12"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity="0.25"
+        strokeWidth="3"
+      />
       <circle
         cx="12"
         cy="12"
@@ -78,7 +94,7 @@ export function useOfflineDownloadAction(video: Video) {
   const offline = useOfflineMode();
   // No Cache Storage / service worker outside secure contexts (plain http).
   const supported = !useOfflineDownloads().unsupported;
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
   const confirm = useConfirm();
 
   const status = item?.status;
@@ -105,7 +121,8 @@ export function useOfflineDownloadAction(video: Video) {
         confirmLabel: "Save file instead",
         cancelLabel: "Close",
       });
-      if (save && video.id > 0) triggerBrowserDownload(downloadFileUrl(video.id));
+      if (save && video.id > 0)
+        triggerBrowserDownload(downloadFileUrl(video.id));
       return;
     }
     if (!item || status === "error") {
@@ -117,7 +134,7 @@ export function useOfflineDownloadAction(video: Video) {
         await offlineManager.download(video);
         showToast("Downloading for offline viewing");
       } catch (err) {
-        showToast(err instanceof Error ? err.message : "Download failed");
+        showError(err instanceof Error ? err.message : "Download failed");
       }
       return;
     }

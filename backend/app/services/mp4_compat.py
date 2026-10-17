@@ -16,15 +16,14 @@ import json
 import logging
 import subprocess
 import threading
-import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Optional
 
 from . import activity, scanner
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin, ffprobe_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
-from .paths import to_rel_path
+from .fsutil import replace_with_retries, safe_rel, safe_unlink
 
 logger = logging.getLogger(__name__)
 
@@ -39,10 +38,10 @@ _path_locks: dict[str, threading.Lock] = {}
 
 @dataclass(frozen=True)
 class MediaProbe:
-    video_codec: Optional[str]
-    audio_codec: Optional[str]
+    video_codec: str | None
+    audio_codec: str | None
     format_name: str
-    moov_front: Optional[bool]
+    moov_front: bool | None
 
 
 @dataclass(frozen=True)
@@ -56,7 +55,7 @@ class CompatPlan:
         return self.transcode_audio or self.faststart or self.remux_to_mp4
 
 
-def codec_family(name: Optional[str]) -> str:
+def codec_family(name: str | None) -> str:
     if not name:
         return ""
     raw = name.strip().lower().replace(" ", "")
@@ -65,7 +64,7 @@ def codec_family(name: Optional[str]) -> str:
     return raw.split(".")[0]
 
 
-def is_aac_audio(name: Optional[str]) -> bool:
+def is_aac_audio(name: str | None) -> bool:
     return codec_family(name) in _AAC_AUDIO
 
 
@@ -74,7 +73,7 @@ def is_mp4_container(format_name: str) -> bool:
     return any(token in n for token in ("mp4", "m4a", "mov", "3gp", "isom"))
 
 
-def mp4_video_tag(name: Optional[str]) -> Optional[str]:
+def mp4_video_tag(name: str | None) -> str | None:
     """ISO-BMFF fourcc Safari expects for copied video."""
     fam = codec_family(name)
     if fam in _AV1_VIDEO:
@@ -95,7 +94,7 @@ def apple_webkit_playback(user_agent: str) -> bool:
     return "safari" in ua
 
 
-def mp4_moov_before_mdat(path: Path) -> Optional[bool]:
+def mp4_moov_before_mdat(path: Path) -> bool | None:
     """True when the moov atom is before mdat (faststart). None if not MP4."""
     try:
         file_size = path.stat().st_size
@@ -151,6 +150,14 @@ def compat_plan(probe: MediaProbe) -> CompatPlan:
     return CompatPlan(transcode_audio=transcode_audio, faststart=True)
 
 
+def needs_safari_prep(path: Path) -> bool:
+    """True when ``path`` is a file WebKit cannot play as stored (and ffmpeg can fix)."""
+    if not ffmpeg_available():
+        return False
+    probe = probe_media(path)
+    return probe is not None and compat_plan(probe).needed
+
+
 def ffmpeg_compat_cmd(
     src: Path,
     dest: Path,
@@ -158,7 +165,7 @@ def ffmpeg_compat_cmd(
     transcode_audio: bool,
     has_video: bool,
     has_audio: bool,
-    video_codec: Optional[str] = None,
+    video_codec: str | None = None,
 ) -> list[str]:
     cmd = [ffmpeg_bin(), "-y", "-i", str(src)]
     if has_video:
@@ -180,7 +187,7 @@ def ffmpeg_compat_cmd(
     return cmd
 
 
-def probe_media(path: Path) -> Optional[MediaProbe]:
+def probe_media(path: Path) -> MediaProbe | None:
     if not path.exists() or path.stat().st_size <= 0:
         return None
     try:
@@ -206,8 +213,8 @@ def probe_media(path: Path) -> Optional[MediaProbe]:
         data = json.loads(result.stdout)
     except (subprocess.SubprocessError, ValueError, OSError, json.JSONDecodeError):
         return None
-    video_codec: Optional[str] = None
-    audio_codec: Optional[str] = None
+    video_codec: str | None = None
+    audio_codec: str | None = None
     for stream in data.get("streams") or []:
         if not isinstance(stream, dict):
             continue
@@ -241,40 +248,6 @@ def _lock_for(path: Path) -> threading.Lock:
         return lock
 
 
-def _replace_with_retries(src: Path, dest: Path, retries: int = 8) -> None:
-    last_exc: Optional[OSError] = None
-    for attempt in range(retries):
-        try:
-            src.replace(dest)
-            return
-        except PermissionError as exc:
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-        except OSError as exc:
-            if getattr(exc, "winerror", None) not in (5, 32) and not isinstance(
-                exc, PermissionError
-            ):
-                raise
-            last_exc = exc
-            time.sleep(0.2 * (attempt + 1))
-    if last_exc is not None:
-        raise last_exc
-
-
-def _safe_unlink(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
-def _safe_rel(path: Path) -> Optional[str]:
-    try:
-        return to_rel_path(path)
-    except ValueError:
-        return None
-
-
 def _dest_mp4(path: Path) -> Path:
     if path.suffix.lower() in _MP4_SUFFIXES and path.suffix.lower() != ".mov":
         return path
@@ -284,26 +257,36 @@ def _dest_mp4(path: Path) -> Path:
 def ensure_safari_mp4(
     path: Path,
     *,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
-    """Copy video, AAC audio if needed, faststart. Returns the playable path."""
+    """Copy video, AAC audio if needed, faststart. Returns the playable path.
+
+    ``on_replace(new_path)`` is for callers whose database row points at
+    ``path``: it runs after the new file is in place and *before* the original
+    is removed, while the scanner is told to ignore both names. If it raises,
+    a new file at a different path is deleted again, the original stays, and
+    the exception propagates.
+    """
     with _lock_for(path):
         return _ensure_safari_mp4_locked(
             path,
             cancel_event=cancel_event,
             on_progress=on_progress,
             duration=duration,
+            on_replace=on_replace,
         )
 
 
 def _ensure_safari_mp4_locked(
     path: Path,
     *,
-    cancel_event: Optional[threading.Event] = None,
-    on_progress: Optional[Callable[[float], None]] = None,
-    duration: Optional[float] = None,
+    cancel_event: threading.Event | None = None,
+    on_progress: Callable[[float], None] | None = None,
+    duration: float | None = None,
+    on_replace: Callable[[Path], None] | None = None,
 ) -> Path:
     if not path.exists():
         return path
@@ -318,11 +301,9 @@ def _ensure_safari_mp4_locked(
         return path
 
     dest_path = _dest_mp4(path)
-    tmp = dest_path.with_name(
-        f"{dest_path.stem}.compat.{threading.get_ident()}.mp4"
-    )
-    tmp_rel = _safe_rel(tmp)
-    dest_rel = _safe_rel(dest_path)
+    tmp = dest_path.with_name(f"{dest_path.stem}.compat.{threading.get_ident()}.mp4")
+    tmp_rel = safe_rel(tmp)
+    dest_rel = safe_rel(dest_path)
     if tmp_rel:
         scanner.mark_active(tmp_rel)
     if dest_rel and dest_path != path:
@@ -351,16 +332,23 @@ def _ensure_safari_mp4_locked(
                 cancel_event=cancel_event,
                 timeout=4 * 3600,
             )
-            _replace_with_retries(tmp, dest_path)
+            replace_with_retries(tmp, dest_path)
+        if on_replace is not None:
+            try:
+                on_replace(dest_path)
+            except BaseException:
+                if dest_path != path:
+                    safe_unlink(dest_path)
+                raise
         if dest_path != path:
-            _safe_unlink(path)
+            safe_unlink(path)
         return dest_path
     except FfmpegCancelled:
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         raise
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError) as exc:
         logger.warning("Safari MP4 remux failed for %s: %s", path.name, exc)
-        _safe_unlink(tmp)
+        safe_unlink(tmp)
         return path
     finally:
         if tmp_rel:
@@ -368,4 +356,4 @@ def _ensure_safari_mp4_locked(
         if dest_rel and dest_path != path:
             scanner.unmark_active(dest_rel)
         if tmp.exists():
-            _safe_unlink(tmp)
+            safe_unlink(tmp)

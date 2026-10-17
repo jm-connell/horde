@@ -6,18 +6,16 @@ CDN/manifest caching used by api/preview.py.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import secrets
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Any, Optional
+from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
-import httpx
-
-logger = logging.getLogger(__name__)
-
+from .url_safety import UnsafeUrlError, fetch_bytes
 from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
@@ -31,6 +29,8 @@ from .ytdlp_common import (
 from .ytdlp_extract import _best_thumbnail_url
 from .ytdlp_formats import _available_presets, pick_original_audio_format
 
+logger = logging.getLogger(__name__)
+
 
 def _as_info(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
@@ -41,7 +41,7 @@ def _purge_members_only_yt_id(yt_id: str) -> None:
         from .channel_catalog.skips import purge_members_only_by_yt_id
 
         purge_members_only_by_yt_id(yt_id)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("members-only catalog purge failed", exc_info=True)
 
 
@@ -79,7 +79,7 @@ class PreviewRefreshError(RuntimeError):
         self.retry_after = retry_after
 
 
-def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
+def _pick_progressive_format(info: dict[str, Any]) -> dict[str, Any] | None:
     """Best muxed progressive format at or below preview height cap."""
     formats = info.get("formats") or []
     candidates: list[tuple[int, dict[str, Any]]] = []
@@ -103,10 +103,8 @@ def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
         elif ext in ("webm", "mkv"):
             score += 50_000
         tbr = fmt.get("tbr") or 0
-        try:
+        with contextlib.suppress(TypeError, ValueError):
             score += int(float(tbr))
-        except (TypeError, ValueError):
-            pass
         candidates.append((score, fmt))
     if not candidates:
         return None
@@ -116,7 +114,7 @@ def _pick_progressive_format(info: dict[str, Any]) -> Optional[dict[str, Any]]:
 
 def _is_mp4_video_codec(vcodec: str) -> bool:
     v = vcodec.lower()
-    return v.startswith("avc1") or v.startswith("av01") or v.startswith("avc")
+    return v.startswith(("avc1", "av01", "avc"))
 
 
 def _is_mp4_audio_codec(acodec: str) -> bool:
@@ -124,11 +122,11 @@ def _is_mp4_audio_codec(acodec: str) -> bool:
     return a.startswith("mp4a") or a in ("aac", "mp4a.40.2", "mp4a.40.5")
 
 
-def _video_codec_family(vcodec: str) -> Optional[str]:
+def _video_codec_family(vcodec: str) -> str | None:
     v = vcodec.lower()
     if v.startswith("av01"):
         return "av01"
-    if v.startswith("avc1") or v.startswith("avc"):
+    if v.startswith(("avc1", "avc")):
         return "avc1"
     return None
 
@@ -154,7 +152,12 @@ def _pick_adaptive_formats(
         # Skip storyboard / image formats.
         if str(fmt.get("format_note") or "").lower().startswith("storyboard"):
             continue
-        if fmt.get("protocol") in ("mhtml", "m3u8", "m3u8_native", "http_dash_segments"):
+        if fmt.get("protocol") in (
+            "mhtml",
+            "m3u8",
+            "m3u8_native",
+            "http_dash_segments",
+        ):
             continue
         # SegmentBase DASH needs a single-file URL with sidx, not a fragment list.
         if fmt.get("fragments"):
@@ -171,10 +174,8 @@ def _pick_adaptive_formats(
                 continue
             score = height * 1000
             tbr = fmt.get("tbr") or fmt.get("vbr") or 0
-            try:
+            with contextlib.suppress(TypeError, ValueError):
                 score += int(float(tbr))
-            except (TypeError, ValueError):
-                pass
             key = (family, height)
             prev = video_by_key.get(key)
             if prev is None or score > int(prev.get("_score") or 0):
@@ -207,7 +208,7 @@ def _format_http_headers(fmt: dict[str, Any], info: dict[str, Any]) -> dict[str,
 
 
 def _walk_mp4_boxes(
-    data: bytes, start: int = 0, end: Optional[int] = None
+    data: bytes, start: int = 0, end: int | None = None
 ) -> list[tuple[int, bytes, int]]:
     """Return top-level (offset, type, size) boxes in [start, end)."""
     if end is None:
@@ -236,7 +237,7 @@ def _walk_mp4_boxes(
     return boxes
 
 
-def _find_sidx_range(data: bytes) -> Optional[tuple[int, int]]:
+def _find_sidx_range(data: bytes) -> tuple[int, int] | None:
     """Locate the first complete top-level sidx box; return (start, end_inclusive)."""
     for offset, typ, size in _walk_mp4_boxes(data):
         if typ == b"sidx":
@@ -327,21 +328,20 @@ def _probe_mp4_ranges(
     Returns (init_range, index_range, sidx_info).
     """
     req_headers = dict(headers)
-    last_err: Optional[Exception] = None
+    last_err: Exception | None = None
     for nbytes in _PREVIEW_PROBE_SIZES:
         req_headers["Range"] = f"bytes=0-{nbytes - 1}"
         try:
-            with httpx.Client(
-                timeout=httpx.Timeout(20.0, read=60.0),
-                follow_redirects=True,
-            ) as client:
-                resp = client.get(direct_url, headers=req_headers)
-            if resp.status_code not in (200, 206):
-                raise RuntimeError(
-                    f"Probe failed with status {resp.status_code}"
-                )
-            data = resp.content
-        except Exception as exc:  # noqa: BLE001
+            # direct_url came from the extractor: fetch it through the SSRF gate
+            # (public addresses only, redirects re-checked). A server that ignores
+            # Range and sends more than the window fails the size cap.
+            data = fetch_bytes(
+                direct_url, max_bytes=nbytes, timeout=60.0, headers=req_headers
+            ).body
+        except UnsafeUrlError:
+            raise
+        except Exception as exc:
+            logger.debug("preview probe range request failed", exc_info=True)
             last_err = exc
             continue
 
@@ -382,10 +382,8 @@ def _bandwidth_bps(fmt: dict[str, Any], *, kind: str) -> int:
         filesize = fmt.get("filesize") or fmt.get("filesize_approx")
         duration = fmt.get("duration")  # rarely on format
         if filesize and duration:
-            try:
+            with contextlib.suppress(TypeError, ValueError, ZeroDivisionError):
                 avg = max(1, int(int(filesize) * 8 / float(duration)))
-            except (TypeError, ValueError, ZeroDivisionError):
-                pass
     if avg <= 0:
         avg = 1_000_000 if kind == "video" else 128_000
     pad = 1.4 if kind == "video" else 1.1
@@ -415,11 +413,7 @@ def _build_representation(
 
     mime = "video/mp4" if kind == "video" else "audio/mp4"
     codecs = _codecs_string(fmt, kind=kind)
-    family = (
-        fmt.get("_codec_family")
-        or _video_codec_family(codecs)
-        or "unknown"
-    )
+    family = fmt.get("_codec_family") or _video_codec_family(codecs) or "unknown"
     rep: dict[str, Any] = {
         "itag": itag,
         "kind": kind,
@@ -480,7 +474,7 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
                 priority=EXTRACT_PRIORITY_INTERACTIVE,
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         if is_members_only_error(exc):
             _purge_members_only_url(url)
             raise MembersOnlyError("Members-only video — skipped") from exc
@@ -499,13 +493,13 @@ def _extract_preview_info(url: str, *, force: bool = False) -> dict[str, Any]:
     return info
 
 
-def _subtitle_entry_vtt_url(entries: list[Any]) -> Optional[str]:
+def _subtitle_entry_vtt_url(entries: list[Any]) -> str | None:
     """Pick a VTT URL from a yt-dlp subtitle format list for one language."""
     import urllib.parse
 
     if not isinstance(entries, list):
         return None
-    chosen: Optional[dict[str, Any]] = None
+    chosen: dict[str, Any] | None = None
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -566,8 +560,7 @@ def list_preview_subtitles(url: str, *, force: bool = False) -> list[dict[str, A
     """Return [{lang, auto}] for English captions available on a stream URL."""
     info = _extract_preview_info(url, force=force)
     return [
-        {"lang": t["lang"], "auto": t["auto"]}
-        for t in _collect_preview_subtitles(info)
+        {"lang": t["lang"], "auto": t["auto"]} for t in _collect_preview_subtitles(info)
     ]
 
 
@@ -592,7 +585,7 @@ def resolve_preview_subtitle(
     }
 
 
-def _max_adaptive_height(info: dict[str, Any]) -> Optional[int]:
+def _max_adaptive_height(info: dict[str, Any]) -> int | None:
     videos, _ = _pick_adaptive_formats(info)
     if not videos:
         return None
@@ -613,7 +606,7 @@ def _boundaries_aligned(
         bounds = other.get("boundaries") or []
         if len(bounds) != len(ref):
             return False
-        for a, b in zip(ref, bounds):
+        for a, b in zip(ref, bounds, strict=False):
             if abs(float(a) - float(b)) > tolerance_sec:
                 return False
     return True
@@ -629,7 +622,7 @@ def _segment_base_xml(rep: dict[str, Any]) -> list[str]:
         attrs.append(f'timescale="{timescale}"')
         attrs.append(f'presentationTimeOffset="{ept}"')
     return [
-        f'<SegmentBase {" ".join(attrs)}>',
+        f"<SegmentBase {' '.join(attrs)}>",
         f'<Initialization range="{init_r}"/>',
         "</SegmentBase>",
     ]
@@ -654,14 +647,9 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
             duration = float(duration)
         except (TypeError, ValueError):
             duration = None
-    source = (
-        info.get("webpage_url")
-        or info.get("original_url")
-        or url
-    )
+    source = info.get("webpage_url") or info.get("original_url") or url
     subtitles = [
-        {"lang": t["lang"], "auto": t["auto"]}
-        for t in _collect_preview_subtitles(info)
+        {"lang": t["lang"], "auto": t["auto"]} for t in _collect_preview_subtitles(info)
     ]
     return {
         "id": info.get("id"),
@@ -703,9 +691,7 @@ def resolve_preview_stream(url: str, *, force: bool = False) -> dict[str, Any]:
         info = _extract_preview_info(url, force=force)
         fmt = _pick_progressive_format(info)
         if fmt is None:
-            raise RuntimeError(
-                "No progressive preview format available for this video"
-            )
+            raise RuntimeError("No progressive preview format available for this video")
         direct = fmt.get("url")
         if not direct:
             raise RuntimeError("Preview format has no URL")
@@ -765,14 +751,12 @@ def _store_manifest_entry(url: str, entry: dict[str, Any]) -> None:
 def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     videos, audios = _pick_adaptive_formats(info)
     if not videos or not audios:
-        raise RuntimeError(
-            "No MP4 adaptive formats available for DASH preview"
-        )
+        raise RuntimeError("No MP4 adaptive formats available for DASH preview")
 
     # Probe representations concurrently; extract semaphore already released.
-    jobs: list[tuple[str, dict[str, Any]]] = [
-        ("video", fmt) for fmt in videos
-    ] + [("audio", fmt) for fmt in audios]
+    jobs: list[tuple[str, dict[str, Any]]] = [("video", fmt) for fmt in videos] + [
+        ("audio", fmt) for fmt in audios
+    ]
     reps: dict[str, dict[str, Any]] = {}
     errors: list[Exception] = []
 
@@ -782,16 +766,15 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     workers = min(6, max(1, len(jobs)))
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_probe_one, kind, fmt): (kind, fmt)
-            for kind, fmt in jobs
+            pool.submit(_probe_one, kind, fmt): (kind, fmt) for kind, fmt in jobs
         }
         for fut in as_completed(futures):
             try:
                 rep = fut.result()
                 reps[rep["itag"]] = rep
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 errors.append(exc)
-                logger.warning("Preview probe failed: %s", exc)
+                logger.warning("Preview probe failed", exc_info=True)
 
     video_reps = [r for r in reps.values() if r.get("kind") == "video"]
     audio_reps = [r for r in reps.values() if r.get("kind") == "audio"]
@@ -803,9 +786,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
 
     # Prefer exact sidx-derived duration over yt-dlp's rounded seconds.
     sidx_durs = [
-        float(r["duration_sec"])
-        for r in reps.values()
-        if r.get("duration_sec")
+        float(r["duration_sec"]) for r in reps.values() if r.get("duration_sec")
     ]
     duration_f = max(sidx_durs) if sidx_durs else None
     if duration_f is None:
@@ -815,11 +796,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError):
             duration_f = None
 
-    heights = [
-        int(r["height"])
-        for r in video_reps
-        if r.get("height")
-    ]
+    heights = [int(r["height"]) for r in video_reps if r.get("height")]
     max_height = max(heights) if heights else None
 
     return {
@@ -832,9 +809,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _do_resolve_preview_manifest(
-    url: str, *, force: bool = False
-) -> dict[str, Any]:
+def _do_resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]:
     """Internal resolve without single-flight wrapping."""
     now = time.time()
     if not force:
@@ -852,7 +827,7 @@ def _do_resolve_preview_manifest(
                     return dict(cached)
         info = _extract_preview_info(url, force=force)
 
-    existing_token: Optional[str] = None
+    existing_token: str | None = None
     with _preview_stream_lock:
         prev = _preview_manifest_by_url.get(url)
         if prev:
@@ -907,7 +882,7 @@ def resolve_preview_manifest(url: str, *, force: bool = False) -> dict[str, Any]
             _preview_refresh_last_at[url] = time.time()
             _preview_refresh_attempts[url] = 0
         return entry
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         with _preview_stream_lock:
             attempts = _preview_refresh_attempts.get(url, 0) + 1
             _preview_refresh_attempts[url] = attempts
@@ -969,18 +944,14 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
     set_id = 0
     for family in family_order:
         family_reps = by_family[family]
-        family_reps.sort(
-            key=lambda r: int(r.get("height") or 0), reverse=True
-        )
+        family_reps.sort(key=lambda r: int(r.get("height") or 0), reverse=True)
         aligned = _boundaries_aligned(family_reps)
         widths = [int(r.get("width") or 0) for r in family_reps]
         heights = [int(r.get("height") or 0) for r in family_reps]
         fps_vals = [int(r["fps"]) for r in family_reps if r.get("fps")]
         align_attrs = ""
         if aligned:
-            align_attrs = (
-                ' segmentAlignment="true" subsegmentAlignment="true"'
-            )
+            align_attrs = ' segmentAlignment="true" subsegmentAlignment="true"'
         max_w = max(widths) if widths else 0
         max_h = max(heights) if heights else 0
         max_fps = max(fps_vals) if fps_vals else 0
@@ -996,9 +967,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
             f'mimeType="video/mp4" startWithSAP="1" '
             f'subsegmentStartsWithSAP="1"{align_attrs}{extra}>'
         )
-        lines.append(
-            '<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>'
-        )
+        lines.append('<Role schemeIdUri="urn:mpeg:dash:role:2011" value="main"/>')
         for rep in family_reps:
             itag = xml_escape(str(rep["itag"]))
             codecs = xml_escape(str(rep.get("codecs") or "avc1.4D401F"))
@@ -1017,10 +986,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
                 attrs.append(f'height="{height}"')
             if fps:
                 attrs.append(f'frameRate="{int(fps)}"')
-            base = (
-                f"/api/preview/media?token={xml_escape(token)}"
-                f"&amp;itag={itag}"
-            )
+            base = f"/api/preview/media?token={xml_escape(token)}&amp;itag={itag}"
             lines.append(f"<Representation {' '.join(attrs)}>")
             lines.append(f"<BaseURL>{base}</BaseURL>")
             lines.extend(_segment_base_xml(rep))
@@ -1032,9 +998,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
         aligned_a = _boundaries_aligned(audios)
         align_attrs = ""
         if aligned_a:
-            align_attrs = (
-                ' segmentAlignment="true" subsegmentAlignment="true"'
-            )
+            align_attrs = ' segmentAlignment="true" subsegmentAlignment="true"'
         lang = xml_escape(str(audios[0].get("lang") or "und"))
         lines.append(
             f'<AdaptationSet id="{set_id}" contentType="audio" '
@@ -1046,16 +1010,13 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
             codecs = xml_escape(str(rep.get("codecs") or "mp4a.40.2"))
             bandwidth = int(rep.get("bandwidth") or 128_000)
             channels = int(rep.get("audio_channels") or 2)
-            base = (
-                f"/api/preview/media?token={xml_escape(token)}"
-                f"&amp;itag={itag}"
-            )
+            base = f"/api/preview/media?token={xml_escape(token)}&amp;itag={itag}"
             lines.append(
                 f'<Representation id="{itag}" bandwidth="{bandwidth}" '
                 f'codecs="{codecs}">'
             )
             lines.append(
-                '<AudioChannelConfiguration '
+                "<AudioChannelConfiguration "
                 'schemeIdUri="urn:mpeg:dash:23003:3:'
                 'audio_channel_configuration:2011" '
                 f'value="{channels}"/>'
@@ -1108,7 +1069,7 @@ def lookup_preview_media(
                 session["token"] = token
                 _preview_manifest_by_token[token] = session
                 _preview_manifest_by_url[source_url] = session
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             # Explicit 403 refresh must surface; proactive refresh can keep
             # serving the existing CDN URLs until they actually fail.
             if refresh:

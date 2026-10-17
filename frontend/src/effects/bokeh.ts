@@ -28,35 +28,38 @@ export function createBokehEffect(canvas: HTMLCanvasElement): EffectController {
     }));
   };
 
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, dt, size }) => {
-    if (
-      width !== lastW ||
-      height !== lastH ||
-      Math.abs(size - lastSize) > 0.05
-    ) {
-      lastW = width;
-      lastH = height;
-      lastSize = size;
-      rebuild(width, height, size);
-    }
+  return createCanvasLoop(
+    canvas,
+    ({ ctx, width, height, accent, dt, size }) => {
+      if (
+        width !== lastW ||
+        height !== lastH ||
+        Math.abs(size - lastSize) > 0.05
+      ) {
+        lastW = width;
+        lastH = height;
+        lastSize = size;
+        rebuild(width, height, size);
+      }
 
-    ctx.clearRect(0, 0, width, height);
-    for (const o of orbs) {
-      o.x += o.vx * dt;
-      o.y += o.vy * dt;
-      if (o.x < -o.r) o.x = width + o.r;
-      if (o.x > width + o.r) o.x = -o.r;
-      if (o.y < -o.r) o.y = height + o.r;
-      if (o.y > height + o.r) o.y = -o.r;
+      ctx.clearRect(0, 0, width, height);
+      for (const o of orbs) {
+        o.x += o.vx * dt;
+        o.y += o.vy * dt;
+        if (o.x < -o.r) o.x = width + o.r;
+        if (o.x > width + o.r) o.x = -o.r;
+        if (o.y < -o.r) o.y = height + o.r;
+        if (o.y > height + o.r) o.y = -o.r;
 
-      const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
-      g.addColorStop(0, rgba(accent, o.alpha));
-      g.addColorStop(0.55, rgba(accent, o.alpha * 0.35));
-      g.addColorStop(1, rgba(accent, 0));
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
-      ctx.fill();
+        const g = ctx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r);
+        g.addColorStop(0, rgba(accent, o.alpha));
+        g.addColorStop(0.55, rgba(accent, o.alpha * 0.35));
+        g.addColorStop(1, rgba(accent, 0));
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(o.x, o.y, o.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
-  });
+  );
 }

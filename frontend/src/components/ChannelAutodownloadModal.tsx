@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { backdropClick } from "../utils";
+import { useRef, useState } from "react";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 import ThemedSelect from "./ThemedSelect";
 import { PRESET_LABELS, PRESET_ORDER } from "../presets";
 import type { ChannelAutodownload } from "../types";
@@ -31,7 +33,11 @@ export default function ChannelAutodownloadModal({
     policy.previous_mode
   );
   const [previousCount, setPreviousCount] = useState(
-    String(policy.previous_count && policy.previous_count > 0 ? policy.previous_count : 10)
+    String(
+      policy.previous_count && policy.previous_count > 0
+        ? policy.previous_count
+        : 10
+    )
   );
   const [qualityPreset, setQualityPreset] = useState(
     policy.quality_preset || "1080p"
@@ -40,15 +46,13 @@ export default function ChannelAutodownloadModal({
     policy.include_completed_streams
   );
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useFocusTrap(dialogRef, { onEscape: onClose });
 
-  const countNum = Math.max(1, Math.min(500, parseInt(previousCount, 10) || 10));
+  const countNum = Math.max(
+    1,
+    Math.min(500, parseInt(previousCount, 10) || 10)
+  );
   const allPrevious = previousMode === "all";
   const qualityOptions = PRESET_ORDER.map((p) => ({
     value: p,
@@ -67,14 +71,16 @@ export default function ChannelAutodownloadModal({
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="autodownload-title"
+      role="presentation"
+      onClick={backdropClick(onClose)}
     >
       <div
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
-        onClick={(e) => e.stopPropagation()}
+        ref={dialogRef}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="autodownload-title"
+        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -84,12 +90,12 @@ export default function ChannelAutodownloadModal({
             >
               Autodownload
             </h2>
-            <p className="mt-0.5 text-sm text-gray-500">{channel}</p>
+            <p className="mt-0.5 text-sm text-muted">{channel}</p>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-300"
+            className="text-muted hover:text-gray-300"
             aria-label="Close"
           >
             ×
@@ -174,7 +180,7 @@ export default function ChannelAutodownloadModal({
               <p className="text-sm font-medium text-gray-200">
                 Include completed livestreams
               </p>
-              <p className="mt-0.5 text-xs text-gray-500">
+              <p className="mt-0.5 text-xs text-muted">
                 Livestreams are never downloaded while live or upcoming. When
                 this is on, finished stream recordings are included.
               </p>
@@ -187,7 +193,7 @@ export default function ChannelAutodownloadModal({
         </div>
 
         {policy.pending_estimate > 0 && (
-          <p className="mb-4 text-xs text-gray-500">
+          <p className="mb-4 text-xs text-muted">
             About {policy.pending_estimate} catalog video
             {policy.pending_estimate === 1 ? "" : "s"} not already in your
             library would be queued with the current previous-video setting.
@@ -201,7 +207,11 @@ export default function ChannelAutodownloadModal({
             disabled={saving}
             className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
           >
-            {saving ? "Saving…" : policy.enabled ? "Save" : "Enable autodownload"}
+            {saving
+              ? "Saving…"
+              : policy.enabled
+                ? "Save"
+                : "Enable autodownload"}
           </button>
           {policy.configured && policy.enabled && (
             <button

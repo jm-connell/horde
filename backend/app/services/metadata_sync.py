@@ -2,23 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import threading
-from datetime import datetime, timedelta, timezone
-from typing import Any, Literal, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ..config import DOWNLOADS_DIR
-from ..database import engine
-from ..models import Video
+from ..context import get_engine, get_paths
+from ..models import Video, require_id
 from . import activity
 from .thumbnails import save_from_url
+from .workers import BackgroundWorker
 from .ytdlp_common import (
     EXTRACT_PRIORITY_BACKGROUND,
     extract_info_gated,
+    is_network_error,
     youtube_extractor_args,
 )
-from .ytdlp_extract import _list_thumbnail_url
+from .ytdlp_extract import list_thumbnail_url
+
+logger = logging.getLogger(__name__)
 
 SyncField = Literal["views", "thumbnails", "captions", "titles_descriptions", "all"]
 
@@ -64,7 +68,7 @@ def _extract_metadata(url: str) -> dict[str, Any]:
     return info or {}
 
 
-def _normalize_fields(fields: Optional[list[str]]) -> set[str]:
+def _normalize_fields(fields: list[str] | None) -> set[str]:
     if not fields or "all" in fields:
         return {"views", "thumbnails", "captions", "titles_descriptions"}
     allowed = {"views", "thumbnails", "captions", "titles_descriptions"}
@@ -79,7 +83,7 @@ def _normalize_fields(fields: Optional[list[str]]) -> set[str]:
 def refresh_video_metadata(
     video_id: int,
     *,
-    fields: Optional[list[str]] = None,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
     """Fetch fresh metadata from the source URL and update the video row.
 
@@ -89,7 +93,7 @@ def refresh_video_metadata(
     """
     want = _normalize_fields(fields)
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             raise ValueError(f"Video {video_id} not found")
@@ -100,7 +104,7 @@ def refresh_video_metadata(
     info = _extract_metadata(source_url)
     changed: dict[str, Any] = {}
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return {}
@@ -139,7 +143,7 @@ def refresh_video_metadata(
             thumb_path = save_from_url(
                 info.get("thumbnail"),
                 video.id,
-                list_url=_list_thumbnail_url(info, info.get("id")),
+                list_url=list_thumbnail_url(info, info.get("id")),
             )
             if thumb_path:
                 video.thumbnail_path = thumb_path
@@ -164,29 +168,46 @@ def refresh_video_metadata(
 
         apply_source_chapters(video, info, replace_empty=False)
 
-        video.metadata_synced_at = datetime.now(timezone.utc)
+        video.metadata_synced_at = datetime.now(UTC)
         session.add(video)
         session.commit()
 
     if "captions" in want:
         try:
-            from .downloader import download_subtitles
+            from .downloads.subtitles import download_subtitles
             from .subtitle_retry import apply_subtitle_outcome, captions_fetch_allowed
 
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 video = session.get(Video, video_id)
                 if video is None:
                     return changed
                 if not captions_fetch_allowed(video):
                     return changed
-                media = DOWNLOADS_DIR / video.file_path
+                media = get_paths().downloads / video.file_path
                 tracks_url = source_url
             outcome = download_subtitles(media, tracks_url)
             apply_subtitle_outcome(video_id, outcome)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning(
+                "caption refresh failed for video %s", video_id, exc_info=True
+            )
 
     return changed
+
+
+def _log_refresh_failure(what: str, video_id: int | None, exc: Exception) -> None:
+    """One line when the source is unreachable (offline, proxy down), else a traceback."""
+    if is_network_error(exc):
+        first_line = str(exc).strip().splitlines()[0] if str(exc).strip() else ""
+        logger.warning(
+            "%s skipped for video %s: source unreachable (%s)",
+            what,
+            video_id,
+            first_line[:200] or type(exc).__name__,
+        )
+        logger.debug("%s failed for video %s", what, video_id, exc_info=True)
+        return
+    logger.warning("%s failed for video %s", what, video_id, exc_info=True)
 
 
 def _should_sync(video: Video, min_interval_hours: int = 24) -> bool:
@@ -194,10 +215,10 @@ def _should_sync(video: Video, min_interval_hours: int = 24) -> bool:
         return False
     if video.metadata_synced_at is None:
         return True
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=min_interval_hours)
+    cutoff = datetime.now(UTC) - timedelta(hours=min_interval_hours)
     synced = video.metadata_synced_at
     if synced.tzinfo is None:
-        synced = synced.replace(tzinfo=timezone.utc)
+        synced = synced.replace(tzinfo=UTC)
     return synced < cutoff
 
 
@@ -226,7 +247,7 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
     )
     try:
         for vid in video_ids:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 video = session.get(Video, vid)
                 if video is None or not video.source_url:
                     _set_job(skipped=_job_state["skipped"] + 1)
@@ -235,13 +256,16 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 _set_job(current_title=title, current_video_id=vid)
                 act.update(
                     detail=title,
-                    done=_job_state["done"] + _job_state["failed"] + _job_state["skipped"],
+                    done=_job_state["done"]
+                    + _job_state["failed"]
+                    + _job_state["skipped"],
                 )
             try:
                 with _sync_lock:
                     refresh_video_metadata(vid, fields=want)
                 _set_job(done=_job_state["done"] + 1)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # noqa: BLE001 - logged by _log_refresh_failure
+                _log_refresh_failure("metadata refresh", vid, exc)
                 _set_job(
                     failed=_job_state["failed"] + 1,
                     last_error=str(exc),
@@ -252,7 +276,7 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
                 + (f", {_job_state['failed']} failed" if _job_state["failed"] else "")
             )
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         act.finish(status="failed", error=str(exc)[:500])
         raise
     finally:
@@ -262,28 +286,34 @@ def _run_bulk_job(video_ids: list[int], fields: list[str]) -> None:
             running=False,
             current_title=None,
             current_video_id=None,
-            finished_at=datetime.now(timezone.utc).isoformat(),
+            finished_at=datetime.now(UTC).isoformat(),
         )
 
 
 def start_bulk_sync(
-    video_ids: Optional[list[int]] = None,
-    fields: Optional[list[str]] = None,
+    video_ids: list[int] | None = None,
+    fields: list[str] | None = None,
 ) -> dict[str, Any]:
     """Queue a background bulk metadata sync. Returns immediate status."""
     with _job_lock:
         if _job_state["running"]:
-            return {"started": False, "detail": "Metadata sync already running", **dict(_job_state)}
+            return {
+                "started": False,
+                "detail": "Metadata sync already running",
+                **dict(_job_state),
+            }
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         if video_ids:
             ids = [vid for vid in video_ids if session.get(Video, vid) is not None]
         else:
-            ids = list(
-                session.exec(
-                    select(Video.id).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+            ids = [
+                vid
+                for vid in session.exec(
+                    select(col(Video.id)).where(col(Video.source_url).is_not(None))
                 ).all()
-            )
+                if vid is not None
+            ]
             ids = [vid for vid in ids if vid is not None]
 
     if not ids:
@@ -305,13 +335,15 @@ def start_bulk_sync(
     }
 
 
-def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
-    """Background thread: refresh stale metadata for all syncable videos."""
-    while True:
+def run_periodic_sync(
+    worker: BackgroundWorker, interval_hours: int = 24, batch_size: int = 20
+) -> None:
+    """Worker loop: refresh stale metadata for all syncable videos, hourly."""
+    while not worker.stopping:
         with _sync_lock:
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 all_videos = session.exec(
-                    select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
+                    select(Video).where(col(Video.source_url).is_not(None))
                 ).all()
                 stale = [v for v in all_videos if _should_sync(v, interval_hours)]
 
@@ -327,31 +359,38 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 )
                 try:
                     for i, video in enumerate(batch):
+                        if worker.stopping:
+                            break
                         act.update(done=i, detail=video.title)
                         try:
-                            refresh_video_metadata(video.id)
-                        except Exception:  # noqa: BLE001
-                            pass
+                            refresh_video_metadata(require_id(video))
+                        except Exception as exc:  # noqa: BLE001 - logged by _log_refresh_failure
+                            _log_refresh_failure(
+                                "periodic metadata refresh", video.id, exc
+                            )
                     act.finish(detail=f"{len(batch)} video(s)")
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
+                    logger.warning("periodic metadata refresh failed", exc_info=True)
                     act.finish(status="failed", error=str(exc)[:500])
                 finally:
                     if not act._closed:
                         act.discard()
 
+        if worker.stopping:
+            return
         try:
             from . import channel_catalog
 
             channel_catalog.refresh_stale_catalogs()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning("refreshing stale channel catalogs failed", exc_info=True)
 
         try:
             from .playlist_sync import sync_subscribed_playlists
 
             sync_subscribed_playlists()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning("syncing subscribed playlists failed", exc_info=True)
 
         # Re-read interval so Settings changes apply without restart.
         try:
@@ -361,17 +400,16 @@ def run_periodic_sync(interval_hours: int = 24, batch_size: int = 20) -> None:
                 settings_svc.load().get("metadata_sync_interval_hours")
                 or interval_hours
             )
-        except Exception:  # noqa: BLE001
-            pass
-        threading.Event().wait(3600)
+        except Exception:
+            logger.warning(
+                "could not re-read the metadata sync interval", exc_info=True
+            )
+        if worker.sleep(3600):
+            return
 
 
-def start_sync_worker(interval_hours: int = 24) -> threading.Thread:
-    t = threading.Thread(
-        target=run_periodic_sync,
-        kwargs={"interval_hours": interval_hours},
-        daemon=True,
-        name="metadata-sync",
+def create_sync_worker(interval_hours: int = 24) -> BackgroundWorker:
+    return BackgroundWorker(
+        "metadata-sync",
+        lambda worker: run_periodic_sync(worker, interval_hours=interval_hours),
     )
-    t.start()
-    return t

@@ -2,11 +2,13 @@
 
 from pathlib import Path
 
-from app.services import downloader
+from app.services import ytdlp_formats
+from app.services.downloads import artifacts, errors
+from app.services.paths import video_stem
 
 
 def test_format_chain_height_capped_no_unbounded_best():
-    chain = downloader._format_chain("1080p")
+    chain = ytdlp_formats.format_chain("1080p")
     assert chain
     assert all("bestvideo" in c or "best[" in c or "height" in c for c in chain)
     # Must not fall back to unrestricted best/best for capped presets.
@@ -16,20 +18,24 @@ def test_format_chain_height_capped_no_unbounded_best():
 
 
 def test_format_chain_best_and_audio():
-    best = downloader._format_chain("best")
+    best = ytdlp_formats.format_chain("best")
     assert any("vcodec^=av01" in c for c in best)
     assert any("best[ext=mp4]" in c for c in best)
-    audio = downloader._format_chain("audio")
+    audio = ytdlp_formats.format_chain("audio")
     assert any("bestaudio/best" in c for c in audio)
     assert "mp4a" in audio[0] or "aac" in audio[0]
-    capped = downloader._format_chain("audio-128")
+    capped = ytdlp_formats.format_chain("audio-128")
     assert "abr<=128" in capped[0]
     assert "mp4a" in capped[0] or "aac" in capped[0]
     assert any("bestaudio/best" in c for c in capped)
 
 
 def test_format_chain_h264_1080_prefers_avc():
-    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+    from app.services.ytdlp_formats import (
+        format_chain,
+        format_sort_for,
+        uses_native_h264,
+    )
 
     assert uses_native_h264("1080p", "h264_convert")
     assert uses_native_h264("720p", "h265")  # legacy → h264_convert
@@ -69,7 +75,11 @@ def test_h264_native_caps_every_video_preset_at_1080():
 
 
 def test_sidecar_mode_downloads_av1_original():
-    from app.services.ytdlp_formats import format_chain, format_sort_for, uses_native_h264
+    from app.services.ytdlp_formats import (
+        format_chain,
+        format_sort_for,
+        uses_native_h264,
+    )
 
     assert not uses_native_h264("1080p", "sidecar")
     assert any("av01" in c for c in format_chain("2160p", "sidecar"))
@@ -124,7 +134,7 @@ def test_available_presets_audio_bitrate_tiers():
             {"vcodec": "none", "acodec": "opus", "abr": 64},
         ]
     }
-    presets = downloader._available_presets(info)
+    presets = ytdlp_formats._available_presets(info)
     assert "1080p" in presets
     assert "audio" in presets
     # Best is 160 → skip audio-160; keep lower caps.
@@ -139,40 +149,32 @@ def test_available_presets_audio_without_abr_metadata():
             {"vcodec": "none", "acodec": "mp4a"},
         ]
     }
-    presets = downloader._available_presets(info)
+    presets = ytdlp_formats._available_presets(info)
     assert presets == ["audio", "audio-160", "audio-128", "audio-64"]
 
 
 def test_is_intermediate_media():
-    assert downloader._is_intermediate_media("video.f137.mp4")
-    assert downloader._is_intermediate_media("video.part")
-    assert downloader._is_intermediate_media("video.norm.mp4")
-    assert downloader._is_intermediate_media("video.compat.mp4")
-    assert downloader._is_intermediate_media("video.compat.123.mp4")
-    assert downloader._is_intermediate_media("video.xcode.mp4")
-    assert downloader._is_intermediate_media("video.xcode.123.mp4")
-    assert not downloader._is_intermediate_media("video.mp4")
+    assert artifacts.is_intermediate_media("video.f137.mp4")
+    assert artifacts.is_intermediate_media("video.part")
+    assert artifacts.is_intermediate_media("video.norm.mp4")
+    assert artifacts.is_intermediate_media("video.compat.mp4")
+    assert artifacts.is_intermediate_media("video.compat.123.mp4")
+    assert artifacts.is_intermediate_media("video.xcode.mp4")
+    assert artifacts.is_intermediate_media("video.xcode.123.mp4")
+    assert not artifacts.is_intermediate_media("video.mp4")
 
 
 def test_video_stem():
-    assert downloader._video_stem(Path("Title [id].f137.mp4")) == "Title [id]"
-    assert downloader._video_stem(Path("Title [id].mp4")) == "Title [id]"
+    assert video_stem(Path("Title [id].f137.mp4")) == "Title [id]"
+    assert video_stem(Path("Title [id].mp4")) == "Title [id]"
 
 
 def test_is_recoverable_download_error():
-    assert downloader._is_recoverable_download_error(
-        Exception("Unable to rename file: ...")
-    )
-    assert downloader._is_recoverable_download_error(
+    assert errors.is_recoverable_download_error(Exception("Unable to rename file: ..."))
+    assert errors.is_recoverable_download_error(
         Exception("Postprocessing: Error merging formats")
     )
-    assert not downloader._is_recoverable_download_error(
-        Exception("HTTP Error 403")
-    )
-
-
-def test_strip_ansi():
-    assert downloader._strip_ansi("\x1b[31mred\x1b[0m") == "red"
+    assert not errors.is_recoverable_download_error(Exception("HTTP Error 403"))
 
 
 def test_has_audio_and_available_presets():
@@ -183,14 +185,14 @@ def test_has_audio_and_available_presets():
             {"vcodec": "avc1", "acodec": "mp4a", "height": 720},
         ]
     }
-    assert downloader._has_audio(info)
-    presets = downloader._available_presets(info)
+    assert ytdlp_formats._has_audio(info)
+    presets = ytdlp_formats._available_presets(info)
     assert "720p" in presets or "1080p" in presets or "best" in presets
 
 
 def test_height_to_tier():
-    assert downloader._height_to_tier(2160) >= downloader._height_to_tier(720)
-    assert downloader._height_to_tier(480) > 0
+    assert ytdlp_formats._height_to_tier(2160) >= ytdlp_formats._height_to_tier(720)
+    assert ytdlp_formats._height_to_tier(480) > 0
 
 
 def test_resolve_quality_preset_best_to_highest_tier():
@@ -223,4 +225,3 @@ def test_apply_audio_format_id_pins_ba_not_bestaudio():
     pinned = apply_audio_format_id(chain, "140")
     assert pinned[0] == "bv*+140/bv*+140/bestaudio/best"
     assert pinned[1] == "140/140/bestaudio/best"
-

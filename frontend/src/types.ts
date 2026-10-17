@@ -1,265 +1,88 @@
-export type VideoStatus = "downloading" | "ready" | "error";
+import type { components } from "./api/schema";
 
-export interface SpriteMeta {
-  interval_sec: number;
-  tile_width: number;
-  tile_height: number;
-  columns: number;
-  count: number;
-  duration_sec: number;
-}
+type S = components["schemas"];
 
-export interface SubtitleTrack {
-  lang: string;
-  auto: boolean;
-}
-
-export type SearchMatchReason = {
-  source:
-    | "title"
-    | "description"
-    | "tags"
-    | "notes"
-    | "captions"
-    | "related"
-    | "youtube";
-  snippet?: string | null;
+/* Wire shapes: aliases of the generated OpenAPI schema (src/api/schema.d.ts). */
+export type VideoStatus = S["VideoStatus"];
+export type MetadataSyncStatus = S["MetadataSyncStatus"];
+export type BackgroundItem = S["BackgroundRead"];
+export type ChannelSearchHit = S["ChannelSearchHit"];
+export type SpriteMeta = S["SpriteMetaRead"];
+export type SubtitleTrack = S["SubtitleTrack"];
+export type SearchMatchReason = S["SearchMatchReason"];
+export type Video = S["VideoRead"];
+export type CompatState = S["CompatState"];
+export type CompatSummary = S["CompatSummaryRead"];
+export type VideoUpdate = S["VideoUpdate"];
+export type ChannelStat = S["ChannelStat"];
+export type ChannelFeedEntry = S["ChannelFeedEntry"];
+export type ChannelFeedPage = S["ChannelFeedPage"];
+export type ChannelCatalogStatusItem = S["ChannelCatalogStatusItem"];
+export type ChannelAutodownload = S["ChannelAutodownloadRead"];
+export type ChannelCatalogStatus = S["ChannelCatalogStatusResponse"];
+export type JobStatus = S["JobStatus"];
+export type DownloadDestination = S["DownloadDestination"];
+export type DownloadJob = S["DownloadJobRead"];
+export type DownloadPreview = S["DownloadPreview"];
+export type StreamPreviewMeta = S["StreamPreviewMeta"];
+export type DownloadBulkSkip = S["DownloadBulkSkip"];
+export type DownloadBulkResult = S["DownloadBulkResult"];
+export type DownloadQueueStatus = S["DownloadQueueStatus"];
+export type TagStat = S["TagStat"];
+export type StorageStats = S["StorageStats"];
+export type AiSettings = S["AiSettingsRead"];
+export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
+export type OpenRouterCosts = S["OpenRouterCostsRead"];
+export type OpenRouterModel = S["OpenRouterModelRow"];
+/** `ai` is always sent (the schema only marks it optional because it has a default). */
+export type AppSettings = Omit<S["AppSettingsRead"], "ai"> & { ai: AiSettings };
+/** `pulling` is always sent (the schema marks it optional because it has a default). */
+export type AiStatus = Omit<S["AiStatusRead"], "pulling"> & {
+  pulling: string[];
 };
-
-export interface Video {
-  id: number;
-  title: string;
-  channel: string | null;
-  channel_url: string | null;
-  tags: string[];
-  ai_tags: string[];
-  user_tags: string[];
-  description: string | null;
-  notes: string | null;
-  source_url: string | null;
-  has_thumbnail: boolean;
-  has_sprites?: boolean;
-  subtitles: SubtitleTrack[];
-  file_path: string;
-  duration_sec: number | null;
-  file_size: number | null;
-  width_px: number | null;
-  height_px: number | null;
-  frame_rate: number | null;
-  view_count: number | null;
-  channel_subscriber_count: number | null;
-  published_at: string | null;
-  added_at: string;
-  last_position_sec: number;
-  last_watched_at: string | null;
-  needs_review: boolean;
-  platform: string | null;
-  status: VideoStatus;
-  metadata_synced_at: string | null;
-  source_title: string | null;
-  source_description: string | null;
-  title_is_custom: boolean;
-  description_is_custom: boolean;
-  subtitles_pending: boolean;
-  ai_summary?: string | null;
-  /** Length setting used when the summary was generated. */
-  ai_summary_length?: "short" | "medium" | "long" | null;
-  /** OpenRouter cost for the last summary, when known. */
-  ai_summary_cost?: number | null;
-  /** Model used for the last summary, when known. */
-  ai_summary_model?: string | null;
-  embed_status?: string | null;
-  embed_error?: string | null;
-  tags_enriched_at?: string | null;
-  processing_summary?: boolean;
-  processing_sprites?: boolean;
-  processing_chapters?: boolean;
-  chapters?: { start_sec: number; title: string }[];
-  chapters_source?: "description" | "source" | "ai" | null;
-  match_reason?: SearchMatchReason | null;
-  /** Actual stored stream (ffprobe): "av1" | "vp9" | "h264" | "hevc" | … */
-  vcodec?: string | null;
-  acodec?: string | null;
-  /** RFC 6381 codec string for MediaCapabilities, e.g. "av01.0.08M.08". */
-  codec_string?: string | null;
-  bit_depth?: number | null;
-  is_hdr?: boolean;
-  /** A ≤1080p H.264 sidecar exists (playable on nearly every device). */
-  has_compat?: boolean;
-  compat_size?: number | null;
-  /** Full rows only: sidecar job state. */
-  compat?: CompatState | null;
-}
+export type AiJobFailure = S["AiJobFailure"];
+export type AiJobRow = S["AiJobRow"];
+export type RecommendationSection = S["RecommendationSectionRead"];
+export type RecommendationsResponse = S["RecommendationsRead"];
+export type AiCurrentJob = S["AiCurrentJob"];
+export type SystemStats = S["SystemStatsRead"];
+export type ActivityTask = S["ActivityTaskRead"];
+export type SystemActivity = S["SystemActivityRead"];
+export type AiProcessResult = S["AiProcessResult"];
+export type DuplicateGroup = S["DuplicateGroupRead"];
+export type ImportScanResult = S["ScanResult"];
+export type HealthStats = S["HealthFull"];
+export type UpdateCheck = S["UpdateCheckRead"];
+export type PlaylistSource = S["PlaylistSource"];
+export type Playlist = S["PlaylistRead"];
+export type PlaylistDetail = S["PlaylistDetail"];
+export type PlaylistPreviewEntry = S["PlaylistPreviewEntry"];
+export type PlaylistPreviewData = S["PlaylistPreview"];
+export type AuthUser = Omit<S["AuthUserRead"], "permissions"> & {
+  permissions: Permission[];
+};
+export type AuthState = Omit<S["AuthState"], "user"> & {
+  user: AuthUser | null;
+};
+export type UserAccount = Omit<S["UserRead"], "permissions"> & {
+  permissions: Permission[];
+};
+export type PermissionInfo = Omit<S["PermissionInfo"], "name"> & {
+  name: Permission;
+};
+export type UserCreateInput = Omit<
+  S["UserCreate"],
+  "permissions" | "is_admin"
+> & {
+  is_admin?: boolean;
+  permissions?: Permission[];
+};
+export type UserUpdateInput = Omit<S["UserUpdate"], "permissions"> & {
+  permissions?: Permission[];
+};
+export type MediaToken = S["MediaTokenRead"];
 
 export type CompatStatus = "none" | "queued" | "running" | "ready" | "error";
-
-export interface CompatState {
-  kind: "compat" | "convert";
-  status: CompatStatus;
-  stage: "queued" | "downloading" | "encoding" | "finishing" | null;
-  progress: number;
-  error: string | null;
-}
-
-export interface CompatSummary {
-  videos: number;
-  library_bytes: number;
-  by_codec: Record<string, number>;
-  unprobed: number;
-  compat_ready: number;
-  compat_bytes: number;
-  compat_missing: number;
-  compat_missing_est_bytes: number;
-  convertible: number;
-  convertible_bytes: number;
-  queued: number;
-  running: number;
-  convert_queued: number;
-  convert_running: number;
-}
-
-export interface VideoUpdate {
-  title?: string;
-  channel?: string;
-  channel_url?: string | null;
-  tags?: string[];
-  user_tag?: string;
-  description?: string;
-  notes?: string | null;
-  source_url?: string;
-  published_at?: string | null;
-  thumbnail_url?: string;
-  title_is_custom?: boolean;
-  description_is_custom?: boolean;
-}
-
-export interface ChannelStat {
-  channel: string;
-  count: number;
-  last_download_at: string | null;
-  subscriber_count: number | null;
-  channel_url: string | null;
-}
-
-export interface ChannelFeedEntry {
-  id: string | null;
-  url: string;
-  title: string | null;
-  duration: number | null;
-  thumbnail_url: string | null;
-  view_count: number | null;
-  like_count: number | null;
-  dislike_count: number | null;
-  published_at: string | null;
-  /** Relative or year-only text when a calendar day is not known. */
-  published_label?: string | null;
-  /** Present on global catalog search results. */
-  channel?: string | null;
-  channel_url?: string | null;
-  in_library: boolean;
-  video_id: number | null;
-  library_height_px: number | null;
-  max_height: number | null;
-  match_reason?: SearchMatchReason | null;
-}
-
-export interface ChannelFeedPage {
-  channel: string | null;
-  channel_url: string | null;
-  entries: ChannelFeedEntry[];
-  has_more: boolean;
-  indexing?: boolean;
-  from_catalog?: boolean;
-  catalog_indexed?: number;
-  catalog_total?: number | null;
-  catalog_complete?: boolean;
-  catalog_status?: string | null;
-  direct_youtube_search_effective?: boolean | null;
-  youtube_video_search_effective?: boolean | null;
-}
-
-export interface ChannelCatalogStatusItem {
-  id: number | null;
-  channel_url: string;
-  channel_name: string | null;
-  status: string;
-  indexed_count: number;
-  channel_total: number | null;
-  complete: boolean;
-  max_videos: number;
-  phase: string | null;
-  last_error: string | null;
-  started_at: string | null;
-  finished_at: string | null;
-  updated_at: string | null;
-  direct_youtube_search?: boolean | null;
-  direct_youtube_search_effective?: boolean;
-}
-
-export interface ChannelAutodownload {
-  configured: boolean;
-  enabled: boolean;
-  previous_mode: "none" | "count" | "all";
-  previous_count: number | null;
-  quality_preset: string;
-  include_completed_streams: boolean;
-  channel_url: string | null;
-  channel_name: string | null;
-  pending_estimate: number;
-  catalog_max_videos: number;
-}
-
-export interface ChannelCatalogStatus {
-  enabled: boolean;
-  running: boolean;
-  current_channel: string | null;
-  current_channel_url: string | null;
-  current_phase: string | null;
-  done: number;
-  total: number;
-  catalog_id: number | null;
-  queue_depth: number;
-  catalogs: ChannelCatalogStatusItem[];
-  direct_youtube_search?: boolean;
-}
-
-export type JobStatus =
-  | "queued"
-  | "downloading"
-  | "completed"
-  | "error"
-  | "cancelled";
-
-export type DownloadDestination = "library" | "device";
-
-export interface DownloadJob {
-  id: number;
-  url: string;
-  quality_preset: string;
-  available_presets?: string[];
-  status: JobStatus;
-  progress: number;
-  title: string | null;
-  title_override: string | null;
-  channel: string | null;
-  channel_override: string | null;
-  thumbnail_url: string | null;
-  notes_pending: string | null;
-  paused: boolean;
-  error: string | null;
-  error_kind?: string | null;
-  destination?: DownloadDestination;
-  device_file_path?: string | null;
-  video_id: number | null;
-  replace_video_id?: number | null;
-  playlist_id?: number | null;
-  file_size: number | null;
-  height_px?: number | null;
-  video_codec?: string | null;
-  created_at: string;
-  video_missing?: boolean;
-  superseded?: boolean;
-}
 
 export interface ProgressEvent {
   job_id?: number;
@@ -284,36 +107,6 @@ export interface ProgressEvent {
   volume_warning?: string;
 }
 
-export interface DownloadPreview {
-  is_playlist: boolean;
-  title: string | null;
-  channel: string | null;
-  channel_url: string | null;
-  thumbnail_url: string | null;
-  entry_count: number | null;
-  view_count?: number | null;
-  published_at?: string | null;
-  published_label?: string | null;
-  available_presets: string[];
-  preset_sizes: Record<string, number>;
-}
-
-export interface StreamPreviewMeta {
-  id: string | null;
-  title: string | null;
-  channel: string | null;
-  channel_url: string | null;
-  thumbnail_url: string | null;
-  description: string | null;
-  duration: number | null;
-  view_count: number | null;
-  source_url: string | null;
-  preview_height: number | null;
-  library_video_id: number | null;
-  available_presets: string[];
-  subtitles: SubtitleTrack[];
-}
-
 export interface DownloadOverrides {
   title_override?: string;
   channel_override?: string;
@@ -323,413 +116,18 @@ export interface DownloadOverrides {
   destination?: DownloadDestination;
 }
 
-export interface DownloadBulkSkip {
-  url: string;
-  reason: string;
-}
-
-export interface DownloadBulkResult {
-  jobs: DownloadJob[];
-  skipped: number;
-  skips: DownloadBulkSkip[];
-}
-
-export interface DownloadQueueStatus {
-  paused: boolean;
-  active_count: number;
-  queued_count: number;
-}
-
-export interface TagStat {
-  tag: string;
-  count: number;
-}
-
-export interface StorageStats {
-  total_bytes: number;
-  video_bytes: number;
-  thumbnail_bytes: number;
-  video_count: number;
-}
-
 export type AiSchedule = "on_download" | "on_request" | "timer" | "set_time";
 export type AiWorkloadProfile = "light" | "normal" | "heavy";
 export type AiSummaryLength = "short" | "medium" | "long";
 export type AiChaptersMode = "on_download" | "on_watch";
 export type AiGpuSource = "override" | "ollama" | "local" | "unknown";
 
-export interface AiSettings {
-  enabled: boolean;
-  provider: string;
-  base_url: string;
-  embed_model: string;
-  chat_model: string;
-  openrouter_enabled: boolean;
-  /** Masked key from the API; empty when unset. */
-  openrouter_api_key: string;
-  openrouter_api_key_set: boolean;
-  openrouter_model: string;
-  openrouter_scope: "specialized" | "all";
-  openrouter_embed_model: string;
-  ollama_prefer_embeddings: boolean;
-  /** When false, hide per-response cost chips in Watch (Settings totals still show). */
-  openrouter_show_costs: boolean;
-  /** Soft/hard weekly OpenRouter spend limit (rolling 7 days). null = off. */
-  openrouter_weekly_budget_usd: number | null;
-  /** When true and weekly spend >= budget, block further OpenRouter calls. */
-  openrouter_budget_hard_limit: boolean;
-  schedule: AiSchedule;
-  timer_hours: number;
-  schedule_time: string;
-  auto_pull_models: boolean;
-  use_subtitles: boolean;
-  enrich_tags: boolean;
-  /** Days before unlocked tags can be re-reviewed (7–365). */
-  tag_rescan_days: number;
-  ai_summaries: boolean;
-  ai_chapters: boolean;
-  ai_chapters_mode: AiChaptersMode;
-  ai_chat: boolean;
-  summary_length: AiSummaryLength;
-  ai_duplicates: boolean;
-  category_min_score: number;
-  workload_profile: AiWorkloadProfile;
-  /** Optional GiB override for the Ollama machine GPU; null = autodetect. */
-  vram_gb: number | null;
-  paused: boolean;
-}
-
-export interface VideoAiChatMessage {
-  id: number | null;
-  role: "user" | "assistant";
-  content: string;
-  /** OpenRouter cost for this assistant turn, when known. */
-  cost?: number | null;
-  /** Model used for this assistant turn, when known. */
-  model?: string | null;
-  created_at: string | null;
-}
-
-export interface OpenRouterCosts {
-  h24: number;
-  d7: number;
-  d30: number;
-  y1: number;
-  all: number;
-  h24_calls?: number;
-  d7_calls?: number;
-  d30_calls?: number;
-  y1_calls?: number;
-  all_calls?: number;
-  weekly_budget_usd?: number | null;
-  hard_limit?: boolean;
-  over_budget?: boolean;
-  blocked?: boolean;
-}
-
 /** OpenRouter catalog row from GET /api/ai/openrouter/models. */
-export interface OpenRouterModel {
-  id: string;
-  name: string;
-  prompt_per_million?: number | null;
-  completion_per_million?: number | null;
-}
-
-export interface AppSettings {
-  progress_expiry_days: number;
-  metadata_sync_interval_hours: number;
-  channel_catalog_enabled: boolean;
-  channel_catalog_max_videos: number;
-  direct_youtube_search: boolean;
-  youtube_video_search: boolean;
-  setup_completed: boolean;
-  ui: Record<string, unknown>;
-  ai: AiSettings;
-}
-
-export interface AiStatus {
-  enabled: boolean;
-  provider: string;
-  ready: boolean;
-  reachable: boolean;
-  base_url: string | null;
-  embed_model: string;
-  chat_model: string;
-  embed_model_present: boolean;
-  chat_model_present: boolean;
-  pulling: string[];
-  last_error: string | null;
-  paused: boolean;
-  schedule: AiSchedule;
-  indexed_videos: number;
-  total_videos: number;
-  queue_depth: number;
-  queue_breakdown: Record<string, number>;
-  current_job: AiCurrentJob | string | null;
-  blocked_reason?: string | null;
-  runnable_count?: number;
-  deferred_count?: number;
-  waiting_count?: number;
-  error_count?: number;
-  recent_failures?: AiJobFailure[];
-  workload_profile?: AiWorkloadProfile;
-  recommended_profile?: AiWorkloadProfile;
-  profile_locked?: boolean;
-  lock_reason?: string | null;
-  workload_warning?: string | null;
-  vram_tier?: string;
-  gpu_name?: string | null;
-  vram_total_bytes?: number | null;
-  gpu_source?: AiGpuSource;
-  invent_sample_size?: number;
-  invent_budget_chars?: number;
-  models_match_profile?: boolean;
-  openrouter_enabled?: boolean;
-  openrouter_reachable?: boolean;
-  openrouter_model?: string;
-  openrouter_api_key_set?: boolean;
-  openrouter_scope?: "specialized" | "all";
-  openrouter_embed_model?: string;
-  ollama_prefer_embeddings?: boolean;
-  llm_backend?: string | null;
-  embed_backend?: string | null;
-}
-
-export interface AiJobFailure {
-  id: number | null;
-  kind: string;
-  video_id: number | null;
-  catalog_video_id?: number | null;
-  title: string | null;
-  attempts: number;
-  error: string | null;
-  updated_at: string | null;
-}
-
-export interface AiJobRow {
-  id: number | null;
-  kind: string;
-  status: string;
-  video_id: number | null;
-  catalog_video_id?: number | null;
-  title: string | null;
-  attempts: number;
-  error: string | null;
-  run_after: string | null;
-  created_at: string | null;
-  updated_at: string | null;
-}
-
-export interface RecommendationSection {
-  title: string;
-  kind?: string;
-  seed_video_id: number | null;
-  videos: Video[];
-}
-
-export interface RecommendationsResponse {
-  categories: string[];
-  sections: RecommendationSection[];
-  hint?: string;
-  has_more?: boolean;
-}
-
-export interface AiCurrentJob {
-  id?: number | null;
-  kind: string;
-  video_id: number | null;
-  title: string | null;
-  channel: string | null;
-  has_thumbnail: boolean;
-  model?: string | null;
-  attempts?: number;
-  error?: string | null;
-  run_after?: string | null;
-}
-
-export interface SystemStats {
-  cpu_percent: number | null;
-  cpu_model?: string | null;
-  cpu_temp_c?: number | null;
-  cpu_count?: number | null;
-  ram_used_bytes: number | null;
-  ram_total_bytes: number | null;
-  ram_percent: number | null;
-  gpu: {
-    name?: string | null;
-    vendor?: "nvidia" | "amd" | "intel" | "unknown" | null;
-    util_percent: number | null;
-    temp_c: number | null;
-    vram_used_bytes: number | null;
-    vram_total_bytes: number | null;
-  } | null;
-  disk?: {
-    total_bytes: number;
-    used_bytes: number;
-    free_bytes: number;
-  } | null;
-  encode?: {
-    hw_h264: boolean;
-    hw_hevc: boolean;
-    ffmpeg_has_hw_encoder: boolean;
-    gpu_name?: string | null;
-    gpu_vendor?: string | null;
-    encoder_h264?: string | null;
-    encoder_hevc?: string | null;
-    ffmpeg_bin?: string | null;
-  } | null;
-}
-
-export interface ActivityTask {
-  id: string;
-  kind: string;
-  group: string;
-  label: string;
-  reason: string | null;
-  engine: string | null;
-  detail: string | null;
-  video_id: number | null;
-  done: number | null;
-  total: number | null;
-  status: "running" | "completed" | "failed" | "cancelled" | string;
-  started_at: number;
-  finished_at: number | null;
-  error: string | null;
-}
-
-export interface SystemActivity {
-  running: ActivityTask[];
-  recent: ActivityTask[];
-  queued: Record<string, number>;
-  cpu_percent: number | null;
-}
-
-export interface AiProcessResult {
-  enqueued: number;
-  breakdown: Record<string, number>;
-  detail: string;
-}
-
-export interface DuplicateGroup {
-  videos: Video[];
-  match_type: string;
-  ai_score: number | null;
-  ai_verdict: string | null;
-  ai_confidence: number | null;
-  ai_reason: string | null;
-  ai_error?: string | null;
-}
-
-export interface ImportScanResult {
-  added: number;
-  requeued: number;
-}
-
-export interface HealthStats {
-  status: string;
-  horde_sha?: string;
-  horde_version?: string;
-  yt_dlp_version: string;
-  pot_provider: {
-    status: string;
-    url?: string;
-    version?: string;
-    detail?: string;
-  } | null;
-  ollama?: {
-    enabled: boolean;
-    ready: boolean;
-    reachable: boolean;
-    base_url?: string | null;
-    pulling?: string[];
-    last_error?: string | null;
-  } | null;
-  openrouter?: {
-    enabled: boolean;
-    configured?: boolean;
-    api_key_set?: boolean;
-    model?: string;
-    scope?: string;
-    reachable?: boolean;
-  } | null;
-  disk: { total_bytes: number; used_bytes: number; free_bytes: number } | null;
-  library_video_count: number;
-  review_pending_count: number;
-  active_downloads: number;
-  wiki_available?: boolean;
-  downloads?: {
-    active: number;
-    paused: boolean;
-  };
-  workers?: {
-    ai_queue_depth: number;
-    ai_running: number;
-    ai_error_count?: number;
-    ai_blocked_reason?: string | null;
-    catalog_queue_depth: number;
-    catalog_indexing: boolean;
-  };
-  youtube?: {
-    cookies_configured: boolean;
-    last_extract_failure: {
-      kind: string;
-      message: string;
-      at: string;
-      target?: string | null;
-      url?: string | null;
-    } | null;
-  };
-}
-
-export interface UpdateCheck {
-  repo: string;
-  current_sha: string;
-  current_short: string;
-  latest_sha: string | null;
-  latest_short: string | null;
-  latest_html_url: string | null;
-  update_available: boolean;
-  checked_at: string;
-  error: string | null;
-}
-
-export type PlaylistSource = "user" | "youtube";
-
-export interface Playlist {
-  id: number;
-  name: string;
-  description: string | null;
-  source_type: PlaylistSource;
-  source_url: string | null;
-  subscribed: boolean;
-  quality_preset: string | null;
-  last_synced_at: string | null;
-  sync_error: string | null;
-  created_at: string;
-  item_count: number;
-  position: number;
-  cover_video_id: number | null;
-  has_custom_cover: boolean;
-  thumbnail_video_id: number | null;
-  has_thumbnail: boolean;
-}
-
-export interface PlaylistDetail extends Playlist {
-  videos: Video[];
-}
-
-export interface PlaylistPreviewEntry {
-  id: string | null;
-  url: string;
-  title: string | null;
-  channel: string | null;
-  duration: number | null;
-  thumbnail_url: string | null;
-  view_count: number | null;
-}
-
-export interface PlaylistPreviewData {
-  title: string | null;
-  channel: string | null;
-  entries: PlaylistPreviewEntry[];
-}
+/** Stable permission names (see docs/ops/authentication.md). */
+export type Permission =
+  | "delete_videos"
+  | "download"
+  | "offline_download"
+  | "edit_metadata"
+  | "manage_playlists"
+  | "use_ai";

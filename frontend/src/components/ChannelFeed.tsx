@@ -15,7 +15,12 @@ import {
   applyChannelFeedSort,
   mergeYoutubeFeedEntries,
 } from "./channelFeedYoutubeSearch";
-import type { ChannelFeedEntry, ChannelStat, SearchMatchReason, Video } from "../types";
+import type {
+  ChannelFeedEntry,
+  ChannelStat,
+  SearchMatchReason,
+  Video,
+} from "../types";
 
 type FeedSort = "recent" | "popular";
 type FeedLayout = "grid" | "list";
@@ -104,8 +109,7 @@ function mergeFeedWithLibrary(
         ...existing,
         in_library: true,
         video_id: lib.video_id ?? existing.video_id,
-        library_height_px:
-          lib.library_height_px ?? existing.library_height_px,
+        library_height_px: lib.library_height_px ?? existing.library_height_px,
         published_at: lib.published_at || existing.published_at,
         published_label: lib.published_at ? null : existing.published_label,
         view_count: existing.view_count ?? lib.view_count,
@@ -208,9 +212,7 @@ export default function ChannelFeed({
         const headIds = new Set(
           page.entries.map((e) => e.id).filter(Boolean) as string[]
         );
-        const filteredRest = rest.filter(
-          (e) => !e.id || !headIds.has(e.id)
-        );
+        const filteredRest = rest.filter((e) => !e.id || !headIds.has(e.id));
         return [...page.entries, ...filteredRest];
       });
       setHasMore((prevHasMore) => page.has_more || prevHasMore);
@@ -484,9 +486,7 @@ export default function ChannelFeed({
           setSearchPhase("done");
         } catch (err) {
           if (isAbortError(err) || signal.aborted) return;
-          setSearchError(
-            err instanceof Error ? err.message : "Search failed"
-          );
+          setSearchError(err instanceof Error ? err.message : "Search failed");
           setSearchEntries([]);
           setSearchPhase("done");
         }
@@ -543,8 +543,7 @@ export default function ChannelFeed({
     resolveVideoId,
   ]);
 
-  const canLoadMore =
-    hasMore && !feedSearch.trim() && !loading && !loadingMore;
+  const canLoadMore = hasMore && !feedSearch.trim() && !loading && !loadingMore;
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -581,7 +580,7 @@ export default function ChannelFeed({
 
   if (!channelUrl && libraryEntries.length === 0 && !loading) {
     return (
-      <div className="py-20 text-center text-gray-500">
+      <div className="py-20 text-center text-muted">
         <p className="text-lg">Channel feed unavailable</p>
         <p className="mt-1 text-sm">
           No YouTube URL is known for this channel yet. Download a video from
@@ -607,7 +606,7 @@ export default function ChannelFeed({
 
       {showSearchBanner && (
         <div
-          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500"
+          className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted"
           role="status"
           aria-live="polite"
         >
@@ -642,7 +641,7 @@ export default function ChannelFeed({
       ) : showFeedLoading ? (
         <LoadingIndicator label="Loading channel feed" />
       ) : filteredEntries.length === 0 ? (
-        <div className="py-20 text-center text-gray-500">
+        <div className="py-20 text-center text-muted">
           <p className="text-lg">No videos found</p>
           <p className="mt-1 text-sm">
             {feedSearch
@@ -658,7 +657,9 @@ export default function ChannelFeed({
             className={
               feedLayout === "grid"
                 ? `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
-                    settings.sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
+                    settings.sidebarCollapsed
+                      ? "xl:grid-cols-5"
+                      : "xl:grid-cols-4"
                   }`
                 : "mx-auto flex w-full max-w-3xl flex-col gap-2"
             }

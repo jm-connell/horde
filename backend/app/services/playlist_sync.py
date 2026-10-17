@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Optional
 
 from sqlmodel import Session, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import Playlist, utcnow
 from . import activity
 from .ytdlp_extract import extract_playlist_entries
@@ -20,9 +19,9 @@ _sync_lock = threading.Lock()
 
 def sync_subscribed_playlist(playlist_id: int) -> None:
     """Rescan one subscribed playlist: attach existing ids, download missing ones."""
-    from . import downloader
+    from .downloads.playlist_import import run_playlist_entries
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         playlist = session.get(Playlist, playlist_id)
         if playlist is None or not playlist.subscribed or not playlist.source_url:
             return
@@ -36,8 +35,8 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             for e in (preview.get("entries") or [])
             if isinstance(e, dict) and e.get("url")
         ]
-        downloader.run_playlist_entries(playlist_id, entries, quality)
-        with Session(engine) as session:
+        run_playlist_entries(playlist_id, entries, quality)
+        with Session(get_engine()) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return
@@ -45,9 +44,9 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             playlist.sync_error = None
             session.add(playlist)
             session.commit()
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("Playlist %s sync failed", playlist_id)
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
                 return
@@ -67,7 +66,7 @@ def start_playlist_sync(playlist_id: int) -> None:
 
 
 def subscribed_playlist_ids(session: Session) -> list[int]:
-    rows = session.exec(select(Playlist.id).where(Playlist.subscribed == True)).all()  # noqa: E712
+    rows = session.exec(select(Playlist.id).where(Playlist.subscribed == True)).all()  # noqa: E712 - SQL column comparison, not a Python truth test
     return [pid for pid in rows if pid is not None]
 
 
@@ -76,7 +75,7 @@ def sync_subscribed_playlists() -> None:
     if not _sync_lock.acquire(blocking=False):
         return
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             ids = subscribed_playlist_ids(session)
         if not ids:
             return
@@ -93,7 +92,7 @@ def sync_subscribed_playlists() -> None:
             for index, playlist_id in enumerate(ids):
                 try:
                     sync_subscribed_playlist(playlist_id)
-                except Exception:  # noqa: BLE001
+                except Exception:
                     logger.exception("Playlist %s sync raised", playlist_id)
                 handle.update(
                     done=index + 1,
@@ -104,10 +103,10 @@ def sync_subscribed_playlists() -> None:
 
 
 def find_subscribed_by_url(
-    session: Session, source_url: str, *, exclude_id: Optional[int] = None
-) -> Optional[Playlist]:
+    session: Session, source_url: str, *, exclude_id: int | None = None
+) -> Playlist | None:
     query = select(Playlist).where(
-        Playlist.subscribed == True,  # noqa: E712
+        Playlist.subscribed == True,  # noqa: E712 - SQL column comparison, not a Python truth test
         Playlist.source_url == source_url,
     )
     for row in session.exec(query).all():

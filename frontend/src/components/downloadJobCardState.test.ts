@@ -70,8 +70,12 @@ describe("canRedownloadRemovedJob", () => {
     expect(canRedownloadRemovedJob(true, false, false, true, true)).toBe(false);
     expect(canRedownloadRemovedJob(true, false, true, true, false)).toBe(false);
     expect(canRedownloadRemovedJob(true, true, false, true, false)).toBe(false);
-    expect(canRedownloadRemovedJob(false, false, false, true, false)).toBe(false);
-    expect(canRedownloadRemovedJob(true, false, false, false, false)).toBe(false);
+    expect(canRedownloadRemovedJob(false, false, false, true, false)).toBe(
+      false
+    );
+    expect(canRedownloadRemovedJob(true, false, false, false, false)).toBe(
+      false
+    );
   });
 });
 

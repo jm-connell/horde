@@ -43,6 +43,11 @@ function job(patch: Partial<DownloadJob> & { url: string }): DownloadJob {
     video_id: null,
     file_size: null,
     created_at: "",
+    available_presets: [],
+    destination: "library",
+    video_codec: "av1",
+    video_missing: false,
+    superseded: false,
     ...patch,
   };
 }
@@ -94,12 +99,7 @@ describe("channel feed download button state", () => {
       ])
     ).toBe(false);
     expect(
-      channelFeedItemDownloading(
-        entry,
-        new Set(),
-        new Set([url]),
-        []
-      )
+      channelFeedItemDownloading(entry, new Set(), new Set([url]), [])
     ).toBe(true);
     expect(
       channelFeedItemDownloading(entry, new Set([url]), new Set(), [])
@@ -118,11 +118,13 @@ describe("channel feed download button state", () => {
       ])
     ).toBe(true);
     expect(
-      channelFeedItemInLibrary(feedEntry({ url, in_library: true }), new Map(), [])
+      channelFeedItemInLibrary(
+        feedEntry({ url, in_library: true }),
+        new Map(),
+        []
+      )
     ).toBe(true);
-    expect(channelFeedItemInLibrary(entry, new Map([[url, 7]]), [])).toBe(
-      true
-    );
+    expect(channelFeedItemInLibrary(entry, new Map([[url, 7]]), [])).toBe(true);
   });
 
   it("does not keep downloading state for a finished or failed job", () => {

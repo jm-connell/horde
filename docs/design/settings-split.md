@@ -21,7 +21,7 @@ Most appearance, library, and playback preferences are stored on the server unde
 The frontend maps camelCase React state ↔ snake_case JSON via a fixed `SERVER_UI_KEYS` list. Saves **deep-merge** the `ui` object on the server so a partial PATCH (one toggle) does not wipe nested keys like `custom_colors` or custom themes.
 
 !!! tip "Multi-device"
-    Because `ui` is server-side, opening Horde on another LAN browser picks up the same theme and library defaults. That matches the [single-admin](no-auth.md) model: one house style, not per-account profiles.
+    Because `ui` is stored on the server, opening Horde on another browser picks up your theme and layout. Each account has its **own** `ui` (table `user_settings`); the server-wide `ui` blob in `app_settings.json` is the default for people who have not chosen anything yet. Two `ui` keys change what the server does (`download_video_codec`, `compat_copy_resolution`) and stay server-wide, editable by admins only.
 
 ## 3. Server `ai` / app settings (keys and models)
 
@@ -49,4 +49,4 @@ SQLite                   →  library, jobs, progress, embeddings metadata
 
 - [Settings overview](../settings/index.md)
 - [All settings appendix](../settings/all-settings.md)
-- [No authentication](no-auth.md) — server settings are world-readable/writable on the LAN
+- [Security model](no-auth.md) — server settings need an administrator

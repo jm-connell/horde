@@ -7,18 +7,24 @@ export default function SystemStatsSnippet({
   stats: SystemStats | null;
 }) {
   if (!stats) {
-    return <p className="text-sm text-gray-500">Loading…</p>;
+    return <p className="text-sm text-muted">Loading…</p>;
   }
 
   const cards: { label: string; value: React.ReactNode }[] = [];
 
-  if (stats.cpu_model || stats.cpu_percent != null || stats.cpu_temp_c != null) {
+  if (
+    stats.cpu_model ||
+    stats.cpu_percent != null ||
+    stats.cpu_temp_c != null
+  ) {
     cards.push({
       label: "CPU",
       value: (
         <>
           {stats.cpu_model && (
-            <span className="block text-xs text-gray-400">{stats.cpu_model}</span>
+            <span className="block text-xs text-gray-400">
+              {stats.cpu_model}
+            </span>
           )}
           <span className="block">
             {[
@@ -42,7 +48,8 @@ export default function SystemStatsSnippet({
       label: "RAM",
       value: (
         <>
-          {formatSize(stats.ram_used_bytes)} / {formatSize(stats.ram_total_bytes)}
+          {formatSize(stats.ram_used_bytes)} /{" "}
+          {formatSize(stats.ram_total_bytes)}
           {stats.ram_percent != null
             ? ` (${Math.round(stats.ram_percent)}%)`
             : ""}
@@ -80,7 +87,7 @@ export default function SystemStatsSnippet({
           <span className="block">{gpuLines.join(" · ")}</span>
         )}
         {gpuVram && (
-          <span className="block text-xs text-gray-500">VRAM {gpuVram}</span>
+          <span className="block text-xs text-muted">VRAM {gpuVram}</span>
         )}
       </>
     ) : (
@@ -88,9 +95,9 @@ export default function SystemStatsSnippet({
         <span className="block text-gray-400">None detected</span>
         <a
           href="/wiki/ops/environment/#gpu"
-          className="mt-1 block text-xs text-accent hover:underline"
+          className="mt-1 block text-xs text-accent underline underline-offset-2"
         >
-            Why?
+          Why?
         </a>
       </>
     ),
@@ -103,7 +110,7 @@ export default function SystemStatsSnippet({
         <>
           {formatSize(stats.disk.used_bytes)} /{" "}
           {formatSize(stats.disk.total_bytes)}
-          <span className="block text-xs text-gray-500">
+          <span className="block text-xs text-muted">
             {formatSize(stats.disk.free_bytes)} free
           </span>
         </>
@@ -112,9 +119,7 @@ export default function SystemStatsSnippet({
   }
 
   if (cards.length === 0) {
-    return (
-      <p className="text-sm text-gray-500">No resource stats available.</p>
-    );
+    return <p className="text-sm text-muted">No resource stats available.</p>;
   }
 
   return (
@@ -124,7 +129,7 @@ export default function SystemStatsSnippet({
           key={c.label}
           className="rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5"
         >
-          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+          <p className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
             {c.label}
           </p>
           <div className="text-sm text-gray-200">{c.value}</div>

@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -20,7 +20,7 @@ _lock = threading.Lock()
 _last_fetch_at = 0.0
 
 
-def fetch_votes(video_id: str) -> Optional[dict[str, int]]:
+def fetch_votes(video_id: str) -> dict[str, int] | None:
     """Return {like_count, dislike_count} or None on failure / missing data."""
     yt_id = (video_id or "").strip()
     if not yt_id:
@@ -40,15 +40,16 @@ def fetch_votes(video_id: str) -> Optional[dict[str, int]]:
                 headers={"Accept": "application/json"},
             )
             _last_fetch_at = time.monotonic()
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("RYD fetch failed for %s: %s", yt_id, exc)
+        except Exception:
+            logger.debug("RYD fetch failed for %s", yt_id, exc_info=True)
             return None
 
     if resp.status_code != 200:
         return None
     try:
         data: Any = resp.json()
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("unparseable Return YouTube Dislike response", exc_info=True)
         return None
     if not isinstance(data, dict) or data.get("deleted"):
         return None

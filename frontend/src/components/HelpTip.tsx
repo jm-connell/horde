@@ -62,7 +62,12 @@ export default function HelpTip({
 
     const top = place === "bottom" ? y + CURSOR_GAP_Y : y - CURSOR_GAP_Y;
     setCoords((prev) => {
-      if (prev && prev.top === top && prev.left === left && prev.place === place) {
+      if (
+        prev &&
+        prev.top === top &&
+        prev.left === left &&
+        prev.place === place
+      ) {
         return prev;
       }
       return { top, left, place };
@@ -82,6 +87,7 @@ export default function HelpTip({
   useLayoutEffect(() => {
     if (!open || pointerOpen.current) return;
     placeAtAnchor();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- placeAtAnchor only reads refs; re-run on open/text changes, not on every render
   }, [open, text]);
 
   useEffect(() => {
@@ -174,7 +180,7 @@ export default function HelpTip({
       ) : (
         <button
           type="button"
-          className="cursor-help text-gray-600 hover:text-gray-400"
+          className="cursor-help text-muted hover:text-gray-400"
           aria-label="More info"
           aria-describedby={open ? tipId : undefined}
           aria-expanded={open}

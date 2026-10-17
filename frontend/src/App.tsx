@@ -6,17 +6,22 @@ import {
   useParams,
   useSearchParams,
 } from "react-router-dom";
-import { useEffect, useRef } from "react";
+import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { QueryClientProvider } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
-import History from "./pages/History";
-import Download from "./pages/Download";
-import Import from "./pages/Import";
-import Watch from "./pages/Watch";
-import Settings from "./pages/Settings";
-import Setup from "./pages/Setup";
-import Playlists from "./pages/Playlists";
-import OfflinePage from "./pages/Offline";
+import {
+  Download,
+  History,
+  Import,
+  NotFound,
+  OfflinePage,
+  Playlists,
+  Settings,
+  Setup,
+  Watch,
+} from "./pages/lazy";
+import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import BackgroundEffect from "./components/BackgroundEffect";
@@ -28,6 +33,11 @@ import { ConfirmProvider } from "./context/ConfirmContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { useSetupGate } from "./hooks/useSettings";
+import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
+import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
+import RequirePermission from "./components/auth/RequirePermission";
+import { AuthGate, AuthProvider, useAuth } from "./context/AuthContext";
+import { createQueryClient } from "./queries/client";
 
 /** Back-compat: `/playlists/:id` → `/playlists?open=:id` */
 function PlaylistOpenRedirect() {
@@ -75,27 +85,52 @@ function AppRoutes() {
       data-horde="main"
       className="page-shell relative z-10 mx-auto max-w-[1920px] px-3 py-6 md:px-6"
     >
-      <Routes>
-        <Route path="/" element={<Library />} />
-        <Route path="/history" element={<History />} />
-        <Route path="/offline" element={<OfflinePage />} />
-        <Route path="/download" element={<Download />} />
-        <Route path="/playlists" element={<Playlists />} />
-        <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
-        <Route path="/import" element={<Import />} />
-        <Route path="/review" element={<Navigate to="/import" replace />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/setup" element={<Navigate to="/" replace />} />
-        <Route path="/watch/:id" element={<Watch />} />
-        <Route path="/watch" element={<Watch />} />
-        <Route path="/preview" element={<PreviewRedirect />} />
-      </Routes>
+      {/* A render error stays inside <main> so the nav still works, and
+          resets on navigation. Lazy routes suspend here until their chunk
+          arrives (a failed chunk fetch throws into the boundary). */}
+      <ErrorBoundary scope="route" resetKey={location.key}>
+        <Suspense fallback={<LoadingIndicator label="Loading" />}>
+          <Routes>
+            <Route path="/" element={<Library />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/offline" element={<OfflinePage />} />
+            <Route
+              path="/download"
+              element={
+                <RequirePermission permission="download">
+                  <Download />
+                </RequirePermission>
+              }
+            />
+            <Route path="/playlists" element={<Playlists />} />
+            <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
+            <Route
+              path="/import"
+              element={
+                <RequirePermission permission="download">
+                  <Import />
+                </RequirePermission>
+              }
+            />
+            <Route path="/review" element={<Navigate to="/import" replace />} />
+            <Route path="/settings" element={<Settings />} />
+            <Route path="/setup" element={<Navigate to="/" replace />} />
+            <Route path="/watch/:id" element={<Watch />} />
+            <Route path="/watch" element={<Watch />} />
+            <Route path="/preview" element={<PreviewRedirect />} />
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     </main>
   );
 }
 
 function AppShell() {
+  useServiceWorkerUpdate();
+  useOfflineQuotaToast();
   const { ready, completed } = useSetupGate();
+  const { isAdmin } = useAuth();
 
   if (!ready) {
     return (
@@ -108,15 +143,36 @@ function AppShell() {
     );
   }
 
+  if (!completed && !isAdmin) {
+    return (
+      <div className="relative min-h-full overflow-x-hidden">
+        <BackgroundEffect />
+        <main className="relative z-10 mx-auto max-w-md px-4 py-24 text-center">
+          <h1 className="mb-2 text-xl font-semibold text-gray-100">
+            Setup isn’t finished
+          </h1>
+          <p className="text-sm text-gray-400">
+            An administrator needs to finish setting up Horde before it can be
+            used. Please ask them, then reload this page.
+          </p>
+        </main>
+      </div>
+    );
+  }
+
   if (!completed) {
     return (
       <div className="relative min-h-full overflow-x-hidden">
         <BackgroundEffect />
         <main className="relative z-10">
-          <Routes>
-            <Route path="/setup" element={<Setup />} />
-            <Route path="*" element={<Navigate to="/setup" replace />} />
-          </Routes>
+          <ErrorBoundary scope="setup">
+            <Suspense fallback={<LoadingIndicator label="Loading" />}>
+              <Routes>
+                <Route path="/setup" element={<Setup />} />
+                <Route path="*" element={<Navigate to="/setup" replace />} />
+              </Routes>
+            </Suspense>
+          </ErrorBoundary>
         </main>
       </div>
     );
@@ -131,19 +187,60 @@ function AppShell() {
   );
 }
 
+/**
+ * Everything below the sign-in gate belongs to one account: the query cache
+ * (watch history, downloads, permissions) and the providers that hold state
+ * derived from it. A different user gets a new client and a remounted subtree
+ * in the same commit, so nothing rendered or observed can read the previous
+ * user's data; the old client is cleared when it is dropped.
+ */
+function UserScope({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- a new user must get a new client even though the factory does not read the id
+  const queryClient = useMemo(() => createQueryClient(), [userId]);
+  useEffect(() => () => queryClient.clear(), [queryClient]);
+  // Promoted or demoted in place: what the server answers depends on the role
+  // (members get trimmed settings and status), so nothing cached under the
+  // old one may be shown. A layout effect, so it runs before the screens'
+  // own effects read the cache in the same commit.
+  const role = user
+    ? `${user.is_admin}:${[...user.permissions].sort().join(",")}`
+    : "";
+  const lastRole = useRef(role);
+  useLayoutEffect(() => {
+    if (lastRole.current === role) return;
+    lastRole.current = role;
+    void queryClient.invalidateQueries();
+  }, [role, queryClient]);
+  return (
+    <QueryClientProvider key={userId ?? "anon"} client={queryClient}>
+      {children}
+    </QueryClientProvider>
+  );
+}
+
 export default function App() {
   return (
-    <ToastProvider>
-      <ConfirmProvider>
-        <DownloadProvider>
-          <SearchProvider>
-            <PlaybackProvider>
-              <AppShell />
-              <OverlayScrollThumb viewport />
-            </PlaybackProvider>
-          </SearchProvider>
-        </DownloadProvider>
-      </ConfirmProvider>
-    </ToastProvider>
+    <ErrorBoundary scope="app" fullPage>
+      <ToastProvider>
+        <ConfirmProvider>
+          <AuthProvider>
+            <AuthGate>
+              <UserScope>
+                <DownloadProvider>
+                  <SearchProvider>
+                    <PlaybackProvider>
+                      <AppShell />
+                      <OverlayScrollThumb viewport />
+                    </PlaybackProvider>
+                  </SearchProvider>
+                </DownloadProvider>
+              </UserScope>
+            </AuthGate>
+          </AuthProvider>
+        </ConfirmProvider>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }

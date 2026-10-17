@@ -1,2 +1,5 @@
 pytest>=8.0
-mkdocs-material>=9.5,<10
+-r ../docs/requirements.txt
+ruff==0.17.0
+mypy==2.4.0
+types-psutil==7.2.2.20260906

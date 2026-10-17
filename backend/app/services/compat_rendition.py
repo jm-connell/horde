@@ -18,41 +18,55 @@ outcome is persisted on the ``videos`` row.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import subprocess
 import threading
-import time
 from collections import deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Literal, Optional
+from typing import Any, Literal
 
 from sqlalchemy.orm.exc import StaleDataError
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from .. import config
-from ..config import DOWNLOADS_DIR
-from ..database import engine
-from ..models import Video, VideoStatus
+from ..context import get_engine, get_paths
+from ..models import Video, VideoStatus, require_id
 from . import activity
-from .encode_probe import EncoderChoice, list_filters, pick_encoder, probe_encode_capabilities
+from .encode_probe import (
+    EncoderChoice,
+    list_filters,
+    pick_encoder,
+    probe_encode_capabilities,
+)
 from .ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+from .fsutil import safe_unlink
 from .media_info import apply_stream_info, needs_compat, probe_stream_info
-from .mp4_compat import ensure_safari_mp4
-from .paths import COMPAT_SIDECAR_TOKEN, compat_sidecar_path, resolve_compat_path, to_rel_path
+from .mp4_compat import ensure_safari_mp4, needs_safari_prep
+from .paths import (
+    COMPAT_SIDECAR_TOKEN,
+    compat_sidecar_path,
+    resolve_compat_path,
+    to_rel_path,
+)
+from .workers import BackgroundWorker
 from .ytdlp_formats import (
     COMPAT_MAX_HEIGHT,
-    compat_copy_cap,
     FORMAT_SORT_H264,
     apply_audio_format_id,
+    compat_copy_cap,
     compat_format_spec,
     pick_original_audio_format,
 )
 
 logger = logging.getLogger(__name__)
 
-JobKind = Literal["compat", "convert"]
+# "safari" rewrites the original in place (AAC audio + faststart, video copied) so
+# WebKit can play it; it exists so that GET /stream never has to do that work.
+JobKind = Literal["compat", "convert", "safari"]
 
 _ENCODE_TIMEOUT_SEC = 8 * 3600
 # Rough 1080p/720p/480p H.264 bitrates at our quality settings (for estimates).
@@ -87,6 +101,14 @@ _jobs: dict[int, _Job] = {}
 _pending: deque[int] = deque()
 _running: set[int] = set()
 _errors: dict[int, str] = {}
+# Module-level like the queue state above (there is no compat state object to hang
+# it on yet); moves with it when the queue state is made injectable.
+_safari_errors: dict[int, str] = {}
+
+
+def _queue_group(kind: JobKind) -> str:
+    """Activity group a queued job is counted under."""
+    return "transcode" if kind == "convert" else "compat"
 
 
 # ---------------------------------------------------------------------------
@@ -95,10 +117,10 @@ _errors: dict[int, str] = {}
 
 
 def compat_dimensions(
-    width: Optional[int],
-    height: Optional[int],
+    width: int | None,
+    height: int | None,
     cap: int = COMPAT_MAX_HEIGHT,
-) -> Optional[tuple[int, int]]:
+) -> tuple[int, int] | None:
     """Scale so the short side is ≤``cap`` (keeps vertical video sharp). None = keep size."""
     if not width or not height:
         return None
@@ -135,11 +157,11 @@ def compat_ffmpeg_cmd(
     dest: Path,
     encoder: EncoderChoice,
     *,
-    src_vcodec: Optional[str],
-    bit_depth: Optional[int],
-    width: Optional[int],
-    height: Optional[int],
-    fps: Optional[float],
+    src_vcodec: str | None,
+    bit_depth: int | None,
+    width: int | None,
+    height: int | None,
+    fps: float | None,
     is_hdr: bool,
     copy_audio: bool,
     filters: frozenset[str] = frozenset(),
@@ -161,7 +183,12 @@ def compat_ffmpeg_cmd(
         cmd.extend(["-hwaccel", "cuda"])
     if encoder.kind == "vaapi":
         cmd.extend(
-            ["-init_hw_device", "vaapi=va:/dev/dri/renderD128", "-filter_hw_device", "va"]
+            [
+                "-init_hw_device",
+                "vaapi=va:/dev/dri/renderD128",
+                "-filter_hw_device",
+                "va",
+            ]
         )
     cmd.extend(["-i", str(src), "-map", "0:v:0"])
 
@@ -185,25 +212,77 @@ def compat_ffmpeg_cmd(
     if name == "h264_nvenc":
         cmd.extend(
             [
-                "-c:v", "h264_nvenc", "-preset", "p5", "-tune", "hq",
-                "-rc", "vbr", "-cq", "23", "-b:v", "0",
-                "-maxrate", maxrate, "-bufsize", bufsize,
-                "-profile:v", "high", "-spatial-aq", "1", "-rc-lookahead", "20",
+                "-c:v",
+                "h264_nvenc",
+                "-preset",
+                "p5",
+                "-tune",
+                "hq",
+                "-rc",
+                "vbr",
+                "-cq",
+                "23",
+                "-b:v",
+                "0",
+                "-maxrate",
+                maxrate,
+                "-bufsize",
+                bufsize,
+                "-profile:v",
+                "high",
+                "-spatial-aq",
+                "1",
+                "-rc-lookahead",
+                "20",
             ]
         )
     elif name == "h264_qsv":
-        cmd.extend(["-c:v", "h264_qsv", "-preset", "medium", "-global_quality", "25", "-profile:v", "high"])
+        cmd.extend(
+            [
+                "-c:v",
+                "h264_qsv",
+                "-preset",
+                "medium",
+                "-global_quality",
+                "25",
+                "-profile:v",
+                "high",
+            ]
+        )
     elif name == "h264_vaapi":
         cmd.extend(["-c:v", "h264_vaapi", "-qp", "24", "-profile:v", "high"])
     elif name == "h264_amf":
-        cmd.extend(["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "25"])
+        cmd.extend(
+            [
+                "-c:v",
+                "h264_amf",
+                "-quality",
+                "balanced",
+                "-rc",
+                "cqp",
+                "-qp_i",
+                "23",
+                "-qp_p",
+                "25",
+            ]
+        )
     elif name == "h264_videotoolbox":
         cmd.extend(["-c:v", "h264_videotoolbox", "-q:v", "55", "-profile:v", "high"])
     else:
         cmd.extend(
             [
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "23",
-                "-maxrate", maxrate, "-bufsize", bufsize, "-profile:v", "high",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "veryfast",
+                "-crf",
+                "23",
+                "-maxrate",
+                maxrate,
+                "-bufsize",
+                bufsize,
+                "-profile:v",
+                "high",
             ]
         )
     cmd.extend(["-g", gop])
@@ -229,7 +308,7 @@ def estimate_compat_bytes(video: Video, cap: int = COMPAT_MAX_HEIGHT) -> int:
     return int(duration * (bps + 160_000) / 8)
 
 
-def job_state(video_id: int) -> Optional[dict[str, Any]]:
+def job_state(video_id: int) -> dict[str, Any] | None:
     with _lock:
         job = _jobs.get(video_id)
         if job is None:
@@ -249,11 +328,31 @@ def compat_status(video: Video) -> dict[str, Any]:
         return {**state, "error": None}
     path = resolve_compat_path(video)
     if path is not None and path.is_file():
-        return {"kind": "compat", "status": "ready", "stage": None, "progress": 100.0, "error": None}
-    err = video.compat_error or (_errors.get(video.id) if video.id is not None else None)
+        return {
+            "kind": "compat",
+            "status": "ready",
+            "stage": None,
+            "progress": 100.0,
+            "error": None,
+        }
+    err = video.compat_error or (
+        _errors.get(video.id) if video.id is not None else None
+    )
     if err:
-        return {"kind": "compat", "status": "error", "stage": None, "progress": 0.0, "error": err}
-    return {"kind": "compat", "status": "none", "stage": None, "progress": 0.0, "error": None}
+        return {
+            "kind": "compat",
+            "status": "error",
+            "stage": None,
+            "progress": 0.0,
+            "error": err,
+        }
+    return {
+        "kind": "compat",
+        "status": "none",
+        "stage": None,
+        "progress": 0.0,
+        "error": None,
+    }
 
 
 def queue_counts() -> dict[str, int]:
@@ -275,7 +374,8 @@ def _slot_limit() -> int:
         return config.MAX_FFMPEG_CONCURRENCY
     try:
         return 2 if probe_encode_capabilities().hw_h264 else 1
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("encoder probe failed; using one ffmpeg slot", exc_info=True)
         return 1
 
 
@@ -296,13 +396,12 @@ def enqueue(
         if existing is not None:
             if front and existing.status == "queued":
                 # A viewer is waiting on this one — jump the bulk backfill.
-                try:
+                with contextlib.suppress(ValueError):
                     _pending.remove(video_id)
-                except ValueError:
-                    pass
                 _pending.appendleft(video_id)
             return f"already_{existing.status}"
         _errors.pop(video_id, None)
+        _safari_errors.pop(video_id, None)
         _jobs[video_id] = _Job(
             video_id=video_id,
             kind=kind,
@@ -313,7 +412,7 @@ def enqueue(
             _pending.appendleft(video_id)
         else:
             _pending.append(video_id)
-    activity.note_queued("compat" if kind == "compat" else "transcode", 1)
+    activity.note_queued(_queue_group(kind), 1)
     _dispatch()
     return "queued"
 
@@ -325,19 +424,17 @@ def cancel(video_id: int) -> bool:
             return False
         job.cancel.set()
         if job.status == "queued":
-            try:
+            with contextlib.suppress(ValueError):
                 _pending.remove(video_id)
-            except ValueError:
-                pass
             _jobs.pop(video_id, None)
             queued_kind = job.kind
         else:
             return True
-    activity.note_queued("compat" if queued_kind == "compat" else "transcode", -1)
+    activity.note_queued(_queue_group(queued_kind), -1)
     return True
 
 
-def cancel_all(kind: Optional[JobKind] = None) -> int:
+def cancel_all(kind: JobKind | None = None) -> int:
     """Drop queued jobs (and signal running ones) of ``kind`` (or all)."""
     with _lock:
         ids = [vid for vid, job in _jobs.items() if kind is None or job.kind == kind]
@@ -357,7 +454,7 @@ def _dispatch() -> None:
                 continue
             job.status = "running"
             _running.add(video_id)
-        activity.note_queued("compat" if job.kind == "compat" else "transcode", -1)
+        activity.note_queued(_queue_group(job.kind), -1)
         threading.Thread(
             target=_worker, args=(job,), daemon=True, name=f"compat-{video_id}"
         ).start()
@@ -367,16 +464,25 @@ def _worker(job: _Job) -> None:
     try:
         if job.kind == "convert":
             _run_convert(job)
+        elif job.kind == "safari":
+            _run_safari(job)
         else:
             _run_compat(job)
     except (FfmpegCancelled, _Cancelled):
         logger.info("compat job %s cancelled", job.video_id)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         msg = str(exc) or exc.__class__.__name__
-        logger.warning("compat job %s (%s) failed: %s", job.video_id, job.kind, msg)
+        logger.warning(
+            "compat job %s (%s) failed: %s", job.video_id, job.kind, msg, exc_info=True
+        )
         with _lock:
-            _errors[job.video_id] = msg[:300]
-        _save(job.video_id, compat_error=msg[:300])
+            if job.kind == "safari":
+                # Not a sidecar failure: keep it out of the video row.
+                _safari_errors[job.video_id] = msg[:300]
+            else:
+                _errors[job.video_id] = msg[:300]
+        if job.kind != "safari":
+            _save(job.video_id, compat_error=msg[:300])
     finally:
         with _lock:
             _running.discard(job.video_id)
@@ -389,7 +495,7 @@ class _Cancelled(Exception):
 
 
 def _save(video_id: int, **fields: Any) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return
@@ -402,7 +508,7 @@ def _save(video_id: int, **fields: Any) -> None:
             session.rollback()
 
 
-def _set(job: _Job, *, stage: Optional[str] = None, progress: Optional[float] = None) -> None:
+def _set(job: _Job, *, stage: str | None = None, progress: float | None = None) -> None:
     with _lock:
         if stage is not None:
             job.stage = stage
@@ -410,31 +516,24 @@ def _set(job: _Job, *, stage: Optional[str] = None, progress: Optional[float] = 
             job.progress = max(0.0, min(100.0, progress))
 
 
-def _safe_unlink(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        pass
-
-
 @dataclass(frozen=True)
 class _Source:
     path: Path
     title: str
-    source_url: Optional[str]
-    platform: Optional[str]
-    duration: Optional[float]
-    width: Optional[int]
-    height: Optional[int]
-    fps: Optional[float]
+    source_url: str | None
+    platform: str | None
+    duration: float | None
+    width: int | None
+    height: int | None
+    fps: float | None
 
 
-def _load_source(video_id: int) -> Optional[_Source]:
-    with Session(engine) as session:
+def _load_source(video_id: int) -> _Source | None:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None or video.status != VideoStatus.ready:
             return None
-        root = DOWNLOADS_DIR.resolve()
+        root = get_paths().downloads.resolve()
         path = (root / video.file_path).resolve()
         try:
             path.relative_to(root)
@@ -461,7 +560,11 @@ def _load_source(video_id: int) -> Optional[_Source]:
 
 def _is_youtube(src: _Source) -> bool:
     url = (src.source_url or "").lower()
-    return "youtube" in (src.platform or "").lower() or "youtube.com" in url or "youtu.be" in url
+    return (
+        "youtube" in (src.platform or "").lower()
+        or "youtube.com" in url
+        or "youtu.be" in url
+    )
 
 
 def _run_compat(job: _Job) -> None:
@@ -469,7 +572,7 @@ def _run_compat(job: _Job) -> None:
     if src is None:
         return
     dest = compat_sidecar_path(src.path)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, job.video_id)
         if video is None:
             return
@@ -503,9 +606,9 @@ def _run_compat(job: _Job) -> None:
             _set(job, progress=pct)
             handle.update(done=int(pct))
 
-        produced: Optional[Path] = None
+        produced: Path | None = None
         source_kind = "youtube"
-        download_note: Optional[str] = None
+        download_note: str | None = None
         # YouTube only serves H.264 up to 1080p; a full-res copy of a 1440p/4K
         # source has to be encoded here.
         src_short = min(src.width or 0, src.height or 0)
@@ -517,9 +620,13 @@ def _run_compat(job: _Job) -> None:
                 produced = _download_native_h264(src, dest, job.cancel, progress)
             except _Cancelled:
                 raise
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 download_note = str(exc)
-                logger.info("native H.264 download failed for %s: %s", job.video_id, exc)
+                logger.info(
+                    "native H.264 download failed for %s",
+                    job.video_id,
+                    exc_info=True,
+                )
                 produced = None
         if job.cancel.is_set():
             raise _Cancelled()
@@ -540,7 +647,9 @@ def _run_compat(job: _Job) -> None:
                 cap=cap,
             )
             if download_note:
-                logger.debug("compat %s fell back to encode: %s", job.video_id, download_note)
+                logger.debug(
+                    "compat %s fell back to encode: %s", job.video_id, download_note
+                )
 
         _set(job, stage="finishing", progress=100.0)
         final = ensure_safari_mp4(produced, cancel_event=job.cancel)
@@ -561,11 +670,15 @@ def _download_native_h264(
     dest: Path,
     cancel_event: threading.Event,
     on_progress: Callable[[float], None],
-) -> Optional[Path]:
+) -> Path | None:
     """Fetch YouTube's avc1 stream (≤1080p) to ``dest``. None when not offered."""
     import yt_dlp
 
-    from .ytdlp_common import apply_cookie_opts, url_cookie_required, youtube_extractor_args
+    from .ytdlp_common import (
+        apply_cookie_opts,
+        url_cookie_required,
+        youtube_extractor_args,
+    )
 
     url = src.source_url or ""
     vertical = bool(src.width and src.height and src.height > src.width)
@@ -584,7 +697,7 @@ def _download_native_h264(
 
     tmp_base = dest.with_name(f"{src.path.stem}{COMPAT_SIDECAR_TOKEN}dl")
     opts: dict[str, Any] = {
-        "outtmpl": f"{tmp_base}.%(ext)s",
+        "outtmpl": f"{str(tmp_base).replace('%', '%%')}.%(ext)s",
         "quiet": True,
         "no_warnings": True,
         "noprogress": True,
@@ -635,8 +748,8 @@ def _encode_compat(
     on_progress: Callable[[float], None],
     handle: activity.ActivityHandle,
     *,
-    src_vcodec: Optional[str],
-    bit_depth: Optional[int],
+    src_vcodec: str | None,
+    bit_depth: int | None,
     is_hdr: bool,
     copy_audio: bool,
     cap: int = COMPAT_MAX_HEIGHT,
@@ -692,11 +805,13 @@ def _encode_compat(
             )
             return tmp
         except FfmpegCancelled:
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
             raise
         except subprocess.CalledProcessError as exc:
             raw = exc.stderr or exc.stdout or b""
-            last_err = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            last_err = (
+                raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+            )
             logger.warning(
                 "compat encode failed (%s, hw_decode=%s, tonemap=%s): %s",
                 choice.name,
@@ -704,11 +819,77 @@ def _encode_compat(
                 tonemap,
                 last_err[-600:],
             )
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
         except subprocess.TimeoutExpired as exc:
-            _safe_unlink(tmp)
+            safe_unlink(tmp)
             raise CompatError("H.264 encode timed out") from exc
     raise CompatError(f"ffmpeg {choice.name} failed")
+
+
+# ---------------------------------------------------------------------------
+# safari (in place remux) job
+# ---------------------------------------------------------------------------
+
+
+def safari_status(video: Video, path: Path) -> dict[str, Any]:
+    """Whether ``path`` (the stored original) is ready for WebKit, or being fixed."""
+    state = job_state(video.id) if video.id is not None else None
+    if state is not None:
+        return {**state, "error": None}
+    err = _safari_errors.get(video.id) if video.id is not None else None
+    if needs_safari_prep(path):
+        if err:
+            return {
+                "kind": "safari",
+                "status": "error",
+                "stage": None,
+                "progress": 0.0,
+                "error": err,
+            }
+        status = "none"
+    else:
+        status = "ready"
+    return {
+        "kind": "safari",
+        "status": status,
+        "stage": None,
+        "progress": 100.0 if status == "ready" else 0.0,
+        "error": None,
+    }
+
+
+def _run_safari(job: _Job) -> None:
+    src = _load_source(job.video_id)
+    if src is None:
+        return
+    _set(job, stage="encoding", progress=0.0)
+
+    def persist(new_path: Path) -> None:
+        """Point the row at the remuxed file; runs before the original is removed."""
+        new_size = new_path.stat().st_size
+        new_info = probe_stream_info(new_path)  # ffprobe before the write
+        with Session(get_engine()) as session:
+            video = session.get(Video, job.video_id)
+            if video is None:
+                return
+            video.file_path = to_rel_path(new_path)
+            video.file_size = new_size
+            apply_stream_info(video, new_info)
+            session.add(video)
+            session.commit()
+
+    final = ensure_safari_mp4(
+        src.path,
+        cancel_event=job.cancel,
+        on_progress=lambda pct: _set(job, progress=pct),
+        duration=src.duration,
+        on_replace=persist,
+    )
+    if job.cancel.is_set():
+        raise _Cancelled()
+    if needs_safari_prep(final):
+        raise CompatError("Could not prepare this video for Safari")
+    _set(job, stage="finishing", progress=100.0)
 
 
 # ---------------------------------------------------------------------------
@@ -743,31 +924,39 @@ def _run_convert(job: _Job) -> None:
             _set(job, progress=pct)
             handle.update(done=int(pct))
 
-        new_path = transcode_video(
+        def persist(new_path: Path) -> None:
+            """Point the row at the new file; runs before the original is removed."""
+            stale_compat: Path | None = None
+            new_size = new_path.stat().st_size
+            new_info = probe_stream_info(new_path)  # ffprobe before the write
+            with Session(get_engine()) as session:
+                video = session.get(Video, job.video_id)
+                if video is None:
+                    return
+                video.file_path = to_rel_path(new_path)
+                video.file_size = new_size
+                apply_stream_info(video, new_info)
+                # A ≤1080p H.264 original makes the sidecar redundant.
+                if not needs_compat(video, compat_copy_cap()):
+                    stale_compat = resolve_compat_path(video)
+                    video.compat_path = None
+                    video.compat_size = None
+                    video.compat_source = None
+                video.compat_error = None
+                session.add(video)
+                session.commit()
+            if stale_compat is not None:
+                safe_unlink(stale_compat)
+
+        transcode_video(
             src.path,
             "h264",
             cancel_event=job.cancel,
             on_progress=progress,
             duration=src.duration,
+            on_replace=persist,
         )
     _set(job, stage="finishing", progress=100.0)
-    with Session(engine) as session:
-        video = session.get(Video, job.video_id)
-        if video is None:
-            return
-        video.file_path = to_rel_path(new_path)
-        video.file_size = new_path.stat().st_size
-        apply_stream_info(video, probe_stream_info(new_path))
-        # A ≤1080p H.264 original makes the sidecar redundant.
-        old_compat = resolve_compat_path(video)
-        if old_compat is not None and not needs_compat(video, compat_copy_cap()):
-            _safe_unlink(old_compat)
-            video.compat_path = None
-            video.compat_size = None
-            video.compat_source = None
-        video.compat_error = None
-        session.add(video)
-        session.commit()
 
 
 # ---------------------------------------------------------------------------
@@ -777,7 +966,10 @@ def _run_convert(job: _Job) -> None:
 
 def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
     rows = session.exec(
-        select(Video).where(Video.status == VideoStatus.ready, Video.needs_review == False)  # noqa: E712
+        select(Video).where(
+            Video.status == VideoStatus.ready,
+            Video.needs_review == False,  # noqa: E712 - SQL column expression
+        )
     ).all()
     cap = compat_copy_cap()
     out: list[int] = []
@@ -801,7 +993,10 @@ def eligible_video_ids(session: Session, *, kind: JobKind) -> list[int]:
 
 def library_summary(session: Session) -> dict[str, Any]:
     rows = session.exec(
-        select(Video).where(Video.status == VideoStatus.ready, Video.needs_review == False)  # noqa: E712
+        select(Video).where(
+            Video.status == VideoStatus.ready,
+            Video.needs_review == False,  # noqa: E712 - SQL column expression
+        )
     ).all()
     total_bytes = 0
     compat_ready = 0
@@ -848,41 +1043,38 @@ def library_summary(session: Session) -> dict[str, Any]:
 def delete_compat_files(video: Video) -> None:
     path = resolve_compat_path(video)
     if path is not None:
-        _safe_unlink(path)
+        safe_unlink(path)
 
 
 # ---------------------------------------------------------------------------
 # Startup: probe codecs for rows that predate the columns
 # ---------------------------------------------------------------------------
 
-_backfill_stop = threading.Event()
-_backfill_thread: Optional[threading.Thread] = None
 
-
-def _probe_backfill_loop() -> None:
+def _probe_backfill_loop(worker: BackgroundWorker) -> None:
     # Let startup settle first; ffprobe is cheap but the library may be large.
-    if _backfill_stop.wait(10.0):
+    if worker.sleep(10.0):
         return
     # Unreadable files (NAS offline, mid-move) stay unprobed for a later boot.
     skipped: set[int] = set()
-    while not _backfill_stop.is_set():
-        with Session(engine) as session:
+    while not worker.stopping:
+        with Session(get_engine()) as session:
             query = select(Video).where(
-                Video.media_probed_at == None,  # noqa: E711
+                Video.media_probed_at == None,  # noqa: E711 - SQL column comparison, not a Python truth test
                 Video.status == VideoStatus.ready,
             )
             if skipped:
-                query = query.where(Video.id.notin_(skipped))  # type: ignore[union-attr]
+                query = query.where(col(Video.id).notin_(skipped))
             batch = session.exec(query.limit(25)).all()
             if not batch:
                 return
             for video in batch:
-                if _backfill_stop.is_set():
+                if worker.stopping:
                     return
-                path = (DOWNLOADS_DIR / video.file_path).resolve()
+                path = (get_paths().downloads / video.file_path).resolve()
                 info = probe_stream_info(path)
                 if info is None:
-                    skipped.add(video.id)
+                    skipped.add(require_id(video))
                     continue
                 apply_stream_info(video, info)
                 session.add(video)
@@ -890,19 +1082,9 @@ def _probe_backfill_loop() -> None:
                 session.commit()
             except StaleDataError:
                 session.rollback()
-        time.sleep(0.5)
+        if worker.sleep(0.5):
+            return
 
 
-def start_probe_backfill() -> None:
-    global _backfill_thread
-    if _backfill_thread is not None and _backfill_thread.is_alive():
-        return
-    _backfill_stop.clear()
-    _backfill_thread = threading.Thread(
-        target=_probe_backfill_loop, daemon=True, name="codec-probe-backfill"
-    )
-    _backfill_thread.start()
-
-
-def stop_probe_backfill() -> None:
-    _backfill_stop.set()
+def create_probe_backfill_worker() -> BackgroundWorker:
+    return BackgroundWorker("codec-probe-backfill", _probe_backfill_loop)

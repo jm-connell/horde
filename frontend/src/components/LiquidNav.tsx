@@ -27,11 +27,16 @@ export default function LiquidNav({
   className = "",
   pillClassName = "bg-accent/15",
   dependency,
+  role,
+  "aria-label": ariaLabel,
 }: {
   children: ReactNode;
   className?: string;
   pillClassName?: string;
   dependency?: string | number | boolean;
+  /** e.g. "tablist" when the children are role="tab" buttons. */
+  role?: string;
+  "aria-label"?: string;
 }) {
   const [settings] = useSettings();
   const style: NavIndicator = settings.navIndicator;
@@ -46,7 +51,9 @@ export default function LiquidNav({
   const measure = useCallback(() => {
     const root = containerRef.current;
     if (!root) return;
-    const active = root.querySelector<HTMLElement>('[data-liquid-active="true"]');
+    const active = root.querySelector<HTMLElement>(
+      '[data-liquid-active="true"]'
+    );
     if (!active) {
       setPill(null);
       return;
@@ -122,7 +129,9 @@ export default function LiquidNav({
     const onResize = () => measure();
     window.addEventListener("resize", onResize);
     const ro =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(measure)
+        : null;
     ro?.observe(root);
     return () => {
       window.removeEventListener("resize", onResize);
@@ -132,7 +141,11 @@ export default function LiquidNav({
   }, [measure, enabled]);
 
   if (!enabled) {
-    return <div className={className}>{children}</div>;
+    return (
+      <div className={className} role={role} aria-label={ariaLabel}>
+        {children}
+      </div>
+    );
   }
 
   const isUnderline = style === "underline";
@@ -148,7 +161,12 @@ export default function LiquidNav({
         : "left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1)";
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative ${className}`}
+      role={role}
+      aria-label={ariaLabel}
+    >
       {pill && (
         <span
           aria-hidden
@@ -174,8 +192,7 @@ export default function LiquidNav({
                   width: pill.width,
                   height: pill.height,
                   transition,
-                  borderRadius:
-                    isLiquid && traveling ? "0.85rem" : "0.5rem",
+                  borderRadius: isLiquid && traveling ? "0.85rem" : "0.5rem",
                 }
           }
         />

@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
 from sqlmodel import Session, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import (
     AiJob,
     ChannelCatalog,
     ChannelCatalogEmbedding,
     ChannelCatalogSkip,
     ChannelCatalogVideo,
+    require_id,
     utcnow,
 )
 from .. import feed_meta_cache
@@ -22,6 +23,7 @@ from ..ytdlp_common import (
     is_age_restricted_entry,
     is_members_only_entry,
 )
+
 
 def skipped_yt_ids(session: Session, catalog_id: int) -> set[str]:
     rows = session.exec(
@@ -125,7 +127,7 @@ def purge_members_only_by_yt_id(yt_id: str) -> None:
     yt_id = str(yt_id).strip()
     if not yt_id:
         return
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == yt_id)
         ).all()
@@ -135,7 +137,7 @@ def purge_members_only_by_yt_id(yt_id: str) -> None:
         feed_meta_cache.drop(yt_id)
 
 
-def _skip_reason_for_entry(raw: dict[str, Any]) -> Optional[str]:
+def _skip_reason_for_entry(raw: dict[str, Any]) -> str | None:
     if is_members_only_entry(raw):
         return "members_only"
     if is_age_restricted_entry(raw):
@@ -148,18 +150,16 @@ def _reject_members_or_skipped(
     catalog: ChannelCatalog,
     raw: dict[str, Any],
     *,
-    skipped: Optional[set[str]] = None,
+    skipped: set[str] | None = None,
     allow_gated: bool = False,
-) -> Optional[str]:
+) -> str | None:
     """If entry must be ignored, purge any existing row and return yt_id; else None."""
     yt_id = raw.get("id")
     if not yt_id:
         return None
     yt_id = str(yt_id)
     skip_set = (
-        skipped
-        if skipped is not None
-        else skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+        skipped if skipped is not None else skipped_yt_ids(session, require_id(catalog))
     )
     reason = _skip_reason_for_entry(raw)
     if reason is not None and allow_gated:
@@ -188,5 +188,3 @@ def _reject_members_or_skipped(
         )[:500]
         session.add(catalog)
     return yt_id
-
-

@@ -1,5 +1,6 @@
 """Ephemeral download-to-device jobs: complete, serve, dismiss, GC."""
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -7,7 +8,8 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
-from app.services import downloader
+from app.services.downloads import finalize, postprocess, progress, staging
+from app.services.downloads.spec import JobSpec
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -16,10 +18,10 @@ def _write_media(path: Path, size: int = 64) -> None:
 
 
 def test_complete_device_skips_library_row(init_db, monkeypatch):
-    monkeypatch.setattr(downloader, "_apply_loudnorm", lambda _p: None)
-    monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
-    monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
-    monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(postprocess, "apply_loudnorm", lambda _p: None)
+    monkeypatch.setattr(postprocess, "check_quality", lambda *_a, **_k: None)
+    monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
 
     downloads = init_db["downloads"]
     with Session(init_db["engine"]) as session:
@@ -38,18 +40,18 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
     final = downloads / "_device" / str(job_id) / "Device Clip [dQw4w9WgXcQ].mp4"
     _write_media(final)
 
-    result = downloader._complete_download(
-        job_id,
-        final,
-        {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        "720p",
-        None,
-        None,
-        False,
-        None,
-        None,
-        destination=DownloadDestination.device.value,
+    result = finalize.complete_download(
+        postprocess.PostprocessTask(
+            spec=JobSpec(
+                job_id=job_id,
+                url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                quality_preset="720p",
+                destination=DownloadDestination.device.value,
+            ),
+            final_path=final,
+            info={"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
+            cancel_event=threading.Event(),
+        )
     )
     assert result is None
 
@@ -61,7 +63,7 @@ def test_complete_device_skips_library_row(init_db, monkeypatch):
         assert job.device_file_path == f"_device/{job_id}/Device Clip [dQw4w9WgXcQ].mp4"
         assert session.exec(select(Video)).first() is None
 
-    snap = downloader.progress_store[job_id]
+    snap = progress.progress_store[job_id]
     assert snap["status"] == "completed"
     assert snap["destination"] == "device"
     assert "video_id" not in snap
@@ -74,29 +76,27 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     job_id = 0
 
     def fake_ensure(path: Path, **_kwargs: object) -> Path:
-        seen.append(("ensure", downloader.progress_store.get(job_id, {}).get("stage")))
+        seen.append(("ensure", progress.progress_store.get(job_id, {}).get("stage")))
         return path
 
     def fake_transcode(path: Path, target: str, **_kwargs: object) -> Path:
-        seen.append(
-            ("transcode", downloader.progress_store.get(job_id, {}).get("stage"))
-        )
+        seen.append(("transcode", progress.progress_store.get(job_id, {}).get("stage")))
         return path
 
     def fake_loudnorm(_path: Path, **_kwargs: object) -> None:
-        seen.append(
-            ("loudnorm", downloader.progress_store.get(job_id, {}).get("stage"))
-        )
+        seen.append(("loudnorm", progress.progress_store.get(job_id, {}).get("stage")))
         return None
 
-    monkeypatch.setattr(downloader, "_apply_loudnorm", fake_loudnorm)
-    monkeypatch.setattr(downloader, "_check_quality", lambda *_a, **_k: None)
-    monkeypatch.setattr(downloader, "probe_duration", lambda _p: 12.0)
-    monkeypatch.setattr(downloader, "probe_dimensions", lambda _p: (1280, 720))
-    monkeypatch.setattr(downloader, "ensure_safari_mp4", fake_ensure)
-    monkeypatch.setattr(downloader, "transcode_video", fake_transcode)
+    monkeypatch.setattr(postprocess, "apply_loudnorm", fake_loudnorm)
+    monkeypatch.setattr(postprocess, "check_quality", lambda *_a, **_k: None)
+    monkeypatch.setattr(finalize, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(finalize, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(postprocess, "probe_duration", lambda _p: 12.0)
+    monkeypatch.setattr(postprocess, "probe_dimensions", lambda _p: (1280, 720))
+    monkeypatch.setattr(postprocess, "ensure_safari_mp4", fake_ensure)
+    monkeypatch.setattr(postprocess, "transcode_video", fake_transcode)
     monkeypatch.setattr(
-        downloader,
+        postprocess,
         "probe_media",
         lambda _p: MediaProbe(
             video_codec="av1",
@@ -120,7 +120,7 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
         session.refresh(job)
         job_id = job.id
 
-    downloader.progress_store[job_id] = {
+    progress.progress_store[job_id] = {
         "status": "processing",
         "progress": 99.0,
         "title": "Device Clip",
@@ -128,19 +128,20 @@ def test_complete_download_reports_post_download_stages(init_db, monkeypatch):
     final = downloads / "_device" / str(job_id) / "Device Clip [dQw4w9WgXcQ].mp4"
     _write_media(final)
 
-    downloader._complete_download(
-        job_id,
-        final,
-        {"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-        "720p",
-        None,
-        None,
-        True,
-        None,
-        None,
-        destination=DownloadDestination.device.value,
-        video_codec="h264",
+    finalize.complete_download(
+        postprocess.PostprocessTask(
+            spec=JobSpec(
+                job_id=job_id,
+                url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+                quality_preset="720p",
+                normalize_volume=True,
+                destination=DownloadDestination.device.value,
+                video_codec="h264",
+            ),
+            final_path=final,
+            info={"title": "Device Clip", "id": "dQw4w9WgXcQ", "uploader": "Rick"},
+            cancel_event=threading.Event(),
+        )
     )
     assert seen == [
         ("ensure", "encoding_audio"),
@@ -176,7 +177,10 @@ def test_device_file_endpoint_and_dismiss_cleanup(init_db):
 
     with Session(init_db["engine"]) as session:
         resp = downloads_api.download_device_file(job_id, session)
-    assert resp.path == str(media.resolve()) or Path(resp.path).resolve() == media.resolve()
+    assert (
+        resp.path == str(media.resolve())
+        or Path(resp.path).resolve() == media.resolve()
+    )
     assert resp.filename and "My Save" in resp.filename
 
     with Session(init_db["engine"]) as session:
@@ -230,7 +234,7 @@ def test_gc_orphaned_device_dirs(init_db):
     keep.mkdir(parents=True, exist_ok=True)
     (keep / "keep.mp4").write_bytes(b"y")
 
-    removed = downloader.gc_orphaned_device_dirs()
+    removed = staging.gc_orphaned_device_dirs()
     assert removed >= 1
     assert not orphan.exists()
     assert keep.exists()

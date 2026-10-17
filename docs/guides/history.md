@@ -1,5 +1,8 @@
 # History & continue watching
 
+!!! info "History is per account"
+    Resume positions, **History** and **Continue watching** belong to the signed-in user (table `user_video_state`); other people using the same Horde do not see or change yours. When accounts were introduced, the existing history moved to the first administrator. Expiry (`progress_expiry_days`) applies to everyone's positions.
+
 Horde tracks what you’ve watched and where you left off so you can jump back without scanning the whole library.
 
 ## History page (`/history`)
@@ -25,7 +28,7 @@ Times are interpreted as UTC when the API returns naive timestamps, then shown i
 
 ### Who qualifies
 
-Roughly: videos with a saved `last_position_sec` that still look in-progress (enough watched to matter, and not past the finished threshold). The list is also limited by the continue-watching time window (below).
+Roughly: videos with a saved resume position for you that still look in-progress (enough watched to matter, and not past the finished threshold). The list is also limited by the continue-watching time window (below).
 
 Clicking a card opens `/watch/:id` and seeks to the saved position.
 
@@ -34,9 +37,10 @@ Clicking a card opens `/watch/:id` and seeks to the saved position.
 | Rule | Value |
 |------|--------|
 | Field | `last_position_sec` on the video |
-| Save cadence | About every **5 seconds** while playing |
+| Save cadence | About every **5 seconds** while playing; the position you paused or sought to within 5 seconds; at once when the page is hidden or closed |
 | Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) |
 | History stamp | `last_watched_at` updates as you watch |
+| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device |
 
 Full watch-page behavior (related, autoplay, stream handoff) is in [Watching](watching.md).
 

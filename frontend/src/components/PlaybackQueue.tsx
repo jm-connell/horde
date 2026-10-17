@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { thumbnailUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 
 interface Props {
   className?: string;
@@ -17,8 +20,9 @@ export default function PlaybackQueue({
   listMaxHeightClass = "",
 }: Props) {
   const navigate = useNavigate();
-  const { queue, playVideo, removeFromQueue, reorderQueue, clearQueue } =
-    usePlayback();
+  const { queue } = usePlaybackSession();
+  const { playVideo, removeFromQueue, reorderQueue, clearQueue } =
+    usePlaybackActions();
   const dragIndex = useRef<number | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const prevLen = useRef(queue.length);
@@ -61,7 +65,7 @@ export default function PlaybackQueue({
           </button>
           <button
             onClick={clearQueue}
-            className="shrink-0 text-xs text-gray-500 hover:text-accent"
+            className="shrink-0 text-xs text-muted hover:text-accent"
           >
             Clear
           </button>
@@ -73,7 +77,7 @@ export default function PlaybackQueue({
           </h3>
           <button
             onClick={clearQueue}
-            className="text-xs text-gray-500 hover:text-accent"
+            className="text-xs text-muted hover:text-accent"
           >
             Clear
           </button>
@@ -105,7 +109,7 @@ export default function PlaybackQueue({
                 className="flex items-center gap-2 rounded-lg p-1 hover:bg-ink-800"
               >
                 <span
-                  className="shrink-0 cursor-grab px-1 text-gray-600 active:cursor-grabbing"
+                  className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
                   title="Drag to reorder"
                 >
                   ⠿
@@ -117,6 +121,10 @@ export default function PlaybackQueue({
                   <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-ink-800">
                     {thumb && (
                       <img
+                        loading="lazy"
+                        decoding="async"
+                        width={64}
+                        height={40}
                         src={thumb}
                         alt=""
                         className="h-full w-full object-cover"
@@ -129,7 +137,7 @@ export default function PlaybackQueue({
                 </button>
                 <button
                   onClick={() => removeFromQueue(v.id)}
-                  className="shrink-0 px-2 text-gray-500 hover:text-accent"
+                  className="shrink-0 px-2 text-muted hover:text-accent"
                   title="Remove"
                 >
                   ✕

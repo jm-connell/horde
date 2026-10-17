@@ -96,7 +96,7 @@ export default function SponsorBlockSection() {
               />
             )}
             <div className="space-y-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-500">
+              <p className="text-xs font-medium uppercase tracking-wider text-muted">
                 Categories
               </p>
               {SPONSOR_BLOCK_COMMON_CATEGORIES.map((cat) => (
@@ -118,7 +118,7 @@ export default function SponsorBlockSection() {
                 type="button"
                 onClick={() => setExtrasOpen((o) => !o)}
                 aria-expanded={extrasOpen}
-                className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
+                className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted hover:text-gray-300"
               >
                 <svg
                   viewBox="0 0 24 24"

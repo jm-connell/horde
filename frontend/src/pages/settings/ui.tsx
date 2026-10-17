@@ -4,14 +4,18 @@ export function Toggle({
   checked,
   onChange,
   disabled = false,
+  label,
 }: {
   checked: boolean;
   onChange: () => void;
   disabled?: boolean;
+  /** Accessible name when the toggle is not wrapped in a <label>. */
+  label?: string;
 }) {
   return (
     <button
       role="switch"
+      aria-label={label}
       aria-checked={checked}
       aria-disabled={disabled || undefined}
       disabled={disabled}
@@ -46,7 +50,7 @@ export function SettingRow({
       <span>
         <span className="block text-sm font-medium text-gray-200">{title}</span>
         {description && (
-          <span className="block text-xs text-gray-500">{description}</span>
+          <span className="block text-xs text-muted">{description}</span>
         )}
       </span>
       {control}
@@ -80,7 +84,7 @@ export function ProcessActionRow({
             </span>
           )}
         </p>
-        <p className="mt-0.5 text-xs text-gray-500">{description}</p>
+        <p className="mt-0.5 text-xs text-muted">{description}</p>
       </div>
       <button
         type="button"
@@ -116,11 +120,13 @@ export function Section({
         </h2>
       ) : null}
       {description && (
-        <p className={`mb-3 text-xs text-gray-500 ${title ? "" : "mt-0"}`}>
+        <p className={`mb-3 text-xs text-muted ${title ? "" : "mt-0"}`}>
           {description}
         </p>
       )}
-      <div className={title || description ? undefined : "mt-0"}>{children}</div>
+      <div className={title || description ? undefined : "mt-0"}>
+        {children}
+      </div>
     </div>
   );
 }

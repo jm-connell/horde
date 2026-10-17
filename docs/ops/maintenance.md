@@ -42,11 +42,11 @@ The downloads-tree [scanner](../architecture/workers.md) continues to pick up ne
 
 ## Bumping yt-dlp
 
-Horde pins an exact yt-dlp version in `backend/requirements.txt` (for example `yt-dlp==2026.8.19`). The Docker image installs that pin at build time — the container does **not** auto-upgrade yt-dlp on start.
+Horde pins an exact yt-dlp version in `backend/requirements.txt` (for example `yt-dlp==2026.8.19`). The Docker image installs that pin at build time — the container does **not** auto-upgrade yt-dlp on start unless you set `YTDLP_AUTO_UPDATE=1` ([Environment variables](environment.md#runtime-yt-dlp-updater)). The repository also opens a pull request automatically (`ytdlp-bump.yml`) when PyPI has a newer release, with the lock file regenerated and tests passing; maintainers can merge it instead of editing the pin by hand.
 
 When YouTube breaks extractors (format errors, bot checks that a newer yt-dlp already fixed, etc.):
 
-1. Edit the `yt-dlp==…` pin in `backend/requirements.txt` to the version you want (check [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)).
+1. Edit the `yt-dlp==…` pin in `backend/requirements.txt` to the version you want (check [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases)) and regenerate `backend/requirements.lock` ([Dependencies](../development/dependencies.md)).
 2. Keep `bgutil-ytdlp-pot-provider` aligned with the Compose `bgutil-pot` image tag when that plugin needs a matching bump ([YouTube access](youtube-access.md)).
 3. Rebuild and recreate via [`update.sh`](../getting-started/updating.md) (or Compose with `HORDE_GIT_SHA`).
 4. Smoke-test: Settings → System (or `GET /api/health`) shows the new `yt_dlp_version`, then paste a short URL and download.

@@ -57,9 +57,7 @@ describe("clampZoom", () => {
 
 describe("coverScale", () => {
   it("fits a matching 16:9 image exactly", () => {
-    expect(
-      coverScale(1920, 1080, 640, 360, 0)
-    ).toBeCloseTo(640 / 1920, 6);
+    expect(coverScale(1920, 1080, 640, 360, 0)).toBeCloseTo(640 / 1920, 6);
   });
 
   it("covers a square by the wider viewport side", () => {

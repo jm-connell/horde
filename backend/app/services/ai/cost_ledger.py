@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import Any, Optional
+from typing import Any
 
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import OpenRouterUsage, as_utc, utcnow
 from ...services import app_settings
 
@@ -34,13 +34,13 @@ def _is_sqlite_lock_error(exc: BaseException) -> bool:
 
 def record_cost(
     *,
-    cost: Optional[float],
+    cost: float | None,
     kind: str,
-    model: Optional[str] = None,
-    video_id: Optional[int] = None,
-    prompt_tokens: Optional[int] = None,
-    completion_tokens: Optional[int] = None,
-) -> Optional[float]:
+    model: str | None = None,
+    video_id: int | None = None,
+    prompt_tokens: int | None = None,
+    completion_tokens: int | None = None,
+) -> float | None:
     """Store a usage row when cost is a finite non-negative number. Returns cost.
 
     Ledger failures are logged and swallowed so a locked SQLite file cannot
@@ -57,7 +57,7 @@ def record_cost(
     kind_clean = (kind or "other").strip()[:40] or "other"
     persisted = False
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             session.add(
                 OpenRouterUsage(
                     kind=kind_clean,
@@ -75,18 +75,18 @@ def record_cost(
         if _is_sqlite_lock_error(exc):
             logger.warning("OpenRouter usage not recorded (database locked)")
         else:
-            logger.warning("OpenRouter usage not recorded: %s", exc)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("OpenRouter usage not recorded: %s", exc)
+            logger.warning("OpenRouter usage not recorded", exc_info=True)
+    except Exception:
+        logger.warning("OpenRouter usage not recorded", exc_info=True)
     if persisted:
         try:
             _maybe_pause_on_hard_budget()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.warning("OpenRouter budget pause check failed", exc_info=True)
     return value
 
 
-def cost_from_usage_payload(usage: Any) -> Optional[float]:
+def cost_from_usage_payload(usage: Any) -> float | None:
     if not isinstance(usage, dict):
         return None
     raw = usage.get("cost")
@@ -98,7 +98,7 @@ def cost_from_usage_payload(usage: Any) -> Optional[float]:
         return None
 
 
-def tokens_from_usage_payload(usage: Any) -> tuple[Optional[int], Optional[int]]:
+def tokens_from_usage_payload(usage: Any) -> tuple[int | None, int | None]:
     if not isinstance(usage, dict):
         return None, None
     prompt = usage.get("prompt_tokens")
@@ -118,9 +118,9 @@ def record_from_response(
     data: Any,
     *,
     kind: str,
-    model: Optional[str] = None,
-    video_id: Optional[int] = None,
-) -> Optional[float]:
+    model: str | None = None,
+    video_id: int | None = None,
+) -> float | None:
     if not isinstance(data, dict):
         return None
     usage = data.get("usage")
@@ -138,7 +138,7 @@ def record_from_response(
 
 def sum_since(cutoff: datetime) -> float:
     """Sum OpenRouter costs with created_at >= cutoff."""
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(OpenRouterUsage).where(col(OpenRouterUsage.created_at) >= cutoff)
         ).all()
@@ -159,7 +159,7 @@ def window_analytics() -> dict[str, dict[str, float | int]]:
     out: dict[str, dict[str, float | int]] = {
         k: {"cost": 0.0, "calls": 0} for k in windows
     }
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(select(OpenRouterUsage)).all()
         for row in rows:
             c = float(row.cost or 0.0)
@@ -188,7 +188,7 @@ def totals() -> dict[str, float]:
 
 def budget_status(
     *,
-    window_totals: Optional[dict[str, float]] = None,
+    window_totals: dict[str, float] | None = None,
 ) -> dict[str, Any]:
     """Return weekly budget config vs rolling 7-day spend."""
     ai = app_settings.ai_settings()
@@ -237,5 +237,8 @@ def _maybe_pause_on_hard_budget() -> None:
         from . import worker as ai_worker
 
         ai_worker.wake_worker()
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.warning(
+            "could not wake the AI worker after the budget pause",
+            exc_info=True,
+        )

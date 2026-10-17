@@ -1,3 +1,5 @@
+import { safeStorage } from "../storage";
+
 /**
  * Connection state for the nav status tag and offline mode.
  *
@@ -276,7 +278,7 @@ export class Connectivity {
   private set(patch: Partial<ConnectivityState>): void {
     const next = { ...this.state, ...patch };
     const changed = (Object.keys(patch) as (keyof ConnectivityState)[]).some(
-      (k) => this.state[k] !== next[k],
+      (k) => this.state[k] !== next[k]
     );
     if (!changed) return;
     this.state = next;
@@ -301,14 +303,6 @@ export class Connectivity {
   }
 }
 
-function browserStorage(): Storage | null {
-  try {
-    return typeof localStorage === "undefined" ? null : localStorage;
-  } catch {
-    return null;
-  }
-}
-
 export const connectivity = new Connectivity({
   ping: async (signal) => {
     const resp = await fetch(PING_URL, { cache: "no-store", signal });
@@ -321,7 +315,7 @@ export const connectivity = new Connectivity({
   },
   isVisible: () =>
     typeof document === "undefined" || document.visibilityState !== "hidden",
-  storage: browserStorage(),
+  storage: safeStorage("local"),
 });
 
 /** Wire browser events; call once from main.tsx. */
@@ -329,7 +323,7 @@ export function startConnectivity(): void {
   window.addEventListener("online", () => void connectivity.reconnect(false));
   window.addEventListener("offline", () => connectivity.browserOffline());
   document.addEventListener("visibilitychange", () =>
-    connectivity.visibilityChanged(),
+    connectivity.visibilityChanged()
   );
   if (navigator.onLine === false && !connectivity.offlineMode) {
     connectivity.browserOffline();

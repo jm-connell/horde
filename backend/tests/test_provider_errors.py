@@ -19,7 +19,9 @@ def test_classify_network():
 def test_classify_auth_and_rate(monkeypatch):
     req = httpx.Request("GET", "https://example.com")
     resp = httpx.Response(401, request=req)
-    kind, msg = classify_provider_error(httpx.HTTPStatusError("nope", request=req, response=resp))
+    kind, msg = classify_provider_error(
+        httpx.HTTPStatusError("nope", request=req, response=resp)
+    )
     assert kind == "auth"
     resp429 = httpx.Response(429, request=req)
     kind, _ = classify_provider_error(

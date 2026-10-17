@@ -1,6 +1,9 @@
 import { Link, useNavigate } from "react-router-dom";
 import { streamUrl, thumbnailUrl } from "../api";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackActions,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
 import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
@@ -34,6 +37,12 @@ function CardChannelName({
         e.preventDefault();
         navigate(`/?channel=${encodeURIComponent(channel)}`);
       }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(`/?channel=${encodeURIComponent(channel)}`);
+      }}
       className={className}
     >
       {channel}
@@ -63,7 +72,8 @@ export default function VideoCard({
   /** `feed` drops the card chrome on small screens (YouTube-style home). */
   layout?: "card" | "feed";
 }) {
-  const { addToQueue, current } = usePlayback();
+  const { addToQueue } = usePlaybackActions();
+  const { current } = usePlaybackSession();
   const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
   const duration = formatDuration(video.duration_sec);
@@ -94,7 +104,10 @@ export default function VideoCard({
     stacked,
     titleLines,
     titleNeeded,
-  } = useCardCopyLayout(video.title, Boolean(video.channel && hasSecondaryMeta));
+  } = useCardCopyLayout(
+    video.title,
+    Boolean(video.channel && hasSecondaryMeta)
+  );
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -131,13 +144,16 @@ export default function VideoCard({
       <div className="relative aspect-video w-full overflow-hidden">
         {thumb ? (
           <img
+            decoding="async"
+            width={320}
+            height={180}
             src={thumb}
             alt={video.title}
             loading="lazy"
             className="h-full w-full object-cover"
           />
         ) : (
-          <div className="flex h-full w-full items-center justify-center text-ink-600">
+          <div className="flex h-full w-full items-center justify-center text-muted">
             <span className="text-4xl">▶</span>
           </div>
         )}
@@ -151,7 +167,7 @@ export default function VideoCard({
         ) : null}
         {duration && (
           <span
-            className={`pointer-events-none absolute right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-gray-100 ${
+            className={`pointer-events-none absolute right-2 z-10 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ${
               previewActive ? "bottom-3.5" : "bottom-2"
             }`}
           >
@@ -198,7 +214,7 @@ export default function VideoCard({
               addToQueue(video);
             }}
             title="Add to queue"
-            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-gray-100 transition-opacity hover:bg-accent hover:text-ink-950 ${
+            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white transition-opacity hover:bg-accent hover:text-ink-950 ${
               hideQueueButton
                 ? "hidden"
                 : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
@@ -265,12 +281,12 @@ export default function VideoCard({
             <>
               <div className="flex min-w-0 flex-wrap items-center gap-x-2">
                 {dateLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                  <span className="shrink-0 text-xs leading-4 text-muted">
                     {dateLabel}
                   </span>
                 ) : null}
                 {viewLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-gray-500">
+                  <span className="shrink-0 text-xs leading-4 text-muted">
                     {viewLabel}
                   </span>
                 ) : null}
@@ -281,7 +297,7 @@ export default function VideoCard({
                   className="min-w-0 break-words text-xs leading-4 text-gray-400 hover:text-accent"
                 />
                 {resolution ? (
-                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-gray-500">
+                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-muted">
                     {resolution}
                   </span>
                 ) : null}
@@ -296,17 +312,17 @@ export default function VideoCard({
                 />
               ) : null}
               {dateLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
                   {dateLabel}
                 </span>
               ) : null}
               {viewLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-500">
+                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
                   {viewLabel}
                 </span>
               ) : null}
               {resolution ? (
-                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-gray-500">
+                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-muted">
                   {resolution}
                 </span>
               ) : null}

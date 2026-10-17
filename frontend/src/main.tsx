@@ -13,6 +13,9 @@ import "./index.css";
 import { startConnectivity } from "./offline/connectivity";
 import { offlineManager } from "./offline/manager";
 import { registerServiceWorker } from "./offline/register";
+import { runStorageMigrations } from "./storage";
+
+runStorageMigrations();
 
 // Apply saved theme / motion / CSS before first paint to avoid flash.
 const bootSettings = loadSettings();

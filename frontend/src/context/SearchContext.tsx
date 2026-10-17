@@ -6,7 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { api } from "../api";
+import { useQueryClient } from "@tanstack/react-query";
+import { appSettingsQuery, useUpdateAppSettings } from "../queries/app";
 
 interface SearchContextValue {
   search: string;
@@ -32,6 +33,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
   const youtubeRef = useRef(true);
   youtubeRef.current = youtubeVideoSearch;
 
+  const queryClient = useQueryClient();
+  const saveAppSettings = useUpdateAppSettings();
   const setSearch = useCallback((value: string) => {
     searchRef.current = value;
     setSearchState(value);
@@ -49,8 +52,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     youtubeRef.current = next;
     setYoutubeVideoSearchState(next);
     setYoutubeVideoSearchSaving(true);
-    void api
-      .updateAppSettings({ youtube_video_search: next })
+    void saveAppSettings({ youtube_video_search: next })
       .then((s) => {
         const value = s.youtube_video_search ?? next;
         youtubeRef.current = value;
@@ -61,12 +63,12 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         setYoutubeVideoSearchState(!next);
       })
       .finally(() => setYoutubeVideoSearchSaving(false));
-  }, [youtubeVideoSearchSaving]);
+  }, [youtubeVideoSearchSaving, saveAppSettings]);
 
   useEffect(() => {
     let active = true;
-    api
-      .getAppSettings()
+    queryClient
+      .fetchQuery(appSettingsQuery())
       .then((s) => {
         if (!active) return;
         const value = s.youtube_video_search ?? true;
@@ -77,7 +79,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [queryClient]);
 
   return (
     <SearchContext.Provider

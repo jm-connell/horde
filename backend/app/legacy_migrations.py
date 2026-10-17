@@ -1,0 +1,274 @@
+"""Pre-Alembic schema migrations, kept to adopt existing installs.
+
+Every install created before Alembic was introduced has tables but no
+``alembic_version``. ``init_db()`` runs this module once on such a database
+(additive ``ALTER TABLE ... ADD COLUMN`` lists plus the ``schema_migrations``
+ledger), then hands over to Alembic at the ``0001_baseline`` revision.
+
+This code is frozen: do not add to it. New schema changes are Alembic
+revisions under ``app/migrations/versions``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Callable
+from datetime import UTC, datetime
+
+from sqlalchemy import inspect, text
+from sqlalchemy.engine import Engine
+
+# Columns added after the initial schema. SQLite lacks rich migrations, so we
+# add any that are missing on startup. Each entry is (column, SQL definition).
+_VIDEO_COLUMNS = [
+    ("channel_url", "VARCHAR"),
+    ("notes", "VARCHAR"),
+    ("subtitles", "VARCHAR DEFAULT '[]'"),
+    ("width_px", "INTEGER"),
+    ("height_px", "INTEGER"),
+    ("last_position_sec", "FLOAT DEFAULT 0"),
+    ("last_watched_at", "VARCHAR"),
+    ("view_count", "INTEGER"),
+    ("channel_subscriber_count", "INTEGER"),
+    ("frame_rate", "FLOAT"),
+    ("metadata_synced_at", "VARCHAR"),
+    ("source_title", "VARCHAR"),
+    ("source_description", "VARCHAR"),
+    ("title_is_custom", "BOOLEAN DEFAULT 0"),
+    ("description_is_custom", "BOOLEAN DEFAULT 0"),
+    ("subtitles_pending", "BOOLEAN DEFAULT 0"),
+    ("subtitles_retry_after", "VARCHAR"),
+    ("subtitles_fetch_attempts", "INTEGER DEFAULT 0"),
+    ("sprite_path", "VARCHAR"),
+    ("source_chapters", "VARCHAR DEFAULT '[]'"),
+    ("vcodec", "VARCHAR"),
+    ("acodec", "VARCHAR"),
+    ("codec_string", "VARCHAR"),
+    ("bit_depth", "INTEGER"),
+    ("is_hdr", "BOOLEAN DEFAULT 0"),
+    ("media_probed_at", "VARCHAR"),
+    ("compat_path", "VARCHAR"),
+    ("compat_size", "INTEGER"),
+    ("compat_source", "VARCHAR"),
+    ("compat_error", "VARCHAR"),
+]
+
+_DOWNLOAD_JOB_COLUMNS = [
+    ("title_override", "VARCHAR"),
+    ("channel_override", "VARCHAR"),
+    ("channel", "VARCHAR"),
+    ("thumbnail_url", "VARCHAR"),
+    ("notes_pending", "VARCHAR"),
+    ("paused", "BOOLEAN DEFAULT 0"),
+    ("normalize_volume", "BOOLEAN DEFAULT 0"),
+    ("destination", "VARCHAR DEFAULT 'library'"),
+    ("device_file_path", "VARCHAR"),
+    ("replace_video_id", "INTEGER"),
+    ("file_size", "INTEGER"),
+    ("error_kind", "VARCHAR"),
+    ("available_presets_json", "VARCHAR"),
+    ("height_px", "INTEGER"),
+    ("video_codec", "VARCHAR DEFAULT 'av1'"),
+    ("playlist_id", "INTEGER"),
+]
+
+_VIDEO_AI_META_COLUMNS = [
+    ("ai_tags", "VARCHAR DEFAULT '[]'"),
+    ("user_tags", "VARCHAR DEFAULT '[]'"),
+    ("summary", "VARCHAR"),
+    ("summary_length", "VARCHAR"),
+    ("summary_cost", "FLOAT"),
+    ("summary_model", "VARCHAR"),
+    ("embed_error", "VARCHAR"),
+    ("chapters", "VARCHAR"),
+    ("chapters_skip_reason", "VARCHAR"),
+]
+
+_VIDEO_AI_CHAT_MESSAGE_COLUMNS = [
+    ("cost", "FLOAT"),
+    ("model", "VARCHAR"),
+]
+
+_AI_JOB_COLUMNS = [
+    ("catalog_video_id", "INTEGER"),
+]
+
+_CHANNEL_CATALOG_COLUMNS = [
+    ("phase", "VARCHAR"),
+    ("channel_total", "INTEGER"),
+    ("complete", "BOOLEAN DEFAULT 0"),
+    ("direct_youtube_search", "BOOLEAN"),
+]
+
+_CHANNEL_CATALOG_VIDEO_COLUMNS = [
+    ("live_status", "VARCHAR"),
+]
+
+_AI_CATEGORY_COLUMNS = [
+    ("blurb", "VARCHAR"),
+]
+
+_PLAYLIST_COLUMNS = [
+    ("subscribed", "BOOLEAN DEFAULT 0"),
+    ("quality_preset", "VARCHAR"),
+    ("last_synced_at", "VARCHAR"),
+    ("sync_error", "VARCHAR"),
+    ("position", "INTEGER DEFAULT 0"),
+    ("cover_video_id", "INTEGER"),
+    ("cover_path", "VARCHAR"),
+]
+
+
+def _migrate_table(engine: Engine, table: str, columns: list[tuple[str, str]]) -> None:
+    inspector = inspect(engine)
+    if table not in inspector.get_table_names():
+        return
+    existing = {col["name"] for col in inspector.get_columns(table)}
+    with engine.begin() as conn:
+        for name, definition in columns:
+            if name not in existing:
+                conn.execute(
+                    text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
+                )
+
+
+def _ensure_schema_migrations_table(engine: Engine) -> None:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE IF NOT EXISTS schema_migrations ("
+                "id VARCHAR PRIMARY KEY, "
+                "applied_at VARCHAR NOT NULL"
+                ")"
+            )
+        )
+
+
+def _applied_migration_ids(engine: Engine) -> set[str]:
+    inspector = inspect(engine)
+    if "schema_migrations" not in inspector.get_table_names():
+        return set()
+    with engine.connect() as conn:
+        rows = conn.execute(text("SELECT id FROM schema_migrations")).fetchall()
+    return {str(row[0]) for row in rows}
+
+
+def _record_migration(engine: Engine, step_id: str) -> None:
+    now = datetime.now(UTC).isoformat()
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT OR IGNORE INTO schema_migrations (id, applied_at) "
+                "VALUES (:id, :applied_at)"
+            ),
+            {"id": step_id, "applied_at": now},
+        )
+
+
+def _step_add_columns(engine: Engine) -> None:
+    """Idempotent additive ALTER TABLE pass (safe to re-run)."""
+    _migrate_table(engine, "videos", _VIDEO_COLUMNS)
+    _migrate_table(engine, "download_jobs", _DOWNLOAD_JOB_COLUMNS)
+    _migrate_table(engine, "video_ai_meta", _VIDEO_AI_META_COLUMNS)
+    _migrate_table(engine, "video_ai_chat_messages", _VIDEO_AI_CHAT_MESSAGE_COLUMNS)
+    _migrate_table(engine, "ai_jobs", _AI_JOB_COLUMNS)
+    _migrate_table(engine, "channel_catalogs", _CHANNEL_CATALOG_COLUMNS)
+    _migrate_table(engine, "channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS)
+    _migrate_table(engine, "ai_categories", _AI_CATEGORY_COLUMNS)
+    _migrate_table(engine, "playlists", _PLAYLIST_COLUMNS)
+
+
+def _step_playlist_positions(engine: Engine) -> None:
+    """Preserve newest-first list order after adding ``playlists.position``."""
+    _step_add_columns(engine)
+    inspector = inspect(engine)
+    if "playlists" not in inspector.get_table_names():
+        return
+    cols = {col["name"] for col in inspector.get_columns("playlists")}
+    if "position" not in cols:
+        return
+    order_sql = (
+        "SELECT id FROM playlists ORDER BY created_at DESC"
+        if "created_at" in cols
+        else "SELECT id FROM playlists ORDER BY id DESC"
+    )
+    with engine.begin() as conn:
+        rows = conn.execute(text(order_sql)).fetchall()
+        if len(rows) <= 1:
+            return
+        current = [
+            int(row[0] or 0)
+            for row in conn.execute(text("SELECT position FROM playlists")).fetchall()
+        ]
+        if len(set(current)) == len(current) and max(current) > 0:
+            return
+        for index, row in enumerate(rows):
+            conn.execute(
+                text("UPDATE playlists SET position = :pos WHERE id = :id"),
+                {"pos": index, "id": row[0]},
+            )
+
+
+# Ordered migration ledger. Additive column sync is always re-applied for safety
+# on older DBs; the step id is recorded so future destructive migrations can
+# follow the same pattern without Alembic.
+MIGRATION_STEPS: list[tuple[str, Callable[[Engine], None]]] = [
+    ("2026_07_additive_columns", _step_add_columns),
+    ("2026_09_playlist_positions", _step_playlist_positions),
+]
+
+
+def _migrate_columns(engine: Engine) -> None:
+    """Apply pending ledger steps, then always re-run additive column sync."""
+    _ensure_schema_migrations_table(engine)
+    applied = _applied_migration_ids(engine)
+    for step_id, fn in MIGRATION_STEPS:
+        if step_id in applied:
+            continue
+        fn(engine)
+        _record_migration(engine, step_id)
+    # Keep ALTER ADD COLUMN idempotent for DBs created before the ledger and
+    # for columns appended to the lists after a step was already recorded.
+    _step_add_columns(engine)
+
+
+def applied_migrations(engine: Engine) -> list[str]:
+    """Return applied migration ids in ledger order (for tests / health)."""
+    applied = _applied_migration_ids(engine)
+    return [step_id for step_id, _ in MIGRATION_STEPS if step_id in applied]
+
+
+def verify_schema(engine: Engine) -> None:
+    """Fail fast at startup if expected columns are still missing after migration."""
+    inspector = inspect(engine)
+    for table, columns in (
+        ("videos", _VIDEO_COLUMNS),
+        ("download_jobs", _DOWNLOAD_JOB_COLUMNS),
+        ("video_ai_meta", _VIDEO_AI_META_COLUMNS),
+        ("video_ai_chat_messages", _VIDEO_AI_CHAT_MESSAGE_COLUMNS),
+        ("ai_jobs", _AI_JOB_COLUMNS),
+        ("channel_catalogs", _CHANNEL_CATALOG_COLUMNS),
+        ("channel_catalog_videos", _CHANNEL_CATALOG_VIDEO_COLUMNS),
+        ("ai_categories", _AI_CATEGORY_COLUMNS),
+        ("playlists", _PLAYLIST_COLUMNS),
+    ):
+        if table not in inspector.get_table_names():
+            continue
+        existing = {col["name"] for col in inspector.get_columns(table)}
+        missing = [name for name, _ in columns if name not in existing]
+        if missing:
+            raise RuntimeError(
+                f"Database table {table!r} is missing columns {missing}. "
+                "Delete data/horde.db to start fresh, or restart the backend "
+                "so migrations can run."
+            )
+
+
+def run_legacy_migrations(engine: Engine) -> None:
+    """Bring a pre-Alembic database up to the last legacy schema.
+
+    Runs the ledger steps and the additive column lists, then verifies the
+    result. Only used once per install, when an existing database has no
+    ``alembic_version`` table; all later changes are Alembic revisions.
+    """
+    _migrate_columns(engine)
+    verify_schema(engine)

@@ -41,7 +41,11 @@ function clearRetainReleaseTimer() {
   retainReleaseTimer = null;
 }
 
-function pointerIsOverCard(card: CardEntry, clientX?: number, clientY?: number) {
+function pointerIsOverCard(
+  card: CardEntry,
+  clientX?: number,
+  clientY?: number
+) {
   if (clientX != null && clientY != null) {
     const hit = document.elementFromPoint(clientX, clientY);
     return !!hit && card.el.contains(hit);

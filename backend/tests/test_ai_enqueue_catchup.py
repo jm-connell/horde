@@ -5,7 +5,8 @@ from datetime import timedelta
 from sqlmodel import select
 
 from app.models import AiJob, AiJobKind, AiJobStatus, VideoAiMeta, utcnow
-from app.services.ai import embeddings, text as ai_text, worker
+from app.services.ai import embeddings, worker
+from app.services.ai import text as ai_text
 
 
 def _store_naive_tags_enriched_at(session, video_id: int) -> None:
@@ -78,12 +79,14 @@ def test_maybe_enqueue_index_catchup_on_download(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == [{"skip_failed": True, "skip_empty_document": True}]
@@ -98,12 +101,14 @@ def test_maybe_enqueue_index_catchup_skips_on_request(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == []
@@ -116,12 +121,14 @@ def test_maybe_enqueue_index_catchup_respects_pause(monkeypatch):
     monkeypatch.setattr(
         worker,
         "enqueue_missing_embeds",
-        lambda **kwargs: captured.append(kwargs)
-        or {
-            "enqueued": 1,
-            "breakdown": {"embed": 1, "tags": 0, "categories": 0},
-            "detail": "1 embed",
-        },
+        lambda **kwargs: (
+            captured.append(kwargs)
+            or {
+                "enqueued": 1,
+                "breakdown": {"embed": 1, "tags": 0, "categories": 0},
+                "detail": "1 embed",
+            }
+        ),
     )
     result = worker.maybe_enqueue_index_catchup()
     assert captured == []

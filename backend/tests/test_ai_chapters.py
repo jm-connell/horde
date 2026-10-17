@@ -60,9 +60,7 @@ class FakeLlm:
         return self.replies.pop(0)
 
 
-def test_enqueue_chapters_when_eligible(
-    add_video, session, tmp_dirs, monkeypatch
-):
+def test_enqueue_chapters_when_eligible(add_video, session, tmp_dirs, monkeypatch):
     video = _caption(add_video, session, tmp_dirs)
     captured: list[AiJobKind] = []
     monkeypatch.setattr(
@@ -199,9 +197,7 @@ def test_dispatch_chapters_skips_without_captions(add_video, session):
     assert "subtitle" in reason.lower() or "caption" in reason.lower()
 
 
-def test_run_chapters_snaps_llm_output(
-    session, add_video, tmp_dirs, monkeypatch
-):
+def test_run_chapters_snaps_llm_output(session, add_video, tmp_dirs, monkeypatch):
     video = _caption(add_video, session, tmp_dirs, title="Long talk")
     payload = {
         "chapters": [
@@ -336,7 +332,7 @@ def test_get_video_processing_chapters(client, add_video, session):
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["processing_chapters"] is True
     assert body["processing_summary"] is False
-    listed = client.get("/api/videos").json()
+    listed = client.get("/api/videos").json()["items"]
     row = next(v for v in listed if v["id"] == video.id)
     assert row["processing_chapters"] is False
 

@@ -4,8 +4,8 @@ Horde is designed to run on TrueNAS with [Dockge](https://dockge.kuma.pet/) mana
 
 Horde is **built from git** on the host (`build: .`). The Dockge stack folder must be a full `git clone`, not a compose snippet pasted into **Add Stack**. Without the repo, Docker has no `Dockerfile` and the image cannot build. A GitHub ZIP also skips `.git`, so later [`update.sh`](updating.md) cannot `git pull`.
 
-!!! warning "LAN only — no authentication"
-    Horde has **no login**. Keep the Dockge stack on your trusted network. Do not port-forward `8686` to the internet.
+!!! warning "Trusted network"
+    Create the admin account on first visit ([accounts](../ops/authentication.md)). Keep the Dockge stack on your trusted network. Do not port-forward `8686` to the internet.
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ Create a **second** directory on the pool for app data (SQLite, settings, thumbn
 /mnt/tank/apps/horde/data
 ```
 
-This becomes `DATA_PATH` → `/app/data`. `.env.example` still mentions `/opt/dockge/horde/data`; prefer a dataset on `tank` so the database is not on the boot pool.
+This becomes `DATA_PATH` → `/app/data`. `.env.example` still mentions `/opt/dockge/horde/data`; prefer a dataset on `tank` so the database is not on the boot pool. Do not point `DATA_PATH` at an SMB or NFS mount: SQLite's WAL mode is unsafe on network filesystems.
 
 Optionally share the media dataset over SMB so you can drop `.mp4` / `.mkv` / `.webm` files from a desktop. The folder scanner (watchdog plus a poll every `SCAN_INTERVAL_SEC`, default **60** seconds) picks them up for [Import & review](../guides/import-review.md).
 

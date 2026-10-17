@@ -3,14 +3,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
-from ..config import FONTS_DIR, ensure_dirs
+from ..auth import require_admin
+from ..context import get_paths
+from ..openapi_responses import FONT_FILE, RAW
+from ..response_schemas import FontList, FontRead, OkResponse
+from ..services import uploads
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fonts", tags=["fonts"])
 
@@ -20,7 +27,6 @@ ALLOWED_EXT = {
     ".ttf": "font/ttf",
     ".otf": "font/otf",
 }
-MAX_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
 def _safe_id(raw: str) -> str:
@@ -31,7 +37,7 @@ def _safe_id(raw: str) -> str:
 
 
 def _meta_path(font_id: str) -> Path:
-    return FONTS_DIR / f"{font_id}.json"
+    return get_paths().fonts / f"{font_id}.json"
 
 
 def _read_meta(font_id: str) -> dict[str, Any]:
@@ -41,7 +47,8 @@ def _read_meta(font_id: str) -> dict[str, Any]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         return data if isinstance(data, dict) else {}
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.debug("font metadata unreadable", exc_info=True)
         return {}
 
 
@@ -49,10 +56,14 @@ def _write_meta(font_id: str, meta: dict[str, Any]) -> None:
     _meta_path(font_id).write_text(json.dumps(meta), encoding="utf-8")
 
 
-def _find_file(font_id: str) -> Optional[Path]:
-    ensure_dirs()
-    for path in FONTS_DIR.iterdir():
-        if path.is_file() and path.stem == font_id and path.suffix.lower() in ALLOWED_EXT:
+def _find_file(font_id: str) -> Path | None:
+    get_paths().ensure()
+    for path in get_paths().fonts.iterdir():
+        if (
+            path.is_file()
+            and path.stem == font_id
+            and path.suffix.lower() in ALLOWED_EXT
+        ):
             return path
     return None
 
@@ -69,19 +80,21 @@ def _entry_for(path: Path) -> dict[str, Any]:
     }
 
 
-@router.get("")
+@router.get("", response_model=FontList)
 def list_fonts():
-    ensure_dirs()
+    get_paths().ensure()
     items: list[dict[str, Any]] = []
-    for path in sorted(FONTS_DIR.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True):
+    for path in sorted(
+        get_paths().fonts.iterdir(), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         if path.is_file() and path.suffix.lower() in ALLOWED_EXT:
             items.append(_entry_for(path))
     return {"items": items}
 
 
-@router.post("")
-async def upload_font(file: UploadFile = File(...)):
-    ensure_dirs()
+@router.post("", response_model=FontRead, dependencies=[Depends(require_admin)])
+def upload_font(file: UploadFile = File(...)):
+    get_paths().ensure()
     name = file.filename or "font.bin"
     ext = Path(name).suffix.lower()
     if ext not in ALLOWED_EXT:
@@ -89,15 +102,28 @@ async def upload_font(file: UploadFile = File(...)):
             status_code=400,
             detail="Unsupported type. Use woff2, woff, ttf, or otf.",
         )
-    data = await file.read()
-    if len(data) > MAX_BYTES:
-        raise HTTPException(status_code=400, detail="File too large (max 8 MB)")
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
+    if (
+        uploads.count_files(get_paths().fonts, set(ALLOWED_EXT))
+        >= uploads.MAX_STORED_FONTS
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Too many fonts (max {uploads.MAX_STORED_FONTS}). Delete one first.",
+        )
 
     font_id = uuid.uuid4().hex
-    dest = FONTS_DIR / f"{font_id}{ext}"
-    dest.write_bytes(data)
+    dest = get_paths().fonts / f"{font_id}{ext}"
+    size = uploads.save_upload(file, dest, max_bytes=uploads.FONT_MAX_BYTES)
+    if size == 0:
+        dest.unlink(missing_ok=True)
+        raise HTTPException(status_code=400, detail="Empty file")
+    with dest.open("rb") as fh:
+        head = fh.read(4)
+    if not uploads.font_bytes_match_extension(ext, head):
+        dest.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=400, detail=f"Not a valid {ext.lstrip('.')} font file"
+        )
     _write_meta(font_id, {"filename": Path(name).name})
     return {
         "id": font_id,
@@ -107,7 +133,7 @@ async def upload_font(file: UploadFile = File(...)):
     }
 
 
-@router.get("/{font_id}")
+@router.get("/{font_id}", response_class=RAW, responses=FONT_FILE)
 def get_font(font_id: str):
     path = _find_file(_safe_id(font_id))
     if path is None:
@@ -120,7 +146,9 @@ def get_font(font_id: str):
     )
 
 
-@router.delete("/{font_id}")
+@router.delete(
+    "/{font_id}", response_model=OkResponse, dependencies=[Depends(require_admin)]
+)
 def delete_font(font_id: str):
     safe = _safe_id(font_id)
     path = _find_file(safe)

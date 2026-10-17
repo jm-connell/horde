@@ -19,7 +19,7 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 |---------|-----|---------|-------|---------|
 | Progress expiry (days) | `progress_expiry_days` | `14` | 1–365 | Top-level `app_settings.json` (mirrored locally as `progressExpiryDays`) |
 
-Saved watch position resets after this many days of **inactivity**.
+Saved watch position resets after this many days of **inactivity**. Server-wide: shown to administrators only.
 
 !!! warning "`continue_watching_days` is backend-only"
     The continue watching **row** hides videos after **7 days**. That value is `continue_watching_days` in server `DEFAULTS` — fixed at 7, **not** editable in the UI, and not part of the client settings object. Do not confuse it with progress expiry.
@@ -48,7 +48,7 @@ Saved watch position resets after this many days of **inactivity**.
 
 ## Downloads
 
-Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library).
+Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the two personal rows below are per user.
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
@@ -56,6 +56,8 @@ Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Librar
 | Normalize volume on download | `normalizeVolumeOnDownload` | `true` | Loudness normalization via ffmpeg on new downloads |
 | Playback compatibility | `downloadVideoCodec` | `"av1"` | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (server key `download_video_codec`). Stamped onto every new download as `video_codec`. Legacy `h264` / `h265` migrate to `h264_convert`. |
 | H.264 copy resolution | `compatCopyResolution` | `"1080p"` | `1080p` \| `source` (server key `compat_copy_resolution`). Short-side cap for H.264 copies: 1080 or full size up to 4K. See [copy resolution](../guides/downloads.md#how-the-sidecar-works). |
+
+The **Playback compatibility** panel (both rows above and the library actions below) is server-wide and shown to administrators only. New downloads use this server-wide choice, so members never see the panel; the API refuses a member's change to `download_video_codec` or `compat_copy_resolution` with 403 `admin_required`, and `GET /api/compat/summary` is for administrators.
 
 The four modes, in the order the picker shows them:
 
@@ -75,7 +77,7 @@ The summary line shows library size, how many copies exist and their size, and "
 
 ## Metadata and catalog
 
-These are **top-level** keys (not the `ui` blob).
+These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled` and `channel_catalog_max_videos` (the two YouTube search switches keep their real values, because member screens use them).
 
 ### Channel catalog
 

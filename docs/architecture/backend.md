@@ -27,7 +27,7 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 
 | Area | Modules | Role |
 |------|---------|------|
-| Downloads | `downloader.py`, `job_metadata.py`, `ffmpeg_progress.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; cheap-enqueue metadata fill; ffmpeg progress; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
+| Downloads | `downloads/` (package: queue, runner, postprocess, finalize, jobs, playlist import), `downloader.py` (compatibility façade), `job_metadata.py`, `ffmpeg_progress.py`, `ytdlp_extract.py`, `ytdlp_formats.py`, `stream_preview.py`, `url_clean.py`, `ytdlp_common.py` | Queue/finalize; cheap-enqueue metadata fill; ffmpeg progress; metadata extract & feed; format presets; in-app DASH/progressive preview; URL clean; POT/cookies/extract gate |
 | Library disk | `scanner.py`, `paths.py`, `library.py`, `metadata.py`, `sprites.py` | Scan, paths, probes, sprites |
 | Sync / feeds | `metadata_sync.py`, `subtitle_retry.py`, `playlist_sync.py`, `feed_meta_cache.py`, `channel_catalog/` (package), `return_youtube_dislike.py` | Stale metadata, delayed caption retry, subscribed playlist rescan, catalog worker/index/query/skips, caches |
 | Settings / updates | `app_settings.py`, `updates.py` | JSON settings, GitHub SHA compare |
@@ -39,30 +39,27 @@ Top-level routes on the app (not under a router module): `GET /api/health`, `GET
 
 | Module | Role |
 |--------|------|
-| `config.py` | Env-derived paths and constants |
-| `database.py` | Engine (WAL + busy timeout), `create_all`, `schema_migrations` ledger, additive `ALTER` columns, `verify_schema` |
+| `config.py` | Env-derived constants and tunables |
+| `context.py` | `AppContext`, `Paths`, the active-context accessors and the `get_ctx` / `get_session` dependencies (see [Application context](../design/app-context.md)) |
+| `database.py` | Engine factory (WAL, busy timeout, foreign keys), `init_db()` |
+| `migrations/` | Alembic environment, runner and revisions |
+| `legacy_migrations.py` | Frozen pre-Alembic additive migrator, used once to adopt old installs |
 | `models.py` | SQLModel tables |
 
 ## Lifespan order
 
 From `main.py` `lifespan`:
 
-1. `ensure_dirs()` — create downloads + data subdirs  
-2. `init_db()` — `create_all`, versioned migration steps + additive columns, `verify_schema()`  
-3. `cleanup_orphans()` — drop library rows for missing files  
-4. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
-5. `preview.init_preview_client()`  
-6. `downloader.download_queue.recover()` — `downloading` → `queued`; restore `download_queue_paused`  
-7. `recover_ai_jobs()` — AI jobs left `running` → `queued`  
-8. `recover_catalog_jobs()` — catalogs left `indexing` → `queued`  
-9. `start_scanner()` — watchdog + `SCAN_INTERVAL_SEC` poller  
-10. `start_sync_worker(interval_hours=…)` — from settings  
-11. `start_ai_worker()`  
-12. `start_catalog_worker()`  
-13. `start_autodownload_worker()`  
-14. `start_subtitle_retry_worker()`  
+1. Build an `AppContext` (paths, engine, queues, worker registry), store it on `app.state.ctx`, make it the active context, and create the downloads + data subdirs  
+2. `init_db()` — Alembic `upgrade head` (adopting pre-Alembic databases first); refuses a database from a newer version  
+3. The context's `WorkerRegistry` and shutdown event are published on `app.state`  
+4. Network-filesystem check of `DATA_DIR` (logs an `ERROR` and sets `storage_warning` on `/api/health`)  
+5. `cleanup_orphans()` — drop library rows for missing files  
+6. `ensure_plugins_loaded()` — load yt-dlp plugins once before workers  
+7. `preview.init_preview_client()`  
+8. `_start_workers()`: the download queue, ffmpeg queue and reaper are registered, then `download_queue.recover()` (`downloading` → `queued`; restore `download_queue_paused`), `recover_ai_jobs()`, `recover_catalog_jobs()`, then the sprite pool, scanner (watchdog + poller, which runs the first library scan), metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill, nightly backup  
 
-On shutdown (reverse concerns): stop subtitle retry → stop autodownload → stop catalog → stop AI → stop observer → close preview client.
+On shutdown the shutdown event is set (streams end), every worker is signalled and then joined newest first, and the preview client is closed. See [Workers](workers.md#lifecycle).
 
 ## Related
 

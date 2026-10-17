@@ -129,10 +129,9 @@ def test_stream_compat_rendition(client, add_video, init_db):
     side.write_bytes(b"h264-bytes")
     from sqlmodel import Session
 
-    from app.database import engine
     from app.models import Video
 
-    with Session(engine) as s:
+    with Session(init_db["engine"]) as s:
         row = s.get(Video, video.id)
         row.compat_path = side.relative_to(init_db["downloads"]).as_posix()
         row.compat_size = 10
@@ -143,10 +142,13 @@ def test_stream_compat_rendition(client, add_video, init_db):
     assert resp.status_code == 200
     assert resp.content == b"h264-bytes"
     ranged = client.get(
-        f"/api/videos/{video.id}/stream?rendition=compat", headers={"Range": "bytes=0-3"}
+        f"/api/videos/{video.id}/stream?rendition=compat",
+        headers={"Range": "bytes=0-3"},
     )
     assert ranged.status_code == 206 and ranged.content == b"h264"
-    assert client.get(f"/api/videos/{video.id}/stream?rendition=bogus").status_code == 400
+    assert (
+        client.get(f"/api/videos/{video.id}/stream?rendition=bogus").status_code == 400
+    )
 
     body = client.get(f"/api/videos/{video.id}").json()
     assert body["has_compat"] is True
@@ -164,14 +166,20 @@ def test_stream_compat_rendition(client, add_video, init_db):
 def test_request_compat_queues_and_rejects_h264(client, add_video):
     from app.models import utcnow
 
-    av1 = add_video(vcodec="av1", media_probed_at=utcnow(), width_px=1920, height_px=1080)
+    av1 = add_video(
+        vcodec="av1", media_probed_at=utcnow(), width_px=1920, height_px=1080
+    )
     resp = client.post(f"/api/videos/{av1.id}/compat")
     assert resp.status_code == 200
     assert resp.json()["status"] == "queued"
     assert client.get(f"/api/videos/{av1.id}/compat").json()["status"] == "queued"
 
     h264 = add_video(
-        vcodec="h264", bit_depth=8, media_probed_at=utcnow(), width_px=1920, height_px=1080
+        vcodec="h264",
+        bit_depth=8,
+        media_probed_at=utcnow(),
+        width_px=1920,
+        height_px=1080,
     )
     assert client.post(f"/api/videos/{h264.id}/compat").status_code == 409
 
@@ -180,9 +188,23 @@ def test_summary_backfill_and_convert(client, add_video):
     from app.models import utcnow
 
     now = utcnow()
-    add_video(vcodec="av1", media_probed_at=now, width_px=1920, height_px=1080, duration_sec=600)
-    add_video(vcodec="vp9", media_probed_at=now, width_px=3840, height_px=2160, duration_sec=60)
-    add_video(vcodec="h264", bit_depth=8, media_probed_at=now, width_px=1920, height_px=1080)
+    add_video(
+        vcodec="av1",
+        media_probed_at=now,
+        width_px=1920,
+        height_px=1080,
+        duration_sec=600,
+    )
+    add_video(
+        vcodec="vp9",
+        media_probed_at=now,
+        width_px=3840,
+        height_px=2160,
+        duration_sec=60,
+    )
+    add_video(
+        vcodec="h264", bit_depth=8, media_probed_at=now, width_px=1920, height_px=1080
+    )
     add_video(vcodec=None, media_probed_at=now)  # audio-only
 
     summary = client.get("/api/compat/summary").json()
@@ -192,8 +214,14 @@ def test_summary_backfill_and_convert(client, add_video):
     # ~5.16 Mbps × 660 s ≈ 425 MB
     assert 350_000_000 < summary["compat_missing_est_bytes"] < 500_000_000
 
-    assert client.post("/api/compat/backfill").json() == {"queued": 2, "already_queued": 0}
-    assert client.post("/api/compat/backfill").json() == {"queued": 0, "already_queued": 2}
+    assert client.post("/api/compat/backfill").json() == {
+        "queued": 2,
+        "already_queued": 0,
+    }
+    assert client.post("/api/compat/backfill").json() == {
+        "queued": 0,
+        "already_queued": 2,
+    }
     assert client.get("/api/compat/summary").json()["queued"] == 2
 
     assert client.post("/api/compat/convert-library", json={}).status_code == 400
@@ -218,25 +246,39 @@ def test_rename_moves_sidecar(session, add_video, init_db):
     assert not side.exists()
 
 
-@pytest.mark.skipif(
-    __import__("shutil").which("ffmpeg") is None, reason="needs ffmpeg"
-)
+@pytest.mark.skipif(__import__("shutil").which("ffmpeg") is None, reason="needs ffmpeg")
 def test_worker_encodes_sidecar_end_to_end(add_video, init_db, monkeypatch):
     import subprocess
 
     from sqlmodel import Session
 
-    from app.database import engine
     from app.models import Video
 
     video = add_video(write_file=True, width_px=640, height_px=360, duration_sec=1.0)
     src = init_db["downloads"] / video.file_path
     subprocess.run(
         [
-            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
-            "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=24",
-            "-f", "lavfi", "-i", "sine=frequency=440",
-            "-t", "1", "-c:v", "mpeg4", "-c:a", "libopus", "-shortest", str(src),
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=640x360:rate=24",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440",
+            "-t",
+            "1",
+            "-c:v",
+            "mpeg4",
+            "-c:a",
+            "libopus",
+            "-shortest",
+            str(src),
         ],
         check=True,
     )
@@ -246,14 +288,21 @@ def test_worker_encodes_sidecar_end_to_end(add_video, init_db, monkeypatch):
         "pick_encoder",
         lambda target, encoders: X264 if "libx264" in encoders else None,
     )
-    if compat_rendition.pick_encoder("h264", compat_rendition.probe_encode_capabilities().encoders) is None:
+    if (
+        compat_rendition.pick_encoder(
+            "h264", compat_rendition.probe_encode_capabilities().encoders
+        )
+        is None
+    ):
         pytest.skip("ffmpeg lacks libx264")
 
-    job = compat_rendition._Job(video_id=video.id, kind="compat", prefer_download=False, reason="test")
+    job = compat_rendition._Job(
+        video_id=video.id, kind="compat", prefer_download=False, reason="test"
+    )
     compat_rendition._jobs[video.id] = job
     compat_rendition._worker(job)
 
-    with Session(engine) as s:
+    with Session(init_db["engine"]) as s:
         row = s.get(Video, video.id)
         assert row.compat_error is None
         assert row.compat_source == "transcode"
@@ -284,7 +333,15 @@ def test_needs_compat_respects_cap():
     from app.models import Video, utcnow
     from app.services.media_info import needs_compat
 
-    uhd_h264 = Video(title="t", file_path="x.mp4", media_probed_at=utcnow(), vcodec="h264", bit_depth=8, width_px=3840, height_px=2160)
+    uhd_h264 = Video(
+        title="t",
+        file_path="x.mp4",
+        media_probed_at=utcnow(),
+        vcodec="h264",
+        bit_depth=8,
+        width_px=3840,
+        height_px=2160,
+    )
     assert needs_compat(uhd_h264, 1080)
     assert not needs_compat(uhd_h264, 2160)
 
@@ -302,9 +359,9 @@ def test_copy_cap_setting(init_db):
 @pytest.mark.parametrize(
     "cap_setting,width,height,expect_download",
     [
-        ("1080p", 3840, 2160, True),   # YouTube's 1080p H.264 is enough
+        ("1080p", 3840, 2160, True),  # YouTube's 1080p H.264 is enough
         ("source", 1920, 1080, True),  # source is ≤1080p: native matches
-        ("source", 3840, 2160, False), # needs a 4K encode
+        ("source", 3840, 2160, False),  # needs a 4K encode
     ],
 )
 def test_native_download_only_when_it_meets_the_cap(
@@ -337,7 +394,9 @@ def test_native_download_only_when_it_meets_the_cap(
     monkeypatch.setattr(compat_rendition, "_download_native_h264", fake_download)
     monkeypatch.setattr(compat_rendition, "_encode_compat", fake_encode)
     monkeypatch.setattr(compat_rendition, "ensure_safari_mp4", lambda p, **k: p)
-    job = compat_rendition._Job(video_id=video.id, kind="compat", prefer_download=True, reason="t")
+    job = compat_rendition._Job(
+        video_id=video.id, kind="compat", prefer_download=True, reason="t"
+    )
     compat_rendition._jobs[video.id] = job
     compat_rendition._worker(job)
     assert calls["download"] == (1 if expect_download else 0)

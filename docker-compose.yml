@@ -9,9 +9,13 @@ services:
   # For a GPU on another machine, leave this off and set OLLAMA_BASE_URL
   # (or Settings → AI) to that host, e.g. http://192.168.1.50:11434
   ollama:
-    image: ollama/ollama:latest
+    # Pinned: bump deliberately (the `rocm` variant is ollama/ollama:<version>-rocm).
+    image: ollama/ollama:0.40.4
     container_name: horde-ollama
     profiles: ["ai"]
+    init: true
+    security_opt:
+      - no-new-privileges:true
     volumes:
       - ${OLLAMA_DATA_PATH:-./ollama}:/root/.ollama
     # GPU passthrough when Ollama runs on this host (pick one):
@@ -46,8 +50,19 @@ services:
       context: .
       args:
         HORDE_GIT_SHA: ${HORDE_GIT_SHA:-unknown}
-    image: horde:latest
+        # `jellyfin` (default; hardware-encoder-capable) or `debian`. The build
+        # fails if the chosen flavor cannot be installed.
+        FFMPEG_FLAVOR: ${FFMPEG_FLAVOR:-jellyfin}
+        # Optional: fail the build unless the Jellyfin repository key has this
+        # fingerprint (40 hex characters, no spaces).
+        JELLYFIN_GPG_FPR: ${JELLYFIN_GPG_FPR:-}
+        HORDE_VERSION: ${HORDE_VERSION:-dev}
+    # Built locally by default (update.sh also tags horde:<shortsha> for rollback).
+    # Set HORDE_IMAGE to use a published image instead; see docs/getting-started/updating.md.
+    image: ${HORDE_IMAGE:-horde:latest}
+    pull_policy: ${HORDE_PULL_POLICY:-missing}
     container_name: horde
+    init: true
     depends_on:
       - bgutil-pot
     ports:
@@ -64,16 +79,60 @@ services:
       - YTDLP_COOKIES_FROM_BROWSER=${YTDLP_COOKIES_FROM_BROWSER:-}
       # Empty = auto-discover (ollama compose service, then host.docker.internal).
       - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-}
-      # Baked at build time; override only if needed. Repo for update checks:
+      # Runtime setting (not baked into the image): the GitHub owner/name the
+      # in-app update check queries. Override only for a fork.
       - HORDE_GITHUB_REPO=${HORDE_GITHUB_REPO:-jm-connell/horde}
+      # Security (see docs/ops/security.md). All optional.
+      - HORDE_ALLOWED_HOSTS=${HORDE_ALLOWED_HOSTS:-}
+      - HORDE_ALLOW_PRIVATE_URLS=${HORDE_ALLOW_PRIVATE_URLS:-}
+      - HORDE_MAX_UPLOAD_GB=${HORDE_MAX_UPLOAD_GB:-}
+      # Accounts behind a reverse proxy (see docs/ops/authentication.md). All optional.
+      - HORDE_TRUST_PROXY=${HORDE_TRUST_PROXY:-}
+      - HORDE_TRUSTED_PROXY_HOPS=${HORDE_TRUSTED_PROXY_HOPS:-1}
+      - HORDE_AUTH_DISABLED=${HORDE_AUTH_DISABLED:-}
+      - HORDE_TRUSTED_USER_HEADER=${HORDE_TRUSTED_USER_HEADER:-}
+      # Optional OpenRouter key; overrides the one in Settings → AI when set.
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      # yt-dlp request threads and extract-queue waits. Empty background
+      # timeout = 3x the interactive one.
+      - HORDE_YTDLP_REQUEST_THREADS=${HORDE_YTDLP_REQUEST_THREADS:-8}
+      - HORDE_EXTRACT_QUEUE_TIMEOUT_SEC=${HORDE_EXTRACT_QUEUE_TIMEOUT_SEC:-180}
+      - HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC=${HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC:-}
+      # Boot sweep of stale partial downloads older than N hours (0 = off).
+      - HORDE_TEMP_SWEEP_HOURS=${HORDE_TEMP_SWEEP_HOURS:-6}
+      # Opt-in: on every start, install the newest yt-dlp into the data volume.
+      - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
+      - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}
+      # Logging and nightly database backups (docs/ops/logging.md, backup-restore.md).
+      - HORDE_LOG_LEVEL=${HORDE_LOG_LEVEL:-INFO}
+      - HORDE_LOG_FORMAT=${HORDE_LOG_FORMAT:-text}
+      - HORDE_BACKUP_ENABLED=${HORDE_BACKUP_ENABLED:-1}
+      - HORDE_BACKUP_HOUR=${HORDE_BACKUP_HOUR:-4}
+      - HORDE_BACKUP_KEEP=${HORDE_BACKUP_KEEP:-7}
     volumes:
       # Media library on your ZFS dataset.
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads
       # Persistent SQLite DB + cached thumbnails.
       - ${DATA_PATH:-/opt/dockge/horde/data}:/app/data
     restart: unless-stopped
+    # Uvicorn drains for up to 10 s, then workers stop within 20 s (ffmpeg gets
+    # SIGTERM, then SIGKILL): 30 s worst case, usually 1-3 s. Keep some margin.
+    stop_grace_period: 40s
     extra_hosts:
       - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/api/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    # Hardening. The entrypoint starts as root only to fix ownership and then
+    # drops to PUID:PGID with gosu; that works with no-new-privileges.
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: ${HORDE_PIDS_LIMIT:-1024}
+    # Empty/0 means unlimited (the default). Example: HORDE_MEM_LIMIT=4g
+    mem_limit: ${HORDE_MEM_LIMIT:-0}
     # GPU for archive transcode (H.264/H.265). Uncomment the block that matches
     # the host. This is separate from Ollama passthrough above.
     #

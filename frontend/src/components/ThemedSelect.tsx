@@ -63,8 +63,7 @@ export default function ThemedSelect<T extends string>({
   const compact = size === "compact";
   const { flip, anchorRef } = useFlipMenu(open, compact ? 200 : 320);
   const visible = useMemo(
-    () =>
-      searchable ? filterThemedSelectOptions(options, query) : options,
+    () => (searchable ? filterThemedSelectOptions(options, query) : options),
     [searchable, options, query]
   );
 
@@ -77,6 +76,7 @@ export default function ThemedSelect<T extends string>({
     if (!open) return;
     const selectedIdx = visible.findIndex((o) => o.value === value);
     setActiveIndex(selectedIdx >= 0 ? selectedIdx : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed the highlight when the menu opens or the query changes, not when value/options change underneath it
   }, [open, query]);
 
   useEffect(() => {
@@ -106,9 +106,7 @@ export default function ThemedSelect<T extends string>({
   const move = (dir: 1 | -1) => {
     if (searchable) {
       if (!visible.length) return;
-      setActiveIndex(
-        (i) => (i + dir + visible.length) % visible.length
-      );
+      setActiveIndex((i) => (i + dir + visible.length) % visible.length);
       return;
     }
     const idx = options.findIndex((o) => o.value === value);
@@ -121,7 +119,14 @@ export default function ThemedSelect<T extends string>({
   const optionList = (
     <ul id={listId} role="listbox">
       {visible.length === 0 ? (
-        <li className="px-3 py-2 text-sm text-gray-500">No matching models</li>
+        <li
+          role="option"
+          aria-disabled="true"
+          aria-selected="false"
+          className="px-3 py-2 text-sm text-muted"
+        >
+          No matching models
+        </li>
       ) : (
         visible.map((opt, i) => {
           const active = opt.value === value;
@@ -135,7 +140,7 @@ export default function ThemedSelect<T extends string>({
               {showGroup ? (
                 <li
                   role="presentation"
-                  className="sticky top-0 z-[1] border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-gray-500"
+                  className="sticky top-0 z-[1] border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted"
                 >
                   {opt.group}
                 </li>
@@ -161,7 +166,7 @@ export default function ThemedSelect<T extends string>({
                   {opt.hint ? (
                     <span
                       className={`shrink-0 tabular-nums ${
-                        active ? "text-accent/80" : "text-gray-500"
+                        active ? "text-accent/80" : "text-muted"
                       } ${compact ? "text-[10px]" : "text-xs"}`}
                       title="USD per 1M tokens"
                     >
@@ -215,6 +220,8 @@ export default function ThemedSelect<T extends string>({
               ? "gap-1 rounded px-1.5 py-0.5"
               : "gap-2 rounded-lg px-3 py-2"
           } ${disabled ? "cursor-not-allowed opacity-50" : ""} ${buttonClassName}`}
+          // Pointer helper: clicking anywhere on the control focuses the search field.
+          role="presentation"
           onMouseDown={(e) => {
             if (disabled) return;
             if (e.target === inputRef.current) return;
@@ -241,9 +248,7 @@ export default function ThemedSelect<T extends string>({
             spellCheck={false}
             value={query}
             placeholder={
-              query
-                ? searchPlaceholder
-                : selected?.label ?? searchPlaceholder
+              query ? searchPlaceholder : (selected?.label ?? searchPlaceholder)
             }
             onFocus={() => !disabled && setOpen(true)}
             onChange={(e) => {
@@ -257,13 +262,13 @@ export default function ThemedSelect<T extends string>({
           />
           {!query && selected?.hint ? (
             <span
-              className="shrink-0 text-xs tabular-nums text-gray-500"
+              className="shrink-0 text-xs tabular-nums text-muted"
               title="USD per 1M tokens"
             >
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-gray-500" aria-hidden>
+          <span className="shrink-0 text-muted" aria-hidden>
             ▾
           </span>
         </div>
@@ -271,7 +276,12 @@ export default function ThemedSelect<T extends string>({
         <button
           type="button"
           disabled={disabled}
-          aria-label={ariaLabel}
+          // WCAG 2.5.3: the name must contain the visible text (the current value).
+          aria-label={
+            ariaLabel && selected
+              ? `${ariaLabel}: ${selected.label}`
+              : ariaLabel
+          }
           aria-haspopup="listbox"
           aria-expanded={open}
           aria-controls={listId}
@@ -286,13 +296,13 @@ export default function ThemedSelect<T extends string>({
           <span className="min-w-0 truncate">{selected?.label ?? value}</span>
           {selected?.hint ? (
             <span
-              className="shrink-0 text-xs tabular-nums text-gray-500"
+              className="shrink-0 text-xs tabular-nums text-muted"
               title="USD per 1M tokens"
             >
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-gray-500" aria-hidden>
+          <span className="shrink-0 text-muted" aria-hidden>
             ▾
           </span>
         </button>

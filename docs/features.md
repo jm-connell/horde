@@ -2,8 +2,8 @@
 
 A closer look at what Horde actually does. Each section is a product tour, not a settings dump — follow the guide links when you need every control.
 
-!!! warning "LAN only — no authentication"
-    Single-admin, trusted LAN. Do not port-forward it.
+!!! warning "Trusted network"
+    Everyone signs in, but Horde is built for a LAN or VPN. Do not port-forward it.
 
 ## Downloads
 

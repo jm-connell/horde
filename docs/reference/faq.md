@@ -6,7 +6,7 @@ Clone [the git repo](https://github.com/jm-connell/horde) onto the Docker host, 
 
 ## Is there authentication?
 
-**No.** Horde is a single-admin app with no login. Keep it on a **trusted LAN** (or behind your own VPN / SSO gateway). Details: [No authentication](../design/no-auth.md).
+**Yes.** The first visit creates the administrator account, who adds other people; everyone has their own watch history. Keep it on a **trusted LAN** (or behind your own VPN / SSO gateway). Details: [Accounts and sign-in](../ops/authentication.md), [Security model](../design/no-auth.md).
 
 ## What ports does it use?
 
@@ -46,7 +46,7 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 ## Can I expose this to the internet?
 
-**Not recommended** without your own auth layer. CORS is wide for Chromecast, and there is no app login. Prefer a VPN (Tailscale / WireGuard) or put HTTP Basic Auth / SSO on a reverse proxy in front of Horde. See [Remote access](../ops/remote-access.md) and [No authentication](../design/no-auth.md).
+**Not recommended** without your own auth layer. Horde has a login, but no two-factor sign-in or email recovery. Prefer a VPN (Tailscale / WireGuard) or put HTTP Basic Auth / SSO on a reverse proxy in front of Horde. See [Remote access](../ops/remote-access.md) and [Security model](../design/no-auth.md).
 
 ## Can I restyle the UI with custom CSS?
 

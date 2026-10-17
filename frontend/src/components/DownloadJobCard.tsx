@@ -2,10 +2,12 @@ import {
   memo,
   useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -45,6 +47,7 @@ import {
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
+import { getItem, setItem } from "../storage";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -56,19 +59,17 @@ const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 const SKIP_DISMISS_CONFIRM_KEY = "horde.downloads.skip-dismiss-confirm";
 
 function stripAnsi(text: string): string {
+  // eslint-disable-next-line no-control-regex -- matching the ESC byte is the point of stripping ANSI codes
   return text.replace(/\x1b\[[0-9;]*m/g, "");
 }
 
 function skipDismissConfirm(): boolean {
-  try {
-    return localStorage.getItem(SKIP_DISMISS_CONFIRM_KEY) === "1";
-  } catch {
-    return false;
-  }
+  return getItem(SKIP_DISMISS_CONFIRM_KEY) === "1";
 }
 
 // Memoized: unrelated SSE progress ticks re-render other cards' props by reference only.
 function DownloadJobCard({ job, live, channels, active = false }: Props) {
+  const { can } = useAuth();
   const {
     updateJobOverrides,
     retryJob,
@@ -78,14 +79,14 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     changeJobQuality,
     refreshJobs,
   } = useDownloads();
-  const { showToast } = useToast();
+  const { showError } = useToast();
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
     if (live?.downloaded_bytes) {
       maxBytesRef.current = Math.max(
         maxBytesRef.current,
-        live.downloaded_bytes,
+        live.downloaded_bytes
       );
     }
   } else {
@@ -96,7 +97,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const percent = downloadProgressPercent(
     live?.progress ?? job.progress,
     status === "downloading" ? downloaded : undefined,
-    liveTotal,
+    liveTotal
   );
   const completed = status === "completed";
   const failed = status === "error";
@@ -105,37 +106,37 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     status,
     failed,
     cancelled,
-    completed,
+    completed
   );
   const videoId = live?.video_id ?? job.video_id;
   const isDeviceJob = (live?.destination ?? job.destination) === "device";
   const { item: offlineItem, progress: offlineProgress } = useOfflineItem(
-    isDeviceJob ? -job.id : null,
+    isDeviceJob ? -job.id : null
   );
   const videoGone = isLibraryVideoGone(
     isDeviceJob,
     job.video_missing,
-    job.superseded,
+    job.superseded
   );
   const canEditNotes = canEditDownloadJobNotes(
     isDeviceJob,
     failed,
     cancelled,
     videoGone,
-    completed,
+    completed
   );
   const inLibrary = canManageCompletedLibraryVideo(
     completed,
     isDeviceJob,
     videoGone,
-    videoId,
+    videoId
   );
   const canRedownload = canRedownloadRemovedJob(
     completed,
     isDeviceJob,
     failed,
     job.video_missing,
-    job.superseded,
+    job.superseded
   );
   const isReplacing =
     active &&
@@ -154,6 +155,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
+  const noteInputId = useId();
   const [dismissConfirm, setDismissConfirm] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [cancelConfirm, setCancelConfirm] = useState(false);
@@ -164,7 +166,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   const [redownloading, setRedownloading] = useState(false);
   const [changingQuality, setChangingQuality] = useState(false);
   const [sourcePresets, setSourcePresets] = useState<string[]>(
-    () => job.available_presets ?? [],
+    () => job.available_presets ?? []
   );
   const [editingTitle, setEditingTitle] = useState(false);
   const retryingRef = useRef(false);
@@ -189,7 +191,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     setChannel(c);
     setNote(n);
     savedChannel.current = c;
-  }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [job, live?.title, live?.channel]); // eslint-disable-line react-hooks/exhaustive-deps -- resolveTitle/resolveChannel are derived from exactly these inputs
 
   useEffect(() => {
     if (!editingTitle) return;
@@ -211,7 +213,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   ]);
   const displayPreset = resolveQualityPreset(
     job.quality_preset || "best",
-    sourcePresets,
+    sourcePresets
   );
   const finishedRes = completed
     ? finishedQualityLabel(job.quality_preset, job.height_px, sourcePresets)
@@ -302,11 +304,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
   const confirmDismiss = async () => {
     if (dontAskAgain) {
-      try {
-        localStorage.setItem(SKIP_DISMISS_CONFIRM_KEY, "1");
-      } catch {
-        /* ignore */
-      }
+      setItem(SKIP_DISMISS_CONFIRM_KEY, "1");
     }
     setDismissConfirm(false);
     await dismissJob(job.id);
@@ -338,7 +336,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
       setDeleteConfirm(false);
       refreshJobs();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "Could not delete video");
+      showError(err instanceof Error ? err.message : "Could not delete video");
     } finally {
       setDeleting(false);
     }
@@ -475,8 +473,10 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               <>
                 <span
                   className={`min-w-0 truncate${
-                    videoGone ? " text-gray-500 line-through" : ""
+                    videoGone ? " text-muted line-through" : ""
                   }${canEditTitle ? " cursor-text" : ""}`}
+                  // Pointer shortcut; keyboard users use the "Edit title" button.
+                  role="presentation"
                   onClick={startTitleEdit}
                   title={title || undefined}
                 >
@@ -486,7 +486,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   <button
                     type="button"
                     onClick={startTitleEdit}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-gray-500 hover:text-accent"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:text-accent"
                     title="Edit title"
                     aria-label="Edit title"
                   >
@@ -508,12 +508,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               </>
             )}
             {job.superseded && (
-              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                 Replaced
               </span>
             )}
             {job.video_missing && !job.superseded && (
-              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                 Removed
               </span>
             )}
@@ -566,6 +566,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
           >
             {thumbSrc ? (
               <img
+                loading="lazy"
+                width={96}
+                height={56}
                 key={`${job.id}-${thumbSrc}`}
                 src={thumbSrc}
                 alt=""
@@ -581,7 +584,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 }}
               />
             ) : (
-              <div className="flex h-full items-center justify-center text-xs text-gray-600">
+              <div className="flex h-full items-center justify-center text-xs text-muted">
                 No preview
               </div>
             )}
@@ -608,7 +611,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
             {!cancelled && (
               <div className="w-full sm:max-w-md">
-                <label className={labelClass}>Channel</label>
+                <span className={labelClass}>Channel</span>
                 <ChannelPicker
                   value={channel}
                   onChange={setChannel}
@@ -621,9 +624,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             {canEditNotes && (showNote || note) && (
               <div className="mt-3">
                 <div className="mb-1 flex items-baseline justify-between gap-2">
-                  <label className={labelClass + " mb-0"}>Note</label>
+                  <label htmlFor={noteInputId} className={labelClass + " mb-0"}>
+                    Note
+                  </label>
                 </div>
                 <textarea
+                  id={noteInputId}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
@@ -637,14 +643,16 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               ref={setActionRow}
               className="mt-3 flex min-w-0 flex-nowrap items-center gap-1.5 overflow-x-hidden sm:gap-2"
             >
-              {completed && isDeviceJob && offlineItem?.status === "complete" && (
-                <Link
-                  to={`/watch/${-job.id}`}
-                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
-                >
-                  Watch
-                </Link>
-              )}
+              {completed &&
+                isDeviceJob &&
+                offlineItem?.status === "complete" && (
+                  <Link
+                    to={`/watch/${-job.id}`}
+                    className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                  >
+                    Watch
+                  </Link>
+                )}
               {completed &&
                 isDeviceJob &&
                 (offlineItem?.status === "queued" ||
@@ -681,21 +689,25 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   >
                     Watch →
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setDeleteConfirm(true)}
-                    disabled={deleting}
-                    title="Delete this video from your library"
-                    className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    Delete
-                  </button>
+                  {can("delete_videos") && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteConfirm(true)}
+                      disabled={deleting}
+                      title="Delete this video from your library"
+                      className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  )}
                   <div data-collapse="playlist" className="shrink-0">
-                    <AddToPlaylist
-                      videoId={videoId}
-                      buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-                      onOpenChange={setPlaylistOpen}
-                    />
+                    {can("manage_playlists") && (
+                      <AddToPlaylist
+                        videoId={videoId}
+                        buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                        onOpenChange={setPlaylistOpen}
+                      />
+                    )}
                   </div>
                 </>
               )}
@@ -710,7 +722,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 </button>
               )}
               {completed && !isDeviceJob && videoGone && (
-                <span className="shrink-0 whitespace-nowrap text-xs text-gray-500">
+                <span className="shrink-0 whitespace-nowrap text-xs text-muted">
                   {job.video_missing
                     ? "Video no longer in library"
                     : "Superseded by a newer download"}
@@ -761,7 +773,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               {sizeLabel ? (
                 <span
                   data-collapse="size"
-                  className="shrink-0 whitespace-nowrap text-xs text-gray-500"
+                  className="shrink-0 whitespace-nowrap text-xs text-muted"
                 >
                   {sizeLabel}
                 </span>
@@ -770,6 +782,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 <div
                   data-collapse="res"
                   className="shrink-0"
+                  role="presentation"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <ThemedSelect

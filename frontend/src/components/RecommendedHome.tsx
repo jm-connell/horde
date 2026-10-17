@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { aiStatusQuery } from "../queries/status";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
@@ -12,7 +15,10 @@ export default function RecommendedHome({
 }: {
   sidebarCollapsed: boolean;
 }) {
-  const { showToast } = useToast();
+  const { showToast, showError } = useToast();
+  // Re-running the category job is AI worker control (administrators).
+  const { isAdmin } = useAuth();
+  const queryClient = useQueryClient();
   const [categories, setCategories] = useState<string[]>([]);
   const [feedVideos, setFeedVideos] = useState<Video[]>([]);
   const [feedOffset, setFeedOffset] = useState(0);
@@ -156,7 +162,10 @@ export default function RecommendedHome({
         while (Date.now() - started < 90_000) {
           await new Promise((r) => setTimeout(r, 2000));
           try {
-            const status = await api.getAiStatus();
+            const status = await queryClient.fetchQuery({
+              ...aiStatusQuery(),
+              staleTime: 0,
+            });
             const busy =
               status.queue_depth > 0 ||
               Boolean(status.current_job) ||
@@ -173,7 +182,7 @@ export default function RecommendedHome({
       void poll().finally(() => setRefreshing(false));
       return;
     } catch {
-      showToast("Could not refresh categories");
+      showError("Could not refresh categories");
       setRefreshing(false);
     }
   };
@@ -225,7 +234,7 @@ export default function RecommendedHome({
             ›
           </button>
         )}
-        {showForYou && (
+        {showForYou && isAdmin && (
           <button
             type="button"
             onClick={refreshCategories}
@@ -241,11 +250,11 @@ export default function RecommendedHome({
       {loading ? (
         <LoadingIndicator />
       ) : error ? (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-muted">
           <p className="text-sm">{error}</p>
         </div>
       ) : feedVideos.length === 0 ? (
-        <div className="py-16 text-center text-gray-500">
+        <div className="py-16 text-center text-muted">
           <p className="text-lg">No recommendations yet.</p>
           <p className="mt-1 text-sm">
             {showForYou

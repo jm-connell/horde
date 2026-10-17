@@ -13,7 +13,6 @@ from app.services.ytdlp_extract import (
     search_youtube_channel_videos,
 )
 
-
 LTT = "https://www.youtube.com/@LinusTechTips"
 
 
@@ -42,9 +41,7 @@ def test_search_skips_short_query_and_non_youtube(monkeypatch):
         called["n"] += 1
         raise AssertionError("extract should not run")
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", boom
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", boom)
     assert search_youtube_channel_videos(LTT, "p") == []
     assert search_youtube_channel_videos("https://vimeo.com/foo", "paint") == []
     assert called["n"] == 0
@@ -74,9 +71,7 @@ def test_search_maps_flat_entries(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     hits = search_youtube_channel_videos(LTT, "paint")
     assert len(hits) == 1
     hit = hits[0]
@@ -106,9 +101,7 @@ def test_search_maps_timestamp_when_upload_date_missing(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     hits = search_youtube_channel_videos(LTT, "paint")
     assert len(hits) == 1
     assert hits[0]["published_at"].startswith("2014-01-01")
@@ -166,9 +159,7 @@ def test_search_skips_shorts_and_playlists(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     hits = search_youtube_channel_videos(LTT, "paint")
     assert [h["id"] for h in hits] == ["paintfix111", "oldshort55s"]
     assert hits[0]["published_at"]
@@ -214,9 +205,7 @@ def test_extract_failure_returns_empty(monkeypatch):
     def boom(*_a, **_k):
         raise RuntimeError("bot check")
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", boom
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", boom)
     assert search_youtube_channel_videos(LTT, "paint") == []
 
 
@@ -268,9 +257,7 @@ def test_youtube_search_api_respects_setting(client, monkeypatch):
             }
         ]
 
-    monkeypatch.setattr(
-        "app.api.channels.search_youtube_channel_videos", fake_search
-    )
+    monkeypatch.setattr("app.api.channels.search_youtube_channel_videos", fake_search)
 
     client.patch("/api/settings", json={"direct_youtube_search": False})
     skipped = client.get(
@@ -316,9 +303,7 @@ def test_youtube_search_api_passes_relative_published_label(client, monkeypatch)
             }
         ]
 
-    monkeypatch.setattr(
-        "app.api.channels.search_youtube_channel_videos", fake_search
-    )
+    monkeypatch.setattr("app.api.channels.search_youtube_channel_videos", fake_search)
     client.patch("/api/settings", json={"direct_youtube_search": True})
     body = client.get(
         "/api/channels/youtube-search",
@@ -347,6 +332,8 @@ def test_youtube_search_pref_patch(client):
 
     status = client.get("/api/channels/catalog/status").json()
     assert status["direct_youtube_search"] is True
-    hit = next(c for c in status["catalogs"] if "linustechtips" in c["channel_url"].lower())
+    hit = next(
+        c for c in status["catalogs"] if "linustechtips" in c["channel_url"].lower()
+    )
     assert hit["direct_youtube_search"] is None
     assert hit["direct_youtube_search_effective"] is True

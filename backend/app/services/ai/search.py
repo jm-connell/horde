@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from collections.abc import Callable
+from typing import Any
 
 from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings, library
 from ..search_text import explain_match, query_allows_semantic
-from . import embeddings, text as ai_text
+from . import embeddings
+from . import text as ai_text
 from .provider import get_embed_provider
 
 
-def _caption_chunk_text(video: Video, chunk_index: int) -> Optional[str]:
+def _caption_chunk_text(video: Video, chunk_index: int) -> str | None:
     if chunk_index < 0:
         return None
     use_subs = bool(app_settings.ai_settings().get("use_subtitles", True))
@@ -27,8 +29,8 @@ def explain_library_video(
     video: Video,
     query: str,
     *,
-    chunk_index: Optional[int] = None,
-) -> Optional[dict[str, Any]]:
+    chunk_index: int | None = None,
+) -> dict[str, Any] | None:
     tags = library.parse_tags(video.tags)
     keyword = explain_match(
         query,
@@ -58,18 +60,23 @@ def hybrid_search(
     session: Session,
     q: str,
     *,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = "added_at",
     order: str = "desc",
-    needs_review: Optional[bool] = False,
-    seed: Optional[int] = None,
+    needs_review: bool | None = False,
+    seed: int | None = None,
+    user_id: int | None = None,
+    semantic: bool = True,
+    embed_query: Callable[[str], list[float] | None] | None = None,
 ) -> tuple[list[Video], dict[int, int]]:
     """Merge whole-word keyword hits with embedding nearest neighbors.
 
     Returns (videos, chunk_index_by_video_id) for match-reason snippets.
     When Ollama/embeddings are unavailable, or the query is too short to
-    embed usefully, falls back to keyword-only search.
+    embed usefully, falls back to keyword-only search. ``semantic=False`` skips the
+    embedding half (the caller may not spend AI quota); ``embed_query`` lets the
+    caller reuse a cached query vector.
     """
     keyword = library.query_videos(
         session,
@@ -80,17 +87,19 @@ def hybrid_search(
         order=order,
         needs_review=needs_review,
         seed=seed,
+        user_id=user_id,
     )
     chunks: dict[int, int] = {}
 
     if (
-        get_embed_provider() is None
+        not semantic
+        or get_embed_provider() is None
         or not q.strip()
         or not query_allows_semantic(q)
     ):
         return keyword, chunks
 
-    query_vec = embeddings.embed_query(q)
+    query_vec = (embed_query or embeddings.embed_query)(q)
     if query_vec is None:
         return keyword, chunks
 

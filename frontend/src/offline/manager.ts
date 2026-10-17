@@ -13,6 +13,7 @@ import {
   codecLabel,
 } from "../utils/playbackRendition";
 import {
+  ApiError,
   OFFLINE_PROGRESS_EVENT,
   api,
   listThumbnailUrl,
@@ -31,14 +32,23 @@ import {
   chunkCount,
   chunkUrl,
   deleteItem,
-  deletePendingProgress,
   getAllItems,
-  getAllPendingProgress,
   putItem,
+  withoutWatchState,
   type OfflineItem,
   type OfflineSponsorSegment,
 } from "./db";
+import { classifySendFailure, pendingProgress } from "./pendingProgress";
 import { contentRangeTotal } from "./ranges";
+import { deviceResume } from "./resume";
+import { isAppleWebkit } from "../utils/playbackRendition";
+import {
+  isQuotaError,
+  OFFLINE_QUOTA_EVENT,
+  quotaMessage,
+  StorageQuotaError,
+  type OfflineQuotaDetail,
+} from "./quota";
 
 export interface OfflineSnapshot {
   items: OfflineItem[];
@@ -108,6 +118,11 @@ export function videoFromJob(job: DownloadJob): Video {
     description_is_custom: false,
     subtitles_pending: false,
     chapters: [],
+    has_compat: false,
+    is_hdr: false,
+    processing_summary: false,
+    processing_sprites: false,
+    processing_chapters: false,
   };
 }
 
@@ -155,7 +170,8 @@ class OfflineManager {
       this.emit(true);
       connectivity.subscribe(() => this.onConnectivity());
       window.addEventListener(OFFLINE_PROGRESS_EVENT, (e) => {
-        const d = (e as CustomEvent<{ videoId: number; positionSec: number }>).detail;
+        const d = (e as CustomEvent<{ videoId: number; positionSec: number }>)
+          .detail;
         this.recordProgress(d.videoId, d.positionSec);
       });
       this.onConnectivity();
@@ -178,7 +194,7 @@ class OfflineManager {
     if (choice.rendition === null) {
       api.requestCompat(video.id).catch(() => undefined);
       throw new Error(
-        `This device can’t play ${codecLabel(video)} video. Horde is making an H.264 copy — save it for offline again once that finishes.`,
+        `This device can’t play ${codecLabel(video)} video. Horde is making an H.264 copy — save it for offline again once that finishes.`
       );
     }
     await this.enqueue({
@@ -219,7 +235,7 @@ class OfflineManager {
     const item = this.items.get(videoId);
     if (!item || item.status === "complete") return;
     void this.save({ ...item, status: "queued", error: null }).then(() =>
-      this.pump(),
+      this.pump()
     );
   }
 
@@ -233,6 +249,9 @@ class OfflineManager {
     this.live.delete(videoId);
     this.emit(true);
     await deleteItem(videoId).catch(() => undefined);
+    await deviceResume.forget(videoId).catch((err) => {
+      console.warn("Could not forget the offline resume positions", err);
+    });
     await this.deleteStoredData(item);
   }
 
@@ -280,39 +299,29 @@ class OfflineManager {
     this.pump();
   }
 
-  /** Keep the downloaded copy's resume point current (used offline). */
+  /** Keep the signed-in account's place in a downloaded video (used offline). */
   private recordProgress(videoId: number, positionSec: number): void {
-    const item = this.items.get(videoId);
-    if (!item) return;
-    const video = {
-      ...item.video,
-      last_position_sec: positionSec,
-      last_watched_at: new Date().toISOString(),
-    };
-    this.items.set(videoId, { ...item, video });
-    // Persist without re-rendering every list on each periodic save.
-    void putItem({ ...item, video }).catch(() => undefined);
+    if (!this.items.has(videoId)) return;
+    deviceResume.record(videoId, positionSec).catch((err) => {
+      console.warn("Could not save the offline resume position", err);
+    });
   }
 
-  private flushing = false;
-
-  private async flushPendingProgress(): Promise<void> {
-    if (this.flushing) return;
-    this.flushing = true;
-    try {
-      for (const p of await getAllPendingProgress()) {
-        try {
-          await api.syncProgress(p.videoId, p.positionSec);
-          await deletePendingProgress(p.videoId);
-        } catch {
-          return; // still unreachable; try again on the next online event
-        }
-      }
-    } catch {
-      // IndexedDB unavailable
-    } finally {
-      this.flushing = false;
-    }
+  /**
+   * Send progress saved while offline, for the account the server says is
+   * signed in (other accounts' saves wait for them; see pendingProgress).
+   */
+  flushPendingProgress(): Promise<void> {
+    return pendingProgress.flush({
+      whoAmI: async () => {
+        const state = await api.getAuthState();
+        return state.authenticated && state.user ? state.user.id : null;
+      },
+      send: (videoId, positionSec, at) =>
+        api.syncProgress(videoId, positionSec, at),
+      classify: (err) =>
+        classifySendFailure(err instanceof ApiError ? err.status : null),
+    });
   }
 
   private pump(): void {
@@ -335,11 +344,19 @@ class OfflineManager {
     let item = this.items.get(videoId);
     if (!item) return;
     try {
-      item = await this.patch(videoId, { status: "downloading", error: null }, signal);
+      item = await this.patch(
+        videoId,
+        { status: "downloading", error: null },
+        signal
+      );
       if (item.totalBytes === 0) item = await this.prepare(item, signal);
       item = await this.fetchChunks(item, signal);
       item = await this.fetchExtras(item, signal);
-      await this.patch(videoId, { status: "complete", completedAt: Date.now() }, signal);
+      await this.patch(
+        videoId,
+        { status: "complete", completedAt: Date.now() },
+        signal
+      );
     } catch (err) {
       const current = this.items.get(videoId);
       if (!current) return; // removed
@@ -355,6 +372,10 @@ class OfflineManager {
         await this.save({ ...current, status: "queued" });
         return;
       }
+      if (isQuotaError(err)) {
+        await this.failForQuota(current);
+        return;
+      }
       await this.save({
         ...current,
         status: "error",
@@ -363,13 +384,69 @@ class OfflineManager {
     }
   }
 
-  /** First request: learn the size/type (also triggers the iOS remux). */
-  private async prepare(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  /**
+   * Storage is full: drop the partial chunks (they are useless without the
+   * rest and keep eating the space the user needs), mark the item failed so it
+   * can be retried, and tell the UI how much room is left.
+   */
+  private async failForQuota(item: OfflineItem): Promise<void> {
+    await this.deleteStoredData(item);
+    const est = await navigator.storage?.estimate?.().catch(() => null);
+    const freeBytes = est?.quota != null ? est.quota - (est.usage ?? 0) : null;
+    const message = quotaMessage(item.video.title, freeBytes);
+    try {
+      await this.save({
+        ...item,
+        status: "error",
+        error: message,
+        chunksDone: 0,
+        extras: [],
+      });
+    } catch (err) {
+      // The metadata write can fail for the same reason; the in-memory state
+      // already shows the error and the next init resets the half-written row.
+      console.warn("Could not persist offline quota failure", err);
+    }
+    window.dispatchEvent(
+      new CustomEvent<OfflineQuotaDetail>(OFFLINE_QUOTA_EVENT, {
+        detail: { videoId: item.videoId, title: item.video.title, freeBytes },
+      })
+    );
+  }
+
+  /**
+   * Safari/iOS cannot play some stored originals until the server rewrites them
+   * (GET /stream no longer does that). Ask, then wait, so the offline copy is the
+   * playable file. Failures fall through: the download still proceeds.
+   */
+  private async ensureSafariReady(
+    videoId: number,
+    signal: AbortSignal
+  ): Promise<void> {
+    if (videoId <= 0 || !isAppleWebkit()) return;
+    try {
+      let state = await api.requestSafariPrep(videoId);
+      while (state.status === "queued" || state.status === "running") {
+        if (signal.aborted) return;
+        await new Promise((r) => window.setTimeout(r, 2000));
+        state = await api.getSafariPrep(videoId);
+      }
+    } catch {
+      // Best effort; the original is downloaded as stored.
+    }
+  }
+
+  /** First request: learn the size/type. */
+  private async prepare(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     let video = item.video;
     if (item.videoId > 0) {
       // List responses can be compact; fetch full metadata (chapters, subs).
       video = await api.getVideo(item.videoId).catch(() => item.video);
     }
+    await this.ensureSafariReady(item.videoId, signal);
     const resp = await fetch(item.sourceUrl, {
       headers: { Range: "bytes=0-0" },
       cache: "no-store",
@@ -378,7 +455,9 @@ class OfflineManager {
     if (resp.status !== 206) {
       await resp.body?.cancel().catch(() => undefined);
       throw new Error(
-        resp.ok ? "Server does not support resumable downloads" : `Download failed (${resp.status})`,
+        resp.ok
+          ? "Server does not support resumable downloads"
+          : `Download failed (${resp.status})`
       );
     }
     const total = contentRangeTotal(resp.headers.get("content-range"));
@@ -387,7 +466,11 @@ class OfflineManager {
     await this.ensureSpace(total);
     const contentType =
       resp.headers.get("content-type")?.split(";")[0] || "video/mp4";
-    return this.patch(item.videoId, { video, totalBytes: total, contentType }, signal);
+    return this.patch(
+      item.videoId,
+      { video, totalBytes: total, contentType },
+      signal
+    );
   }
 
   private async ensureSpace(bytes: number): Promise<void> {
@@ -395,13 +478,14 @@ class OfflineManager {
     if (!est || !est.quota) return;
     const free = est.quota - (est.usage ?? 0);
     if (free < bytes * 1.02) {
-      throw new Error(
-        `Not enough storage (${formatMb(bytes)} needed, ${formatMb(free)} free)`,
-      );
+      throw new StorageQuotaError(bytes, free);
     }
   }
 
-  private async fetchChunks(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  private async fetchChunks(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     const cache = await caches.open(MEDIA_CACHE);
     const count = chunkCount(item);
     for (let i = item.chunksDone; i < count; i++) {
@@ -410,7 +494,9 @@ class OfflineManager {
       const blob = await this.fetchChunkWithRetry(item, start, end, signal);
       await cache.put(
         chunkUrl(item.videoId, i),
-        new Response(blob, { headers: { "Content-Type": "application/octet-stream" } }),
+        new Response(blob, {
+          headers: { "Content-Type": "application/octet-stream" },
+        })
       );
       item = await this.patch(item.videoId, { chunksDone: i + 1 }, signal);
     }
@@ -421,7 +507,7 @@ class OfflineManager {
     item: OfflineItem,
     start: number,
     end: number,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Blob> {
     let lastErr: unknown;
     for (let attempt = 0; attempt < MAX_CHUNK_RETRIES; attempt++) {
@@ -441,7 +527,7 @@ class OfflineManager {
     item: OfflineItem,
     start: number,
     end: number,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<Blob> {
     const resp = await fetch(item.sourceUrl, {
       headers: { Range: `bytes=${start}-${end}` },
@@ -475,7 +561,10 @@ class OfflineManager {
     return new Blob(parts as BlobPart[]);
   }
 
-  private async fetchExtras(item: OfflineItem, signal: AbortSignal): Promise<OfflineItem> {
+  private async fetchExtras(
+    item: OfflineItem,
+    signal: AbortSignal
+  ): Promise<OfflineItem> {
     const cache = await caches.open(EXTRAS_CACHE);
     const extras: string[] = [];
     const store = async (url: string, source: string | Request = url) => {
@@ -485,8 +574,9 @@ class OfflineManager {
         if (!resp.ok && resp.type !== "opaque") return;
         await cache.put(url, resp);
         extras.push(url);
-      } catch {
-        // Extras are best-effort; the video still plays without them.
+      } catch (err) {
+        // Extras are best-effort, but a full disk must stop the download.
+        if (isQuotaError(err)) throw err;
       }
     };
     const v = item.video;
@@ -504,7 +594,7 @@ class OfflineManager {
       if (thumb) {
         await store(
           `/api/thumbnails/${item.videoId}`,
-          new Request(thumb, { mode: "no-cors" }),
+          new Request(thumb, { mode: "no-cors" })
         );
       }
     }
@@ -517,7 +607,9 @@ class OfflineManager {
       const media = await caches.open(MEDIA_CACHE);
       const count = Math.max(chunkCount(item), item.chunksDone + 1);
       await Promise.all(
-        Array.from({ length: count }, (_, i) => media.delete(chunkUrl(item.videoId, i))),
+        Array.from({ length: count }, (_, i) =>
+          media.delete(chunkUrl(item.videoId, i))
+        )
       );
       const extras = await caches.open(EXTRAS_CACHE);
       await Promise.all(item.extras.map((u) => extras.delete(u)));
@@ -541,7 +633,7 @@ class OfflineManager {
   private async patch(
     videoId: number,
     patch: Partial<OfflineItem>,
-    signal: AbortSignal,
+    signal: AbortSignal
   ): Promise<OfflineItem> {
     if (signal.aborted) throw signal.reason;
     const current = this.items.get(videoId);
@@ -549,10 +641,13 @@ class OfflineManager {
     return this.save({ ...current, ...patch });
   }
 
-  private async save(item: OfflineItem): Promise<OfflineItem> {
+  private async save(next: OfflineItem): Promise<OfflineItem> {
     // A removed item must not be resurrected by an in-flight download.
-    const current = this.items.get(item.videoId);
-    if (!current && item.status !== "queued") return item;
+    const current = this.items.get(next.videoId);
+    if (!current && next.status !== "queued") return next;
+    // Metadata from the server carries the signed-in account's position;
+    // the copy is the device's, positions are kept per account (resume.ts).
+    const item = withoutWatchState(next);
     this.items.set(item.videoId, item);
     this.emit(true);
     await putItem(item);
@@ -574,7 +669,9 @@ class OfflineManager {
   }
 
   private publish(): void {
-    const items = [...this.items.values()].sort((a, b) => b.createdAt - a.createdAt);
+    const items = [...this.items.values()].sort(
+      (a, b) => b.createdAt - a.createdAt
+    );
     this.snapshot = {
       ...this.snapshot,
       items,
@@ -598,22 +695,25 @@ class FileChangedError extends Error {
 
 async function fetchSponsorSegments(
   video: Video,
-  signal: AbortSignal,
+  signal: AbortSignal
 ): Promise<OfflineSponsorSegment[] | null> {
   const ytId = extractYouTubeId(video.source_url, video.file_path);
   if (!ytId) return null;
   const cats = encodeURIComponent(
-    JSON.stringify(SPONSOR_BLOCK_CATEGORIES.map((c) => c.id)),
+    JSON.stringify(SPONSOR_BLOCK_CATEGORIES.map((c) => c.id))
   );
   try {
     const resp = await fetch(
       `https://sponsor.ajay.app/api/skipSegments?videoID=${ytId}&categories=${cats}`,
-      { signal },
+      { signal }
     );
     // 404 = no segments for this video.
     if (resp.status === 404) return [];
     if (!resp.ok) return null;
-    const data = (await resp.json()) as { segment: [number, number]; category: string }[];
+    const data = (await resp.json()) as {
+      segment: [number, number];
+      category: string;
+    }[];
     if (!Array.isArray(data)) return null;
     return data.map((s) => ({
       startSec: s.segment[0],
@@ -634,13 +734,9 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
         clearTimeout(t);
         reject(signal.reason);
       },
-      { once: true },
+      { once: true }
     );
   });
-}
-
-function formatMb(bytes: number): string {
-  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 export const offlineManager = new OfflineManager();

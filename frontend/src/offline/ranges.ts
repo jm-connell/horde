@@ -16,7 +16,7 @@ export const OPEN_RANGE_MAX = 8 * 1024 * 1024;
 export function parseRange(
   header: string | null,
   size: number,
-  openRangeMax = OPEN_RANGE_MAX,
+  openRangeMax = OPEN_RANGE_MAX
 ): ByteRange | null | "invalid" {
   if (!header) return null;
   const m = /^bytes=(\d*)-(\d*)$/.exec(header.trim());

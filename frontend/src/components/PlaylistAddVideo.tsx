@@ -157,9 +157,7 @@ export default function PlaylistAddVideo({
   }, [query]);
 
   const highlightIndex =
-    suggestions.length === 0
-      ? 0
-      : Math.min(highlight, suggestions.length - 1);
+    suggestions.length === 0 ? 0 : Math.min(highlight, suggestions.length - 1);
 
   const close = () => {
     setOpen(false);
@@ -190,7 +188,9 @@ export default function PlaylistAddVideo({
     setError(null);
     try {
       const next = await api.addUrlToPlaylist(playlistId, url);
-      const addedExisting = next.videos.some((video) => !memberIds.has(video.id));
+      const addedExisting = next.videos.some(
+        (video) => !memberIds.has(video.id)
+      );
       onAdded(next);
       setQuery("");
       setLinkPreview(null);
@@ -200,7 +200,9 @@ export default function PlaylistAddVideo({
       }
       pendingDownloads.current += 1;
       refreshJobs();
-      setStatus("Download started — the video will appear here when it finishes.");
+      setStatus(
+        "Download started — the video will appear here when it finishes."
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not queue download");
     } finally {
@@ -250,26 +252,23 @@ export default function PlaylistAddVideo({
       ),
     ]);
     return (
+      // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- options are driven from the combobox input (arrows, Enter); the row itself is not focusable
       <li
         key="download"
         id={`${listId}-${index}`}
         role="option"
         aria-selected={activeRow}
+        aria-disabled={busy || undefined}
+        onMouseEnter={() => setHighlight(index)}
+        onClick={() => {
+          if (!busy) void choose(item);
+        }}
+        className={`block w-full cursor-pointer px-3 py-2 text-left ${
+          activeRow ? "bg-ink-800" : "hover:bg-ink-800"
+        }`}
       >
-        <button
-          type="button"
-          disabled={busy}
-          onMouseEnter={() => setHighlight(index)}
-          onClick={() => void choose(item)}
-          className={`block w-full px-3 py-2 text-left ${
-            activeRow ? "bg-ink-800" : "hover:bg-ink-800"
-          }`}
-        >
-          <p className="truncate text-sm font-medium text-gray-100">{title}</p>
-          <p className="truncate text-xs text-gray-500">
-            {meta || item.url}
-          </p>
-        </button>
+        <p className="truncate text-sm font-medium text-gray-100">{title}</p>
+        <p className="truncate text-xs text-muted">{meta || item.url}</p>
       </li>
     );
   };
@@ -390,7 +389,7 @@ export default function PlaylistAddVideo({
                 onClick={close}
                 title="Close"
                 aria-label="Close add video"
-                className={`absolute right-0.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-gray-500 transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
+                className={`absolute right-0.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-muted transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
                   open ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               >
@@ -405,13 +404,30 @@ export default function PlaylistAddVideo({
               className="mt-1 max-h-64 w-full overflow-y-auto rounded-lg bg-ink-950 ring-1 ring-ink-800 horde-scrollbar"
             >
               {loadingLibrary ? (
-                <li className="px-3 py-2 text-sm text-gray-500">Searching…</li>
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
+                  Searching…
+                </li>
               ) : alreadyInPlaylist ? (
-                <li className="px-3 py-2 text-sm text-gray-500">
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
                   Already in this playlist
                 </li>
               ) : suggestions.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-gray-500">
+                <li
+                  role="option"
+                  aria-disabled="true"
+                  aria-selected="false"
+                  className="px-3 py-2 text-sm text-muted"
+                >
                   {looksLikeDownloadUrl(query) && linkPreviewing
                     ? "Looking up…"
                     : "No matching videos"}
@@ -427,28 +443,27 @@ export default function PlaylistAddVideo({
                     formatPublishedAt(item.video.published_at),
                   ]);
                   return (
+                    // eslint-disable-next-line jsx-a11y/click-events-have-key-events -- options are driven from the combobox input (arrows, Enter); the row itself is not focusable
                     <li
                       key={item.video.id}
                       id={`${listId}-${index}`}
                       role="option"
                       aria-selected={activeRow}
+                      aria-disabled={busy || undefined}
+                      onMouseEnter={() => setHighlight(index)}
+                      onClick={() => {
+                        if (!busy) void choose(item);
+                      }}
+                      className={`block w-full cursor-pointer px-3 py-2 text-left ${
+                        activeRow ? "bg-ink-800" : "hover:bg-ink-800"
+                      }`}
                     >
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onMouseEnter={() => setHighlight(index)}
-                        onClick={() => void choose(item)}
-                        className={`block w-full px-3 py-2 text-left ${
-                          activeRow ? "bg-ink-800" : "hover:bg-ink-800"
-                        }`}
-                      >
-                        <p className="truncate text-sm font-medium text-gray-100">
-                          {item.video.title}
-                        </p>
-                        {meta ? (
-                          <p className="truncate text-xs text-gray-500">{meta}</p>
-                        ) : null}
-                      </button>
+                      <p className="truncate text-sm font-medium text-gray-100">
+                        {item.video.title}
+                      </p>
+                      {meta ? (
+                        <p className="truncate text-xs text-muted">{meta}</p>
+                      ) : null}
                     </li>
                   );
                 })

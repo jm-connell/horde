@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import shutil
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import delete
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import (
     AiCategory,
     AiJob,
@@ -23,20 +24,24 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    UserSettings,
+    UserVideoState,
     Video,
-    VideoAiChat,
     VideoAiChatMessage,
     VideoAiMeta,
     VideoEmbedding,
 )
-from . import app_settings, downloader, library, scanner
-from .thumbnails import unlink_for_video
+from . import app_settings, scanner
+from .downloads.queue import download_queue
+from .video_delete import collect_video_files, remove_files
 
-_ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob)
+logger = logging.getLogger(__name__)
+
+# Per-user UI preferences are settings, so they reset with the server defaults.
+_ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob, UserSettings)
 
 _ERASE_MEDIA_MODELS = (
     VideoAiChatMessage,
-    VideoAiChat,
     VideoAiMeta,
     VideoEmbedding,
     ChannelCatalogEmbedding,
@@ -47,6 +52,7 @@ _ERASE_MEDIA_MODELS = (
     PlaylistItem,
     Playlist,
     AiCategory,
+    UserVideoState,
     Video,
 )
 
@@ -79,104 +85,97 @@ def reset_app(*, erase_media: bool) -> dict[str, Any]:
 
 def _pause_workers(*, cancel_downloads: bool) -> None:
     try:
-        downloader.download_queue.pause_all()
-    except Exception:  # noqa: BLE001
-        pass
+        download_queue.pause_all()
+    except Exception:
+        logger.warning(
+            "factory reset: could not pause the download queue",
+            exc_info=True,
+        )
     try:
         app_settings.save({"ai": {"paused": True}})
-    except Exception:  # noqa: BLE001
-        pass
+    except app_settings.SettingsError:
+        logger.warning("Could not pause AI before reset", exc_info=True)
+    except Exception:
+        logger.warning(
+            "factory reset: could not pause AI",
+            exc_info=True,
+        )
     if not cancel_downloads:
         return
     try:
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             jobs = session.exec(
                 select(DownloadJob).where(
-                    DownloadJob.status.in_(
+                    col(DownloadJob.status).in_(
                         [JobStatus.queued, JobStatus.downloading]
                     )
                 )
             ).all()
             ids = [job.id for job in jobs if job.id is not None]
         for job_id in ids:
-            downloader.download_queue.cancel_job(job_id)
-    except Exception:  # noqa: BLE001
-        pass
+            download_queue.cancel_job(job_id)
+    except Exception:
+        logger.warning(
+            "factory reset: could not cancel active downloads",
+            exc_info=True,
+        )
 
 
 def _resume_workers() -> None:
     try:
-        downloader.download_queue.resume_all()
-    except Exception:  # noqa: BLE001
-        pass
+        download_queue.resume_all()
+    except Exception:
+        logger.warning(
+            "factory reset: could not resume the download queue",
+            exc_info=True,
+        )
     try:
-        from .ai.worker import wake_worker
         from .ai.provider import invalidate_resolved_url
+        from .ai.worker import wake_worker
 
         invalidate_resolved_url()
         wake_worker()
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.warning(
+            "factory reset: could not wake the AI worker",
+            exc_info=True,
+        )
 
 
 def _erase_media() -> None:
-    from ..config import DOWNLOADS_DIR, SPRITES_DIR
+    from ..context import get_engine
     from .compat_rendition import cancel_all
 
     cancel_all()
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         videos = session.exec(select(Video)).all()
         for video in videos:
-            _delete_media_files(video)
-            unlink_for_video(video.id, video.thumbnail_path)
-            if video.id is not None:
-                from .metadata import delete_sprite_files
-
-                delete_sprite_files(SPRITES_DIR, video.id)
-    _wipe_dir_contents(DOWNLOADS_DIR)
-
-
-def _delete_media_files(video: Video) -> None:
-    from ..config import DOWNLOADS_DIR
-
-    media = DOWNLOADS_DIR / video.file_path
-    if media.exists():
-        media.unlink(missing_ok=True)
-    from .paths import resolve_compat_path
-
-    compat = resolve_compat_path(video)
-    if compat is not None:
-        compat.unlink(missing_ok=True)
-    for track in library.parse_subtitles(video.subtitles):
-        sub = DOWNLOADS_DIR / track.get("path", "")
-        if sub.exists():
-            sub.unlink(missing_ok=True)
+            remove_files(collect_video_files(video, include_media=True))
+    _wipe_dir_contents(get_paths().downloads)
 
 
 def _delete_rows(models: tuple[type, ...]) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         for model in models:
             session.execute(delete(model))
         session.commit()
 
 
 def _wipe_chrome_assets() -> None:
-    from ..config import BACKGROUNDS_DIR, FONTS_DIR, ensure_dirs
 
-    _wipe_dir_contents(BACKGROUNDS_DIR)
-    _wipe_dir_contents(FONTS_DIR)
-    ensure_dirs()
+    _wipe_dir_contents(get_paths().backgrounds)
+    _wipe_dir_contents(get_paths().fonts)
+    get_paths().ensure()
 
 
 def _wipe_library_caches() -> None:
-    from ..config import DATA_DIR, SPRITES_DIR, THUMBNAILS_DIR, ensure_dirs
 
-    _wipe_dir_contents(THUMBNAILS_DIR)
-    _wipe_dir_contents(SPRITES_DIR)
-    cache = DATA_DIR / "feed_meta_cache.json"
+    _wipe_dir_contents(get_paths().thumbnails)
+    _wipe_dir_contents(get_paths().sprites)
+    cache = get_paths().data / "feed_meta_cache.json"
     cache.unlink(missing_ok=True)
-    ensure_dirs()
+    get_paths().ensure()
 
 
 def _wipe_dir_contents(root: Path) -> None:
@@ -193,5 +192,5 @@ def _wipe_dir_contents(root: Path) -> None:
 
 
 def _video_count() -> int:
-    with Session(engine) as session:
-        return int(session.scalar(select(func.count(Video.id))) or 0)
+    with Session(get_engine()) as session:
+        return int(session.scalar(select(func.count(col(Video.id)))) or 0)

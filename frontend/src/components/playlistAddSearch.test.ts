@@ -9,7 +9,8 @@ import {
 } from "./playlistAddSearch";
 
 function hit(
-  partial: Partial<PlaylistAddLibraryHit> & Pick<PlaylistAddLibraryHit, "id" | "title">
+  partial: Partial<PlaylistAddLibraryHit> &
+    Pick<PlaylistAddLibraryHit, "id" | "title">
 ): PlaylistAddLibraryHit {
   return {
     channel: "Alpha",

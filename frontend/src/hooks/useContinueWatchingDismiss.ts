@@ -1,21 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
+import { getJson, setJson } from "../storage";
 
 const STORAGE_KEY = "horde.continue-watching-dismissed";
 const EVENT = "horde:continue-watching-dismissed";
 
+const isIdList = (v: unknown): v is number[] =>
+  Array.isArray(v) && v.every((n) => typeof n === "number");
+
 function loadDismissed(): Set<number> {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return new Set();
-    const ids = JSON.parse(raw) as number[];
-    return new Set(ids);
-  } catch {
-    return new Set();
-  }
+  const ids = getJson(STORAGE_KEY, isIdList, []);
+  return new Set(ids);
 }
 
 function saveDismissed(ids: Set<number>) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify([...ids]));
+  setJson(STORAGE_KEY, [...ids]);
   window.dispatchEvent(new Event(EVENT));
 }
 

@@ -1,6 +1,6 @@
 # Data model
 
-SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLModel. There is **no Alembic** — schema evolves via `create_all`, a **`schema_migrations`** ledger, additive `ALTER TABLE` column lists, and a startup `verify_schema()` check. See [SQLite & migrations](../design/sqlite-and-migrations.md).
+SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLModel. The schema is managed with **Alembic** (revisions in `backend/app/migrations/versions`, applied by `init_db()` at startup); foreign keys are enforced. See [SQLite & migrations](../design/sqlite-and-migrations.md).
 
 ## Tables
 
@@ -8,7 +8,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
-| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`), probed media info (`vcodec`, `acodec`, `codec_string` RFC 6381, `bit_depth`, `is_hdr`, `media_probed_at`), H.264 sidecar (`compat_path`, `compat_size`, `compat_source` = `youtube`\|`transcode`, `compat_error`) |
+| `videos` | Library items: path (unique, relative to downloads), metadata, watch position, review flag, custom title/description flags, yt-dlp `source_chapters`, caption retry (`subtitles_pending`, `subtitles_retry_after`, `subtitles_fetch_attempts`), `youtube_id` (indexed, derived), probed media info (`vcodec`, `acodec`, `codec_string` RFC 6381, `bit_depth`, `is_hdr`, `media_probed_at`), H.264 sidecar (`compat_path`, `compat_size`, `compat_source` = `youtube`\|`transcode`, `compat_error`) |
 | `download_jobs` | Queue rows: URL, quality, `video_codec` (playback mode), probed `height_px`, progress, pause, loudnorm, optional replace target, `error` + typed `error_kind` |
 | `playlists` | User, imported, or subscribed YouTube playlists (`subscribed`, `quality_preset`, `last_synced_at`, `sync_error`, list `position`, optional `cover_video_id` / `cover_path`) |
 | `playlist_items` | Ordered video membership |
@@ -19,6 +19,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 |-------|---------|
 | `channel_catalogs` | Per-channel index status, phase, caps, completeness |
 | `channel_catalog_videos` | Flat (+ described) upload rows (`catalog_id` + `yt_id` unique) |
+| `channel_autodownloads` | Per-channel automatic download policy (enabled, how many earlier uploads, quality preset) |
 | `channel_catalog_skips` | Permanent skips (e.g. members-only) |
 | `channel_catalog_embeddings` | Embeddings for catalog videos (recommend / hybrid catalog search) |
 
@@ -26,31 +27,41 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 
 | Table | Purpose |
 |-------|---------|
+| `video_tags` | Derived tag index (`video_id`, `tag`, `source` = `user`\|`ai`\|`source`), trigger-maintained from `videos.tags` and `video_ai_meta`; see [SQLite and migrations](../design/sqlite-and-migrations.md) |
 | `video_embeddings` | Per-video vectors; `chunk_index` **-1** = metadata doc, **0+** = caption chunks |
 | `video_ai_meta` | Embed status, summary, AI/user tags, locks, LLM chapters |
-| `video_ai_chat` | One chat thread per video |
-| `video_ai_chat_messages` | User/assistant turns (+ optional OpenRouter cost/model) |
+| `video_ai_chat_messages` | User/assistant turns of one person's chat about a video (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
 | `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
-| `schema_migrations` | Ledger of applied migration step ids (`id`, `applied_at`) |
+| `alembic_version` | Current Alembic revision (`version_num`) |
+| `schema_migrations` | Legacy ledger from before Alembic (adopted installs only; unused) |
+
+### Accounts and per-user data
+
+| Table | Purpose |
+|-------|---------|
+| `users` | Accounts: `username_norm` (unique), scrypt `password_hash`, `is_admin`, `disabled`, `permissions` (JSON list of granted names; admins implicitly have all) |
+| `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |
+| `user_video_state` | **Per-user** watch position and last-watched time, keyed `(user_id, video_id)`. Read and written only through `services/user_state.py` |
+| `user_settings` | **Per-user** UI preferences (`ui_json`); server-wide settings stay in `app_settings.json` |
+
+`user_sessions`, `user_video_state`, `user_settings` and `video_ai_chat_messages.user_id` reference `users` with `ON DELETE CASCADE`, so deleting a person removes their sessions, history, preferences and chats and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
 
 ## Schema lifecycle
 
 ```text
 init_db():
-  import models
-  SQLModel.metadata.create_all(engine)   # new tables
-  _migrate_columns()                     # schema_migrations + ALTER ADD COLUMN
-  verify_schema()                        # fail fast if still incomplete
+  fresh database                 -> alembic upgrade head
+  tables, no alembic_version     -> legacy additive migrator, then upgrade head
+  unknown alembic revision       -> refuse to start (newer app ran here)
+  otherwise                      -> backup, then upgrade head if behind
 ```
 
-`MIGRATION_STEPS` in `database.py` records versioned steps (e.g. `2026_07_additive_columns`). Column lists remain the source of which fields to add; the ledger makes order explicit and allows future destructive one-shots without Alembic.
+Revisions live in `backend/app/migrations/versions/` and are forward-only; a pre-migration copy of `horde.db` is written to `DATA_DIR/backups/`. The legacy `schema_migrations` table is only kept on installs that predate Alembic. Details and the "how to add a migration" recipe: [SQLite & migrations](../design/sqlite-and-migrations.md).
 
-Migrations for day-to-day features are **additive** (new nullable/defaulted columns). Breaking renames/drops need a new numbered Python step (or a fresh `horde.db`).
-
-!!! danger "Missing columns"
-    If `verify_schema` raises, fix the DB (or delete `data/horde.db` to start empty) and restart. Do not ignore startup migration errors.
+!!! danger "Startup migration errors"
+    Do not ignore them. A failed migration rolls back and leaves the database as it was; restore from `DATA_DIR/backups/` or your own backup if needed.
 
 ## Related
 

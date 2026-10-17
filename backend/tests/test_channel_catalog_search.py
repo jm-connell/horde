@@ -15,7 +15,6 @@ from app.services.channel_catalog.query import (
     update_catalog_video_fields,
 )
 
-
 LTT = "https://youtube.com/@linustechtips"
 OTHER = "https://youtube.com/@otherchannel"
 LINUS_TITLE = "I painted his House to Fix his WiFi"
@@ -90,9 +89,7 @@ def test_paint_and_paint_fix_match_linus_title(session):
     paint_fix = search_catalog(session, LTT, "paint fix", semantic=False)
     assert _titles(paint_fix) == {LINUS_TITLE}
 
-    painted_house = search_catalog(
-        session, LTT, "painted house wifi", semantic=False
-    )
+    painted_house = search_catalog(session, LTT, "painted house wifi", semantic=False)
     assert _titles(painted_house) == {LINUS_TITLE}
 
     one_term_only = search_catalog(session, LTT, "paint router", semantic=False)
@@ -103,7 +100,11 @@ def test_paint_and_paint_fix_match_linus_title(session):
 def test_car_does_not_match_card_or_carriers(session):
     catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
     _add_video(
-        session, catalog, yt_id="usedcar1111", title="I bought a cheap used car", position=0
+        session,
+        catalog,
+        yt_id="usedcar1111",
+        title="I bought a cheap used car",
+        position=0,
     )
     _add_video(
         session,
@@ -148,9 +149,7 @@ def test_match_reason_title_and_description(session):
 def test_search_all_catalogs_uses_token_and(session):
     catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
     _add_video(session, catalog, yt_id="paintfix11", title=LINUS_TITLE, position=0)
-    _add_video(
-        session, catalog, yt_id="paintonly11", title="Just paint", position=1
-    )
+    _add_video(session, catalog, yt_id="paintonly11", title="Just paint", position=1)
     hits = search_all_catalogs(session, "paint fix", semantic=False)
     assert _titles(hits) == {LINUS_TITLE}
 
@@ -164,25 +163,27 @@ def test_semantic_false_does_not_embed(session, monkeypatch):
         calls["n"] += 1
         return [1.0, 0.0]
 
-    monkeypatch.setattr(
-        "app.services.ai.embeddings.embed_query", fake_embed
-    )
+    monkeypatch.setattr("app.services.ai.embeddings.embed_query", fake_embed)
     search_catalog(session, LTT, "wifi", semantic=False)
     assert calls["n"] == 0
 
 
 def test_short_query_skips_semantic_even_when_enabled(session, monkeypatch):
     catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
-    _add_video(session, catalog, yt_id="usedcar1111", title="I bought a cheap used car", position=0)
+    _add_video(
+        session,
+        catalog,
+        yt_id="usedcar1111",
+        title="I bought a cheap used car",
+        position=0,
+    )
     calls = {"n": 0}
 
     def fake_embed(query: str):
         calls["n"] += 1
         return [1.0, 0.0]
 
-    monkeypatch.setattr(
-        "app.services.ai.embeddings.embed_query", fake_embed
-    )
+    monkeypatch.setattr("app.services.ai.embeddings.embed_query", fake_embed)
     search_catalog(session, LTT, "car", semantic=True)
     assert calls["n"] == 0
     search_catalog(session, LTT, "hyprland", semantic=True)
@@ -232,9 +233,7 @@ def test_semantic_hits_are_scoped_to_catalog(session, monkeypatch):
         "app.services.ai.embeddings.embed_query",
         lambda query: [1.0, 0.0],
     )
-    hits = search_catalog(
-        session, LTT, "that episode about house wifi", semantic=True
-    )
+    hits = search_catalog(session, LTT, "that episode about house wifi", semantic=True)
     ids = {r["id"] for r in hits}
     assert "semltt11111" in ids
     assert "semother111" not in ids
@@ -244,7 +243,9 @@ def test_semantic_hits_are_scoped_to_catalog(session, monkeypatch):
 
 def test_update_catalog_video_fields_fills_dates_without_insert(session):
     catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
-    row = _add_video(session, catalog, yt_id="paintfix11", title=LINUS_TITLE, position=0)
+    row = _add_video(
+        session, catalog, yt_id="paintfix11", title=LINUS_TITLE, position=0
+    )
     assert row.published_at is None
 
     update_catalog_video_fields(
@@ -281,7 +282,9 @@ def test_update_catalog_video_fields_fills_dates_without_insert(session):
 
 def test_update_catalog_video_fields_skips_approximate_dates(session):
     catalog = _add_catalog(session, url=LTT, name="Linus Tech Tips")
-    row = _add_video(session, catalog, yt_id="oldpaint111", title=LINUS_TITLE, position=0)
+    row = _add_video(
+        session, catalog, yt_id="oldpaint111", title=LINUS_TITLE, position=0
+    )
     assert row.published_at is None
 
     update_catalog_video_fields(

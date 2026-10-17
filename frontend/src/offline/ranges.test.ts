@@ -13,7 +13,10 @@ describe("parseRange", () => {
 
   it("caps open-ended ranges", () => {
     expect(parseRange("bytes=0-", 1000, 64)).toEqual({ start: 0, end: 63 });
-    expect(parseRange("bytes=990-", 1000, 64)).toEqual({ start: 990, end: 999 });
+    expect(parseRange("bytes=990-", 1000, 64)).toEqual({
+      start: 990,
+      end: 999,
+    });
   });
 
   it("handles suffix ranges", () => {

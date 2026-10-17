@@ -24,14 +24,16 @@ const LABELS: Record<string, string> = {
 };
 
 const HINTS: Record<string, string> = {
-  members: "Member videos can't be downloaded without a signed-in account that has membership.",
+  members:
+    "Member videos can't be downloaded without a signed-in account that has membership.",
   bot: "Check PO token health (Settings → System / YouTube access docs). Cookies are not sent for bot checks.",
   pot: "Ensure bgutil-pot is running and YTDLP_POT_BASE_URL is reachable.",
   cookies:
     "Horde retries this video with cookies after an anonymous block. If it still failed, the signed-in account does not have access.",
   rate_limit: "Wait and retry; avoid bursty browsing while downloads run.",
   unavailable: "The source may have removed or geo-blocked this video.",
-  postprocess: "The file may still be salvageable — retry or check disk permissions.",
+  postprocess:
+    "The file may still be salvageable — retry or check disk permissions.",
 };
 
 export function downloadErrorLabel(kind: string | null | undefined): string {
@@ -39,7 +41,9 @@ export function downloadErrorLabel(kind: string | null | undefined): string {
   return LABELS[kind] ?? LABELS.unknown;
 }
 
-export function downloadErrorHint(kind: string | null | undefined): string | null {
+export function downloadErrorHint(
+  kind: string | null | undefined
+): string | null {
   if (!kind) return null;
   return HINTS[kind] ?? null;
 }
@@ -51,7 +55,8 @@ export function downloadErrorToast(
   if (kind === "cancelled") return "Cancelled";
   const label = downloadErrorLabel(kind);
   const msg = (message || "").trim();
-  if (!msg) return label === "Failed" ? "Download failed" : `Download failed: ${label}`;
+  if (!msg)
+    return label === "Failed" ? "Download failed" : `Download failed: ${label}`;
   if (kind && kind !== "unknown") {
     return `${label}: ${msg}`;
   }

@@ -5,23 +5,25 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Any, Optional
+from typing import Any
 
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
-from ...database import engine
+from ...context import get_engine
 from ...models import (
     ChannelCatalog,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
+    require_id,
     utcnow,
 )
 from .. import activity, app_settings
+from ..channel_autodownload import after_catalog_update, is_active_live_status
 from ..feed_meta_cache import parse_upload_date, published_meta_from_entry
 from ..ytdlp_common import (
+    ERROR_KIND_MEMBERS,
     EXTRACT_PRIORITY_BACKGROUND,
     CatalogSkipError,
-    ERROR_KIND_MEMBERS,
     MembersOnlyError,
     QuietYtdlpLogger,
     catalog_skip_message,
@@ -50,9 +52,9 @@ from .skips import (
     purge_catalog_video,
     skipped_yt_ids,
 )
-from ..channel_autodownload import after_catalog_update, is_active_live_status
 
 logger = logging.getLogger(__name__)
+
 
 def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any]:
     from ..ytdlp_extract import fetch_channel_feed
@@ -90,7 +92,7 @@ def _upsert_flat_entries(
     """Upsert flat entries starting at start_position. Returns (next position, new yt ids)."""
     pos = start_position
     inserted: list[str] = []
-    skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+    skipped = skipped_yt_ids(session, require_id(catalog))
     for raw in entries:
         rejected = _reject_members_or_skipped(
             session, catalog, raw, skipped=skipped, allow_gated=allow_gated
@@ -110,7 +112,7 @@ def _upsert_flat_entries(
         ).first()
         if existing is None:
             existing = ChannelCatalogVideo(
-                catalog_id=catalog.id,  # type: ignore[arg-type]
+                catalog_id=require_id(catalog),
                 yt_id=str(yt_id),
                 url=str(entry_url),
             )
@@ -128,7 +130,7 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
     rows = session.exec(
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
     ).all()
     keep_ids = {r.id for r in rows[: catalog.max_videos] if r.id is not None}
     for row in rows:
@@ -140,7 +142,7 @@ def _trim_beyond_cap(session: Session, catalog: ChannelCatalog) -> None:
 def sync_feed_head(
     channel_url: str,
     *,
-    channel_name: Optional[str] = None,
+    channel_name: str | None = None,
     limit: int = 50,
 ) -> dict[str, Any]:
     """Fetch the newest uploads from YouTube and merge into the local catalog.
@@ -154,7 +156,7 @@ def sync_feed_head(
     pc = data.get("playlist_count")
     live_name = data.get("channel") or channel_name
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = get_catalog_by_url(session, url, channel_name=live_name)
         if catalog is None:
             if not _enabled():
@@ -178,10 +180,10 @@ def sync_feed_head(
         existing = session.exec(
             select(ChannelCatalogVideo)
             .where(ChannelCatalogVideo.catalog_id == catalog.id)
-            .order_by(ChannelCatalogVideo.position.asc())
+            .order_by(col(ChannelCatalogVideo.position).asc())
         ).all()
         by_yt: dict[str, ChannelCatalogVideo] = {v.yt_id: v for v in existing}
-        skipped = skipped_yt_ids(session, catalog.id)  # type: ignore[arg-type]
+        skipped = skipped_yt_ids(session, require_id(catalog))
 
         live_ids: list[str] = []
         inserted: list[str] = []
@@ -204,7 +206,7 @@ def sync_feed_head(
                 published = None
             if row is None:
                 row = ChannelCatalogVideo(
-                    catalog_id=catalog.id,  # type: ignore[arg-type]
+                    catalog_id=require_id(catalog),
                     yt_id=yt_id,
                     url=str(raw["url"]),
                 )
@@ -248,7 +250,7 @@ def sync_feed_head(
         session.commit()
         _trim_beyond_cap(session, catalog)
         count = session.exec(
-            select(func.count(ChannelCatalogVideo.id)).where(
+            select(func.count(col(ChannelCatalogVideo.id))).where(
                 ChannelCatalogVideo.catalog_id == catalog.id
             )
         ).one()
@@ -271,7 +273,7 @@ def sync_feed_head(
             live_finished_ids=live_finished,
             source="head",
         )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("autodownload after head sync failed for %s", url, exc_info=True)
 
     return data
@@ -282,7 +284,7 @@ _head_sync_inflight: set[str] = set()
 
 
 def schedule_feed_head_sync(
-    channel_url: str, *, channel_name: Optional[str] = None
+    channel_url: str, *, channel_name: str | None = None
 ) -> None:
     """Non-blocking newest-page sync; coalesces duplicate requests per channel."""
     url = _normalize_channel_url(channel_url)
@@ -294,7 +296,7 @@ def schedule_feed_head_sync(
     def _run() -> None:
         try:
             sync_feed_head(url, channel_name=channel_name, limit=50)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("feed head sync failed for %s", url, exc_info=True)
         finally:
             with _head_sync_lock:
@@ -306,9 +308,9 @@ def schedule_feed_head_sync(
 def _fetch_description(
     url: str,
     *,
-    title: Optional[str] = None,
-    channel: Optional[str] = None,
-) -> tuple[Optional[str], Optional[str]]:
+    title: str | None = None,
+    channel: str | None = None,
+) -> tuple[str | None, str | None]:
     """Full extract for description; also returns published_at when yt-dlp has it."""
     opts = {
         "quiet": True,
@@ -326,19 +328,15 @@ def _fetch_description(
             channel=channel,
             priority=EXTRACT_PRIORITY_BACKGROUND,
         )
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, _message = classify_ytdlp_error(
             exc, url=url, title=title, channel=channel
         )
         if is_skippable_catalog_kind(kind) or is_members_only_error(exc):
-            skip_kind = (
-                kind if is_skippable_catalog_kind(kind) else ERROR_KIND_MEMBERS
-            )
+            skip_kind = kind if is_skippable_catalog_kind(kind) else ERROR_KIND_MEMBERS
             raise CatalogSkipError(
                 skip_kind,
-                catalog_skip_message(
-                    skip_kind, url=url, title=title, channel=channel
-                ),
+                catalog_skip_message(skip_kind, url=url, title=title, channel=channel),
             ) from exc
         return None, None
     desc = info.get("description")
@@ -362,7 +360,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
         select(ChannelCatalogVideo)
         .where(ChannelCatalogVideo.catalog_id == catalog.id)
         .where(ChannelCatalogVideo.position < _DESC_LIMIT)
-        .order_by(ChannelCatalogVideo.position.asc())
+        .order_by(col(ChannelCatalogVideo.position).asc())
     ).all()
     total = len(rows)
     _set_runtime(done=0, total=total)
@@ -382,9 +380,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             )
         except (CatalogSkipError, MembersOnlyError) as skip:
             skip_kind = getattr(skip, "kind", ERROR_KIND_MEMBERS)
-            reason = (
-                "members_only" if skip_kind == ERROR_KIND_MEMBERS else skip_kind
-            )
+            reason = "members_only" if skip_kind == ERROR_KIND_MEMBERS else skip_kind
             purge_catalog_video(session, row, reason=reason)
             if not catalog.last_error:
                 catalog.last_error = str(skip)[:500]
@@ -392,7 +388,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
                 session.commit()
             _set_runtime(done=i + 1)
             continue
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug(
                 "catalog description fetch failed for %s", row.url, exc_info=True
             )
@@ -420,12 +416,12 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
         ai = app_settings.ai_settings()
         if not ai.get("enabled", True) or ai.get("paused"):
             return
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             rows = session.exec(
                 select(ChannelCatalogVideo)
                 .where(ChannelCatalogVideo.catalog_id == catalog_id)
                 .where(ChannelCatalogVideo.position < _DESC_LIMIT)
-                .order_by(ChannelCatalogVideo.position.asc())
+                .order_by(col(ChannelCatalogVideo.position).asc())
             ).all()
             for row in rows:
                 if row.id is None:
@@ -437,7 +433,7 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
                     catalog_video_id=row.id,
                     force=False,
                 )
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("catalog embed enqueue skipped", exc_info=True)
 
 
@@ -445,7 +441,7 @@ def _note_catalog_warning(catalog_id: int, message: str) -> None:
     text = (message or "").strip()[:500]
     if not text:
         return
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = session.get(ChannelCatalog, catalog_id)
         if catalog is None or catalog.last_error:
             return
@@ -456,7 +452,7 @@ def _note_catalog_warning(catalog_id: int, message: str) -> None:
 
 
 def index_catalog(catalog_id: int) -> None:
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         catalog = session.get(ChannelCatalog, catalog_id)
         if catalog is None:
             return
@@ -499,13 +495,13 @@ def index_catalog(catalog_id: int) -> None:
         offset = 0
         position = 0
         reached_end = False
-        channel_total: Optional[int] = None
+        channel_total: int | None = None
         listing_skips = 0
         while position < max_videos and not should_stop():
             limit = min(_PAGE_SIZE, max_videos - position)
             try:
                 data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 kind, _message = classify_ytdlp_error(
                     exc, url=channel_url, channel=channel_name
                 )
@@ -514,9 +510,7 @@ def index_catalog(catalog_id: int) -> None:
                 listing_skips += 1
                 _note_catalog_warning(
                     catalog_id,
-                    catalog_skip_message(
-                        kind, url=channel_url, channel=channel_name
-                    ),
+                    catalog_skip_message(kind, url=channel_url, channel=channel_name),
                 )
                 if listing_skips >= 3:
                     reached_end = True
@@ -533,7 +527,7 @@ def index_catalog(catalog_id: int) -> None:
             pc = data.get("playlist_count")
             if isinstance(pc, int) and pc > 0:
                 channel_total = pc
-            with Session(engine) as session:
+            with Session(get_engine()) as session:
                 catalog = session.get(ChannelCatalog, catalog_id)
                 if catalog is None:
                     act.discard()
@@ -554,10 +548,8 @@ def index_catalog(catalog_id: int) -> None:
                 session.add(catalog)
                 session.commit()
             try:
-                after_catalog_update(
-                    channel_url, new_yt_ids=new_ids, source="index"
-                )
-            except Exception:  # noqa: BLE001
+                after_catalog_update(channel_url, new_yt_ids=new_ids, source="index")
+            except Exception:
                 logger.debug(
                     "autodownload after index page failed for %s",
                     channel_url,
@@ -581,14 +573,14 @@ def index_catalog(catalog_id: int) -> None:
             # Brief yield so downloads/previews can use the extract gate.
             time.sleep(0.35)
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is None:
                 act.discard()
                 return
             _trim_beyond_cap(session, catalog)
             count = session.exec(
-                select(func.count(ChannelCatalogVideo.id)).where(
+                select(func.count(col(ChannelCatalogVideo.id))).where(
                     ChannelCatalogVideo.catalog_id == catalog_id
                 )
             ).one()
@@ -614,7 +606,7 @@ def index_catalog(catalog_id: int) -> None:
                 act.discard()
                 return
             count = session.exec(
-                select(func.count(ChannelCatalogVideo.id)).where(
+                select(func.count(col(ChannelCatalogVideo.id))).where(
                     ChannelCatalogVideo.catalog_id == catalog_id
                 )
             ).one()
@@ -643,7 +635,7 @@ def index_catalog(catalog_id: int) -> None:
         )
         _enqueue_catalog_embeds(catalog_id)
 
-        with Session(engine) as session:
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:
                 catalog.phase = None
@@ -652,12 +644,12 @@ def index_catalog(catalog_id: int) -> None:
                 session.add(catalog)
                 session.commit()
         act.finish(detail=channel_name or channel_url)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         _kind, message = classify_ytdlp_error(
             exc, url=channel_url, channel=channel_name
         )
-        logger.warning("Catalog index failed for %s: %s", channel_url, exc)
-        with Session(engine) as session:
+        logger.warning("Catalog index failed for %s", channel_url, exc_info=True)
+        with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
             if catalog is not None:
                 catalog.status = ChannelCatalogStatus.error
@@ -680,5 +672,3 @@ def index_catalog(catalog_id: int) -> None:
             total=0,
             catalog_id=None,
         )
-
-

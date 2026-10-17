@@ -36,11 +36,7 @@ export function canRedownloadRemovedJob(
   superseded?: boolean
 ): boolean {
   return (
-    completed &&
-    !isDeviceJob &&
-    !failed &&
-    Boolean(videoMissing) &&
-    !superseded
+    completed && !isDeviceJob && !failed && Boolean(videoMissing) && !superseded
   );
 }
 

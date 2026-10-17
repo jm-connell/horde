@@ -1,8 +1,8 @@
 # Remote access
 
-Horde has **no login**. Anyone who can reach the URL can download, delete, change settings, and use any configured OpenRouter key. Keep the app on a trusted LAN, or put **your own** access control in front — do not publish host port **8686** raw to the public internet.
+Horde has its own [sign-in](authentication.md), but no two-factor and no email recovery. Anyone who can reach the URL can try passwords, and an administrator can use any configured OpenRouter key. Keep the app on a trusted LAN, or put **your own** access control in front — do not publish host port **8686** raw to the public internet.
 
-See [No authentication](../design/no-auth.md) and [Ports & networking](ports-networking.md).
+See [Security model](../design/no-auth.md) and [Ports & networking](ports-networking.md).
 
 ```text
 Preferred:  Client ──► Tailscale/VPN ──► Horde on LAN :8686
@@ -48,7 +48,7 @@ horde.example.com {
 4. Point DNS for `horde.example.com` at the host; Caddy obtains TLS automatically when ports 80/443 are reachable.
 
 !!! warning "Casting through Basic Auth"
-    Chromecast (and similar) often cannot send HTTP Basic credentials when fetching media. Prefer [Tailscale / VPN](#tailscale) for day-to-day use, and keep casting on the LAN. Wide CORS assumes a trusted path — see [No authentication](../design/no-auth.md).
+    Chromecast (and similar) often cannot send HTTP Basic credentials when fetching media. Prefer [Tailscale / VPN](#tailscale) for day-to-day use, and keep casting on the LAN. Cross-origin media access assumes a trusted path (see [Security](security.md)). Behind a reverse proxy on a public name, also set `HORDE_ALLOWED_HOSTS`.
 
 If Caddy runs in Docker on the same Compose network, `reverse_proxy horde:8080` instead of `127.0.0.1:8686`.
 
@@ -88,7 +88,8 @@ Horde’s threat model is “trusted network or trusted gateway.” Auth belongs
 
 ## Related
 
-- [No authentication](../design/no-auth.md)
+- [Security model](../design/no-auth.md)
+- [Accounts and sign-in](authentication.md) (including `HORDE_AUTH_DISABLED` for an authenticating proxy)
 - [Ports & networking](ports-networking.md)
 - [Updating](../getting-started/updating.md)
 - [Troubleshooting](troubleshooting.md)

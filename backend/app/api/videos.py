@@ -1,20 +1,40 @@
+import bisect
+import logging
 import re
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlmodel import Session, func, select
+from sqlmodel import Session, col, func, select
 
-from ..config import DOWNLOADS_DIR, SPRITES_DIR, THUMBNAILS_DIR
-from ..database import get_session
-from ..models import DownloadJob, JobStatus, Video, VideoAiMeta, utcnow
+from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
+from ..context import get_paths, get_session
+from ..models import DownloadJob, JobStatus, User, Video, require_id
+from ..openapi_responses import (
+    EVENT_STREAM,
+    FILE_DOWNLOAD,
+    IMAGE_JPEG,
+    RAW,
+    SUBTITLES,
+    VIDEO_STREAM,
+)
+from ..response_schemas import (
+    OkResponse,
+    SpriteGenerateResult,
+    SpriteMetaRead,
+    TagPage,
+    TagStatPage,
+    ThumbnailCandidates,
+    VideoAiChatHistory,
+    VideoPage,
+)
 from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
+    MediaTokenRead,
     MetadataRefreshResult,
     MetadataSyncStatus,
     StorageStats,
@@ -24,40 +44,86 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import downloader, library
-from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
-from ..services.mp4_compat import apple_webkit_playback, ensure_safari_mp4
-from ..services.thumbnails import (
-    copy_full,
-    ensure_list_thumbnail,
-    save_from_url,
-    unlink_for_video,
-    write_full_bytes,
-)
+from ..services import library, uploads, user_state
+from ..services.ai.provider import format_provider_error
+from ..services.auth import media_token as media_token_svc
+from ..services.auth.accounts import AuthUser
+from ..services.downloads import jobs as download_jobs
+from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
-    delete_sprite_files,
     load_sprite_meta,
     sprite_image_path,
     sprites_exist,
 )
+from ..services.pagination import (
+    InvalidCursor,
+    PageRequest,
+    keyset_cursor,
+    offset_cursor,
+    parse_cursor,
+)
 from ..services.paths import (
-    resolve_compat_path,
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
-    to_rel_path,
+    resolve_compat_path,
 )
+from ..services.search_cache import library_fingerprint
 from ..services.sprites import enqueue_sprite_generation
-
+from ..services.thumbnails import (
+    copy_full,
+    ensure_list_thumbnail,
+    resolve_thumbnail_file,
+    save_from_url,
+    write_full_bytes,
+)
+from ..services.url_safety import validate_public_url
+from ..services.video_delete import delete_video_cascade, remove_files
+from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
+from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import (
-    as_utc as _as_utc,
     resolve_media as _resolve_media,
+)
+from .video_serialize import (
     safe_filename as _safe_filename,
+)
+from .video_serialize import (
     to_read as _to_read,
 )
+from .video_serialize import (
+    to_read_many as _to_read_many,
+)
 
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["videos"])
+
+
+class _Paging(TypedDict):
+    """The keyword arguments ``build_page`` takes from the list endpoint."""
+
+    page: PageRequest
+    sort: str
+    order: str
+    seed: int | None
+    session: Session
+    user_id: int
+
+
+class _Filters(TypedDict):
+    """The keyword arguments ``library.query_videos`` takes from the list endpoint."""
+
+    q: str | None
+    channel: str | None
+    tag: str | None
+    sort: str
+    order: str
+    needs_review: bool
+    continue_watching: bool
+    watched_only: bool
+    seed: int | None
+    user_id: int
+
 
 CHUNK_SIZE = 1024 * 1024
 
@@ -68,45 +134,111 @@ CONTENT_TYPES = {
 }
 
 
-@router.get("/videos", response_model=list[VideoRead])
+@router.get("/videos", response_model=VideoPage)
 def list_videos(
-    q: Optional[str] = None,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    request: Request,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = Query("added_at"),
     order: str = Query("desc"),
     continue_watching: bool = False,
     watched_only: bool = False,
-    seed: Optional[int] = None,
+    seed: int | None = None,
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = None,
+    include_total: bool = False,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
+    """One page of the library. Follow ``next_cursor`` until it is null.
+
+    ``continue_watching`` is a fixed short shelf and is never paged.
+    """
     # Expiry is a write; it now runs on a background tick, not this read path.
+    page, seed = page_request(
+        cursor,
+        limit=MAX_LIMIT if continue_watching else limit,
+        sort=sort,
+        order=order,
+        seed=seed,
+        searching=bool(q and not continue_watching and not watched_only),
+    )
+    paging = _Paging(
+        page=page, sort=sort, order=order, seed=seed, session=session, user_id=user.id
+    )
     if q and not continue_watching and not watched_only:
+        from ..services.ai import embeddings
+        from ..services.ai.provider import resolve_embed_model
         from ..services.ai.search import explain_library_video, hybrid_search
 
-        videos, chunks = hybrid_search(
-            session,
-            q,
-            channel=channel,
-            tag=tag,
-            sort=sort,
-            order=order,
-            needs_review=False,
-            seed=seed,
-        )
-        return [
-            _to_read(
-                v,
+        cache = request.app.state.search_cache
+        # Embedding the query can cost money: only members allowed AI get it.
+        semantic = user.can("use_ai")
+        # The ranking is the same for every user, so they share an entry.
+        key = (q.strip(), channel, tag, sort, order, seed, semantic)
+
+        def rank() -> tuple[list[int], dict[int, int]]:
+            found, found_chunks = hybrid_search(
                 session,
-                compact=True,
-                match_reason=explain_library_video(
-                    v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
+                q,
+                channel=channel,
+                tag=tag,
+                sort=sort,
+                order=order,
+                needs_review=False,
+                seed=seed,
+                user_id=user.id,
+                semantic=semantic,
+                embed_query=lambda text: cache.query_vector(
+                    (text.strip(), resolve_embed_model()),
+                    lambda: embeddings.embed_query(text),
                 ),
             )
-            for v in videos
-        ]
-    videos = library.query_videos(
-        session,
+            return [v.id for v in found if v.id is not None], found_chunks
+
+        if sort == "last_watched_at":
+            # Ordered by the caller's watch history, which changes with every
+            # play and is not part of the cache's invalidation: rank afresh.
+            ranked_ids, chunks = rank()
+        else:
+            ranked_ids, chunks = cache.ranking(
+                key, lambda: library_fingerprint(session), rank
+            )
+        window_ids = ranked_ids[page.offset : page.offset + page.fetch]
+        by_id = {
+            v.id: v
+            for v in session.exec(
+                select(Video).where(col(Video.id).in_(window_ids))
+            ).all()
+        }
+        # A video deleted since the ranking was cached drops out of the page.
+        videos = [by_id[i] for i in window_ids if i in by_id]
+
+        def serialize_hits(rows, states):
+            return [
+                _to_read(
+                    v,
+                    session,
+                    viewer=user,
+                    states=states,
+                    compact=True,
+                    match_reason=explain_library_video(
+                        v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
+                    ),
+                )
+                for v in rows
+            ]
+
+        # Ranked in Python, so the cursor is a position in that ranking.
+        return build_page(
+            videos,
+            serialize=serialize_hits,
+            total=len(ranked_ids) if include_total else None,
+            keyset=False,
+            **paging,
+        )
+    filters = _Filters(
         q=q,
         channel=channel,
         tag=tag,
@@ -116,76 +248,133 @@ def list_videos(
         continue_watching=continue_watching,
         watched_only=watched_only,
         seed=seed,
+        user_id=user.id,
     )
-    return [_to_read(v, session, compact=True) for v in videos]
+    videos = library.query_videos(session, page=page, **filters)
+    total = None
+    if include_total and not continue_watching:
+        total = library.query_videos(session, count_only=True, **filters)
+    return build_page(
+        videos,
+        serialize=lambda rows, states: _to_read_many(
+            rows, session, viewer=user, states=states, compact=True
+        ),
+        total=total,
+        **paging,
+    )
 
 
-@router.get("/tags", response_model=list[str])
-def list_tags(session: Session = Depends(get_session)):
-    return library.all_tags(session)
-
-
-@router.get("/tags/stats", response_model=list[TagStat])
-def tag_stats(
-    channel: Optional[str] = None, session: Session = Depends(get_session)
+@router.get("/tags", response_model=TagPage)
+def list_tags(
+    limit: int = Query(1000, ge=1, le=5000),
+    cursor: str | None = None,
+    session: Session = Depends(get_session),
 ):
-    return [
-        TagStat(tag=t, count=n) for t, n in library.tag_stats(session, channel=channel)
-    ]
+    """Every tag, alphabetically, ``limit`` at a time (keyset on the tag itself)."""
+    page = _tag_page_request(cursor, limit, sort="tags", kind="keyset")
+    tags = library.all_tags(session)
+    if page.has_position:
+        if not isinstance(page.value, str):
+            raise HTTPException(status_code=400, detail="Invalid cursor")
+        tags = tags[bisect.bisect_right(tags, page.value) :]
+    window = tags[: page.limit]
+    more = len(tags) > page.limit
+    return TagPage(
+        items=window,
+        next_cursor=keyset_cursor(sort="tags", order="asc", value=window[-1], last_id=0)
+        if more
+        else None,
+    )
+
+
+@router.get("/tags/stats", response_model=TagStatPage)
+def tag_stats(
+    channel: str | None = None,
+    limit: int = Query(500, ge=1, le=2000),
+    cursor: str | None = None,
+    session: Session = Depends(get_session),
+):
+    """Tags with their video counts, most common first, ``limit`` at a time."""
+    page = _tag_page_request(cursor, limit, sort="tagstats", kind="offset")
+    ranked = library.tag_stats(session, channel=channel)
+    window = ranked[page.offset : page.offset + page.limit]
+    more = len(ranked) > page.offset + page.limit
+    return TagStatPage(
+        items=[TagStat(tag=t, count=n) for t, n in window],
+        next_cursor=offset_cursor(
+            sort="tagstats", order="asc", offset=page.offset + page.limit
+        )
+        if more
+        else None,
+    )
+
+
+def _tag_page_request(cursor: str | None, limit: int, *, sort: str, kind):
+    try:
+        return parse_cursor(cursor, limit=limit, sort=sort, order="asc", kind=kind)
+    except InvalidCursor as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/stats/storage", response_model=StorageStats)
 def storage_stats(session: Session = Depends(get_session)):
     video_bytes = session.exec(
-        select(func.coalesce(func.sum(Video.file_size), 0)).where(
-            Video.needs_review == False  # noqa: E712
+        select(func.coalesce(func.sum(col(Video.file_size)), 0)).where(
+            Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
         )
     ).one()
     video_count = session.exec(
-        select(func.count(Video.id)).where(Video.needs_review == False)  # noqa: E712
+        select(func.count(col(Video.id))).where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
     ).one()
     compat_bytes = session.exec(
         select(func.coalesce(func.sum(Video.compat_size), 0)).where(
-            Video.needs_review == False,  # noqa: E712
-            Video.compat_path != None,  # noqa: E711
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            Video.compat_path != None,  # noqa: E711 - SQL column comparison, not a Python truth test
         )
     ).one()
     thumbnail_bytes = 0
-    if THUMBNAILS_DIR.exists():
+    if get_paths().thumbnails.exists():
         thumbnail_bytes = sum(
-            f.stat().st_size for f in THUMBNAILS_DIR.glob("*") if f.is_file()
+            f.stat().st_size for f in get_paths().thumbnails.glob("*") if f.is_file()
         )
     return StorageStats(
-        total_bytes=int(video_bytes) + int(compat_bytes) + thumbnail_bytes,
-        video_bytes=int(video_bytes),
-        compat_bytes=int(compat_bytes),
+        total_bytes=int(video_bytes or 0) + int(compat_bytes or 0) + thumbnail_bytes,
+        video_bytes=int(video_bytes or 0),
+        compat_bytes=int(compat_bytes or 0),
         thumbnail_bytes=thumbnail_bytes,
-        video_count=int(video_count),
+        video_count=int(video_count or 0),
     )
 
 
 # Static /videos/... paths must be registered before /videos/{video_id}
 # or FastAPI treats the last segment as an int and returns 422.
-@router.post("/videos/bulk-delete", status_code=204)
+@router.post(
+    "/videos/bulk-delete",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
 ):
+    doomed: list[Path] = []
     for vid_id in payload.video_ids:
         video = session.get(Video, vid_id)
         if video is None:
             continue
-        if payload.delete_files:
-            _delete_media_files(video)
-        unlink_for_video(video.id, video.thumbnail_path)
-        if video.id is not None:
-            delete_sprite_files(SPRITES_DIR, video.id)
-        session.delete(video)
+        doomed += delete_video_cascade(
+            session, video, payload.delete_files, commit=False
+        )
     session.commit()
+    remove_files(doomed)
     return Response(status_code=204)
 
 
-@router.patch("/videos/bulk-notes", status_code=204)
+@router.patch(
+    "/videos/bulk-notes",
+    status_code=204,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def bulk_update_notes(
     payload: BulkVideoNotes,
     session: Session = Depends(get_session),
@@ -202,11 +391,15 @@ def bulk_update_notes(
 
 
 @router.get("/videos/{video_id}", response_model=VideoRead)
-def get_video(video_id: int, session: Session = Depends(get_session)):
+def get_video(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
 @router.get("/videos/{video_id}/related", response_model=list[VideoRead])
@@ -215,19 +408,25 @@ def related_videos(
     limit: int = Query(8, ge=1, le=24),
     offset: int = Query(0, ge=0),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit, offset=offset)
-    return [_to_read(v, session, compact=True) for v in rows]
+    return _to_read_many(rows, session, viewer=user, compact=True)
 
 
-@router.patch("/videos/{video_id}", response_model=VideoRead)
+@router.patch(
+    "/videos/{video_id}",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def update_video(
     video_id: int,
     payload: VideoUpdate,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -259,7 +458,10 @@ def update_video(
             video.title_is_custom = True
     if "description" in data:
         new_desc = data["description"]
-        if video.source_description is not None and new_desc == video.source_description:
+        if (
+            video.source_description is not None
+            and new_desc == video.source_description
+        ):
             video.description_is_custom = False
         else:
             video.description_is_custom = True
@@ -302,12 +504,16 @@ def update_video(
 
             sync_tag_provenance(
                 session,
-                video.id,
+                require_id(video),
                 user_tag=user_tag if isinstance(user_tag, str) else None,
             )
             session.commit()
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning(
+                "could not record tag provenance for video %s",
+                video.id,
+                exc_info=True,
+            )
 
     # After leaving review, queue AI enrichment for scanner-ingested files.
     if was_review and not video.needs_review and video.id is not None:
@@ -315,10 +521,14 @@ def update_video(
             from ..services.ai import enqueue_for_video
 
             enqueue_for_video(video.id, include_tags=True, force=False)
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.warning(
+                "could not queue AI enrichment for video %s",
+                video.id,
+                exc_info=True,
+            )
 
-    return _to_read(video, session)
+    return _to_read(video, session, viewer=user)
 
 
 @router.patch("/videos/{video_id}/progress", status_code=204)
@@ -326,6 +536,7 @@ def update_progress(
     video_id: int,
     payload: WatchProgressUpdate,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -335,23 +546,20 @@ def update_progress(
     # Near-complete watches (>=90%) are treated as finished — clear progress.
     position = max(0.0, payload.position_sec)
     duration = video.duration_sec
-    if (
-        duration
-        and duration > 0
-        and position > 0
-        and position >= duration * 0.9
-    ):
+    if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
     if position >= 5 or position == 0:
-        library.expire_stale_progress(session)
-        video.last_position_sec = position
-        video.last_watched_at = utcnow()
-        session.add(video)
-        session.commit()
+        user_state.record_progress(
+            session, user.id, video_id, position, payload.watched_at
+        )
     return Response(status_code=204)
 
 
-@router.delete("/videos/{video_id}", status_code=204)
+@router.delete(
+    "/videos/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def delete_video(
     video_id: int,
     delete_file: bool = False,
@@ -360,30 +568,11 @@ def delete_video(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    if delete_file:
-        _delete_media_files(video)
-    unlink_for_video(video.id, video.thumbnail_path)
-    if video.id is not None:
-        delete_sprite_files(SPRITES_DIR, video.id)
-    session.delete(video)
-    session.commit()
+    delete_video_cascade(session, video, delete_file)
     return Response(status_code=204)
 
 
-def _delete_media_files(video: Video) -> None:
-    media = DOWNLOADS_DIR / video.file_path
-    if media.exists():
-        media.unlink(missing_ok=True)
-    compat = resolve_compat_path(video)
-    if compat is not None:
-        compat.unlink(missing_ok=True)
-    for track in library.parse_subtitles(video.subtitles):
-        sub = DOWNLOADS_DIR / track.get("path", "")
-        if sub.exists():
-            sub.unlink(missing_ok=True)
-
-
-def _effective_source_url(video: Video) -> Optional[str]:
+def _effective_source_url(video: Video) -> str | None:
     if video.source_url and video.source_url.strip():
         return video.source_url.strip()
     match = re.search(r"\[([A-Za-z0-9_-]{11})\]", video.file_path)
@@ -392,11 +581,16 @@ def _effective_source_url(video: Video) -> Optional[str]:
     return None
 
 
-@router.post("/videos/{video_id}/redownload", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/redownload",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def redownload_video(
     video_id: int,
     payload: VideoRedownload,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -425,24 +619,27 @@ def redownload_video(
     session.commit()
     session.refresh(job)
 
-    downloader.enqueue_download(job.id)
-    return _to_read(video, session)
+    download_jobs.enqueue_download(require_id(job))
+    return _to_read(video, session, viewer=user)
 
 
 def _fetch_thumbnail_from_url(video: Video, url: str) -> None:
-    from ..services.ytdlp_extract import _list_thumbnail_url
+    from ..services.ytdlp_extract import list_thumbnail_url
 
     if video.id is None:
         raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
-    dest = save_from_url(
-        url, video.id, list_url=_list_thumbnail_url({"thumbnail": url})
-    )
+    validate_public_url(url)  # 400 with the reason instead of a generic failure
+    dest = save_from_url(url, video.id, list_url=list_thumbnail_url({"thumbnail": url}))
     if dest is None:
         raise HTTPException(status_code=400, detail="Could not fetch thumbnail")
     video.thumbnail_path = dest
 
 
-@router.post("/videos/refresh-metadata", response_model=MetadataRefreshResult)
+@router.post(
+    "/videos/refresh-metadata",
+    response_model=MetadataRefreshResult,
+    dependencies=[Depends(require_admin)],
+)
 def bulk_refresh_metadata(
     payload: BulkMetadataRefresh,
     session: Session = Depends(get_session),
@@ -466,18 +663,28 @@ def bulk_refresh_metadata(
     )
 
 
-@router.get("/videos/refresh-metadata/status", response_model=MetadataSyncStatus)
+@router.get(
+    "/videos/refresh-metadata/status",
+    response_model=MetadataSyncStatus,
+    dependencies=[Depends(require_admin)],
+)
 def metadata_sync_status():
+    """Progress of the library-wide metadata refresh (raw errors included)."""
     from ..services.metadata_sync import get_sync_status
 
     return MetadataSyncStatus(**get_sync_status())
 
 
-@router.post("/videos/{video_id}/refresh-metadata", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/refresh-metadata",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def refresh_metadata(
     video_id: int,
     session: Session = Depends(get_session),
-    fields: Optional[str] = Query(None, description="Comma-separated sync fields"),
+    fields: str | None = Query(None, description="Comma-separated sync fields"),
+    user: AuthUser = Depends(current_user),
 ):
     from ..services.metadata_sync import refresh_video_metadata
 
@@ -487,15 +694,25 @@ def refresh_metadata(
     field_list = [f.strip() for f in fields.split(",") if f.strip()] if fields else None
     try:
         refresh_video_metadata(video_id, fields=field_list)
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}")
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Refresh failed: {exc}") from exc
     session.expire_all()
     video = session.get(Video, video_id)
-    return _to_read(video, session)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    return _to_read(video, session, viewer=user)
 
 
-@router.post("/videos/{video_id}/ai/refresh-tags", response_model=VideoRead)
-def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
+@router.post(
+    "/videos/{video_id}/ai/refresh-tags",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def refresh_video_tags(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -507,16 +724,22 @@ def refresh_video_tags(video_id: int, session: Session = Depends(get_session)):
             raise HTTPException(status_code=400, detail="Could not queue tag refresh")
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _to_read(video, session)
+    except Exception as exc:
+        logger.warning("tag refresh failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=400, detail=format_provider_error(exc)) from exc
+    return _to_read(video, session, viewer=user)
 
 
-@router.post("/videos/{video_id}/ai/summarize", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/ai/summarize",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def summarize_video(
     video_id: int,
     force: bool = Query(False),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -529,20 +752,27 @@ def summarize_video(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        # Not str(exc): an httpx error quotes the provider URL.
+        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
-@router.post("/videos/{video_id}/ai/chapters", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/ai/chapters",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def generate_video_chapters(
     video_id: int,
     force: bool = Query(False),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -555,45 +785,70 @@ def generate_video_chapters(
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except HTTPException:
         raise
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    except Exception as exc:
+        # Not str(exc): an httpx error quotes the provider URL.
+        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
+        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
     session.expire_all()
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, include_processing=True)
+    return _to_read(video, session, viewer=user, include_processing=True)
 
 
 class VideoAiChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
 
 
-@router.get("/videos/{video_id}/ai/chat")
-def get_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+@router.get(
+    "/videos/{video_id}/ai/chat",
+    response_model=VideoAiChatHistory,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def get_video_ai_chat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     from ..services.ai import chat as ai_chat
 
-    return {"messages": ai_chat.list_messages(session, video_id)}
+    return {"messages": ai_chat.list_messages(session, video_id, user.id)}
 
 
-@router.delete("/videos/{video_id}/ai/chat")
-def delete_video_ai_chat(video_id: int, session: Session = Depends(get_session)):
+@router.delete(
+    "/videos/{video_id}/ai/chat",
+    response_model=OkResponse,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def delete_video_ai_chat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     from ..services.ai import chat as ai_chat
 
-    ai_chat.clear_messages(session, video_id)
+    ai_chat.clear_messages(session, video_id, user.id)
     return {"ok": True}
 
 
-@router.post("/videos/{video_id}/ai/chat")
+@router.post(
+    "/videos/{video_id}/ai/chat",
+    response_class=RAW,
+    responses=EVENT_STREAM,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
 def post_video_ai_chat(
+    request: Request,
     video_id: int,
     payload: VideoAiChatRequest,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
@@ -602,34 +857,55 @@ def post_video_ai_chat(
 
     # Own session: request-scoped session closes before SSE finishes.
     return StreamingResponse(
-        ai_chat.stream_chat_events(video_id, payload.message),
+        ai_chat.stream_chat_events(
+            video_id,
+            payload.message,
+            user.id,
+            StreamAuthGuard.of(request).still_valid,
+        ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-@router.post("/videos/{video_id}/thumbnail", response_model=VideoRead)
-async def upload_thumbnail(
+@router.post(
+    "/videos/{video_id}/thumbnail",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
+def upload_thumbnail(
     video_id: int,
     file: UploadFile,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    dest = write_full_bytes(video_id, await file.read())
+    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
+    if not data:
+        raise HTTPException(status_code=400, detail="Empty file")
+    try:
+        dest = write_full_bytes(video_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Could not read image") from exc
     video.thumbnail_path = dest
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session)
+    return _to_read(video, session, viewer=user)
 
 
-@router.post("/videos/{video_id}/thumbnail/candidates")
+@router.post(
+    "/videos/{video_id}/thumbnail/candidates",
+    response_model=ThumbnailCandidates,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def generate_thumbnail_candidates(
     video_id: int,
     count: int = Query(8, ge=1, le=16),
     session: Session = Depends(get_session),
+    grab_limit: ConcurrencyLimit = Depends(thumbnail_grab_limit),
 ):
     """Extract several frames from the video for the user to pick as thumbnail."""
     from ..services import activity
@@ -639,19 +915,22 @@ def generate_thumbnail_candidates(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     media = _resolve_media(video)
-    THUMBNAILS_DIR.mkdir(parents=True, exist_ok=True)
-    with activity.track(
-        "thumbnail",
-        "Generating thumbnail candidates",
-        reason="You asked to pick a new thumbnail",
-        engine="ffmpeg",
-        detail=video.title,
-        video_id=video_id,
-        total=count,
+    get_paths().thumbnails.mkdir(parents=True, exist_ok=True)
+    with (
+        grab_limit.slot(),
+        activity.track(
+            "thumbnail",
+            "Generating thumbnail candidates",
+            reason="You asked to pick a new thumbnail",
+            engine="ffmpeg",
+            detail=video.title,
+            video_id=video_id,
+            total=count,
+        ),
     ):
         candidates = _gen(
             media,
-            THUMBNAILS_DIR,
+            get_paths().thumbnails,
             video_id,
             count=count,
             duration=video.duration_sec,
@@ -670,7 +949,11 @@ def generate_thumbnail_candidates(
     }
 
 
-@router.get("/videos/{video_id}/thumbnail/candidates/{index}")
+@router.get(
+    "/videos/{video_id}/thumbnail/candidates/{index}",
+    response_class=RAW,
+    responses=IMAGE_JPEG,
+)
 def get_thumbnail_candidate(
     video_id: int,
     index: int,
@@ -681,17 +964,22 @@ def get_thumbnail_candidate(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    path = candidate_thumb_path(get_paths().thumbnails, video_id, index)
     if not path.exists():
         raise HTTPException(status_code=404, detail="Candidate not found")
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/videos/{video_id}/thumbnail/candidates/{index}", response_model=VideoRead)
+@router.post(
+    "/videos/{video_id}/thumbnail/candidates/{index}",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def select_thumbnail_candidate(
     video_id: int,
     index: int,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Promote a generated candidate frame to the video's thumbnail."""
     from ..services.metadata import candidate_thumb_path
@@ -699,7 +987,7 @@ def select_thumbnail_candidate(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    src = candidate_thumb_path(THUMBNAILS_DIR, video_id, index)
+    src = candidate_thumb_path(get_paths().thumbnails, video_id, index)
     if not src.exists():
         raise HTTPException(status_code=404, detail="Candidate not found")
     dest = copy_full(src, video_id)
@@ -707,20 +995,20 @@ def select_thumbnail_candidate(
     session.add(video)
     session.commit()
     session.refresh(video)
-    return _to_read(video, session)
+    return _to_read(video, session, viewer=user)
 
 
-@router.get("/thumbnails/{video_id}")
+@router.get("/thumbnails/{video_id}", response_class=RAW, responses=IMAGE_JPEG)
 def get_thumbnail(
     video_id: int,
-    size: Optional[str] = Query(None),
+    size: str | None = Query(None),
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
     if video is None or not video.thumbnail_path:
         raise HTTPException(status_code=404, detail="No thumbnail")
-    path = Path(video.thumbnail_path)
-    if not path.exists():
+    path = resolve_thumbnail_file(video.thumbnail_path)
+    if path is None:
         raise HTTPException(status_code=404, detail="No thumbnail")
     if size == "sm":
         sm = ensure_list_thumbnail(video_id, path)
@@ -731,29 +1019,29 @@ def get_thumbnail(
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.get("/videos/{video_id}/sprites/meta")
+@router.get("/videos/{video_id}/sprites/meta", response_model=SpriteMetaRead)
 def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    meta = load_sprite_meta(SPRITES_DIR, video_id)
-    if meta is None or not sprites_exist(SPRITES_DIR, video_id):
+    meta = load_sprite_meta(get_paths().sprites, video_id)
+    if meta is None or not sprites_exist(get_paths().sprites, video_id):
         raise HTTPException(status_code=404, detail="Sprites not ready")
     return meta
 
 
-@router.get("/videos/{video_id}/sprites")
+@router.get("/videos/{video_id}/sprites", response_class=RAW, responses=IMAGE_JPEG)
 def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    path = sprite_image_path(SPRITES_DIR, video_id)
+    path = sprite_image_path(get_paths().sprites, video_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Sprites not ready")
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/videos/{video_id}/sprites/generate")
+@router.post("/videos/{video_id}/sprites/generate", response_model=SpriteGenerateResult)
 def generate_sprites(video_id: int, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -765,7 +1053,9 @@ def generate_sprites(video_id: int, session: Session = Depends(get_session)):
     return {"status": status}
 
 
-@router.get("/videos/{video_id}/subtitles/{lang}")
+@router.get(
+    "/videos/{video_id}/subtitles/{lang}", response_class=RAW, responses=SUBTITLES
+)
 def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_session)):
     video = session.get(Video, video_id)
     if video is None:
@@ -776,8 +1066,8 @@ def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_sessio
     )
     if track is None:
         raise HTTPException(status_code=404, detail="Subtitle not found")
-    path = (DOWNLOADS_DIR / track["path"]).resolve()
-    if DOWNLOADS_DIR not in path.parents or not path.exists():
+    path = (get_paths().downloads / track["path"]).resolve()
+    if get_paths().downloads not in path.parents or not path.exists():
         raise HTTPException(status_code=404, detail="Subtitle file missing")
     return FileResponse(path, media_type="text/vtt")
 
@@ -785,7 +1075,7 @@ def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_sessio
 _RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
 
 
-def _resolve_rendition(video: Video, rendition: Optional[str]) -> Optional[Path]:
+def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
     """Sidecar path for ``rendition=compat``; None means serve the original."""
     if rendition in (None, "", "original"):
         return None
@@ -797,11 +1087,11 @@ def _resolve_rendition(video: Video, rendition: Optional[str]) -> Optional[Path]
     return path
 
 
-@router.get("/videos/{video_id}/stream")
+@router.get("/videos/{video_id}/stream", response_class=RAW, responses=VIDEO_STREAM)
 def stream_video(
     video_id: int,
     request: Request,
-    rendition: Optional[str] = None,
+    rendition: str | None = None,
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)
@@ -809,30 +1099,6 @@ def stream_video(
         raise HTTPException(status_code=404, detail="Video not found")
     compat = _resolve_rendition(video, rendition)
     path = compat or _resolve_media(video)
-    ua = request.headers.get("user-agent") or ""
-    # Sidecars are written Safari-ready (AAC + faststart); only originals remux.
-    if compat is None and apple_webkit_playback(ua):
-        remuxed = ensure_safari_mp4(path)
-        try:
-            new_size = remuxed.stat().st_size
-        except OSError:
-            new_size = None
-        changed = remuxed != path
-        if changed:
-            try:
-                video.file_path = to_rel_path(remuxed)
-            except ValueError:
-                pass
-            else:
-                path = remuxed
-        if new_size is not None and video.file_size != new_size:
-            video.file_size = new_size
-            changed = True
-        if changed:
-            session.add(video)
-            session.commit()
-        path = remuxed if remuxed.exists() else path
-
     file_size = path.stat().st_size
 
     suffix = path.suffix.lower()
@@ -850,9 +1116,19 @@ def stream_video(
     if match is None:
         raise HTTPException(status_code=416, detail="Invalid range")
 
-    start = int(match.group(1)) if match.group(1) else 0
-    end = int(match.group(2)) if match.group(2) else file_size - 1
-    end = min(end, file_size - 1)
+    first, last = match.group(1), match.group(2)
+    if not first and not last:
+        raise HTTPException(status_code=416, detail="Invalid range")
+    if not first:
+        # Suffix range "-N": the last N bytes (all of them when N > size).
+        suffix_len = int(last)
+        if suffix_len == 0 or file_size == 0:
+            raise HTTPException(status_code=416, detail="Range not satisfiable")
+        start = max(0, file_size - suffix_len)
+        end = file_size - 1
+    else:
+        start = int(first)
+        end = min(int(last), file_size - 1) if last else file_size - 1
     if start > end:
         raise HTTPException(status_code=416, detail="Range not satisfiable")
 
@@ -878,10 +1154,40 @@ def stream_video(
     return StreamingResponse(iter_file(), status_code=206, headers=headers)
 
 
-@router.get("/videos/{video_id}/file")
+@router.get("/videos/{video_id}/media-token", response_model=MediaTokenRead)
+def media_token(
+    video_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """A 12 hour signed token for ``?mt=`` on the stream, subtitle and thumbnail URLs.
+
+    Cast and AirPlay receivers fetch media themselves and send no cookie.
+    """
+    if session.get(Video, video_id) is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    row = session.get(User, user.id)
+    if row is None:
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    token, expires_at = media_token_svc.sign(
+        request.app.state.auth.secret(),
+        video_id,
+        user.id,
+        media_token_svc.token_epoch(row.password_hash),
+    )
+    return MediaTokenRead(token=token, expires_at=expires_at)
+
+
+@router.get(
+    "/videos/{video_id}/file",
+    response_class=RAW,
+    responses=FILE_DOWNLOAD,
+    dependencies=[Depends(require_permission("offline_download"))],
+)
 def download_video_file(
     video_id: int,
-    rendition: Optional[str] = None,
+    rendition: str | None = None,
     session: Session = Depends(get_session),
 ):
     video = session.get(Video, video_id)

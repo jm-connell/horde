@@ -44,8 +44,7 @@ export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
   "Search this channel on YouTube. Search text is sent to YouTube.";
 export const YOUTUBE_VIDEO_SEARCH_TIP =
   "When on, Library home search can query YouTube for videos that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. Separate from Direct YouTube search on channel pages.";
-export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP =
-  "Toggle YouTube search results";
+export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP = "Toggle YouTube search results";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 
@@ -176,7 +175,11 @@ export const THEMES: { value: Theme; label: string; preview: string }[] = [
   { value: "oled", label: "OLED (true black)", preview: "#22d3ee" },
   { value: "terminal", label: "Terminal (green)", preview: "#4ade80" },
   { value: "nord", label: "Nord", preview: "#88c0d0" },
-  { value: "light", label: "Minimal Neutrals + Teal (light)", preview: "#14b8a6" },
+  {
+    value: "light",
+    label: "Minimal Neutrals + Teal (light)",
+    preview: "#14b8a6",
+  },
   { value: "indigo", label: "Midnight Indigo", preview: "#6366f1" },
   { value: "cyber", label: "Neon Cyber", preview: "#00f5ff" },
   { value: "sunset", label: "Warm Sunset", preview: "#ff6b35" },
@@ -194,9 +197,21 @@ export const TABS: { id: SettingsTab; label: string }[] = [
   { id: "playback", label: "Playback" },
   { id: "ai", label: "AI" },
   { id: "system", label: "System" },
+  { id: "users", label: "Users" },
 ];
 
-export const AI_SCHEDULE_OPTIONS: { value: AiSchedule; label: string; description: string }[] = [
+/** Tabs that configure the whole server; members never see them. */
+export const ADMIN_ONLY_TABS: ReadonlySet<SettingsTab> = new Set([
+  "ai",
+  "system",
+  "users",
+]);
+
+export const AI_SCHEDULE_OPTIONS: {
+  value: AiSchedule;
+  label: string;
+  description: string;
+}[] = [
   {
     value: "on_download",
     label: "On download",
@@ -261,16 +276,20 @@ export const WORKLOAD_OPTIONS: { value: AiWorkloadProfile; label: string }[] = [
   { value: "heavy", label: "Heavy" },
 ];
 
-export const SUMMARY_LENGTH_OPTIONS: { value: AiSummaryLength; label: string }[] = [
+export const SUMMARY_LENGTH_OPTIONS: {
+  value: AiSummaryLength;
+  label: string;
+}[] = [
   { value: "short", label: "Short" },
   { value: "medium", label: "Medium" },
   { value: "long", label: "Long" },
 ];
 
-export const CHAPTER_MODE_OPTIONS: { value: AiChaptersMode; label: string }[] = [
-  { value: "on_download", label: "On download" },
-  { value: "on_watch", label: "Watch page" },
-];
+export const CHAPTER_MODE_OPTIONS: { value: AiChaptersMode; label: string }[] =
+  [
+    { value: "on_download", label: "On download" },
+    { value: "on_watch", label: "Watch page" },
+  ];
 
 export const DEFAULT_AI: AiSettings = {
   enabled: true,

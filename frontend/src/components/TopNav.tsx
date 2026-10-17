@@ -1,15 +1,19 @@
+import type { Permission } from "../types";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { api } from "../api";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
-import { usePlayback } from "../context/PlaybackContext";
+import {
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import {
-  IMPORT_QUEUE_EVENT,
-  notifyImportQueueChanged,
-} from "../utils/importQueue";
+import { useAuth } from "../context/AuthContext";
+import AccountMenu from "./auth/AccountMenu";
+import { queryKeys } from "../queries/keys";
+import { useReviewCount } from "../queries/status";
 import Collapse from "./Collapse";
 import ConnectionTag from "./ConnectionTag";
 import { DownloadIcon, ProgressRing } from "./OfflineDownloadButton";
@@ -27,18 +31,36 @@ interface NavLinkDef {
   end: boolean;
   /** Needs the server; hidden in offline mode. */
   serverOnly?: boolean;
+  /** Hidden for accounts without this permission. */
+  permission?: Permission;
 }
 
 const BASE_LINKS: NavLinkDef[] = [
   { to: "/", label: "Home", end: true },
   { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
   { to: "/history", label: "History", end: false, serverOnly: true },
-  { to: "/download", label: "Download", end: false, serverOnly: true },
-  { to: "/import", label: "Import", end: false, serverOnly: true },
+  {
+    to: "/download",
+    label: "Download",
+    end: false,
+    serverOnly: true,
+    permission: "download",
+  },
+  {
+    to: "/import",
+    label: "Import",
+    end: false,
+    serverOnly: true,
+    permission: "download",
+  },
   { to: "/settings", label: "Settings", end: false },
 ];
 
-const OFFLINE_LINK: NavLinkDef = { to: "/offline", label: "Offline", end: false };
+const OFFLINE_LINK: NavLinkDef = {
+  to: "/offline",
+  label: "Offline",
+  end: false,
+};
 
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
@@ -49,7 +71,8 @@ function isLinkActive(pathname: string, to: string, end: boolean): boolean {
 }
 
 export default function TopNav() {
-  const [importCount, setImportCount] = useState(0);
+  const queryClient = useQueryClient();
+  const importCount = useReviewCount({ interval: 30_000 }).data ?? 0;
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuRendered, setMenuRendered] = useState(false);
   const [menuShown, setMenuShown] = useState(false);
@@ -60,26 +83,32 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const [settings] = useSettings();
+  const { can } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const { mode, videoFrameInset } = usePlayback();
+  const { mode } = usePlaybackSession();
+  const { videoFrameInset } = usePlaybackLayout();
   const isMobile = useIsMobile();
   const net = useConnectivity();
   const offlineMode = net.status === "offline";
   const offlineSnap = useOfflineDownloads();
   const hasOfflineItems = offlineSnap.items.length > 0;
   const activeOffline = offlineSnap.items.find(
-    (i) => i.status === "downloading" || i.status === "queued",
+    (i) => i.status === "downloading" || i.status === "queued"
   );
   const activeOfflineProgress = itemProgress(
     activeOffline,
-    offlineSnap.liveBytes,
+    offlineSnap.liveBytes
   ).progress;
   const NAV_LINKS: NavLinkDef[] = (
     hasOfflineItems || offlineMode
       ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
       : BASE_LINKS
-  ).filter((link) => !(offlineMode && link.serverOnly));
+  ).filter(
+    (link) =>
+      !(offlineMode && link.serverOnly) &&
+      (!link.permission || can(link.permission))
+  );
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -96,46 +125,14 @@ export default function TopNav() {
 
   const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
 
+  // Refresh the badge when navigating to the import page (e.g. after the
+  // scanner ingested files).
+  const onImportPage =
+    location.pathname === "/import" || location.pathname === "/review";
   useEffect(() => {
-    let active = true;
-    const poll = () =>
-      api
-        .listImport()
-        .then((items) => {
-          if (!active) return;
-          setImportCount(items.length);
-        })
-        .catch(() => undefined);
-    poll();
-    const id = setInterval(poll, 30000);
-    const onQueue = (e: Event) => {
-      const count = (e as CustomEvent<{ count?: number }>).detail?.count;
-      if (typeof count === "number") {
-        setImportCount(count);
-        return;
-      }
-      poll();
-    };
-    window.addEventListener(IMPORT_QUEUE_EVENT, onQueue);
-    return () => {
-      active = false;
-      clearInterval(id);
-      window.removeEventListener(IMPORT_QUEUE_EVENT, onQueue);
-    };
-  }, []);
-
-  // Refresh badge when navigating (e.g. after scanner ingested files).
-  useEffect(() => {
-    if (location.pathname === "/import" || location.pathname === "/review") {
-      api
-        .listImport()
-        .then((items) => {
-          setImportCount(items.length);
-          notifyImportQueueChanged(items.length);
-        })
-        .catch(() => undefined);
-    }
-  }, [location.pathname]);
+    if (onImportPage)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.review.count });
+  }, [onImportPage, queryClient]);
 
   useEffect(() => {
     setMenuOpen(false);
@@ -404,8 +401,12 @@ export default function TopNav() {
 
           {/* Desktop: pill sits at the far right so it never shifts the links. */}
           {!useHamburger && (
-            <div ref={tagRef} className="ml-auto flex shrink-0 pl-4 empty:hidden">
+            <div
+              ref={tagRef}
+              className="ml-auto flex shrink-0 pl-4 empty:hidden"
+            >
               <ConnectionTag popupAlign="end" />
+              <AccountMenu variant="dropdown" />
             </div>
           )}
 
@@ -431,7 +432,7 @@ export default function TopNav() {
                     placeholder="Search"
                     enterKeyHint="search"
                     aria-label="Search library"
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
                   />
                   <YoutubeSearchChip />
                 </div>
@@ -566,7 +567,7 @@ export default function TopNav() {
                     const active = isLinkActive(
                       location.pathname,
                       link.to,
-                      link.end,
+                      link.end
                     );
                     return (
                       <NavLink
@@ -584,6 +585,10 @@ export default function TopNav() {
                     );
                   })}
                 </LiquidNav>
+                <AccountMenu
+                  variant="list"
+                  onNavigate={() => setMenuOpen(false)}
+                />
               </div>
             </Collapse>
           </nav>

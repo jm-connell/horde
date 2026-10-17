@@ -15,10 +15,33 @@ Back up both volume roots used by Compose (or your local dirs):
 | `DOWNLOADS_PATH` | `DOWNLOADS_DIR` (`/downloads`) | Media library, imports, subtitle sidecars |
 | `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db` (and WAL sidecars `horde.db-wal` / `horde.db-shm`), settings, caches, user fonts/backgrounds |
 
+If you restore a file into `DATA_PATH` yourself (for example `horde.db` from a backup, as root), you do not need to `chown` it: on the next start the container notices any file in the data directory with the wrong owner or group and repairs the ownership.
+
+`update.sh` additionally takes a verified online SQLite backup before every update (see [Updating](../getting-started/updating.md#backups)); it only covers `horde.db`.
+
 A consistent snapshot of **both** keeps file paths and DB rows aligned. Backing up only the DB without media leaves broken library entries; media without the DB loses titles, tags, progress, playlists, and AI meta.
 
 !!! tip "Stop or quiesce"
     Prefer stopping Horde (or at least pausing downloads/AI) briefly so SQLite and in-flight `.part` files are quiet. For ZFS/TrueNAS, a dataset snapshot of both mounts is ideal.
+
+Horde also writes `DATA_DIR/backups/horde-pre-*.db` before it migrates the database to a newer schema or repairs rows an older version left behind (the newest five are kept) and `app_settings.json.bak` beside the settings file. These are safety nets, not a replacement for your own backups: they live on the same volume.
+
+## Nightly database backups { #nightly }
+
+Once a day Horde copies the database (`VACUUM INTO`, a consistent snapshot taken while Horde keeps running) to `DATA_DIR/backups/horde-nightly-YYYYMMDD.db`.
+
+| Variable | Default | Effect |
+|----------|---------|--------|
+| `HORDE_BACKUP_ENABLED` | `1` | Set to `0` to turn nightly backups off. |
+| `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23, so `0` is midnight) after which the day's backup is taken. |
+| `HORDE_BACKUP_KEEP` | `7` | How many nightly files to keep, minimum 1 (it does not disable backups). Older ones are deleted. |
+
+* If Horde was stopped at the backup hour, the backup runs as soon as it is back up later that day.
+* A same-day backup is only taken once; delete today's file to force another.
+* Pruning only touches `horde-nightly-*.db`. The `horde-pre-*.db` migration copies and anything else you put in the folder are left alone.
+* The backup covers the database only (library rows, tags, playlists, progress, AI metadata). Media files and `app_settings.json` still need your regular volume backup.
+
+To restore one, stop Horde, copy the chosen file over `DATA_DIR/horde.db`, delete `horde.db-wal` and `horde.db-shm` next to it, and start Horde.
 
 ## Regenerable (safe to omit or delete)
 

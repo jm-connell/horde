@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAuth } from "../context/AuthContext";
+import { describeError } from "../apiErrors";
 import { Link } from "react-router-dom";
 import { api } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -6,9 +8,11 @@ import VideoEditForm from "../components/VideoEditForm";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
 import type { DuplicateGroup, Video } from "../types";
-import { notifyImportQueueChanged } from "../utils/importQueue";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
 import { formatSize } from "../utils";
 
+import { getJson, setJson } from "../storage";
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
@@ -38,19 +42,16 @@ function duplicateGroupKey(group: DuplicateGroup): string {
 }
 
 function loadDismissedDupes(): Set<string> {
-  try {
-    const raw = localStorage.getItem(DISMISSED_DUPES_KEY);
-    if (!raw) return new Set();
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return new Set();
-    return new Set(parsed.filter((x): x is string => typeof x === "string"));
-  } catch {
-    return new Set();
-  }
+  const parsed = getJson(
+    DISMISSED_DUPES_KEY,
+    (v): v is unknown[] => Array.isArray(v),
+    []
+  );
+  return new Set(parsed.filter((x): x is string => typeof x === "string"));
 }
 
 function saveDismissedDupes(keys: Set<string>) {
-  localStorage.setItem(DISMISSED_DUPES_KEY, JSON.stringify([...keys]));
+  setJson(DISMISSED_DUPES_KEY, [...keys]);
 }
 
 function isVideoFile(file: File): boolean {
@@ -70,7 +71,9 @@ interface UploadItem {
 }
 
 export default function Import() {
-  const { showToast } = useToast();
+  const { can } = useAuth();
+  const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const confirm = useConfirm();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
@@ -134,7 +137,7 @@ export default function Import() {
       showToast(`Kept "${keep.title}"`);
       load();
     } catch {
-      showToast("Could not delete duplicate(s)");
+      showError("Could not delete duplicate(s)");
     }
   };
 
@@ -150,25 +153,29 @@ export default function Import() {
       await api.deleteVideo(v.id, true);
       load();
     } catch {
-      showToast("Could not delete video");
+      showError("Could not delete video");
     }
   };
 
-  const load = useCallback((opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    Promise.all([
-      api.listImport().catch(() => [] as Video[]),
-      api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
-    ])
-      .then(([review, dupes]) => {
-        setItems(review);
-        setGroups(dupes);
-        notifyImportQueueChanged(review.length);
-      })
-      .finally(() => {
-        if (!opts?.silent) setLoading(false);
-      });
-  }, []);
+  const load = useCallback(
+    (opts?: { silent?: boolean }) => {
+      if (!opts?.silent) setLoading(true);
+      Promise.all([
+        api.listReview().catch(() => [] as Video[]),
+        api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
+      ])
+        .then(([review, dupes]) => {
+          setItems(review);
+          setGroups(dupes);
+          // The nav badge reads the same count; no need for it to ask again.
+          queryClient.setQueryData(queryKeys.review.count, review.length);
+        })
+        .finally(() => {
+          if (!opts?.silent) setLoading(false);
+        });
+    },
+    [queryClient]
+  );
 
   const scanForNewFiles = async () => {
     if (scanningRef.current) return;
@@ -184,7 +191,7 @@ export default function Import() {
       );
       load({ silent: true });
     } catch {
-      showToast("Could not scan for new files");
+      showError("Could not scan for new files");
     } finally {
       scanningRef.current = false;
       setScanning(false);
@@ -312,7 +319,7 @@ export default function Import() {
         <p className="text-sm text-gray-300">
           Drop .mp4, .mkv, or .webm files here
         </p>
-        <p className="mt-1 text-xs text-gray-500">or</p>
+        <p className="mt-1 text-xs text-muted">or</p>
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
@@ -345,7 +352,7 @@ export default function Import() {
                 <span className="min-w-0 truncate text-gray-300">
                   {u.name}
                   {u.size > 0 && (
-                    <span className="ml-2 text-gray-500">
+                    <span className="ml-2 text-muted">
                       {formatSize(u.size)}
                     </span>
                   )}
@@ -356,7 +363,7 @@ export default function Import() {
                       ? "shrink-0 text-red-400"
                       : u.status === "done"
                         ? "shrink-0 text-accent"
-                        : "shrink-0 text-gray-500"
+                        : "shrink-0 text-muted"
                   }
                 >
                   {u.status === "error"
@@ -392,7 +399,7 @@ export default function Import() {
       {loading ? (
         <LoadingIndicator />
       ) : items.length === 0 && visibleGroups.length === 0 ? (
-        <div className="py-12 text-center text-gray-500">
+        <div className="py-12 text-center text-muted">
           <p className="text-lg">Nothing to import.</p>
           <p className="mt-1 text-sm">
             Drop files above or scan the media folder.
@@ -413,7 +420,11 @@ export default function Import() {
                   <div className="flex gap-2">
                     <button
                       onClick={async () => {
-                        await api.skipImport(v.id).catch(() => undefined);
+                        try {
+                          await api.skipImport(v.id);
+                        } catch (err) {
+                          showError(`Could not skip: ${describeError(err)}`);
+                        }
                         load();
                       }}
                       className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
@@ -421,12 +432,14 @@ export default function Import() {
                     >
                       Skip
                     </button>
-                    <button
-                      onClick={() => void deleteVideoFile(v)}
-                      className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
-                    >
-                      Delete
-                    </button>
+                    {can("delete_videos") && (
+                      <button
+                        onClick={() => void deleteVideoFile(v)}
+                        className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -458,7 +471,7 @@ export default function Import() {
                       >
                         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                            <p className="text-xs font-medium uppercase tracking-wide text-muted">
                               Duplicate group
                             </p>
                             {label && (
@@ -477,7 +490,7 @@ export default function Import() {
                               </span>
                             )}
                             {group.ai_score != null && (
-                              <span className="text-[11px] text-gray-500">
+                              <span className="text-[11px] text-muted">
                                 score {group.ai_score.toFixed(2)}
                               </span>
                             )}
@@ -485,7 +498,7 @@ export default function Import() {
                           <button
                             type="button"
                             onClick={() => dismissGroup(group)}
-                            className="text-xs text-gray-500 hover:text-gray-300"
+                            className="text-xs text-muted hover:text-gray-300"
                             title="Hide this group on this browser"
                           >
                             Not a duplicate
@@ -509,7 +522,7 @@ export default function Import() {
                                 >
                                   {v.title}
                                 </Link>
-                                <p className="text-xs text-gray-500">
+                                <p className="text-xs text-muted">
                                   {v.channel} · {v.file_path}
                                 </p>
                               </div>
@@ -522,13 +535,15 @@ export default function Import() {
                                 >
                                   Keep this
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => void deleteVideoFile(v)}
-                                  className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
-                                >
-                                  Delete
-                                </button>
+                                {can("delete_videos") && (
+                                  <button
+                                    type="button"
+                                    onClick={() => void deleteVideoFile(v)}
+                                    className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
                               </div>
                             </div>
                           ))}

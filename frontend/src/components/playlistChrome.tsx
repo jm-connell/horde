@@ -3,7 +3,7 @@ import type { DragEvent } from "react";
 export function ExpandChevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-500 transition-[transform,color,background-color] duration-200 ease-out group-hover:bg-ink-800 group-hover:text-gray-300 ${
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-[transform,color,background-color] duration-200 ease-out group-hover:bg-ink-800 group-hover:text-gray-300 ${
         open ? "rotate-90 text-gray-300" : ""
       }`}
       aria-hidden
@@ -27,7 +27,7 @@ export function CoverEditIcon({ active }: { active?: boolean }) {
       className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors ${
         active
           ? "bg-ink-800 text-accent"
-          : "text-gray-500 hover:bg-ink-800 hover:text-gray-300"
+          : "text-muted hover:bg-ink-800 hover:text-gray-300"
       }`}
       aria-hidden
     >
@@ -61,9 +61,10 @@ export function DragHandle({
       title={label}
       aria-label={label}
       onClick={(event) => event.stopPropagation()}
+      onKeyDown={(event) => event.stopPropagation()}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
-      className="inline-flex shrink-0 cursor-grab items-center justify-center self-stretch px-1.5 text-gray-600 hover:text-gray-400 active:cursor-grabbing"
+      className="inline-flex shrink-0 cursor-grab items-center justify-center self-stretch px-1.5 text-muted hover:text-gray-400 active:cursor-grabbing"
     >
       <svg
         width="10"
@@ -95,9 +96,15 @@ export function PlaylistThumb({
       className={`relative overflow-hidden rounded-md bg-ink-800 ${className}`}
     >
       {src ? (
-        <img src={src} alt="" className="h-full w-full object-cover" />
+        <img
+          loading="lazy"
+          decoding="async"
+          src={src}
+          alt=""
+          className="h-full w-full object-cover"
+        />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-ink-600">
+        <div className="flex h-full w-full items-center justify-center text-muted">
           <svg
             viewBox="0 0 24 24"
             className="h-5 w-5"

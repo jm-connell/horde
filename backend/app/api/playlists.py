@@ -1,12 +1,16 @@
+import logging
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
-from sqlalchemy import func, update as sa_update
-from sqlmodel import Session, select
+from sqlalchemy import delete, func
+from sqlalchemy import update as sa_update
+from sqlmodel import Session, col, select
 
-from ..database import get_session
-from ..models import Playlist, PlaylistItem, PlaylistSource, Video
+from ..auth import current_user, require_permission
+from ..context import get_session
+from ..models import Playlist, PlaylistItem, PlaylistSource, Video, require_id
+from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     BulkPlaylistAdd,
     DownloadCreate,
@@ -22,25 +26,40 @@ from ..schemas import (
     PlaylistSizeEstimateRequest,
     PlaylistUpdate,
 )
-from ..services import downloader, library
+from ..services import library, uploads, ytdlp_extract
+from ..services.auth.accounts import AuthUser
+from ..services.downloads import playlist_import
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.playlist_sync import (
     find_subscribed_by_url,
     start_playlist_sync,
 )
 from ..services.thumbnails import (
+    resolve_thumbnail_file,
     unlink_playlist_cover,
     write_playlist_cover,
 )
 from ..services.url_clean import clean_url, youtube_video_id
-from .videos import _to_read
+from ..services.url_safety import UnsafeUrlError, validate_public_url
+from .video_serialize import to_read_many as _to_read_many
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
+
+
+def _is_public_url(url: str) -> bool:
+    try:
+        validate_public_url(url)
+    except UnsafeUrlError:
+        return False
+    return True
 
 
 def _item_count(session: Session, playlist_id: int) -> int:
     return (
         session.scalar(
-            select(func.count(PlaylistItem.id)).where(
+            select(func.count(col(PlaylistItem.id))).where(
                 PlaylistItem.playlist_id == playlist_id
             )
         )
@@ -58,7 +77,9 @@ def _library_video_id_for_url(session: Session, raw_url: str) -> int | None:
     candidates = [value for value in (cleaned, raw_url.strip()) if value]
     if not candidates:
         return None
-    row = session.exec(select(Video).where(Video.source_url.in_(candidates))).first()
+    row = session.exec(
+        select(Video).where(col(Video.source_url).in_(candidates))
+    ).first()
     if row is not None and row.id is not None:
         return row.id
     return None
@@ -69,7 +90,7 @@ def _playlist_items(session: Session, playlist_id: int) -> list[PlaylistItem]:
         session.exec(
             select(PlaylistItem)
             .where(PlaylistItem.playlist_id == playlist_id)
-            .order_by(PlaylistItem.position)
+            .order_by(col(PlaylistItem.position))
         ).all()
     )
 
@@ -78,7 +99,7 @@ def _thumb_ok(session: Session, video_ids: list[int]) -> dict[int, bool]:
     unique = list(dict.fromkeys(vid for vid in video_ids if vid is not None))
     if not unique:
         return {}
-    videos = session.exec(select(Video).where(Video.id.in_(unique))).all()
+    videos = session.exec(select(Video).where(col(Video.id).in_(unique))).all()
     found = {video.id: video for video in videos}
     out: dict[int, bool] = {}
     for vid in unique:
@@ -97,7 +118,7 @@ def _member_video_ids(session: Session, items: list[PlaylistItem]) -> list[int]:
         return []
     existing = {
         video.id
-        for video in session.exec(select(Video).where(Video.id.in_(ordered))).all()
+        for video in session.exec(select(Video).where(col(Video.id).in_(ordered))).all()
     }
     return [vid for vid in ordered if vid in existing]
 
@@ -111,7 +132,7 @@ def _to_playlist_read(
     thumbs: dict[int, bool] | None = None,
 ) -> PlaylistRead:
     if items is None:
-        items = _playlist_items(session, playlist.id)
+        items = _playlist_items(session, require_id(playlist))
     if members is None:
         members = _member_video_ids(session, items)
     if thumbs is None:
@@ -122,15 +143,13 @@ def _to_playlist_read(
     member_set = set(members)
     first_id = members[0] if members else None
     has_custom = bool(playlist.cover_path and Path(playlist.cover_path).is_file())
-    pinned = (
-        playlist.cover_video_id if playlist.cover_video_id in member_set else None
-    )
+    pinned = playlist.cover_video_id if playlist.cover_video_id in member_set else None
     thumb_video = None if has_custom else (pinned if pinned is not None else first_id)
     has_thumb = has_custom or (
         thumb_video is not None and thumbs.get(thumb_video, False)
     )
     return PlaylistRead(
-        id=playlist.id,
+        id=require_id(playlist),
         name=playlist.name,
         description=playlist.description,
         source_type=playlist.source_type,
@@ -159,11 +178,10 @@ def _clear_custom_cover(playlist: Playlist) -> None:
 
 
 def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
-    if playlist.cover_path:
-        custom = Path(playlist.cover_path)
-        if custom.is_file():
-            return custom
-    items = _playlist_items(session, playlist.id)
+    custom = resolve_thumbnail_file(playlist.cover_path)
+    if custom is not None:
+        return custom
+    items = _playlist_items(session, require_id(playlist))
     members = _member_video_ids(session, items)
     pinned = (
         playlist.cover_video_id if playlist.cover_video_id in set(members) else None
@@ -172,17 +190,16 @@ def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
     if video_id is None:
         return None
     video = session.get(Video, video_id)
-    if video is None or not video.thumbnail_path:
+    if video is None:
         return None
-    path = Path(video.thumbnail_path)
-    return path if path.is_file() else None
+    return resolve_thumbnail_file(video.thumbnail_path)
 
 
 def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
     items = session.exec(
         select(PlaylistItem)
         .where(PlaylistItem.playlist_id == playlist_id)
-        .order_by(PlaylistItem.position)
+        .order_by(col(PlaylistItem.position))
     ).all()
     videos: list[Video] = []
     for item in items:
@@ -192,29 +209,60 @@ def _ordered_videos(session: Session, playlist_id: int) -> list[Video]:
     return videos
 
 
-@router.get("/preview", response_model=PlaylistPreview)
-def preview_playlist(url: str):
+@router.get(
+    "/preview",
+    response_model=PlaylistPreview,
+    dependencies=[Depends(require_permission("download")), Depends(ytdlp_slot)],
+)
+def preview_playlist(url: str, gate: ExtractionGate = Depends(extraction_gate)):
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(url)
     try:
-        data = downloader.extract_playlist_entries(clean_url(url, keep_playlist=True))
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+        data = gate.run(
+            ytdlp_extract.extract_playlist_entries, clean_url(url, keep_playlist=True)
+        )
+    except HTTPException:
+        raise  # 429 / 504 from the gate
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Could not read playlist: {exc}"
+        ) from exc
     return PlaylistPreview(**data)
 
 
-@router.post("/estimate", response_model=PlaylistSizeEstimate)
-def estimate_playlist_sizes(payload: PlaylistSizeEstimateRequest):
-    if not payload.urls:
+@router.post(
+    "/estimate", response_model=PlaylistSizeEstimate, dependencies=[Depends(ytdlp_slot)]
+)
+def estimate_playlist_sizes(
+    payload: PlaylistSizeEstimateRequest,
+    gate: ExtractionGate = Depends(extraction_gate),
+):
+    urls = [u for u in payload.urls if _is_public_url(u)]
+    if not urls:
         return PlaylistSizeEstimate(sizes={})
-    sizes = downloader.estimate_playlist_sizes(payload.urls)
+    sizes = gate.run(ytdlp_extract.estimate_playlist_sizes, urls)
     return PlaylistSizeEstimate(sizes=sizes)
 
 
 @router.get("", response_model=list[PlaylistRead])
-def list_playlists(session: Session = Depends(get_session)):
+def list_playlists(
+    limit: int = Query(500, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    session: Session = Depends(get_session),
+):
+    """Playlists in their saved order; ``limit`` caps a pathological library."""
+    return _playlist_reads(session, limit=limit, offset=offset)
+
+
+def _playlist_reads(
+    session: Session, *, limit: int = 1000, offset: int = 0
+) -> list[PlaylistRead]:
     playlists = session.exec(
-        select(Playlist).order_by(Playlist.position, Playlist.created_at.desc())
+        select(Playlist)
+        .order_by(col(Playlist.position), col(Playlist.created_at).desc())
+        .offset(offset)
+        .limit(limit)
     ).all()
     if not playlists:
         return []
@@ -222,8 +270,8 @@ def list_playlists(session: Session = Depends(get_session)):
     grouped: dict[int, list[PlaylistItem]] = {pid: [] for pid in ids}
     items = session.exec(
         select(PlaylistItem)
-        .where(PlaylistItem.playlist_id.in_(ids))
-        .order_by(PlaylistItem.playlist_id, PlaylistItem.position)
+        .where(col(PlaylistItem.playlist_id).in_(ids))
+        .order_by(col(PlaylistItem.playlist_id), col(PlaylistItem.position))
     ).all()
     for item in items:
         grouped.setdefault(item.playlist_id, []).append(item)
@@ -232,15 +280,19 @@ def list_playlists(session: Session = Depends(get_session)):
         p.cover_video_id for p in playlists if p.cover_video_id is not None
     )
     thumbs = _thumb_ok(session, video_ids)
-    existing = {
-        video.id
-        for video in session.exec(
-            select(Video).where(Video.id.in_(list(dict.fromkeys(video_ids))))
-        ).all()
-    } if video_ids else set()
+    existing = (
+        {
+            video.id
+            for video in session.exec(
+                select(Video).where(col(Video.id).in_(list(dict.fromkeys(video_ids))))
+            ).all()
+        }
+        if video_ids
+        else set()
+    )
     out: list[PlaylistRead] = []
     for playlist in playlists:
-        plist = grouped.get(playlist.id, [])
+        plist = grouped.get(require_id(playlist), [])
         members = [item.video_id for item in plist if item.video_id in existing]
         out.append(
             _to_playlist_read(
@@ -254,7 +306,11 @@ def list_playlists(session: Session = Depends(get_session)):
     return out
 
 
-@router.post("", response_model=PlaylistRead)
+@router.post(
+    "",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def create_playlist(payload: PlaylistCreate, session: Session = Depends(get_session)):
     name = payload.name.strip()
     if not name:
@@ -272,7 +328,11 @@ def create_playlist(payload: PlaylistCreate, session: Session = Depends(get_sess
     return _to_playlist_read(session, playlist)
 
 
-@router.patch("/reorder", response_model=list[PlaylistRead])
+@router.patch(
+    "/reorder",
+    response_model=list[PlaylistRead],
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def reorder_playlists(
     payload: PlaylistListReorder,
     session: Session = Depends(get_session),
@@ -284,20 +344,30 @@ def reorder_playlists(
             playlist.position = position[playlist.id]
             session.add(playlist)
     session.commit()
-    return list_playlists(session)
+    return _playlist_reads(session)
 
 
 @router.get("/{playlist_id}", response_model=PlaylistDetail)
-def get_playlist(playlist_id: int, session: Session = Depends(get_session)):
+def get_playlist(
+    playlist_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
     videos = _ordered_videos(session, playlist_id)
     base = _to_playlist_read(session, playlist)
-    return PlaylistDetail(**base.model_dump(), videos=[_to_read(v, session) for v in videos])
+    return PlaylistDetail(
+        **base.model_dump(), videos=_to_read_many(videos, session, viewer=user)
+    )
 
 
-@router.patch("/{playlist_id}", response_model=PlaylistRead)
+@router.patch(
+    "/{playlist_id}",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def update_playlist(
     playlist_id: int,
     payload: PlaylistUpdate,
@@ -341,7 +411,11 @@ def update_playlist(
     if "cover_video_id" in data:
         cover_id = data["cover_video_id"]
         if cover_id is not None:
-            members = set(_member_video_ids(session, _playlist_items(session, playlist.id)))
+            members = set(
+                _member_video_ids(
+                    session, _playlist_items(session, require_id(playlist))
+                )
+            )
             if cover_id not in members:
                 raise HTTPException(
                     status_code=400, detail="Video is not in this playlist"
@@ -352,44 +426,51 @@ def update_playlist(
     session.commit()
     session.refresh(playlist)
     if enable_sub is True:
-        start_playlist_sync(playlist.id)
+        start_playlist_sync(require_id(playlist))
     return _to_playlist_read(session, playlist)
 
 
-@router.delete("/{playlist_id}", status_code=204)
+@router.delete(
+    "/{playlist_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def delete_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    items = session.exec(
-        select(PlaylistItem).where(PlaylistItem.playlist_id == playlist_id)
-    ).all()
-    for item in items:
-        session.delete(item)
+    session.execute(
+        delete(PlaylistItem).where(col(PlaylistItem.playlist_id) == playlist_id)
+    )
     unlink_playlist_cover(playlist.id, playlist.cover_path)
     session.delete(playlist)
     session.commit()
     return Response(status_code=204)
 
 
-@router.post("/{playlist_id}/items", response_model=PlaylistDetail)
+@router.post(
+    "/{playlist_id}/items",
+    response_model=PlaylistDetail,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def add_item(
     playlist_id: int,
     payload: PlaylistItemAdd,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
 
     video_id = payload.video_id
-    raw_url = (payload.url or "").strip()
-    if video_id is None and not raw_url:
-        raise HTTPException(status_code=400, detail="video_id or url is required")
-
-    if video_id is None and raw_url:
-        video_id = _library_video_id_for_url(session, raw_url)
-        if video_id is None:
+    if video_id is None:
+        raw_url = (payload.url or "").strip()
+        if not raw_url:
+            raise HTTPException(status_code=400, detail="video_id or url is required")
+        found = _library_video_id_for_url(session, raw_url)
+        if found is None:
+            # Not in the library yet: download it into this playlist.
             from .downloads import create_download
 
             quality = (playlist.quality_preset or "").strip() or "best"
@@ -400,8 +481,10 @@ def add_item(
                     playlist_id=playlist_id,
                 ),
                 session,
+                user,
             )
-            return get_playlist(playlist_id, session)
+            return get_playlist(playlist_id, session, user)
+        video_id = found
 
     if session.get(Video, video_id) is None:
         raise HTTPException(status_code=404, detail="Video not found")
@@ -423,10 +506,14 @@ def add_item(
         )
         session.commit()
 
-    return get_playlist(playlist_id, session)
+    return get_playlist(playlist_id, session, user)
 
 
-@router.post("/{playlist_id}/items/bulk", status_code=204)
+@router.post(
+    "/{playlist_id}/items/bulk",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def bulk_add_items(
     playlist_id: int,
     payload: BulkPlaylistAdd,
@@ -459,7 +546,11 @@ def bulk_add_items(
     return Response(status_code=204)
 
 
-@router.delete("/{playlist_id}/items/{video_id}", status_code=204)
+@router.delete(
+    "/{playlist_id}/items/{video_id}",
+    status_code=204,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def remove_item(
     playlist_id: int, video_id: int, session: Session = Depends(get_session)
 ):
@@ -475,11 +566,16 @@ def remove_item(
     return Response(status_code=204)
 
 
-@router.patch("/{playlist_id}/reorder", response_model=PlaylistDetail)
+@router.patch(
+    "/{playlist_id}/reorder",
+    response_model=PlaylistDetail,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def reorder_items(
     playlist_id: int,
     payload: PlaylistReorder,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     if session.get(Playlist, playlist_id) is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
@@ -492,13 +588,11 @@ def reorder_items(
             item.position = position[item.video_id]
             session.add(item)
     session.commit()
-    return get_playlist(playlist_id, session)
+    return get_playlist(playlist_id, session, user)
 
 
-@router.get("/{playlist_id}/thumbnail")
-def get_playlist_thumbnail(
-    playlist_id: int, session: Session = Depends(get_session)
-):
+@router.get("/{playlist_id}/thumbnail", response_class=RAW, responses=IMAGE_JPEG)
+def get_playlist_thumbnail(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
@@ -508,8 +602,12 @@ def get_playlist_thumbnail(
     return FileResponse(path, media_type="image/jpeg")
 
 
-@router.post("/{playlist_id}/thumbnail", response_model=PlaylistRead)
-async def upload_playlist_thumbnail(
+@router.post(
+    "/{playlist_id}/thumbnail",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
+def upload_playlist_thumbnail(
     playlist_id: int,
     file: UploadFile,
     session: Session = Depends(get_session),
@@ -517,12 +615,12 @@ async def upload_playlist_thumbnail(
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    data = await file.read()
+    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
     if not data:
         raise HTTPException(status_code=400, detail="Empty file")
     try:
         dest = write_playlist_cover(playlist_id, data)
-    except Exception as exc:  # noqa: BLE001
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail="Could not read image") from exc
     playlist.cover_path = dest
     session.add(playlist)
@@ -531,7 +629,11 @@ async def upload_playlist_thumbnail(
     return _to_playlist_read(session, playlist)
 
 
-@router.post("/{playlist_id}/sync", response_model=PlaylistRead)
+@router.post(
+    "/{playlist_id}/sync",
+    response_model=PlaylistRead,
+    dependencies=[Depends(require_permission("manage_playlists"))],
+)
 def sync_playlist(playlist_id: int, session: Session = Depends(get_session)):
     playlist = session.get(Playlist, playlist_id)
     if playlist is None:
@@ -544,11 +646,20 @@ def sync_playlist(playlist_id: int, session: Session = Depends(get_session)):
     return _to_playlist_read(session, playlist)
 
 
-@router.post("/import", response_model=PlaylistRead)
+@router.post(
+    "/import",
+    response_model=PlaylistRead,
+    dependencies=[
+        Depends(require_permission("manage_playlists")),
+        Depends(require_permission("download")),
+        Depends(ytdlp_slot),
+    ],
+)
 def import_playlist(payload: PlaylistImport, session: Session = Depends(get_session)):
     url = clean_url(payload.url, keep_playlist=True)
     if not url:
         raise HTTPException(status_code=400, detail="URL is required")
+    validate_public_url(url)
 
     if payload.subscribe:
         other = find_subscribed_by_url(session, url)
@@ -559,20 +670,25 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
             )
 
     selected_entries = [e.strip() for e in payload.entries if e.strip()]
+    for entry in selected_entries:
+        validate_public_url(entry)
     if selected_entries:
         title = (payload.name or "").strip()
         if not title:
             try:
-                preview = downloader.extract_playlist_entries(url)
+                preview = ytdlp_extract.extract_playlist_entries(url)
                 title = preview.get("title") or "Imported playlist"
-            except Exception:  # noqa: BLE001
+            except Exception:
+                logger.debug("could not read the playlist title", exc_info=True)
                 title = "Imported playlist"
         entries = selected_entries
     else:
         try:
-            title, entries = downloader.extract_playlist(url)
-        except Exception as exc:  # noqa: BLE001 - surface extraction failures
-            raise HTTPException(status_code=400, detail=f"Could not read playlist: {exc}")
+            title, entries = ytdlp_extract.extract_playlist(url)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=400, detail=f"Could not read playlist: {exc}"
+            ) from exc
         if payload.name and payload.name.strip():
             title = payload.name.strip()
 
@@ -593,5 +709,5 @@ def import_playlist(payload: PlaylistImport, session: Session = Depends(get_sess
     session.commit()
     session.refresh(playlist)
 
-    downloader.start_playlist_import(playlist.id, entries, quality)
+    playlist_import.start_playlist_import(require_id(playlist), entries, quality)
     return _to_playlist_read(session, playlist)

@@ -47,9 +47,10 @@ def test_playlist_only_url():
         "https://www.youtube.com/playlist?list=PLtest"
     )
     assert is_playlist_only_url(url) is True
-    assert is_playlist_only_url(
-        "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest"
-    ) is False
+    assert (
+        is_playlist_only_url("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLtest")
+        is False
+    )
     assert is_playlist_only_url("https://youtu.be/dQw4w9WgXcQ") is False
 
 

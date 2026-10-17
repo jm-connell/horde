@@ -11,19 +11,21 @@ const seek = { left: 100, right: 500, top: 80, bottom: 96 };
 
 describe("playerSeek", () => {
   it("maps client X to a time along the bar", () => {
-    expect(scrubPositionFromClientX(100, { left: 100, width: 400 }, 200)).toEqual(
-      { time: 0, pct: 0 }
-    );
-    expect(scrubPositionFromClientX(300, { left: 100, width: 400 }, 200)).toEqual(
-      { time: 100, pct: 50 }
-    );
-    expect(scrubPositionFromClientX(80, { left: 100, width: 400 }, 200)).toEqual(
-      { time: 0, pct: 0 }
-    );
-    expect(scrubPositionFromClientX(600, { left: 100, width: 400 }, 200)).toEqual(
-      { time: 200, pct: 100 }
-    );
-    expect(scrubPositionFromClientX(300, { left: 100, width: 400 }, 0)).toBeNull();
+    expect(
+      scrubPositionFromClientX(100, { left: 100, width: 400 }, 200)
+    ).toEqual({ time: 0, pct: 0 });
+    expect(
+      scrubPositionFromClientX(300, { left: 100, width: 400 }, 200)
+    ).toEqual({ time: 100, pct: 50 });
+    expect(
+      scrubPositionFromClientX(80, { left: 100, width: 400 }, 200)
+    ).toEqual({ time: 0, pct: 0 });
+    expect(
+      scrubPositionFromClientX(600, { left: 100, width: 400 }, 200)
+    ).toEqual({ time: 200, pct: 100 });
+    expect(
+      scrubPositionFromClientX(300, { left: 100, width: 400 }, 0)
+    ).toBeNull();
   });
 
   it("lifts captions that encroach on the visible seek bar", () => {
@@ -64,12 +66,12 @@ describe("playerSeek", () => {
 
   it("builds a layout box from offset metrics so lift ignores CSS transform", () => {
     expect(
-      layoutBoxFromOffsets(
-        { left: 40, top: 10 },
-        2,
-        1,
-        { offsetLeft: 20, offsetTop: 30, offsetWidth: 100, offsetHeight: 40 }
-      )
+      layoutBoxFromOffsets({ left: 40, top: 10 }, 2, 1, {
+        offsetLeft: 20,
+        offsetTop: 30,
+        offsetWidth: 100,
+        offsetHeight: 40,
+      })
     ).toEqual({ left: 62, top: 41, right: 162, bottom: 81 });
   });
 });

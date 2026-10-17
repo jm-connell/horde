@@ -1,18 +1,22 @@
 import logging
-import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
 from pydantic import BaseModel
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ..config import DOWNLOADS_DIR, VIDEO_EXTENSIONS
-from ..database import get_session
+from ..auth import current_user, require_permission
+from ..config import VIDEO_EXTENSIONS
+from ..context import get_paths, get_session
 from ..models import Video
+from ..response_schemas import VideoPage
 from ..schemas import VideoRead
-from ..services import library
+from ..services import duplicate_groups as duplicate_groups_svc
+from ..services import library, uploads
+from ..services.auth.accounts import AuthUser
 from ..services.metadata import probe_is_playable
+from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
 from ..services.scanner import (
     ingest_media_file,
@@ -20,23 +24,23 @@ from ..services.scanner import (
     scan_for_new_files,
     unmark_active,
 )
+from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import to_read as _to_read
+from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/review", tags=["review"])
 
-_UPLOAD_CHUNK = 1024 * 1024
-
 
 class DuplicateGroupRead(BaseModel):
     videos: list[VideoRead]
     match_type: str  # youtube_id | heuristic
-    ai_score: Optional[float] = None
-    ai_verdict: Optional[str] = None
-    ai_confidence: Optional[float] = None
-    ai_reason: Optional[str] = None
-    ai_error: Optional[str] = None
+    ai_score: float | None = None
+    ai_verdict: str | None = None
+    ai_confidence: float | None = None
+    ai_reason: str | None = None
+    ai_error: str | None = None
 
 
 class ScanResult(BaseModel):
@@ -44,13 +48,47 @@ class ScanResult(BaseModel):
     requeued: int
 
 
-@router.get("", response_model=list[VideoRead])
-def review_queue(session: Session = Depends(get_session)):
-    videos = library.query_videos(session, needs_review=True, sort="added_at", order="desc")
-    return [_to_read(v, session) for v in videos]
+@router.get("", response_model=VideoPage)
+def review_queue(
+    limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
+    cursor: str | None = None,
+    include_total: bool = False,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """One page of videos waiting for review, newest first."""
+    sort, order = "added_at", "desc"
+    page, _ = page_request(cursor, limit=limit, sort=sort, order=order, seed=None)
+    videos = library.query_videos(
+        session, needs_review=True, sort=sort, order=order, page=page
+    )
+    total = (
+        library.query_videos(
+            session, needs_review=True, sort=sort, order=order, count_only=True
+        )
+        if include_total
+        else None
+    )
+    return build_page(
+        videos,
+        page,
+        sort=sort,
+        order=order,
+        seed=None,
+        session=session,
+        user_id=user.id,
+        serialize=lambda rows, states: _to_read_many(
+            rows, session, viewer=user, states=states
+        ),
+        total=total,
+    )
 
 
-@router.post("/scan", response_model=ScanResult)
+@router.post(
+    "/scan",
+    response_model=ScanResult,
+    dependencies=[Depends(require_permission("download"))],
+)
 def scan_import_folder():
     """Rescan the media folder and queue videos that are not in the library.
 
@@ -61,10 +99,15 @@ def scan_import_folder():
     return ScanResult(added=added, requeued=requeued)
 
 
-@router.post("/upload", response_model=VideoRead)
-async def upload_import(
+@router.post(
+    "/upload",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("download"))],
+)
+def upload_import(
     file: UploadFile = File(...),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Stream a video into DOWNLOADS_DIR/imports and add it to the review queue."""
     name = Path(file.filename or "upload.bin").name
@@ -78,7 +121,7 @@ async def upload_import(
     stem = safe_filename(Path(name).stem)
     desired = f"imports/{stem}{ext}"
     rel_path = unique_rel_path(desired)
-    root = DOWNLOADS_DIR.resolve()
+    root = get_paths().downloads.resolve()
     dest = (root / rel_path).resolve()
     try:
         dest.relative_to(root)
@@ -92,12 +135,13 @@ async def upload_import(
     part = dest.with_name(dest.name + ".part")
     mark_active(rel_path)
     try:
-        with part.open("wb") as out:
-            while True:
-                chunk = await file.read(_UPLOAD_CHUNK)
-                if not chunk:
-                    break
-                out.write(chunk)
+        uploads.save_upload(
+            file,
+            part,
+            max_bytes=uploads.max_video_upload_bytes(),
+            free_space_dir=get_paths().downloads,
+            headroom_bytes=uploads.IMPORT_HEADROOM_BYTES,
+        )
         if part.stat().st_size == 0:
             part.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Empty file")
@@ -114,7 +158,7 @@ async def upload_import(
                 raise HTTPException(status_code=409, detail="File already in library")
             dest.unlink(missing_ok=True)
             raise HTTPException(status_code=400, detail="Could not import file")
-        return _to_read(video, session)
+        return _to_read(video, session, viewer=user)
     except HTTPException:
         part.unlink(missing_ok=True)
         raise
@@ -127,13 +171,21 @@ async def upload_import(
     finally:
         unmark_active(rel_path)
         try:
-            await file.close()
-        except Exception:  # noqa: BLE001
+            file.file.close()
+        except Exception:
             logger.debug("failed closing upload stream", exc_info=True)
 
 
-@router.post("/{video_id}/skip", response_model=VideoRead)
-def skip_review(video_id: int, session: Session = Depends(get_session)):
+@router.post(
+    "/{video_id}/skip",
+    response_model=VideoRead,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
+def skip_review(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     """Dismiss a review item without requiring a channel. The file stays in the
     library keeping its filename-derived title."""
     video = session.get(Video, video_id)
@@ -147,82 +199,60 @@ def skip_review(video_id: int, session: Session = Depends(get_session)):
         from ..services.ai import enqueue_for_video
 
         enqueue_for_video(video_id, include_tags=True, force=False)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("AI enqueue after review skip failed", exc_info=True)
-    return _to_read(video, session)
+    return _to_read(video, session, viewer=user)
 
 
-def _yt_id(video: Video) -> str | None:
-    """Extract YouTube video ID from source_url or file_path."""
-    for text in (video.source_url or "", video.file_path):
-        m = re.search(r"\[([A-Za-z0-9_-]{11})\]", text)
-        if m:
-            return m.group(1)
-        m = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", text)
-        if m:
-            return m.group(1)
-    return None
+class DuplicateGroupPage(BaseModel):
+    items: list[DuplicateGroupRead]
+    next_cursor: str | None = None
 
 
-def _title_tokens(title: str) -> set[str]:
-    return set(re.sub(r"[^a-z0-9 ]", "", title.lower()).split())
+@router.get("/groups", response_model=DuplicateGroupPage)
+def duplicate_groups(
+    request: Request,
+    limit: int = Query(25, ge=1, le=100),
+    cursor: str | None = None,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Clusters of likely duplicate videos, ``limit`` groups per page.
 
-
-@router.get("/groups")
-def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
-    """Return heuristic clusters of likely duplicate videos in the library.
-
-    Response is a list of DuplicateGroupRead objects. Older clients that expect
-    ``list[list[VideoRead]]`` can still read ``.videos`` from each group.
+    Finding the clusters reads the whole library, so the grouping is cached until
+    the library changes (``services/duplicate_groups.py``); the AI check (one model call
+    per heuristic cluster) and the serialization only run for the groups on the
+    requested page.
     """
-    all_videos = session.exec(
-        select(Video).where(Video.needs_review == False)  # noqa: E712
-    ).all()
-
-    # Group 1: same YouTube video ID
-    by_yt_id: dict[str, list[Video]] = {}
-    for v in all_videos:
-        yt_id = _yt_id(v)
-        if yt_id:
-            by_yt_id.setdefault(yt_id, []).append(v)
-
-    # Group 2: same channel + high title similarity + duration within 5s
-    used: set[int] = set()
-    raw_groups: list[tuple[str, list[Video]]] = []
-
-    for yt_id, vids in by_yt_id.items():
-        if len(vids) > 1:
-            raw_groups.append(("youtube_id", vids))
-            for v in vids:
-                used.add(v.id)
-
-    for i, va in enumerate(all_videos):
-        if va.id in used:
-            continue
-        if not va.channel or not va.title or not va.duration_sec:
-            continue
-        tokens_a = _title_tokens(va.title)
-        cluster = [va]
-        for vb in all_videos[i + 1:]:
-            if vb.id in used or vb.channel != va.channel:
-                continue
-            if not vb.title or not vb.duration_sec:
-                continue
-            if abs(va.duration_sec - vb.duration_sec) > 5:
-                continue
-            tokens_b = _title_tokens(vb.title)
-            # Jaccard similarity
-            if tokens_a and tokens_b:
-                overlap = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
-                if overlap >= 0.7:
-                    cluster.append(vb)
-        if len(cluster) > 1:
-            for v in cluster:
-                used.add(v.id)
-            raw_groups.append(("heuristic", cluster))
+    try:
+        page = parse_cursor(
+            cursor, limit=limit, sort="groups", order="asc", kind="offset"
+        )
+    except InvalidCursor as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    groups = request.app.state.duplicate_groups.groups(
+        duplicate_groups_svc.load_facts(session)
+    )
+    window = groups[page.offset : page.offset + page.fetch]
+    more = len(window) > limit
+    window = window[:limit]
+    by_id = {
+        v.id: v
+        for v in session.exec(
+            select(Video).where(
+                col(Video.id).in_({vid for g in window for vid in g.video_ids})
+            )
+        ).all()
+    }
+    # A video deleted since the grouping was cached drops out of its group.
+    raw_groups = [
+        (g.match_type, [by_id[vid] for vid in g.video_ids if vid in by_id])
+        for g in window
+    ]
+    raw_groups = [(t, vids) for t, vids in raw_groups if len(vids) > 1]
 
     annotate = False
-    ai_unavailable_reason: Optional[str] = None
+    ai_unavailable_reason: str | None = None
     try:
         from ..services import app_settings
         from ..services.ai.provider import get_llm_provider
@@ -234,14 +264,15 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
                 annotate = True
             else:
                 ai_unavailable_reason = "AI unavailable (no chat provider)"
-    except Exception:  # noqa: BLE001
+    except Exception:
+        logger.warning("AI annotation of duplicate groups unavailable", exc_info=True)
         annotate = False
         ai_unavailable_reason = "AI unavailable"
 
     out: list[dict[str, Any]] = []
     for match_type, group in raw_groups:
         entry: dict[str, Any] = {
-            "videos": [_to_read(v, session) for v in group],
+            "videos": _to_read_many(group, session, viewer=user),
             "match_type": match_type,
             "ai_score": None,
             "ai_verdict": None,
@@ -255,7 +286,8 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
 
                 scored = annotate_group(session, group)
                 entry.update(scored)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
+                logger.warning("AI duplicate check failed", exc_info=True)
                 entry["ai_error"] = str(exc)[:200]
         elif match_type == "heuristic" and ai_unavailable_reason:
             entry["ai_error"] = ai_unavailable_reason
@@ -264,4 +296,12 @@ def duplicate_groups(session: Session = Depends(get_session)) -> list[Any]:
             entry["ai_confidence"] = 1.0
             entry["ai_reason"] = "Same YouTube video ID"
         out.append(entry)
-    return out
+    next_cursor = (
+        offset_cursor(sort="groups", order="asc", offset=page.offset + limit)
+        if more
+        else None
+    )
+    return DuplicateGroupPage(
+        items=[DuplicateGroupRead.model_validate(entry) for entry in out],
+        next_cursor=next_cursor,
+    )

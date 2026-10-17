@@ -1,12 +1,16 @@
 import json
+import logging
 import subprocess
+import threading
 from pathlib import Path
-from typing import Optional
 
 from .ffmpeg_bin import ffmpeg_bin, ffprobe_bin
+from .ffmpeg_progress import FfmpegCancelled, run_ffmpeg
+
+logger = logging.getLogger(__name__)
 
 
-def probe_duration(path: Path) -> Optional[float]:
+def probe_duration(path: Path) -> float | None:
     """Return media duration in seconds via ffprobe, or None on failure."""
     try:
         result = subprocess.run(
@@ -30,6 +34,7 @@ def probe_duration(path: Path) -> Optional[float]:
         duration = data.get("format", {}).get("duration")
         return float(duration) if duration is not None else None
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe duration failed", exc_info=True)
         return None
 
 
@@ -75,10 +80,11 @@ def probe_is_playable(path: Path) -> bool:
             return False
         return float(duration) > 0
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe playability check failed", exc_info=True)
         return False
 
 
-def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
+def probe_dimensions(path: Path) -> tuple[int, int] | None:
     """Return (width, height) in pixels of the first video stream via ffprobe."""
     try:
         result = subprocess.run(
@@ -109,10 +115,11 @@ def probe_dimensions(path: Path) -> Optional[tuple[int, int]]:
             return int(width), int(height)
         return None
     except (subprocess.SubprocessError, ValueError, OSError):
+        logger.debug("ffprobe dimensions failed", exc_info=True)
         return None
 
 
-def probe_frame_rate(path: Path) -> Optional[float]:
+def probe_frame_rate(path: Path) -> float | None:
     """Return the frame rate of the first video stream via ffprobe, or None."""
     try:
         result = subprocess.run(
@@ -145,7 +152,27 @@ def probe_frame_rate(path: Path) -> Optional[float]:
                 return round(int(num) / int(den), 3)
         return None
     except (subprocess.SubprocessError, ValueError, OSError, ZeroDivisionError):
+        logger.debug("ffprobe frame rate failed", exc_info=True)
         return None
+
+
+def _run_ffmpeg_tracked(
+    cmd: list[str], *, timeout: float, cancel_event: threading.Event | None
+) -> bool:
+    """Run a long ffmpeg through ``run_ffmpeg`` (own session, registered for shutdown).
+
+    True when it exits 0. A cancel, timeout or failure is False, with the reason
+    in the debug log.
+    """
+    try:
+        run_ffmpeg(cmd, timeout=timeout, cancel_event=cancel_event)
+    except FfmpegCancelled:
+        logger.debug("ffmpeg cancelled: %s", cmd[-1])
+        return False
+    except (subprocess.SubprocessError, OSError):
+        logger.debug("ffmpeg failed: %s", cmd[-1], exc_info=True)
+        return False
+    return True
 
 
 def grab_frame(
@@ -154,31 +181,32 @@ def grab_frame(
     at_seconds: float = 5.0,
     *,
     scale_width: int = 640,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
     """Extract a single frame as a JPEG thumbnail. Returns True on success."""
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(
-            [
-                ffmpeg_bin(),
-                "-y",
-                "-ss",
-                str(at_seconds),
-                "-i",
-                str(video_path),
-                "-frames:v",
-                "1",
-                "-vf",
-                f"scale={scale_width}:-1",
-                str(output_path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=60,
-        )
-        return result.returncode == 0 and output_path.exists()
-    except (subprocess.SubprocessError, OSError):
+    except OSError:
+        logger.debug("cannot create %s", output_path.parent, exc_info=True)
         return False
+    ok = _run_ffmpeg_tracked(
+        [
+            ffmpeg_bin(),
+            "-y",
+            "-ss",
+            str(at_seconds),
+            "-i",
+            str(video_path),
+            "-frames:v",
+            "1",
+            "-vf",
+            f"scale={scale_width}:-1",
+            str(output_path),
+        ],
+        timeout=60,
+        cancel_event=cancel_event,
+    )
+    return ok and output_path.exists()
 
 
 def candidate_timestamps(duration: float, count: int = 8) -> list[float]:
@@ -197,7 +225,8 @@ def candidate_timestamps(duration: float, count: int = 8) -> list[float]:
     for i in range(count):
         t = lo + (hi - lo) * (i + 0.5) / count
         jitter = (hi - lo) / (count * 4)
-        t = min(hi, max(lo, t + random.uniform(-jitter, jitter)))
+        offset = random.uniform(-jitter, jitter)  # noqa: S311 - sample-time jitter
+        t = min(hi, max(lo, t + offset))
         stamps.append(round(t, 3))
     # Deduplicate while preserving order.
     seen: set[float] = set()
@@ -266,13 +295,15 @@ def sprites_exist(sprites_dir: Path, video_id: int) -> bool:
     )
 
 
-def load_sprite_meta(sprites_dir: Path, video_id: int) -> Optional[dict]:
+def load_sprite_meta(sprites_dir: Path, video_id: int) -> dict | None:
     path = sprite_meta_path(sprites_dir, video_id)
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        meta: dict | None = json.loads(path.read_text(encoding="utf-8"))
+        return meta
     except (OSError, json.JSONDecodeError, ValueError):
+        logger.debug("sprite metadata unreadable", exc_info=True)
         return None
 
 
@@ -310,30 +341,31 @@ def _sprite_via_ffmpeg_tile(
     interval: int,
     columns: int,
     rows: int,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
     try:
         image_path.parent.mkdir(parents=True, exist_ok=True)
-        result = subprocess.run(
-            [
-                ffmpeg_bin(),
-                "-y",
-                "-i",
-                str(video_path),
-                "-vf",
-                f"fps=1/{interval},scale={SPRITE_TILE_WIDTH}:-1,tile={columns}x{rows}",
-                "-frames:v",
-                "1",
-                "-q:v",
-                "3",
-                str(image_path),
-            ],
-            capture_output=True,
-            text=True,
-            timeout=600,
-        )
-        return result.returncode == 0 and image_path.is_file()
-    except (subprocess.SubprocessError, OSError):
+    except OSError:
+        logger.debug("cannot create %s", image_path.parent, exc_info=True)
         return False
+    ok = _run_ffmpeg_tracked(
+        [
+            ffmpeg_bin(),
+            "-y",
+            "-i",
+            str(video_path),
+            "-vf",
+            f"fps=1/{interval},scale={SPRITE_TILE_WIDTH}:-1,tile={columns}x{rows}",
+            "-frames:v",
+            "1",
+            "-q:v",
+            "3",
+            str(image_path),
+        ],
+        timeout=600,
+        cancel_event=cancel_event,
+    )
+    return ok and image_path.is_file()
 
 
 def _sprite_via_frame_montage(
@@ -346,11 +378,13 @@ def _sprite_via_frame_montage(
     count: int,
     columns: int,
     rows: int,
+    cancel_event: threading.Event | None = None,
 ) -> bool:
     """Fallback: grab individual frames and stitch with Pillow."""
     try:
         from PIL import Image
     except ImportError:
+        logger.debug("Pillow is not available; skipping the frame-montage sprite")
         return False
 
     tmp_dir = sprites_dir / f".{video_id}_sprite_tmp"
@@ -360,8 +394,14 @@ def _sprite_via_frame_montage(
         for i in range(count):
             at = i * interval + interval / 2
             dest = tmp_dir / f"{i:04d}.jpg"
+            if cancel_event is not None and cancel_event.is_set():
+                return False
             if not grab_frame(
-                video_path, dest, at_seconds=at, scale_width=SPRITE_TILE_WIDTH
+                video_path,
+                dest,
+                at_seconds=at,
+                scale_width=SPRITE_TILE_WIDTH,
+                cancel_event=cancel_event,
             ):
                 continue
             frames.append(dest)
@@ -374,14 +414,18 @@ def _sprite_via_frame_montage(
         for i, frame_path in enumerate(frames):
             col = i % columns
             row = i // columns
-            with Image.open(frame_path) as im:
-                if im.size != (tile_w, tile_h):
-                    im = im.resize((tile_w, tile_h))
-                sheet.paste(im, (col * tile_w, row * tile_h))
+            with Image.open(frame_path) as frame:
+                tile = (
+                    frame
+                    if frame.size == (tile_w, tile_h)
+                    else frame.resize((tile_w, tile_h))
+                )
+                sheet.paste(tile, (col * tile_w, row * tile_h))
         image_path.parent.mkdir(parents=True, exist_ok=True)
         sheet.save(image_path, format="JPEG", quality=85)
         return image_path.is_file()
     except (OSError, ValueError):
+        logger.debug("frame-montage sprite failed", exc_info=True)
         return False
     finally:
         if tmp_dir.exists():
@@ -396,8 +440,12 @@ def generate_sprite_sheet(
     video_id: int,
     *,
     duration: float | None = None,
-) -> Optional[str]:
-    """Build a seek-preview sprite sheet + JSON sidecar. Returns image path or None."""
+    cancel_event: threading.Event | None = None,
+) -> str | None:
+    """Build a seek-preview sprite sheet + JSON sidecar. Returns image path or None.
+
+    ``cancel_event`` stops any running ffmpeg and skips the fallback (shutdown).
+    """
     dur = duration if duration is not None else probe_duration(video_path)
     if not dur or dur <= 0:
         return None
@@ -412,8 +460,16 @@ def generate_sprite_sheet(
     meta_path = sprite_meta_path(sprites_dir, video_id)
 
     ok = _sprite_via_ffmpeg_tile(
-        video_path, image_path, interval=interval, columns=columns, rows=rows
+        video_path,
+        image_path,
+        interval=interval,
+        columns=columns,
+        rows=rows,
+        cancel_event=cancel_event,
     )
+    if not ok and cancel_event is not None and cancel_event.is_set():
+        delete_sprite_files(sprites_dir, video_id)
+        return None
     if not ok:
         image_path.unlink(missing_ok=True)
         ok = _sprite_via_frame_montage(
@@ -425,6 +481,7 @@ def generate_sprite_sheet(
             count=count,
             columns=columns,
             rows=rows,
+            cancel_event=cancel_event,
         )
     if not ok or not image_path.is_file():
         delete_sprite_files(sprites_dir, video_id)
@@ -441,7 +498,7 @@ def generate_sprite_sheet(
                 tile_width = max(1, sheet_w // columns)
                 tile_height = max(1, sheet_h // rows)
     except (OSError, ImportError, ValueError):
-        pass
+        logger.debug("could not measure the sprite sheet image", exc_info=True)
 
     _write_sprite_meta(
         meta_path,

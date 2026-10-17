@@ -1,7 +1,7 @@
 export type CatalogProgress = {
   indexed: number;
   /** Full YouTube library size when known. */
-  total: number | null;
+  total: number | null | undefined;
   /** Per-channel index cap from settings. */
   maxVideos: number;
   complete: boolean;
@@ -43,7 +43,10 @@ const MATCH_SOURCE_LABEL: Record<string, string> = {
   notes: "notes",
 };
 
-export function matchedQueryLabel(query: string, snippet?: string | null): string {
+export function matchedQueryLabel(
+  query: string,
+  snippet?: string | null
+): string {
   const tokens = (query || "").toLowerCase().match(/[a-z0-9]+/g) ?? [];
   const hay = (snippet || "").toLowerCase();
   const hits = tokens.filter((t) => t.length > 1 && hay.includes(t));
@@ -80,10 +83,13 @@ export function formatMatchReasonTip(
 
 /** Tooltip copy when the match is not already obvious from the title. */
 export function visibleMatchReasonTip(
-  reason: {
-    source: string;
-    snippet?: string | null;
-  } | null | undefined,
+  reason:
+    | {
+        source: string;
+        snippet?: string | null;
+      }
+    | null
+    | undefined,
   query = ""
 ): string | null {
   if (!reason || reason.source === "title") return null;

@@ -86,10 +86,7 @@ declare namespace cast {
       constructor(player: RemotePlayer);
       playOrPause(): void;
       seek(): void;
-      addEventListener(
-        type: RemotePlayerEventType,
-        handler: () => void
-      ): void;
+      addEventListener(type: RemotePlayerEventType, handler: () => void): void;
       removeEventListener(
         type: RemotePlayerEventType,
         handler: () => void

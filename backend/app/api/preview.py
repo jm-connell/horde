@@ -3,19 +3,29 @@
 from __future__ import annotations
 
 import logging
-from typing import AsyncIterator, Optional
-from urllib.parse import urlparse
+from collections.abc import AsyncIterator
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
-from ..database import get_session
+from ..context import get_session
+from ..errors import extraction_error
+from ..openapi_responses import (
+    DASH_MANIFEST,
+    RAW,
+    SUBTITLES,
+    VIDEO_STREAM,
+)
 from ..schemas import StreamPreviewMeta
 from ..services import library, stream_preview
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url
+from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
@@ -29,7 +39,7 @@ logger = logging.getLogger(__name__)
 _CHUNK = 512 * 1024
 _CACHE_CONTROL = "private, max-age=1800, immutable"
 
-_preview_client: Optional[httpx.AsyncClient] = None
+_preview_client: httpx.AsyncClient | None = None
 
 
 def get_preview_client() -> httpx.AsyncClient:
@@ -49,7 +59,7 @@ async def init_preview_client() -> None:
             max_keepalive_connections=16,
             keepalive_expiry=60.0,
         ),
-        follow_redirects=True,
+        follow_redirects=False,  # redirects are followed by _send_validated
     )
 
 
@@ -65,7 +75,40 @@ def _require_video_url(url: str) -> str:
     cleaned = clean_url(url, keep_playlist=False)
     if not cleaned.strip():
         raise HTTPException(status_code=400, detail="URL is required")
+    # DNS lookup blocks briefly; the async routes call this through to_thread.
+    validate_public_url(cleaned)
     return cleaned
+
+
+async def _send_validated(
+    client: httpx.AsyncClient,
+    method: str,
+    url: str,
+    headers: dict[str, str],
+    *,
+    stream: bool,
+) -> httpx.Response:
+    """Send a request to a URL an extractor returned, checking every hop.
+
+    yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
+    each URL (the first and every redirect target) must pass the same public-address
+    check as user-supplied URLs. Raises UnsafeUrlError (HTTP 400) otherwise.
+    """
+    for _hop in range(MAX_REDIRECTS + 1):
+        await run_in_threadpool(validate_public_url, url)
+        request = client.build_request(method, url, headers=headers)
+        response = await client.send(request, stream=stream)
+        if response.status_code not in REDIRECT_STATUSES:
+            return response
+        location = response.headers.get("location")
+        if stream:
+            await response.aclose()
+        if not location:
+            raise HTTPException(
+                status_code=502, detail="Upstream redirect had no target"
+            )
+        url = urljoin(url, location)
+    raise HTTPException(status_code=502, detail="Upstream redirected too many times")
 
 
 async def _open_upstream(
@@ -73,32 +116,42 @@ async def _open_upstream(
     direct_url: str,
     headers: dict[str, str],
 ) -> httpx.Response:
-    upstream_req = client.build_request("GET", direct_url, headers=headers)
-    return await client.send(upstream_req, stream=True)
+    return await _send_validated(client, "GET", direct_url, headers, stream=True)
 
 
-async def _close_upstream(upstream: Optional[httpx.Response]) -> None:
+async def _close_upstream(upstream: httpx.Response | None) -> None:
     if upstream is None:
         return
     try:
         await upstream.aclose()
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception:
+        logger.debug(
+            "closing the upstream preview response failed",
+            exc_info=True,
+        )
+
+
+async def _in_ytdlp_thread(request: Request, fn, *args, **kwargs):
+    """Run blocking yt-dlp work off the event loop, holding a yt-dlp slot.
+
+    The async routes below cannot simply call the extractors: they block for seconds.
+    The slot (see ``services/limits.py``) keeps those worker threads to a bounded few.
+    """
+    async with request.app.state.ytdlp_slots.slot():
+        return await run_in_threadpool(fn, *args, **kwargs)
 
 
 def _reresolve_preview(
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
-    stream_url: Optional[str] = None,
+    allow_refresh: tuple[str, str] | None = None,
+    stream_url: str | None = None,
 ) -> dict:
     """Re-extract CDN URLs after a 401/403. Raises HTTPException on failure."""
     if allow_refresh is not None:
         token, itag = allow_refresh
         logger.warning("Refreshing preview media token=%s itag=%s", token[:8], itag)
         try:
-            return stream_preview.lookup_preview_media(
-                token, itag, refresh=True
-            )
+            return stream_preview.lookup_preview_media(token, itag, refresh=True)
         except stream_preview.PreviewRefreshError as exc:
             logger.warning("Preview media refresh failed: %s", exc)
             raise HTTPException(
@@ -106,17 +159,17 @@ def _reresolve_preview(
                 detail=str(exc),
                 headers={"Retry-After": str(exc.retry_after)},
             ) from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Could not refresh preview media: %s", exc)
             raise HTTPException(
                 status_code=502,
                 detail=f"Could not refresh preview media: {exc}",
             ) from exc
-    assert stream_url is not None
+    assert stream_url is not None  # noqa: S101 - type narrowing; unreachable otherwise
     logger.warning("Refreshing preview stream url=%s", stream_url[:80])
     try:
         return stream_preview.resolve_preview_stream(stream_url, force=True)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.warning("Could not refresh preview stream: %s", exc)
         raise HTTPException(
             status_code=502,
@@ -128,8 +181,8 @@ async def _proxy_upstream(
     request: Request,
     resolved: dict,
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
-    stream_url: Optional[str] = None,
+    allow_refresh: tuple[str, str] | None = None,
+    stream_url: str | None = None,
 ) -> StreamingResponse:
     """Proxy a CDN media URL with Range support.
 
@@ -142,7 +195,7 @@ async def _proxy_upstream(
     if range_header:
         upstream_headers["Range"] = range_header
 
-    upstream: Optional[httpx.Response] = None
+    upstream: httpx.Response | None = None
     try:
         upstream = await _open_upstream(
             client, resolved["direct_url"], upstream_headers
@@ -158,8 +211,11 @@ async def _proxy_upstream(
     if upstream.status_code in (401, 403) and can_refresh:
         await _close_upstream(upstream)
         upstream = None
-        resolved = _reresolve_preview(
-            allow_refresh=allow_refresh, stream_url=stream_url
+        resolved = await _in_ytdlp_thread(
+            request,
+            _reresolve_preview,
+            allow_refresh=allow_refresh,
+            stream_url=stream_url,
         )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
@@ -174,12 +230,13 @@ async def _proxy_upstream(
                 status_code=502, detail=f"Upstream stream failed: {exc}"
             ) from exc
 
-    assert upstream is not None
+    assert upstream is not None  # noqa: S101 - type narrowing; the retry loop always sets it
 
     if upstream.status_code >= 400:
         try:
             detail = (await upstream.aread())[:200]
-        except Exception:  # noqa: BLE001
+        except Exception:
+            logger.debug("could not read the upstream error body", exc_info=True)
             detail = b""
         status = upstream.status_code
         await _close_upstream(upstream)
@@ -201,9 +258,7 @@ async def _proxy_upstream(
         )
     if status not in (200, 206):
         await _close_upstream(upstream)
-        raise HTTPException(
-            status_code=502, detail=f"Unexpected status {status}"
-        )
+        raise HTTPException(status_code=502, detail=f"Unexpected status {status}")
 
     out_headers = {
         "Accept-Ranges": "bytes",
@@ -241,7 +296,7 @@ async def _head_upstream(
     request: Request,
     resolved: dict,
     *,
-    allow_refresh: Optional[tuple[str, str]] = None,
+    allow_refresh: tuple[str, str] | None = None,
 ) -> Response:
     """HEAD proxy for adaptive media (CORS/preflight and player probes)."""
     client = get_preview_client()
@@ -251,8 +306,8 @@ async def _head_upstream(
         upstream_headers["Range"] = range_header
 
     try:
-        resp = await client.head(
-            resolved["direct_url"], headers=upstream_headers
+        resp = await _send_validated(
+            client, "HEAD", resolved["direct_url"], upstream_headers, stream=False
         )
     except httpx.HTTPError as exc:
         raise HTTPException(
@@ -260,13 +315,15 @@ async def _head_upstream(
         ) from exc
 
     if resp.status_code in (401, 403) and allow_refresh is not None:
-        resolved = _reresolve_preview(allow_refresh=allow_refresh)
+        resolved = await _in_ytdlp_thread(
+            request, _reresolve_preview, allow_refresh=allow_refresh
+        )
         upstream_headers = dict(resolved.get("http_headers") or {})
         if range_header:
             upstream_headers["Range"] = range_header
         try:
-            resp = await client.head(
-                resolved["direct_url"], headers=upstream_headers
+            resp = await _send_validated(
+                client, "HEAD", resolved["direct_url"], upstream_headers, stream=False
             )
         except httpx.HTTPError as exc:
             raise HTTPException(
@@ -299,29 +356,35 @@ async def _head_upstream(
     )
 
 
-@router.get("/meta", response_model=StreamPreviewMeta)
-def preview_meta(url: str = Query(...), session: Session = Depends(get_session)):
+@router.get(
+    "/meta", response_model=StreamPreviewMeta, dependencies=[Depends(ytdlp_slot)]
+)
+def preview_meta(
+    url: str = Query(...),
+    session: Session = Depends(get_session),
+    gate: ExtractionGate = Depends(extraction_gate),
+):
     cleaned = _require_video_url(url)
     try:
-        meta = stream_preview.extract_stream_preview_meta(cleaned)
+        meta = gate.run(stream_preview.extract_stream_preview_meta, cleaned)
+    except HTTPException:
+        raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=http_detail_for_error(
-                exc, prefix="Could not load preview", url=cleaned
-            ),
+        raise extraction_error(
+            400,
+            http_detail_for_error(exc, prefix="Could not load preview", url=cleaned),
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         kind, _ = classify_ytdlp_error(exc, url=cleaned)
         detail = http_detail_for_error(
             exc, prefix="Could not load preview", url=cleaned
         )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("stream preview meta failed for %r", cleaned)
-            raise HTTPException(status_code=500, detail=detail) from exc
-        raise HTTPException(status_code=400, detail=detail) from exc
+            raise extraction_error(500, detail) from exc
+        raise extraction_error(400, detail) from exc
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -349,18 +412,23 @@ def preview_meta(url: str = Query(...), session: Session = Depends(get_session))
     )
 
 
-@router.get("/subtitles")
+@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
 async def preview_subtitles(
+    request: Request,
     url: str = Query(...),
     lang: str = Query("en"),
 ):
     """Proxy an English (or requested) WebVTT caption track for stream preview."""
-    cleaned = _require_video_url(url)
+    cleaned = await run_in_threadpool(_require_video_url, url)
     try:
-        resolved = stream_preview.resolve_preview_subtitle(cleaned, lang)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.resolve_preview_subtitle, cleaned, lang
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not load preview subtitles: {exc}"
         ) from exc
@@ -369,7 +437,9 @@ async def preview_subtitles(
     headers = dict(resolved.get("http_headers") or {})
 
     try:
-        resp = await client.get(resolved["direct_url"], headers=headers)
+        resp = await _send_validated(
+            client, "GET", resolved["direct_url"], headers, stream=False
+        )
     except httpx.HTTPError as exc:
         logger.warning("Upstream subtitle fetch failed: %s", exc)
         raise HTTPException(
@@ -384,19 +454,27 @@ async def preview_subtitles(
             resp.status_code,
         )
         try:
-            resolved = stream_preview.resolve_preview_subtitle(
-                cleaned, lang, force=True
+            resolved = await _in_ytdlp_thread(
+                request,
+                stream_preview.resolve_preview_subtitle,
+                cleaned,
+                lang,
+                force=True,
             )
+        except HTTPException:
+            raise
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             raise HTTPException(
                 status_code=502,
                 detail=f"Could not refresh preview subtitles: {exc}",
             ) from exc
         headers = dict(resolved.get("http_headers") or {})
         try:
-            resp = await client.get(resolved["direct_url"], headers=headers)
+            resp = await _send_validated(
+                client, "GET", resolved["direct_url"], headers, stream=False
+            )
         except httpx.HTTPError as exc:
             logger.warning("Upstream subtitle retry failed: %s", exc)
             raise HTTPException(
@@ -419,12 +497,8 @@ async def preview_subtitles(
     if body.startswith(b"\xef\xbb\xbf"):
         body = body[3:]
     if not body.lstrip().startswith(b"WEBVTT"):
-        logger.warning(
-            "Upstream subtitle was not WEBVTT (prefix=%r)", body[:40]
-        )
-        raise HTTPException(
-            status_code=502, detail="Upstream subtitle was not WEBVTT"
-        )
+        logger.warning("Upstream subtitle was not WEBVTT (prefix=%r)", body[:40])
+        raise HTTPException(status_code=502, detail="Upstream subtitle was not WEBVTT")
 
     return Response(
         content=body,
@@ -433,18 +507,26 @@ async def preview_subtitles(
     )
 
 
-@router.api_route("/manifest", methods=["GET", "HEAD"])
+# One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
+# document has a single operation id (api_route would emit it twice and warn).
+@router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
+@router.get(
+    "/manifest",
+    response_class=RAW,
+    responses=DASH_MANIFEST,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
     cleaned = _require_video_url(url)
     try:
         session = stream_preview.resolve_preview_manifest(cleaned)
         xml = stream_preview.build_dash_manifest(session)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         logger.exception("preview manifest failed for %r", cleaned)
-        raise HTTPException(
-            status_code=400,
-            detail=http_detail_for_error(
+        raise extraction_error(
+            400,
+            http_detail_for_error(
                 exc, prefix="Could not build preview manifest", url=cleaned
             ),
         ) from exc
@@ -466,7 +548,7 @@ def preview_manifest(request: Request, url: str = Query(...)):
     )
 
 
-@router.get("/media")
+@router.get("/media", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_media(
     request: Request,
     token: str = Query(...),
@@ -476,7 +558,11 @@ async def preview_media(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = stream_preview.lookup_preview_media(token, itag)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.lookup_preview_media, token, itag
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except stream_preview.PreviewRefreshError as exc:
@@ -485,17 +571,15 @@ async def preview_media(
             detail=str(exc),
             headers={"Retry-After": str(exc.retry_after)},
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
-    return await _proxy_upstream(
-        request, resolved, allow_refresh=(token, itag)
-    )
+    return await _proxy_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.head("/media")
+@router.head("/media", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_media_head(
     request: Request,
     token: str = Query(...),
@@ -504,7 +588,11 @@ async def preview_media_head(
     if not token.strip() or not itag.strip():
         raise HTTPException(status_code=400, detail="token and itag are required")
     try:
-        resolved = stream_preview.lookup_preview_media(token, itag)
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.lookup_preview_media, token, itag
+        )
+    except HTTPException:
+        raise  # 429 from the slot
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except stream_preview.PreviewRefreshError as exc:
@@ -513,23 +601,25 @@ async def preview_media_head(
             detail=str(exc),
             headers={"Retry-After": str(exc.retry_after)},
         ) from exc
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview media: {exc}"
         ) from exc
 
-    return await _head_upstream(
-        request, resolved, allow_refresh=(token, itag)
-    )
+    return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.get("/stream")
+@router.get("/stream", response_class=RAW, responses=VIDEO_STREAM)
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
-    cleaned = _require_video_url(url)
+    cleaned = await run_in_threadpool(_require_video_url, url)
     try:
-        resolved = stream_preview.resolve_preview_stream(cleaned)
-    except Exception as exc:  # noqa: BLE001
+        resolved = await _in_ytdlp_thread(
+            request, stream_preview.resolve_preview_stream, cleaned
+        )
+    except HTTPException:
+        raise  # 429 from the slot
+    except Exception as exc:
         raise HTTPException(
             status_code=400, detail=f"Could not open preview stream: {exc}"
         ) from exc

@@ -1,7 +1,17 @@
 """Channel catalog package — public API matches the former module."""
 
 from .documents import catalog_content_hash, catalog_document
+from .index import schedule_feed_head_sync, sync_feed_head
+from .query import (
+    catalog_feed_page,
+    catalog_progress,
+    search_all_catalogs,
+    search_catalog,
+    update_catalog_video_fields,
+    update_catalog_view_counts,
+)
 from .runtime import (
+    create_catalog_worker,
     enqueue_all_library_channels,
     enqueue_channel,
     get_catalog_by_url,
@@ -12,8 +22,6 @@ from .runtime import (
     refresh_all_library_channels,
     refresh_stale_catalogs,
     set_direct_youtube_search,
-    start_catalog_worker,
-    stop_catalog_worker,
     youtube_search_pref,
 )
 from .skips import (
@@ -22,15 +30,6 @@ from .skips import (
     purge_members_only_by_yt_id,
     record_members_only_skip,
     skipped_yt_ids,
-)
-from .index import schedule_feed_head_sync, sync_feed_head
-from .query import (
-    catalog_feed_page,
-    catalog_progress,
-    search_all_catalogs,
-    search_catalog,
-    update_catalog_video_fields,
-    update_catalog_view_counts,
 )
 
 __all__ = [
@@ -56,8 +55,7 @@ __all__ = [
     "search_catalog",
     "set_direct_youtube_search",
     "skipped_yt_ids",
-    "start_catalog_worker",
-    "stop_catalog_worker",
+    "create_catalog_worker",
     "sync_feed_head",
     "update_catalog_video_fields",
     "update_catalog_view_counts",

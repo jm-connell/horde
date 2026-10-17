@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, Optional
+from collections.abc import Callable
+from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import (
     ChannelAutodownload,
-    ChannelCatalog,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
     DownloadDestination,
@@ -21,6 +21,7 @@ from ..models import (
 )
 from . import app_settings, library
 from .url_clean import clean_url, youtube_video_id
+from .workers import BackgroundWorker
 from .ytdlp_extract import is_youtube_short_entry
 from .ytdlp_formats import QUALITY_FORMATS, default_download_video_codec
 
@@ -34,9 +35,6 @@ PREVIOUS_COUNT_MAX = 500
 POLL_INTERVAL_SEC = 15 * 60
 STARTUP_DELAY_SEC = 60
 LIVE_ACTIVE = frozenset({"is_live", "is_upcoming", "post_live"})
-
-_stop = threading.Event()
-_thread: Optional[threading.Thread] = None
 
 
 def normalize_previous_mode(value: Any) -> str:
@@ -73,11 +71,11 @@ def catalog_row_is_short(row: ChannelCatalogVideo) -> bool:
 
 
 def should_skip_live(
-    live_status: Optional[str],
-    duration: Optional[float],
+    live_status: str | None,
+    duration: float | None,
     *,
     include_completed_streams: bool,
-) -> Optional[str]:
+) -> str | None:
     """Return a skip reason, or None if the row may be downloaded."""
     status = (live_status or "").strip().lower()
     if status in LIVE_ACTIVE:
@@ -94,11 +92,11 @@ def should_skip_live(
     return None
 
 
-def is_active_live_status(live_status: Optional[str]) -> bool:
+def is_active_live_status(live_status: str | None) -> bool:
     return (live_status or "").strip().lower() in LIVE_ACTIVE
 
 
-def get_policy(session: Session, channel_url: str) -> Optional[ChannelAutodownload]:
+def get_policy(session: Session, channel_url: str) -> ChannelAutodownload | None:
     from .channel_catalog.runtime import (
         _channel_identity_keys,
         _normalize_channel_url,
@@ -122,7 +120,7 @@ def get_policy(session: Session, channel_url: str) -> Optional[ChannelAutodownlo
 def list_enabled_policies(session: Session) -> list[ChannelAutodownload]:
     return list(
         session.exec(
-            select(ChannelAutodownload).where(ChannelAutodownload.enabled == True)  # noqa: E712
+            select(ChannelAutodownload).where(ChannelAutodownload.enabled == True)  # noqa: E712 - SQL column comparison, not a Python truth test
         ).all()
     )
 
@@ -131,10 +129,10 @@ def upsert_policy(
     session: Session,
     *,
     channel_url: str,
-    channel_name: Optional[str],
+    channel_name: str | None,
     enabled: bool,
     previous_mode: str,
-    previous_count: Optional[int],
+    previous_count: int | None,
     quality_preset: str,
     include_completed_streams: bool,
 ) -> ChannelAutodownload:
@@ -164,7 +162,7 @@ def upsert_policy(
 def active_youtube_ids(session: Session) -> set[str]:
     jobs = session.exec(
         select(DownloadJob).where(
-            DownloadJob.status.in_([JobStatus.queued, JobStatus.downloading]),
+            col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading]),
             DownloadJob.destination == DownloadDestination.library.value,
         )
     ).all()
@@ -182,7 +180,7 @@ def candidate_skip_reason(
     include_completed_streams: bool,
     library_ids: set[str],
     queued_ids: set[str],
-) -> Optional[str]:
+) -> str | None:
     if catalog_row_is_short(row):
         return "short"
     live = should_skip_live(
@@ -202,7 +200,7 @@ def candidate_skip_reason(
 def backfill_window(
     rows: list[ChannelCatalogVideo],
     previous_mode: str,
-    previous_count: Optional[int],
+    previous_count: int | None,
 ) -> list[ChannelCatalogVideo]:
     ordered = sorted(rows, key=lambda r: int(r.position or 0))
     mode = normalize_previous_mode(previous_mode)
@@ -218,15 +216,15 @@ def enqueue_catalog_row(
     session: Session,
     row: ChannelCatalogVideo,
     policy: ChannelAutodownload,
-) -> Optional[int]:
-    from . import downloader
+) -> int | None:
+    from .downloads import jobs
 
     yt_id = row.yt_id
     if not yt_id:
         return None
     raw_url = row.url or f"https://www.youtube.com/watch?v={yt_id}"
     url = clean_url(raw_url, keep_playlist=False)
-    with downloader.job_mutate_lock:
+    with jobs.job_mutate_lock:
         queued = active_youtube_ids(session)
         if yt_id in queued:
             return None
@@ -247,7 +245,7 @@ def enqueue_catalog_row(
         session.refresh(job)
         job_id = job.id
     if job_id is not None:
-        downloader.enqueue_download(job_id)
+        jobs.enqueue_download(job_id)
     return job_id
 
 
@@ -282,7 +280,7 @@ def pending_estimate(session: Session, policy: ChannelAutodownload) -> int:
         session.exec(
             select(ChannelCatalogVideo)
             .where(ChannelCatalogVideo.catalog_id == catalog.id)
-            .order_by(ChannelCatalogVideo.position.asc())
+            .order_by(col(ChannelCatalogVideo.position).asc())
         ).all()
     )
     window = backfill_window(rows, policy.previous_mode, policy.previous_count)
@@ -292,10 +290,10 @@ def pending_estimate(session: Session, policy: ChannelAutodownload) -> int:
 
 def policy_to_read(
     session: Session,
-    policy: Optional[ChannelAutodownload],
+    policy: ChannelAutodownload | None,
     *,
-    channel_url: Optional[str] = None,
-    channel_name: Optional[str] = None,
+    channel_url: str | None = None,
+    channel_name: str | None = None,
 ) -> dict[str, Any]:
     max_videos = catalog_max_videos()
     if policy is None:
@@ -328,8 +326,8 @@ def policy_to_read(
 def after_catalog_update(
     channel_url: str,
     *,
-    new_yt_ids: Optional[list[str]] = None,
-    live_finished_ids: Optional[list[str]] = None,
+    new_yt_ids: list[str] | None = None,
+    live_finished_ids: list[str] | None = None,
     source: str = "head",
 ) -> int:
     """Enqueue matching catalog videos after a feed-head sync or index page."""
@@ -339,7 +337,7 @@ def after_catalog_update(
     new_ids = [i for i in (new_yt_ids or []) if i]
     finished_ids = [i for i in (live_finished_ids or []) if i]
     enqueued = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policy = get_policy(session, url)
         if policy is None or not policy.enabled:
             return 0
@@ -355,7 +353,7 @@ def after_catalog_update(
             session.exec(
                 select(ChannelCatalogVideo)
                 .where(ChannelCatalogVideo.catalog_id == catalog.id)
-                .order_by(ChannelCatalogVideo.position.asc())
+                .order_by(col(ChannelCatalogVideo.position).asc())
             ).all()
         )
         by_id = {r.yt_id: r for r in rows}
@@ -394,15 +392,13 @@ def after_catalog_update(
     return enqueued
 
 
-def apply_saved_policy(
-    channel_url: str, *, channel_name: Optional[str] = None
-) -> None:
+def apply_saved_policy(channel_url: str, *, channel_name: str | None = None) -> None:
     """Sync the feed head (and maybe full index) then enqueue per the saved policy."""
     from .channel_catalog import enqueue_channel, sync_feed_head
     from .channel_catalog.runtime import _normalize_channel_url, get_catalog_by_url
 
     url = _normalize_channel_url(channel_url)
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policy = get_policy(session, url)
         if policy is None or not policy.enabled:
             return
@@ -417,13 +413,13 @@ def apply_saved_policy(
             enqueue_channel(url, channel_name=channel_name or policy.channel_name)
     try:
         sync_feed_head(url, channel_name=channel_name, limit=50)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("autodownload feed-head sync failed for %s", url, exc_info=True)
         after_catalog_update(url, new_yt_ids=[], source="head")
 
 
 def schedule_apply_saved_policy(
-    channel_url: str, *, channel_name: Optional[str] = None
+    channel_url: str, *, channel_name: str | None = None
 ) -> None:
     thread = threading.Thread(
         target=apply_saved_policy,
@@ -434,48 +430,32 @@ def schedule_apply_saved_policy(
     thread.start()
 
 
-def poll_enabled_channels() -> None:
+def poll_enabled_channels(should_stop: Callable[[], bool] | None = None) -> None:
     from .channel_catalog import sync_feed_head
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         policies = list_enabled_policies(session)
         targets = [(p.channel_url, p.channel_name) for p in policies]
     for channel_url, channel_name in targets:
-        if _stop.is_set():
+        if should_stop is not None and should_stop():
             return
         try:
             sync_feed_head(channel_url, channel_name=channel_name, limit=50)
-        except Exception:  # noqa: BLE001
-            logger.debug(
-                "autodownload poll failed for %s", channel_url, exc_info=True
-            )
+        except Exception:
+            logger.debug("autodownload poll failed for %s", channel_url, exc_info=True)
 
 
-def _worker_loop() -> None:
-    if _stop.wait(timeout=STARTUP_DELAY_SEC):
+def _worker_loop(worker: BackgroundWorker) -> None:
+    if worker.sleep(STARTUP_DELAY_SEC):
         return
-    while not _stop.is_set():
+    while not worker.stopping:
         try:
-            poll_enabled_channels()
-        except Exception:  # noqa: BLE001
+            poll_enabled_channels(lambda: worker.stopping)
+        except Exception:
             logger.debug("autodownload poller error", exc_info=True)
-        if _stop.wait(timeout=POLL_INTERVAL_SEC):
+        if worker.sleep(POLL_INTERVAL_SEC):
             return
 
 
-def start_autodownload_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(
-        target=_worker_loop, daemon=True, name="autodownload-poller"
-    )
-    _thread.start()
-
-
-def stop_autodownload_worker() -> None:
-    _stop.set()
-    thread = _thread
-    if thread is not None and thread.is_alive():
-        thread.join(timeout=5)
+def create_worker() -> BackgroundWorker:
+    return BackgroundWorker("autodownload-poller", _worker_loop)

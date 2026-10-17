@@ -1,8 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { describeError } from "../apiErrors";
 import { Link, useNavigate } from "react-router-dom";
 import { api, listThumbnailUrl, playlistCoverUrl } from "../api";
 import Collapse from "./Collapse";
-import ImageCropModal from "./ImageCropModal";
+import { ImageCropModal } from "./lazy";
 import LoadingIndicator from "./LoadingIndicator";
 import {
   CoverEditIcon,
@@ -12,9 +16,15 @@ import {
   beginReorderDrag,
 } from "./playlistChrome";
 import { useConfirm } from "../context/ConfirmContext";
-import { usePlayback } from "../context/PlaybackContext";
-import type { Playlist, PlaylistDetail, Video } from "../types";
-import { formatDuration, formatRelative, moveItem } from "../utils";
+import { usePlaybackActions } from "../context/PlaybackContext";
+import { queryKeys } from "../queries/keys";
+import {
+  mergePlaylist,
+  setPlaylistDetail,
+  usePlaylistDetail,
+} from "../queries/playlists";
+import type { Playlist, Video } from "../types";
+import { formatDuration, formatRelative, moveItem, safeHref } from "../utils";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 
 export default function PlaylistRow({
@@ -24,7 +34,6 @@ export default function PlaylistRow({
   dragOver,
   onToggle,
   onDeleted,
-  onUpdated,
   onPlaylistDragStart,
   onPlaylistDragOver,
   onPlaylistDrop,
@@ -36,24 +45,24 @@ export default function PlaylistRow({
   dragOver?: boolean;
   onToggle: () => void;
   onDeleted: () => void;
-  onUpdated: (next: Playlist) => void;
   onPlaylistDragStart: (id: number) => void;
   onPlaylistDragOver: (id: number) => void;
   onPlaylistDrop: (id: number) => void;
   onPlaylistDragEnd: () => void;
 }) {
+  const { can } = useAuth();
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const { playVideo, addToQueue } = usePlayback();
+  const { showError } = useToast();
+  const { playVideo, addToQueue } = usePlaybackActions();
   const headerRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const skipNameSaveRef = useRef(false);
-  const [detail, setDetail] = useState<PlaylistDetail | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [actionError, setActionError] = useState<string | null>(null);
-  const [actionBusy, setActionBusy] = useState(false);
+  const queryClient = useQueryClient();
+  const detailQuery = usePlaylistDetail(playlist.id, open);
+  const loadError = detailQuery.isError ? "Could not load playlist" : null;
+  const loading = detailQuery.isFetching;
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [coverDraft, setCoverDraft] = useState<File | null>(null);
@@ -62,59 +71,23 @@ export default function PlaylistRow({
   const videoDragIndex = useRef<number | null>(null);
   const [videoDragOver, setVideoDragOver] = useState<number | null>(null);
 
-  const current = detail && detail.id === playlist.id ? detail : null;
+  const current = detailQuery.data ?? null;
   const coverSrc = playlistCoverUrl(playlist);
   const coverSrcBusted =
     coverSrc && playlist.has_custom_cover && coverRev
       ? `${coverSrc}&r=${coverRev}`
       : coverSrc;
 
-  const applyPlaylist = (next: Playlist, videos?: Video[]) => {
-    if (videos && current) {
-      setDetail({ ...current, ...next, videos });
-    } else if (current) {
-      setDetail({ ...current, ...next, videos: current.videos });
-    }
-    onUpdated(next);
-  };
+  const reload = () =>
+    queryClient.invalidateQueries({
+      queryKey: queryKeys.playlists.detail(playlist.id),
+    });
 
-  const reload = () => {
-    setLoading(true);
-    api
-      .getPlaylist(playlist.id)
-      .then((d) => {
-        setDetail(d);
-        setLoadError(null);
-        onUpdated(d);
-      })
-      .catch(() => setLoadError("Could not load playlist"))
-      .finally(() => setLoading(false));
-  };
-
+  // A freshly read playlist also refreshes its row in the list (video count, cover).
+  const loaded = detailQuery.data;
   useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setLoading(true);
-    setLoadError(null);
-    api
-      .getPlaylist(playlist.id)
-      .then((d) => {
-        if (cancelled) return;
-        setDetail(d);
-        onUpdated(d);
-      })
-      .catch(() => {
-        if (!cancelled) setLoadError("Could not load playlist");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-    // onUpdated is unstable; fetch when this row opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, playlist.id]);
+    if (loaded) mergePlaylist(queryClient, loaded, { detail: false });
+  }, [loaded, queryClient]);
 
   useEffect(() => {
     if (!open) setEditing(false);
@@ -130,7 +103,7 @@ export default function PlaylistRow({
     }, 0);
     return () => window.clearTimeout(t);
     // Only reset the draft when the editor opens.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when the editor opens, not on every rename
   }, [editing]);
 
   const playAll = () => {
@@ -140,11 +113,21 @@ export default function PlaylistRow({
     navigate(`/watch/${first.id}`);
   };
 
-  const remove = async (videoId: number) => {
-    await api.removeFromPlaylist(playlist.id, videoId).catch(() => undefined);
-    reload();
-  };
+  const removeMutation = useMutation({
+    mutationFn: (videoId: number) =>
+      api.removeFromPlaylist(playlist.id, videoId),
+    onError: (err) =>
+      showError(`Could not remove video: ${describeError(err)}`),
+    onSettled: () => reload(),
+  });
+  const remove = (videoId: number) => removeMutation.mutate(videoId);
 
+  const deleteMutation = useMutation({
+    mutationFn: () => api.deletePlaylist(playlist.id),
+    onSuccess: () => onDeleted(),
+    onError: (err) =>
+      showError(`Could not delete playlist: ${describeError(err)}`),
+  });
   const onDelete = async () => {
     const ok = await confirm({
       title: "Delete this playlist?",
@@ -152,64 +135,45 @@ export default function PlaylistRow({
       confirmLabel: "Delete",
       danger: true,
     });
-    if (!ok) return;
-    await api.deletePlaylist(playlist.id);
-    onDeleted();
+    if (ok) deleteMutation.mutate();
   };
 
-  const onSync = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    setSyncMessage(null);
-    try {
-      await api.syncPlaylist(playlist.id);
+  const syncMutation = useMutation({
+    mutationFn: () => api.syncPlaylist(playlist.id),
+    onMutate: () => setSyncMessage(null),
+    onSuccess: () => {
       setSyncMessage("Sync started — new videos will appear as they download.");
-      window.setTimeout(reload, 1500);
-    } catch (err) {
-      setActionError(err instanceof Error ? err.message : "Sync failed");
-    } finally {
-      setActionBusy(false);
-    }
-  };
+      window.setTimeout(() => void reload(), 1500);
+    },
+    onError: (err) => showError(`Sync failed: ${describeError(err)}`),
+  });
+  const onSync = () => syncMutation.mutate();
 
-  const onStopSubscribing = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        subscribed: false,
-      });
-      applyPlaylist(updated);
-      setSyncMessage(null);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not stop subscribing"
-      );
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const onSubscribeUpdates = async () => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        subscribed: true,
-      });
-      applyPlaylist(updated);
-      setSyncMessage(
-        "Subscribed — Horde will check for new videos on a schedule."
-      );
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not subscribe"
-      );
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
+  // Every edit of the playlist itself: the server returns the new row.
+  const updateMutation = useMutation({
+    mutationFn: (v: {
+      patch: Parameters<typeof api.updatePlaylist>[1];
+      success?: string | null;
+      failure: string;
+    }) => api.updatePlaylist(playlist.id, v.patch),
+    onSuccess: (updated, v) => {
+      mergePlaylist(queryClient, updated);
+      if (v.success !== undefined) setSyncMessage(v.success);
+    },
+    onError: (err, v) => showError(`${v.failure}: ${describeError(err)}`),
+  });
+  const onStopSubscribing = () =>
+    updateMutation.mutate({
+      patch: { subscribed: false },
+      success: null,
+      failure: "Could not stop subscribing",
+    });
+  const onSubscribeUpdates = () =>
+    updateMutation.mutate({
+      patch: { subscribed: true },
+      success: "Subscribed — Horde will check for new videos on a schedule.",
+      failure: "Could not subscribe",
+    });
   const saveName = async () => {
     const next = draftName.trim();
     if (!next) {
@@ -217,75 +181,65 @@ export default function PlaylistRow({
       return;
     }
     if (next === playlist.name) return;
-    setActionBusy(true);
-    setActionError(null);
     try {
-      const updated = await api.updatePlaylist(playlist.id, { name: next });
-      applyPlaylist(updated);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not rename playlist"
-      );
-      setDraftName(playlist.name);
-    } finally {
-      setActionBusy(false);
-    }
-  };
-
-  const setCoverVideo = async (videoId: number | null) => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.updatePlaylist(playlist.id, {
-        cover_video_id: videoId,
+      await updateMutation.mutateAsync({
+        patch: { name: next },
+        failure: "Could not rename playlist",
       });
-      applyPlaylist(updated);
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not update cover"
-      );
-    } finally {
-      setActionBusy(false);
+    } catch {
+      setDraftName(playlist.name);
     }
   };
+  const setCoverVideo = (videoId: number | null) =>
+    updateMutation.mutate({
+      patch: { cover_video_id: videoId },
+      failure: "Could not update cover",
+    });
 
   const clearCoverDraft = () => {
     setCoverDraft(null);
     if (coverInputRef.current) coverInputRef.current.value = "";
   };
 
-  const onUploadCover = async (file: File) => {
-    setActionBusy(true);
-    setActionError(null);
-    try {
-      const updated = await api.uploadPlaylistCover(playlist.id, file);
-      applyPlaylist(updated);
+  const coverMutation = useMutation({
+    mutationFn: (file: File) => api.uploadPlaylistCover(playlist.id, file),
+    onSuccess: (updated) => {
+      mergePlaylist(queryClient, updated);
       setCoverRev(Date.now());
       clearCoverDraft();
-    } catch (err) {
-      setActionError(
-        err instanceof Error ? err.message : "Could not upload cover"
-      );
-      throw err;
-    } finally {
-      setActionBusy(false);
-    }
+    },
+    onError: (err) =>
+      showError(`Could not upload cover: ${describeError(err)}`),
+  });
+  const onUploadCover = async (file: File) => {
+    await coverMutation.mutateAsync(file);
   };
 
-  const commitVideoOrder = async (videos: Video[]) => {
-    if (!current) return;
-    setDetail({ ...current, videos });
-    try {
-      const next = await api.reorderPlaylist(
+  const orderMutation = useMutation({
+    mutationFn: (videos: Video[]) =>
+      api.reorderPlaylist(
         playlist.id,
         videos.map((v) => v.id)
-      );
-      setDetail(next);
-      onUpdated(next);
-    } catch {
-      reload();
-    }
+      ),
+    onMutate: (videos) => {
+      if (current) {
+        queryClient.setQueryData(queryKeys.playlists.detail(playlist.id), {
+          ...current,
+          videos,
+        });
+      }
+    },
+    onSuccess: (next) => setPlaylistDetail(queryClient, next),
+    onError: () => void reload(),
+  });
+  const commitVideoOrder = (videos: Video[]) => {
+    if (current) orderMutation.mutate(videos);
   };
+
+  const actionBusy =
+    updateMutation.isPending ||
+    syncMutation.isPending ||
+    coverMutation.isPending;
 
   const youtubeImported = playlist.source_type === "youtube";
   const sourceHint = playlist.subscribed
@@ -294,7 +248,8 @@ export default function PlaylistRow({
       ? " · imported from YouTube"
       : "";
   const videoCount = current?.videos.length ?? playlist.item_count;
-  const coverPinned = playlist.has_custom_cover || playlist.cover_video_id != null;
+  const coverPinned =
+    playlist.has_custom_cover || playlist.cover_video_id != null;
 
   return (
     <div
@@ -320,6 +275,8 @@ export default function PlaylistRow({
       <div
         ref={headerRef}
         className="flex cursor-pointer items-stretch"
+        // Pointer shortcut; the expand/collapse button below is the keyboard path.
+        role="presentation"
         onClick={onToggle}
       >
         <DragHandle
@@ -369,7 +326,7 @@ export default function PlaylistRow({
                 </span>
               )}
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted">
               {videoCount} video{videoCount === 1 ? "" : "s"}
               {sourceHint}
               {playlist.subscribed && playlist.last_synced_at
@@ -422,182 +379,185 @@ export default function PlaylistRow({
           {loading && !current ? (
             <LoadingIndicator className="py-8" />
           ) : loadError ? (
-            <p className="py-6 text-center text-sm text-gray-500">{loadError}</p>
+            <p className="py-6 text-center text-sm text-muted">{loadError}</p>
           ) : (
             <>
               <div className="flex flex-wrap items-start gap-2">
                 <div className="flex min-w-0 flex-1 flex-nowrap items-start gap-2">
-                <button
-                  type="button"
-                  onClick={playAll}
-                  disabled={!current || current.videos.length === 0}
-                  className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
-                >
-                  Play all
-                </button>
-                {playlist.subscribed && (
                   <button
                     type="button"
-                    onClick={onSync}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    onClick={playAll}
+                    disabled={!current || current.videos.length === 0}
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
                   >
-                    Sync now
+                    Play all
                   </button>
-                )}
-                <PlaylistAddVideo
-                  playlistId={playlist.id}
-                  memberIds={new Set((current?.videos ?? []).map((v) => v.id))}
-                  active={open}
-                  onAdded={(next) => {
-                    setDetail(next);
-                    onUpdated(next);
-                  }}
-                />
+                  {playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onSync}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    >
+                      Sync now
+                    </button>
+                  )}
+                  <PlaylistAddVideo
+                    playlistId={playlist.id}
+                    memberIds={
+                      new Set((current?.videos ?? []).map((v) => v.id))
+                    }
+                    active={open}
+                    onAdded={(next) => setPlaylistDetail(queryClient, next)}
+                  />
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                {playlist.subscribed && (
-                  <button
-                    type="button"
-                    onClick={onStopSubscribing}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
-                  >
-                    Stop subscription
-                  </button>
-                )}
-                {youtubeImported && !playlist.subscribed && (
-                  <button
-                    type="button"
-                    onClick={onSubscribeUpdates}
-                    disabled={actionBusy}
-                    className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
-                  >
-                    Subscribe to updates
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={onDelete}
-                  className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
-                >
-                  Delete
-                </button>
-                {playlist.source_url && (
-                  <a
-                    href={playlist.source_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 text-sm text-accent hover:underline"
-                  >
-                    Source playlist ↗
-                  </a>
-                )}
+                  {playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onStopSubscribing}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                    >
+                      Stop subscription
+                    </button>
+                  )}
+                  {youtubeImported && !playlist.subscribed && (
+                    <button
+                      type="button"
+                      onClick={onSubscribeUpdates}
+                      disabled={actionBusy}
+                      className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                    >
+                      Subscribe to updates
+                    </button>
+                  )}
+                  {can("manage_playlists") && (
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                    >
+                      Delete
+                    </button>
+                  )}
+                  {safeHref(playlist.source_url) && (
+                    <a
+                      href={safeHref(playlist.source_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="shrink-0 text-sm text-accent hover:underline"
+                    >
+                      Source playlist ↗
+                    </a>
+                  )}
                 </div>
               </div>
               {playlist.sync_error && (
-                <p className="mt-2 text-sm text-red-400">{playlist.sync_error}</p>
-              )}
-              {actionError && (
-                <p className="mt-2 text-sm text-red-400">{actionError}</p>
+                <p className="mt-2 text-sm text-red-400">
+                  {playlist.sync_error}
+                </p>
               )}
               {syncMessage && (
                 <p className="mt-2 text-sm text-accent">{syncMessage}</p>
               )}
 
               {editing && (
-              <div className="mt-4">
-                <div className="mb-2 flex items-baseline justify-between gap-2">
-                  <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
-                    Cover
-                  </p>
-                  {coverPinned && (
+                <div className="mt-4">
+                  <div className="mb-2 flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                      Cover
+                    </p>
+                    {coverPinned && (
+                      <button
+                        type="button"
+                        disabled={actionBusy}
+                        onClick={() => setCoverVideo(null)}
+                        className="text-xs text-gray-400 hover:text-accent disabled:opacity-50"
+                      >
+                        Use first video
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex gap-2 overflow-x-auto pb-1 horde-scrollbar">
+                    {(current?.videos ?? []).map((video, index) => {
+                      const selected =
+                        !playlist.has_custom_cover &&
+                        (playlist.cover_video_id === video.id ||
+                          (playlist.cover_video_id == null && index === 0));
+                      const src = video.has_thumbnail
+                        ? listThumbnailUrl(video.id)
+                        : null;
+                      return (
+                        <button
+                          key={video.id}
+                          type="button"
+                          disabled={actionBusy}
+                          title={
+                            index === 0 && playlist.cover_video_id == null
+                              ? "Default (first video)"
+                              : `Use thumbnail from ${video.title}`
+                          }
+                          onClick={() => {
+                            if (
+                              index === 0 &&
+                              playlist.cover_video_id == null &&
+                              !playlist.has_custom_cover
+                            ) {
+                              return;
+                            }
+                            setCoverVideo(index === 0 ? null : video.id);
+                          }}
+                          className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
+                            selected
+                              ? "ring-accent"
+                              : "ring-ink-700 hover:ring-ink-500"
+                          }`}
+                        >
+                          <PlaylistThumb
+                            src={src}
+                            className="aspect-video w-full"
+                          />
+                          {index === 0 && playlist.cover_video_id == null && (
+                            <span className="absolute bottom-0.5 left-0.5 rounded bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
+                              Auto
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                     <button
                       type="button"
                       disabled={actionBusy}
-                      onClick={() => void setCoverVideo(null)}
-                      className="text-xs text-gray-400 hover:text-accent disabled:opacity-50"
+                      onClick={() => coverInputRef.current?.click()}
+                      className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
+                        playlist.has_custom_cover
+                          ? "border-accent text-accent"
+                          : "border-ink-600 text-muted hover:border-ink-500 hover:text-gray-300"
+                      }`}
                     >
-                      Use first video
+                      {playlist.has_custom_cover ? "Custom" : "Upload"}
                     </button>
-                  )}
-                </div>
-                <div className="flex gap-2 overflow-x-auto pb-1 horde-scrollbar">
-                  {(current?.videos ?? []).map((video, index) => {
-                    const selected =
-                      !playlist.has_custom_cover &&
-                      (playlist.cover_video_id === video.id ||
-                        (playlist.cover_video_id == null && index === 0));
-                    const src = video.has_thumbnail
-                      ? listThumbnailUrl(video.id)
-                      : null;
-                    return (
-                      <button
-                        key={video.id}
-                        type="button"
-                        disabled={actionBusy}
-                        title={
-                          index === 0 && playlist.cover_video_id == null
-                            ? "Default (first video)"
-                            : `Use thumbnail from ${video.title}`
+                    <input
+                      ref={coverInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) setCoverDraft(file);
+                        else if (coverInputRef.current) {
+                          coverInputRef.current.value = "";
                         }
-                        onClick={() => {
-                          if (
-                            index === 0 &&
-                            playlist.cover_video_id == null &&
-                            !playlist.has_custom_cover
-                          ) {
-                            return;
-                          }
-                          void setCoverVideo(index === 0 ? null : video.id);
-                        }}
-                        className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
-                          selected
-                            ? "ring-accent"
-                            : "ring-ink-700 hover:ring-ink-500"
-                        }`}
-                      >
-                        <PlaylistThumb src={src} className="aspect-video w-full" />
-                        {index === 0 && playlist.cover_video_id == null && (
-                          <span className="absolute bottom-0.5 left-0.5 rounded bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
-                            Auto
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                  <button
-                    type="button"
-                    disabled={actionBusy}
-                    onClick={() => coverInputRef.current?.click()}
-                    className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
-                      playlist.has_custom_cover
-                        ? "border-accent text-accent"
-                        : "border-ink-600 text-gray-500 hover:border-ink-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {playlist.has_custom_cover ? "Custom" : "Upload"}
-                  </button>
-                  <input
-                    ref={coverInputRef}
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      if (file) setCoverDraft(file);
-                      else if (coverInputRef.current) {
-                        coverInputRef.current.value = "";
-                      }
-                    }}
-                  />
+                      }}
+                    />
+                  </div>
                 </div>
-              </div>
               )}
 
               <div className="mt-3 space-y-2">
                 {!current || current.videos.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-gray-500">
+                  <p className="py-8 text-center text-sm text-muted">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."
                       : "No videos yet. Search your library or paste a download link."}
@@ -625,7 +585,7 @@ export default function PlaylistRow({
                           setVideoDragOver(null);
                           if (!current) return;
                           const next = moveItem(current.videos, from, i);
-                          void commitVideoOrder(next);
+                          commitVideoOrder(next);
                         }}
                         className={`flex items-center gap-1 rounded-lg bg-ink-950/70 p-2 ring-1 ${
                           videoDragOver === i
@@ -645,7 +605,7 @@ export default function PlaylistRow({
                             setVideoDragOver(null);
                           }}
                         />
-                        <span className="w-6 shrink-0 text-center text-sm text-gray-500">
+                        <span className="w-6 shrink-0 text-center text-sm text-muted">
                           {i + 1}
                         </span>
                         <Link
@@ -655,6 +615,10 @@ export default function PlaylistRow({
                           <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
                             {thumb && (
                               <img
+                                loading="lazy"
+                                decoding="async"
+                                width={96}
+                                height={56}
                                 src={thumb}
                                 alt=""
                                 className="h-full w-full object-cover"
@@ -665,7 +629,7 @@ export default function PlaylistRow({
                             <p className="truncate text-sm font-medium text-gray-100">
                               {v.title}
                             </p>
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-muted">
                               {v.channel} · {formatDuration(v.duration_sec)}
                             </p>
                           </div>
@@ -681,7 +645,7 @@ export default function PlaylistRow({
                         <button
                           type="button"
                           onClick={() => remove(v.id)}
-                          className="shrink-0 px-2 text-gray-500 hover:text-accent"
+                          className="shrink-0 px-2 text-muted hover:text-accent"
                           title="Remove from playlist"
                         >
                           ✕
@@ -696,13 +660,15 @@ export default function PlaylistRow({
         </div>
       </Collapse>
       {coverDraft ? (
-        <ImageCropModal
-          file={coverDraft}
-          title="Edit playlist cover"
-          confirmLabel="Use cover"
-          onCancel={clearCoverDraft}
-          onConfirm={onUploadCover}
-        />
+        <Suspense fallback={null}>
+          <ImageCropModal
+            file={coverDraft}
+            title="Edit playlist cover"
+            confirmLabel="Use cover"
+            onCancel={clearCoverDraft}
+            onConfirm={onUploadCover}
+          />
+        </Suspense>
       ) : null}
     </div>
   );

@@ -5,18 +5,29 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
-from sqlmodel import Session, select
+from sqlalchemy import func
+from sqlmodel import Session, col, select
 
-from ...models import AiCategory, AiJobKind, ChannelCatalogEmbedding, ChannelCatalogVideo, Video, VideoAiMeta, utcnow
-from .. import app_settings, chapters as chapters_svc, library
-from . import embeddings, text as ai_text
+from ...models import (
+    AiCategory,
+    AiJobKind,
+    ChannelCatalogEmbedding,
+    ChannelCatalogVideo,
+    UserVideoState,
+    Video,
+    VideoAiMeta,
+    utcnow,
+)
+from .. import app_settings, library
+from .. import chapters as chapters_svc
+from . import embeddings
+from . import text as ai_text
 from .provider import (
     OpenRouterProvider,
     get_embed_provider,
     get_llm_provider,
-    get_provider,
     llm_features_allowed,
     require_llm_chat_model,
     resolve_embed_model,
@@ -49,7 +60,8 @@ def _parse_json_object(raw: str) -> dict[str, Any]:
 
 def _unescape_json_string(fragment: str) -> str:
     try:
-        return json.loads(f'"{fragment}"')
+        text: str = json.loads(f'"{fragment}"')
+        return text
     except json.JSONDecodeError:
         return (
             fragment.replace("\\n", "\n")
@@ -142,7 +154,7 @@ def _extract_summary_text(raw: str) -> str:
     return ""
 
 
-def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
+def run_embed_video(session: Session, video_id: int | None) -> SkipReason | None:
     if video_id is None:
         raise RuntimeError("embed_video requires video_id")
     ok = embeddings.embed_video(session, video_id)
@@ -154,13 +166,15 @@ def run_embed_video(session: Session, video_id: Optional[int]) -> Optional[SkipR
     if video.needs_review:
         return "needs_review"
     if get_embed_provider() is None:
-        raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
+        raise RuntimeError(
+            "No embed provider available (enable Ollama or OpenRouter All)"
+        )
     return "embed_skipped"
 
 
 def run_embed_catalog_video(
-    session: Session, catalog_video_id: Optional[int]
-) -> Optional[SkipReason]:
+    session: Session, catalog_video_id: int | None
+) -> SkipReason | None:
     if catalog_video_id is None:
         raise RuntimeError("embed_catalog_video requires catalog_video_id")
     video = session.get(ChannelCatalogVideo, catalog_video_id)
@@ -168,7 +182,9 @@ def run_embed_catalog_video(
         return "catalog_video_missing"
     provider = get_embed_provider()
     if provider is None:
-        raise RuntimeError("No embed provider available (enable Ollama or OpenRouter All)")
+        raise RuntimeError(
+            "No embed provider available (enable Ollama or OpenRouter All)"
+        )
     model = resolve_embed_model(provider)
     from .. import channel_catalog
 
@@ -226,13 +242,10 @@ def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
         return True
     # Token-set equality (order-independent)
     tokens = frozenset(key.split())
-    for existing in seen_norms:
-        if frozenset(existing.split()) == tokens:
-            return True
-    return False
+    return any(frozenset(existing.split()) == tokens for existing in seen_norms)
 
 
-def run_enrich_tags(session: Session, video_id: Optional[int]) -> Optional[SkipReason]:
+def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None:
     if video_id is None:
         raise RuntimeError("enrich_tags requires video_id")
     ai = app_settings.ai_settings()
@@ -275,8 +288,10 @@ def run_enrich_tags(session: Session, video_id: Optional[int]) -> Optional[SkipR
         video_id=video_id,
     )
     data = _parse_json_object(raw)
-    suggested = data.get("tags") if isinstance(data.get("tags"), list) else []
-    remove_raw = data.get("remove") if isinstance(data.get("remove"), list) else []
+    suggested_raw = data.get("tags")
+    suggested = suggested_raw if isinstance(suggested_raw, list) else []
+    remove_value = data.get("remove")
+    remove_raw = remove_value if isinstance(remove_value, list) else []
 
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
@@ -362,12 +377,7 @@ def run_summarize(session: Session, video_id: int, *, force: bool = False) -> st
         )
 
     meta = session.get(VideoAiMeta, video_id)
-    if (
-        not force
-        and meta is not None
-        and meta.summary
-        and str(meta.summary).strip()
-    ):
+    if not force and meta is not None and meta.summary and str(meta.summary).strip():
         return str(meta.summary).strip()
 
     provider = get_llm_provider()
@@ -591,9 +601,7 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
             video_id=video_id,
         )
         payload = chapters_svc.chapters_from_model_output(raw)
-        cleaned = chapters_svc.snap_and_validate(
-            payload, cues, video.duration_sec
-        )
+        cleaned = chapters_svc.snap_and_validate(payload, cues, video.duration_sec)
         if cleaned:
             break
         logger.warning(
@@ -654,6 +662,7 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
 def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video]:
     """Mix recent watches, recent adds, and channel-stratified fill."""
     from collections import defaultdict
+
     from sqlalchemy import nullslast
 
     used: set[int] = set()
@@ -673,21 +682,26 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
             out.append(video)
             cap -= 1
 
+    # Categories are shared across users, so "recently watched" is the latest
+    # watch by anyone (max over users), not any one person's history.
+    latest_watch = func.max(UserVideoState.last_watched_at)
     watched = session.exec(
         select(Video)
+        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
         .where(
-            Video.needs_review == False,  # noqa: E712
-            Video.last_watched_at.is_not(None),  # type: ignore[attr-defined]
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            col(UserVideoState.last_watched_at).is_not(None),
         )
-        .order_by(Video.last_watched_at.desc())  # type: ignore[union-attr]
+        .group_by(col(Video.id))
+        .order_by(latest_watch.desc())
         .limit(watch_cap * 2)
     ).all()
     _take(list(watched), watch_cap)
 
     recent = session.exec(
         select(Video)
-        .where(Video.needs_review == False)  # noqa: E712
-        .order_by(nullslast(Video.added_at.desc()))
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .order_by(nullslast(col(Video.added_at).desc()))
         .limit(add_cap * 2)
     ).all()
     _take(list(recent), add_cap)
@@ -697,8 +711,8 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
 
     rest = session.exec(
         select(Video)
-        .where(Video.needs_review == False)  # noqa: E712
-        .order_by(nullslast(Video.added_at.desc()))
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .order_by(nullslast(col(Video.added_at).desc()))
     ).all()
     by_channel: dict[str, list[Video]] = defaultdict(list)
     for video in rest:
@@ -770,7 +784,7 @@ def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
     return cleaned
 
 
-def run_refresh_categories(session: Session, _video_id: Optional[int] = None) -> None:
+def run_refresh_categories(session: Session, _video_id: int | None = None) -> None:
     embed_provider = get_embed_provider()
     if embed_provider is None:
         raise RuntimeError(
@@ -829,7 +843,8 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         usage_kind="categories",
     )
     data = _parse_json_object(raw)
-    raw_cats = data.get("categories") if isinstance(data.get("categories"), list) else []
+    categories_value = data.get("categories")
+    raw_cats = categories_value if isinstance(categories_value, list) else []
     cleaned = _parse_category_items(raw_cats)
     # Need a few solid chips before wiping the existing table.
     if len(cleaned) < 3:
@@ -846,7 +861,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
             sample_centroids.append((video, cent))
 
     example_min = 0.28
-    prepared: list[tuple[str, Optional[str], list[float]]] = []
+    prepared: list[tuple[str, str | None, list[float]]] = []
     for name, blurb in cleaned:
         provisional = ai_text.category_embed_text(name, blurb)
         q = embed_provider.embed(provisional, embed_model, usage_kind="embed")
@@ -860,9 +875,7 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
         example_titles = [
             (v.title or "").strip() for _, v, _ in examples if (v.title or "").strip()
         ]
-        doc = ai_text.category_embed_text(
-            name, blurb, example_titles=example_titles
-        )
+        doc = ai_text.category_embed_text(name, blurb, example_titles=example_titles)
         text_vec = embed_provider.embed(doc, embed_model, usage_kind="embed")
         cent = embeddings.mean_vectors([c for _, _, c in examples])
         if cent is None:
@@ -874,13 +887,13 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
     existing = session.exec(select(AiCategory)).all()
     for row in existing:
         session.delete(row)
-    for name, blurb, store_vec in prepared:
+    for cat_name, cat_blurb, cat_vec in prepared:
         session.add(
             AiCategory(
-                name=name,
-                blurb=blurb,
-                embedding=embeddings.pack_vector(store_vec),
-                dim=len(store_vec),
+                name=cat_name,
+                blurb=cat_blurb,
+                embedding=embeddings.pack_vector(cat_vec),
+                dim=len(cat_vec),
                 model=embed_model,
                 updated_at=utcnow(),
             )
@@ -891,10 +904,10 @@ def run_refresh_categories(session: Session, _video_id: Optional[int] = None) ->
 def dispatch(
     session: Session,
     kind: AiJobKind,
-    video_id: Optional[int],
+    video_id: int | None,
     *,
-    catalog_video_id: Optional[int] = None,
-) -> Optional[SkipReason]:
+    catalog_video_id: int | None = None,
+) -> SkipReason | None:
     """Run a job. Returns None on success, or a skip reason (caller → cancelled)."""
     if kind == AiJobKind.embed_video:
         return run_embed_video(session, video_id)

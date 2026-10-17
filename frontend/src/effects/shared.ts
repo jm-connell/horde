@@ -87,12 +87,19 @@ const noopController: EffectController = {
   setSize: () => undefined,
 };
 
+/**
+ * Decorative effects do not need display-rate animation; 30 fps halves the
+ * CPU/GPU cost and battery drain. Pass `maxFps` to override per effect.
+ */
+export const DEFAULT_EFFECT_FPS = 30;
+
 export function createCanvasLoop(
   canvas: HTMLCanvasElement,
   draw: (ctx: EffectContext) => void,
-  options?: { maxDpr?: number }
+  options?: { maxDpr?: number; maxFps?: number }
 ): EffectController {
   const maxDpr = options?.maxDpr ?? 1.5;
+  const minFrameMs = 1000 / (options?.maxFps ?? DEFAULT_EFFECT_FPS);
   const ctx = canvas.getContext("2d", { alpha: true });
   if (!ctx) return noopController;
 
@@ -155,7 +162,14 @@ export function createCanvasLoop(
 
   const frame = (now: number) => {
     if (!running || paused || document.hidden) return;
-    const rawDt = Math.min(0.033, (now - last) / 1000);
+    // Wait for the next display frame once we are ahead of the fps budget; the
+    // 1 ms slack stops a 60 Hz display from landing just under 33 ms and
+    // alternately drawing and skipping.
+    if (now - last < minFrameMs - 1) {
+      raf = requestAnimationFrame(frame);
+      return;
+    }
+    const rawDt = Math.min(0.1, (now - last) / 1000);
     last = now;
     // Skip pathological stalls (tab resume, GC) so particles don't jump.
     if (rawDt <= 0) {

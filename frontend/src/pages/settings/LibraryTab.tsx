@@ -1,4 +1,6 @@
+import { useAuth } from "../../context/AuthContext";
 import { useSettingsPage } from "./context";
+import { useLibraryState } from "./useLibraryState";
 import { Section, SettingRow, Toggle, Chip } from "./ui";
 import {
   CATALOG_INDEX_TIP,
@@ -10,16 +12,45 @@ import {
   METADATA_INTERVAL_TIP,
   PANEL_BTN,
 } from "./constants";
-import { LIBRARY_SORT_OPTIONS, type LibrarySort } from "../../hooks/useLibrarySort";
+import {
+  LIBRARY_SORT_OPTIONS,
+  type LibrarySort,
+} from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
+const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
+
+const DOWNLOAD_PREF_TERMS = [
+  "download count",
+  "navigation",
+  "badge",
+  "normalize volume",
+  "loudness",
+  "downloads",
+];
+
+const COMPAT_TERMS = [
+  "compatibility",
+  "av1",
+  "h264",
+  "h265",
+  "hevc",
+  "codec",
+  "transcode",
+  "sidecar",
+  "gpu",
+  "nvenc",
+  "playback compatibility",
+  "convert",
+];
+
 export default function LibraryTab() {
+  const { q, match, settings, update } = useSettingsPage();
+  const { isAdmin, can } = useAuth();
+  // Download preferences only matter to someone who may download (admins can).
+  const canDownload = can("download");
   const {
-    q,
-    match,
-    settings,
-    update,
     appSettings,
     catalogMaxInput,
     setCatalogMaxInput,
@@ -35,7 +66,7 @@ export default function LibraryTab() {
     setExpiryInput,
     saveExpiry,
     systemStats,
-  } = useSettingsPage();
+  } = useLibraryState();
 
   return (
     <>
@@ -50,9 +81,7 @@ export default function LibraryTab() {
             "progress bar",
             "dates",
             "video cards",
-            "progress expiry",
-            "inactivity",
-            "days",
+            ...(isAdmin ? EXPIRY_TERMS : []),
             "default video sort",
             "sort",
             "library",
@@ -125,44 +154,48 @@ export default function LibraryTab() {
           />
         </div>
 
-        <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            Progress expiry
-          </h3>
-          <p className="mb-3 text-xs text-gray-500">
-            Saved watch position resets after this many days of inactivity.
-            The continue watching row hides videos after 7 days (fixed, not
-            configurable).
-          </p>
-          <div className="flex items-center gap-3">
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={expiryInput}
-              onChange={(e) => setExpiryInput(e.target.value)}
-              className={INPUT_COMPACT}
-            />
-            <button
-              onClick={saveExpiry}
-              disabled={
-                !appSettings ||
-                parseInt(expiryInput, 10) === appSettings.progress_expiry_days
-              }
-              className={PANEL_BTN}
-            >
-              Save
-            </button>
+        {/* Server-wide: it resets everyone's saved positions. */}
+        {isAdmin && (
+          <div className="mt-6 border-t border-ink-700 pt-6">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+              Progress expiry
+            </h3>
+            <p className="mb-3 text-xs text-muted">
+              Saved watch position resets after this many days of inactivity.
+              The continue watching row hides videos after 7 days (fixed, not
+              configurable).
+            </p>
+            <div className="flex items-center gap-3">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                aria-label="Progress expiry in days"
+                value={expiryInput}
+                onChange={(e) => setExpiryInput(e.target.value)}
+                className={INPUT_COMPACT}
+              />
+              <button
+                onClick={saveExpiry}
+                disabled={
+                  !appSettings ||
+                  parseInt(expiryInput, 10) === appSettings.progress_expiry_days
+                }
+                className={PANEL_BTN}
+              >
+                Save
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Default video sort
           </h3>
-          <p className="mb-3 text-xs text-gray-500">
-            Used when you open the library or after a temporary sort expires
-            (3 hours).
+          <p className="mb-3 text-xs text-muted">
+            Used when you open the library or after a temporary sort expires (3
+            hours).
           </p>
           <div className="flex flex-wrap gap-2">
             {LIBRARY_SORT_OPTIONS.filter((o) => o.value !== "random").map(
@@ -182,7 +215,7 @@ export default function LibraryTab() {
         </div>
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Channel list order (sidebar)
           </h3>
           <div className="mb-3 flex flex-wrap gap-2">
@@ -214,26 +247,8 @@ export default function LibraryTab() {
         title="Downloads"
         description="Background download queue and navigation preferences."
         hidden={
-          !match(
-            "download count",
-            "navigation",
-            "badge",
-            "normalize volume",
-            "loudness",
-            "downloads",
-            "compatibility",
-            "av1",
-            "h264",
-            "h265",
-            "hevc",
-            "codec",
-            "transcode",
-            "sidecar",
-            "gpu",
-            "nvenc",
-            "playback compatibility",
-            "convert"
-          )
+          !canDownload ||
+          !match(...DOWNLOAD_PREF_TERMS, ...(isAdmin ? COMPAT_TERMS : []))
         }
       >
         <div className="space-y-4">
@@ -268,34 +283,21 @@ export default function LibraryTab() {
               />
             }
           />
-          <div
-            hidden={
-              !!q &&
-              !match(
-                "compatibility",
-                "av1",
-                "h264",
-                "h265",
-                "hevc",
-                "codec",
-                "transcode",
-                "sidecar",
-                "gpu",
-                "nvenc",
-                "playback compatibility",
-                "convert"
-              )
-            }
-          >
-            <PlaybackCompatPicker
-              mode={settings.downloadVideoCodec}
-              onChange={(id) => update({ downloadVideoCodec: id })}
-              copyResolution={settings.compatCopyResolution}
-              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
-              stats={systemStats}
-              showLibraryActions
-            />
-          </div>
+          {/* Server-wide: the codec every download uses and the library's H.264 copies. */}
+          {isAdmin && (
+            <div hidden={!!q && !match(...COMPAT_TERMS)}>
+              <PlaybackCompatPicker
+                mode={settings.downloadVideoCodec}
+                onChange={(id) => update({ downloadVideoCodec: id })}
+                copyResolution={settings.compatCopyResolution}
+                onCopyResolutionChange={(v) =>
+                  update({ compatCopyResolution: v })
+                }
+                stats={systemStats}
+                showLibraryActions
+              />
+            </div>
+          )}
         </div>
       </Section>
 
@@ -303,6 +305,7 @@ export default function LibraryTab() {
         title="Metadata and catalog"
         description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync. Channel catalogs refresh on the same interval."
         hidden={
+          !isAdmin ||
           !match(
             "library metadata",
             "resync",
@@ -378,12 +381,16 @@ export default function LibraryTab() {
             }
           />
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+            <label
+              htmlFor="settings-catalog-max"
+              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
+            >
               Max videos per channel
               <HelpTip text={CATALOG_MAX_TIP} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                id="settings-catalog-max"
                 type="number"
                 min={100}
                 max={5000}
@@ -401,7 +408,8 @@ export default function LibraryTab() {
                   const clamped = Math.max(100, Math.min(5000, n));
                   setCatalogMaxInput(String(clamped));
                   if (
-                    clamped !== (appSettings?.channel_catalog_max_videos ?? 1000)
+                    clamped !==
+                    (appSettings?.channel_catalog_max_videos ?? 1000)
                   ) {
                     void saveCatalogSettings({
                       channel_catalog_max_videos: clamped,
@@ -410,7 +418,7 @@ export default function LibraryTab() {
                 }}
                 className={INPUT_COMPACT}
               />
-              <span className="text-xs text-gray-500">100–5000</span>
+              <span className="text-xs text-muted">100–5000</span>
             </div>
             {parseInt(catalogMaxInput, 10) > 1000 && (
               <p className="mt-1.5 text-xs text-amber-400/90">
@@ -420,12 +428,16 @@ export default function LibraryTab() {
             )}
           </div>
           <div>
-            <label className="mb-1 flex items-center gap-1.5 text-xs text-gray-500">
+            <label
+              htmlFor="settings-metadata-interval"
+              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
+            >
               Metadata / catalog refresh interval (hours)
               <HelpTip text={METADATA_INTERVAL_TIP} />
             </label>
             <div className="flex flex-wrap items-center gap-2">
               <input
+                id="settings-metadata-interval"
                 type="number"
                 min={1}
                 max={168}

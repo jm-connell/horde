@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Optional
+import logging
+from typing import Any
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session
 
-from ..database import get_session
-from ..models import Video
+from ..auth import current_user, require_permission
+from ..context import get_session
+from ..errors import CodedHTTPException
+from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
     ChannelAutodownloadUpdate,
@@ -25,16 +27,36 @@ from ..schemas import (
     ChannelSearchResponse,
     ChannelStat,
 )
-from ..services import channel_autodownload, channel_catalog, downloader, feed_meta_cache, library
 from ..services import app_settings as app_settings_svc
+from ..services import (
+    channel_autodownload,
+    channel_catalog,
+    feed_meta_cache,
+    library,
+    ytdlp_extract,
+)
+from ..services.auth.accounts import AuthUser
+from ..services.limits import ytdlp_slot
+from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
     search_youtube_channel_videos,
     search_youtube_videos,
 )
-from .video_serialize import to_read
+from . import member_view
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["channels"])
+
+
+def _checked_url(raw: str | None) -> str | None:
+    """A caller-supplied channel URL, trimmed. It reaches yt-dlp, so it must be public."""
+    url = (raw or "").strip() or None
+    if url:
+        validate_public_url(url)
+    return url
+
 
 @router.get("/channels", response_model=list[ChannelStat])
 def list_channels(
@@ -54,7 +76,11 @@ def list_channels(
     ]
 
 
-@router.patch("/channels", response_model=dict)
+@router.patch(
+    "/channels",
+    response_model=ChannelRenameResult,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
 def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):
     old = payload.old_name.strip()
     new = payload.new_name.strip()
@@ -64,23 +90,32 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
     return {"updated": updated}
 
 
-@router.get("/channels/search", response_model=ChannelSearchResponse)
+@router.get(
+    "/channels/search",
+    response_model=ChannelSearchResponse,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def search_channels(
     q: str = Query(..., min_length=1),
     limit: int = Query(8, ge=1, le=20),
 ):
-    hits = downloader.search_youtube_channels(q, limit=limit)
-    return ChannelSearchResponse(
-        results=[ChannelSearchHit(**h) for h in hits]
-    )
+    hits = ytdlp_extract.search_youtube_channels(q, limit=limit)
+    return ChannelSearchResponse(results=[ChannelSearchHit(**h) for h in hits])
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
-def channel_catalog_status():
-    return ChannelCatalogStatusResponse(**channel_catalog.get_runtime_status())
+def channel_catalog_status(user: AuthUser = Depends(current_user)):
+    payload = channel_catalog.get_runtime_status()
+    if not user.is_admin:
+        payload = member_view.catalog_status(payload)
+    return ChannelCatalogStatusResponse(**payload)
 
 
-@router.post("/channels/catalog/index", response_model=ChannelCatalogIndexResult)
+@router.post(
+    "/channels/catalog/index",
+    response_model=ChannelCatalogIndexResult,
+    dependencies=[Depends(require_permission("download"))],
+)
 def channel_catalog_index(
     payload: ChannelCatalogIndexRequest,
     session: Session = Depends(get_session),
@@ -91,7 +126,7 @@ def channel_catalog_index(
             status_code=400, detail="Channel catalog indexing is disabled"
         )
 
-    channel_url = (payload.url or "").strip() or None
+    channel_url = _checked_url(payload.url)
     channel_name = (payload.channel or "").strip() or None
 
     # No channel specified → refresh or full-index every library channel with a URL.
@@ -132,10 +167,10 @@ def channel_catalog_index(
 def _resolve_youtube_channel_url(
     session: Session,
     *,
-    url: Optional[str],
-    channel: Optional[str],
-) -> tuple[str, Optional[str]]:
-    channel_url = (url or "").strip() or None
+    url: str | None,
+    channel: str | None,
+) -> tuple[str, str | None]:
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -154,8 +189,8 @@ def _resolve_youtube_channel_url(
 
 @router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)
 def get_channel_autodownload(
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     session: Session = Depends(get_session),
 ):
     channel_url, channel_name = _resolve_youtube_channel_url(
@@ -172,7 +207,11 @@ def get_channel_autodownload(
     )
 
 
-@router.put("/channels/autodownload", response_model=ChannelAutodownloadRead)
+@router.put(
+    "/channels/autodownload",
+    response_model=ChannelAutodownloadRead,
+    dependencies=[Depends(require_permission("download"))],
+)
 def put_channel_autodownload(
     payload: ChannelAutodownloadUpdate,
     session: Session = Depends(get_session),
@@ -206,17 +245,14 @@ def put_channel_autodownload(
 
 def _published_fields(
     raw: dict[str, Any],
-    cached: Optional[dict[str, Any]],
-    library_iso: Optional[str],
-) -> tuple[Optional[str], Optional[str]]:
+    cached: dict[str, Any] | None,
+    library_iso: str | None,
+) -> tuple[str | None, str | None]:
     """Return (sort ISO, display label). Library dates are real calendar days."""
     label = raw.get("published_label")
     if not label and cached and not raw.get("published_at"):
         label = cached.get("published_label")
-    if isinstance(label, str):
-        label = label.strip() or None
-    else:
-        label = None
+    label = (label.strip() or None) if isinstance(label, str) else None
     iso = feed_meta_cache.parse_upload_date(raw.get("published_at"))
     if iso is None and cached:
         iso = feed_meta_cache.parse_upload_date(cached.get("published_at"))
@@ -231,8 +267,8 @@ def _feed_entries_from_raw(
     session: Session,
     raw_entries: list[dict[str, Any]],
     *,
-    channel_name: Optional[str],
-    channel_url: Optional[str] = None,
+    channel_name: str | None,
+    channel_url: str | None = None,
     global_search: bool = False,
 ) -> list[ChannelFeedEntry]:
     lib_map = library.youtube_library_map(
@@ -325,24 +361,27 @@ def _feed_entries_from_raw(
         feed_meta_cache.upsert_many(to_cache)
     if channel_url and catalog_updates:
         try:
-            channel_catalog.update_catalog_video_fields(
-                channel_url, catalog_updates
+            channel_catalog.update_catalog_video_fields(channel_url, catalog_updates)
+        except Exception:
+            logger.warning(
+                "could not store feed metadata in the catalog for %s",
+                channel_url,
+                exc_info=True,
             )
-        except Exception:  # noqa: BLE001
-            pass
     return entries
 
 
 @router.patch(
     "/channels/catalog/youtube-search",
     response_model=ChannelCatalogYoutubeSearchPref,
+    dependencies=[Depends(require_permission("edit_metadata"))],
 )
 def channel_youtube_search_pref(
     payload: ChannelCatalogYoutubeSearchUpdate,
     session: Session = Depends(get_session),
 ):
     """Set per-channel Direct YouTube search override (null = inherit)."""
-    channel_url = (payload.url or "").strip() or None
+    channel_url = _checked_url(payload.url)
     channel_name = (payload.channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -364,15 +403,19 @@ def channel_youtube_search_pref(
     return ChannelCatalogYoutubeSearchPref(**result)
 
 
-@router.get("/channels/youtube-search", response_model=ChannelFeedPage)
+@router.get(
+    "/channels/youtube-search",
+    response_model=ChannelFeedPage,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def channel_youtube_search(
     q: str = Query(..., min_length=2),
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     limit: int = Query(20, ge=1, le=40),
     session: Session = Depends(get_session),
 ):
-    channel_url = (url or "").strip() or None
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
@@ -393,9 +436,7 @@ def channel_youtube_search(
     empty.direct_youtube_search_effective = effective
     if not effective:
         return empty
-    raw_entries = search_youtube_channel_videos(
-        channel_url, q, limit=limit
-    )
+    raw_entries = search_youtube_channel_videos(channel_url, q, limit=limit)
     entries = _feed_entries_from_raw(
         session,
         raw_entries,
@@ -412,7 +453,11 @@ def channel_youtube_search(
     )
 
 
-@router.get("/youtube/search", response_model=ChannelFeedPage)
+@router.get(
+    "/youtube/search",
+    response_model=ChannelFeedPage,
+    dependencies=[Depends(ytdlp_slot)],
+)
 def youtube_video_search(
     q: str = Query(..., min_length=2),
     limit: int = Query(20, ge=1, le=40),
@@ -448,19 +493,22 @@ def youtube_video_search(
 @router.get("/channels/catalog/search", response_model=ChannelFeedPage)
 def channel_catalog_search(
     q: str = Query(..., min_length=1),
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     limit: int = Query(60, ge=1, le=200),
     semantic: bool = Query(True),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
+    # The embedding half spends the AI provider's quota: only accounts with use_ai.
+    semantic = semantic and user.can("use_ai")
     channel_url = (url or "").strip() or None
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
 
     global_search = not channel_url
-    if global_search:
+    if global_search or channel_url is None:
         raw_entries = channel_catalog.search_all_catalogs(
             session, q, limit=limit, semantic=semantic
         )
@@ -492,10 +540,19 @@ def channel_catalog_search(
     )
 
 
-@router.get("/channels/feed", response_model=ChannelFeedPage)
+def _feed_unavailable() -> CodedHTTPException:
+    """The fixed answer for a feed that could not load (the cause can quote a proxy)."""
+    return CodedHTTPException(
+        400, "Could not load the channel feed", "channel_feed_unavailable"
+    )
+
+
+@router.get(
+    "/channels/feed", response_model=ChannelFeedPage, dependencies=[Depends(ytdlp_slot)]
+)
 def channel_feed(
-    channel: Optional[str] = None,
-    url: Optional[str] = None,
+    channel: str | None = None,
+    url: str | None = None,
     offset: int = Query(0, ge=0),
     limit: int = Query(30, ge=1, le=100),
     live: bool = Query(
@@ -505,26 +562,31 @@ def channel_feed(
     ),
     session: Session = Depends(get_session),
 ):
-    channel_url = (url or "").strip() or None
+    channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
     if not channel_url:
-        return ChannelFeedPage(channel=channel_name, channel_url=None, entries=[], has_more=False)
+        return ChannelFeedPage(
+            channel=channel_name, channel_url=None, entries=[], has_more=False
+        )
 
     # Kick off / refresh catalog in the background without blocking the response.
     try:
-        channel_catalog.maybe_enqueue_for_feed(
-            channel_url, channel_name=channel_name
+        channel_catalog.maybe_enqueue_for_feed(channel_url, channel_name=channel_name)
+    except Exception:
+        logger.warning(
+            "could not queue a catalog refresh for %s",
+            channel_url,
+            exc_info=True,
         )
-    except Exception:  # noqa: BLE001
-        pass
 
     data = None
     from_catalog = False
     indexing = False
 
     if live:
+        live_error: Exception | None
         # Blocking YouTube fetch — used as a soft refresh after catalog paint.
         try:
             data = channel_catalog.sync_feed_head(
@@ -540,7 +602,10 @@ def channel_feed(
                 indexing = bool(catalog_page.get("indexing"))
             else:
                 from_catalog = False
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
+            logger.debug(
+                "live channel feed sync failed for %s", channel_url, exc_info=True
+            )
             # Fall back to catalog or live flat extract below.
             data = None
             live_error = exc
@@ -548,15 +613,16 @@ def channel_feed(
             live_error = None
         if data is None:
             try:
-                data = downloader.fetch_channel_feed(
+                data = ytdlp_extract.fetch_channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
                 from_catalog = False
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:
                 err = live_error or exc
-                raise HTTPException(
-                    status_code=400, detail=f"Could not load channel feed: {err}"
-                ) from err
+                logger.warning(
+                    "could not load channel feed %s", channel_url, exc_info=True
+                )
+                raise _feed_unavailable() from err
     else:
         data = channel_catalog.catalog_feed_page(
             session, channel_url, offset=offset, limit=limit
@@ -566,13 +632,14 @@ def channel_feed(
 
         if data is None:
             try:
-                data = downloader.fetch_channel_feed(
+                data = ytdlp_extract.fetch_channel_feed(
                     channel_url, offset=offset, limit=limit
                 )
-            except Exception as exc:  # noqa: BLE001
-                raise HTTPException(
-                    status_code=400, detail=f"Could not load channel feed: {exc}"
-                ) from exc
+            except Exception as exc:
+                logger.warning(
+                    "could not load channel feed %s", channel_url, exc_info=True
+                )
+                raise _feed_unavailable() from exc
             from_catalog = False
             indexing = False
         elif offset == 0:
@@ -581,8 +648,12 @@ def channel_feed(
                 channel_catalog.schedule_feed_head_sync(
                     channel_url, channel_name=channel_name
                 )
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.warning(
+                    "could not schedule a feed-head sync for %s",
+                    channel_url,
+                    exc_info=True,
+                )
 
     lib_map = library.youtube_library_map(session, channel=channel_name)
     yt_ids = [str(e["id"]) for e in (data.get("entries") or []) if e.get("id")]
@@ -640,8 +711,7 @@ def channel_feed(
             ChannelFeedEntry(
                 id=yt_id,
                 url=raw["url"],
-                title=raw.get("title")
-                or (cached.get("title") if cached else None),
+                title=raw.get("title") or (cached.get("title") if cached else None),
                 duration=duration,
                 thumbnail_url=thumbnail_url,
                 view_count=view_count,
@@ -677,14 +747,16 @@ def channel_feed(
                 channel_catalog.update_catalog_video_fields(
                     channel_url, catalog_updates
                 )
-            except Exception:  # noqa: BLE001
-                pass
+            except Exception:
+                logger.warning(
+                    "could not store feed metadata in the catalog for %s",
+                    channel_url,
+                    exc_info=True,
+                )
 
     # Background-fill missing views / dates / votes (catalog + live).
     missing_meta = [
-        e
-        for e in entries
-        if e.id and (e.view_count is None or not e.published_at)
+        e for e in entries if e.id and (e.view_count is None or not e.published_at)
     ][:8]
     missing_votes = [
         e for e in entries if e.id and (e.like_count is None or e.dislike_count is None)
@@ -695,7 +767,7 @@ def channel_feed(
         def _enrich(
             meta_rows: list[tuple[str, str]],
             vote_ids: list[str],
-            catalog_url: Optional[str],
+            catalog_url: str | None,
         ) -> None:
             from ..services import activity
 
@@ -714,8 +786,11 @@ def channel_feed(
                 done = 0
                 for yt_id, entry_url in meta_rows:
                     try:
-                        preview = downloader.extract_preview(entry_url)
-                    except Exception:  # noqa: BLE001
+                        preview = ytdlp_extract.extract_preview(entry_url)
+                    except Exception:
+                        logger.debug(
+                            "feed enrichment failed for %s", entry_url, exc_info=True
+                        )
                         done += 1
                         handle.update(done=done, detail=f"{done}/{total}")
                         continue
@@ -755,8 +830,12 @@ def channel_feed(
                         channel_catalog.update_catalog_video_fields(
                             catalog_url, catalog_field_updates
                         )
-                    except Exception:  # noqa: BLE001
-                        pass
+                    except Exception:
+                        logger.warning(
+                            "could not store enriched feed metadata in the catalog for %s",
+                            catalog_url,
+                            exc_info=True,
+                        )
 
         import threading
 
@@ -777,6 +856,9 @@ def channel_feed(
     else:
         indexing = bool(progress.get("indexing"))
 
+    catalog_indexed = data.get("catalog_indexed")
+    if catalog_indexed is None:
+        catalog_indexed = progress.get("catalog_indexed") or 0
     return ChannelFeedPage(
         channel=channel_name or data.get("channel"),
         channel_url=data.get("channel_url") or channel_url,
@@ -784,12 +866,7 @@ def channel_feed(
         has_more=bool(data.get("has_more")),
         indexing=indexing,
         from_catalog=from_catalog,
-        catalog_indexed=int(
-            data.get("catalog_indexed")
-            if data.get("catalog_indexed") is not None
-            else progress.get("catalog_indexed")
-            or 0
-        ),
+        catalog_indexed=int(catalog_indexed),
         catalog_total=(
             data.get("catalog_total")
             if data.get("catalog_total") is not None
@@ -806,5 +883,3 @@ def channel_feed(
             else progress.get("catalog_status")
         ),
     )
-
-

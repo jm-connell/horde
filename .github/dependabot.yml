@@ -1,0 +1,72 @@
+# Dependency update PRs. Minor and patch updates arrive as one grouped PR per
+# ecosystem each week; major updates get their own PR so they are reviewed alone.
+# yt-dlp is handled by .github/workflows/ytdlp-bump.yml (daily), because
+# Dependabot allows only one schedule per ecosystem and directory.
+version: 2
+
+updates:
+  # Dependabot edits backend/requirements.txt but cannot regenerate the
+  # hash-pinned backend/requirements.lock the image installs. CI's lock check
+  # (scripts/check_requirements_lock.py) fails such a PR until someone runs the
+  # uv command from the lock's header on its branch and pushes the new lock.
+  - package-ecosystem: pip
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+    ignore:
+      - dependency-name: yt-dlp
+    groups:
+      python-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(backend)"
+    labels: [dependencies]
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      npm-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(frontend)"
+    labels: [dependencies]
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      docker-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(docker)"
+    labels: [dependencies]
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      compose-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(compose)"
+    labels: [dependencies]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      actions-minor-patch:
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "deps(ci)"
+    labels: [dependencies]

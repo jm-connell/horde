@@ -1,23 +1,23 @@
 import { api } from "../../../api";
+import { describeError } from "../../../apiErrors";
 import ThemedSelect from "../../../components/ThemedSelect";
 import Collapse from "../../../components/Collapse";
 import type { AiSchedule } from "../../../types";
 import AiQueueStatus from "../AiQueueStatus";
 import { useSettingsPage } from "../context";
+import { useAiPage } from "./aiPageContext";
 import { ProcessActionRow, Section } from "../ui";
 import { AI_SCHEDULE_OPTIONS, INPUT_COMPACT, PANEL_BTN } from "../constants";
 
 export default function JobsPane() {
+  const { q, match, showToast, showError } = useSettingsPage();
   const {
-    q,
-    match,
     aiDraft,
     setAiDraft,
     saveAi,
     aiStatus,
     systemStats,
     openRouterCosts,
-    showToast,
     aiProcessingAction,
     runAiProcess,
     catchUpScope,
@@ -27,7 +27,7 @@ export default function JobsPane() {
     reindexPrompt,
     setReindexPrompt,
     refreshAiStatus,
-  } = useSettingsPage();
+  } = useAiPage();
   const stepsOpen = individualStepsOpen || Boolean(q);
 
   return (
@@ -36,7 +36,17 @@ export default function JobsPane() {
         first
         title="Queue"
         description="Live AI job status and pause/resume."
-        hidden={!match("queue", "indexed", "pause", "resume", "process", "gpu jobs", "index missing")}
+        hidden={
+          !match(
+            "queue",
+            "indexed",
+            "pause",
+            "resume",
+            "process",
+            "gpu jobs",
+            "index missing"
+          )
+        }
       >
         {aiStatus ? (
           <AiQueueStatus
@@ -44,12 +54,22 @@ export default function JobsPane() {
             systemStats={systemStats}
             openRouterCosts={openRouterCosts}
             onPause={async () => {
-              await api.pauseAi().catch(() => undefined);
+              try {
+                await api.pauseAi();
+              } catch (err) {
+                showError(`Could not pause AI queue: ${describeError(err)}`);
+                return;
+              }
               await saveAi({ paused: true });
               showToast("AI queue paused");
             }}
             onResume={async () => {
-              await api.resumeAi().catch(() => undefined);
+              try {
+                await api.resumeAi();
+              } catch (err) {
+                showError(`Could not resume AI queue: ${describeError(err)}`);
+                return;
+              }
               await saveAi({ paused: false });
               showToast("AI queue resumed");
             }}
@@ -57,7 +77,7 @@ export default function JobsPane() {
             indexBusy={aiProcessingAction === "embeds"}
           />
         ) : (
-          <p className="text-sm text-gray-500">Loading…</p>
+          <p className="text-sm text-muted">Loading…</p>
         )}
         {aiStatus?.paused && (
           <p className="mt-2 text-xs text-amber-400/90">
@@ -82,9 +102,14 @@ export default function JobsPane() {
                   type="button"
                   className={PANEL_BTN}
                   onClick={async () => {
-                    const res = await api.retryFailedAiJobs().catch(() => null);
+                    const res = await api.retryFailedAiJobs().catch((err) => {
+                      showError(`Could not retry jobs: ${describeError(err)}`);
+                      return null;
+                    });
                     if (res) {
-                      showToast(`Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`);
+                      showToast(
+                        `Retried ${res.retried} job${res.retried === 1 ? "" : "s"}`
+                      );
                       refreshAiStatus();
                     }
                   }}
@@ -95,9 +120,14 @@ export default function JobsPane() {
                   type="button"
                   className={PANEL_BTN}
                   onClick={async () => {
-                    const res = await api.clearFailedAiJobs(0).catch(() => null);
+                    const res = await api.clearFailedAiJobs(0).catch((err) => {
+                      showError(`Could not clear jobs: ${describeError(err)}`);
+                      return null;
+                    });
                     if (res) {
-                      showToast(`Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`);
+                      showToast(
+                        `Cleared ${res.deleted} failed job${res.deleted === 1 ? "" : "s"}`
+                      );
                       refreshAiStatus();
                     }
                   }}
@@ -116,12 +146,14 @@ export default function JobsPane() {
                     <p className="truncate text-gray-200">
                       {job.title || job.kind.replace(/_/g, " ")}
                     </p>
-                    <p className="truncate text-gray-500">
+                    <p className="truncate text-muted">
                       {job.kind.replace(/_/g, " ")}
                       {job.attempts > 0 ? ` · ${job.attempts} attempts` : ""}
                     </p>
                     {job.error && (
-                      <p className="mt-0.5 truncate text-red-400/90">{job.error}</p>
+                      <p className="mt-0.5 truncate text-red-400/90">
+                        {job.error}
+                      </p>
                     )}
                   </div>
                   {job.id != null && (
@@ -129,8 +161,14 @@ export default function JobsPane() {
                       type="button"
                       className="shrink-0 text-accent hover:underline"
                       onClick={async () => {
-                        await api.retryAiJob(job.id!).catch(() => undefined);
-                        showToast("Job requeued");
+                        try {
+                          await api.retryAiJob(job.id!);
+                          showToast("Job requeued");
+                        } catch (err) {
+                          showError(
+                            `Could not requeue job: ${describeError(err)}`
+                          );
+                        }
                         refreshAiStatus();
                       }}
                     >
@@ -195,7 +233,7 @@ export default function JobsPane() {
             className="w-full max-w-sm"
             buttonClassName="w-full"
           />
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted">
             {
               AI_SCHEDULE_OPTIONS.find((o) => o.value === aiDraft.schedule)
                 ?.description
@@ -203,7 +241,7 @@ export default function JobsPane() {
           </p>
           {aiDraft.schedule === "timer" && (
             <label className="block">
-              <span className="mb-1 block text-xs text-gray-500">
+              <span className="mb-1 block text-xs text-muted">
                 Timer interval (hours)
               </span>
               <input
@@ -229,7 +267,7 @@ export default function JobsPane() {
           )}
           {aiDraft.schedule === "set_time" && (
             <label className="block">
-              <span className="mb-1 block text-xs text-gray-500">
+              <span className="mb-1 block text-xs text-muted">
                 Daily run time (local)
               </span>
               <input
@@ -276,7 +314,7 @@ export default function JobsPane() {
         <div className="space-y-3">
           <div>
             <p className="mb-2 text-sm font-medium text-gray-200">Catch up</p>
-            <p className="mb-3 text-xs text-gray-500">
+            <p className="mb-3 text-xs text-muted">
               Queue missing search indexes and AI tags, then refresh categories.
             </p>
             <div className="ui-panel mb-3 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
@@ -312,7 +350,9 @@ export default function JobsPane() {
               onClick={() => runAiProcess(catchUpScope)}
               className={PANEL_BTN}
             >
-              {aiProcessingAction === catchUpScope ? "Queuing…" : "Run catch-up"}
+              {aiProcessingAction === catchUpScope
+                ? "Queuing…"
+                : "Run catch-up"}
             </button>
           </div>
 
@@ -321,7 +361,7 @@ export default function JobsPane() {
               type="button"
               onClick={() => setIndividualStepsOpen((o) => !o)}
               aria-expanded={stepsOpen}
-              className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-gray-500 hover:text-gray-300"
+              className="mb-2 inline-flex items-center gap-1 text-xs font-medium uppercase tracking-wider text-muted hover:text-gray-300"
             >
               <svg
                 viewBox="0 0 24 24"
@@ -337,14 +377,12 @@ export default function JobsPane() {
               >
                 <path d="m6 9 6 6 6-6" />
               </svg>
-              {stepsOpen
-                ? "Hide individual steps"
-                : "Show individual steps"}
+              {stepsOpen ? "Hide individual steps" : "Show individual steps"}
             </button>
             <Collapse open={stepsOpen}>
               <div className="space-y-4">
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Search index
                   </p>
                   <div className="divide-y divide-ink-800">
@@ -366,7 +404,7 @@ export default function JobsPane() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Tags
                   </p>
                   <div className="divide-y divide-ink-800">
@@ -388,7 +426,7 @@ export default function JobsPane() {
                   </div>
                 </div>
                 <div>
-                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
                     Categories
                   </p>
                   <div className="divide-y divide-ink-800">

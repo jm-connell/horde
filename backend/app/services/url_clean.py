@@ -38,7 +38,7 @@ def _youtube_video_id(parsed) -> str | None:
         return values[0] if values else None
     for prefix in ("/shorts/", "/embed/", "/live/", "/v/"):
         if path.startswith(prefix):
-            return path[len(prefix):].split("/")[0] or None
+            return path[len(prefix) :].split("/")[0] or None
     return None
 
 
@@ -111,7 +111,14 @@ def clean_url(url: str, keep_playlist: bool = False) -> str:
             )
         if keep_playlist and playlist:
             return urlunparse(
-                ("https", "www.youtube.com", "/playlist", "", urlencode({"list": playlist}), "")
+                (
+                    "https",
+                    "www.youtube.com",
+                    "/playlist",
+                    "",
+                    urlencode({"list": playlist}),
+                    "",
+                )
             )
 
     # Generic cleanup: drop known tracking params, keep everything else.
@@ -121,8 +128,8 @@ def clean_url(url: str, keep_playlist: bool = False) -> str:
         for k, v in query.items()
         if k not in _TRACKING_PARAMS and not k.startswith("utm_")
     }
-    new_query = urlencode(cleaned, doseq=True)
-    return urlunparse(parsed._replace(query=new_query))
+    encoded_query = urlencode(cleaned, doseq=True)
+    return urlunparse(parsed._replace(query=encoded_query))
 
 
 def is_playlist_url(url: str) -> bool:

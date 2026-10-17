@@ -5,10 +5,29 @@ import {
   setFlowingGradientPresetGetter,
 } from "../effects";
 import { parseHexColor, type EffectController } from "../effects/shared";
-import { useSettings, type BackgroundEffect as EffectId } from "../hooks/useSettings";
+import {
+  useSettings,
+  type BackgroundEffect as EffectId,
+} from "../hooks/useSettings";
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+interface NetworkInformationLike extends EventTarget {
+  saveData?: boolean;
+}
+
+function navigatorConnection(): NetworkInformationLike | null {
+  return (
+    (navigator as Navigator & { connection?: NetworkInformationLike })
+      .connection ?? null
+  );
+}
+
+/** The user asked the browser to save data: skip decorative animation. */
+function dataSaverOn(): boolean {
+  return navigatorConnection()?.saveData === true;
 }
 
 function hexToRgb(hex: string): string {
@@ -33,6 +52,9 @@ export default function BackgroundEffect() {
   const controllerRef = useRef<EffectController | null>(null);
   const [reducedMotion, setReducedMotion] = useState(prefersReducedMotion);
   const [playerFullscreen, setPlayerFullscreen] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [playerCovering, setPlayerCovering] = useState(false);
+  const [saveData, setSaveData] = useState(dataSaverOn);
 
   const effect = settings.backgroundEffect;
   const opacity = settings.backgroundOpacity;
@@ -42,12 +64,19 @@ export default function BackgroundEffect() {
   const customColor = settings.backgroundEffectColor;
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
+  // A full-size player that is playing makes the effect pure overhead.
+  // Fullscreen and playing theater/fit-window modes always pause (the effect is
+  // hidden anyway). "Pause while watching" additionally pauses behind a playing
+  // standard player and on the Watch page; with it off the effect keeps running.
   const shouldPause =
-    playerFullscreen || (pauseWhileWatching && onWatchPage);
+    playerFullscreen ||
+    playerCovering ||
+    (pauseWhileWatching && (videoPlaying || onWatchPage));
   const isCustom = effect === "custom-image" && !!settings.customBackgroundId;
   const active =
     effect !== "none" &&
     !reducedMotion &&
+    !saveData &&
     (effect !== "custom-image" || isCustom);
 
   useEffect(() => {
@@ -60,15 +89,27 @@ export default function BackgroundEffect() {
 
   useEffect(() => {
     const syncFullscreen = () => {
-      setPlayerFullscreen(document.body.classList.contains("player-fullscreen"));
+      setPlayerFullscreen(
+        document.body.classList.contains("player-fullscreen")
+      );
+      setVideoPlaying(document.body.dataset.playerPlaying === "true");
+      setPlayerCovering(document.body.dataset.playerCovering === "true");
     };
     syncFullscreen();
     const observer = new MutationObserver(syncFullscreen);
     observer.observe(document.body, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ["class", "data-player-playing", "data-player-covering"],
     });
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const connection = navigatorConnection();
+    if (!connection) return;
+    const onChange = () => setSaveData(dataSaverOn());
+    connection.addEventListener?.("change", onChange);
+    return () => connection.removeEventListener?.("change", onChange);
   }, []);
 
   useEffect(() => {
@@ -102,7 +143,7 @@ export default function BackgroundEffect() {
         controllerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- opacity/speed/size/color/pause are pushed to the live controller by their own effects; rebuilding the canvas effect on them would restart the animation
   }, [active, effect, isCustom, settings.flowingGradientPreset]);
 
   useEffect(() => {
@@ -159,6 +200,7 @@ export default function BackgroundEffect() {
           />
         ) : (
           <img
+            decoding="async"
             key={url}
             src={url}
             alt=""

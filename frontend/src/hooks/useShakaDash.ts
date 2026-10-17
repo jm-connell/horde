@@ -275,7 +275,9 @@ export function useShakaDashLoad({
       } catch (err) {
         if (cancelled) return;
         const msg =
-          err instanceof Error ? err.message : "Failed to start adaptive stream";
+          err instanceof Error
+            ? err.message
+            : "Failed to start adaptive stream";
         if (!enterCompatMode()) {
           setMediaError(msg);
           setBuffering(false);
@@ -293,7 +295,7 @@ export function useShakaDashLoad({
       enqueueDestroy(active);
     };
     // Intentionally omit casting — only checked at load time for autoplay.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- casting is read once at load time; re-running would tear down the player
   }, [
     src,
     effectiveStreamType,
@@ -355,11 +357,6 @@ export function useApplyShakaQuality(
         console.warn("[stream-quality] apply failed", err);
       }
     },
-    [
-      shakaPlayerRef,
-      capabilityMaxHeightRef,
-      variantTracksRef,
-      setQualityChoice,
-    ]
+    [shakaPlayerRef, capabilityMaxHeightRef, variantTracksRef, setQualityChoice]
   );
 }

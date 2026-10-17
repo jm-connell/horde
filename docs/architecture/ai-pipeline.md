@@ -38,6 +38,10 @@ Beyond readiness and `queue_depth`, status exposes:
 | `error_count` / `recent_failures` | Terminal failures for Jobs UI |
 | `current_job` | Includes `id`, `attempts`, prior `error` when retrying |
 
+Members see a reduced view: `GET /api/ai/status`, `GET /api/health` and the `ai` block of `GET /api/settings` keep the readiness flags and feature switches the player and library read, but leave out the provider type and address, schedule, workload profile, model names, GPU details, key tail, budget and error texts; `GET /api/health` has no `openrouter` block for them (administrators get everything). Video reads give them "AI indexing failed" instead of the embedding error and no summary model or cost, and `GET /api/system/activity` leaves out the engine, detail (model names) and error of AI jobs and model pulls ([what members see](../ops/authentication.md#account-types-and-permissions)). `GET /api/ai/jobs` is administrator-only.
+
+A chat stream also ends when its caller loses access (session revoked, account disabled or deleted): the server stops reading from the provider, which drops the upstream request. The cost of that cut-off turn is not booked in the ledger, because the provider only reports it in a final usage chunk (a client that disconnects mid-answer loses it the same way).
+
 Health (`GET /api/health`) mirrors `workers.ai_error_count` and `workers.ai_blocked_reason`.
 
 ### Job admin API
@@ -66,6 +70,10 @@ Resolved from Settings + env (`OLLAMA_BASE_URL`, `OPENROUTER_API_KEY`):
 When Ollama HTTP calls fail, the resolved URL cache is invalidated so a dead cache cannot keep claiming jobs. Queued jobs that cannot run yet stay `queued` (attempts unchanged) and may show a `waiting: …` note after ~2 minutes.
 
 Embeds are only enqueued when Ollama is **enabled** or OpenRouter owns embeddings (`scope=all`) — not when neither backend can ever serve them.
+
+## Vector search
+
+Similarity search (hybrid search, related videos, recommendations) scores every stored chunk with one matrix product. The vectors are loaded into an L2-normalised `float32` matrix per dimension, built on first use and then updated incrementally: each search compares a cheap per-video fingerprint (chunk count and max id) and the videos the ORM reported as written, and re-reads only the videos that changed (a full rebuild only when more than 20 percent of the videos, and more than 50, changed at once). The code is `services/ai/vector_index.py`; see [ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md). Memory is about `chunks x dim x 4` bytes, for example 60 000 chunks of 768 dimensions is roughly 184 MB. The matrix lives on the database engine object, not in module state. Vectors of another dimension (a previous embed model) are ignored until re-indexed.
 
 ## Embeddings layout
 

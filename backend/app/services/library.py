@@ -1,27 +1,34 @@
+import bisect
 import json
+import logging
 import random as py_random
-import re
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal, overload
 
-from sqlalchemy import func, nullsfirst, nullslast
-from sqlmodel import Session, select
+from sqlalchemy import and_, func, nullsfirst, nullslast, or_, text
+from sqlalchemy import select as sa_select
+from sqlalchemy.orm import Mapped
+from sqlmodel import Session, col, select
 
-from ..models import Video
-from .search_text import keyword_match_clause
+from ..models import UserVideoState, Video, VideoTag, require_id
+from .pagination import PageRequest, random_key
+from .search_text import fts_match_expression, keyword_match_clause
+
+logger = logging.getLogger(__name__)
 
 PROGRESS_EXPIRY_DAYS = 14
 CONTINUE_WATCHING_DAYS = 7
 
-SORT_COLUMNS = {
-    "added_at": Video.added_at,
-    "title": Video.title,
-    "duration": Video.duration_sec,
-    "published_at": Video.published_at,
-    "file_size": Video.file_size,
-    "view_count": Video.view_count,
-    "last_watched_at": Video.last_watched_at,
+SORT_COLUMNS: dict[str, Mapped[Any]] = {
+    "added_at": col(Video.added_at),
+    "title": col(Video.title),
+    "duration": col(Video.duration_sec),
+    "published_at": col(Video.published_at),
+    "file_size": col(Video.file_size),
+    "view_count": col(Video.view_count),
+    # Watch state is per user; query_videos joins the caller's rows.
+    "last_watched_at": col(UserVideoState.last_watched_at),
 }
 
 
@@ -29,9 +36,9 @@ SORT_COLUMNS = {
 class ChannelStatRow:
     channel: str
     count: int
-    last_download_at: Optional[datetime]
-    subscriber_count: Optional[int]
-    channel_url: Optional[str]
+    last_download_at: datetime | None
+    subscriber_count: int | None
+    channel_url: str | None
 
 
 def parse_tags(raw: str) -> list[str]:
@@ -47,10 +54,12 @@ def dump_tags(tags: list[str]) -> str:
     return json.dumps(cleaned)
 
 
-def parse_subtitles(raw: Optional[str]) -> list[dict]:
+def parse_subtitles(raw: str | None) -> list[dict]:
     try:
         value = json.loads(raw or "[]")
-        return [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
+        return (
+            [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
+        )
     except (json.JSONDecodeError, TypeError):
         return []
 
@@ -60,29 +69,19 @@ def dump_subtitles(tracks: list[dict]) -> str:
 
 
 def expire_stale_progress(session: Session) -> None:
-    """Reset watch position on videos not watched within the configured expiry period."""
+    """Reset every user's watch position on videos not watched within the expiry period."""
+    from . import user_state
     from .app_settings import load as load_app_settings
+
     expiry_days = load_app_settings().get("progress_expiry_days", PROGRESS_EXPIRY_DAYS)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=expiry_days)
-    rows = session.exec(
-        select(Video).where(
-            Video.last_watched_at.is_not(None),
-            Video.last_watched_at < cutoff,
-            Video.last_position_sec > 0,
-        )
-    ).all()
-    for video in rows:
-        video.last_position_sec = 0.0
-        session.add(video)
-    if rows:
-        session.commit()
+    user_state.expire_stale(session, datetime.now(UTC) - timedelta(days=expiry_days))
 
 
 def _apply_sort(statement, sort: str, order: str):
     if sort == "random":
         return statement, True
 
-    column = SORT_COLUMNS.get(sort, Video.added_at)
+    column = SORT_COLUMNS.get(sort, col(Video.added_at))
     nullable = sort in ("file_size", "view_count", "last_watched_at")
     if order == "desc":
         ordering = nullslast(column.desc()) if nullable else column.desc()
@@ -91,19 +90,178 @@ def _apply_sort(statement, sort: str, order: str):
     return statement.order_by(ordering), False
 
 
+#: The Video attribute each sort key reads (``last_watched_at`` is per user).
+_SORT_ATTRS = {
+    "added_at": "added_at",
+    "title": "title",
+    "duration": "duration_sec",
+    "published_at": "published_at",
+    "file_size": "file_size",
+    "view_count": "view_count",
+}
+
+
+def sort_value(
+    video: Video, sort: str, state: UserVideoState | None = None, seed: int = 0
+):
+    """The value ``video`` sorts by under ``sort``: what a keyset cursor remembers."""
+    if sort == "random":
+        return random_key(seed, require_id(video))
+    if sort == "last_watched_at":
+        return state.last_watched_at if state is not None else None
+    return getattr(video, _SORT_ATTRS.get(sort, "added_at"))
+
+
+def _keyset_after(statement, sort: str, order: str, page: PageRequest):
+    """Order by (sort key, id) and keep only the rows after the cursor's row.
+
+    SQLite sorts NULL before every value when ascending and after every value when
+    descending, which is what ``_apply_sort`` asks for on the nullable columns and
+    what the other columns do by default, so NULL is handled the same way for all.
+    """
+    column = SORT_COLUMNS.get(sort, col(Video.added_at))
+    desc = order == "desc"
+    statement = statement.order_by(
+        col(Video.id).desc() if desc else col(Video.id).asc()
+    )
+    if not page.has_position:
+        return statement
+    after_id = page.after_id
+    id_after = col(Video.id) < after_id if desc else col(Video.id) > after_id
+    value = page.value
+    if value is None:
+        if desc:
+            clause = and_(column.is_(None), id_after)
+        else:
+            clause = or_(and_(column.is_(None), id_after), column.is_not(None))
+    else:
+        past = column < value if desc else column > value
+        clause = or_(past, and_(column == value, id_after))
+        if desc:
+            clause = or_(clause, column.is_(None))
+    return statement.where(clause)
+
+
+_ID_CHUNK = 500
+
+
+def _load_in_order(session: Session, ids: list[int]) -> list[Video]:
+    """The videos with these ids, in this order (missing ids are skipped)."""
+    found: dict[int, Video] = {}
+    for start in range(0, len(ids), _ID_CHUNK):
+        chunk = ids[start : start + _ID_CHUNK]
+        for video in session.exec(select(Video).where(col(Video.id).in_(chunk))):
+            found[require_id(video)] = video
+    return [found[i] for i in ids if i in found]
+
+
+def has_fts(session: Session) -> bool:
+    """True when the ``videos_fts`` index exists (SQLite built with FTS5)."""
+    return (
+        session.connection()
+        .exec_driver_sql("SELECT 1 FROM sqlite_master WHERE name = 'videos_fts'")
+        .first()
+        is not None
+    )
+
+
+def _keyword_clause(session: Session, query: str):
+    """WHERE clause for a keyword search over title, description, notes, channel, tags.
+
+    Uses the FTS5 index when present (each query token is a whole word or one of
+    its light inflections, AND across tokens). A query with no word characters
+    (``"!!"``) and databases without FTS5 fall back to the REGEXP scan, which
+    escapes the query, so ``%`` and ``_`` are never wildcards.
+    """
+    match = fts_match_expression(query) if has_fts(session) else None
+    if match is not None:
+        return col(Video.id).in_(
+            text(
+                "SELECT rowid FROM videos_fts WHERE videos_fts MATCH :fts_q"
+            ).bindparams(fts_q=match)
+        )
+    return keyword_match_clause(
+        query,
+        Video.title,
+        Video.description,
+        Video.channel,
+        Video.notes,
+        Video.tags,
+    )
+
+
+@overload
 def query_videos(
     session: Session,
-    q: Optional[str] = None,
-    channel: Optional[str] = None,
-    tag: Optional[str] = None,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
     sort: str = "added_at",
     order: str = "desc",
-    needs_review: Optional[bool] = None,
+    needs_review: bool | None = None,
     continue_watching: bool = False,
     watched_only: bool = False,
-    seed: Optional[int] = None,
-) -> list[Video]:
+    seed: int | None = None,
+    user_id: int | None = None,
+    page: PageRequest | None = None,
+    *,
+    count_only: Literal[True],
+) -> int: ...
+
+
+@overload
+def query_videos(
+    session: Session,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
+    sort: str = "added_at",
+    order: str = "desc",
+    needs_review: bool | None = None,
+    continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: int | None = None,
+    user_id: int | None = None,
+    page: PageRequest | None = None,
+    count_only: Literal[False] = False,
+) -> list[Video]: ...
+
+
+def query_videos(
+    session: Session,
+    q: str | None = None,
+    channel: str | None = None,
+    tag: str | None = None,
+    sort: str = "added_at",
+    order: str = "desc",
+    needs_review: bool | None = None,
+    continue_watching: bool = False,
+    watched_only: bool = False,
+    seed: int | None = None,
+    user_id: int | None = None,
+    page: PageRequest | None = None,
+    count_only: bool = False,
+) -> list[Video] | int:
+    """Library rows, newest first by default.
+
+    With ``page`` the result is that page plus one extra row (so the caller can tell
+    whether another page follows); ``count_only`` returns how many rows match.
+
+    Anything that reads watch state (``continue_watching``, ``watched_only``,
+    ``sort="last_watched_at"``) needs ``user_id``: history belongs to one user,
+    so their rows are outer-joined onto the shared library.
+    """
     statement = select(Video)
+    if continue_watching or watched_only or sort == "last_watched_at":
+        if user_id is None:
+            raise ValueError("watch state needs a user_id")
+        statement = statement.outerjoin(
+            UserVideoState,
+            and_(
+                col(UserVideoState.video_id) == col(Video.id),
+                col(UserVideoState.user_id) == user_id,
+            ),
+        )
 
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
@@ -112,42 +270,54 @@ def query_videos(
 
         settings = load_app_settings()
         cw_days = settings.get("continue_watching_days", CONTINUE_WATCHING_DAYS)
-        cw_cutoff = datetime.now(timezone.utc) - timedelta(days=cw_days)
+        cw_cutoff = datetime.now(UTC) - timedelta(days=cw_days)
         # Started but not effectively finished (within the last 10% of runtime).
-        statement = statement.where(Video.last_position_sec >= 30).where(
-            (Video.duration_sec.is_(None))
-            | (Video.last_position_sec < Video.duration_sec * 0.9)
+        statement = statement.where(UserVideoState.position_sec >= 30).where(
+            (col(Video.duration_sec).is_(None))
+            | (col(UserVideoState.position_sec) < col(Video.duration_sec) * 0.9)
         )
-        statement = statement.where(Video.last_watched_at.is_not(None))
-        statement = statement.where(Video.last_watched_at >= cw_cutoff)
-        statement = statement.order_by(Video.last_watched_at.desc()).limit(12)
+        statement = statement.where(col(UserVideoState.last_watched_at).is_not(None))
+        statement = statement.where(col(UserVideoState.last_watched_at) >= cw_cutoff)
+        statement = statement.order_by(
+            col(UserVideoState.last_watched_at).desc()
+        ).limit(12)
         return list(session.exec(statement).all())
     if watched_only:
-        statement = statement.where(Video.last_watched_at.is_not(None))
+        statement = statement.where(col(UserVideoState.last_watched_at).is_not(None))
     if channel:
         statement = statement.where(Video.channel == channel)
     if q:
-        clause = keyword_match_clause(
-            q,
-            Video.title,
-            Video.description,
-            Video.channel,
-            Video.notes,
-            Video.tags,
-        )
+        clause = _keyword_clause(session, q)
         if clause is not None:
             statement = statement.where(clause)
     if tag:
-        # Tags are stored as a JSON list string; match the quoted token.
-        statement = statement.where(Video.tags.ilike(f'%"{tag}"%'))
+        statement = statement.where(
+            col(Video.id).in_(
+                select(col(VideoTag.video_id)).where(col(VideoTag.tag) == tag)
+            )
+        )
+
+    if count_only:
+        total = session.scalar(select(func.count()).select_from(statement.subquery()))
+        return int(total or 0)
 
     statement, is_random = _apply_sort(statement, sort, order)
-
-    results = list(session.exec(statement).all())
     if is_random:
-        rng = py_random.Random(seed)
-        rng.shuffle(results)
-    return results
+        # Order ids by a keyed hash: a page needs a position in the shuffle, not
+        # every row, and one video's position does not depend on the others.
+        ids = list(session.exec(statement.with_only_columns(Video.id)))
+        shuffle_seed = (
+            seed if seed is not None else py_random.SystemRandom().randrange(2**31)
+        )
+        keyed = sorted((random_key(shuffle_seed, i), i) for i in ids)
+        if page is not None:
+            if page.has_position:
+                keyed = keyed[bisect.bisect_right(keyed, (page.value, page.after_id)) :]
+            keyed = keyed[: page.fetch]
+        return _load_in_order(session, [i for _, i in keyed])
+    if page is not None:
+        statement = _keyset_after(statement, sort, order, page).limit(page.fetch)
+    return list(session.exec(statement).all())
 
 
 def rename_channel(session: Session, old_name: str, new_name: str) -> int:
@@ -167,16 +337,16 @@ def channel_stats(
     order: str = "desc",
 ) -> list[ChannelStatRow]:
     statement = (
-        select(
-            Video.channel,
-            func.count(Video.id),
-            func.max(Video.added_at),
-            func.max(Video.channel_subscriber_count),
-            func.max(Video.channel_url),
+        sa_select(  # sqlmodel's select stops at four columns
+            col(Video.channel),
+            func.count(col(Video.id)),
+            func.max(col(Video.added_at)),
+            func.max(col(Video.channel_subscriber_count)),
+            func.max(col(Video.channel_url)),
         )
-        .where(Video.channel.is_not(None))
-        .where(Video.needs_review == False)  # noqa: E712
-        .group_by(Video.channel)
+        .where(col(Video.channel).is_not(None))
+        .where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .group_by(col(Video.channel))
     )
     rows = [
         ChannelStatRow(
@@ -186,7 +356,7 @@ def channel_stats(
             subscriber_count=int(sub) if sub is not None else None,
             channel_url=url,
         )
-        for c, n, last_dl, sub, url in session.exec(statement).all()
+        for c, n, last_dl, sub, url in session.execute(statement).all()
         if c
     ]
 
@@ -200,7 +370,7 @@ def channel_stats(
             return row.subscriber_count if row.subscriber_count is not None else -1
         # recent_download (default)
         if row.last_download_at is None:
-            return datetime.min.replace(tzinfo=timezone.utc)
+            return datetime.min.replace(tzinfo=UTC)
         return row.last_download_at
 
     reverse = order == "desc"
@@ -216,7 +386,7 @@ def channel_stats(
     return rows
 
 
-def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
+def resolve_channel_url(session: Session, channel_name: str) -> str | None:
     """Return a canonical channel URL for a library channel name, if known."""
     for row in channel_stats(session):
         if row.channel == channel_name and row.channel_url:
@@ -224,116 +394,78 @@ def resolve_channel_url(session: Session, channel_name: str) -> Optional[str]:
     return None
 
 
-def find_video_by_youtube_id(session: Session, yt_id: str) -> Optional[Video]:
-    """Find a library video by YouTube id in source_url or [id] in file_path."""
+def find_video_by_youtube_id(session: Session, yt_id: str) -> Video | None:
+    """Find a library video by YouTube id (indexed ``videos.youtube_id``)."""
     if not yt_id:
         return None
-    token = f"[{yt_id}]"
-    # Prefer path match (works even without source_url).
-    by_path = session.exec(
-        select(Video).where(Video.file_path.contains(token))  # type: ignore[attr-defined]
+    return session.exec(
+        select(Video)
+        .where(col(Video.youtube_id) == yt_id)
+        .order_by(col(Video.id))
+        .limit(1)
     ).first()
-    if by_path is not None:
-        return by_path
-    from urllib.parse import urlparse
-
-    from .url_clean import _youtube_video_id
-
-    rows = session.exec(
-        select(Video).where(Video.source_url.is_not(None))  # type: ignore[attr-defined]
-    ).all()
-    for video in rows:
-        if not video.source_url:
-            continue
-        try:
-            parsed = urlparse(video.source_url)
-        except ValueError:
-            continue
-        if _youtube_video_id(parsed) == yt_id:
-            return video
-    return None
 
 
-def _iso_published(value: Optional[datetime]) -> Optional[str]:
+def _iso_published(value: datetime | None) -> str | None:
     if value is None:
         return None
-    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=timezone.utc)
+    dt = value if getattr(value, "tzinfo", None) else value.replace(tzinfo=UTC)
     return dt.isoformat() if hasattr(dt, "isoformat") else str(dt)
 
 
 def youtube_library_map(
-    session: Session, channel: Optional[str] = None
-) -> dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]]:
+    session: Session, channel: str | None = None
+) -> dict[str, tuple[int, int | None, int | None, str | None]]:
     """Map YouTube IDs to (library_id, height_px, view_count, published_at ISO)."""
-    from urllib.parse import urlparse
-
-    from .url_clean import _youtube_video_id
-
-    statement = select(
-        Video.id,
-        Video.source_url,
-        Video.height_px,
-        Video.view_count,
-        Video.file_path,
-        Video.published_at,
-    )
+    statement = sa_select(  # sqlmodel's select stops at four columns
+        col(Video.youtube_id),
+        col(Video.id),
+        col(Video.height_px),
+        col(Video.view_count),
+        col(Video.published_at),
+    ).where(col(Video.youtube_id).is_not(None))
     if channel:
-        statement = statement.where(Video.channel == channel)
-    mapping: dict[str, tuple[int, Optional[int], Optional[int], Optional[str]]] = {}
-    for (
-        video_id,
-        source_url,
-        height_px,
-        views,
-        file_path,
-        published_at,
-    ) in session.exec(statement).all():
-        yt_id = None
-        if source_url:
-            try:
-                parsed = urlparse(source_url)
-                yt_id = _youtube_video_id(parsed)
-            except ValueError:
-                yt_id = None
-        if not yt_id and file_path:
-            match = re.search(r"\[([A-Za-z0-9_-]{11})\]", file_path)
-            if match:
-                yt_id = match.group(1)
-        if yt_id:
-            mapping[yt_id] = (
-                int(video_id),
-                int(height_px) if height_px else None,
-                int(views) if views is not None else None,
-                _iso_published(published_at),
-            )
+        statement = statement.where(col(Video.channel) == channel)
+    mapping: dict[str, tuple[int, int | None, int | None, str | None]] = {}
+    for yt_id, video_id, height_px, views, published_at in session.execute(
+        statement.order_by(col(Video.id))
+    ).all():
+        mapping[yt_id] = (
+            int(video_id),
+            int(height_px) if height_px else None,
+            int(views) if views is not None else None,
+            _iso_published(published_at),
+        )
     return mapping
 
 
 def all_tags(session: Session) -> list[str]:
-    rows = session.exec(select(Video.tags)).all()
-    seen: set[str] = set()
-    for raw in rows:
-        for tag in parse_tags(raw):
-            seen.add(tag)
-    return sorted(seen)
+    # Join videos: a tag row whose video is gone (written by code that ran with
+    # foreign keys off) must not show up as a library tag.
+    rows = session.exec(
+        select(VideoTag.tag)
+        .join(Video, col(Video.id) == col(VideoTag.video_id))
+        .distinct()
+    ).all()
+    return sorted(rows)
 
 
-def tag_stats(
-    session: Session, channel: Optional[str] = None
-) -> list[tuple[str, int]]:
+def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, int]]:
     """Return (tag, count) pairs ordered by most common first.
 
-    When ``channel`` is given, only tags from that channel's videos are counted.
+    Counts videos (a tag held under two sources counts once). When ``channel``
+    is given, only tags from that channel's videos are counted.
     """
-    statement = select(Video.tags).where(Video.needs_review == False)  # noqa: E712
+    count = func.count(func.distinct(VideoTag.video_id))
+    statement = (
+        select(VideoTag.tag, count)
+        .join(Video, col(Video.id) == col(VideoTag.video_id))
+        .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+    )
     if channel:
         statement = statement.where(Video.channel == channel)
-    rows = session.exec(statement).all()
-    counts: dict[str, int] = {}
-    for raw in rows:
-        for tag in parse_tags(raw):
-            counts[tag] = counts.get(tag, 0) + 1
-    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    rows = session.exec(statement.group_by(VideoTag.tag)).all()
+    return sorted(((tag, int(n)) for tag, n in rows), key=lambda kv: (-kv[1], kv[0]))
 
 
 def related_videos(
@@ -362,7 +494,7 @@ def related_videos(
 
     def add_candidates(candidates: list[Video]) -> None:
         for video in candidates:
-            if video.id in seen or video.needs_review:
+            if video.id is None or video.id in seen or video.needs_review:
                 continue
             seen.add(video.id)
             picked.append(video)
@@ -400,8 +532,12 @@ def related_videos(
                         scored.append((score + boost, video))
                     scored.sort(key=lambda item: item[0], reverse=True)
                     add_candidates([v for _, v in scored])
-        except Exception:  # noqa: BLE001
-            pass
+        except Exception:
+            logger.debug(
+                "embedding-based related videos unavailable for video %s",
+                source.id,
+                exc_info=True,
+            )
 
     if len(picked) < pool_limit and source.channel:
         channel_rows = query_videos(
@@ -414,26 +550,24 @@ def related_videos(
         add_candidates(channel_rows)
 
     if len(picked) < pool_limit:
-        source_tags = {t.lower() for t in parse_tags(source.tags)}
-        if source_tags:
-            scored_tags: list[tuple[int, Video]] = []
-            for row in query_videos(
-                session, needs_review=False, sort="added_at", order="desc"
-            ):
-                if row.id in seen or row.needs_review:
-                    continue
-                row_tags = {t.lower() for t in parse_tags(row.tags)}
-                overlap = len(source_tags & row_tags)
-                if overlap > 0:
-                    scored_tags.append((overlap, row))
-            scored_tags.sort(
-                key=lambda item: (
-                    item[0],
-                    item[1].added_at or datetime.min.replace(tzinfo=timezone.utc),
-                ),
-                reverse=True,
-            )
-            add_candidates([v for _, v in scored_tags])
+        source_tag_names = list(
+            session.exec(
+                select(VideoTag.tag).where(VideoTag.video_id == video_id).distinct()
+            ).all()
+        )
+        if source_tag_names:
+            overlap = func.count(func.distinct(VideoTag.tag))
+            tagged = session.exec(
+                select(Video)
+                .join(VideoTag, col(VideoTag.video_id) == col(Video.id))
+                .where(col(VideoTag.tag).in_(source_tag_names))
+                .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+                .where(col(Video.id).not_in(seen))
+                .group_by(col(Video.id))
+                .order_by(overlap.desc(), col(Video.added_at).desc())
+                .limit(pool_limit)
+            ).all()
+            add_candidates(list(tagged))
 
     if len(picked) < pool_limit:
         pool = query_videos(

@@ -30,7 +30,7 @@ function formatElapsed(startedAt: number, finishedAt?: number | null): string {
   return `${h}h ${m % 60}m`;
 }
 
-function EngineChip({ engine }: { engine: string | null }) {
+function EngineChip({ engine }: { engine: string | null | undefined }) {
   if (!engine) return null;
   return (
     <span className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-300/90">
@@ -51,8 +51,8 @@ function ProgressBar({
   done,
   total,
 }: {
-  done: number | null;
-  total: number | null;
+  done: number | null | undefined;
+  total: number | null | undefined;
 }) {
   if (total == null || total <= 0 || done == null) return null;
   const pct = Math.max(0, Math.min(100, Math.round((done / total) * 100)));
@@ -79,16 +79,18 @@ function RunningRow({ task, now }: { task: ActivityTask; now: number }) {
             </span>
           </div>
           {task.detail && (
-            <p className="mt-0.5 truncate text-xs text-gray-300">{task.detail}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-300">
+              {task.detail}
+            </p>
           )}
           {task.reason && (
-            <p className="mt-0.5 text-xs text-gray-500">{task.reason}</p>
+            <p className="mt-0.5 text-xs text-muted">{task.reason}</p>
           )}
         </div>
         <div className="shrink-0 text-right text-xs tabular-nums text-gray-400">
           {formatElapsed(task.started_at, now / 1000)}
           {task.total != null && task.done != null && (
-            <div className="text-gray-500">
+            <div className="text-muted">
               {task.done}/{task.total}
             </div>
           )}
@@ -113,7 +115,7 @@ function RecentRow({ task }: { task: ActivityTask }) {
               failed
                 ? "text-red-300"
                 : cancelled
-                  ? "text-gray-500"
+                  ? "text-muted"
                   : "text-gray-300"
             }
           >
@@ -121,20 +123,20 @@ function RecentRow({ task }: { task: ActivityTask }) {
           </span>
         </div>
         {task.detail && (
-          <p className="mt-0.5 truncate text-gray-500">{task.detail}</p>
+          <p className="mt-0.5 truncate text-muted">{task.detail}</p>
         )}
         {failed && task.error && (
           <p className="mt-0.5 text-red-400">{task.error}</p>
         )}
       </div>
-      <div className="shrink-0 text-right tabular-nums text-gray-500">
+      <div className="shrink-0 text-right tabular-nums text-muted">
         {formatElapsed(task.started_at, task.finished_at)}
         <div
           className={
             failed
               ? "text-red-400"
               : cancelled
-                ? "text-gray-600"
+                ? "text-muted"
                 : "text-emerald-500/80"
           }
         >
@@ -158,7 +160,7 @@ export default function BackgroundActivity({
   }, []);
 
   if (!activity) {
-    return <p className="text-sm text-gray-500">Loading activity…</p>;
+    return <p className="text-sm text-muted">Loading activity…</p>;
   }
 
   const running = activity.running ?? [];
@@ -181,9 +183,7 @@ export default function BackgroundActivity({
     }
     if (cpu != null) parts.push(`CPU ${cpu}%`);
     if (ffmpegRunning) {
-      parts.push(
-        `${ffmpegRunning} ffmpeg${ffmpegRunning === 1 ? "" : "s"}`
-      );
+      parts.push(`${ffmpegRunning} ffmpeg${ffmpegRunning === 1 ? "" : "s"}`);
     }
     summary = parts.join(" · ");
   }
@@ -212,7 +212,7 @@ export default function BackgroundActivity({
           ))}
         </ul>
       ) : (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-muted">
           When Horde runs ffmpeg, downloads, AI jobs, or folder scans, they show
           up here with why they started.
         </p>
@@ -220,12 +220,14 @@ export default function BackgroundActivity({
 
       {recent.length > 0 && (
         <div className="border-t border-ink-800 pt-3">
-          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
+          <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
             Recent activity
           </p>
           <div className="group isolate relative">
             <ul
               ref={recentScrollRef}
+              // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
+              tabIndex={0}
               className="horde-meta-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain"
               aria-label="Recent activity"
             >

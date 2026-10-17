@@ -13,10 +13,16 @@ import {
 } from "../hooks/useCardPreview";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { formatTimestamp } from "../utils";
-import { PREVIEW_UNLOAD_DELAY_MS, reportPreviewTime } from "../utils/cardPreview";
+import {
+  PREVIEW_UNLOAD_DELAY_MS,
+  reportPreviewTime,
+} from "../utils/cardPreview";
 import { scrubPositionFromClientX } from "./playerSeek";
 
-function stopCardNav(e: { preventDefault: () => void; stopPropagation: () => void }) {
+function stopCardNav(e: {
+  preventDefault: () => void;
+  stopPropagation: () => void;
+}) {
   e.preventDefault();
   e.stopPropagation();
 }
@@ -231,7 +237,9 @@ function PreviewSeekBar({
   return (
     <div
       ref={barRef}
-      aria-label="Seek preview"
+      // Pointer-only scrubber over a decorative, aria-hidden hover preview;
+      // keyboard users open the video from the card link instead.
+      role="presentation"
       data-horde="card-preview-seek"
       onClick={stopCardNav}
       onMouseDown={stopCardNav}
@@ -246,7 +254,7 @@ function PreviewSeekBar({
     >
       <div
         ref={tipRef}
-        className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 rounded bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-gray-100 opacity-0 transition-opacity"
+        className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 rounded bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white opacity-0 transition-opacity"
       />
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-visible bg-white/20 transition-[height] group-hover/seek:h-1 group-data-[engaged]/seek:h-1">
         <div
@@ -434,6 +442,7 @@ export default function CardPreviewVideo({
 
   return (
     <>
+      {/* eslint-disable-next-line jsx-a11y/media-has-caption -- silent, aria-hidden hover preview; no audio or speech to caption */}
       <video
         ref={videoRef}
         src={src}
@@ -460,7 +469,7 @@ export default function CardPreviewVideo({
             onPointerDown={(e) => e.stopPropagation()}
             title={playingMuted ? "Unmute preview" : "Mute preview"}
             aria-label={playingMuted ? "Unmute preview" : "Mute preview"}
-            className="absolute bottom-4 left-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-gray-100 opacity-80 ring-1 ring-white/15 hover:bg-black/75 hover:opacity-100"
+            className="absolute bottom-4 left-2 z-30 flex h-7 w-7 items-center justify-center rounded-full bg-black/55 text-white opacity-80 ring-1 ring-white/15 hover:bg-black/75 hover:opacity-100"
           >
             <MuteGlyph muted={playingMuted} />
           </button>

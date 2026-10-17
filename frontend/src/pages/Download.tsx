@@ -7,6 +7,7 @@ import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import ThemedSelect from "../components/ThemedSelect";
+import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import {
@@ -41,6 +42,7 @@ import {
   youtubeListThumbnailUrl,
 } from "../utils";
 
+import { getItem, setItem } from "../storage";
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
 const SKIP_TOAST: Record<string, string> = {
@@ -50,11 +52,12 @@ const SKIP_TOAST: Record<string, string> = {
   playlist: "Skipped playlist link — paste it alone to import.",
   shorts: "Don't watch shorts",
   duplicate_in_paste: "Skipped duplicate links",
+  invalid_url: "Skipped links that are not public http(s) URLs",
 };
 
 function toastBulkSkips(
   skips: DownloadBulkSkip[],
-  showToast: (message: string) => void,
+  showToast: (message: string) => void
 ) {
   if (skips.length === 0) return;
   const counts = new Map<string, number>();
@@ -71,6 +74,8 @@ function toastBulkSkips(
 
 export default function Download() {
   const { showToast } = useToast();
+  // Pausing the queue stops everyone's downloads: an administrator's call.
+  const { isAdmin } = useAuth();
   const {
     jobs,
     progress,
@@ -124,18 +129,14 @@ export default function Download() {
     "subscribe" | "import" | "videos"
   >("import");
 
-  const [activeCollapsed, setActiveCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem(ACTIVE_COLLAPSE_KEY) === "true";
-    } catch {
-      return false;
-    }
-  });
+  const [activeCollapsed, setActiveCollapsed] = useState(
+    () => getItem(ACTIVE_COLLAPSE_KEY) === "true"
+  );
   const [activeSectionVisible, setActiveSectionVisible] = useState(
-    () => activeCount > 0,
+    () => activeCount > 0
   );
   const [activeSectionEntered, setActiveSectionEntered] = useState(
-    () => activeCount > 0,
+    () => activeCount > 0
   );
 
   useEffect(() => {
@@ -155,12 +156,12 @@ export default function Download() {
     if (activeCount > 0 && activeCollapsed) {
       setActiveCollapsed(false);
     }
-  }, [activeCount]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeCount]); // eslint-disable-line react-hooks/exhaustive-deps -- expand when downloads become active; the user can collapse again without it re-opening
 
   const toggleActiveCollapsed = () => {
     setActiveCollapsed((v) => {
       const next = !v;
-      localStorage.setItem(ACTIVE_COLLAPSE_KEY, String(next));
+      setItem(ACTIVE_COLLAPSE_KEY, String(next));
       return next;
     });
   };
@@ -204,7 +205,7 @@ export default function Download() {
           // Leave channel empty so the picker stays on "Auto-detected".
           if (!p.is_playlist && p.available_presets.length > 0) {
             setPreset((current) =>
-              current !== "best" ? current : p.available_presets[0],
+              current !== "best" ? current : p.available_presets[0]
             );
           }
         })
@@ -517,7 +518,7 @@ export default function Download() {
       setImportMessage(
         playlistMode === "subscribe"
           ? `Subscribed to "${created.name}" — new videos will download automatically.`
-          : `Importing "${created.name}" — videos will appear in your library as they finish.`,
+          : `Importing "${created.name}" — videos will appear in your library as they finish.`
       );
       setUrl("");
       setPreview(null);
@@ -577,7 +578,7 @@ export default function Download() {
                 setUrl(e.target.value);
               }}
               placeholder="Video or playlist URL (YouTube, etc.)"
-              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
             />
             <button
               type="button"
@@ -603,8 +604,8 @@ export default function Download() {
                 }
                 setPasteHint(
                   insecureClipboardHint(
-                    typeof window !== "undefined" && window.isSecureContext,
-                  ),
+                    typeof window !== "undefined" && window.isSecureContext
+                  )
                 );
               }}
               className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
@@ -612,14 +613,14 @@ export default function Download() {
               Paste
             </button>
           </div>
-          <p className="mt-1 text-xs text-gray-500">
+          <p className="mt-1 text-xs text-muted">
             Accepts comma-separated links.
           </p>
           {pasteHint && (
             <p className="mt-1 text-xs text-amber-200/90">{pasteHint}</p>
           )}
           {previewing && !isBulkList && (
-            <p className="mt-1 text-xs text-gray-500">Reading link...</p>
+            <p className="mt-1 text-xs text-muted">Reading link...</p>
           )}
           {!previewing && previewError && (
             <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
@@ -648,14 +649,14 @@ export default function Download() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Auto-detected"
-                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
               />
             </div>
             <Collapse open={!toDevice}>
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">
+                <span className="mb-1 block text-sm font-medium text-gray-300">
                   Channel
-                </label>
+                </span>
                 <ChannelPicker
                   value={channel}
                   onChange={setChannel}
@@ -709,9 +710,7 @@ export default function Download() {
                     <span className="block text-sm font-medium">{label}</span>
                     <span
                       className={`mt-1 block text-xs font-normal leading-relaxed ${
-                        playlistMode === mode
-                          ? "text-accent/80"
-                          : "text-gray-500"
+                        playlistMode === mode ? "text-accent/80" : "text-muted"
                       }`}
                     >
                       {hint}
@@ -723,14 +722,18 @@ export default function Download() {
 
             {playlistMode !== "videos" && (
               <div>
-                <label className="mb-1 block text-sm font-medium text-gray-300">
+                <label
+                  htmlFor="download-playlist-name"
+                  className="mb-1 block text-sm font-medium text-gray-300"
+                >
                   Playlist name
                 </label>
                 <input
+                  id="download-playlist-name"
                   value={playlistName}
                   onChange={(e) => setPlaylistName(e.target.value)}
                   placeholder="Playlist name"
-                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
                 />
               </div>
             )}
@@ -761,7 +764,7 @@ export default function Download() {
                   {playlistEntries.map((entry) => {
                     const thumbSrc = youtubeListThumbnailUrl(
                       entry.id,
-                      entry.thumbnail_url,
+                      entry.thumbnail_url
                     );
                     const rowClass =
                       playlistMode === "subscribe"
@@ -780,13 +783,16 @@ export default function Download() {
                         <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
                           {thumbSrc ? (
                             <img
+                              decoding="async"
+                              width={96}
+                              height={56}
                               src={thumbSrc}
                               alt=""
                               loading="lazy"
                               className="h-full w-full object-cover"
                             />
                           ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-gray-600">
+                            <div className="flex h-full items-center justify-center text-xs text-muted">
                               No preview
                             </div>
                           )}
@@ -795,7 +801,7 @@ export default function Download() {
                           <p className="line-clamp-2 text-sm text-gray-200">
                             {entry.title ?? "Untitled"}
                           </p>
-                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-gray-500">
+                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
                             {entry.channel && <span>{entry.channel}</span>}
                             {entry.view_count != null && (
                               <span>{formatViewCount(entry.view_count)}</span>
@@ -829,9 +835,9 @@ export default function Download() {
         </Collapse>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-300">
+          <span className="mb-1 block text-sm font-medium text-gray-300">
             Quality
-          </label>
+          </span>
           <ThemedSelect
             aria-label="Quality"
             value={preset}
@@ -839,7 +845,7 @@ export default function Download() {
               value: p,
               label: presetOptionLabel(
                 p,
-                metadataLoaded ? presetSizes : undefined,
+                metadataLoaded ? presetSizes : undefined
               ),
             }))}
             onChange={setPreset}
@@ -850,10 +856,17 @@ export default function Download() {
 
         <Collapse open={!isPlaylist}>
           <div>
-            <label className="mb-1 block text-sm font-medium text-gray-300">
+            <span
+              id="download-destination-label"
+              className="mb-1 block text-sm font-medium text-gray-300"
+            >
               Destination
-            </label>
-            <div className="grid grid-cols-2 gap-2">
+            </span>
+            <div
+              role="group"
+              aria-labelledby="download-destination-label"
+              className="grid grid-cols-2 gap-2"
+            >
               <button
                 type="button"
                 onClick={() => setDestination("library")}
@@ -878,7 +891,7 @@ export default function Download() {
               </button>
             </div>
             {toDevice && (
-              <p className="mt-2 text-xs text-gray-500">
+              <p className="mt-2 text-xs text-muted">
                 Saved inside Horde on this device for offline viewing; not added
                 to the library.
               </p>
@@ -953,7 +966,13 @@ export default function Download() {
               </span>
             </button>
             <div className="flex shrink-0 gap-2">
-              {queuePaused ? (
+              {!isAdmin ? (
+                queuePaused && (
+                  <span className="rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-300">
+                    Paused by an administrator
+                  </span>
+                )
+              ) : queuePaused ? (
                 <button
                   type="button"
                   onClick={() => resumeQueue()}
@@ -1016,12 +1035,12 @@ export default function Download() {
               (j) =>
                 j.status === "completed" ||
                 j.status === "error" ||
-                j.status === "cancelled",
+                j.status === "cancelled"
             ) && (
               <button
                 type="button"
                 onClick={dismissFinishedJobs}
-                className="text-xs text-gray-500 hover:text-accent"
+                className="text-xs text-muted hover:text-accent"
               >
                 Clear all
               </button>

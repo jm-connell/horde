@@ -11,15 +11,15 @@ import logging
 import re
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from typing import Any, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
-from ..config import DOWNLOADS_DIR
-from ..database import engine
+from ..context import get_engine, get_paths
 from ..models import Video, as_utc
 from . import activity, library
+from .workers import BackgroundWorker
 from .ytdlp_common import (
     ERROR_KIND_BOT,
     ERROR_KIND_COOKIES,
@@ -62,18 +62,16 @@ _RETRYABLE_KINDS = frozenset(
     }
 )
 
-_stop = threading.Event()
-_thread: Optional[threading.Thread] = None
 _cooldown_lock = threading.Lock()
-_global_retry_after: Optional[datetime] = None
+_global_retry_after: datetime | None = None
 
 
 @dataclass
 class SubtitleFetchOutcome:
     tracks: list[dict[str, Any]] = field(default_factory=list)
     retryable: bool = False
-    kind: Optional[str] = None
-    message: Optional[str] = None
+    kind: str | None = None
+    message: str | None = None
 
 
 def reset_for_tests() -> None:
@@ -96,7 +94,7 @@ def note_global_cooldown(delay_sec: float) -> None:
     global _global_retry_after
     if delay_sec <= 0:
         return
-    until = datetime.now(timezone.utc) + timedelta(seconds=delay_sec)
+    until = datetime.now(UTC) + timedelta(seconds=delay_sec)
     with _cooldown_lock:
         if _global_retry_after is None or until > _global_retry_after:
             _global_retry_after = until
@@ -106,7 +104,7 @@ def seconds_until_global_cooldown() -> float:
     with _cooldown_lock:
         if _global_retry_after is None:
             return 0.0
-        delta = (_global_retry_after - datetime.now(timezone.utc)).total_seconds()
+        delta = (_global_retry_after - datetime.now(UTC)).total_seconds()
         return max(0.0, delta)
 
 
@@ -129,8 +127,8 @@ def subtitle_failure_retryable(text: str) -> bool:
 def outcome_from_fetch(
     tracks: list[dict[str, Any]],
     *,
-    messages: Optional[list[str]] = None,
-    exc: Optional[BaseException] = None,
+    messages: list[str] | None = None,
+    exc: BaseException | None = None,
 ) -> SubtitleFetchOutcome:
     """Map on-disk tracks + yt-dlp logs into a fetch outcome."""
     if tracks:
@@ -160,15 +158,13 @@ def captions_fetch_allowed(video: Video) -> bool:
     if seconds_until_global_cooldown() > 0:
         return False
     retry = as_utc(video.subtitles_retry_after)
-    if retry is not None and retry > datetime.now(timezone.utc):
-        return False
-    return True
+    return not (retry is not None and retry > datetime.now(UTC))
 
 
 def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None:
     """Persist tracks or keep ``subtitles_pending`` with a retry timestamp."""
     got_tracks = False
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = session.get(Video, video_id)
         if video is None:
             return
@@ -189,7 +185,7 @@ def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None
                 delay = backoff_seconds(attempts)
                 video.subtitles_pending = True
                 video.subtitles_fetch_attempts = attempts
-                video.subtitles_retry_after = datetime.now(timezone.utc) + timedelta(
+                video.subtitles_retry_after = datetime.now(UTC) + timedelta(
                     seconds=delay
                 )
                 note_global_cooldown(delay)
@@ -211,21 +207,21 @@ def apply_subtitle_outcome(video_id: int, outcome: SubtitleFetchOutcome) -> None
             from .ai import enqueue_for_video
 
             enqueue_for_video(video_id, include_tags=False, force=False)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("subtitle re-embed enqueue failed", exc_info=True)
 
 
 def recover_unsynced_missing_captions() -> int:
     """Re-open forgotten empty-caption downloads (never metadata-synced)."""
     count = 0
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         rows = session.exec(
             select(Video).where(
-                Video.source_url.is_not(None),  # type: ignore[attr-defined]
-                Video.subtitles_pending == False,  # noqa: E712
+                col(Video.source_url).is_not(None),
+                Video.subtitles_pending == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
         ).all()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         cutoff = now - _RECOVER_MAX_AGE
         for video in rows:
             if video.metadata_synced_at is not None:
@@ -247,13 +243,13 @@ def recover_unsynced_missing_captions() -> int:
     return count
 
 
-def next_due_video(session: Session) -> Optional[Video]:
+def next_due_video(session: Session) -> Video | None:
     """Newest library download whose caption retry is due."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = session.exec(
         select(Video).where(
-            Video.subtitles_pending == True,  # noqa: E712
-            Video.source_url.is_not(None),  # type: ignore[attr-defined]
+            Video.subtitles_pending == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+            col(Video.source_url).is_not(None),
         )
     ).all()
     due: list[Video] = []
@@ -267,7 +263,7 @@ def next_due_video(session: Session) -> Optional[Video]:
         stamp = as_utc(video.added_at)
         if stamp is not None:
             return stamp
-        return datetime.min.replace(tzinfo=timezone.utc)
+        return datetime.min.replace(tzinfo=UTC)
 
     due.sort(key=_added, reverse=True)
     return due[0] if due else None
@@ -277,18 +273,18 @@ def process_due_subtitle() -> bool:
     """Fetch captions for one due video. Returns True if a timedtext call ran."""
     if seconds_until_global_cooldown() > 0:
         return False
-    video_id: Optional[int] = None
-    title: Optional[str] = None
-    source_url: Optional[str] = None
+    video_id: int | None = None
+    title: str | None = None
+    source_url: str | None = None
     media = None
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         video = next_due_video(session)
         if video is None or video.id is None:
             return False
         video_id = video.id
         title = video.title
         source_url = video.source_url
-        media = DOWNLOADS_DIR / video.file_path
+        media = get_paths().downloads / video.file_path
     if not source_url or media is None or not media.is_file():
         if video_id is not None:
             apply_subtitle_outcome(
@@ -297,7 +293,7 @@ def process_due_subtitle() -> bool:
             )
         return False
 
-    from .downloader import download_subtitles
+    from .downloads.subtitles import download_subtitles
 
     with activity.track(
         "subtitles",
@@ -313,46 +309,32 @@ def process_due_subtitle() -> bool:
     return True
 
 
-def _worker_loop() -> None:
+def _worker_loop(worker: BackgroundWorker) -> None:
     try:
         recover_unsynced_missing_captions()
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("subtitle pending recovery failed", exc_info=True)
-    if _stop.wait(timeout=STARTUP_DELAY_SEC):
+    if worker.sleep(STARTUP_DELAY_SEC):
         return
-    while not _stop.is_set():
+    while not worker.stopping:
         wait = seconds_until_global_cooldown()
         if wait > 0:
-            if _stop.wait(timeout=min(wait, POLL_INTERVAL_SEC)):
+            if worker.sleep(min(wait, POLL_INTERVAL_SEC)):
                 return
             continue
         ran = False
         try:
             ran = process_due_subtitle()
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("subtitle retry failed", exc_info=True)
             note_global_cooldown(INTER_FETCH_SEC)
         if ran:
-            if _stop.wait(timeout=INTER_FETCH_SEC):
+            if worker.sleep(INTER_FETCH_SEC):
                 return
             continue
-        if _stop.wait(timeout=POLL_INTERVAL_SEC):
+        if worker.sleep(POLL_INTERVAL_SEC):
             return
 
 
-def start_subtitle_retry_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(
-        target=_worker_loop, daemon=True, name="subtitle-retry"
-    )
-    _thread.start()
-
-
-def stop_subtitle_retry_worker() -> None:
-    _stop.set()
-    thread = _thread
-    if thread is not None and thread.is_alive():
-        thread.join(timeout=5)
+def create_worker() -> BackgroundWorker:
+    return BackgroundWorker("subtitle-retry", _worker_loop)

@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session
 
-from ..database import get_session
-from ..models import Video
+from ..auth import current_user, require_admin, require_permission
+from ..context import get_session
+from ..models import Video, require_id
+from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState
 from ..services import compat_rendition
+from ..services.auth.accounts import AuthUser
 from ..services.media_info import needs_compat
-from ..services.ytdlp_formats import compat_copy_cap
 from ..services.paths import resolve_compat_path
+from ..services.ytdlp_formats import compat_copy_cap
+from . import member_view
+from .video_serialize import resolve_media
 
 router = APIRouter(prefix="/api", tags=["compat"])
 
@@ -35,7 +40,12 @@ class ConvertLibraryRequest(BaseModel):
 
 
 class CompatCancelRequest(BaseModel):
-    kind: Optional[Literal["compat", "convert"]] = None
+    kind: Literal["compat", "convert"] | None = None
+
+
+def _state_for(user: AuthUser, state: dict) -> CompatState:
+    read = CompatState(**state)
+    return read if user.is_admin else member_view.compat(read)
 
 
 def _video_or_404(session: Session, video_id: int) -> Video:
@@ -46,22 +56,27 @@ def _video_or_404(session: Session, video_id: int) -> Video:
 
 
 @router.get("/videos/{video_id}/compat", response_model=CompatState)
-def get_compat(video_id: int, session: Session = Depends(get_session)):
+def get_compat(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
     video = _video_or_404(session, video_id)
-    return CompatState(**compat_rendition.compat_status(video))
+    return _state_for(user, compat_rendition.compat_status(video))
 
 
 @router.post("/videos/{video_id}/compat", response_model=CompatState)
 def request_compat(
     video_id: int,
-    payload: Optional[CompatRequest] = None,
+    payload: CompatRequest | None = None,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Create the sidecar for one video (a viewer is waiting, so it jumps the queue)."""
     video = _video_or_404(session, video_id)
     existing = resolve_compat_path(video)
     if existing is not None and existing.is_file():
-        return CompatState(**compat_rendition.compat_status(video))
+        return _state_for(user, compat_rendition.compat_status(video))
     if not needs_compat(video, compat_copy_cap()):
         raise HTTPException(
             status_code=409,
@@ -77,10 +92,58 @@ def request_compat(
         reason="Requested for a device that cannot play the original",
         front=True,
     )
-    return CompatState(**compat_rendition.compat_status(video))
+    return _state_for(user, compat_rendition.compat_status(video))
 
 
-@router.delete("/videos/{video_id}/compat", status_code=204)
+def _safari_state(video: Video) -> dict:
+    # While a job runs the file is being swapped; do not look for it on disk.
+    busy = compat_rendition.job_state(require_id(video))
+    if busy is not None:
+        return {**busy, "error": None}
+    return compat_rendition.safari_status(video, resolve_media(video))
+
+
+@router.get("/videos/{video_id}/compat/safari", response_model=CompatState)
+def get_safari_prep(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Is the stored original playable by WebKit (Safari, every iOS browser)?"""
+    return _state_for(user, _safari_state(_video_or_404(session, video_id)))
+
+
+@router.post("/videos/{video_id}/compat/safari", response_model=CompatState)
+def request_safari_prep(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Queue the in-place Safari remux (AAC audio + faststart, video copied).
+
+    GET /stream only serves files that already exist; a client that detects it
+    is WebKit calls this first and polls ``GET`` until the status is ``ready``.
+    Idempotent: a repeat call while the job is queued or running changes nothing.
+    """
+    video = _video_or_404(session, video_id)
+    state = _safari_state(video)
+    if state["status"] in ("none", "error"):
+        compat_rendition.enqueue(
+            video_id,
+            kind="safari",
+            prefer_download=False,
+            reason="Safari cannot play this file as stored",
+            front=True,
+        )
+        state = _safari_state(video)
+    return _state_for(user, state)
+
+
+@router.delete(
+    "/videos/{video_id}/compat",
+    status_code=204,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
 def delete_compat(video_id: int, session: Session = Depends(get_session)):
     video = _video_or_404(session, video_id)
     compat_rendition.cancel(video_id)
@@ -93,12 +156,21 @@ def delete_compat(video_id: int, session: Session = Depends(get_session)):
     session.commit()
 
 
-@router.get("/compat/summary")
+@router.get(
+    "/compat/summary",
+    response_model=CompatSummaryRead,
+    dependencies=[Depends(require_admin)],
+)
 def compat_summary(session: Session = Depends(get_session)):
+    """Library-wide codec and H.264 copy totals for the compatibility settings."""
     return compat_rendition.library_summary(session)
 
 
-@router.post("/compat/backfill", response_model=CompatBulkResult)
+@router.post(
+    "/compat/backfill",
+    response_model=CompatBulkResult,
+    dependencies=[Depends(require_admin)],
+)
 def compat_backfill(session: Session = Depends(get_session)):
     """Queue H.264 copies for every library video that would benefit."""
     queued = 0
@@ -116,7 +188,11 @@ def compat_backfill(session: Session = Depends(get_session)):
     return CompatBulkResult(queued=queued, already_queued=already)
 
 
-@router.post("/compat/convert-library", response_model=CompatBulkResult)
+@router.post(
+    "/compat/convert-library",
+    response_model=CompatBulkResult,
+    dependencies=[Depends(require_admin)],
+)
 def convert_library(
     payload: ConvertLibraryRequest,
     session: Session = Depends(get_session),
@@ -143,7 +219,11 @@ def convert_library(
     return CompatBulkResult(queued=queued, already_queued=already)
 
 
-@router.post("/compat/cancel")
-def compat_cancel(payload: Optional[CompatCancelRequest] = None):
+@router.post(
+    "/compat/cancel",
+    response_model=CompatCancelResult,
+    dependencies=[Depends(require_admin)],
+)
+def compat_cancel(payload: CompatCancelRequest | None = None):
     dropped = compat_rendition.cancel_all(payload.kind if payload else None)
     return {"cancelled": dropped}

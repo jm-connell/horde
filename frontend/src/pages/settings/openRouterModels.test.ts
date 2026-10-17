@@ -20,9 +20,9 @@ describe("openRouterSelectOptions", () => {
       "google/gemini-2.5-flash",
       "openai/gpt-4o-mini",
     ]);
-    expect(ids.filter((id) => id === "google/gemini-2.5-flash-lite")).toHaveLength(
-      1
-    );
+    expect(
+      ids.filter((id) => id === "google/gemini-2.5-flash-lite")
+    ).toHaveLength(1);
     expect(ids[ids.length - 1]).toBe("zzz/other");
     expect(opts[0].group).toBe("Recommended");
     expect(opts.find((o) => o.value === "zzz/other")?.group).toBe("All models");

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { useUpdateAppSettings } from "../queries/app";
+import { dataOrNull, useSystemStats } from "../queries/status";
 import Collapse from "../components/Collapse";
 import {
   flushSettingsSync,
@@ -15,7 +17,14 @@ import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 
-const STEPS = ["welcome", "downloads", "playback", "look", "ai", "done"] as const;
+const STEPS = [
+  "welcome",
+  "downloads",
+  "playback",
+  "look",
+  "ai",
+  "done",
+] as const;
 type Step = (typeof STEPS)[number];
 type AiChoice = "skip" | "openrouter" | "ollama";
 
@@ -39,10 +48,11 @@ const HEIGHT_EASE =
 
 export default function Setup() {
   const navigate = useNavigate();
+  const saveAppSettings = useUpdateAppSettings();
   const [settings, update] = useSettings();
   const [step, setStep] = useState<Step>("welcome");
   const [health, setHealth] = useState<HealthStats | null>(null);
-  const [systemStats, setSystemStats] = useState<SystemStats | null>(null);
+  const systemStats = dataOrNull(useSystemStats());
   const [finishing, setFinishing] = useState(false);
   const [aiChoice, setAiChoice] = useState<AiChoice>("skip");
   const [openRouterKey, setOpenRouterKey] = useState("");
@@ -62,7 +72,6 @@ export default function Setup() {
       .then((r) => r.json())
       .then(setHealth)
       .catch(() => undefined);
-    api.getSystemStats().then(setSystemStats).catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -104,12 +113,11 @@ export default function Setup() {
     setFinishing(true);
     try {
       await flushSettingsSync();
-      await api.updateAppSettings({ setup_completed: true });
+      await saveAppSettings({ setup_completed: true });
       markSetupCompleted();
-      navigate(
-        (health?.library_video_count ?? 0) > 0 ? "/" : "/download",
-        { replace: true }
-      );
+      navigate((health?.library_video_count ?? 0) > 0 ? "/" : "/download", {
+        replace: true,
+      });
     } catch {
       setFinishing(false);
     }
@@ -140,7 +148,7 @@ export default function Setup() {
         setAiStatus(result.detail || "Could not reach OpenRouter.");
         return;
       }
-      await api.updateAppSettings({
+      await saveAppSettings({
         ai: {
           enabled: true,
           openrouter_enabled: true,
@@ -150,7 +158,9 @@ export default function Setup() {
       setAiStatus("OpenRouter connected. You can continue.");
       goNext();
     } catch (err) {
-      setAiStatus(err instanceof Error ? err.message : "OpenRouter test failed.");
+      setAiStatus(
+        err instanceof Error ? err.message : "OpenRouter test failed."
+      );
     } finally {
       setAiBusy(false);
     }
@@ -166,7 +176,7 @@ export default function Setup() {
         setAiStatus(result.detail || "Could not reach Ollama.");
         return;
       }
-      await api.updateAppSettings({
+      await saveAppSettings({
         ai: { enabled: true, base_url: url },
       });
       setAiStatus("Ollama connected. You can continue.");
@@ -216,7 +226,10 @@ export default function Setup() {
         ))}
       </div>
 
-      <div ref={wrapRef} className={`relative mt-6 overflow-hidden ${HEIGHT_EASE}`}>
+      <div
+        ref={wrapRef}
+        className={`relative mt-6 overflow-hidden ${HEIGHT_EASE}`}
+      >
         {leaving != null ? (
           <div
             className={`pointer-events-none absolute inset-x-0 top-0 ${
@@ -296,17 +309,18 @@ function WizardPanel({
       <h1 className="text-2xl font-semibold text-gray-100">
         {STEP_TITLE[step]}
       </h1>
-      <p className="mt-1 text-xs text-gray-500">
-        Step {stepIndex + 1} of {STEPS.length}
+      <p className="mt-1 text-xs text-muted">
+        Step {stepIndex + 2} of {STEPS.length + 1}
       </p>
 
       <div className="mt-8 space-y-4">
         {step === "welcome" && (
           <>
             <p className="text-sm text-gray-300">
-              Horde is a single-admin media archive for a trusted LAN. There is
-              no login — anyone who can reach this URL can download, delete, and
-              change settings.
+              Horde is a self-hosted media archive. Everyone signs in with their
+              own account and keeps their own watch history; as the
+              administrator you choose who can delete, download and change
+              settings.
             </p>
             <div className="rounded-lg border border-ink-700 bg-ink-950/60 px-4 py-3 text-sm text-gray-300">
               <p>
@@ -331,7 +345,7 @@ function WizardPanel({
               </p>
             </div>
             {health?.wiki_available ? (
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-muted">
                 Docs stay available at{" "}
                 <a
                   href="/wiki/"
@@ -358,7 +372,7 @@ function WizardPanel({
                 <span className="block text-sm font-medium text-gray-200">
                   Normalize volume on download
                 </span>
-                <span className="block text-xs text-gray-500">
+                <span className="block text-xs text-muted">
                   Apply loudness normalization when saving new videos (requires
                   ffmpeg).
                 </span>
@@ -386,7 +400,9 @@ function WizardPanel({
               mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
               copyResolution={settings.compatCopyResolution}
-              onCopyResolutionChange={(v) => update({ compatCopyResolution: v })}
+              onCopyResolutionChange={(v) =>
+                update({ compatCopyResolution: v })
+              }
               stats={systemStats}
             />
           </>
@@ -408,8 +424,7 @@ function WizardPanel({
         {step === "ai" && (
           <>
             <p className="text-sm text-gray-400">
-              AI is optional. Skip for now and enable it later in Settings →
-              AI.
+              AI is optional. Skip for now and enable it later in Settings → AI.
             </p>
             <div className="flex flex-wrap gap-2">
               {(
@@ -438,7 +453,7 @@ function WizardPanel({
             </div>
             <Collapse open={aiChoice === "openrouter"}>
               <div className="space-y-2 pt-2">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   Cloud LLM for summaries, tags, and chat. The key is stored on
                   this Horde server.
                 </p>
@@ -464,7 +479,7 @@ function WizardPanel({
             </Collapse>
             <Collapse open={aiChoice === "ollama"}>
               <div className="space-y-2 pt-2">
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-muted">
                   Leave the URL blank to use the default (Docker Compose{" "}
                   <span className="font-mono">ai</span> profile, or localhost).
                 </p>

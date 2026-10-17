@@ -5,7 +5,11 @@ import {
   normalizeCustomCss,
   pageIdFromPath,
   sanitizeCustomCss,
+  stripRemoteCss,
 } from "./customCss";
+import { spliceCorpus } from "./customCssCorpus";
+import corpus from "./customCssSanitize.corpus.json";
+import vectors from "./customCssSanitize.vectors.json";
 
 describe("normalizeCustomCss", () => {
   it("keeps ordinary CSS and rejects non-strings", () => {
@@ -58,5 +62,38 @@ describe("pageIdFromPath", () => {
     expect(pageIdFromPath("/import")).toBe("import");
     expect(pageIdFromPath("/review")).toBe("import");
     expect(pageIdFromPath("/nope")).toBe("other");
+  });
+});
+
+describe("stripRemoteCss", () => {
+  // The same vectors run against the server implementation in
+  // backend/tests/test_css_sanitize.py.
+  for (const vector of vectors) {
+    it(vector.name, () => {
+      expect(stripRemoteCss(vector.input)).toBe(vector.output);
+    });
+  }
+
+  it("is idempotent on the vectors", () => {
+    for (const vector of vectors) {
+      const once = stripRemoteCss(vector.input);
+      expect(stripRemoteCss(once), vector.name).toBe(once);
+    }
+  });
+
+  it("is idempotent on generated inputs", () => {
+    // Same splice corpus as backend/tests/test_css_sanitize.py (see
+    // customCssCorpus.ts); e2e/custom-css-network.spec.ts loads these inputs
+    // in Chromium and checks that none reaches another host.
+    for (const css of spliceCorpus(corpus, 3000)) {
+      const once = stripRemoteCss(css);
+      expect(stripRemoteCss(once), JSON.stringify(css)).toBe(once);
+    }
+  });
+
+  it("is applied by sanitizeCustomCss together with the style-tag guard", () => {
+    expect(
+      sanitizeCustomCss("@import 'x';a{background:url(//e.test/x)}</style>")
+    ).toBe("a{background:none}<\\/style>");
   });
 });

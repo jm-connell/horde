@@ -4,17 +4,20 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Generator
+from collections.abc import Callable, Generator
+from typing import Any
 
-from sqlmodel import Session, select
+from sqlalchemy.exc import IntegrityError
+from sqlmodel import Session, col, select
 
-from ...database import engine
-from ...models import Video, VideoAiChat, VideoAiChatMessage, utcnow
+from ...context import get_engine
+from ...models import Video, VideoAiChatMessage, utcnow
 from .. import app_settings
 from . import embeddings as ai_embeddings
 from . import text as ai_text
 from .provider import (
     OpenRouterProvider,
+    format_provider_error,
     get_llm_provider,
     llm_features_allowed,
     require_llm_chat_model,
@@ -35,20 +38,18 @@ class ChatError(Exception):
         self.status_code = status_code
 
 
-def _get_or_create_thread(session: Session, video_id: int) -> VideoAiChat:
-    row = session.get(VideoAiChat, video_id)
-    if row is None:
-        row = VideoAiChat(video_id=video_id)
-        session.add(row)
-        session.flush()
-    return row
-
-
-def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
+def list_messages(
+    session: Session, video_id: int, user_id: int
+) -> list[dict[str, Any]]:
     rows = session.exec(
         select(VideoAiChatMessage)
-        .where(VideoAiChatMessage.video_id == video_id)
-        .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
+        .where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
+        .order_by(
+            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
+        )
     ).all()
     return [
         {
@@ -63,25 +64,31 @@ def list_messages(session: Session, video_id: int) -> list[dict[str, Any]]:
     ]
 
 
-def clear_messages(session: Session, video_id: int) -> None:
+def clear_messages(session: Session, video_id: int, user_id: int) -> None:
+    """Delete this user's conversation about the video (nobody else's)."""
     rows = session.exec(
-        select(VideoAiChatMessage).where(VideoAiChatMessage.video_id == video_id)
+        select(VideoAiChatMessage).where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
     ).all()
     for row in rows:
         session.delete(row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        session.delete(thread)
     session.commit()
 
 
 def _history_for_prompt(
-    session: Session, video_id: int
+    session: Session, video_id: int, user_id: int
 ) -> list[dict[str, str]]:
     rows = session.exec(
         select(VideoAiChatMessage)
-        .where(VideoAiChatMessage.video_id == video_id)
-        .order_by(VideoAiChatMessage.created_at.asc(), VideoAiChatMessage.id.asc())
+        .where(
+            VideoAiChatMessage.video_id == video_id,
+            VideoAiChatMessage.user_id == user_id,
+        )
+        .order_by(
+            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
+        )
     ).all()
     # Drop the just-persisted latest user message — it is passed as ``prompt``.
     if rows and rows[-1].role == "user":
@@ -100,7 +107,9 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     ai = app_settings.ai_settings()
     allowed, reason = llm_features_allowed()
     if not allowed:
-        raise ChatError(reason or "AI is disabled", status_code=409 if ai.get("paused") else 400)
+        raise ChatError(
+            reason or "AI is disabled", status_code=409 if ai.get("paused") else 400
+        )
     if not ai.get("ai_chat", True):
         raise ChatError("AI video chat is disabled", status_code=400)
 
@@ -126,14 +135,28 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
     return video
 
 
-def stream_chat_events(video_id: int, message: str) -> Generator[str, None, None]:
+#: ``authorized(force=...)``: whether the caller may still receive this stream
+#: (throttled unless forced). See ``StreamAuthGuard.still_valid``.
+Authorized = Callable[..., bool]
+
+
+def stream_chat_events(
+    video_id: int,
+    message: str,
+    user_id: int,
+    authorized: Authorized | None = None,
+) -> Generator[str, None, None]:
     """SSE generator that owns its DB session for the full stream lifetime."""
-    with Session(engine) as session:
-        yield from stream_chat(session, video_id, message)
+    with Session(get_engine()) as session:
+        yield from stream_chat(session, video_id, message, user_id, authorized)
 
 
 def stream_chat(
-    session: Session, video_id: int, message: str
+    session: Session,
+    video_id: int,
+    message: str,
+    user_id: int,
+    authorized: Authorized | None = None,
 ) -> Generator[str, None, None]:
     """Yield SSE event strings for a chat turn.
 
@@ -168,25 +191,22 @@ def stream_chat(
         yield _sse({"type": "error", "detail": missing, "status": 503})
         return
 
-    _get_or_create_thread(session, video_id)
     user_row = VideoAiChatMessage(
         video_id=video_id,
+        user_id=user_id,
         role="user",
         content=user_text,
         created_at=utcnow(),
     )
     session.add(user_row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        thread.updated_at = utcnow()
-        session.add(thread)
     session.commit()
     session.refresh(user_row)
     # Re-load video after commit (expire_on_commit) before building context.
-    video = session.get(Video, video_id)
-    if video is None:
+    fresh_video = session.get(Video, video_id)
+    if fresh_video is None:
         yield _sse({"type": "error", "detail": "Video not found", "status": 404})
         return
+    video = fresh_video
 
     yield _sse(
         {
@@ -204,29 +224,61 @@ def stream_chat(
 
     context = ai_embeddings.build_chat_context(session, video, user_text)
     system = ai_text.chat_system_prompt() + "\n\n" + context
-    history = _history_for_prompt(session, video_id)
+    history = _history_for_prompt(session, video_id, user_id)
     session.commit()
 
     assistant_parts: list[str] = []
+    revoked = False
+    stream = provider.chat_stream(
+        user_text,
+        chat_model,
+        system=system,
+        messages=history,
+        num_predict=_NUM_PREDICT,
+        timeout=_CHAT_TIMEOUT,
+        temperature=0.4,
+        usage_kind="chat",
+        video_id=video_id,
+    )
     try:
-        for delta in provider.chat_stream(
-            user_text,
-            chat_model,
-            system=system,
-            messages=history,
-            num_predict=_NUM_PREDICT,
-            timeout=_CHAT_TIMEOUT,
-            temperature=0.4,
-            usage_kind="chat",
-            video_id=video_id,
-        ):
+        for delta in stream:
             if not delta:
                 continue
+            if authorized is not None and not authorized():
+                # Stop reading: closing the generator drops the upstream request.
+                # The turn's cost is not booked (the provider only learns it from
+                # the final usage chunk); a client disconnect loses it the same way.
+                revoked = True
+                yield _sse(_revoked_event())
+                break
             assistant_parts.append(delta)
             yield _sse({"type": "token", "text": delta})
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("chat stream failed video_id=%s: %s", video_id, exc)
-        yield _sse({"type": "error", "detail": str(exc), "status": 502})
+    except Exception as exc:
+        logger.warning("chat stream failed video_id=%s", video_id, exc_info=True)
+        # Not str(exc): an httpx error quotes the provider URL.
+        yield _sse(
+            {"type": "error", "detail": format_provider_error(exc), "status": 502}
+        )
+        return
+    finally:
+        close = getattr(stream, "close", None)
+        if close is not None:
+            close()
+
+    if revoked:
+        logger.warning(
+            "chat stream ended: caller lost access user_id=%s video_id=%s",
+            user_id,
+            video_id,
+        )
+        return
+    if authorized is not None and not authorized(force=True):
+        logger.warning(
+            "chat reply dropped: caller lost access user_id=%s video_id=%s",
+            user_id,
+            video_id,
+        )
+        yield _sse(_revoked_event())
         return
 
     reply = "".join(assistant_parts).strip()
@@ -241,26 +293,33 @@ def stream_chat(
         return
 
     turn_cost = getattr(provider, "last_cost", None)
-    if not isinstance(turn_cost, (int, float)):
-        turn_cost = None
-    else:
-        turn_cost = float(turn_cost)
+    turn_cost = float(turn_cost) if isinstance(turn_cost, (int, float)) else None
 
     assistant_row = VideoAiChatMessage(
         video_id=video_id,
+        user_id=user_id,
         role="assistant",
         content=reply,
         cost=turn_cost,
         model=(chat_model or "").strip() or None,
         created_at=utcnow(),
     )
-    session.add(assistant_row)
-    thread = session.get(VideoAiChat, video_id)
-    if thread is not None:
-        thread.updated_at = utcnow()
-        session.add(thread)
-    session.commit()
-    session.refresh(assistant_row)
+    try:
+        session.add(assistant_row)
+        session.commit()
+        session.refresh(assistant_row)
+    except IntegrityError:
+        # The account was deleted while the model answered. The provider already
+        # booked the spend in the cost ledger; only the reply has nowhere to go.
+        session.rollback()
+        logger.warning(
+            "chat reply not stored: user %s no longer exists (video_id=%s)",
+            user_id,
+            video_id,
+            exc_info=True,
+        )
+        yield _sse(_revoked_event())
+        return
 
     yield _sse(
         {
@@ -283,6 +342,9 @@ def stream_chat(
     )
 
 
+def _revoked_event() -> dict[str, Any]:
+    return {"type": "error", "detail": "Your session has ended", "status": 401}
+
+
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
-

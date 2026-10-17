@@ -27,6 +27,9 @@ flowchart LR
 2. **Hydrate** — One `GET /api/settings` for the whole app. If `ui` has keys, they overwrite matching local fields (plus `progress_expiry_days` → `progressExpiryDays`). If `ui` is empty **and** `setup_completed` is true, the client **migrates** local `SERVER_UI_KEYS` up to the server. If setup is still incomplete, leftover local prefs are **not** pushed up (so a factory reset cannot restore the old theme/codec).
 3. **Edits** — `useSettings` writes localStorage first, then schedules a patch of the `ui` blob. Top-level and AI fields use explicit save helpers (e.g. progress expiry, catalog caps, `saveAi`).
 
+!!! note "Per account"
+    The `ui` blob is saved **per user** (`user_settings`), layered over a server-wide default. AI, System and Users tabs are visible to administrators only; members see Appearance, Library and Playback and can change only their own preferences. Server-wide parts of those three tabs (progress expiry, playback compatibility, metadata and catalog, background and font uploads) are hidden from members too; see [what members can and can't change](../ops/authentication.md#what-members-can-and-cant-change).
+
 !!! tip "Same server, new browser"
     Opening Horde on another machine pulls the server `ui` blob and AI/app settings. Keys **not** in `SERVER_UI_KEYS` (notably `volume` and `lastCustomChannel`) stay per-browser.
 
@@ -41,6 +44,7 @@ See [All settings](all-settings.md) for every key, default, type, and storage la
 | Playback | `?tab=playback` | [playback.md](playback.md) |
 | AI | `?tab=ai` | [ai.md](ai.md) |
 | System | `?tab=system` | [system.md](system.md) |
+| Users | `?tab=users` | [Accounts and sign-in](../ops/authentication.md) |
 
 ### Query parameters
 

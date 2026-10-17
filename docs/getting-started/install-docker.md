@@ -2,12 +2,12 @@
 
 Horde runs as a Docker Compose stack: the main `horde` app, a `bgutil-pot` sidecar for YouTube proof-of-origin tokens, and an optional `ollama` service behind the `ai` profile.
 
-There is **no pre-built image on Docker Hub**. You clone this git repository onto the Docker host and Compose **builds** `horde:latest` from the `Dockerfile`. A zip download of the source can start once, but it has no `.git` directory, so later [`update.sh`](updating.md) / `git pull` will fail.
+There is **no image on Docker Hub**. You clone this git repository onto the Docker host and Compose **builds** `horde:latest` from the `Dockerfile` (tagged releases are also published to GHCR; see [Use the published image](updating.md#use-the-published-image)). A zip download of the source can start once, but it has no `.git` directory, so later [`update.sh`](updating.md) / `git pull` will fail.
 
 On **TrueNAS with Dockge**, clone into the Dockge stacks directory and deploy from the UI: [TrueNAS / Dockge](truenas-dockge.md).
 
-!!! warning "LAN only — no authentication"
-    Horde has **no login**. Bind it to a trusted LAN only. Do not publish it to the public internet or reverse-proxy it without your own access control in front.
+!!! warning "Trusted network"
+    The first visit creates the admin account ([accounts](../ops/authentication.md)). Keep Horde on a trusted LAN or VPN; do not publish it to the public internet.
 
 ## Requirements
 
@@ -52,7 +52,10 @@ Pick two paths that will survive container rebuilds. Examples on a generic Linux
 mkdir -p /home/you/horde-media /home/you/horde-data
 ```
 
-`.env.example` ships TrueNAS-style defaults (`/mnt/tank/media/youtube_archive`, `/opt/dockge/horde/data`). If you leave those paths on a machine where they do not exist, Compose may create them as **root**, and Horde will not be able to write. Always set paths that you created and own.
+`.env.example` ships TrueNAS-style defaults (`/mnt/tank/media/youtube_archive`, `/opt/dockge/horde/data`). If you leave those paths on a machine where they do not exist, Compose may create them as **root**, and Horde will not be able to write. Always set paths that you created and own. `update.sh` stops with a pointer to this page when it detects that a recreate would mount different host paths.
+
+!!! danger "`DATA_PATH` must be a local disk"
+    `DATA_PATH` holds the SQLite database in WAL mode. WAL relies on shared-memory file locking that SMB and NFS do not provide reliably, so a database on a network share can corrupt. Keep `DATA_PATH` on a local disk or ZFS dataset on the Docker host. Only `DOWNLOADS_PATH` (media) may be a network share.
 
 ### 3. Copy and edit `.env`
 

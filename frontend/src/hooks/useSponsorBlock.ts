@@ -30,7 +30,9 @@ async function offlineSponsorSegments(
   try {
     for (const item of await getAllItems()) {
       if (!item.sponsorSegments) continue;
-      if (extractYouTubeId(item.video.source_url, item.video.file_path) === ytId) {
+      if (
+        extractYouTubeId(item.video.source_url, item.video.file_path) === ytId
+      ) {
         return item.sponsorSegments;
       }
     }
@@ -50,9 +52,7 @@ export function useSponsorBlock(
   const catsKey = categories.join(",");
 
   useEffect(() => {
-    const cats = catsKey
-      ? (catsKey.split(",") as SponsorBlockCategory[])
-      : [];
+    const cats = catsKey ? (catsKey.split(",") as SponsorBlockCategory[]) : [];
     if (!enabled || cats.length === 0) {
       setSegments([]);
       return;
@@ -66,14 +66,16 @@ export function useSponsorBlock(
     let cancelled = false;
     const allowed = new Set(cats);
     const encoded = encodeURIComponent(JSON.stringify(cats));
-    const useOffline = () =>
+    const applyOfflineSegments = () =>
       offlineSponsorSegments(ytId).then((segs) => {
         if (cancelled || !segs) return false;
-        setSegments(segs.filter((s) => allowed.has(s.category as SponsorBlockCategory)));
+        setSegments(
+          segs.filter((s) => allowed.has(s.category as SponsorBlockCategory))
+        );
         return true;
       });
     if (connectivity.offlineMode) {
-      void useOffline().then((ok) => {
+      void applyOfflineSegments().then((ok) => {
         if (!ok && !cancelled) setSegments([]);
       });
       return () => {
@@ -104,9 +106,9 @@ export function useSponsorBlock(
         }
       )
       .catch(() =>
-        useOffline().then((ok) => {
+        applyOfflineSegments().then((ok) => {
           if (!ok && !cancelled) setSegments([]);
-        }),
+        })
       );
 
     return () => {

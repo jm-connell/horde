@@ -1,19 +1,26 @@
-import { useSettingsPage } from "../context";
 import type { AiPane } from "../types";
+import type { AiPaneState } from "./useAiPaneState";
 import ProvidersPane from "./ProvidersPane";
 import FeaturesPane from "./FeaturesPane";
 import JobsPane from "./JobsPane";
+import { AiPageContext } from "./aiPageContext";
+import { useAiCore } from "./useAiCore";
+import { useAiPanes } from "./useAiPanes";
 
+import { setItem } from "../../../storage";
 const PANES: { id: AiPane; label: string }[] = [
   { id: "providers", label: "Providers" },
   { id: "features", label: "Features" },
   { id: "jobs", label: "Jobs" },
 ];
 
-export default function AiTab() {
-  const { aiPane, setAiPane } = useSettingsPage();
+/** The pane is routing (`?pane=`), so the settings page owns it and passes it in. */
+export default function AiTab({ paneState }: { paneState: AiPaneState }) {
+  const { aiPane, setAiPane } = paneState;
+  const core = useAiCore();
+  const panes = useAiPanes(core, paneState);
   return (
-    <>
+    <AiPageContext.Provider value={{ ...core, ...panes }}>
       <div className="mb-4 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         {PANES.map((pane) => {
           const active = aiPane === pane.id;
@@ -23,11 +30,7 @@ export default function AiTab() {
               type="button"
               onClick={() => {
                 setAiPane(pane.id);
-                try {
-                  localStorage.setItem("horde.aiPane", pane.id);
-                } catch {
-                  /* ignore */
-                }
+                setItem("horde.aiPane", pane.id);
               }}
               className={
                 active
@@ -43,6 +46,6 @@ export default function AiTab() {
       {aiPane === "providers" && <ProvidersPane />}
       {aiPane === "features" && <FeaturesPane />}
       {aiPane === "jobs" && <JobsPane />}
-    </>
+    </AiPageContext.Provider>
   );
 }

@@ -7,7 +7,9 @@ type WebKitVideo = HTMLVideoElement & {
 
 export function useAirPlay(
   videoRef: RefObject<HTMLVideoElement | null>,
-  src: string
+  src: string,
+  /** Same media with a signed token, for the receiver (it sends no cookie). */
+  signedSrc?: () => Promise<string | null>
 ) {
   const [available, setAvailable] = useState(false);
   const [casting, setCasting] = useState(false);
@@ -46,10 +48,32 @@ export function useAirPlay(
     };
   }, [videoRef, src]);
 
-  const showPicker = useCallback(() => {
+  const showPicker = useCallback(async () => {
     const video = videoRef.current as WebKitVideo | null;
-    video?.webkitShowPlaybackTargetPicker?.();
-  }, [videoRef]);
+    if (!video) return;
+    // An Apple TV fetches the media URL itself, without our session cookie, so
+    // hand it a signed URL. Only done when the user asks for AirPlay; normal
+    // playback keeps the cookie-authenticated source.
+    if (
+      signedSrc &&
+      video.currentSrc &&
+      !video.currentSrc.startsWith("blob:")
+    ) {
+      try {
+        const url = await signedSrc();
+        if (url) {
+          const at = video.currentTime;
+          const wasPlaying = !video.paused;
+          video.src = url;
+          video.currentTime = at;
+          if (wasPlaying) void video.play().catch(() => undefined);
+        }
+      } catch {
+        // No token (offline, signed out): the picker still opens.
+      }
+    }
+    video.webkitShowPlaybackTargetPicker?.();
+  }, [videoRef, signedSrc]);
 
   return { available, casting, showPicker };
 }

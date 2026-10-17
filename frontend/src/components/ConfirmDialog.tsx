@@ -1,5 +1,7 @@
+import { backdropClick } from "../utils";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useFocusTrap } from "../hooks/useFocusTrap";
 
 export type ConfirmOptions = {
   title: string;
@@ -35,36 +37,30 @@ export default function ConfirmDialog({
   onCancelRef.current = onCancel;
   busyRef.current = busy;
 
+  useFocusTrap(panelRef, {
+    onEscape: () => {
+      if (!busyRef.current) onCancelRef.current();
+    },
+  });
+
   useEffect(() => {
-    const prev = document.activeElement as HTMLElement | null;
     const prevOverflow = document.body.style.overflow;
-    panelRef.current?.focus();
     document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !busyRef.current) {
-        e.preventDefault();
-        onCancelRef.current();
-      }
-    };
-    window.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = prevOverflow;
-      window.removeEventListener("keydown", onKey);
-      prev?.focus?.();
     };
-    // Bind once; cancel/busy are read from refs so Escape stays current.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const hasBody = body != null;
-  const confirmText = busy ? busyLabel ?? confirmLabel : confirmLabel;
+  const confirmText = busy ? (busyLabel ?? confirmLabel) : confirmLabel;
 
   return createPortal(
     <div
       className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
-      onClick={() => {
+      role="presentation"
+      onClick={backdropClick(() => {
         if (!busy) onCancel();
-      }}
+      })}
     >
       <div
         ref={panelRef}
@@ -74,12 +70,8 @@ export default function ConfirmDialog({
         aria-describedby={hasBody ? bodyId : undefined}
         tabIndex={-1}
         className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-none ring-1 ring-ink-600"
-        onClick={(e) => e.stopPropagation()}
       >
-        <h2
-          id={titleId}
-          className="text-base font-semibold text-gray-100"
-        >
+        <h2 id={titleId} className="text-base font-semibold text-gray-100">
           {title}
         </h2>
         {hasBody ? (

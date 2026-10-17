@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 import math
 import re
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
-from ..config import DOWNLOADS_DIR
+from ..context import get_paths
 from ..models import Video, VideoAiMeta
 from . import library
 
@@ -20,9 +20,7 @@ _CHAPTER_LINE_RE = re.compile(
 )
 _PAREN_TITLE_RE = re.compile(r"^\((.+)\)$")
 
-_CUE_TS_RE = re.compile(
-    r"^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$"
-)
+_CUE_TS_RE = re.compile(r"^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?$")
 _CUE_TIMING_RE = re.compile(
     r"^((?:\d{1,2}:)?\d{1,2}:\d{2}(?:\.\d{1,3})?)\s*-->\s*"
     r"((?:\d{1,2}:)?\d{1,2}:\d{2}(?:\.\d{1,3})?)"
@@ -80,7 +78,7 @@ CHAPTERS_JSON_SCHEMA: dict[str, Any] = {
 }
 
 
-def parse_chapters(description: Optional[str]) -> list[Chapter]:
+def parse_chapters(description: str | None) -> list[Chapter]:
     """YouTube-style timestamp lines; empty unless ≥2 strictly ascending."""
     if not description:
         return []
@@ -137,6 +135,8 @@ def normalize_ytdlp_chapters(raw: Any) -> list[Chapter]:
             continue
         start = item.get("start_time", item.get("start_sec"))
         title = str(item.get("title") or "").strip()
+        if start is None:
+            continue
         try:
             start_sec = float(start)
         except (TypeError, ValueError):
@@ -167,15 +167,15 @@ def source_chapters_for(video: Video) -> list[Chapter]:
     return parse_chapter_list(getattr(video, "source_chapters", None) or "[]")
 
 
-def ai_chapters_for(meta: Optional[VideoAiMeta]) -> list[Chapter]:
+def ai_chapters_for(meta: VideoAiMeta | None) -> list[Chapter]:
     if meta is None:
         return []
     return parse_chapter_list(getattr(meta, "chapters", None))
 
 
 def resolve_chapters(
-    video: Video, meta: Optional[VideoAiMeta] = None
-) -> tuple[list[Chapter], Optional[ChapterSource]]:
+    video: Video, meta: VideoAiMeta | None = None
+) -> tuple[list[Chapter], ChapterSource | None]:
     from_desc = parse_chapters(video.description)
     if from_desc:
         return from_desc, "description"
@@ -196,7 +196,7 @@ def transcript_char_cap(profile: Any = None) -> int:
 def parse_vtt_cues(raw: str) -> list[tuple[float, str]]:
     """Return (start_sec, text) cues, collapsing consecutive duplicate text."""
     cues: list[tuple[float, str]] = []
-    pending_start: Optional[float] = None
+    pending_start: float | None = None
     pending_lines: list[str] = []
 
     def flush() -> None:
@@ -223,7 +223,7 @@ def parse_vtt_cues(raw: str) -> list[tuple[float, str]]:
             continue
         if s.isdigit():
             continue
-        if s.startswith("NOTE") or s.startswith("STYLE") or s.startswith("REGION"):
+        if s.startswith(("NOTE", "STYLE", "REGION")):
             continue
         timing = _CUE_TIMING_RE.match(s)
         if timing:
@@ -254,7 +254,7 @@ def load_timed_cues(video: Video) -> list[tuple[float, str]]:
         rel = track.get("path")
         if not rel:
             continue
-        path = DOWNLOADS_DIR / str(rel)
+        path = get_paths().downloads / str(rel)
         if not path.is_file():
             continue
         try:
@@ -266,9 +266,7 @@ def load_timed_cues(video: Video) -> list[tuple[float, str]]:
     return []
 
 
-def format_timed_transcript(
-    cues: list[tuple[float, str]], *, max_chars: int
-) -> str:
+def format_timed_transcript(cues: list[tuple[float, str]], *, max_chars: int) -> str:
     windows = _downsample_cues(cues, CUE_WINDOW_SEC)
     if not windows:
         return ""
@@ -305,11 +303,11 @@ def is_music_like(cues: list[tuple[float, str]]) -> bool:
 
 def skip_reason(
     video: Video,
-    meta: Optional[VideoAiMeta] = None,
+    meta: VideoAiMeta | None = None,
     *,
     force: bool = False,
-    cues: Optional[list[tuple[float, str]]] = None,
-) -> Optional[str]:
+    cues: list[tuple[float, str]] | None = None,
+) -> str | None:
     """Return a short skip token, or None if an LLM chapter job should run."""
     if parse_chapters(video.description):
         return "description_chapters"
@@ -336,18 +334,18 @@ def skip_reason(
     return None
 
 
-def persist_skip_reason(reason: Optional[str]) -> bool:
+def persist_skip_reason(reason: str | None) -> bool:
     """Whether this skip should stick on video_ai_meta (avoid retry loops)."""
     return reason == "music_like"
 
 
-def min_segment_sec(duration_sec: Optional[float]) -> float:
+def min_segment_sec(duration_sec: float | None) -> float:
     if duration_sec is not None and 0 < float(duration_sec) < SHORT_VIDEO_SEC:
         return MIN_SEGMENT_SHORT_SEC
     return MIN_SEGMENT_SEC
 
 
-def max_chapter_count(duration_sec: Optional[float]) -> int:
+def max_chapter_count(duration_sec: float | None) -> int:
     if duration_sec is None or duration_sec <= 0:
         return 12
     return max(2, min(MAX_CHAPTERS_HARD, int(math.ceil(float(duration_sec) / 120.0))))
@@ -356,7 +354,7 @@ def max_chapter_count(duration_sec: Optional[float]) -> int:
 def snap_and_validate(
     raw_chapters: list[Any],
     cues: list[tuple[float, str]],
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> list[Chapter]:
     cue_starts = [t for t, _ in cues]
     min_seg = min_segment_sec(duration_sec)
@@ -383,7 +381,7 @@ def snap_and_validate(
     if duration is not None:
         deduped = [c for c in deduped if c["start_sec"] < duration]
     nudged: list[Chapter] = []
-    prev_start: Optional[float] = None
+    prev_start: float | None = None
     for chapter in deduped:
         start = float(chapter["start_sec"])
         if start <= 0.05:
@@ -411,9 +409,7 @@ def snap_and_validate(
             deduped[i + 1]["start_sec"]
             if i + 1 < len(deduped)
             else (
-                duration
-                if duration is not None
-                else chapter["start_sec"] + min_seg + 1
+                duration if duration is not None else chapter["start_sec"] + min_seg + 1
             )
         )
         if next_start - chapter["start_sec"] < min_seg:
@@ -424,7 +420,9 @@ def snap_and_validate(
         if last["start_sec"] - first["start_sec"] >= min_seg:
             filtered = [first, last]
     if len(filtered) < 2:
-        filtered = _ensure_two_chapters(filtered or deduped, cue_starts, duration, min_seg)
+        filtered = _ensure_two_chapters(
+            filtered or deduped, cue_starts, duration, min_seg
+        )
     cap = max_chapter_count(duration)
     if len(filtered) > cap:
         idxs = _even_indices(len(filtered), cap)
@@ -437,7 +435,7 @@ def snap_and_validate(
 
 def fallback_chapters_from_cues(
     cues: list[tuple[float, str]],
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> list[Chapter]:
     """Last-resort markers from timed captions when the model output is unusable."""
     windows = _downsample_cues(cues, CUE_WINDOW_SEC)
@@ -511,7 +509,7 @@ def chapters_prompt(
     video: Video,
     transcript: str,
     *,
-    duration_sec: Optional[float],
+    duration_sec: float | None,
 ) -> str:
     duration_label = (
         _fmt_ts(float(duration_sec)) if duration_sec and duration_sec > 0 else "unknown"
@@ -535,7 +533,7 @@ def chapters_prompt(
     )
 
 
-def _coerce_chapter(item: Any) -> Optional[Chapter]:
+def _coerce_chapter(item: Any) -> Chapter | None:
     if not isinstance(item, dict):
         return None
     start = None
@@ -564,7 +562,7 @@ def _coerce_chapter(item: Any) -> Optional[Chapter]:
     return {"start_sec": start_sec, "title": title}
 
 
-def _parse_start_value(raw: Any) -> Optional[float]:
+def _parse_start_value(raw: Any) -> float | None:
     if isinstance(raw, bool):
         return None
     if isinstance(raw, (int, float)):
@@ -586,9 +584,7 @@ def _parse_start_value(raw: Any) -> Optional[float]:
     clock = _CUE_TS_RE.match(text)
     if clock:
         return _parse_cue_ts(text)
-    embedded = re.search(
-        r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?", text
-    )
+    embedded = re.search(r"(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\.(\d{1,3}))?", text)
     if embedded:
         return _parse_cue_ts(embedded.group(0))
     return None
@@ -597,18 +593,14 @@ def _parse_start_value(raw: Any) -> Optional[float]:
 def _ensure_two_chapters(
     chapters: list[Chapter],
     cue_starts: list[float],
-    duration: Optional[float],
+    duration: float | None,
     min_seg: float,
 ) -> list[Chapter]:
     if len(chapters) >= 2:
         return chapters
     if not cue_starts:
         return []
-    first = (
-        dict(chapters[0])
-        if chapters
-        else {"start_sec": 0.0, "title": "Intro"}
-    )
+    first = dict(chapters[0]) if chapters else {"start_sec": 0.0, "title": "Intro"}
     first["start_sec"] = 0.0
     if not first.get("title"):
         first["title"] = "Intro"
@@ -812,15 +804,14 @@ def _contains_seq(hay: list[str], needle: list[str]) -> bool:
     n = len(needle)
     if n == 0 or n > len(hay):
         return False
-    for i in range(len(hay) - n + 1):
-        if hay[i : i + n] == needle:
-            return True
-    return False
+    return any(hay[i : i + n] == needle for i in range(len(hay) - n + 1))
 
 
 def _collapse_stutter(text: str) -> str:
     """Drop a clause that repeats the previous one, or keep the longer extension."""
-    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()]
+    parts = [
+        p.strip() for p in re.split(r"(?<=[.!?])\s+", (text or "").strip()) if p.strip()
+    ]
     if len(parts) < 2:
         return (text or "").strip()
     out: list[str] = []
@@ -879,14 +870,13 @@ def _repeats_clause(text: str) -> bool:
     words = _cmp_words(text)
     if len(words) < 4:
         return False
-    for n in range(2, len(words) // 2 + 1):
-        if words[:n] == words[n : n * 2]:
-            return True
-    return False
+    return any(words[:n] == words[n : n * 2] for n in range(2, len(words) // 2 + 1))
 
 
 def _cue_words_near(
-    cues: list[tuple[float, str]], start_sec: float, window: float = _QUOTE_CUE_WINDOW_SEC
+    cues: list[tuple[float, str]],
+    start_sec: float,
+    window: float = _QUOTE_CUE_WINDOW_SEC,
 ) -> list[str]:
     words: list[str] = []
     for ts, text in cues:
@@ -899,10 +889,9 @@ def _is_contiguous_quote(title_words: list[str], cue_words: list[str]) -> bool:
     n = len(title_words)
     if n < 4 or n > len(cue_words):
         return False
-    for i in range(len(cue_words) - n + 1):
-        if cue_words[i : i + n] == title_words:
-            return True
-    return False
+    return any(
+        cue_words[i : i + n] == title_words for i in range(len(cue_words) - n + 1)
+    )
 
 
 def title_is_spoken_quote(
@@ -922,9 +911,7 @@ def title_is_spoken_quote(
     return _is_contiguous_quote(words, _cue_words_near(cues, start_sec))
 
 
-def titles_need_rewrite(
-    chapters: list[Chapter], cues: list[tuple[float, str]]
-) -> bool:
+def titles_need_rewrite(chapters: list[Chapter], cues: list[tuple[float, str]]) -> bool:
     return any(
         title_is_spoken_quote(str(chapter["title"]), cues, float(chapter["start_sec"]))
         for chapter in chapters
@@ -1003,7 +990,7 @@ def apply_title_rewrites(
     for index, chapter in enumerate(chapters):
         start = float(chapter["start_sec"])
         title = str(chapter["title"])
-        cand_i: Optional[int] = None
+        cand_i: int | None = None
         if len(candidates) == len(chapters):
             cand_i = index
         else:
@@ -1035,9 +1022,7 @@ def title_rewrite_system_prompt() -> str:
     )
 
 
-def title_rewrite_prompt(
-    chapters: list[Chapter], cues: list[tuple[float, str]]
-) -> str:
+def title_rewrite_prompt(chapters: list[Chapter], cues: list[tuple[float, str]]) -> str:
     blocks: list[str] = []
     for i, chapter in enumerate(chapters):
         start = float(chapter["start_sec"])
@@ -1060,15 +1045,13 @@ def title_rewrite_prompt(
         blocks.append(
             f"start_sec: {start_label}\n"
             f"current_title: {chapter['title']}\n"
-            "transcript:\n"
-            + ("\n".join(lines) if lines else "(no captions)")
+            "transcript:\n" + ("\n".join(lines) if lines else "(no captions)")
         )
     return (
         "Rewrite every current_title into a 2–6 word topic label. "
         "Keep start_sec the same. "
         "If the transcript is people talking about digging and getting rich, "
-        'write "Digging for treasure", not a line they said.\n\n'
-        + "\n\n".join(blocks)
+        'write "Digging for treasure", not a line they said.\n\n' + "\n\n".join(blocks)
     )
 
 
@@ -1168,9 +1151,7 @@ def _content_tokens(text: str) -> set[str]:
     return toks | extra
 
 
-def _fit_transcript_windows(
-    windows: list[tuple[float, str]], max_chars: int
-) -> str:
+def _fit_transcript_windows(windows: list[tuple[float, str]], max_chars: int) -> str:
     """Keep every window timestamp if possible by shortening cue text first."""
 
     def render(max_words: int) -> str:
@@ -1210,7 +1191,7 @@ def _topic_onset(
     title: str,
     cues: list[tuple[float, str]],
     *,
-    prev_start: Optional[float],
+    prev_start: float | None,
     lookback: float = TOPIC_LOOKBACK_SEC,
 ) -> float:
     """Walk captions backward from a late marker to the first on-topic cue."""
@@ -1261,6 +1242,9 @@ def _snap_to_cues(start_sec: float, cue_starts: list[float]) -> float:
         earlier = [ts for ts in cue_starts if ts <= start_sec]
         if earlier:
             last_before = max(earlier)
-            if start_sec - last_before <= abs(nearest - start_sec) + SNAP_EARLIER_TIE_SEC:
+            if (
+                start_sec - last_before
+                <= abs(nearest - start_sec) + SNAP_EARLIER_TIE_SEC
+            ):
                 return last_before
     return nearest

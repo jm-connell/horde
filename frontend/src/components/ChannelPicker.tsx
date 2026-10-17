@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ChannelStat } from "../types";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
+import { focusOnMount } from "../utils";
 import ThemedSelect from "./ThemedSelect";
 
 interface Props {
@@ -16,7 +17,7 @@ const COMBOBOX_THRESHOLD = 30;
 const CUSTOM = "__custom__";
 
 const inputClass =
-  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-500 outline-none focus:border-accent";
+  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
 
 export default function ChannelPicker({
   value,
@@ -61,12 +62,11 @@ function SelectPicker({
   placeholder?: string;
 }) {
   const [custom, setCustom] = useState(false);
-
   if (custom) {
     return (
       <div className="flex gap-2">
         <input
-          autoFocus
+          ref={focusOnMount}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
@@ -147,11 +147,13 @@ function Combobox({
   const [highlight, setHighlight] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
 
   useEffect(() => {
     if (!open) return;
     const onClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (ref.current && !ref.current.contains(e.target as Node))
+        setOpen(false);
     };
     window.addEventListener("mousedown", onClick);
     return () => window.removeEventListener("mousedown", onClick);
@@ -212,10 +214,11 @@ function Combobox({
         autoComplete="off"
         role="combobox"
         aria-expanded={open}
+        aria-controls={listId}
         aria-autocomplete="list"
       />
       {tabSuggestion && open && (
-        <p className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">
+        <p className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">
           Tab · {tabSuggestion}
         </p>
       )}
@@ -224,7 +227,7 @@ function Combobox({
         className="absolute z-20 mt-1 w-full"
       >
         <MenuScroll className="max-h-60" revision={matches.length}>
-          <ul>
+          <ul id={listId}>
             {matches.slice(0, 50).map((name, i) => (
               <li key={name}>
                 <button

@@ -1,6 +1,6 @@
 # Frontend
 
-React + Vite SPA under `frontend/`. Production build is copied to `backend/static` (and served by FastAPI). Dev uses Vite on port **5173**.
+React + Vite SPA under `frontend/`. The Docker build compiles it into `/app/static`, and `npm run build:sync` does the same locally into the gitignored `backend/static` (served by FastAPI). Dev uses Vite on port **5173**.
 
 ## Routes
 
@@ -8,6 +8,7 @@ React + Vite SPA under `frontend/`. Production build is copied to `backend/stati
 |------|------|
 | `/` | Library |
 | `/history` | Watch history / continue watching |
+| `/offline` | Videos saved on this device (works without the server) |
 | `/download` | Download queue & URL ingest |
 | `/playlists` | Playlists (expand a row; `?open=<id>` opens one) |
 | `/playlists/:id` | Redirect → `/playlists?open=:id` |
@@ -27,10 +28,26 @@ Mounted in `App.tsx` (outer → inner):
 
 | Provider | Role |
 |----------|------|
-| `ToastProvider` | Transient toasts |
-| `DownloadProvider` | Download queue state / actions |
+| `ErrorBoundary` (`scope="app"`) | Last-resort render-error page; routes get their own boundary inside `<main>` |
+| `ToastProvider` | Transient toasts (stable value) |
+| `ConfirmProvider` | Promise-based confirm dialogs |
+| `AuthProvider` + `AuthGate` | Who is signed in and their permissions; shows sign-in or *Create the admin account* instead of the app. `RequirePermission` hides routes and controls the account cannot use (the server enforces) |
+| `QueryClientProvider` (inside the sign-in gate, keyed by user id) | The TanStack Query cache for the signed-in account (see [Data layer](#data-layer)) |
+| `DownloadProvider` | Download jobs, live progress and queue state, kept in the query cache |
 | `SearchProvider` | Shared search query / library search coordination |
-| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch` |
+| `PlaybackProvider` | Current video, queue, mini-player, navigation into `/watch`; three contexts (below) |
+
+`PlaybackProvider` exposes `usePlaybackActions()` (stable, never re-renders a reader), `usePlaybackSession()` (current video, stream, queue, mode) and `usePlaybackLayout()` (mini-player rectangle, picture inset, live quality; these change while dragging). Read the narrowest one a component needs.
+
+## Data layer
+
+Server data is read through **TanStack Query** (`src/queries/`). Types come from the generated OpenAPI schema (`src/api/schema.d.ts`, see [API overview](api-overview.md)); `src/types.ts` aliases them.
+
+- One query key per resource (`queries/keys.ts`), so screens share a request and a returning screen paints the cached value while it revalidates. Status data (AI status, system stats, activity, catalog and metadata sync) polls only on the screens that show it, and not in background tabs.
+- The library list is a `useInfiniteQuery` over the cursor API: the first page paints, the rest streams in, a failed page keeps the pages already loaded, and a refetch replaces the list only when every page has arrived.
+- Download jobs and per-job progress live in the cache: SSE events go in with `setQueryData`, and polling is only a fallback while the stream is down.
+- Writes are `useMutation` calls that invalidate or update the cache; a failure with no inline handling goes through `showError`.
+- The client uses `networkMode: "always"` because offline mode is tracked by `offline/connectivity`, and each signed-in user gets a new client and a remounted subtree, so nothing of the previous account survives a user change.
 
 ## Player DOM reparenting
 
@@ -43,7 +60,7 @@ This preserves playback state across route changes without remounting the media 
 
 ## Settings hydrate + debounce
 
-`useSettings` keeps a **module-level hydrate**: one `GET /api/settings` shared by all subscribers.
+`useSettings` (`hooks/settings/serverSync.ts`) keeps a **module-level hydrate**: one `GET /api/settings` shared by all subscribers.
 
 Edits patch local state immediately and **debounced sync** to the server (~**300 ms**) so typing and slider drags do not spam `PATCH /api/settings`. Appearance and AI panes follow the same pattern.
 
@@ -51,10 +68,15 @@ Edits patch local state immediately and **debounced sync** to the server (~**300
 
 | Area | Notes |
 |------|--------|
-| `pages/Library.tsx` | Browse composition; sidebar/bulk helpers live in `ChannelSidebar`, `LibraryBulkBar`, `libraryCatalogProgress` / `libraryStorage` |
-| `components/VideoPlayer.tsx` | Orchestration; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
-| `hooks/useSettings.ts` | Hydrate + debounced PATCH; `ViewMode` type from `videoPlayerTypes` |
+| `pages/Library.tsx` | Composes the browse page from `pages/library/`: state hooks (`useLibraryQuery` for channel, tag, sort and search; `useLibraryLists`, `useLibraryRefresh`, `useGlobalSearch`, `useChannelCatalog`, `useChannelNavigation`, `useSidebar`, `useQueueDock`, `useTagDrawer`), the select-mode reducer in `bulkSelection.ts`, and components (`LibraryHeader`, `ChannelHeader`, `HomeControls`, `ChannelControls`, `LibrarySidebar`, `TagDrawer`, `LibraryGrid`, `SearchResults`, `QueueDock`). Pure rules (URL parameters, filters, sort transitions) are in `libraryQuery.ts`. The grid renders every card; it is not virtualised, so Tab order, find-in-page and screen readers reach all of it |
+| `pages/Watch.tsx` | Wiring and layout only. The pieces are in `pages/watch/`: `useWatchVideo` (library or stream-preview load, keeps the page copy current, a failed refresh never replaces a video already shown), `useStreamDownload` + `StreamDownloadControl` (download a previewed stream), `useWatchActions` + `WatchActions` + `RedownloadDialog` (edit, change resolution, normalize, delete), `useWatchAi` (AI flags, chapter generation), `useRelatedFeed` + `WatchSidebar` (related videos), `WatchPlayerSection` (player dock, `SourceChangeBanners`, `WatchHeader`) and `WatchInfoPanels` (AI panel, description, chapters, tags) |
+| `pages/Settings.tsx` | Tab bar, search box, and `?tab=` / `?pane=` routing only; admin-only tabs are gated here. Each tab owns its state and polling through its own hook in `pages/settings/`: `useAppearanceState`, `useLibraryState`, `useSystemState`, and `ai/useAiCore` (shared by the AI and System tabs) with `ai/useAiPanes`. The shared `SettingsPageContext` carries only the search query and the client preferences. The AI pane and provider sub-pane (`ai/useAiPaneState`) are held by the page so they survive a tab switch. Drafts and other tab-local state reset when you leave a tab (they are re-read from the saved settings on return), the API key and Ollama URL fields save on blur, and the metadata-sync button is disabled while a sync started elsewhere is running. Large tabs are split into section components (`appearance/`, `system/`, `ai/LocalProviderPane`, `ai/OpenRouterProviderPane`) |
+| `hooks/useSettings.ts` | The hook and the public exports. The rest is in `hooks/settings/`: `types` / `defaults` (schema), `migrations` (legacy local formats), `serverUi` (server `ui` blob mapping), `applyToDom` (theme and CSS variables), `localStore` (browser cache) and `serverSync` (hydration, owner check, debounced PATCH, pagehide flush). `ViewMode` type from `videoPlayerTypes` |
+| `components/VideoPlayer.tsx` | Wiring layer: reads props, calls the hooks below and renders; types/quality in `videoPlayerTypes` / `videoPlayerQuality`; DASH load in `hooks/useShakaDash`; overlays in `PlayerOverlays` |
+| `components/player/` | The player's pieces. Hooks: `usePlayerKeyboard`, `useChapters`, `useSkipSegments` (SponsorBlock), `useCaptions`, `useCasting`, `useFullscreen`, `usePictureInPicture`, `useStreamQuality`, `usePlayerSource` (DASH/compat/buffering/errors), `useHoldToSpeed`, `useControlsVisibility`, `useMiniPlayer`, `useVideoEvents`, `usePlayerVolume`. Components: `ControlBar` (with `ScrubBar`, `VolumeControl`, `QualityMenu`, `SpeedMenu`), `MiniPlayerFrame`, `SkipNotice`, `UpNextOverlay`. Context reads stay in the caller; pieces get values as props |
 | `customCss.ts` | User CSS overlay (`#horde-custom-css`) and `data-page` / `data-horde` hooks |
+
+See also the [architecture map](../design/architecture.md#frontend) for where new frontend and backend code belongs.
 
 ## Related
 

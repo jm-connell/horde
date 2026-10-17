@@ -89,7 +89,9 @@ def test_extract_retries_with_cookies_after_members_gate(dummy_ydl, monkeypatch)
         raise RuntimeError("Join this channel to get access to members-only content")
 
     dummy_ydl.handler = handler
-    info = yc.extract_info_gated("https://www.youtube.com/watch?v=memvid", {"quiet": True})
+    info = yc.extract_info_gated(
+        "https://www.youtube.com/watch?v=memvid", {"quiet": True}
+    )
     assert yc.extract_has_media(info)
     assert len(dummy_ydl.calls) == 2
     assert dummy_ydl.calls[1].get("cookiefile")
@@ -158,10 +160,10 @@ def test_public_extract_never_attaches_cookies(dummy_ydl, monkeypatch):
 
 def test_should_retry_only_for_cookie_and_members_gates(monkeypatch):
     monkeypatch.setattr(yc, "cookie_configured", lambda: True)
-    assert yc.should_retry_with_cookies({}, RuntimeError("Login required / age-restricted"))
     assert yc.should_retry_with_cookies(
-        {}, RuntimeError("members-only content")
+        {}, RuntimeError("Login required / age-restricted")
     )
+    assert yc.should_retry_with_cookies({}, RuntimeError("members-only content"))
     assert not yc.should_retry_with_cookies(
         {}, RuntimeError("Sign in to confirm you’re not a bot")
     )

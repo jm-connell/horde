@@ -2,8 +2,8 @@
 
 Run the FastAPI backend and Vite frontend on your machine for UI and API work. Clone the repo first (`git clone https://github.com/jm-connell/horde.git`), then work from that checkout. This path does not require Docker, though you can still use Compose for a production-like stack ([Install with Docker](install-docker.md)).
 
-!!! warning "LAN only — no authentication"
-    Even in dev, Horde has **no login**. Do not expose the Vite or uvicorn ports beyond a trusted network.
+!!! warning "Trusted network"
+    Even in dev the first visit creates an admin account. Do not expose the Vite or uvicorn ports beyond a trusted network.
 
 ## Prerequisites
 
@@ -28,7 +28,7 @@ From the repo root:
 
 1. Sets `DOWNLOADS_DIR` and `DATA_DIR` to `./downloads` and `./data` under the repo (creating them if needed)
 2. Creates `.venv` if missing and installs `backend/requirements.txt` when needed
-3. Installs `backend/requirements-dev.txt` (pytest, mkdocs-material) when needed
+3. Installs `backend/requirements-dev.txt` (pytest, ruff, mypy, mkdocs-material) when needed
 4. Builds the MkDocs wiki into `backend/static/wiki/` when missing or when `docs/` / `mkdocs.yml` changed (unless `SKIP_WIKI=1`)
 5. Runs `npm install` in `frontend/` when `node_modules` is missing
 6. Starts **uvicorn** with `--reload` on port **8080**
@@ -104,7 +104,7 @@ Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll in
 
 ## Tests
 
-See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, Playwright, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
+Run **`scripts/check.sh`** before every commit: it runs all lint, format, type, test, build, and wiki gates (see [Quality gates](testing.md#quality-gates-scriptscheck-sh)). See **[Automated testing](testing.md)** for the intended layers (pytest API tests, Vitest, Playwright, MkDocs, Docker image), local commands, and how GitHub Actions runs the same jobs on every **push**, **pull request**, and manual **Run workflow**.
 
 Backend (from `backend/`, with the repo venv activated):
 
@@ -134,7 +134,7 @@ cd frontend
 npm run build:sync
 ```
 
-That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`.
+That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`. `backend/static` is gitignored: it is a local build artifact, never committed (the Docker image builds its own copy).
 
 ## Optional: Docker-shaped local stack
 

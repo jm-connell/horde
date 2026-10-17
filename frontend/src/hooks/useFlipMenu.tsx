@@ -8,6 +8,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { MenuFlyout, useMenuPresence } from "../components/MenuFlyout";
+import type { MenuBehavior } from "./useMenuKeyboard";
 
 type Flip = "down" | "up";
 
@@ -65,12 +66,15 @@ export function FlipMenuPanel({
   flip,
   align = "left",
   className = "",
+  menu,
   children,
 }: {
   open: boolean;
   flip: Flip;
   align?: "left" | "right";
   className?: string;
+  /** Forwarded to MenuFlyout: role, keyboard and focus behaviour. */
+  menu?: MenuBehavior;
   children: ReactNode;
 }) {
   const markerRef = useRef<HTMLSpanElement>(null);
@@ -113,6 +117,7 @@ export function FlipMenuPanel({
           <MenuFlyout
             open={open}
             unmountOnExit={false}
+            menu={menu}
             data-horde="flip-menu"
             className={`fixed z-[80] ${className}`}
             style={coords}

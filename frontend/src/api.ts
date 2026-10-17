@@ -4,6 +4,13 @@ import type {
   AiSettings,
   AiStatus,
   AppSettings,
+  AuthState,
+  AuthUser,
+  MediaToken,
+  PermissionInfo,
+  UserAccount,
+  UserCreateInput,
+  UserUpdateInput,
   ChannelAutodownload,
   ChannelCatalogStatus,
   ChannelFeedPage,
@@ -16,7 +23,6 @@ import type {
   DuplicateGroup,
   ImportScanResult,
   OpenRouterCosts,
-  OpenRouterModel,
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
@@ -32,25 +38,50 @@ import type {
   Video,
   VideoUpdate,
   SpriteMeta,
-  VideoAiChatMessage,
 } from "./types";
+import type { ApiResponse } from "./api/typed";
 import { connectivity } from "./offline/connectivity";
-import { getItem as getOfflineItem, putPendingProgress } from "./offline/db";
+import { getItem as getOfflineItem } from "./offline/db";
+import { deviceResume } from "./offline/resume";
+import { pendingProgress } from "./offline/pendingProgress";
 
+/** One entry of a 422 response's `fields`: where the problem is and what it is. */
+export interface ApiErrorField {
+  loc: (string | number)[];
+  msg: string;
+}
+
+/**
+ * Every error response has the same body (see backend/app/errors.py):
+ * `{detail, code, fields?, extra?}`. `message` is `detail`; branch on `code`.
+ */
 export class ApiError extends Error {
-  errorKind?: string;
   code?: string;
   status: number;
+  fields?: ApiErrorField[];
+  extra?: Record<string, unknown>;
 
   constructor(
     message: string,
-    extra?: { errorKind?: string; code?: string; status?: number }
+    extra?: {
+      code?: string;
+      status?: number;
+      fields?: ApiErrorField[];
+      extra?: Record<string, unknown>;
+    }
   ) {
     super(message);
     this.name = "ApiError";
-    this.errorKind = extra?.errorKind;
     this.code = extra?.code;
     this.status = extra?.status ?? 0;
+    this.fields = extra?.fields;
+    this.extra = extra?.extra;
+  }
+
+  /** Stable failure kind of a link-reading error (`extra.error_kind`). */
+  get errorKind(): string | undefined {
+    const kind = this.extra?.error_kind;
+    return typeof kind === "string" ? kind : undefined;
   }
 }
 
@@ -68,13 +99,81 @@ function isNetworkFailure(err: unknown): boolean {
   return err instanceof TypeError || isOfflineError(err);
 }
 
+/**
+ * Every state-changing request must carry this header: the server refuses
+ * mutations without it (app/security.py). A custom header forces a CORS
+ * preflight, which no route grants, so other websites cannot send one.
+ */
+export const CSRF_HEADER = "X-Horde-Request";
+
+/** Add the CSRF header to a non-GET request init. Safe methods pass through. */
+export function withCsrf(init?: RequestInit): RequestInit | undefined {
+  const method = (init?.method ?? "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS")
+    return init;
+  const headers = new Headers(init?.headers);
+  headers.set(CSRF_HEADER, "1");
+  return { ...init, headers };
+}
+
+/** Fired when the server says the session is gone (401). AuthProvider listens. */
+export const AUTH_REQUIRED_EVENT = "horde:auth-required";
+/** Fired on any 403; the detail is a user-facing sentence. */
+export const PERMISSION_DENIED_EVENT = "horde:permission-denied";
+
+function notifyAuthFailure(
+  status: number,
+  code: string | undefined,
+  message: string
+): void {
+  if (status === 401 && code === "auth_required") {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
+  } else if (status === 403) {
+    // Every 403 envelope (permission_denied, admin_required, csrf_rejected, ...)
+    // carries a user-facing `detail`; show it instead of failing silently.
+    window.dispatchEvent(
+      new CustomEvent(PERMISSION_DENIED_EVENT, {
+        detail: message || "Not allowed",
+      })
+    );
+  }
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
+/** Build the ApiError for a non-2xx response, notifying auth listeners. */
+async function apiErrorFrom(resp: Response): Promise<ApiError> {
+  let message = resp.statusText;
+  let code: string | undefined;
+  let fields: ApiErrorField[] | undefined;
+  let extra: Record<string, unknown> | undefined;
+  try {
+    const body = await resp.json();
+    if (typeof body.detail === "string") message = body.detail;
+    if (typeof body.code === "string") code = body.code;
+    if (Array.isArray(body.fields)) fields = body.fields;
+    if (typeof body.extra === "object" && body.extra !== null)
+      extra = body.extra;
+  } catch {
+    // non-JSON error body; keep status text
+  }
+  notifyAuthFailure(resp.status, code, message);
+  return new ApiError(message, { status: resp.status, code, fields, extra });
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   // Offline mode: fail fast instead of hanging on a dead/slow connection.
   if (connectivity.offlineMode) throw offlineError();
   let resp: Response;
   const t0 = performance.now();
   try {
-    resp = await fetch(url, init);
+    resp = await fetch(url, withCsrf(init));
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw err;
@@ -83,33 +182,14 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     throw err;
   }
   connectivity.reportRequest(performance.now() - t0, false);
-  if (!resp.ok) {
-    let detail: unknown = resp.statusText;
-    try {
-      const body = await resp.json();
-      detail = body.detail ?? detail;
-    } catch {
-      // non-JSON error body; keep status text
-    }
-    if (typeof detail === "object" && detail !== null) {
-      const d = detail as {
-        message?: string;
-        error_kind?: string;
-        detail?: string;
-        code?: string;
-      };
-      throw new ApiError(d.message || d.detail || JSON.stringify(detail), {
-        errorKind: d.error_kind,
-        code: d.code,
-        status: resp.status,
-      });
-    }
-    throw new ApiError(typeof detail === "string" ? detail : String(detail), {
-      status: resp.status,
-    });
-  }
+  if (!resp.ok) throw await apiErrorFrom(resp);
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
+}
+
+/** Options every read accepts so React Query can cancel it. */
+export interface ReadOptions {
+  signal?: AbortSignal;
 }
 
 /** Event the offline manager listens for to keep resume positions current. */
@@ -117,14 +197,17 @@ export const OFFLINE_PROGRESS_EVENT = "horde:offline-progress";
 
 function notifyOfflineProgress(videoId: number, positionSec: number): void {
   window.dispatchEvent(
-    new CustomEvent(OFFLINE_PROGRESS_EVENT, { detail: { videoId, positionSec } }),
+    new CustomEvent(OFFLINE_PROGRESS_EVENT, {
+      detail: { videoId, positionSec },
+    })
   );
 }
 
+/** A video saved on this device, with this account's place in it. */
 async function offlineVideo(id: number): Promise<Video> {
   const item = await getOfflineItem(id).catch(() => undefined);
   if (!item) throw new ApiError("Video not found", { status: 404 });
-  return item.video;
+  return deviceResume.offline(item.video);
 }
 
 export interface LibraryQuery {
@@ -139,9 +222,41 @@ export interface LibraryQuery {
   signal?: AbortSignal;
 }
 
+/** One page of a cursor-paginated list; `next_cursor` is null on the last page. */
+export interface Page<T> {
+  items: T[];
+  next_cursor: string | null;
+  /** Present only when the request asked for `include_total`. */
+  total?: number | null;
+}
+
+/** Rows asked for per request; the server caps it at 500. */
+export const PAGE_SIZE = 500;
+
+/**
+ * Walk a cursor-paginated list to its end. `onPage` sees everything fetched so
+ * far after each page that is not the last, so a screen can paint the first page
+ * while the rest loads in the background.
+ */
+async function collectPages<T>(
+  fetchPage: (cursor: string | null) => Promise<Page<T>>,
+  onPage?: (soFar: T[]) => void
+): Promise<T[]> {
+  const all: T[] = [];
+  let cursor: string | null = null;
+  do {
+    const page: Page<T> = await fetchPage(cursor);
+    all.push(...page.items);
+    cursor = page.next_cursor;
+    if (cursor && onPage) onPage([...all]);
+  } while (cursor);
+  return all;
+}
+
 export interface ChannelQuery {
   sort?: string;
   order?: string;
+  signal?: AbortSignal;
 }
 
 export interface ChannelFeedQuery {
@@ -154,15 +269,92 @@ export interface ChannelFeedQuery {
 }
 
 export const api = {
-  listVideos(params: LibraryQuery = {}): Promise<Video[]> {
+  getAuthState(): Promise<AuthState> {
+    return request<AuthState>("/api/auth/state");
+  },
+
+  login(username: string, password: string): Promise<{ user: AuthUser }> {
+    return request("/api/auth/login", jsonInit("POST", { username, password }));
+  },
+
+  bootstrapAdmin(
+    username: string,
+    password: string
+  ): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/bootstrap",
+      jsonInit("POST", { username, password })
+    );
+  },
+
+  logout(): Promise<void> {
+    return request<void>("/api/auth/logout", { method: "POST" });
+  },
+
+  changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return request<void>(
+      "/api/auth/password",
+      jsonInit("POST", {
+        current_password: currentPassword,
+        new_password: newPassword,
+      })
+    );
+  },
+
+  getMediaToken(videoId: number): Promise<MediaToken> {
+    return request<MediaToken>(`/api/videos/${videoId}/media-token`);
+  },
+
+  listUsers(): Promise<UserAccount[]> {
+    return request<UserAccount[]>("/api/users");
+  },
+
+  listPermissions(): Promise<PermissionInfo[]> {
+    return request<PermissionInfo[]>("/api/users/permissions");
+  },
+
+  createUser(input: UserCreateInput): Promise<UserAccount> {
+    return request<UserAccount>("/api/users", jsonInit("POST", input));
+  },
+
+  updateUser(id: number, input: UserUpdateInput): Promise<UserAccount> {
+    return request<UserAccount>(`/api/users/${id}`, jsonInit("PATCH", input));
+  },
+
+  deleteUser(id: number): Promise<void> {
+    return request<void>(`/api/users/${id}`, { method: "DELETE" });
+  },
+
+  /** One page of the library. `listVideos` walks them all. */
+  listVideosPage(
+    params: LibraryQuery & {
+      limit?: number;
+      cursor?: string | null;
+      include_total?: boolean;
+    } = {}
+  ): Promise<Page<Video>> {
     const { signal, ...query } = params;
     const qs = new URLSearchParams();
     Object.entries(query).forEach(([k, v]) => {
       if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
     });
-    return request<Video[]>(
+    return request<Page<Video>>(
       `/api/videos?${qs.toString()}`,
       signal ? { signal } : undefined
+    );
+  },
+
+  /**
+   * Every matching video. Pages are fetched back to back; `onPage` receives the
+   * list so far after each page but the last (see `collectPages`).
+   */
+  listVideos(
+    params: LibraryQuery = {},
+    onPage?: (soFar: Video[]) => void
+  ): Promise<Video[]> {
+    return collectPages(
+      (cursor) => api.listVideosPage({ ...params, limit: PAGE_SIZE, cursor }),
+      onPage
     );
   },
 
@@ -175,50 +367,63 @@ export const api = {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ position_sec: positionSec }),
+        // Sent as the page is hidden or closed too: let it outlive the page.
+        keepalive: true,
       });
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
-      // Sync when the connection is back (offline/manager flushes these).
-      await putPendingProgress({ videoId: id, positionSec, at: Date.now() }).catch(
-        () => undefined,
-      );
+      // Sync when the connection is back (offline/manager flushes these),
+      // for the account that is signed in now.
+      await pendingProgress.add(id, positionSec).catch(() => undefined);
     }
   },
 
-  /** Raw progress PATCH, used when flushing progress saved while offline. */
-  syncProgress(id: number, positionSec: number): Promise<void> {
+  /**
+   * Progress PATCH for a save made earlier (queued while offline). `at` is
+   * when it was made: the server keeps it only if nothing newer was saved
+   * since, on any device.
+   */
+  syncProgress(id: number, positionSec: number, at: number): Promise<void> {
     return request<void>(`/api/videos/${id}/progress`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ position_sec: positionSec }),
+      body: JSON.stringify({
+        position_sec: positionSec,
+        watched_at: new Date(at).toISOString(),
+      }),
     });
   },
 
-  /** Falls back to the downloaded copy when offline or unreachable. */
-  async getVideo(id: number): Promise<Video> {
+  /**
+   * The video with the signed-in account's resume position (see
+   * offline/resume). Falls back to the downloaded copy when offline or
+   * unreachable.
+   */
+  async getVideo(id: number, opts?: ReadOptions): Promise<Video> {
     if (id < 0) return offlineVideo(id);
+    let video: Video;
     try {
-      return await request<Video>(`/api/videos/${id}`);
+      video = await request<Video>(`/api/videos/${id}`, opts);
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
       const local = await getOfflineItem(id).catch(() => undefined);
-      if (local) return local.video;
+      if (local) return deviceResume.offline(local.video);
       throw err;
     }
+    return deviceResume.online(video);
   },
 
   getRelatedVideos(
     id: number,
     limit = 8,
-    offset = 0
+    offset = 0,
+    opts?: ReadOptions
   ): Promise<Video[]> {
     const qs = new URLSearchParams({
       limit: String(limit),
       offset: String(offset),
     });
-    return request<Video[]>(
-      `/api/videos/${id}/related?${qs.toString()}`
-    );
+    return request<Video[]>(`/api/videos/${id}/related?${qs.toString()}`, opts);
   },
 
   updateVideo(id: number, payload: VideoUpdate): Promise<Video> {
@@ -260,14 +465,7 @@ export const api = {
   refreshMetadataBulk(
     videoIds?: number[],
     fields?: string[]
-  ): Promise<{
-    refreshed: number;
-    failed: number;
-    skipped: number;
-    started?: boolean;
-    detail?: string;
-    total?: number;
-  }> {
+  ): Promise<ApiResponse<"/api/videos/refresh-metadata", "post">> {
     return request("/api/videos/refresh-metadata", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -278,19 +476,10 @@ export const api = {
     });
   },
 
-  getMetadataSyncStatus(): Promise<{
-    running: boolean;
-    total: number;
-    done: number;
-    failed: number;
-    skipped: number;
-    current_title: string | null;
-    current_video_id: number | null;
-    fields: string[];
-    last_error: string | null;
-    finished_at: string | null;
-  }> {
-    return request("/api/videos/refresh-metadata/status");
+  getMetadataSyncStatus(
+    opts?: ReadOptions
+  ): Promise<ApiResponse<"/api/videos/refresh-metadata/status", "get">> {
+    return request("/api/videos/refresh-metadata/status", opts);
   },
 
   uploadThumbnail(id: number, file: File): Promise<Video> {
@@ -305,9 +494,9 @@ export const api = {
   generateThumbnailCandidates(
     id: number,
     count = 8
-  ): Promise<{
-    candidates: { index: number; at_seconds: number; url: string }[];
-  }> {
+  ): Promise<
+    ApiResponse<"/api/videos/{video_id}/thumbnail/candidates", "post">
+  > {
     return request(`/api/videos/${id}/thumbnail/candidates?count=${count}`, {
       method: "POST",
     });
@@ -323,30 +512,29 @@ export const api = {
     return request<SpriteMeta>(`/api/videos/${id}/sprites/meta`);
   },
 
-  ensureSprites(id: number): Promise<{ status: "ready" | "generating" }> {
+  ensureSprites(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/sprites/generate", "post">> {
     return request(`/api/videos/${id}/sprites/generate`, { method: "POST" });
   },
 
   listChannels(params: ChannelQuery = {}): Promise<ChannelStat[]> {
+    const { signal, ...query } = params;
     const qs = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
+    Object.entries(query).forEach(([k, v]) => {
       if (v) qs.set(k, String(v));
     });
-    const query = qs.toString();
-    return request<ChannelStat[]>(`/api/channels${query ? `?${query}` : ""}`);
+    const text = qs.toString();
+    return request<ChannelStat[]>(
+      `/api/channels${text ? `?${text}` : ""}`,
+      signal ? { signal } : undefined
+    );
   },
 
   searchChannels(
     q: string,
     limit = 8
-  ): Promise<{
-    results: {
-      name: string;
-      url: string;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-    }[];
-  }> {
+  ): Promise<ApiResponse<"/api/channels/search", "get">> {
     const qs = new URLSearchParams({
       q,
       limit: String(limit),
@@ -385,8 +573,8 @@ export const api = {
     );
   },
 
-  getChannelCatalogStatus(): Promise<ChannelCatalogStatus> {
-    return request<ChannelCatalogStatus>("/api/channels/catalog/status");
+  getChannelCatalogStatus(opts?: ReadOptions): Promise<ChannelCatalogStatus> {
+    return request<ChannelCatalogStatus>("/api/channels/catalog/status", opts);
   },
 
   searchChannelYoutube(params: {
@@ -427,11 +615,7 @@ export const api = {
     channel?: string;
     url?: string;
     direct_youtube_search: boolean | null;
-  }): Promise<{
-    channel_url: string;
-    direct_youtube_search: boolean | null;
-    direct_youtube_search_effective: boolean;
-  }> {
+  }): Promise<ApiResponse<"/api/channels/catalog/youtube-search", "patch">> {
     return request("/api/channels/catalog/youtube-search", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -443,18 +627,14 @@ export const api = {
     });
   },
 
-  indexChannelCatalog(params: {
-    channel?: string;
-    url?: string;
-    force?: boolean;
-    mode?: "incremental" | "full";
-  } = {}): Promise<{
-    queued: number;
-    skipped: number;
-    refreshed: number;
-    catalog_id: number | null;
-    detail: string;
-  }> {
+  indexChannelCatalog(
+    params: {
+      channel?: string;
+      url?: string;
+      force?: boolean;
+      mode?: "incremental" | "full";
+    } = {}
+  ): Promise<ApiResponse<"/api/channels/catalog/index", "post">> {
     return request("/api/channels/catalog/index", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -503,7 +683,10 @@ export const api = {
     });
   },
 
-  renameChannel(oldName: string, newName: string): Promise<{ updated: number }> {
+  renameChannel(
+    oldName: string,
+    newName: string
+  ): Promise<{ updated: number }> {
     return request<{ updated: number }>("/api/channels", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -512,20 +695,28 @@ export const api = {
   },
 
   listTags(): Promise<string[]> {
-    return request<string[]>("/api/tags");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "5000" });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<string>>(`/api/tags?${qs}`);
+    });
   },
 
-  tagStats(channel?: string): Promise<TagStat[]> {
-    const qs = channel ? `?channel=${encodeURIComponent(channel)}` : "";
-    return request<TagStat[]>(`/api/tags/stats${qs}`);
+  tagStats(channel?: string, opts?: ReadOptions): Promise<TagStat[]> {
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "2000" });
+      if (channel) qs.set("channel", channel);
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<TagStat>>(`/api/tags/stats?${qs}`, opts);
+    });
   },
 
   storageStats(): Promise<StorageStats> {
     return request<StorageStats>("/api/stats/storage");
   },
 
-  getAppSettings(): Promise<AppSettings> {
-    return request<AppSettings>("/api/settings");
+  getAppSettings(opts?: ReadOptions): Promise<AppSettings> {
+    return request<AppSettings>("/api/settings", opts);
   },
 
   updateAppSettings(
@@ -538,20 +729,19 @@ export const api = {
     });
   },
 
-  resetApp(eraseMedia: boolean): Promise<{
-    setup_completed: boolean;
-    erased_media: boolean;
-    library_video_count: number;
-  }> {
+  resetApp(
+    eraseMedia: boolean,
+    confirm: string
+  ): Promise<ApiResponse<"/api/setup/reset", "post">> {
     return request("/api/setup/reset", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ erase_media: eraseMedia }),
+      body: JSON.stringify({ erase_media: eraseMedia, confirm }),
     });
   },
 
-  getAiStatus(): Promise<AiStatus> {
-    return request<AiStatus>("/api/ai/status");
+  getAiStatus(opts?: ReadOptions): Promise<AiStatus> {
+    return request<AiStatus>("/api/ai/status", opts);
   },
 
   listAiJobs(status?: string, limit = 50): Promise<AiJobRow[]> {
@@ -561,30 +751,35 @@ export const api = {
     return request(`/api/ai/jobs?${params}`);
   },
 
-  retryAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+  retryAiJob(
+    jobId: number
+  ): Promise<ApiResponse<"/api/ai/jobs/{job_id}/retry", "post">> {
     return request(`/api/ai/jobs/${jobId}/retry`, { method: "POST" });
   },
 
-  retryFailedAiJobs(): Promise<{ ok: boolean; retried: number }> {
+  retryFailedAiJobs(): Promise<
+    ApiResponse<"/api/ai/jobs/retry-failed", "post">
+  > {
     return request("/api/ai/jobs/retry-failed", { method: "POST" });
   },
 
-  cancelAiJob(jobId: number): Promise<{ ok: boolean; id: number }> {
+  cancelAiJob(
+    jobId: number
+  ): Promise<ApiResponse<"/api/ai/jobs/{job_id}/cancel", "post">> {
     return request(`/api/ai/jobs/${jobId}/cancel`, { method: "POST" });
   },
 
-  clearFailedAiJobs(keepDays = 0): Promise<{ ok: boolean; deleted: number }> {
+  clearFailedAiJobs(
+    keepDays = 0
+  ): Promise<ApiResponse<"/api/ai/jobs/clear-failed", "post">> {
     return request(`/api/ai/jobs/clear-failed?keep_days=${keepDays}`, {
       method: "POST",
     });
   },
 
-  testAiConnection(base_url?: string): Promise<{
-    ok: boolean;
-    base_url?: string | null;
-    detail?: string;
-    models?: string[];
-  }> {
+  testAiConnection(
+    base_url?: string
+  ): Promise<ApiResponse<"/api/ai/test", "post">> {
     return request("/api/ai/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -592,11 +787,9 @@ export const api = {
     });
   },
 
-  testOpenRouterConnection(api_key?: string): Promise<{
-    ok: boolean;
-    detail?: string;
-    model_count?: number;
-  }> {
+  testOpenRouterConnection(
+    api_key?: string
+  ): Promise<ApiResponse<"/api/ai/openrouter/test", "post">> {
     return request("/api/ai/openrouter/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -604,24 +797,19 @@ export const api = {
     });
   },
 
-  getOpenRouterModels(): Promise<{
-    presets: { id: string; label: string; model: string }[];
-    models: OpenRouterModel[];
-    embedding_models?: OpenRouterModel[];
-  }> {
-    return request("/api/ai/openrouter/models");
+  getOpenRouterModels(
+    opts?: ReadOptions
+  ): Promise<ApiResponse<"/api/ai/openrouter/models", "get">> {
+    return request("/api/ai/openrouter/models", opts);
   },
 
-  getOpenRouterCosts(): Promise<OpenRouterCosts> {
-    return request<OpenRouterCosts>("/api/ai/openrouter/costs");
+  getOpenRouterCosts(opts?: ReadOptions): Promise<OpenRouterCosts> {
+    return request<OpenRouterCosts>("/api/ai/openrouter/costs", opts);
   },
 
-  applyAiWorkload(profile?: "light" | "normal" | "heavy"): Promise<{
-    ok: boolean;
-    embed_model_changed?: boolean;
-    detail?: string;
-    runtime?: Record<string, unknown>;
-  }> {
+  applyAiWorkload(
+    profile?: "light" | "normal" | "heavy"
+  ): Promise<ApiResponse<"/api/ai/apply-workload", "post">> {
     return request("/api/ai/apply-workload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -659,15 +847,29 @@ export const api = {
     });
   },
 
-  getCompatSummary(): Promise<CompatSummary> {
-    return request<CompatSummary>("/api/compat/summary");
+  /** Is the stored original playable by WebKit (Safari, every iOS browser)? */
+  getSafariPrep(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat/safari`);
   },
 
-  startCompatBackfill(): Promise<{ queued: number; already_queued: number }> {
+  /** Queue the in-place Safari remux. GET /stream never does this itself. */
+  requestSafariPrep(videoId: number): Promise<CompatState> {
+    return request<CompatState>(`/api/videos/${videoId}/compat/safari`, {
+      method: "POST",
+    });
+  },
+
+  getCompatSummary(opts?: ReadOptions): Promise<CompatSummary> {
+    return request<CompatSummary>("/api/compat/summary", opts);
+  },
+
+  startCompatBackfill(): Promise<ApiResponse<"/api/compat/backfill", "post">> {
     return request("/api/compat/backfill", { method: "POST" });
   },
 
-  convertLibraryToH264(): Promise<{ queued: number; already_queued: number }> {
+  convertLibraryToH264(): Promise<
+    ApiResponse<"/api/compat/convert-library", "post">
+  > {
     return request("/api/compat/convert-library", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -675,7 +877,9 @@ export const api = {
     });
   },
 
-  cancelCompatJobs(kind?: "compat" | "convert"): Promise<{ cancelled: number }> {
+  cancelCompatJobs(
+    kind?: "compat" | "convert"
+  ): Promise<ApiResponse<"/api/compat/cancel", "post">> {
     return request("/api/compat/cancel", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -683,12 +887,12 @@ export const api = {
     });
   },
 
-  getSystemStats(): Promise<SystemStats> {
-    return request<SystemStats>("/api/system/stats");
+  getSystemStats(opts?: ReadOptions): Promise<SystemStats> {
+    return request<SystemStats>("/api/system/stats", opts);
   },
 
-  getSystemActivity(): Promise<SystemActivity> {
-    return request<SystemActivity>("/api/system/activity");
+  getSystemActivity(opts?: ReadOptions): Promise<SystemActivity> {
+    return request<SystemActivity>("/api/system/activity", opts);
   },
 
   checkUpdates(refresh = false): Promise<UpdateCheck> {
@@ -698,13 +902,7 @@ export const api = {
 
   uploadBackground(
     file: File
-  ): Promise<{
-    id: string;
-    url: string;
-    mime: string;
-    animated: boolean;
-    filename?: string;
-  }> {
+  ): Promise<ApiResponse<"/api/backgrounds", "post">> {
     const form = new FormData();
     form.append("file", file);
     return request("/api/backgrounds", {
@@ -713,35 +911,27 @@ export const api = {
     });
   },
 
-  listBackgrounds(): Promise<{
-    items: {
-      id: string;
-      url: string;
-      mime: string;
-      animated: boolean;
-      filename?: string;
-    }[];
-  }> {
+  listBackgrounds(): Promise<ApiResponse<"/api/backgrounds", "get">> {
     return request("/api/backgrounds");
   },
 
-  deleteBackground(id: string): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(
-      `/api/backgrounds/${encodeURIComponent(id)}`,
-      { method: "DELETE" }
-    );
+  deleteBackground(
+    id: string
+  ): Promise<ApiResponse<"/api/backgrounds/{bg_id}", "delete">> {
+    return request(`/api/backgrounds/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
 
-  extractBackgroundPalette(id: string): Promise<{ colors: string[] }> {
-    return request<{ colors: string[] }>(
-      `/api/backgrounds/${encodeURIComponent(id)}/palette`,
-      { method: "POST" }
-    );
+  extractBackgroundPalette(
+    id: string
+  ): Promise<ApiResponse<"/api/backgrounds/{bg_id}/palette", "post">> {
+    return request(`/api/backgrounds/${encodeURIComponent(id)}/palette`, {
+      method: "POST",
+    });
   },
 
-  uploadFont(
-    file: File
-  ): Promise<{ id: string; url: string; mime: string; filename?: string }> {
+  uploadFont(file: File): Promise<ApiResponse<"/api/fonts", "post">> {
     const form = new FormData();
     form.append("file", file);
     return request("/api/fonts", {
@@ -750,19 +940,20 @@ export const api = {
     });
   },
 
-  deleteFont(id: string): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(
-      `/api/fonts/${encodeURIComponent(id)}`,
-      { method: "DELETE" }
-    );
+  deleteFont(
+    id: string
+  ): Promise<ApiResponse<"/api/fonts/{font_id}", "delete">> {
+    return request(`/api/fonts/${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
   },
 
-  pauseAi(): Promise<{ paused: boolean }> {
-    return request<{ paused: boolean }>("/api/ai/pause", { method: "POST" });
+  pauseAi(): Promise<ApiResponse<"/api/ai/pause", "post">> {
+    return request("/api/ai/pause", { method: "POST" });
   },
 
-  resumeAi(): Promise<{ paused: boolean }> {
-    return request<{ paused: boolean }>("/api/ai/resume", { method: "POST" });
+  resumeAi(): Promise<ApiResponse<"/api/ai/resume", "post">> {
+    return request("/api/ai/resume", { method: "POST" });
   },
 
   getRecommendations(
@@ -778,7 +969,9 @@ export const api = {
   },
 
   refreshVideoTags(id: number): Promise<Video> {
-    return request<Video>(`/api/videos/${id}/ai/refresh-tags`, { method: "POST" });
+    return request<Video>(`/api/videos/${id}/ai/refresh-tags`, {
+      method: "POST",
+    });
   },
 
   summarizeVideo(
@@ -803,14 +996,16 @@ export const api = {
     });
   },
 
-  getVideoAiChat(id: number): Promise<{ messages: VideoAiChatMessage[] }> {
-    return request<{ messages: VideoAiChatMessage[] }>(
-      `/api/videos/${id}/ai/chat`
-    );
+  getVideoAiChat(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "get">> {
+    return request(`/api/videos/${id}/ai/chat`);
   },
 
-  clearVideoAiChat(id: number): Promise<{ ok: boolean }> {
-    return request<{ ok: boolean }>(`/api/videos/${id}/ai/chat`, {
+  clearVideoAiChat(
+    id: number
+  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "delete">> {
+    return request(`/api/videos/${id}/ai/chat`, {
       method: "DELETE",
     });
   },
@@ -827,22 +1022,19 @@ export const api = {
       onEvent: (event: Record<string, unknown>) => void;
     }
   ): Promise<void> {
-    const resp = await fetch(`/api/videos/${id}/ai/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-      body: JSON.stringify({ message }),
-      signal: opts.signal,
-    });
-    if (!resp.ok) {
-      let detail = resp.statusText;
-      try {
-        const body = await resp.json();
-        detail = body.detail ?? detail;
-      } catch {
-        // non-JSON
-      }
-      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
-    }
+    const resp = await fetch(
+      `/api/videos/${id}/ai/chat`,
+      withCsrf({
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "text/event-stream",
+        },
+        body: JSON.stringify({ message }),
+        signal: opts.signal,
+      })
+    );
+    if (!resp.ok) throw await apiErrorFrom(resp);
     if (!resp.body) {
       throw new Error("No response body");
     }
@@ -873,15 +1065,28 @@ export const api = {
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {
-    return request<DuplicateGroup[]>("/api/review/groups");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: "100" });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<DuplicateGroup>>(`/api/review/groups?${qs}`);
+    });
+  },
+
+  /** How many videos wait for review: one row and the server's count, not the list. */
+  async reviewCount(opts?: ReadOptions): Promise<number> {
+    const page = await request<Page<Video>>(
+      "/api/review?limit=1&include_total=true",
+      opts
+    );
+    return page.total ?? page.items.length;
   },
 
   listReview(): Promise<Video[]> {
-    return request<Video[]>("/api/review");
-  },
-
-  listImport(): Promise<Video[]> {
-    return request<Video[]>("/api/review");
+    return collectPages((cursor) => {
+      const qs = new URLSearchParams({ limit: String(PAGE_SIZE) });
+      if (cursor) qs.set("cursor", cursor);
+      return request<Page<Video>>(`/api/review?${qs}`);
+    });
   },
 
   scanImport(): Promise<ImportScanResult> {
@@ -903,6 +1108,7 @@ export const api = {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("POST", "/api/review/upload");
+      xhr.setRequestHeader(CSRF_HEADER, "1");
       xhr.responseType = "json";
       xhr.upload.onprogress = (e) => {
         if (!onProgress || !e.lengthComputable) return;
@@ -929,19 +1135,21 @@ export const api = {
     });
   },
 
-  listPresets(): Promise<string[]> {
-    return request<string[]>("/api/downloads/presets");
+  listPresets(opts?: ReadOptions): Promise<string[]> {
+    return request<string[]>("/api/downloads/presets", opts);
   },
 
-  previewDownload(url: string): Promise<DownloadPreview> {
+  previewDownload(url: string, opts?: ReadOptions): Promise<DownloadPreview> {
     return request<DownloadPreview>(
-      `/api/downloads/preview?url=${encodeURIComponent(url)}`
+      `/api/downloads/preview?url=${encodeURIComponent(url)}`,
+      opts
     );
   },
 
-  getPreviewMeta(url: string): Promise<StreamPreviewMeta> {
+  getPreviewMeta(url: string, opts?: ReadOptions): Promise<StreamPreviewMeta> {
     return request<StreamPreviewMeta>(
-      `/api/preview/meta?url=${encodeURIComponent(url)}`
+      `/api/preview/meta?url=${encodeURIComponent(url)}`,
+      opts
     );
   },
 
@@ -973,18 +1181,15 @@ export const api = {
     });
   },
 
-  listJobs(): Promise<DownloadJob[]> {
-    return request<DownloadJob[]>("/api/downloads");
+  listJobs(opts?: ReadOptions): Promise<DownloadJob[]> {
+    return request<DownloadJob[]>("/api/downloads", opts);
   },
 
   getJob(jobId: number): Promise<DownloadJob> {
     return request<DownloadJob>(`/api/downloads/${jobId}`);
   },
 
-  updateJob(
-    jobId: number,
-    overrides: DownloadOverrides
-  ): Promise<DownloadJob> {
+  updateJob(jobId: number, overrides: DownloadOverrides): Promise<DownloadJob> {
     return request<DownloadJob>(`/api/downloads/${jobId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1009,7 +1214,10 @@ export const api = {
     });
   },
 
-  changeJobQuality(jobId: number, quality_preset: string): Promise<DownloadJob> {
+  changeJobQuality(
+    jobId: number,
+    quality_preset: string
+  ): Promise<DownloadJob> {
     return request<DownloadJob>(`/api/downloads/${jobId}/quality`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1025,8 +1233,8 @@ export const api = {
     return request<void>("/api/downloads/dismiss-finished", { method: "POST" });
   },
 
-  getQueueStatus(): Promise<DownloadQueueStatus> {
-    return request<DownloadQueueStatus>("/api/downloads/queue/status");
+  getQueueStatus(opts?: ReadOptions): Promise<DownloadQueueStatus> {
+    return request<DownloadQueueStatus>("/api/downloads/queue/status", opts);
   },
 
   pauseQueue(): Promise<DownloadQueueStatus> {
@@ -1054,12 +1262,12 @@ export const api = {
     });
   },
 
-  listPlaylists(): Promise<Playlist[]> {
-    return request<Playlist[]>("/api/playlists");
+  listPlaylists(opts?: ReadOptions): Promise<Playlist[]> {
+    return request<Playlist[]>("/api/playlists", opts);
   },
 
-  getPlaylist(id: number): Promise<PlaylistDetail> {
-    return request<PlaylistDetail>(`/api/playlists/${id}`);
+  getPlaylist(id: number, opts?: ReadOptions): Promise<PlaylistDetail> {
+    return request<PlaylistDetail>(`/api/playlists/${id}`, opts);
   },
 
   createPlaylist(name: string, description?: string): Promise<Playlist> {
@@ -1179,7 +1387,7 @@ export const api = {
 
   estimatePlaylistSizes(
     urls: string[]
-  ): Promise<{ sizes: Record<string, Record<string, number>> }> {
+  ): Promise<ApiResponse<"/api/playlists/estimate", "post">> {
     return request("/api/playlists/estimate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1216,13 +1424,29 @@ export function spritesImageUrl(id: number): string {
   return `/api/videos/${id}/sprites`;
 }
 
+/**
+ * Add a signed media token (`GET /api/videos/{id}/media-token`) to a media URL.
+ * Only for URLs handed to a Cast or AirPlay receiver, which send no cookies; the
+ * page's own `<video>` keeps using the cookie so offline cache keys do not change.
+ */
+export function withMediaToken(url: string, token: string): string {
+  const parsed = new URL(url, window.location.origin);
+  parsed.searchParams.set("mt", token);
+  return /^[a-z][a-z0-9+.-]*:/i.test(url)
+    ? parsed.href
+    : `${parsed.pathname}${parsed.search}`;
+}
+
 export function absoluteUrl(path: string): string {
   return new URL(path, window.location.origin).href;
 }
 
 export type Rendition = "original" | "compat";
 
-export function streamUrl(id: number, rendition: Rendition = "original"): string {
+export function streamUrl(
+  id: number,
+  rendition: Rendition = "original"
+): string {
   return rendition === "compat"
     ? `/api/videos/${id}/stream?rendition=compat`
     : `/api/videos/${id}/stream`;

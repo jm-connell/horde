@@ -74,9 +74,10 @@ export function miniPlayerHostInsets(
   };
 }
 
-function viewportSize(
-  opts?: { viewportWidth?: number; viewportHeight?: number }
-): { vw: number; vh: number } {
+function viewportSize(opts?: {
+  viewportWidth?: number;
+  viewportHeight?: number;
+}): { vw: number; vh: number } {
   return {
     vw: opts?.viewportWidth ?? window.innerWidth,
     vh: opts?.viewportHeight ?? window.innerHeight,

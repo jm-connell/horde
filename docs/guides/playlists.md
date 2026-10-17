@@ -49,7 +49,7 @@ To bring in a remote playlist **once** (no ongoing sync):
 Horde:
 
 - Creates a playlist marked as imported from YouTube (`source_type` youtube, not subscribed)
-- Queues downloads for the selected entries (skips YouTube ids already in the library)
+- Queues a normal download job for each selected entry that is not already in the library (they respect the queue's concurrency and pause, survive a restart, and join the playlist in YouTube order as they finish)
 
 Use **Subscribe** on that same page if you want future videos as well.
 

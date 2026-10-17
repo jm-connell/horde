@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
-import type { ChannelStat } from "../types";
+import type { ChannelSearchHit, ChannelStat } from "../types";
 import { formatCompactCount } from "../utils";
 import Collapse from "./Collapse";
 
 const CHANNEL_SIDEBAR_LIMIT = 30;
 
-function formatSubscriberCount(count: number | null) {
-  if (count === null) return null;
+function formatSubscriberCount(count: number | null | undefined) {
+  if (count == null) return null;
   return formatCompactCount(count);
 }
 
@@ -33,14 +33,7 @@ export default function ChannelSidebar({
   onToggleShowAll: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [remoteHits, setRemoteHits] = useState<
-    {
-      name: string;
-      url: string;
-      thumbnail_url: string | null;
-      subscriber_count: number | null;
-    }[]
-  >([]);
+  const [remoteHits, setRemoteHits] = useState<ChannelSearchHit[]>([]);
   const [searching, setSearching] = useState(false);
   const debounced = useMemo(() => query.trim().toLowerCase(), [query]);
 
@@ -93,7 +86,7 @@ export default function ChannelSidebar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search channels"
-        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-gray-500 outline-none focus:border-accent"
+        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-muted outline-none focus:border-accent"
       />
       <ul className="space-y-0.5">
         {!debounced && (
@@ -121,9 +114,9 @@ export default function ChannelSidebar({
               }`}
             >
               <span className="truncate">{c.channel}</span>
-              <span className="ml-2 shrink-0 text-xs text-gray-500">
+              <span className="ml-2 shrink-0 text-xs text-muted">
                 {channelSort === "subscriber_count" &&
-                c.subscriber_count !== null
+                c.subscriber_count != null
                   ? formatSubscriberCount(c.subscriber_count)
                   : c.count}
               </span>
@@ -145,9 +138,9 @@ export default function ChannelSidebar({
                       }`}
                     >
                       <span className="truncate">{c.channel}</span>
-                      <span className="ml-2 shrink-0 text-xs text-gray-500">
+                      <span className="ml-2 shrink-0 text-xs text-muted">
                         {channelSort === "subscriber_count" &&
-                        c.subscriber_count !== null
+                        c.subscriber_count != null
                           ? formatSubscriberCount(c.subscriber_count)
                           : c.count}
                       </span>
@@ -172,10 +165,10 @@ export default function ChannelSidebar({
         {debounced && (
           <>
             {searching && (
-              <li className="px-3 py-1.5 text-xs text-gray-500">Searching…</li>
+              <li className="px-3 py-1.5 text-xs text-muted">Searching…</li>
             )}
             {remoteHits.length > 0 && (
-              <li className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              <li className="px-3 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted">
                 From YouTube
               </li>
             )}
@@ -187,13 +180,13 @@ export default function ChannelSidebar({
                     onSelectRemoteChannel({
                       name: hit.name,
                       url: hit.url,
-                      subscriber_count: hit.subscriber_count,
+                      subscriber_count: hit.subscriber_count ?? null,
                     })
                   }
                   className="flex w-full min-w-0 items-center justify-between rounded-lg px-3 py-1.5 text-left text-sm text-gray-300 hover:bg-ink-800"
                 >
                   <span className="truncate">{hit.name}</span>
-                  <span className="ml-2 shrink-0 text-xs text-gray-500">
+                  <span className="ml-2 shrink-0 text-xs text-muted">
                     {hit.subscriber_count != null
                       ? formatSubscriberCount(hit.subscriber_count)
                       : "New"}
@@ -204,7 +197,7 @@ export default function ChannelSidebar({
             {!searching &&
               libraryMatches.length === 0 &&
               remoteHits.length === 0 && (
-                <li className="px-3 py-1.5 text-xs text-gray-500">
+                <li className="px-3 py-1.5 text-xs text-muted">
                   No channels found
                 </li>
               )}

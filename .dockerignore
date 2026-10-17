@@ -1,13 +1,40 @@
+# Keep the build context small: only what the Dockerfile COPYs is needed
+# (frontend/, backend/app + requirements.lock, docs/ + mkdocs.yml, docker/).
+.git
+.github
+.local
+.venv
+venv
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
 **/node_modules
 **/dist
 **/__pycache__
 **/*.pyc
+frontend/*.tsbuildinfo
+backend/static
+
+# Tests and test artifacts
+e2e
+frontend/e2e
+frontend/test-results
+frontend/playwright-report
+frontend/blob-report
+backend/tests
+test-results
+playwright-report
+
+# Runtime data and model stores (can be many GB)
 backend/data
 backend/downloads
 data
 downloads
-.git
-.venv
+ollama
 *.db
-.env
 site/
+
+# Root-level markdown is not used by the image (docs/*.md is, so no **/*.md)
+*.md

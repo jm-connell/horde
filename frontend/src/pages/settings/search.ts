@@ -1,12 +1,23 @@
 import { LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
+import type { Permission } from "../../types";
 import { TABS } from "./constants";
 import type { AiPane, SettingsTab } from "./types";
+
+/** Who sees a setting beyond its tab: administrators, or holders of a permission. */
+export type SettingAccess = "admin" | Permission;
+
+/** Whether the signed-in user sees settings marked with `access`. */
+export type AccessCheck = (access: SettingAccess) => boolean;
+
+const EVERYONE: AccessCheck = () => true;
 
 export interface SearchRegistryEntry {
   tab: SettingsTab;
   keywords: string;
   /** Which AI pane this entry belongs to, when tab is "ai". */
   pane?: AiPane;
+  /** Unset: whoever can open the tab sees it. */
+  access?: SettingAccess;
 }
 
 /** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
@@ -20,13 +31,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "appearance",
-    keywords:
-      `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
+    keywords: `interface motion navigation indicator nav liquid jelly underline fade glow lift hover motion cards controls translucent panels panel transparency blur frost glass tint legibility ${LOADING_STYLE_SEARCH_KEYWORDS}`,
   },
   {
     tab: "appearance",
-    keywords:
-      "saved themes save theme save current preset snapshot appearance",
+    keywords: "saved themes save theme save current preset snapshot appearance",
   },
   {
     tab: "appearance",
@@ -41,16 +50,17 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // Library
   {
     tab: "library",
+    access: "admin",
     keywords:
       "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search youtube video search",
   },
   {
     tab: "library",
-    keywords:
-      "homepage continue watching progress bar dates video cards",
+    keywords: "homepage continue watching progress bar dates video cards",
   },
   {
     tab: "library",
+    access: "admin",
     keywords: "progress expiry inactivity days",
   },
   {
@@ -73,8 +83,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords:
-      "undownloaded channel feed show undownloaded library downloads",
+    keywords: "undownloaded channel feed show undownloaded library downloads",
   },
   {
     tab: "playback",
@@ -91,7 +100,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "playback",
-    keywords: "playback speed speed default hold hold-click hold speed click to hold",
+    keywords:
+      "playback speed speed default hold hold-click hold speed click to hold",
   },
   {
     tab: "playback",
@@ -100,8 +110,15 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // Downloads (legacy tab, redirected to library)
   {
     tab: "library",
+    access: "download",
     keywords:
-      "download count navigation badge normalize volume loudness downloads compatibility av1 h264 h265 hevc codec transcode format sidecar gpu nvenc playback compatibility convert",
+      "download count navigation badge normalize volume loudness downloads",
+  },
+  {
+    tab: "library",
+    access: "admin",
+    keywords:
+      "compatibility av1 h264 h265 hevc codec transcode format sidecar gpu nvenc playback compatibility convert",
   },
   // AI
   {
@@ -119,8 +136,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "providers",
-    keywords:
-      "models embedding chat model vram auto-pull gpu",
+    keywords: "models embedding chat model vram auto-pull gpu",
   },
   {
     tab: "ai",
@@ -131,7 +147,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "features",
-    keywords: "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
+    keywords:
+      "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
   },
   // System
   {
@@ -176,17 +193,29 @@ export function matchesQuery(
   return tokens.length > 1 && tokens.every((t) => hay.includes(t));
 }
 
-export function tabMatchesQuery(tabId: SettingsTab, query: string): boolean {
+export function tabMatchesQuery(
+  tabId: SettingsTab,
+  query: string,
+  allowed: AccessCheck = EVERYONE
+): boolean {
   if (!query) return true;
   return SEARCH_REGISTRY.some(
-    (entry) => entry.tab === tabId && matchesQuery(query, entry.keywords)
+    (entry) =>
+      entry.tab === tabId &&
+      (!entry.access || allowed(entry.access)) &&
+      matchesQuery(query, entry.keywords)
   );
 }
 
-export function firstMatchingTab(query: string): SettingsTab | null {
+/** The first of `tabs` (default: all) with a setting the user sees that matches. */
+export function firstMatchingTab(
+  query: string,
+  allowed: AccessCheck = EVERYONE,
+  tabs: readonly { id: SettingsTab }[] = TABS
+): SettingsTab | null {
   if (!query) return null;
-  for (const t of TABS) {
-    if (tabMatchesQuery(t.id, query)) return t.id;
+  for (const t of tabs) {
+    if (tabMatchesQuery(t.id, query, allowed)) return t.id;
   }
   return null;
 }

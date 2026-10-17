@@ -19,7 +19,9 @@ def test_reset_keep_media(client, add_video, session, tmp_dirs):
         {"ui": {"theme": "oled"}, "ai": {"enabled": False}, "setup_completed": True}
     )
 
-    resp = client.post("/api/setup/reset", json={"erase_media": False})
+    resp = client.post(
+        "/api/setup/reset", json={"erase_media": False, "confirm": "RESET"}
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["setup_completed"] is False
@@ -32,7 +34,7 @@ def test_reset_keep_media(client, add_video, session, tmp_dirs):
     assert settings["ui"] == {}
     assert settings["ai"]["enabled"] is True
 
-    videos = client.get("/api/videos").json()
+    videos = client.get("/api/videos").json()["items"]
     assert len(videos) == 1
     playlists = client.get("/api/playlists").json()
     assert len(playlists) == 1
@@ -57,7 +59,9 @@ def test_reset_erase_media(client, add_video, session, tmp_dirs):
 
     settings_svc.save({"ui": {"theme": "oled"}, "setup_completed": True})
 
-    resp = client.post("/api/setup/reset", json={"erase_media": True})
+    resp = client.post(
+        "/api/setup/reset", json={"erase_media": True, "confirm": "ERASE MEDIA"}
+    )
     assert resp.status_code == 200
     body = resp.json()
     assert body["erased_media"] is True
@@ -69,5 +73,5 @@ def test_reset_erase_media(client, add_video, session, tmp_dirs):
     settings = client.get("/api/settings").json()
     assert settings["setup_completed"] is False
     assert settings["ui"] == {}
-    assert client.get("/api/videos").json() == []
+    assert client.get("/api/videos").json()["items"] == []
     assert client.get("/api/playlists").json() == []

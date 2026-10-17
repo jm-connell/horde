@@ -1,0 +1,161 @@
+name: yt-dlp bump
+
+# YouTube breaks extractors often and yt-dlp ships a fix within days. This opens
+# a pull request as soon as PyPI has a newer yt-dlp than backend/requirements.txt
+# pins.
+#
+# Two jobs, so freshly published package code never runs next to a write token:
+#   bump  installs the new lock and runs the tests and pip-audit with read-only
+#         permissions and no persisted credentials, then uploads the changed
+#         requirements.txt as an artifact;
+#   pr    (write permissions) never installs or runs package code. It validates
+#         the artifact (only the yt-dlp pin may change) and regenerates the lock
+#         itself with uv, which only resolves, then commits and opens the PR.
+#         The lock built by the other job is not trusted.
+#
+# Pull requests created with the default GITHUB_TOKEN do not start other
+# workflows. Add a fine-grained PAT (contents + pull requests: write) as the
+# BOT_TOKEN secret if you want CI/security/image checks to run on the PR too.
+# The repo setting "Allow GitHub Actions to create and approve pull requests"
+# must be enabled.
+
+on:
+  schedule:
+    - cron: "23 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ytdlp-bump
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      bump: ${{ steps.version.outputs.bump }}
+      current: ${{ steps.version.outputs.current }}
+      latest: ${{ steps.version.outputs.latest }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Is there a newer yt-dlp?
+        id: version
+        run: |
+          current="$(sed -nE 's/^yt-dlp==([^ #]+).*$/\1/p' backend/requirements.txt)"
+          latest="$(curl -fsS https://pypi.org/pypi/yt-dlp/json | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')"
+          echo "pinned: ${current}  latest: ${latest}"
+          # Both values end up in later commands; accept dotted numbers only.
+          for v in "${current}" "${latest}"; do
+            if ! [[ "${v}" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+              echo "::error::unexpected version string"; exit 1
+            fi
+          done
+          echo "current=${current}" >> "$GITHUB_OUTPUT"
+          echo "latest=${latest}" >> "$GITHUB_OUTPUT"
+          if [ "${current}" = "${latest}" ]; then
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+          elif git ls-remote --exit-code --heads "https://github.com/${GITHUB_REPOSITORY}.git" "bot/yt-dlp-${latest}" >/dev/null 2>&1; then
+            echo "A bump branch for ${latest} already exists."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "bump=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Update the pin and the lock file
+        if: steps.version.outputs.bump == 'true'
+        env:
+          LATEST: ${{ steps.version.outputs.latest }}
+        run: |
+          python -m pip install uv==0.13.1
+          sed -i -E "s/^yt-dlp==.*/yt-dlp==${LATEST}/" backend/requirements.txt
+          uv pip compile --generate-hashes --python-version 3.12 \
+            backend/requirements.txt -o backend/requirements.lock \
+            --upgrade-package yt-dlp
+          git diff --stat
+
+      - name: Backend tests and advisories against the new lock
+        if: steps.version.outputs.bump == 'true'
+        working-directory: backend
+        run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install "pytest>=8.0" pip-audit==2.10.1
+          PYTHONPATH=. pytest -q
+          pip-audit -r requirements.lock --no-deps --disable-pip
+
+      - name: Hand the changed requirements.txt to the next job
+        if: steps.version.outputs.bump == 'true'
+        run: |
+          mkdir bump-out
+          cp backend/requirements.txt bump-out/
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.version.outputs.bump == 'true'
+        with:
+          name: ytdlp-bump
+          path: bump-out/
+          retention-days: 3
+
+  pr:
+    needs: bump
+    if: needs.bump.outputs.bump == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+      LATEST: ${{ needs.bump.outputs.latest }}
+      CURRENT: ${{ needs.bump.outputs.current }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: ytdlp-bump
+          path: bump-in
+      - name: Apply only the expected change
+        run: |
+          for v in "${CURRENT}" "${LATEST}"; do
+            [[ "${v}" =~ ^[0-9]+(\.[0-9]+)*$ ]] || { echo "::error::unexpected version string"; exit 1; }
+          done
+          cp bump-in/requirements.txt backend/requirements.txt
+          # requirements.txt must differ from main by exactly the yt-dlp pin.
+          changed="$(git diff --numstat -- backend/requirements.txt | cut -f1,2)"
+          if [ "${changed}" != "$(printf '1\t1')" ] || ! git diff -U0 -- backend/requirements.txt | grep -q "^+yt-dlp==${LATEST}\$"; then
+            echo "::error::the artifact changes more than the yt-dlp pin"; exit 1
+          fi
+          git diff --stat
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+      - name: Regenerate the lock (resolution only, no package code runs)
+        run: |
+          python -m pip install uv==0.13.1
+          uv pip compile --generate-hashes --python-version 3.12 \
+            backend/requirements.txt -o backend/requirements.lock \
+            --upgrade-package yt-dlp
+          git diff --stat -- backend/requirements.lock
+      - name: Open the pull request
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "bot/yt-dlp-${LATEST}"
+          git add backend/requirements.txt backend/requirements.lock
+          git commit -m "Bump yt-dlp from ${CURRENT} to ${LATEST}" \
+            -m "Automated by .github/workflows/ytdlp-bump.yml after the backend test suite and pip-audit passed against the regenerated lock file."
+          git push origin "bot/yt-dlp-${LATEST}"
+          gh pr create --base main --head "bot/yt-dlp-${LATEST}" \
+            --title "Bump yt-dlp from ${CURRENT} to ${LATEST}" \
+            --body "Automated yt-dlp bump. Backend tests and pip-audit passed on the regenerated lock. See [yt-dlp releases](https://github.com/yt-dlp/yt-dlp/releases/tag/${LATEST})."

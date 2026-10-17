@@ -31,12 +31,10 @@ describe("media URL helpers", () => {
   });
 
   it("thumbnailUrl is null without a cached thumb", () => {
-    expect(
-      thumbnailUrl({ id: 1, has_thumbnail: false } as Video)
-    ).toBeNull();
-    expect(
-      thumbnailUrl({ id: 1, has_thumbnail: true } as Video)
-    ).toBe("/api/thumbnails/1");
+    expect(thumbnailUrl({ id: 1, has_thumbnail: false } as Video)).toBeNull();
+    expect(thumbnailUrl({ id: 1, has_thumbnail: true } as Video)).toBe(
+      "/api/thumbnails/1"
+    );
     expect(listThumbnailUrl(1)).toBe("/api/thumbnails/1?size=sm");
     expect(
       playlistCoverUrl({

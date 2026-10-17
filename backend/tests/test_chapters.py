@@ -44,7 +44,10 @@ def test_normalize_ytdlp_chapters():
     out = chapters_svc.normalize_ytdlp_chapters(raw)
     assert [c["title"] for c in out] == ["Intro", "Main", "Outro"]
     assert out[1]["start_sec"] == 45.5
-    assert chapters_svc.normalize_ytdlp_chapters([{"start_time": 0, "title": "Only"}]) == []
+    assert (
+        chapters_svc.normalize_ytdlp_chapters([{"start_time": 0, "title": "Only"}])
+        == []
+    )
 
 
 def test_apply_source_chapters(add_video, session):
@@ -126,7 +129,10 @@ def test_timed_transcript_char_cap_samples_whole_file():
 
 def test_skip_too_short_and_description(add_video):
     video = add_video(duration_sec=120, description="plain")
-    assert chapters_svc.skip_reason(video, None, force=False, cues=[(0.0, "hi")]) == "too_short"
+    assert (
+        chapters_svc.skip_reason(video, None, force=False, cues=[(0.0, "hi")])
+        == "too_short"
+    )
     assert chapters_svc.skip_reason(video, None, force=True, cues=[(0.0, "hi")]) is None
 
     mid = add_video(duration_sec=200, description="plain", file_path="talks/mid.mp4")
@@ -139,14 +145,21 @@ def test_skip_too_short_and_description(add_video):
 def test_too_short_skip_is_not_sticky(add_video):
     video = add_video(duration_sec=200, description="plain")
     meta = VideoAiMeta(video_id=video.id, chapters_skip_reason="too_short")
-    assert chapters_svc.skip_reason(video, meta, force=False, cues=[(0.0, "hi")]) is None
+    assert (
+        chapters_svc.skip_reason(video, meta, force=False, cues=[(0.0, "hi")]) is None
+    )
 
 
 def test_skip_music_like_and_source(add_video):
     video = add_video(duration_sec=1200)
     chapters_svc.apply_source_chapters(
         video,
-        {"chapters": [{"start_time": 0, "title": "A"}, {"start_time": 60, "title": "B"}]},
+        {
+            "chapters": [
+                {"start_time": 0, "title": "A"},
+                {"start_time": 60, "title": "B"},
+            ]
+        },
     )
     assert chapters_svc.skip_reason(video, None) == "source_chapters"
 

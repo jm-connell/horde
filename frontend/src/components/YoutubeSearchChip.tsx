@@ -37,7 +37,7 @@ export default function YoutubeSearchChip({
         className={`youtube-search-chip rounded px-1 text-[10px] font-semibold tracking-wide transition-[color,opacity] duration-75 disabled:cursor-not-allowed disabled:opacity-50 ${
           isOn
             ? "text-accent hover:text-accent-soft"
-            : "text-gray-600 hover:text-gray-400"
+            : "text-muted hover:text-gray-400"
         }`}
       >
         YT

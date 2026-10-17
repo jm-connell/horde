@@ -16,7 +16,7 @@ Single-flight keeps utilization predictable: jobs wait in `ai_jobs`, the worker 
 
 | Behavior | Detail |
 |----------|--------|
-| One runner thread | `start_ai_worker()` loops `_process_one()` |
+| One runner thread | `ai.worker.create_workers()` returns a runner that loops `_process_one()` |
 | Queue in SQLite | Kinds such as embed, enrich tags, refresh categories, etc. |
 | Dedup while active | Enqueue skips if the same kind+target is already queued/running (unless `force`) |
 | Pause switch | AI settings `paused` stops claiming new work |

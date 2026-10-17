@@ -46,7 +46,11 @@ export const BACKGROUND_EFFECT_OPTIONS: {
   },
   { value: "matrix", label: "Matrix", description: "Cascading glyph rain" },
   { value: "snow", label: "Snow", description: "Gentle drifting flakes" },
-  { value: "fireflies", label: "Fireflies", description: "Glowing wandering lights" },
+  {
+    value: "fireflies",
+    label: "Fireflies",
+    description: "Glowing wandering lights",
+  },
   { value: "dust", label: "Dust", description: "Rising motes in the air" },
   { value: "bokeh", label: "Bokeh", description: "Soft out-of-focus orbs" },
   {
@@ -54,7 +58,11 @@ export const BACKGROUND_EFFECT_OPTIONS: {
     label: "Warp grid",
     description: "A grid gently distorted by noise",
   },
-  { value: "scanlines", label: "Scanlines", description: "CRT-style line sweep" },
+  {
+    value: "scanlines",
+    label: "Scanlines",
+    description: "CRT-style line sweep",
+  },
   { value: "grain", label: "Film grain", description: "Subtle animated noise" },
   {
     value: "modern-grid",

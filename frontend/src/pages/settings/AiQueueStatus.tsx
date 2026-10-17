@@ -33,7 +33,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
           <span className="block truncate text-xs text-gray-200">
             {job.title || (job.video_id == null ? kindLabel : "Untitled")}
           </span>
-          <span className="block truncate text-[11px] text-gray-500">
+          <span className="block truncate text-[11px] text-muted">
             {[
               job.channel,
               kindLabel,
@@ -43,7 +43,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
               .join(" · ")}
           </span>
           {job.model && (
-            <span className="mt-0.5 block truncate font-mono text-[10px] text-gray-500">
+            <span className="mt-0.5 block truncate font-mono text-[10px] text-muted">
               {job.model}
             </span>
           )}
@@ -55,6 +55,10 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
         </span>
         {job.has_thumbnail && job.video_id != null ? (
           <img
+            loading="lazy"
+            decoding="async"
+            width={112}
+            height={63}
             src={`/api/thumbnails/${job.video_id}`}
             alt=""
             className="aspect-video w-28 shrink-0 rounded object-cover ring-1 ring-ink-700"
@@ -167,7 +171,7 @@ export default function AiQueueStatus({
                 {indexBusy ? "Queuing…" : "Index missing"}
               </button>
             ) : (
-              <span className="text-xs text-gray-500">Idle</span>
+              <span className="text-xs text-muted">Idle</span>
             )}
           </dd>
         </div>
@@ -296,11 +300,7 @@ export default function AiQueueStatus({
                   )
                 : null,
               aiStatus.queue_breakdown.enrich_tags
-                ? plural(
-                    aiStatus.queue_breakdown.enrich_tags,
-                    "tag",
-                    "tags"
-                  )
+                ? plural(aiStatus.queue_breakdown.enrich_tags, "tag", "tags")
                 : null,
               aiStatus.queue_breakdown.summarize
                 ? plural(

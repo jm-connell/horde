@@ -19,7 +19,8 @@ function entry(
     url: `https://www.youtube.com/watch?v=${id}`,
     title: extra.title ?? id,
     duration: extra.duration ?? 60,
-    thumbnail_url: extra.thumbnail_url ?? `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+    thumbnail_url:
+      extra.thumbnail_url ?? `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
     view_count: extra.view_count !== undefined ? extra.view_count : 1,
     like_count: extra.like_count ?? null,
     dislike_count: extra.dislike_count ?? null,
@@ -129,9 +130,11 @@ describe("applyChannelFeedSort", () => {
       entry("high", { view_count: 90 }),
       entry("none", { view_count: null }),
     ];
-    expect(
-      sortFeedEntries(list, "popular", "desc").map((e) => e.id)
-    ).toEqual(["high", "low", "none"]);
+    expect(sortFeedEntries(list, "popular", "desc").map((e) => e.id)).toEqual([
+      "high",
+      "low",
+      "none",
+    ]);
   });
 
   it("reverses browse Recent instead of sorting by date", () => {
@@ -151,8 +154,8 @@ describe("applyChannelFeedSort", () => {
 describe("excludeKnownYoutubeIds", () => {
   it("drops ids already in library or catalog results", () => {
     const incoming = [entry("keep"), entry("dup"), entry("also")];
-    expect(excludeKnownYoutubeIds(incoming, ["dup", null, ""]).map((e) => e.id)).toEqual(
-      ["keep", "also"]
-    );
+    expect(
+      excludeKnownYoutubeIds(incoming, ["dup", null, ""]).map((e) => e.id)
+    ).toEqual(["keep", "also"]);
   });
 });

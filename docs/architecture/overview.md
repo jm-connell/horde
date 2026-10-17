@@ -1,5 +1,7 @@
 # Architecture overview
 
+For one page that connects the process model, the request path, ownership of data and the pipelines, start with the [architecture map](../design/architecture.md); the reasoning behind the big choices is in the [decision records](../adr/index.md).
+
 Horde is a **single-container** app: FastAPI serves the JSON API, streams media, and hosts the built React SPA (plus the MkDocs wiki in image builds). Optional sidecars (bgutil POT, Ollama) sit beside it in Compose.
 
 ```text
@@ -22,32 +24,27 @@ Horde is a **single-container** app: FastAPI serves the JSON API, streams media,
 On process start, `lifespan` in `main.py` runs roughly:
 
 ```text
-ensure_dirs
-    -> init_db (create_all + schema_migrations / ALTER + verify_schema)
+build AppContext + ensure dirs
+    -> init_db (Alembic upgrade head)
     -> cleanup_orphans
     -> ensure yt-dlp plugins loaded
     -> init preview HTTP client
-    -> download_queue.recover()   # downloading→queued; restore pause flag
+    -> register download/ffmpeg queues + reaper, then download_queue.recover()   # downloading→queued; restore pause flag
     -> recover_ai_jobs()          # running→queued
     -> recover_catalog_jobs()     # indexing→queued
-    -> start_scanner()            # watchdog + poll
-    -> start_sync_worker()        # metadata / catalog freshness
-    -> start_ai_worker()
-    -> start_catalog_worker()
-    -> start_autodownload_worker()
-    -> start_subtitle_retry_worker()
-    -> start_job_metadata_worker()
+    -> sprite pool, scanner (the first scan runs on its poller thread)
+    -> metadata sync, AI, catalog, autodownload, subtitle retry, job metadata, probe backfill, nightly backup
 ```
 
 Stuck mid-flight download / AI / catalog work is requeued **before** workers start so a crash cannot leave jobs stranded forever. Download queue pause is restored from `download_queue_paused` in app settings.
 
-Shutdown stops job-metadata, subtitle retry, autodownload, catalog, and AI workers, joins the scanner observer, and closes the preview client.
+Shutdown signals every registered worker and joins them in reverse start order with a per-worker timeout; in-flight downloads are requeued and ffmpeg children are terminated. See [Workers](workers.md#lifecycle).
 
 ## Major moving parts
 
 | Piece | Role |
 |-------|------|
-| **API routers** | Videos, downloads, preview, review, playlists, settings, AI, system, backgrounds, fonts |
+| **API routers** | Videos, downloads, preview, review, playlists, channels, settings, AI, system, setup, auth, users, backgrounds, fonts, compat |
 | **Scanner** | Discovers files dropped into downloads; orphan awareness |
 | **Download queue** | Concurrent yt-dlp jobs, ffmpeg postprocess pool, multiplex SSE |
 | **Job metadata** | Background title/preset fill for cheap-enqueued downloads |
@@ -58,7 +55,7 @@ Shutdown stops job-metadata, subtitle retry, autodownload, catalog, and AI worke
 | **React SPA** | Library, player, settings; providers for download/playback/search/toast |
 
 !!! warning "Trust boundary"
-    No authentication — treat the network as the security boundary. See [No authentication](../design/no-auth.md) and [Single container](../design/single-container.md).
+    Sign-in is required, but the network is still assumed to be trusted: do not expose Horde to the internet. See [Security model](../design/no-auth.md) and [Single container](../design/single-container.md).
 
 ## Related
 

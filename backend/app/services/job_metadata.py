@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import logging
 import queue
-import threading
-from typing import Optional
 
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from ..database import engine
+from ..context import get_engine
 from ..models import DownloadJob, JobStatus
-from .url_clean import youtube_video_id, youtube_thumbnail_url
+from .url_clean import youtube_thumbnail_url, youtube_video_id
+from .workers import BackgroundWorker
 from .ytdlp_common import EXTRACT_PRIORITY_BACKGROUND
 from .ytdlp_extract import extract_preview, is_youtube_short_entry, is_youtube_short_url
 from .ytdlp_formats import quality_from_preview
@@ -19,53 +18,58 @@ from .ytdlp_formats import quality_from_preview
 logger = logging.getLogger(__name__)
 
 _pending: queue.Queue[int] = queue.Queue()
-_stop = threading.Event()
-_thread: Optional[threading.Thread] = None
+_STOP_SENTINEL = -1
 
 
-def request_job_metadata(job_id: Optional[int]) -> None:
+def request_job_metadata(job_id: int | None) -> None:
     if job_id is None:
         return
     _pending.put(job_id)
 
 
-def start_job_metadata_worker() -> None:
-    global _thread
-    if _thread is not None and _thread.is_alive():
-        return
-    _stop.clear()
-    _thread = threading.Thread(
-        target=_loop, name="job-metadata", daemon=True
+def create_worker() -> BackgroundWorker:
+    """The worker; call ``rehydrate_pending()`` once it is registered."""
+    return BackgroundWorker(
+        "job-metadata", _loop, on_stop=lambda: _pending.put(_STOP_SENTINEL)
     )
-    _thread.start()
 
 
-def stop_job_metadata_worker() -> None:
-    _stop.set()
-    _pending.put(-1)
-    thread = _thread
-    if thread is not None:
-        thread.join(timeout=2)
+def rehydrate_pending() -> int:
+    """Re-queue metadata fills lost on restart (the queue is in memory only)."""
+    with Session(get_engine()) as session:
+        ids = session.exec(
+            select(DownloadJob.id).where(
+                DownloadJob.status == JobStatus.queued,
+                (DownloadJob.title == None)  # noqa: E711 - SQL IS NULL
+                | (DownloadJob.title == "")
+                | (DownloadJob.available_presets_json == None),  # noqa: E711 - SQL column comparison, not a Python truth test
+            )
+        ).all()
+    for job_id in ids:
+        request_job_metadata(job_id)
+    if ids:
+        logger.info("requeued metadata for %d queued download job(s)", len(ids))
+    return len(ids)
 
 
-def _loop() -> None:
-    while not _stop.is_set():
+def _loop(worker: BackgroundWorker) -> None:
+    while not worker.stopping:
         try:
             job_id = _pending.get(timeout=1.0)
         except queue.Empty:
             continue
-        if job_id < 0 or _stop.is_set():
+        if job_id < 0 or worker.stopping:
             continue
         try:
             _fill_job(job_id)
-        except Exception:  # noqa: BLE001
+        except Exception:
             logger.debug("job metadata fill failed for %s", job_id, exc_info=True)
 
 
 def _fill_job(job_id: int) -> None:
-    from . import downloader
+    from .downloads.progress import progress_store
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.status not in (JobStatus.queued, JobStatus.downloading):
             return
@@ -83,12 +87,16 @@ def _fill_job(job_id: int) -> None:
 
     try:
         preview = extract_preview(url, priority=EXTRACT_PRIORITY_BACKGROUND)
-    except Exception:  # noqa: BLE001
+    except Exception:
         logger.debug("job metadata extract failed for %s", job_id, exc_info=True)
         return
 
     if is_youtube_short_entry(
-        {**(preview if isinstance(preview, dict) else {}), "url": url, "webpage_url": url}
+        {
+            **(preview if isinstance(preview, dict) else {}),
+            "url": url,
+            "webpage_url": url,
+        }
     ):
         _drop_short(job_id, url)
         return
@@ -102,7 +110,7 @@ def _fill_job(job_id: int) -> None:
     if not thumb and yt_id:
         thumb = youtube_thumbnail_url(str(yt_id))
 
-    with Session(engine) as session:
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None or job.status not in (JobStatus.queued, JobStatus.downloading):
             return
@@ -124,25 +132,27 @@ def _fill_job(job_id: int) -> None:
         snap_thumb = job.thumbnail_url
         snap_preset = job.quality_preset
 
-    prev = downloader.progress_store.get(job_id, {})
-    downloader.progress_store[job_id] = {
-        **prev,
-        "title": snap_title,
-        "channel": snap_channel,
-        "thumbnail_url": snap_thumb,
-        "quality_preset": snap_preset,
-        "available_presets": preview.get("available_presets") or [],
-    }
+    progress_store.merge(
+        job_id,
+        {
+            "title": snap_title,
+            "channel": snap_channel,
+            "thumbnail_url": snap_thumb,
+            "quality_preset": snap_preset,
+            "available_presets": preview.get("available_presets") or [],
+        },
+    )
 
 
 def _drop_short(job_id: int, url: str) -> None:
-    from . import downloader
+    from .downloads.progress import progress_store
+    from .downloads.queue import download_queue
 
-    downloader.download_queue.cancel_job(job_id)
-    with Session(engine) as session:
+    download_queue.cancel_job(job_id)
+    with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
         if job is None:
-            downloader.progress_store[job_id] = {
+            progress_store[job_id] = {
                 "status": "skipped",
                 "reason": "shorts",
             }
@@ -150,7 +160,7 @@ def _drop_short(job_id: int, url: str) -> None:
         if job.status in (JobStatus.queued, JobStatus.cancelled):
             session.delete(job)
             session.commit()
-    downloader.progress_store[job_id] = {
+    progress_store[job_id] = {
         "status": "skipped",
         "reason": "shorts",
         "url": url,

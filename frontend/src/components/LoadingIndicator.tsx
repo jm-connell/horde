@@ -1,8 +1,5 @@
 import { useSettings } from "../hooks/useSettings";
-import {
-  isLoadingStyle,
-  type LoadingStyle,
-} from "../loadingStyles";
+import { isLoadingStyle, type LoadingStyle } from "../loadingStyles";
 
 export function LoadingMark({
   style,
@@ -51,7 +48,7 @@ export default function LoadingIndicator({
 
   return (
     <div
-      className={`flex flex-col items-center justify-center gap-3 text-gray-500 ${className}`}
+      className={`flex flex-col items-center justify-center gap-3 text-muted ${className}`}
       role="status"
       aria-live="polite"
     >

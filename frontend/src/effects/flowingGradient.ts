@@ -47,12 +47,7 @@ function mix(a: Rgb, b: Rgb, t: number): Rgb {
   ];
 }
 
-export type FlowingGradientPreset =
-  | "theme"
-  | "rgb"
-  | "cool"
-  | "warm"
-  | "mono";
+export type FlowingGradientPreset = "theme" | "rgb" | "cool" | "warm" | "mono";
 
 /** Hue offsets for the 4 soft blobs. */
 export const FLOWING_PRESET_OFFSETS: Record<FlowingGradientPreset, number[]> = {
@@ -143,7 +138,8 @@ export function createFlowingGradientEffect(
       ctx.clearRect(0, 0, width, height);
 
       const preset = getPreset?.() ?? "theme";
-      const offsets = FLOWING_PRESET_OFFSETS[preset] ?? FLOWING_PRESET_OFFSETS.theme;
+      const offsets =
+        FLOWING_PRESET_OFFSETS[preset] ?? FLOWING_PRESET_OFFSETS.theme;
 
       const baseHue =
         (Math.atan2(accent[1] - accent[0], accent[2] - accent[0]) * 180) /
@@ -157,7 +153,8 @@ export function createFlowingGradientEffect(
         const hueOffset = offsets[i] ?? offsets[0] ?? 0;
         const cx =
           width *
-          (0.5 + Math.sin(time * base.speed + base.phaseX) * base.orbitX * size);
+          (0.5 +
+            Math.sin(time * base.speed + base.phaseX) * base.orbitX * size);
         const cy =
           height *
           (0.5 +

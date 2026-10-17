@@ -1,8 +1,10 @@
-import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
+import { usePlaylists } from "../queries/playlists";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
-import type { Playlist } from "../types";
 
 const defaultButtonClass =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
@@ -19,19 +21,16 @@ export default function AddToPlaylist({
   onOpenChange?: (open: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const queryClient = useQueryClient();
+  const { playlists } = usePlaylists(open);
   const [status, setStatus] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const { flip, anchorRef } = useFlipMenu(open, 320);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     onOpenChange?.(open);
   }, [open, onOpenChange]);
-
-  useEffect(() => {
-    if (!open) return;
-    api.listPlaylists().then(setPlaylists).catch(() => undefined);
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -48,6 +47,9 @@ export default function AddToPlaylist({
   const add = async (playlistId: number, name: string) => {
     try {
       await api.addToPlaylist(playlistId, videoId);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.playlists.all,
+      });
       setStatus(`Added to ${name}`);
       setTimeout(() => setStatus(null), 2000);
       setOpen(false);
@@ -70,8 +72,11 @@ export default function AddToPlaylist({
   return (
     <div className="relative shrink-0" ref={anchorRef}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         className={buttonClassName}
       >
         {label}
@@ -81,10 +86,21 @@ export default function AddToPlaylist({
           {status}
         </span>
       )}
-      <FlipMenuPanel open={open} flip={flip} align="left" className="w-64">
+      <FlipMenuPanel
+        open={open}
+        flip={flip}
+        align="left"
+        className="w-64"
+        menu={{
+          kind: "popup",
+          label: "Add to playlist",
+          onClose: () => setOpen(false),
+          triggerRef,
+        }}
+      >
         <MenuScroll className="max-h-48" revision={playlists.length}>
           {playlists.length === 0 ? (
-            <p className="px-3 py-2 text-xs text-gray-500">No playlists yet.</p>
+            <p className="px-3 py-2 text-xs text-muted">No playlists yet.</p>
           ) : (
             playlists.map((p) => (
               <button

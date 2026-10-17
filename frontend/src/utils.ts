@@ -1,4 +1,6 @@
-export function formatDuration(seconds: number | null): string {
+import type { MouseEvent } from "react";
+
+export function formatDuration(seconds: number | null | undefined): string {
   if (seconds == null || seconds < 0) return "";
   return formatTimestamp(seconds);
 }
@@ -41,7 +43,9 @@ export interface Chapter {
 const CHAPTER_LINE_RE =
   /^(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?:\s*[-–—|·•:→]?\s*)(.+)/;
 
-export function parseChapters(description: string | null): Chapter[] {
+export function parseChapters(
+  description: string | null | undefined
+): Chapter[] {
   if (!description) return [];
   const chapters: Chapter[] = [];
   for (const rawLine of description.split("\n")) {
@@ -90,7 +94,9 @@ export function resolveLibraryChapters(video: {
 }
 
 /** Remove chapter timestamp lines from description when chapters are shown separately. */
-export function stripChapterLines(description: string | null): string {
+export function stripChapterLines(
+  description: string | null | undefined
+): string {
   if (!description) return "";
   if (parseChapters(description).length === 0) return description;
   const lines = description.split("\n");
@@ -100,7 +106,10 @@ export function stripChapterLines(description: string | null): string {
     if (line && CHAPTER_LINE_RE.test(line)) continue;
     kept.push(rawLine);
   }
-  return kept.join("\n").replace(/^\n+|\n+$/g, "").replace(/\n{3,}/g, "\n\n");
+  return kept
+    .join("\n")
+    .replace(/^\n+|\n+$/g, "")
+    .replace(/\n{3,}/g, "\n\n");
 }
 
 /** Percent for a live download; prefer bytes over a possibly-stale progress field. */
@@ -166,7 +175,7 @@ function formatUsdPerMillionAmount(n: number): string {
 /** Format OpenRouter list prices as "in / out" USD per 1M tokens. */
 export function formatOpenRouterPerMillion(
   promptPerMillion?: number | null,
-  completionPerMillion?: number | null,
+  completionPerMillion?: number | null
 ): string {
   if (promptPerMillion == null && completionPerMillion == null) return "";
   const input = promptPerMillion ?? 0;
@@ -257,7 +266,11 @@ export function formatPublishedAt(
   if (trimmedLabel) return trimmedLabel;
   if (!iso) return "";
   const s = iso.trim();
-  if (YEAR_ONLY_RE.test(s) || RELATIVE_AGO_RE.test(s) || YEAR_MONTH_RE.test(s)) {
+  if (
+    YEAR_ONLY_RE.test(s) ||
+    RELATIVE_AGO_RE.test(s) ||
+    YEAR_MONTH_RE.test(s)
+  ) {
     return s;
   }
   return formatDate(s);
@@ -267,7 +280,9 @@ export function formatPublishedAt(
 export function formatCompactCount(count: number): string {
   const format = (n: number, suffix: string) => {
     const rounded = Math.round(n * 10) / 10;
-    const body = Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+    const body = Number.isInteger(rounded)
+      ? String(rounded)
+      : rounded.toFixed(1);
     return `${body}${suffix}`;
   };
   if (count >= 1_000_000_000) return format(count / 1_000_000_000, "B");
@@ -286,7 +301,9 @@ export function formatViewCount(count: number | null): string {
 export function joinDotList(
   parts: Array<string | null | undefined | false>
 ): string {
-  return parts.filter((p): p is string => typeof p === "string" && p.trim() !== "").join(" · ");
+  return parts
+    .filter((p): p is string => typeof p === "string" && p.trim() !== "")
+    .join(" · ");
 }
 
 /** Compact like ratio label (e.g. "92%") when both counts are known. */
@@ -338,7 +355,7 @@ export function youtubeVideoIdFromUrl(url?: string | null): string | null {
 }
 
 export function youtubeThumbnailUrl(
-  videoId: string | null,
+  videoId: string | null | undefined,
   thumbnailUrl?: string | null
 ): string | null {
   const raw = thumbnailUrl?.trim();
@@ -353,7 +370,7 @@ export function youtubeThumbnailUrl(
 
 /** Medium CDN thumb (~320×180) for small list tiles — avoids downscaling maxres. */
 export function youtubeListThumbnailUrl(
-  videoId: string | null,
+  videoId: string | null | undefined,
   thumbnailUrl?: string | null
 ): string | null {
   const id =
@@ -379,10 +396,7 @@ export function formatRelative(iso: string | null): string {
   return `${Math.floor(diffMo / 12)}y ago`;
 }
 
-export {
-  clipboardTextToUrl,
-  readClipboardText,
-} from "./clipboard";
+export { clipboardTextToUrl, readClipboardText } from "./clipboard";
 
 /** Source URL for re-downloading; falls back to YouTube id in the file path. */
 export function effectiveSourceUrl(video: {
@@ -409,4 +423,43 @@ export function moveItem<T>(list: T[], from: number, to: number): T[] {
   const [item] = next.splice(from, 1);
   next.splice(to, 0, item);
   return next;
+}
+
+/**
+ * Ref callback that focuses an element when it mounts. Use instead of the
+ * `autoFocus` attribute for fields that appear in response to a user action
+ * (rename, add a note, ...). Keep the reference stable (this module-level
+ * function) so React only calls it on mount.
+ */
+export function focusOnMount(el: HTMLElement | null): void {
+  el?.focus();
+}
+
+/**
+ * Click handler for a modal backdrop. Closes only when the backdrop itself was
+ * clicked; clicks that bubble up from the dialog (including through React
+ * portals) are stopped here so they never reach ancestors of the modal.
+ */
+export function backdropClick(onClose: () => void) {
+  return (e: MouseEvent) => {
+    if (e.target === e.currentTarget) onClose();
+    else e.stopPropagation();
+  };
+}
+
+/**
+ * A URL that is safe to put in `<a href>`: http(s) only. Anything else
+ * (`javascript:`, `data:`, malformed input) yields `undefined`, so the link
+ * renders without a target. Use this at every sink fed by stored or fetched data.
+ */
+export function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.href
+      : undefined;
+  } catch {
+    return undefined;
+  }
 }

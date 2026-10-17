@@ -112,7 +112,7 @@ if (-not (Test-Path $nodeModules)) {
 
 Write-Host "Starting backend on http://127.0.0.1:8080 ..."
 $backend = Start-Process -FilePath $python -ArgumentList @(
-    "-m", "uvicorn", "app.main:app", "--reload", "--port", "8080"
+    "-m", "uvicorn", "app.main:app", "--reload", "--port", "8080", "--timeout-graceful-shutdown", "10"
 ) -WorkingDirectory $backendDir -PassThru -NoNewWindow
 
 Wait-ForBackend

@@ -4,6 +4,7 @@ import type { CompatState, Video } from "../types";
 import {
   checkOriginalSupport,
   chooseRendition,
+  isAppleWebkit,
   type OriginalSupport,
 } from "../utils/playbackRendition";
 import type { DownloadVideoCodec } from "./useSettings";
@@ -15,6 +16,9 @@ export type LibraryRenditionState = {
   support: OriginalSupport;
   /** Sidecar job progress while the device waits on it. */
   compat: CompatState | null;
+  /** True while the server rewrites the original so Safari can play it. */
+  safariPreparing: boolean;
+  safariPrep: CompatState | null;
   /** True when the original failed to play (not just predicted to). */
   originalFailed: boolean;
   requestCompat: () => void;
@@ -25,11 +29,31 @@ export type LibraryRenditionState = {
 };
 
 const POLL_MS = 2000;
+/** How many times a vanished Safari-prep job is re-requested before giving up. */
+export const SAFARI_PREP_MAX_RETRIES = 3;
+
+export type SafariPrepStep = "ready" | "wait" | "retry" | "fail";
+
+/**
+ * What to do with a poll result while preparing a file for Safari. `none` means the
+ * job is gone (cancelled, or a different job held the slot) but the file still
+ * needs prep, so ask again a few times, then fall through and let the player try.
+ */
+export function nextSafariPrepStep(
+  status: string,
+  retriesUsed: number
+): SafariPrepStep {
+  if (status === "ready") return "ready";
+  if (status === "queued" || status === "running") return "wait";
+  if (status === "none" && retriesUsed < SAFARI_PREP_MAX_RETRIES)
+    return "retry";
+  return "fail";
+}
 
 export function useLibraryRendition(
   video: Video | null,
   mode: DownloadVideoCodec,
-  onCompatReady: (video: Video) => void,
+  onCompatReady: (video: Video) => void
 ): LibraryRenditionState {
   const [support, setSupport] = useState<OriginalSupport>("unknown");
   const [checking, setChecking] = useState(true);
@@ -65,11 +89,83 @@ export function useLibraryRendition(
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-check per file
   }, [videoId, video?.codec_string, video?.file_path]);
 
-  const effectiveSupport: OriginalSupport = originalFailed ? "unsupported" : support;
+  const effectiveSupport: OriginalSupport = originalFailed
+    ? "unsupported"
+    : support;
   const choice = video
     ? chooseRendition(effectiveSupport, video, { forceOriginal: forced })
     : { rendition: null };
   const blocked = !checking && video != null && choice.rendition === null;
+
+  // WebKit cannot play some stored originals (Opus audio, late moov). The server
+  // rewrites them on request only (never as a side effect of GET /stream), so ask
+  // first and wait; if the request fails, fall through and try to play anyway.
+  const [safariPrep, setSafariPrep] = useState<CompatState | null>(null);
+  const [safariFailed, setSafariFailed] = useState(false);
+  const safariRetries = useRef(0);
+  const wantsSafariPrep =
+    !checking &&
+    videoId != null &&
+    !offline &&
+    choice.rendition === "original" &&
+    isAppleWebkit();
+  const safariPreparing =
+    wantsSafariPrep && !safariFailed && safariPrep?.status !== "ready";
+
+  useEffect(() => {
+    setSafariPrep(null);
+    setSafariFailed(false);
+    safariRetries.current = 0;
+  }, [videoId, video?.file_path]);
+
+  useEffect(() => {
+    if (!wantsSafariPrep || videoId == null || safariPrep != null) return;
+    let cancelled = false;
+    api
+      .requestSafariPrep(videoId)
+      .then((state) => {
+        if (cancelled) return;
+        setSafariPrep(state);
+        if (state.status === "none" || state.status === "error") {
+          setSafariFailed(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setSafariFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsSafariPrep, videoId, safariPrep]);
+
+  const safariPending =
+    safariPrep?.status === "queued" || safariPrep?.status === "running";
+  useEffect(() => {
+    if (!safariPending || videoId == null) return;
+    const timer = window.setInterval(() => {
+      api
+        .getSafariPrep(videoId)
+        .then((state) => {
+          const step = nextSafariPrepStep(state.status, safariRetries.current);
+          if (step === "retry") {
+            // Re-issue the request: clearing the state lets the request effect run.
+            safariRetries.current += 1;
+            setSafariPrep(null);
+            return;
+          }
+          setSafariPrep(state);
+          if (step === "fail") setSafariFailed(true);
+          if (step === "ready") {
+            api
+              .getVideo(videoId)
+              .then((v) => readyRef.current(v))
+              .catch(() => undefined);
+          }
+        })
+        .catch(() => setSafariFailed(true));
+    }, POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [safariPending, videoId]);
 
   const requestCompat = useCallback(() => {
     if (videoId == null || offline) return;
@@ -82,8 +178,11 @@ export function useLibraryRendition(
           status: "error",
           stage: null,
           progress: 0,
-          error: err instanceof Error ? err.message : "Could not start the conversion",
-        }),
+          error:
+            err instanceof Error
+              ? err.message
+              : "Could not start the conversion",
+        })
       );
   }, [videoId, offline]);
 
@@ -108,7 +207,10 @@ export function useLibraryRendition(
         .then((state) => {
           setCompat(state);
           if (state.status === "ready") {
-            api.getVideo(videoId).then((v) => readyRef.current(v)).catch(() => undefined);
+            api
+              .getVideo(videoId)
+              .then((v) => readyRef.current(v))
+              .catch(() => undefined);
           }
         })
         .catch(() => undefined);
@@ -127,7 +229,9 @@ export function useLibraryRendition(
   }, [video, offline, choice.rendition]);
 
   return {
-    rendition: checking ? null : choice.rendition,
+    rendition: checking || safariPreparing ? null : choice.rendition,
+    safariPreparing,
+    safariPrep,
     checking,
     support: effectiveSupport,
     compat,

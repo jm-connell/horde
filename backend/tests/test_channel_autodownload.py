@@ -17,7 +17,6 @@ from app.services.ytdlp_extract import (
     is_youtube_short_url,
 )
 
-
 LTT = "https://www.youtube.com/@LinusTechTips"
 
 
@@ -81,8 +80,13 @@ def _policy(session, **fields) -> ChannelAutodownload:
 
 def test_should_skip_live_rules():
     assert ad.should_skip_live("is_live", 0, include_completed_streams=False) == "live"
-    assert ad.should_skip_live("is_upcoming", None, include_completed_streams=True) == "live"
-    assert ad.should_skip_live("post_live", None, include_completed_streams=True) == "live"
+    assert (
+        ad.should_skip_live("is_upcoming", None, include_completed_streams=True)
+        == "live"
+    )
+    assert (
+        ad.should_skip_live("post_live", None, include_completed_streams=True) == "live"
+    )
     assert (
         ad.should_skip_live("was_live", 3600, include_completed_streams=False)
         == "completed_stream"
@@ -90,7 +94,9 @@ def test_should_skip_live_rules():
     assert ad.should_skip_live("was_live", 3600, include_completed_streams=True) is None
     assert ad.should_skip_live("not_live", 600, include_completed_streams=False) is None
     assert ad.should_skip_live(None, None, include_completed_streams=False) == "live"
-    assert ad.should_skip_live("not_live", None, include_completed_streams=False) is None
+    assert (
+        ad.should_skip_live("not_live", None, include_completed_streams=False) is None
+    )
 
 
 def test_backfill_window_modes():
@@ -268,7 +274,7 @@ def test_enqueue_catalog_row_creates_job(session, monkeypatch):
     policy = _policy(session, previous_mode="none")
     enqueued: list[int] = []
     monkeypatch.setattr(
-        "app.services.downloader.enqueue_download",
+        "app.services.downloads.jobs.enqueue_download",
         lambda job_id: enqueued.append(job_id),
     )
     job_id = ad.enqueue_catalog_row(session, row, policy)
@@ -347,7 +353,9 @@ def test_create_download_rejects_shorts_url(client):
     assert "Shorts" in resp.json()["detail"]
 
 
-def test_create_download_drops_short_watch_url_after_metadata(client, monkeypatch, init_db):
+def test_create_download_drops_short_watch_url_after_metadata(
+    client, monkeypatch, init_db
+):
     from sqlmodel import Session
 
     from app.models import DownloadJob

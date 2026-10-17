@@ -32,9 +32,7 @@ def test_search_skips_short_query(monkeypatch):
         called["n"] += 1
         raise AssertionError("extract should not run")
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", boom
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", boom)
     assert search_youtube_videos("t") == {"entries": [], "has_more": False}
     assert search_youtube_videos("  ") == {"entries": [], "has_more": False}
     assert called["n"] == 0
@@ -65,9 +63,7 @@ def test_search_maps_per_entry_channel(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     hits = search_youtube_videos("t480 mod")
     assert hits["has_more"] is False
     assert len(hits["entries"]) == 1
@@ -112,9 +108,7 @@ def test_search_skips_shorts_and_playlists(monkeypatch):
             ],
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     page = search_youtube_videos("t480")
     assert [h["id"] for h in page["entries"]] == ["t480mod1111"]
     assert page["has_more"] is False
@@ -124,9 +118,7 @@ def test_extract_failure_returns_empty(monkeypatch):
     def boom(*_a, **_k):
         raise RuntimeError("bot check")
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", boom
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", boom)
     assert search_youtube_videos("t480") == {"entries": [], "has_more": False}
 
 
@@ -171,7 +163,9 @@ def test_youtube_search_api_respects_setting(client, monkeypatch):
     assert len(body["entries"]) == 1
     assert body["entries"][0]["id"] == "t480mod1111"
     assert body["entries"][0]["channel"] == "Notebook Repair"
-    assert body["entries"][0]["channel_url"] == "https://www.youtube.com/@NotebookRepair"
+    assert (
+        body["entries"][0]["channel_url"] == "https://www.youtube.com/@NotebookRepair"
+    )
     assert body["entries"][0]["thumbnail_url"]
     assert body["entries"][0]["view_count"] == 120_000
     assert body["entries"][0]["match_reason"]["source"] == "youtube"
@@ -196,9 +190,7 @@ def test_search_pages_offset(monkeypatch):
             ]
         }
 
-    monkeypatch.setattr(
-        "app.services.ytdlp_extract.extract_info_gated", fake_extract
-    )
+    monkeypatch.setattr("app.services.ytdlp_extract.extract_info_gated", fake_extract)
     first = search_youtube_videos("t480", limit=20, offset=0)
     assert first["has_more"] is True
     assert [e["title"] for e in first["entries"]] == [f"Result {i}" for i in range(20)]

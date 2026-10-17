@@ -4,6 +4,7 @@ import { isActiveJob, useDownloads } from "../context/DownloadContext";
 import { PRESET_ORDER, resolveQualityPreset } from "../presets";
 import type { ChannelFeedEntry, DownloadJob, DownloadPreview } from "../types";
 
+import { getItem, setItem } from "../storage";
 const CONFIRM_SECONDS = 5;
 const DEFAULT_PRESET_KEY = "horde.channelFeed.defaultPreset";
 
@@ -61,12 +62,7 @@ export function channelFeedItemDownloading(
 }
 
 function loadDefaultPreset(): string {
-  try {
-    const raw = localStorage.getItem(DEFAULT_PRESET_KEY);
-    return raw?.trim() || "best";
-  } catch {
-    return "best";
-  }
+  return getItem(DEFAULT_PRESET_KEY)?.trim() || "best";
 }
 
 export function useChannelDownloadQueue(channelName: string) {
@@ -89,15 +85,14 @@ export function useChannelDownloadQueue(channelName: string) {
 
   const setDefaultPreset = useCallback((preset: string) => {
     setDefaultPresetState(preset);
-    try {
-      localStorage.setItem(DEFAULT_PRESET_KEY, preset);
-    } catch {
-      /* ignore */
-    }
+    setItem(DEFAULT_PRESET_KEY, preset);
   }, []);
 
   useEffect(() => {
-    api.listPresets().then(setAllPresets).catch(() => undefined);
+    api
+      .listPresets()
+      .then(setAllPresets)
+      .catch(() => undefined);
   }, []);
 
   useEffect(() => {
@@ -182,9 +177,7 @@ export function useChannelDownloadQueue(channelName: string) {
 
       submittingIdsRef.current.add(tempId);
       setPending((prev) =>
-        prev.map((p) =>
-          p.tempId === tempId ? { ...p, submitting: true } : p
-        )
+        prev.map((p) => (p.tempId === tempId ? { ...p, submitting: true } : p))
       );
       clearTimer(tempId);
 
@@ -342,9 +335,12 @@ export function useChannelDownloadQueue(channelName: string) {
   );
 
   useEffect(() => {
+    // The Map instance is created once and only mutated, so capturing it here
+    // is equivalent to reading the ref at cleanup time.
+    const intervals = intervalsRef.current;
     return () => {
-      intervalsRef.current.forEach((handle) => clearInterval(handle));
-      intervalsRef.current.clear();
+      intervals.forEach((handle) => clearInterval(handle));
+      intervals.clear();
       // Leaving the channel feed (route change, library home, etc.) should
       // keep queued downloads — confirm anything still counting down.
       confirmPendingOnLeave(pendingRef.current, (tempId) => {

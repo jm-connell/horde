@@ -1,5 +1,7 @@
 """HTTP regression: download queue without calling yt-dlp."""
 
+from app.services.downloads.queue import DownloadQueue
+
 
 def test_presets_and_queue_status(client):
     presets = client.get("/api/downloads/presets")
@@ -18,7 +20,7 @@ def test_presets_and_queue_status(client):
 
 
 def test_enqueue_cancel_and_pause(client, monkeypatch):
-    from app.services import downloader, ytdlp_extract
+    from app.services import ytdlp_extract
 
     calls = {"n": 0}
 
@@ -27,7 +29,7 @@ def test_enqueue_cancel_and_pause(client, monkeypatch):
         raise AssertionError("create must not extract")
 
     monkeypatch.setattr(ytdlp_extract, "extract_preview", fake_preview)
-    monkeypatch.setattr(downloader, "extract_preview", fake_preview)
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", fake_preview)
 
     created = client.post(
         "/api/downloads",
@@ -79,9 +81,9 @@ def test_enqueue_existing_youtube_is_already_in_library(client, add_video):
         json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
     )
     assert created.status_code == 409
-    detail = created.json()["detail"]
-    assert detail["code"] == "already_in_library"
-    assert detail["message"] == "Already in library"
+    body = created.json()
+    assert body["code"] == "already_in_library"
+    assert body["detail"] == "Already in library"
     listed = client.get("/api/downloads").json()
     assert existing.id not in [row.get("replace_video_id") for row in listed]
     assert [row for row in listed if row.get("status") == "queued"] == []
@@ -92,9 +94,7 @@ def test_create_download_requires_url(client):
     assert resp.status_code == 400
 
 
-def test_bulk_skips_existing_and_does_not_create_playlist(
-    client, add_video
-):
+def test_bulk_skips_existing_and_does_not_create_playlist(client, add_video):
     existing = add_video(title="Have it", yt_id="dQw4w9WgXcQ")
     resp = client.post(
         "/api/downloads/bulk",
@@ -114,9 +114,7 @@ def test_bulk_skips_existing_and_does_not_create_playlist(
     assert body["jobs"][0]["url"] == "https://www.youtube.com/watch?v=newvideoid1"
     reasons = {skip["reason"] for skip in body["skips"]}
     assert reasons == {"already_in_library", "playlist"}
-    assert existing.id not in [
-        job.get("replace_video_id") for job in body["jobs"]
-    ]
+    assert existing.id not in [job.get("replace_video_id") for job in body["jobs"]]
     playlists = client.get("/api/playlists").json()
     assert playlists == []
 
@@ -171,10 +169,10 @@ def _failed_job(init_db, **fields):
 
 
 def test_retry_failed_job_requeues_once(client, init_db):
-    from app.services import downloader
+    from app.services.downloads import progress
 
     job_id = _failed_job(init_db)
-    downloader.progress_store[job_id] = {
+    progress.progress_store[job_id] = {
         "status": "error",
         "error": "boom",
         "error_kind": "unknown",
@@ -193,7 +191,7 @@ def test_retry_failed_job_requeues_once(client, init_db):
     assert body["error_kind"] is None
     assert body["progress"] == 0.0
     assert body["title_override"] == "Retried Title"
-    assert downloader.progress_store[job_id]["status"] == "queued"
+    assert progress.progress_store[job_id]["status"] == "queued"
 
     second = client.post(f"/api/downloads/{job_id}/retry", json={})
     assert second.status_code == 200
@@ -221,7 +219,9 @@ def test_retry_cancelled_job(client, init_db):
 def test_retry_completed_and_missing(client, init_db):
     from app.models import JobStatus
 
-    job_id = _failed_job(init_db, status=JobStatus.completed, error=None, error_kind=None)
+    job_id = _failed_job(
+        init_db, status=JobStatus.completed, error=None, error_kind=None
+    )
     assert client.post(f"/api/downloads/{job_id}/retry", json={}).status_code == 409
     assert client.post("/api/downloads/99999/retry", json={}).status_code == 404
 
@@ -267,7 +267,7 @@ def test_create_download_reuses_active_job(client):
     second = client.post("/api/downloads", json=payload)
     assert first.status_code == 200
     assert second.status_code == 409
-    assert second.json()["detail"]["code"] == "already_queued"
+    assert second.json()["code"] == "already_queued"
     listed = client.get("/api/downloads").json()
     assert len([row for row in listed if row["status"] == "queued"]) == 1
 
@@ -302,11 +302,11 @@ def test_create_download_keeps_best_until_metadata_fills(client):
 
 
 def test_change_quality_on_queued_job(client, monkeypatch):
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "dQw4w9WgXcQ",
@@ -345,7 +345,9 @@ def test_change_quality_on_queued_job(client, monkeypatch):
 def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatch):
     from app.models import JobStatus
 
-    job_id = _failed_job(init_db, status=JobStatus.completed, error=None, error_kind=None)
+    job_id = _failed_job(
+        init_db, status=JobStatus.completed, error=None, error_kind=None
+    )
     assert (
         client.post(
             f"/api/downloads/{job_id}/quality", json={"quality_preset": "720p"}
@@ -359,11 +361,11 @@ def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatc
         == 404
     )
 
-    from app.services import downloader
+    from app.services import ytdlp_extract
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {"id": "dQw4w9WgXcQ", "is_playlist": False},
     )
@@ -375,9 +377,7 @@ def test_change_quality_rejects_finished_and_unknown(client, init_db, monkeypatc
         },
     )
     job_id = created.json()["id"]
-    bad = client.post(
-        f"/api/downloads/{job_id}/quality", json={"quality_preset": "8k"}
-    )
+    bad = client.post(f"/api/downloads/{job_id}/quality", json={"quality_preset": "8k"})
     assert bad.status_code == 400
 
 
@@ -385,11 +385,12 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     from sqlmodel import Session
 
     from app.models import DownloadJob, JobStatus
-    from app.services import downloader
+    from app.services import ytdlp_extract
+    from app.services.downloads import jobs, progress
 
-    monkeypatch.setattr(downloader.DownloadQueue, "_dispatch", lambda self: None)
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
     monkeypatch.setattr(
-        downloader,
+        ytdlp_extract,
         "extract_preview",
         lambda url: {
             "id": "dQw4w9WgXcQ",
@@ -413,9 +414,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
         session.add(job)
         session.commit()
 
-    monkeypatch.setattr(
-        downloader.DownloadQueue, "is_running", lambda self, jid: jid == job_id
-    )
+    monkeypatch.setattr(DownloadQueue, "is_running", lambda self, jid: jid == job_id)
 
     def fake_wait(jid, timeout=30.0):
         with Session(init_db["engine"]) as session:
@@ -426,7 +425,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
             session.commit()
         return True
 
-    monkeypatch.setattr(downloader, "wait_until_job_not_running", fake_wait)
+    monkeypatch.setattr(jobs, "wait_until_job_not_running", fake_wait)
 
     changed = client.post(
         f"/api/downloads/{job_id}/quality",
@@ -437,7 +436,7 @@ def test_change_quality_restarts_downloading_job(client, init_db, monkeypatch):
     assert body["quality_preset"] == "720p"
     assert body["status"] == "queued"
     assert body["progress"] == 0.0
-    assert downloader.progress_store[job_id]["status"] == "queued"
+    assert progress.progress_store[job_id]["status"] == "queued"
 
 
 def test_create_download_after_library_delete_is_allowed(client, add_video):
@@ -513,7 +512,30 @@ def test_dismiss_finished_includes_cancelled(client, init_db):
 
 
 def test_queue_events_route_registered(client):
-    paths = [getattr(route, "path", "") for route in client.app.routes]
+    # Newer FastAPI keeps included routers lazy, so read the OpenAPI schema
+    # instead of walking app.routes.
+    paths = client.app.openapi()["paths"]
     assert "/api/downloads/events" in paths
     assert "/api/downloads/{job_id}/events" in paths
 
+
+def test_list_jobs_survives_a_legacy_destination_value(client, init_db):
+    from sqlmodel import Session
+
+    from app.models import DownloadJob, JobStatus
+
+    with Session(init_db["engine"]) as session:
+        job = DownloadJob(
+            url="https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            quality_preset="720p",
+            status=JobStatus.queued,
+            destination="somewhere-old",
+        )
+        session.add(job)
+        session.commit()
+        job_id = job.id
+
+    listed = client.get("/api/downloads")
+    assert listed.status_code == 200
+    row = next(r for r in listed.json() if r["id"] == job_id)
+    assert row["destination"] == "library"

@@ -5,6 +5,8 @@ repo_url: https://github.com/jm-connell/horde
 repo_name: jm-connell/horde
 edit_uri: edit/main/docs/
 docs_dir: docs
+exclude_docs: |
+  requirements.txt
 copyright: Source-available under the PolyForm Noncommercial License 1.0.0
 
 theme:
@@ -80,13 +82,18 @@ nav:
       - Environment variables: ops/environment.md
       - Storage layout: ops/storage-layout.md
       - Ports & networking: ops/ports-networking.md
+      - Accounts & sign-in: ops/authentication.md
+      - Security: ops/security.md
       - Remote access: ops/remote-access.md
       - YouTube access: ops/youtube-access.md
       - AI setup: ops/ai-setup.md
       - Backup & restore: ops/backup-restore.md
+      - Logging: ops/logging.md
+      - Monitoring: ops/monitoring.md
       - Maintenance: ops/maintenance.md
       - Troubleshooting: ops/troubleshooting.md
   - Architecture:
+      - Architecture map: design/architecture.md
       - Overview: architecture/overview.md
       - Backend: architecture/backend.md
       - Frontend: architecture/frontend.md
@@ -95,9 +102,22 @@ nav:
       - Download pipeline: architecture/downloads-pipeline.md
       - AI pipeline: architecture/ai-pipeline.md
       - API overview: architecture/api-overview.md
+  - Decision records:
+      - Index: adr/index.md
+      - 0001 SQLite, WAL and Alembic: adr/0001-sqlite-wal-alembic.md
+      - 0002 Single process, worker threads: adr/0002-single-process-worker-threads.md
+      - 0003 Auth model: adr/0003-auth-model.md
+      - 0004 CSRF header policy: adr/0004-csrf-header-policy.md
+      - 0005 Error envelope and cursors: adr/0005-error-envelope-and-cursors.md
+      - 0006 Downloader package split: adr/0006-downloader-package-split.md
+      - 0007 FTS5 triggers and vector index: adr/0007-fts5-triggers-and-vector-index.md
+      - 0008 Releases and rollback: adr/0008-releases-and-rollback.md
+  - Development:
+      - Dependencies & reproducible builds: development/dependencies.md
+      - Release process: development/release-process.md
   - Design decisions:
       - Why Horde: design/why-horde.md
-      - No authentication: design/no-auth.md
+      - Security model: design/no-auth.md
       - Channel/year layout: design/channel-year-layout.md
       - Review queue: design/review-queue.md
       - SQLite & migrations: design/sqlite-and-migrations.md
@@ -107,6 +127,7 @@ nav:
       - Player architecture: design/player-architecture.md
       - Settings split: design/settings-split.md
       - Single-flight AI: design/single-flight-ai.md
+      - Application context: design/app-context.md
       - Vibecoded: design/vibecoded.md
   - Reference:
       - Keyboard shortcuts: reference/keyboard-shortcuts.md
