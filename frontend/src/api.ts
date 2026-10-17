@@ -28,7 +28,9 @@ import type {
   PlaylistPreviewData,
   RecommendationsResponse,
   StorageStats,
+  StreamAi,
   StreamPreviewMeta,
+  StreamRelatedPage,
   SystemActivity,
   SystemStats,
   CompatState,
@@ -190,6 +192,60 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 /** Options every read accepts so React Query can cancel it. */
 export interface ReadOptions {
   signal?: AbortSignal;
+}
+
+/** Options for a server-sent-events chat turn. */
+export interface ChatStreamOptions {
+  signal?: AbortSignal;
+  onEvent: (event: Record<string, unknown>) => void;
+}
+
+/** POST a JSON body and parse the `data:` lines of the SSE reply. */
+async function postEventStream(
+  url: string,
+  body: unknown,
+  opts: ChatStreamOptions
+): Promise<void> {
+  const resp = await fetch(
+    url,
+    withCsrf({
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      },
+      body: JSON.stringify(body),
+      signal: opts.signal,
+    })
+  );
+  if (!resp.ok) throw await apiErrorFrom(resp);
+  if (!resp.body) {
+    throw new Error("No response body");
+  }
+  const reader = resp.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let sep: number;
+    while ((sep = buffer.indexOf("\n\n")) >= 0) {
+      const raw = buffer.slice(0, sep);
+      buffer = buffer.slice(sep + 2);
+      for (const line of raw.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed.startsWith("data:")) continue;
+        const payload = trimmed.slice(5).trim();
+        if (!payload) continue;
+        try {
+          opts.onEvent(JSON.parse(payload) as Record<string, unknown>);
+        } catch {
+          // ignore malformed chunk
+        }
+      }
+    }
+  }
 }
 
 /** Event the offline manager listens for to keep resume positions current. */
@@ -1014,54 +1070,78 @@ export const api = {
    * Stream a chat turn via SSE. Calls ``onEvent`` for each parsed payload.
    * Resolves when the stream ends (done or error event also delivered).
    */
-  async streamVideoAiChat(
+  streamVideoAiChat(
     id: number,
     message: string,
-    opts: {
-      signal?: AbortSignal;
-      onEvent: (event: Record<string, unknown>) => void;
-    }
+    opts: ChatStreamOptions
   ): Promise<void> {
-    const resp = await fetch(
-      `/api/videos/${id}/ai/chat`,
-      withCsrf({
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({ message }),
-        signal: opts.signal,
-      })
+    return postEventStream(`/api/videos/${id}/ai/chat`, { message }, opts);
+  },
+
+  // --- AI for a streamed (not downloaded) video; all need `use_ai` ---
+
+  getStreamAi(url: string, opts?: ReadOptions): Promise<StreamAi> {
+    return request<StreamAi>(
+      `/api/preview/ai?url=${encodeURIComponent(url)}`,
+      opts
     );
-    if (!resp.ok) throw await apiErrorFrom(resp);
-    if (!resp.body) {
-      throw new Error("No response body");
-    }
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let sep: number;
-      while ((sep = buffer.indexOf("\n\n")) >= 0) {
-        const raw = buffer.slice(0, sep);
-        buffer = buffer.slice(sep + 2);
-        for (const line of raw.split("\n")) {
-          const trimmed = line.trim();
-          if (!trimmed.startsWith("data:")) continue;
-          const payload = trimmed.slice(5).trim();
-          if (!payload) continue;
-          try {
-            opts.onEvent(JSON.parse(payload) as Record<string, unknown>);
-          } catch {
-            // ignore malformed chunk
-          }
-        }
-      }
-    }
+  },
+
+  summarizeStream(
+    url: string,
+    opts?: { force?: boolean; signal?: AbortSignal }
+  ): Promise<StreamAi> {
+    return request<StreamAi>("/api/preview/ai/summarize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, force: !!opts?.force }),
+      signal: opts?.signal,
+    });
+  },
+
+  generateStreamChapters(
+    url: string,
+    opts?: { force?: boolean; signal?: AbortSignal }
+  ): Promise<StreamAi> {
+    return request<StreamAi>("/api/preview/ai/chapters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, force: !!opts?.force }),
+      signal: opts?.signal,
+    });
+  },
+
+  getStreamAiChat(
+    url: string
+  ): Promise<ApiResponse<"/api/preview/ai/chat", "get">> {
+    return request(`/api/preview/ai/chat?url=${encodeURIComponent(url)}`);
+  },
+
+  clearStreamAiChat(
+    url: string
+  ): Promise<ApiResponse<"/api/preview/ai/chat", "delete">> {
+    return request(`/api/preview/ai/chat?url=${encodeURIComponent(url)}`, {
+      method: "DELETE",
+    });
+  },
+
+  streamStreamAiChat(
+    url: string,
+    message: string,
+    opts: ChatStreamOptions
+  ): Promise<void> {
+    return postEventStream("/api/preview/ai/chat", { url, message }, opts);
+  },
+
+  getStreamRelated(
+    url: string,
+    limit = 24,
+    opts?: ReadOptions
+  ): Promise<StreamRelatedPage> {
+    return request<StreamRelatedPage>(
+      `/api/preview/related?url=${encodeURIComponent(url)}&limit=${limit}`,
+      opts
+    );
   },
 
   listDuplicateGroups(): Promise<DuplicateGroup[]> {

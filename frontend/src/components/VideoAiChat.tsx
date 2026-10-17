@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
 import type { VideoAiChatMessage } from "../types";
 import { formatUsdCost } from "../utils";
+import type { AiChatApi } from "./aiTarget";
 import AiMarkdown from "./AiMarkdown";
 import TypingDots from "./TypingDots";
 
 interface Props {
-  videoId: number;
+  /** Identity of the video; the thread reloads when it changes. */
+  chatKey: string;
+  chat: AiChatApi;
   /** Cached AI summary shown as a seed bubble before any chat turns. */
   summary?: string | null;
   hasSubtitles: boolean;
@@ -36,7 +38,8 @@ function toDisplay(m: VideoAiChatMessage): DisplayMessage {
 }
 
 export default function VideoAiChat({
-  videoId,
+  chatKey,
+  chat,
   summary,
   hasSubtitles,
   active,
@@ -51,13 +54,19 @@ export default function VideoAiChat({
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  // The latest operations, read by the effects below without re-running them.
+  const chatRef = useRef(chat);
+  useEffect(() => {
+    chatRef.current = chat;
+  });
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    api
-      .getVideoAiChat(videoId)
+    setMessages([]);
+    chatRef.current
+      .list()
       .then((res) => {
         if (cancelled) return;
         setMessages((res.messages || []).map(toDisplay));
@@ -73,7 +82,7 @@ export default function VideoAiChat({
       cancelled = true;
       abortRef.current?.abort();
     };
-  }, [videoId]);
+  }, [chatKey]);
 
   useEffect(() => {
     if (!active) return;
@@ -128,7 +137,7 @@ export default function VideoAiChat({
     abortRef.current = ac;
 
     try {
-      await api.streamVideoAiChat(videoId, text, {
+      await chatRef.current.stream(text, {
         signal: ac.signal,
         onEvent: (event) => {
           const type = String(event.type || "");
@@ -224,7 +233,7 @@ export default function VideoAiChat({
   async function clearThread() {
     if (sending) return;
     try {
-      await api.clearVideoAiChat(videoId);
+      await chatRef.current.clear();
       setMessages([]);
       setError(null);
       showToast("Chat cleared");

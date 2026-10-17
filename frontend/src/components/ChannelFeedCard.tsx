@@ -18,6 +18,7 @@ import {
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
 import { previewResumeFor } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
+import { watchHref } from "../utils/watchHref";
 import CardPreviewVideo from "./CardPreviewVideo";
 import CardTitle from "./CardTitle";
 import MatchReasonBadge from "./MatchReasonBadge";
@@ -65,22 +66,6 @@ function likeRatioTitle(
 ): string {
   if (likes == null || dislikes == null) return "";
   return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
-}
-
-function watchHref(
-  entry: ChannelFeedEntry,
-  channelName: string
-): string | null {
-  if (entry.in_library && entry.video_id != null) {
-    return `/watch/${entry.video_id}`;
-  }
-  if (entry.url) {
-    const qs = new URLSearchParams();
-    qs.set("url", entry.url);
-    if (channelName) qs.set("channel", channelName);
-    return `/watch?${qs.toString()}`;
-  }
-  return null;
 }
 
 function FeedMetaRow({

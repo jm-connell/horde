@@ -114,6 +114,8 @@ export interface PlaybackActions {
   registerDock: (el: HTMLElement | null) => void;
   /** Patch the playing library video when metadata refreshes (same id). */
   updateCurrentVideo: (video: Video) => void;
+  /** Replace the chapters of the playing stream (e.g. AI chapters), if it is `url`. */
+  setStreamChapters: (url: string, chapters: Chapter[]) => void;
 }
 
 const SessionCtx = createContext<PlaybackSession | null>(null);
@@ -726,6 +728,18 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     );
   }, []);
 
+  // Kept apart from `stream` so a later playStream() for the same stream
+  // (e.g. a changed channel param) cannot overwrite it.
+  const [streamChaptersOverride, setStreamChaptersOverride] = useState<{
+    url: string;
+    chapters: Chapter[];
+  } | null>(null);
+  const setStreamChapters = useCallback((url: string, chapters: Chapter[]) => {
+    setStreamChaptersOverride((prev) =>
+      prev?.url === url && prev.chapters === chapters ? prev : { url, chapters }
+    );
+  }, []);
+
   const refreshCurrentVideo = useCallback(() => {
     if (!current) return;
     api
@@ -776,6 +790,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       suspendPlaybackMedia,
       registerDock,
       updateCurrentVideo,
+      setStreamChapters,
     }),
     [
       setMode,
@@ -792,6 +807,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       suspendPlaybackMedia,
       registerDock,
       updateCurrentVideo,
+      setStreamChapters,
     ]
   );
 
@@ -1003,7 +1019,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onProgress={(sec) => {
           streamPosRef.current = sec;
         }}
-        chapters={stream.chapters}
+        chapters={
+          streamChaptersOverride?.url === stream.url
+            ? streamChaptersOverride.chapters
+            : stream.chapters
+        }
         miniWidth={miniWidth}
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}

@@ -10,6 +10,8 @@ export const queryKeys = {
   preview: {
     meta: (url: string) => ["preview", "meta", url] as const,
     download: (url: string) => ["preview", "download", url] as const,
+    ai: (url: string) => ["preview", "ai", url] as const,
+    related: (url: string) => ["preview", "related", url] as const,
   },
   ai: {
     status: ["ai", "status"] as const,
