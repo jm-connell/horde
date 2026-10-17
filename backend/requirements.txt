@@ -10,6 +10,6 @@ watchdog==6.0.0
 httpx==0.28.1
 python-multipart==0.0.32
 psutil>=5.9.8,<8
-Pillow>=10.0.0,<13
+Pillow>=12.3.0,<13
 alembic>=1.16,<2
 numpy>=2.5.4,<3
