@@ -49,7 +49,9 @@ export default function WatchInfoPanels({
       className={
         !sidebarShown && queueVisible
           ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
-          : "mt-4 space-y-4"
+          : // Without the sidebar the column can be ~116rem wide; keep the
+            // description and AI panel at a readable width.
+            `mt-4 space-y-4 ${sidebarShown ? "" : "max-w-5xl"}`
       }
     >
       <div className="min-w-0 space-y-4">
