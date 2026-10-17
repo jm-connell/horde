@@ -1,6 +1,6 @@
 services:
   bgutil-pot:
-    image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
+    image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
     container_name: horde-bgutil-pot
     init: true
     restart: unless-stopped

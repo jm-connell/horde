@@ -8,7 +8,7 @@ Compose includes:
 
 ```yaml
 bgutil-pot:
-  image: brainicism/bgutil-ytdlp-pot-provider:1.3.2
+  image: brainicism/bgutil-ytdlp-pot-provider:2.0.2
 ```
 
 Horde is configured with:
@@ -16,6 +16,8 @@ Horde is configured with:
 ```text
 YTDLP_POT_BASE_URL=http://bgutil-pot:4416
 ```
+
+The sidecar is reachable only on the Compose network; do not publish port 4416 on the host. Since 2.0 the provider binds to localhost unless started with `--host 0.0.0.0` (the Docker image passes this by default), so a provider run natively on another machine needs that flag.
 
 The [bgutil yt-dlp POT provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider) supplies Proof-of-Origin tokens over HTTP. Horde wires this into yt-dlp extractor args when `YTDLP_POT_BASE_URL` is set. YouTube player clients follow yt-dlp’s current defaults (minus `android_vr`, whose media URLs now 403 after about a minute of playback).
 
