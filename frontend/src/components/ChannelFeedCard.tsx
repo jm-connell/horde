@@ -105,7 +105,9 @@ function FeedMetaRow({
         className="min-w-0 truncate text-xs leading-4 text-gray-400"
       />
       <span
-        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-muted"
+        className={`block min-h-4 min-w-0 truncate text-xs leading-4 text-muted ${
+          stats ? "" : "max-sm:hidden"
+        }`}
         title={
           likeTip
             ? `${stats}${stats ? " · " : ""}${likeTip}`
@@ -435,7 +437,7 @@ export default function ChannelFeedCard({
         >
           <CardTitle
             text={titleText}
-            className="line-clamp-2 min-h-10 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            className="line-clamp-2 overflow-hidden sm:min-h-10 break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             style={{
               display: "-webkit-box",
               WebkitBoxOrient: "vertical",
