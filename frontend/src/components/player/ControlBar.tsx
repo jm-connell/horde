@@ -157,11 +157,11 @@ export default function ControlBar({
           {ccNotice}
         </div>
       )}
-      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-gray-100">
+      <div className="mt-2 flex flex-nowrap items-center gap-x-3 text-gray-100 max-sm:gap-x-2">
         <button
           type="button"
           onClick={togglePlay}
-          className="ui-player-chrome text-xl leading-none hover:text-accent"
+          className="ui-player-chrome shrink-0 text-xl leading-none hover:text-accent"
           aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? "❚❚" : "►"}
@@ -182,17 +182,19 @@ export default function ControlBar({
         {live ? (
           <LiveReadout live={live} />
         ) : (
-          <span className="text-xs tabular-nums text-gray-300">
-            {formatDuration(current)} / {formatDuration(duration)}
+          <span className="flex min-w-0 items-center whitespace-nowrap text-xs tabular-nums text-gray-300">
+            <span className="shrink-0">
+              {formatDuration(current)} / {formatDuration(duration)}
+            </span>
             {activeChapter && (
-              <span className="ml-2 max-w-[140px] truncate text-gray-400">
+              <span className="ml-2 min-w-0 max-w-[140px] truncate text-gray-400">
                 · {activeChapter.title}
               </span>
             )}
           </span>
         )}
 
-        <div className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5">
+        <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5 whitespace-nowrap max-sm:gap-1">
           {streamType === "dash" && availableHeights.length > 0 && (
             <QualityMenu
               open={openMenu === "quality"}

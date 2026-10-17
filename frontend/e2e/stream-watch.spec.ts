@@ -171,6 +171,37 @@ test("AI chapters generated for a stream replace the empty chapter list", async 
   await expect(page.getByText(/AI generated chapters/)).toBeVisible();
 });
 
+test("on a phone the control bar and stream details each stay on one line", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 430, height: 932 });
+  const state = await mockStream(page);
+  state.chapters = [{ start_sec: 0, title: "Upgrading from the old machine" }];
+  await page.goto(WATCH);
+  await expect(
+    page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
+  ).toBeVisible();
+
+  const centerY = async (loc: ReturnType<Page["locator"]>) => {
+    const box = await loc.boundingBox();
+    expect(box).not.toBeNull();
+    return box!.y + box!.height / 2;
+  };
+  // Play and the right-hand buttons share one row.
+  const play = page.getByRole("button", { name: /^(Play|Pause)$/ });
+  const speed = page.getByTitle("Playback speed");
+  await expect(play).toBeVisible();
+  expect(Math.abs((await centerY(play)) - (await centerY(speed)))).toBeLessThan(
+    6
+  );
+  // The download button sits at the right of the channel / duration line.
+  const channel = page.getByRole("link", { name: "Test Channel" });
+  const download = page.getByRole("button", { name: /^Download / });
+  expect(
+    Math.abs((await centerY(channel)) - (await centerY(download)))
+  ).toBeLessThan(6);
+});
+
 test("a stream's AI is hidden when the server does not support it", async ({
   page,
 }) => {
