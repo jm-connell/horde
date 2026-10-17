@@ -628,6 +628,14 @@ def _run_compat(job: _Job) -> None:
                     exc_info=True,
                 )
                 produced = None
+            if produced is not None and not _plays_as_compat(produced, cap):
+                logger.warning(
+                    "YouTube download for %s is not a ≤%sp H.264 copy; encoding",
+                    job.video_id,
+                    cap,
+                )
+                safe_unlink(produced)
+                produced = None
         if job.cancel.is_set():
             raise _Cancelled()
 
@@ -665,6 +673,52 @@ def _run_compat(job: _Job) -> None:
         )
 
 
+def _plays_as_compat(path: Path, cap: int) -> bool:
+    """True unless ffprobe shows ``path`` is not 8-bit H.264 within ``cap``."""
+    info = probe_stream_info(path)
+    if info is None:
+        return True  # cannot tell (no ffprobe): keep what we have
+    if info.vcodec != "h264" or (info.bit_depth or 8) > 8:
+        return False
+    return min(info.width or 0, info.height or 0) <= cap
+
+
+def drop_invalid_native_sidecars() -> int:
+    """Forget YouTube-sourced sidecars that are not actually H.264.
+
+    Before the format-selector fix the native download could save the default
+    best stream (4K VP9/AV1) as the "H.264" copy, which devices without that
+    decoder then fail to play. Removing it lets the copy be made again.
+    """
+    removed = 0
+    with Session(get_engine()) as session:
+        rows = session.exec(
+            select(Video).where(
+                Video.compat_source == "youtube",
+                Video.compat_path != None,  # noqa: E711 - SQL column comparison, not a Python truth test
+            )
+        ).all()
+        for video in rows:
+            path = resolve_compat_path(video)
+            if path is None or not path.is_file():
+                continue
+            info = probe_stream_info(path)
+            if info is None or info.vcodec == "h264":
+                continue
+            logger.warning(
+                "removing %s sidecar of video %s (not H.264)", info.vcodec, video.id
+            )
+            safe_unlink(path)
+            video.compat_path = None
+            video.compat_size = None
+            video.compat_source = None
+            session.add(video)
+            removed += 1
+        if removed:
+            session.commit()
+    return removed
+
+
 def _download_native_h264(
     src: _Source,
     dest: Path,
@@ -686,14 +740,24 @@ def _download_native_h264(
     cap = min(short, COMPAT_MAX_HEIGHT)
     spec = compat_format_spec(cap, vertical=vertical)
 
+    # Video and audio download one after the other; report bytes across both
+    # (never backwards) so the bar does not run to 99 % twice.
+    parts: dict[str, tuple[float, float]] = {}
+    shown = 0.0
+
     def hook(d: dict[str, Any]) -> None:
+        nonlocal shown
         if cancel_event.is_set():
             raise _Cancelled()
         if d.get("status") == "downloading":
             total = d.get("total_bytes") or d.get("total_bytes_estimate")
             done = d.get("downloaded_bytes") or 0
             if total:
-                on_progress(min(99.0, done * 100.0 / total))
+                parts[str(d.get("filename") or "")] = (float(done), float(total))
+                pct = sum(p[0] for p in parts.values()) * 100.0
+                pct /= sum(p[1] for p in parts.values())
+                shown = max(shown, min(99.0, pct))
+                on_progress(shown)
 
     tmp_base = dest.with_name(f"{src.path.stem}{COMPAT_SIDECAR_TOKEN}dl")
     opts: dict[str, Any] = {
@@ -713,15 +777,18 @@ def _download_native_h264(
 
     with yt_dlp.YoutubeDL(opts) as ydl:
         info = ydl.extract_info(url, download=False)
-        if not isinstance(info, dict):
-            return None
-        formats = info.get("formats") or []
-        if not any(str(f.get("vcodec") or "").startswith("avc") for f in formats):
-            return None
-        audio = pick_original_audio_format(info)
-        if audio and audio.get("format_id"):
-            spec = apply_audio_format_id([spec], str(audio["format_id"]))[0]
-        ydl.params["format"] = spec
+    if not isinstance(info, dict):
+        return None
+    formats = info.get("formats") or []
+    if not any(str(f.get("vcodec") or "").startswith("avc") for f in formats):
+        return None
+    audio = pick_original_audio_format(info)
+    if audio and audio.get("format_id"):
+        spec = apply_audio_format_id([spec], str(audio["format_id"]))[0]
+    # YoutubeDL compiles "format" in its constructor: setting params["format"]
+    # on an existing instance is ignored and it downloads the default best
+    # (4K VP9/AV1). The selector must be in the options of the downloader.
+    with yt_dlp.YoutubeDL({**opts, "format": spec}) as ydl:
         ydl.process_ie_result(info, download=True)
     if cancel_event.is_set():
         raise _Cancelled()
@@ -1055,6 +1122,10 @@ def _probe_backfill_loop(worker: BackgroundWorker) -> None:
     # Let startup settle first; ffprobe is cheap but the library may be large.
     if worker.sleep(10.0):
         return
+    try:
+        drop_invalid_native_sidecars()
+    except Exception:
+        logger.warning("checking YouTube H.264 sidecars failed", exc_info=True)
     # Unreadable files (NAS offline, mid-move) stay unprobed for a later boot.
     skipped: set[int] = set()
     while not worker.stopping:

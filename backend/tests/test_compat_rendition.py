@@ -1,5 +1,6 @@
 """H.264 sidecar renditions: ffmpeg command, queue, API, file lifecycle."""
 
+import threading
 from pathlib import Path
 
 import pytest
@@ -401,3 +402,143 @@ def test_native_download_only_when_it_meets_the_cap(
     compat_rendition._worker(job)
     assert calls["download"] == (1 if expect_download else 0)
     assert calls["encode"] == (2160 if cap_setting == "source" else 1080)
+
+
+def _yt_format(fid, *, vcodec="none", acodec="none", height=None, ext="mp4"):
+    fmt = {
+        "format_id": fid,
+        "url": f"https://example.invalid/{fid}",
+        "protocol": "https",
+        "ext": ext,
+        "vcodec": vcodec,
+        "acodec": acodec,
+    }
+    if height:
+        fmt.update(height=height, width=height * 16 // 9)
+    return fmt
+
+
+def test_native_download_selects_h264_not_default_best(tmp_path, monkeypatch):
+    """Regression: params["format"] set after construction was ignored, so the
+    "H.264" copy of a 4K AV1 video was YouTube's default best (4K VP9)."""
+    import yt_dlp
+
+    info = {
+        "id": "6i5zNUTqyT0",
+        "title": "t",
+        "extractor": "youtube",
+        "extractor_key": "Youtube",
+        "webpage_url": "https://www.youtube.com/watch?v=6i5zNUTqyT0",
+        "formats": [
+            _yt_format("140", acodec="mp4a.40.2", ext="m4a"),
+            _yt_format("251", acodec="opus", ext="webm"),
+            _yt_format("137", vcodec="avc1.640028", height=1080),
+            _yt_format("248", vcodec="vp9", height=1080, ext="webm"),
+            _yt_format("313", vcodec="vp9", height=2160, ext="webm"),
+            _yt_format("401", vcodec="av01.0.12M.08", height=2160),
+        ],
+    }
+    chosen: list[str] = []
+    monkeypatch.setattr(
+        yt_dlp.YoutubeDL, "extract_info", lambda self, url, download=True: info
+    )
+    monkeypatch.setattr(
+        yt_dlp.YoutubeDL,
+        "process_info",
+        lambda self, info_dict: chosen.append(info_dict["format_id"]),
+    )
+    src = compat_rendition._Source(
+        path=tmp_path / "v [6i5zNUTqyT0].mp4",
+        title="t",
+        source_url=info["webpage_url"],
+        platform="Youtube",
+        duration=10.0,
+        width=3840,
+        height=2160,
+        fps=30.0,
+    )
+    out = compat_rendition._download_native_h264(
+        src, compat_sidecar_path(src.path), threading.Event(), lambda _p: None
+    )
+    assert out is None  # nothing was really downloaded
+    assert chosen == ["137+140"]
+
+
+def test_non_h264_download_falls_back_to_encode(add_video, init_db, monkeypatch):
+    from app.models import utcnow
+    from app.services.media_info import StreamInfo
+
+    video = add_video(
+        write_file=True,
+        vcodec="av1",
+        media_probed_at=utcnow(),
+        width_px=3840,
+        height_px=2160,
+        source_url="https://www.youtube.com/watch?v=aaaaaaaaa01",
+        platform="Youtube",
+    )
+    calls = {"encode": 0}
+
+    def fake_download(src, dest, cancel, progress):
+        bad = dest.with_name("bad.horde-h264.dl.mp4")
+        bad.write_bytes(b"vp9")
+        return bad
+
+    def fake_encode(src, dest, job, progress, handle, **kw):
+        calls["encode"] += 1
+        dest.write_bytes(b"x")
+        return dest
+
+    monkeypatch.setattr(compat_rendition, "_download_native_h264", fake_download)
+    monkeypatch.setattr(compat_rendition, "_encode_compat", fake_encode)
+    monkeypatch.setattr(compat_rendition, "ensure_safari_mp4", lambda p, **k: p)
+    monkeypatch.setattr(
+        compat_rendition,
+        "probe_stream_info",
+        lambda p: StreamInfo("vp9", "aac", "vp09", 8, False, 3840, 2160),
+    )
+    job = compat_rendition._Job(
+        video_id=video.id, kind="compat", prefer_download=True, reason="t"
+    )
+    compat_rendition._jobs[video.id] = job
+    compat_rendition._worker(job)
+    assert calls["encode"] == 1
+    assert (
+        not (init_db["downloads"] / video.file_path)
+        .with_name("bad.horde-h264.dl.mp4")
+        .exists()
+    )
+
+
+def test_drop_invalid_native_sidecars(add_video, init_db, monkeypatch):
+    from sqlmodel import Session
+
+    from app.models import Video
+    from app.services.media_info import StreamInfo
+
+    good = add_video(write_file=True, vcodec="av1")
+    bad = add_video(write_file=True, vcodec="av1")
+    paths = {}
+    with Session(init_db["engine"]) as s:
+        for v in (good, bad):
+            row = s.get(Video, v.id)
+            side = compat_sidecar_path(init_db["downloads"] / row.file_path)
+            side.write_bytes(b"x")
+            paths[v.id] = side
+            row.compat_path = side.relative_to(init_db["downloads"]).as_posix()
+            row.compat_size = 1
+            row.compat_source = "youtube"
+            s.add(row)
+        s.commit()
+
+    def fake_probe(path):
+        codec = "vp9" if path == paths[bad.id] else "h264"
+        return StreamInfo(codec, "aac", None, 8, False, 1920, 1080)
+
+    monkeypatch.setattr(compat_rendition, "probe_stream_info", fake_probe)
+    assert compat_rendition.drop_invalid_native_sidecars() == 1
+    with Session(init_db["engine"]) as s:
+        assert s.get(Video, good.id).compat_path is not None
+        row = s.get(Video, bad.id)
+        assert row.compat_path is None and row.compat_source is None
+    assert paths[good.id].exists() and not paths[bad.id].exists()
