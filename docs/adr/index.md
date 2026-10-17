@@ -14,6 +14,9 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0006](0006-downloader-package-split.md) | The downloader becomes the `services/downloads/` package, with a temporary facade | Accepted |
 | [0007](0007-fts5-triggers-and-vector-index.md) | FTS5 and the tag table maintained by triggers; an incremental vector index cache | Accepted |
 | [0008](0008-releases-and-rollback.md) | Releases, update channels, and rollback in `update.sh` | Accepted |
+| [0009](0009-live-streams-hls-proxy.md) | Live streams through a server-side HLS proxy with a probed DVR window | Accepted |
+| [0010](0010-stream-ai-retention.md) | AI results for streamed videos are kept per YouTube id, for a while | Accepted |
+| [0011](0011-in-app-updates.md) | In-app updates: a request file in the data folder, run by a host cron job | Accepted |
 
 ## Writing a new record
 

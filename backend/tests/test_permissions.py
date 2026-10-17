@@ -40,6 +40,9 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/ai/pause"),
             ("POST", "/api/ai/resume"),
             ("GET", "/api/ai/jobs"),
+            ("GET", "/api/system/update"),
+            ("POST", "/api/system/update"),
+            ("POST", "/api/system/update/cancel"),
             ("POST", "/api/ai/jobs/retry-failed"),
             ("POST", "/api/ai/jobs/clear-failed"),
             ("POST", "/api/ai/jobs/{job_id}/retry"),
@@ -131,6 +134,12 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/videos/{video_id}/ai/chat"),
             ("DELETE", "/api/videos/{video_id}/ai/chat"),
             ("POST", "/api/videos/{video_id}/ai/chat"),
+            ("GET", "/api/preview/ai"),
+            ("POST", "/api/preview/ai/summarize"),
+            ("POST", "/api/preview/ai/chapters"),
+            ("GET", "/api/preview/ai/chat"),
+            ("DELETE", "/api/preview/ai/chat"),
+            ("POST", "/api/preview/ai/chat"),
         ]
     },
 }
@@ -159,6 +168,8 @@ OPEN_MUTATIONS = {
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
+    ("PUT", "/api/follows"),  # your own followed channels
+    ("DELETE", "/api/follows"),
 }
 PUBLIC = {
     ("POST", "/api/auth/login"),

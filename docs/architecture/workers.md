@@ -24,7 +24,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper. |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -130,6 +130,10 @@ English captions are fetched after the file is watchable. A timedtext **HTTP 429
 | Spacing | **15 s** between fetches | Avoid a caption stampede after the cooldown lifts |
 
 Videos added in the last **48 hours** that never got a metadata sync and still have empty captions are re-queued on worker start. Watch keeps showing “Subtitles loading” while `subtitles_pending` is true. Library **Resync** uses the same helper and skips timedtext while backoff is active.
+
+## Stream AI
+
+**Start:** `stream_ai.create_worker()` after subtitle retry. Once an hour it moves the saved AI results of streamed videos (`stream_ai_state`) onto library videos with the same YouTube id (download finalize does this immediately; the sweep covers imports) and deletes results nobody opened for `HORDE_STREAM_AI_RETENTION_DAYS` (default 30). See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
 ## Nightly backup
 

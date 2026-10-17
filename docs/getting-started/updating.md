@@ -1,17 +1,106 @@
 # Updating
 
-Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
+The easy way to update Horde is the **Update now** button in Settings → System → Updates. This page explains how to switch it on (once), what it does, and what to do if something goes wrong. The same update can also be run by hand from the shell, which is how you roll back.
+
+Behind the scenes Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
 
 First-time install is a `git clone` plus Compose/Dockge deploy — [Install with Docker](install-docker.md) or [TrueNAS / Dockge](truenas-dockge.md). This page is only for an existing checkout.
 
 Library media (`DOWNLOADS_PATH`) and app data (`DATA_PATH`) live on host volumes and are **not** wiped by a rebuild. `update.sh` snapshots bind mounts from the running container into `.env` *before* `git pull`, so a compose-file refresh cannot remount Horde onto empty default directories (which looks like "settings reset" and "storage paths changed").
 
+## Update from the app (recommended) { #update-from-the-app }
+
+Administrators can update Horde with one click, without opening a shell.
+
+1. Open **Settings → System → Updates**.
+2. Press **Update now**.
+3. Wait. Horde shows each step and the page reconnects by itself when Horde restarts.
+
+**What you will see**
+
+| Step | What it means | How long |
+|------|---------------|----------|
+| Waiting | Your request is queued; the server picks it up within about a minute. You can **cancel** while it waits. | Up to ~1 minute |
+| Updating | The new version is being downloaded and built, then Horde restarts. The page may show “reconnecting” for a moment. | Several minutes (a rebuild takes a while on a NAS) |
+| Result | One of the outcomes below, with the end of the log under **details**. | |
+
+| Result | Meaning |
+|--------|---------|
+| Updated | You are on the newest version. The page that started the update reloads itself into the new version; other open tabs show **Update available → Reload** once they notice the new version (or hard-refresh with `Ctrl+Shift+R`). |
+| Up to date | Nothing newer was available; nothing was changed. |
+| Rolled back | The new version did not start properly, so Horde went back to the old version automatically (and restored the database backup if the new version had already changed it). See [Rollback](#rollback). |
+| Failed / could not run | The update stopped before changing anything or could not finish. Open **details** for the reason and see [Troubleshooting](#update-troubleshooting). |
+| Interrupted | The server restarted (or the job was stopped) while an update was running. Check that Horde works, then press **Update now** again. If Horde does not start, run `bash update.sh --rollback` in the shell. |
+
+**Is it safe?** Yes, it is the same careful script as the shell way. Before changing anything it makes a checked backup of the database, and if the new version does not become healthy it goes back to the old one on its own. Your videos and settings live in separate folders and are not touched by a rebuild. Only administrators see the button; members cannot start updates.
+
+**What it installs.** Exactly what `bash update.sh` would: the newest release on your [update channel](#update-channels) (default: the newest tagged release). It never updates by itself: nothing happens until an administrator presses the button.
+
+### One-time setup { #update-button-setup }
+
+Horde runs in a container and, on purpose, cannot rebuild or restart itself. The button only leaves a note in Horde’s data folder. A small scheduled job on the server (the Docker host) looks for that note every minute and runs the update. You set that job up once; until then the button does not appear.
+
+On **TrueNAS** (the same steps work for any Dockge stack):
+
+1. Open the TrueNAS shell (**System → Shell**) or SSH to the server. Do **not** use Dockge’s Bash button.
+2. Run the check below, with the path changed to where your Horde stack is:
+
+    ```bash
+    sudo bash /mnt/tank/dockge/stacks/horde/scripts/update_watch.sh --setup
+    ```
+
+    It confirms it can find Horde’s data folder, checks in, and prints the exact command for the next step. If it prints an error instead, see [Troubleshooting](#update-troubleshooting).
+3. In the TrueNAS web interface open **System → Advanced Settings → Cron Jobs → Add** and fill in:
+
+    | Field | Value |
+    |-------|-------|
+    | Description | `Horde update button` |
+    | Command | `bash /mnt/tank/dockge/stacks/horde/scripts/update_watch.sh` (your path) |
+    | Run As User | `root` |
+    | Schedule | Custom: `* * * * *` (every minute) |
+    | Hide Standard Output | leave checked |
+    | Hide Standard Error | leave checked, or uncheck it to get an email when something goes wrong |
+    | Enabled | checked |
+
+4. Save. Within a minute, **Settings → System → Updates** shows the **Update now** button. (Reload the page if it does not.)
+
+On **other Linux hosts**, add this line to root’s crontab (`sudo crontab -e`) with your path:
+
+```text
+* * * * * bash /path/to/horde/scripts/update_watch.sh
+```
+
+!!! note "Why root?"
+    Rebuilding and recreating containers needs Docker access, which only the host has. When the checkout belongs to another user, the job lets git work for that run and afterwards hands the git folder, `.local`, `.env`, the tracked files and their folders back to the checkout’s owner, so running `bash update.sh` by hand later still works.
+
+!!! note "Settings for the button’s updates"
+    The job runs `update.sh` without any of the variables you might type in front of it in the shell. Settings it should use go in the stack’s `.env` (`update.sh` reads `HORDE_UPDATE_CHANNEL`, `HORDE_ALLOW_DOWNGRADE`, `HORDE_IMAGE` and `YTDLP_AUTO_UPDATE` from there), or in front of the cron command, for example `HORDE_COMPOSE_PROFILES=ai bash /mnt/tank/dockge/stacks/horde/scripts/update_watch.sh`. The `ai` profile is also picked up automatically while the `horde-ollama` container runs.
+
+Each run of the job stamps `DATA_PATH/update/watcher.env`. Horde shows the button only while the job has checked in during the last 5 minutes. With nothing to do the job prints nothing, so cron stays quiet, and a lock keeps two updates from running at once.
+
+### Turning it off { #update-button-off }
+
+Delete or disable the cron job. After about 5 minutes Horde notices the job is gone and the button disappears. Nothing else is left running.
+
+### Troubleshooting { #update-troubleshooting }
+
+| Problem | Likely cause and fix |
+|---------|----------------------|
+| No **Update now** button | The cron job is not running, has the wrong path, or does not run as `root`. Run the `--setup` command above by hand and read what it says. “Horde’s data folder was not found” means there is no running `horde` container and no `DATA_PATH` in the stack’s `.env`: start Horde, or fix `.env`, and run it again. Give it a minute after fixing. |
+| Stuck on “Waiting” | The cron job stopped after the button appeared (disabled, or the server was off). **Cancel** (still shown while the job is missing), fix the job, and try again. |
+| “Could not run” or **Failed** | Open **details** for the tail of the log, or read `DATA_PATH/update/update.log` on the server. A common cause is a hand-edited `docker-compose.yml` ([Local compose edits](#local-compose-edits)); another is the guard that refuses to recreate Horde with different library or data folders (see [AI profile and health URL](#ai-profile-and-health-url)). Fix it, then press the button again, or run `bash update.sh` in the shell to see the messages live. |
+| **Rolled back** | The new version did not become healthy. Your old version and database are back. Read `failed-container.log` in `.local/update-backups/<timestamp>/` inside the stack folder to see why, and see [Rollback](#rollback). |
+
+The shell way (`bash update.sh`, `bash update.sh --rollback`) keeps working at any time and is how you [roll back by hand](#rollback).
+
+## Update from the shell { #update-from-the-shell }
+
+The button runs exactly this script for you. Use the shell when the button is not set up, or to [roll back](#rollback).
+
 !!! warning "TrueNAS / Dockge: use the host shell"
     Run updates from the **TrueNAS shell** or SSH on the Docker host, inside the stack directory. Do **not** use Dockge’s per-service **Bash** button — that shell is inside the running container, where host `docker compose` and stack `git pull` are not available. See [TrueNAS / Dockge](truenas-dockge.md).
 
     After `update.sh` finishes, refresh Dockge so it reloads the compose file. Do **not** click **Deploy** with an older compose still sitting in the Dockge editor — that can rewrite volume paths. The script already recreates containers.
-
-## Recommended: `update.sh`
 
 From your Horde stack / repo folder:
 
@@ -158,14 +247,14 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose --profile ai up -d
 
 ## Update notices in the UI
 
-Settings → System can show a quiet notice when a newer version is available (dismissible until a still-newer one appears). The check runs at most once a day and fails silently when GitHub is unreachable.
+Settings → System → Updates can show a quiet notice when a newer version is available (dismissible until a still-newer one appears). When the [update button](#update-from-the-app) is set up, the notice sits next to **Update now**; otherwise it just tells you to update. The check runs at most once a day and fails silently when GitHub is unreachable. The notice only informs: nothing is installed until an administrator presses the button or runs `update.sh`.
 
 - When the image has a release version baked in (`HORDE_VERSION`, set for tagged releases and by `update.sh` from your nearest `v*` tag), Horde compares it with the **latest GitHub release**.
 - Otherwise, or while the repository has no releases, it compares the baked commit SHA with `main` and **ignores** commits by the `github-actions[bot]` stats bot and changes that only touch docs, so a daily bot commit no longer shows up as an update.
 
 Installs on the default `release` channel bake the exact release version (for example `1.2.0`), so the notice appears when a newer release is published. Installs that follow `main` (`HORDE_UPDATE_CHANNEL=main`) bake a `git describe` version such as `1.2.0-5-gabc1234`; they only see notices for new **releases**, not for every commit on `main` in between.
 
-Both rely on identity baked at build time — another reason to use `update.sh` or set `HORDE_GIT_SHA` on rebuild.
+Both rely on identity baked at build time — another reason to use the button, `update.sh`, or set `HORDE_GIT_SHA` on rebuild.
 
 Override the repo used for checks with `HORDE_GITHUB_REPO` if needed ([Environment variables](../ops/environment.md)).
 

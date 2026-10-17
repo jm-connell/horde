@@ -81,6 +81,10 @@ Keyboard shortcuts live in the [player guide](guides/player.md) and the [shortcu
 
 You can play a remote YouTube URL in the same shell (`/watch?url=…`) to preview before committing disk. Adaptive DASH when available. This path is **somewhat fragile** and quality can vary from video to video. Streaming is not the primary focus — preview, then download. When a download started from preview **completes**, Horde hands off to the local file and keeps your place where it can.
 
+## Live streams
+
+Follow channels (automatically for channels you download from, or by URL / `@handle`) and a small **Live** list in the sidebar shows which are live, with title and game. Live streams play through a server-side HLS proxy that refreshes YouTube's URLs on its own, and you can scrub back up to 4 hours by default. Toggle it in **Settings → Library → Show live streams**. Details: [Live streams](design/live-streams.md).
+
 ## Playlists
 
 Create your own lists, import a YouTube playlist in one shot, or **subscribe** so new parts append on a schedule (about hourly). Sync never deletes files. Add videos from the playlist page, from library bulk select, or from recent downloads.

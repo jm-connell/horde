@@ -13,11 +13,15 @@ Horde is configured primarily through environment variables. Most values have se
 | `DATA_DIR` | `./data` | SQLite DB, settings, caches, thumbnails, sprites, fonts, backgrounds. |
 | `SCAN_INTERVAL_SEC` | `60` | Fallback poll interval (seconds) for the downloads-tree scanner when the watchdog misses an event. |
 | `HORDE_TEMP_SWEEP_HOURS` | `6` | At boot, delete leftover files that Horde itself generates (`<stem>.norm.<n>.mp4`, `.compat.<n>.mp4`, `.xcode.<n>.mp4`, `.horde-h264.dl.*`, `.horde-h264.enc.mp4`) older than this many hours that no library row references. Your own files are never swept, whatever their name (`x.temp.mkv`, `notes.part`, `Show.compat.mkv`). `0` disables the sweep. Staging dirs of finished or missing jobs are always removed at boot. |
+| `HORDE_STREAM_AI_RETENTION_DAYS` | `30` | How long the AI summary, chapters and chat of a streamed (not downloaded) video are kept after it was last opened. Downloading the video moves them onto it instead. Minimum 1. |
 | `HORDE_LOG_LEVEL` | `INFO` | Log level for Horde and uvicorn (`DEBUG`, `INFO`, `WARNING`, `ERROR`). See [Logging](logging.md). |
 | `HORDE_LOG_FORMAT` | `text` | `json` writes one JSON object per log line (for Loki, Vector and similar). See [Logging](logging.md). |
 | `HORDE_YTDLP_REQUEST_THREADS` | `8` | How many requests may be inside yt-dlp work (link checks, previews, feeds, searches) at once. Extra requests wait up to 15 s without using a worker thread, then get HTTP 429, so slow YouTube calls can never freeze the rest of the API. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_SEC` | `180` | How long one yt-dlp call waits its turn on the global extract queue before giving up with an error. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC` | `540` (3x the above) | The same wait for background work (catalog indexing, metadata fills), which always queues behind interactive requests. |
+| `HORDE_LIVE_POLL_SEC` | `300` | How often each followed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
+| `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long follow list never bursts requests at YouTube. |
+| `HORDE_LIVE_DVR_HOURS` | `4` | How far back the player can scrub in a live stream, when YouTube still serves those segments. |
 | `HORDE_BACKUP_ENABLED` | `1` | `0` turns the [nightly database backup](backup-restore.md#nightly) off. |
 | `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23) after which the nightly backup is taken. |
 | `HORDE_BACKUP_KEEP` | `7` | How many nightly backups to keep (minimum 1). |

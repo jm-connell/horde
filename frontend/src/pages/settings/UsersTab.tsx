@@ -103,6 +103,7 @@ export default function UsersTab() {
                   <UserEditor
                     key={u.id}
                     user={u}
+                    isSelf={u.id === me?.id}
                     catalog={catalog}
                     onChanged={reload}
                     onDelete={() => void remove(u)}
@@ -204,11 +205,14 @@ function CreateUser({
 
 function UserEditor({
   user,
+  isSelf,
   catalog,
   onChanged,
   onDelete,
 }: {
   user: UserAccount;
+  /** Your own account: the server refuses demoting or disabling yourself. */
+  isSelf: boolean;
   catalog: PermissionInfo[];
   onChanged: () => Promise<void>;
   onDelete: () => void;
@@ -239,34 +243,41 @@ function UserEditor({
 
   return (
     <div className="mt-3 space-y-4 rounded-lg bg-ink-950/50 p-3">
-      <div>
-        <AccountTypeFields
-          isAdmin={isAdmin}
-          granted={isAdmin ? defaultsOf(catalog) : granted}
-          catalog={catalog}
-          onAdminChange={(v) => {
-            setIsAdmin(v);
-            if (!v && user.is_admin) setGranted(defaultsOf(catalog));
-          }}
-          onGrantedChange={setGranted}
-          disabled={busy}
-        />
-        <button
-          type="button"
-          className={PANEL_BTN}
-          disabled={busy}
-          onClick={() =>
-            void run(
-              isAdmin
-                ? { is_admin: true }
-                : { is_admin: false, permissions: granted },
-              `Saved ${user.username}`
-            )
-          }
-        >
-          Save account type
-        </button>
-      </div>
+      {isSelf ? (
+        <p className="text-sm text-muted">
+          You can&apos;t remove your own administrator access or disable your
+          own account. Another administrator has to do it.
+        </p>
+      ) : (
+        <div>
+          <AccountTypeFields
+            isAdmin={isAdmin}
+            granted={isAdmin ? defaultsOf(catalog) : granted}
+            catalog={catalog}
+            onAdminChange={(v) => {
+              setIsAdmin(v);
+              if (!v && user.is_admin) setGranted(defaultsOf(catalog));
+            }}
+            onGrantedChange={setGranted}
+            disabled={busy}
+          />
+          <button
+            type="button"
+            className={PANEL_BTN}
+            disabled={busy}
+            onClick={() =>
+              void run(
+                isAdmin
+                  ? { is_admin: true }
+                  : { is_admin: false, permissions: granted },
+                `Saved ${user.username}`
+              )
+            }
+          >
+            Save account type
+          </button>
+        </div>
+      )}
       <form
         className="max-w-sm"
         onSubmit={(e) => {
@@ -290,21 +301,23 @@ function UserEditor({
       </form>
       <FormError message={error} />
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          className={PANEL_BTN}
-          disabled={busy}
-          onClick={() =>
-            void run(
-              { disabled: !user.disabled },
-              user.disabled
-                ? `Enabled ${user.username}`
-                : `Disabled ${user.username}`
-            )
-          }
-        >
-          {user.disabled ? "Enable account" : "Disable account"}
-        </button>
+        {!isSelf && (
+          <button
+            type="button"
+            className={PANEL_BTN}
+            disabled={busy}
+            onClick={() =>
+              void run(
+                { disabled: !user.disabled },
+                user.disabled
+                  ? `Enabled ${user.username}`
+                  : `Disabled ${user.username}`
+              )
+            }
+          >
+            {user.disabled ? "Enable account" : "Disable account"}
+          </button>
+        )}
         <button
           type="button"
           className={`${PANEL_BTN} text-red-300`}

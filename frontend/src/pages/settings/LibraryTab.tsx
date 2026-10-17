@@ -17,6 +17,7 @@ import {
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
+import FollowedChannelsSection from "./FollowedChannelsSection";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 
 const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
@@ -78,6 +79,9 @@ export default function LibraryTab() {
           !match(
             "homepage",
             "continue watching",
+            "live streams",
+            "followed channels",
+            "follow",
             "progress bar",
             "dates",
             "video cards",
@@ -108,6 +112,22 @@ export default function LibraryTab() {
               />
             }
           />
+          <SettingRow
+            title="Show live streams"
+            description="List followed channels that are live in the library sidebar."
+            hidden={!!q && !match("live streams", "live", "follow")}
+            control={
+              <Toggle
+                checked={settings.showLiveStreams}
+                onChange={() =>
+                  update({ showLiveStreams: !settings.showLiveStreams })
+                }
+              />
+            }
+          />
+          <div hidden={!!q && !match("followed channels", "follow", "live")}>
+            <FollowedChannelsSection />
+          </div>
           <SettingRow
             title="Progress bar on continue watching"
             description="Show watch progress on cards in the continue watching row."

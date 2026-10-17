@@ -127,3 +127,44 @@ test("a slow response for the previous video does not replace the current one", 
     page.getByRole("heading", { name: slow.title, level: 1 })
   ).toHaveCount(0);
 });
+
+test("theater mode keeps the nav brand off the window edge", async ({
+  page,
+}) => {
+  test.skip(!hasDesktopPlayerChrome(page), "theater is desktop only");
+  // Tall enough that the video fills the width, so its frame inset is 0.
+  await page.setViewportSize({ width: 1000, height: 1000 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  await page.locator("video").first().hover();
+  await page.getByRole("button", { name: "Theater", exact: true }).click();
+  const row = page.locator('[data-horde="nav"] > div').first();
+  await expect(row).toHaveCSS("padding-left", "24px");
+  await expect(row).toHaveCSS("padding-right", "24px");
+});
+
+test("the description box keeps a readable width on a wide window", async ({
+  page,
+}) => {
+  test.skip(!hasDesktopPlayerChrome(page), "theater is desktop only");
+  await page.setViewportSize({ width: 2400, height: 1300 });
+  await page.goto("/");
+  await videoCard(page, "Harbor Lights").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const box = page
+    .locator(".ui-panel")
+    .filter({ has: page.getByText("Boats at dusk.") })
+    .last();
+  const width = async () => (await box.boundingBox())?.width ?? 0;
+
+  // Standard mode with the related sidebar: the column is already bounded, so
+  // the box spans it as before.
+  await expect(page.locator("aside").filter({ visible: true })).toHaveCount(1);
+  await expect.poll(width).toBeGreaterThan(1100);
+
+  // Theater drops the sidebar, so the column spans the window: cap the box.
+  await page.locator("video").first().hover();
+  await page.getByRole("button", { name: "Theater", exact: true }).click();
+  await expect.poll(width).toBeLessThanOrEqual(1024);
+});

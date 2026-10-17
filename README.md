@@ -34,6 +34,8 @@ on the host. Interactive API docs: `/docs`.
   SponsorBlock, chapters, subtitles. Optional YouTube stream preview (fragile;
   no live transcoding — the browser plays the original, or a pre-made
   ≤1080p H.264 copy on devices that can't decode AV1).
+- **Live streams** — follow channels and see, quietly in the sidebar, which are
+  live; watch through a server-side HLS proxy with scrub-back (DVR).
 - **Playlists** — your own lists or imported YouTube playlists.
 - **AI** (optional) — Ollama and/or OpenRouter for embeddings, tags, summaries,
   chat, recommendations, and duplicate help.
@@ -132,7 +134,14 @@ under Settings → AI.
 
 ### Update
 
-From the same clone, on the host:
+Administrators can update from the app: **Settings → System → Updates → Update now**.
+It needs a one-time setup, a cron job on the host that runs
+`scripts/update_watch.sh` every minute as root (TrueNAS: System → Advanced
+Settings → Cron Jobs). Horde itself never gets Docker access; the button only
+leaves a request file that the job picks up. Steps and troubleshooting:
+[Updating](docs/getting-started/updating.md#update-from-the-app).
+
+The button runs the same script as the shell. From the same clone, on the host:
 
 ```bash
 cd /path/to/horde          # e.g. /mnt/tank/dockge/stacks/horde
@@ -183,6 +192,7 @@ push — see [`docs/getting-started/testing.md`](docs/getting-started/testing.md
 | `DOWNLOADS_PATH` | Host media dataset → `/downloads` |
 | `DATA_PATH` | Host DB + thumbnails → `/app/data` |
 | `SCAN_INTERVAL_SEC` | Folder rescan interval (default `60`) |
+| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
 | `YTDLP_POT_BASE_URL` | Compose: `http://bgutil-pot:4416` |
 | `YTDLP_COOKIE_FILE` | Optional Netscape cookies (age gates / hard blocks) |
 | `OLLAMA_BASE_URL` | Empty = auto-discover compose service, then host |

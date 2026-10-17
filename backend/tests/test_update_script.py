@@ -194,7 +194,12 @@ class Harness:
         )
         shutil.copy(REPO / "update.sh", self.work / "update.sh")
         (self.work / "scripts").mkdir()
-        for name in ("update_lib.sh", "parse_compose_mounts.py", "sqlite_tool.py"):
+        for name in (
+            "update_lib.sh",
+            "update_watch.sh",
+            "parse_compose_mounts.py",
+            "sqlite_tool.py",
+        ):
             shutil.copy(REPO / "scripts" / name, self.work / "scripts" / name)
         (self.work / ".gitignore").write_text(".env\n.local/\n")
         (self.work / "docker-compose.yml").write_text("services: {}\n")
@@ -256,6 +261,15 @@ class Harness:
         (self.dir / "state.json").write_text(json.dumps(state))
 
     def run(self, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+        return self._bash("update.sh", *args, **env)
+
+    def watch(self, *args: str, **env: str) -> subprocess.CompletedProcess[str]:
+        """One cron run of scripts/update_watch.sh."""
+        return self._bash("scripts/update_watch.sh", *args, **env)
+
+    def _bash(
+        self, script: str, *args: str, **env: str
+    ) -> subprocess.CompletedProcess[str]:
         full_env = {
             **os.environ,
             "PATH": f"{self.dir / 'bin'}:{os.environ['PATH']}",
@@ -266,7 +280,7 @@ class Harness:
             **env,
         }
         return subprocess.run(
-            ["bash", str(self.work / "update.sh"), *args],
+            ["bash", str(self.work / script), *args],
             cwd=self.work,
             capture_output=True,
             text=True,
@@ -732,3 +746,183 @@ def test_release_channel_refuses_to_move_a_checkout_backwards(harness):
     allowed = harness.run(HORDE_ALLOW_DOWNGRADE="1")
     assert allowed.returncode == 0, allowed.stdout + allowed.stderr
     assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+
+
+# --- scripts/update_watch.sh: the "Update now" button's host side ------------
+
+
+def _control(harness) -> Path:
+    return harness.dir / "data" / "update"
+
+
+def _env(path: Path) -> dict[str, str]:
+    return dict(
+        line.split("=", 1) for line in path.read_text().splitlines() if "=" in line
+    )
+
+
+def _request(harness) -> str:
+    """Press the button the way the API does (the watcher must have checked in)."""
+    from app.services import update_control
+
+    status = update_control.request_update(harness.dir / "data", "admin")
+    assert status["state"] == "requested"
+    return status["request_id"]
+
+
+def test_watcher_without_a_request_only_checks_in(harness):
+    from app.services import update_control
+
+    data = harness.dir / "data"
+    assert update_control.read_status(data)["watcher_connected"] is False
+
+    result = harness.watch()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout == ""  # cron stays quiet
+    assert (_control(harness) / "watcher.env").is_file()
+    assert update_control.read_status(data)["watcher_connected"] is True
+    assert not any(c.startswith("compose") for c in harness.calls())
+
+
+def test_requested_update_runs_update_sh_and_reports_the_outcome(harness):
+    from app.services import update_control
+
+    harness.watch()
+    v2 = harness.publish()
+    request_id = _request(harness)
+
+    result = harness.watch()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert harness.read_state()["tags"]["horde:latest"] == "sha256:new"
+    assert _git(harness.work, "rev-parse", "HEAD") == v2
+    status = update_control.read_status(harness.dir / "data")
+    assert status["state"] == "updated"
+    assert status["request_id"] == request_id
+    assert status["requested_by"] == "admin"
+    assert status["exit_code"] == 0
+    assert status["started_at"] and status["finished_at"]
+    assert any("Updated to" in line for line in status["log_tail"])
+    assert not (_control(harness) / "request.env").exists()
+
+    # The request is consumed: the next cron run does nothing.
+    builds = sum(c.startswith("compose build") for c in harness.calls())
+    harness.watch()
+    assert sum(c.startswith("compose build") for c in harness.calls()) == builds
+
+
+def test_watcher_reports_up_to_date_and_rolled_back(harness):
+    from app.services import update_control
+
+    harness.watch()
+    _request(harness)
+    harness.watch()
+    data = harness.dir / "data"
+    assert update_control.read_status(data)["state"] == "up_to_date"
+
+    harness.publish()
+    harness.set(new_is_healthy=False)
+    _request(harness)
+    result = harness.watch()
+
+    assert result.returncode == 1
+    status = update_control.read_status(data)
+    assert status["state"] == "rolled_back"
+    assert status["exit_code"] == 1
+    assert harness.read_state()["tags"]["horde:latest"] == "sha256:old"
+
+
+def test_watcher_reports_an_aborted_update_as_failed(harness):
+    from app.services import update_control
+
+    harness.watch()
+    harness.publish()
+    harness.set(build_fails=True)
+    _request(harness)
+
+    harness.watch()
+
+    assert update_control.read_status(harness.dir / "data")["state"] == "failed"
+
+
+def test_watcher_marks_a_run_that_died_midway_as_interrupted(harness):
+    from app.services import update_control
+
+    harness.watch()
+    (_control(harness) / "status.env").write_text(
+        "STATE=running\nREQUEST_ID=" + "a" * 32 + "\nSTARTED_AT=2026-01-01T00:00:00Z\n"
+    )
+
+    harness.watch()
+
+    status = update_control.read_status(harness.dir / "data")
+    assert status["state"] == "interrupted"
+    assert status["finished_at"]
+
+
+def test_watcher_ignores_a_malformed_request(harness):
+    harness.watch()
+    (_control(harness) / "request.env").write_text("REQUEST_ID=$(reboot)\n")
+
+    result = harness.watch()
+
+    assert result.returncode == 1
+    assert "malformed" in result.stderr
+    assert not any(c.startswith("compose") for c in harness.calls())
+
+
+def test_setup_prints_the_cron_command(harness):
+    result = harness.watch("--setup")
+
+    assert result.returncode == 0, result.stderr
+    assert f"bash {harness.work}/scripts/update_watch.sh" in result.stdout
+    assert "Cron Jobs" in result.stdout
+
+
+def test_watcher_marks_a_taken_request_without_status_as_interrupted(harness):
+    """A run that died between taking the request and writing status.env."""
+    from app.services import update_control
+
+    harness.watch()
+    (_control(harness) / "current.env").write_text("REQUEST_ID=" + "e" * 32 + "\n")
+
+    harness.watch()
+
+    status = update_control.read_status(harness.dir / "data")
+    assert status["state"] == "interrupted"
+    assert status["request_id"] == "e" * 32
+
+
+def test_watcher_never_follows_links_planted_in_the_update_folder(harness, tmp_path):
+    victim = tmp_path / "victim"
+    victim.mkdir()
+    (victim / "status.env").write_text("precious\n")
+    (victim / "update.log").write_text("precious\n")
+    harness.watch()
+    control = _control(harness)
+    harness.publish()
+    _request(harness)
+    for name in ("status.env", "update.log"):
+        (control / name).symlink_to(victim / name)
+    (control / "current.env").symlink_to("/dev/zero")  # an endless read
+
+    result = harness.watch()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (victim / "status.env").read_text() == "precious\n"
+    assert (victim / "update.log").read_text() == "precious\n"
+    assert not (control / "status.env").is_symlink()
+    assert _env(control / "status.env")["STATE"] == "updated"
+
+
+def test_watcher_refuses_an_update_folder_that_is_a_link(harness, tmp_path):
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (harness.dir / "data" / "update").symlink_to(elsewhere)
+
+    result = harness.watch()
+
+    assert result.returncode != 0
+    assert "refusing" in result.stderr
+    assert not any(elsewhere.iterdir())

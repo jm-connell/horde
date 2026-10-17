@@ -354,7 +354,13 @@ export default function TopNav() {
           }`}
           style={
             isTheaterWide
-              ? { paddingLeft: videoFrameInset, paddingRight: videoFrameInset }
+              ? {
+                  // Align with the letterboxed video frame, but never closer
+                  // to the edge than the normal md:px-6 gutter (a video that
+                  // fills the width has a 0 inset).
+                  paddingLeft: `max(${videoFrameInset}px, 1.5rem)`,
+                  paddingRight: `max(${videoFrameInset}px, 1.5rem)`,
+                }
               : undefined
           }
         >

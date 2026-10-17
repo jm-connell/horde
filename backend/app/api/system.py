@@ -11,9 +11,11 @@ from typing import Any
 
 from fastapi import APIRouter, Depends
 
-from ..auth import current_user
-from ..response_schemas import SystemStatsRead
+from ..auth import current_user, require_admin
+from ..context import get_paths
+from ..response_schemas import SystemStatsRead, UpdateControlRead
 from ..schemas import SystemActivityRead
+from ..services import update_control
 from ..services.auth.accounts import AuthUser
 from . import member_view
 
@@ -175,8 +177,6 @@ def system_stats(user: AuthUser = Depends(current_user)):
         encode = None
     disk = None
     try:
-        from ..context import get_paths
-
         usage = shutil.disk_usage(get_paths().downloads)
         disk = {
             "total_bytes": usage.total,
@@ -217,3 +217,36 @@ def system_activity(user: AuthUser = Depends(current_user)):
         "cpu_percent": cpu,
     }
     return payload if user.is_admin else member_view.activity(payload)
+
+
+# --- "Update now" (scripts/update_watch.sh does the work on the host) --------
+
+
+@router.get(
+    "/update",
+    response_model=UpdateControlRead,
+    dependencies=[Depends(require_admin)],
+)
+def update_status():
+    """Whether the update button is set up on the host, and the last/current run."""
+    return update_control.read_status(get_paths().data)
+
+
+@router.post(
+    "/update",
+    response_model=UpdateControlRead,
+    dependencies=[Depends(require_admin)],
+)
+def start_update(user: AuthUser = Depends(current_user)):
+    """Ask the host to run update.sh (picked up within about a minute)."""
+    return update_control.request_update(get_paths().data, user.username)
+
+
+@router.post(
+    "/update/cancel",
+    response_model=UpdateControlRead,
+    dependencies=[Depends(require_admin)],
+)
+def cancel_update():
+    """Withdraw an update request the host has not started yet."""
+    return update_control.cancel_request(get_paths().data)

@@ -59,6 +59,17 @@ for arg in "$@"; do
   esac
 done
 
+# Outcome for the in-app update button (scripts/update_watch.sh): when
+# HORDE_UPDATE_RESULT_FILE is set, one line RESULT=<word> is written on exit:
+# updated, up_to_date, rolled_back or failed.
+RESULT="failed"
+report_result() {
+  if [[ -n "${HORDE_UPDATE_RESULT_FILE:-}" ]]; then
+    printf 'RESULT=%s\n' "$RESULT" > "$HORDE_UPDATE_RESULT_FILE" || true
+  fi
+}
+trap report_result EXIT
+
 HEALTH_URL="${HORDE_HEALTH_URL:-http://127.0.0.1:8686/api/health}"
 KEEP_BACKUPS="${HORDE_KEEP_BACKUPS:-5}"
 KEEP_IMAGES="${HORDE_KEEP_IMAGES:-3}"
@@ -642,7 +653,7 @@ prune_image_tags() {
 # created when there is something to back up, so aborted runs leave nothing.
 mkdir -p "$ROOT/.local"
 SNAP_DIR="$(mktemp -d "$ROOT/.local/update-snap.XXXXXX")"
-trap 'rm -rf "$SNAP_DIR"' EXIT
+trap 'rm -rf "$SNAP_DIR"; report_result' EXIT
 BACKUP_DIR="$BACKUPS_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
 SNAPSHOT="$SNAP_DIR/live.env"
 LIVE_DOWNLOADS=""
@@ -692,6 +703,7 @@ if [[ "$MODE" == "rollback" ]]; then
   perform_rollback "manual rollback requested" manual || rc=$?
   if [[ "$rc" -eq 0 ]]; then
     echo
+    RESULT="rolled_back"
     echo "Rolled back to $(state_get PREV_GIT_SHA | cut -c1-7)."
     echo "Re-run 'bash update.sh' later to update again; this checkout was moved back, so the same upstream change will be pulled again."
     exit 0
@@ -729,6 +741,7 @@ if [[ "$SHA" == "$PREV_SHA" && -n "$PREV_IMAGE_ID" && "$RUNNING_IMAGE" == "$PREV
   echo
   echo "Already up to date at ${SHORT}; the running container uses the current image. Nothing to do."
   echo "(HORDE_FORCE_REBUILD=1 rebuilds anyway.)"
+  RESULT="up_to_date"
   exit 0
 fi
 VERSION="${VERSION:-$(horde_version_string)}"
@@ -806,6 +819,7 @@ compose "${UP_ARGS[@]}"
 
 if ! command -v curl >/dev/null 2>&1; then
   echo
+  RESULT="updated"
   echo "Updated to ${SHORT}."
   echo "curl not found; skipped health wait and automatic rollback. Open http://<server-ip>:8686 and hard-refresh (Ctrl+Shift+R)."
   echo "Library data and settings on host volumes are unchanged."
@@ -832,6 +846,7 @@ if ! wait_for_health; then
   rc=0
   perform_rollback "the new version (${SHORT}) did not become healthy" auto || rc=$?
   if [[ "$rc" -eq 0 ]]; then
+    RESULT="rolled_back"
     {
       echo
       echo "UPDATE FAILED and was rolled back to ${PREV_SHA:0:7}; Horde is running the previous version."
@@ -843,6 +858,7 @@ if ! wait_for_health; then
 fi
 
 prune_image_tags "$SHORT" "${PREV_SHA:0:7}"
+RESULT="updated"
 
 echo
 echo "Updated to ${SHORT}."

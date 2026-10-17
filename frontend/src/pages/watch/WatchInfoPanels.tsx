@@ -6,11 +6,7 @@ import { VideoAiPanel } from "../../components/lazy";
 import WatchMeta from "../../components/WatchMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-import {
-  parseChapters,
-  resolveLibraryChapters,
-  stripChapterLines,
-} from "../../utils";
+import { resolveLibraryChapters, stripChapterLines } from "../../utils";
 import type { Video } from "../../types";
 import type { WatchAi } from "./useWatchAi";
 import type { WatchSource } from "./useWatchVideo";
@@ -39,9 +35,7 @@ export default function WatchInfoPanels({
     source.kind === "library"
       ? source.video.description
       : source.meta.description;
-  const chapters = video
-    ? resolveLibraryChapters(video)
-    : parseChapters(description);
+  const chapters = video ? resolveLibraryChapters(video) : ai.streamChapters;
   const descriptionBody = stripChapterLines(description);
 
   return (
@@ -49,18 +43,19 @@ export default function WatchInfoPanels({
       className={
         !sidebarShown && queueVisible
           ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
-          : "mt-4 space-y-4"
+          : // Without the sidebar the column can be ~116rem wide; keep the
+            // description and AI panel at a readable width.
+            `mt-4 space-y-4 ${sidebarShown ? "" : "max-w-5xl"}`
       }
     >
       <div className="min-w-0 space-y-4">
-        {video && ai.showAiSection && can("use_ai") && (
+        {ai.target && ai.showAiSection && can("use_ai") && (
           <Suspense fallback={<LoadingIndicator className="py-4" />}>
             <VideoAiPanel
-              video={video}
+              target={ai.target}
               canSummarize={ai.canAiSummarize}
               canChat={ai.canAiChat}
               showCosts={ai.showAiCosts}
-              onVideoUpdate={onVideoUpdated}
               showToast={showToast}
             />
           </Suspense>

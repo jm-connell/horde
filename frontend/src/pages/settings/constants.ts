@@ -50,7 +50,7 @@ export const METADATA_INTERVAL_TIP =
 
 export const STATUS_TIPS = {
   horde:
-    "This Horde install’s version (short git SHA). Compared to GitHub so you can see if an update is available.",
+    "This Horde install’s version (short git SHA). Compared to GitHub so you can see if an update is available. Install it from the Updates section above.",
   ytdlp:
     "The downloader Horde uses to fetch metadata and video files from YouTube and other sites. Keep it current — extractors break when sites change.",
   pot: "YouTube issues Proof-of-Origin (PO) tokens to tell real players from bots. Horde’s bgutil-pot sidecar mints them for yt-dlp. If this is down, downloads and previews often fail with bot-check errors.",

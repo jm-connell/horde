@@ -60,6 +60,11 @@ def _decode_vtt_entities(raw: str) -> str:
     return out
 
 
+def strip_vtt(raw: str) -> str:
+    """Plain caption text from a WebVTT document."""
+    return _strip_vtt(raw)
+
+
 def _strip_vtt(raw: str) -> str:
     lines: list[str] = []
     for line in raw.splitlines():
@@ -186,6 +191,13 @@ def subtitle_excerpt(video: Video, *, max_chars: int = 1500) -> str:
 
 def has_subtitle_text(video: Video) -> bool:
     return bool(load_subtitle_text(video, max_chars=64).strip())
+
+
+def _captions(video: Video, subtitle_text: str | None, *, max_chars: int) -> str:
+    """Caption text for a prompt: the given text (a stream's), else the files."""
+    if subtitle_text is not None:
+        return subtitle_text[:max_chars]
+    return load_subtitle_text(video, max_chars=max_chars)
 
 
 _SUMMARY_DESC_CHARS = 1500
@@ -327,13 +339,14 @@ def summary_continue_prompt(
     *,
     length: SummaryLength | str | None = None,
     need_words: int,
+    subtitle_text: str | None = None,
 ) -> str:
     """Ask for a continuation only — more reliable than a full rewrite on small models."""
     length_key = normalize_summary_length(length)
     spec = _SUMMARY_LENGTH_SPEC[length_key]
     words = count_words(draft)
     need = max(60, int(need_words))
-    sub = load_subtitle_text(video, max_chars=int(spec["sub_chars"]))
+    sub = _captions(video, subtitle_text, max_chars=int(spec["sub_chars"]))
     return (
         f"Length setting: {spec['label']}\n"
         f"The draft below is only {words} words; we need about {need} more words.\n"
@@ -449,11 +462,12 @@ def summary_prompt(
     video: Video,
     *,
     length: SummaryLength | str | None = None,
+    subtitle_text: str | None = None,
 ) -> str:
     length_key = normalize_summary_length(length)
     spec = _SUMMARY_LENGTH_SPEC[length_key]
     desc = re.sub(r"\s+", " ", (video.description or "").strip())[:_SUMMARY_DESC_CHARS]
-    sub = load_subtitle_text(video, max_chars=int(spec["sub_chars"]))
+    sub = _captions(video, subtitle_text, max_chars=int(spec["sub_chars"]))
     channel = (video.channel or "").strip()
     return (
         f"Length setting: {spec['label']}\n"
@@ -687,7 +701,12 @@ def format_chat_context(
 
 def chat_fallback_captions(video: Video) -> list[str]:
     """Plain subtitle text when embeddings are unavailable."""
-    sub = load_subtitle_text(video, max_chars=_CHAT_FALLBACK_SUB_CHARS)
+    return chat_captions(load_subtitle_text(video, max_chars=_CHAT_FALLBACK_SUB_CHARS))
+
+
+def chat_captions(text: str) -> list[str]:
+    """Caption text as the single chat-context excerpt (for a stream's captions)."""
+    sub = (text or "")[:_CHAT_FALLBACK_SUB_CHARS]
     if not sub.strip():
         return []
     return [sub]

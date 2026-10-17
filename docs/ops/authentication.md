@@ -41,7 +41,7 @@ Members do not see how the server is set up: the server settings, AI status and 
 
 Download job errors are not trimmed: they explain why a download the member can see failed (for example a private or members-only video).
 
-These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
+These are **admin only** and cannot be granted: managing users, server-wide settings, AI provider configuration and worker control, factory reset, library-wide compatibility conversion, background and font management, pausing the download queue, a forced update check, starting an update (the **Update now** button) and the bulk metadata refresh. (Channel auto-download is *not* in this list: it needs only `download`.)
 
 ### What members can and can't change
 
@@ -52,7 +52,7 @@ Every administrator sees and can change everything below. A member sees only the
 | Settings → Appearance | Theme, saved themes, font (including Google Fonts by URL), font size, interface, background animation and picking an uploaded background image, custom CSS | | Uploading or deleting background images and font files, extracting a palette from a background |
 | Settings → Library | Continue watching, progress bars, card dates, default sort, channel list order | Download count badge, normalize volume on download (`download`) | Progress expiry, playback compatibility (download codec, H.264 copy size, library copies and conversion), metadata and catalog (indexing, YouTube search switches, catalog size, refresh interval, resync) |
 | Settings → Playback | Everything: watch page, previews, subtitles, SponsorBlock, speeds, offline mode | | |
-| Settings → AI, System, Users | | | The whole tab: AI providers, keys, models, budget, schedule and jobs; storage, background activity, health, updates, factory reset; user management |
+| Settings → AI, System, Users | | | The whole tab: AI providers, keys, models, budget, schedule and jobs; storage, background activity, health, updates (checking for and starting one), factory reset; user management |
 | Elsewhere | Their own password, history and chats | Downloads, imports, channel auto-download (`download`); saving for offline (`offline_download`); notes, details, thumbnails (`edit_metadata`); playlists (`manage_playlists`); AI chat and on-demand AI (`use_ai`); deleting (`delete_videos`) | Pausing or resuming the whole download queue, the bulk metadata resync, refreshing the AI category shelves |
 
 Members still get the read-only values their screens need: the YouTube search switches, the progress expiry and the server's download codec (their downloads use it). `GET /api/settings` gives a member the defaults of the other server-only fields, and the library-wide compatibility totals (`GET /api/compat/summary`) and the metadata resync progress (`GET /api/videos/refresh-metadata/status`) are for administrators.
@@ -66,9 +66,9 @@ Changes apply on the person's next request; they do not need to sign in again. A
 
 ## Managing users (admins)
 
-*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay.
+*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
 
-The server refuses any change that would leave **no enabled administrator**.
+The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 
 ## Passwords and sessions
 
@@ -116,7 +116,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 |----------|--------|
 | `HORDE_TRUST_PROXY=1` | Use `X-Forwarded-For` for the client address (rate limiting) and `X-Forwarded-Proto` for the `Secure` cookie flag. Set only when a proxy you control is the only way in. The proxy must **set or append** `X-Forwarded-For` and never pass a client-supplied value through unchanged: Horde reads the entry counted from the **right**, because everything to the left is whatever the client claimed. |
 | `HORDE_TRUSTED_PROXY_HOPS=1` | How many proxies append to `X-Forwarded-For` (default 1 = the last entry). Raise it for a chain such as CDN, then proxy. |
-| `HORDE_AUTH_DISABLED=1` | Turn sign-in off. Every request acts as the first administrator. **Only** for a deployment where a reverse proxy authenticates users and is the only route to the port. A warning is logged on every start. |
+| `HORDE_AUTH_DISABLED=1` | Turn sign-in off. Every request acts as the first administrator. That account can still manage every other user, but cannot demote or disable itself (it is the one acting); delete it if it must go. **Only** for a deployment where a reverse proxy authenticates users and is the only route to the port. A warning is logged on every start. |
 | `HORDE_TRUSTED_USER_HEADER=X-Remote-User` | With `HORDE_AUTH_DISABLED=1` **and** `HORDE_TRUST_PROXY=1`, act as the existing user named in this header (their history, permissions). A missing or unknown name is refused. Setting the header without `HORDE_TRUST_PROXY=1` is an error: Horde **refuses to start** rather than ignore the header and make everyone an administrator. |
 
 !!! danger "HORDE_AUTH_DISABLED"

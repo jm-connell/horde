@@ -1,29 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "../api";
 import { useSettings } from "../hooks/useSettings";
-import type { Video } from "../types";
 import AiMarkdown from "./AiMarkdown";
 import Collapse from "./Collapse";
 import TypingDots from "./TypingDots";
+import type { AiTarget } from "./aiTarget";
 import VideoAiChat from "./VideoAiChat";
 
 type AiTab = "summary" | "chat";
 
 interface Props {
-  video: Video;
+  target: AiTarget;
   canSummarize: boolean;
   canChat: boolean;
   showCosts?: boolean;
-  onVideoUpdate: (video: Video) => void;
   showToast: (msg: string) => void;
 }
 
 export default function VideoAiPanel({
-  video,
+  target,
   canSummarize,
   canChat,
   showCosts = false,
-  onVideoUpdate,
   showToast,
 }: Props) {
   const [settings, updateSettings] = useSettings();
@@ -42,7 +39,7 @@ export default function VideoAiPanel({
     summarizeAbortRef.current = null;
     setSummarizing(false);
     setTab("summary");
-  }, [video.id]);
+  }, [target.key]);
 
   useEffect(() => {
     return () => {
@@ -50,9 +47,11 @@ export default function VideoAiPanel({
     };
   }, []);
 
-  const hasAiSummary = !!(video.ai_summary && video.ai_summary.trim());
+  const summaryText = target.summary ?? "";
+  const hasAiSummary = !!summaryText.trim();
   const waitingOnSummary =
-    summarizing || (!!video.processing_summary && !hasAiSummary);
+    summarizing || (target.processingSummary && !hasAiSummary);
+  const { summarize } = target;
 
   const runSummarize = useCallback(
     async (force: boolean) => {
@@ -69,11 +68,7 @@ export default function VideoAiPanel({
       const ac = new AbortController();
       summarizeAbortRef.current = ac;
       try {
-        const updated = await api.summarizeVideo(video.id, {
-          force,
-          signal: ac.signal,
-        });
-        onVideoUpdate(updated);
+        await summarize(force, ac.signal);
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
           return;
@@ -89,14 +84,7 @@ export default function VideoAiPanel({
         setSummarizing(false);
       }
     },
-    [
-      canSummarize,
-      hasAiSummary,
-      video.id,
-      onVideoUpdate,
-      showToast,
-      updateSettings,
-    ]
+    [canSummarize, hasAiSummary, summarize, showToast, updateSettings]
   );
 
   if (!canSummarize && !canChat) return null;
@@ -185,7 +173,7 @@ export default function VideoAiPanel({
                   </p>
                 )}
                 {hasAiSummary ? (
-                  <AiMarkdown text={video.ai_summary || ""} />
+                  <AiMarkdown text={summaryText} />
                 ) : waitingOnSummary ? (
                   <div className="flex justify-center py-8">
                     <TypingDots label="Generating summary" />
@@ -211,13 +199,17 @@ export default function VideoAiPanel({
 
           {canChat && (
             <VideoAiChat
-              videoId={video.id}
-              summary={video.ai_summary}
-              hasSubtitles={(video.subtitles?.length ?? 0) > 0}
+              chatKey={target.key}
+              chat={target.chat}
+              summary={target.summary}
+              hasSubtitles={target.hasSubtitles}
               active={activeTab === "chat"}
               showCosts={showCosts}
               showToast={showToast}
             />
+          )}
+          {target.note && (
+            <p className="mt-2 text-xs text-muted">{target.note}</p>
           )}
         </div>
       </Collapse>

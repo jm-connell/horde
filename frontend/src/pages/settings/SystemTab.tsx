@@ -4,6 +4,7 @@ import { useAiCore } from "./ai/useAiCore";
 import ResetHordePanel from "./system/ResetHordePanel";
 import StatusSection from "./system/StatusSection";
 import UpdateNotice from "./system/UpdateNotice";
+import UpdatesSection from "./system/UpdatesSection";
 import { useSystemState } from "./useSystemState";
 import { Section } from "./ui";
 import { PANEL_BTN } from "./constants";
@@ -42,8 +43,9 @@ export default function SystemTab() {
   return (
     <>
       <UpdateNotice system={system} />
+      <UpdatesSection system={system} />
+
       <Section
-        first
         title="Storage"
         hidden={!match("storage", "disk", "space", "library")}
       >

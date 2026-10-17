@@ -20,6 +20,17 @@ Horde has [accounts](authentication.md) ([model](../design/no-auth.md)) and is m
 
 If you script the API yourself, send `X-Horde-Request: 1` on every `POST`, `PUT`, `PATCH` and `DELETE`.
 
+## Updates from the app { #in-app-updates }
+
+Horde has **no access to Docker** and the container does not mount the Docker socket (that would be root on the host). The **Update now** button ([Updating](../getting-started/updating.md#update-from-the-app)) only lets an administrator write a small request file, `DATA_PATH/update/request.env`, in Horde's own data folder. A cron job you set up on the host reads it and runs `update.sh`. What follows from that:
+
+- Only administrators can start an update (`POST /api/system/update`); members cannot even see it.
+- The request carries no command. The host runs the same `update.sh` you would run by hand, on your configured update channel, with its database backup and automatic rollback. The worst a compromised Horde can do is ask for an update.
+- Horde controls its data folder, so the job reads and writes everything in `DATA_PATH/update/` as that folder's owner (via `setpriv`), never as root: a link planted there cannot make root read or overwrite other files. It also works from inside that folder only if it really is `DATA_PATH/update` (not a link elsewhere), never follows links to files, creates new files exclusively and reads at most 64 KiB, so a compromised Horde cannot point it at other files of the same user outside the container either. Request contents are validated, never executed.
+- This relies on Horde running as an ordinary user (`PUID`/`PGID`, the default). With `HORDE_ALLOW_ROOT=1` the data folder belongs to root and the job's file access runs as root too; do not combine that with the update button.
+- The cron job runs as root on the host, so the files it runs (`scripts/update_watch.sh`, `update.sh`) must stay owned and writable only by trusted users.
+- Remove the cron job and the button disappears within 5 minutes. See [ADR 0011](../adr/0011-in-app-updates.md).
+
 ## Allowed hosts { #allowed-hosts }
 
 Horde answers requests whose `Host` header is one of:

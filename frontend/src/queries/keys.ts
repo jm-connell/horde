@@ -10,6 +10,8 @@ export const queryKeys = {
   preview: {
     meta: (url: string) => ["preview", "meta", url] as const,
     download: (url: string) => ["preview", "download", url] as const,
+    ai: (url: string) => ["preview", "ai", url] as const,
+    related: (url: string) => ["preview", "related", url] as const,
   },
   ai: {
     status: ["ai", "status"] as const,
@@ -19,6 +21,7 @@ export const queryKeys = {
   system: {
     stats: ["system", "stats"] as const,
     activity: ["system", "activity"] as const,
+    update: ["system", "update"] as const,
   },
   compat: {
     summary: ["compat", "summary"] as const,
@@ -51,6 +54,12 @@ export const queryKeys = {
     all: ["tags"] as const,
     stats: (channel: string | undefined) =>
       ["tags", "stats", channel ?? ""] as const,
+  },
+  follows: {
+    list: ["follows", "list"] as const,
+  },
+  live: {
+    now: ["live", "now"] as const,
   },
   playlists: {
     all: ["playlists"] as const,

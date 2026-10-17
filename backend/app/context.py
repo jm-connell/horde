@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     from .services.auth.runtime import AuthRuntime
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
+    from .services.live.runtime import LiveRuntime
     from .services.workers import WorkerRegistry
 
 logger = logging.getLogger(__name__)
@@ -112,6 +113,8 @@ class AppContext:
     workers: WorkerRegistry = field(default_factory=lambda: _new_registry())
     shutdown_event: threading.Event = field(default_factory=threading.Event)
     ai: AiRuntimeState = field(default_factory=lambda: _new_ai_state())
+    #: Who is live and the open live HLS sessions (services/live).
+    live: LiveRuntime = field(default_factory=lambda: _new_live_runtime())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -127,6 +130,12 @@ def _new_ai_state() -> AiRuntimeState:
     from .services.ai.state import AiRuntimeState
 
     return AiRuntimeState()
+
+
+def _new_live_runtime() -> LiveRuntime:
+    from .services.live.runtime import LiveRuntime
+
+    return LiveRuntime()
 
 
 def _new_registry() -> WorkerRegistry:

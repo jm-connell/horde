@@ -22,7 +22,7 @@ from ...models import (
     VideoStatus,
     require_id,
 )
-from .. import activity, compat_rendition, library, scanner
+from .. import activity, compat_rendition, follows, library, scanner
 from ..fsutil import MoveJournal, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
 from ..metadata import probe_dimensions, probe_duration
@@ -323,6 +323,15 @@ def _queue_follow_up_work(
 ) -> None:
     """AI enrichment, channel catalog, subtitles/thumbnail and the H.264 sidecar."""
     video_id = committed.video_id
+    # A summary, AI chapters or chat made while it was streamed move onto it.
+    try:
+        from .. import stream_ai
+
+        stream_ai.adopt_video_id(video_id)
+    except Exception:
+        logger.warning(
+            "could not move stream AI results onto video %s", video_id, exc_info=True
+        )
     # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
     try:
         from ..ai import enqueue_for_video
@@ -415,6 +424,7 @@ def _complete_library(
         error_kind=None,
     )
     attach_download_to_playlist(spec.job_id, video_id)
+    follows.follow_from_download(spec.job_id, video_id)
     progress_store[spec.job_id] = snapshot
     return video_id
 

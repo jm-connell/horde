@@ -20,6 +20,12 @@ SCAN_INTERVAL_SEC: int = int(os.environ.get("SCAN_INTERVAL_SEC", "60"))
 # (and not owned by an active job) are deleted. 0 disables the sweep.
 TEMP_SWEEP_MAX_AGE_HOURS: float = float(os.environ.get("HORDE_TEMP_SWEEP_HOURS", "6"))
 
+# AI results for a streamed video are kept this long after it was last opened,
+# then deleted unless it was downloaded (which moves them onto the video).
+STREAM_AI_RETENTION_DAYS: int = max(
+    1, int(os.environ.get("HORDE_STREAM_AI_RETENTION_DAYS", "30"))
+)
+
 # Video extensions the scanner treats as importable media.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 
@@ -53,6 +59,17 @@ YTDLP_REQUEST_THREADS: int = max(
 
 # Max simultaneous ffmpeg sprite-sheet workers (CPU-heavy full-video decode).
 SPRITE_CONCURRENCY: int = max(1, int(os.environ.get("SPRITE_CONCURRENCY", "1")))
+
+# Live streams of followed channels. Each followed channel's /live page is checked
+# every LIVE_POLL_SEC (0 turns the checks off), LIVE_POLL_SPACING_SEC apart.
+LIVE_POLL_SEC: int = max(0, int(os.environ.get("HORDE_LIVE_POLL_SEC", "300")))
+LIVE_POLL_SPACING_SEC: float = max(
+    0.0, float(os.environ.get("HORDE_LIVE_POLL_SPACING_SEC", "2"))
+)
+# How far back the player can scrub in a live stream (when YouTube keeps it).
+LIVE_DVR_WINDOW_SEC: float = 3600 * max(
+    0.0, float(os.environ.get("HORDE_LIVE_DVR_HOURS", "4"))
+)
 
 # YouTube bot checks — bgutil POT sidecar (default in Docker) or cookie fallback.
 # See https://github.com/yt-dlp/yt-dlp/wiki/PO-Token-Guide

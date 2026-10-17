@@ -940,6 +940,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/follows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Follows */
+        get: operations["list_follows_api_follows_get"];
+        /**
+         * Follow Channel
+         * @description Follow a channel by URL or ``@handle`` (it needs no videos in the library).
+         */
+        put: operations["follow_channel_api_follows_put"];
+        post?: never;
+        /** Unfollow Channel */
+        delete: operations["unfollow_channel_api_follows_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fonts": {
         parameters: {
             query?: never;
@@ -988,6 +1010,77 @@ export interface paths {
          * @description The full payload for a signed-in user; the bare minimum for anyone else.
          */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Now
+         * @description Followed channels that are live right now (from the background checks).
+         */
+        get: operations["live_now_api_live_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/master.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Master */
+        get: operations["live_master_api_live__video_id__master_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/seg/{key}/{sq}.ts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Segment */
+        get: operations["live_segment_api_live__video_id__seg__key___sq__ts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/v/{key}.m3u8": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Live Media Playlist */
+        get: operations["live_media_playlist_api_live__video_id__v__key__m3u8_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1247,6 +1340,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/preview/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Stream Ai
+         * @description Saved results for the stream (nothing is generated or fetched).
+         *
+         *     Opening a stream that has saved results restarts their retention period.
+         */
+        get: operations["get_stream_ai_api_preview_ai_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/chapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Chapters For Stream */
+        post: operations["chapters_for_stream_api_preview_ai_chapters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Stream Chat */
+        get: operations["get_stream_chat_api_preview_ai_chat_get"];
+        put?: never;
+        /** Post Stream Chat */
+        post: operations["post_stream_chat_api_preview_ai_chat_post"];
+        /** Delete Stream Chat */
+        delete: operations["delete_stream_chat_api_preview_ai_chat_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/ai/summarize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Summarize Stream */
+        post: operations["summarize_stream_api_preview_ai_summarize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/preview/manifest": {
         parameters: {
             query?: never;
@@ -1297,6 +1465,26 @@ export interface paths {
         };
         /** Preview Meta */
         get: operations["preview_meta_api_preview_meta_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/preview/related": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Related
+         * @description Library and indexed-channel videos related to a stream.
+         */
+        get: operations["preview_related_api_preview_related_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1564,6 +1752,50 @@ export interface paths {
         get: operations["system_stats_api_system_stats_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/update": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Update Status
+         * @description Whether the update button is set up on the host, and the last/current run.
+         */
+        get: operations["update_status_api_system_update_get"];
+        put?: never;
+        /**
+         * Start Update
+         * @description Ask the host to run update.sh (picked up within about a minute).
+         */
+        post: operations["start_update_api_system_update_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/update/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Update
+         * @description Withdraw an update request the host has not started yet.
+         */
+        post: operations["cancel_update_api_system_update_cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3794,6 +4026,40 @@ export interface components {
             /** Version */
             version?: string | null;
         };
+        /**
+         * FollowListResponse
+         * @description Every channel the signed-in user follows (one page; ``next_cursor`` is null).
+         */
+        FollowListResponse: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["FollowedChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** FollowRequest */
+        FollowRequest: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+        };
+        /** FollowedChannelRead */
+        FollowedChannelRead: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Source */
+            source: string;
+        };
         /** FontList */
         FontList: {
             /** Items */
@@ -3902,6 +4168,45 @@ export interface components {
          * @enum {string}
          */
         JobStatus: "queued" | "downloading" | "completed" | "error" | "cancelled";
+        /** LiveChannelRead */
+        LiveChannelRead: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /** Game */
+            game?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url: string;
+            /** Title */
+            title?: string | null;
+            /** Video Id */
+            video_id: string;
+            /** Viewers */
+            viewers?: number | null;
+            /** Watch Url */
+            watch_url: string;
+        };
+        /**
+         * LiveListResponse
+         * @description Followed channels that are live now (one page; ``next_cursor`` is null).
+         */
+        LiveListResponse: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["LiveChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Password */
@@ -4519,6 +4824,51 @@ export interface components {
             /** Video Count */
             video_count: number;
         };
+        /** StreamAiAction */
+        StreamAiAction: {
+            /**
+             * Force
+             * @default false
+             */
+            force: boolean;
+            /** Url */
+            url: string;
+        };
+        /** StreamAiChatRequest */
+        StreamAiChatRequest: {
+            /** Message */
+            message: string;
+            /** Url */
+            url: string;
+        };
+        /**
+         * StreamAiRead
+         * @description AI results saved for a streamed (not downloaded) video.
+         */
+        StreamAiRead: {
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterRead"][];
+            /** Expires At */
+            expires_at?: string | null;
+            /** Has Captions */
+            has_captions?: boolean | null;
+            /** Summary */
+            summary?: string | null;
+            /** Summary Cost */
+            summary_cost?: number | null;
+            /** Summary Model */
+            summary_model?: string | null;
+            /**
+             * Supported
+             * @default true
+             */
+            supported: boolean;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
         /** StreamPreviewMeta */
         StreamPreviewMeta: {
             /**
@@ -4536,6 +4886,11 @@ export interface components {
             duration?: number | null;
             /** Id */
             id?: string | null;
+            /**
+             * Is Live
+             * @default false
+             */
+            is_live: boolean;
             /** Library Video Id */
             library_video_id?: number | null;
             /** Preview Height */
@@ -4553,6 +4908,18 @@ export interface components {
             title?: string | null;
             /** View Count */
             view_count?: number | null;
+        };
+        /**
+         * StreamRelatedPage
+         * @description Related videos for a stream: library and not-downloaded ones, marked.
+         *
+         *     One page; ``next_cursor`` is always None (kept for the list envelope).
+         */
+        StreamRelatedPage: {
+            /** Items */
+            items: components["schemas"]["ChannelFeedEntry"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** SubtitleTrack */
         SubtitleTrack: {
@@ -4647,6 +5014,16 @@ export interface components {
             /** Candidates */
             candidates: components["schemas"]["ThumbnailCandidate"][];
         };
+        /** UnfollowResult */
+        UnfollowResult: {
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Following
+             * @default false
+             */
+            following: boolean;
+        };
         /** UpdateCheckRead */
         UpdateCheckRead: {
             /** Checked At */
@@ -4673,6 +5050,35 @@ export interface components {
             source?: string | null;
             /** Update Available */
             update_available: boolean;
+        };
+        /**
+         * UpdateControlRead
+         * @description The "Update now" button: whether the host watcher is set up, and progress.
+         */
+        UpdateControlRead: {
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Log Tail */
+            log_tail?: string[];
+            /** Request Id */
+            request_id?: string | null;
+            /** Requested At */
+            requested_at?: string | null;
+            /** Requested By */
+            requested_by?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "idle" | "requested" | "running" | "updated" | "up_to_date" | "rolled_back" | "failed" | "interrupted";
+            /** Watcher Connected */
+            watcher_connected: boolean;
+            /** Watcher Last Seen */
+            watcher_last_seen?: string | null;
         };
         /** UserCreate */
         UserCreate: {
@@ -7353,6 +7759,126 @@ export interface operations {
             };
         };
     };
+    list_follows_api_follows_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowListResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    follow_channel_api_follows_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowedChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    unfollow_channel_api_follows_delete: {
+        parameters: {
+            query: {
+                channel_url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnfollowResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_fonts_api_fonts_get: {
         parameters: {
             query?: never;
@@ -7530,6 +8056,167 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthFull"] | components["schemas"]["HealthPublic"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_now_api_live_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveListResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_master_api_live__video_id__master_m3u8_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_segment_api_live__video_id__seg__key___sq__ts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description MPEG-TS media segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "video/mp2t": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_media_playlist_api_live__video_id__v__key__m3u8_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description HLS playlist */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.apple.mpegurl": string;
                 };
             };
             /** @description Validation error */
@@ -8292,6 +8979,252 @@ export interface operations {
             };
         };
     };
+    get_stream_ai_api_preview_ai_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    chapters_for_stream_api_preview_ai_chapters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_stream_chat_api_preview_ai_chat_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoAiChatHistory"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_stream_chat_api_preview_ai_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Server-sent events, one JSON object per event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_stream_chat_api_preview_ai_chat_delete: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    summarize_stream_api_preview_ai_summarize_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamAiAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     preview_manifest_api_preview_manifest_get: {
         parameters: {
             query: {
@@ -8434,6 +9367,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamPreviewMeta"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_related_api_preview_related_get: {
+        parameters: {
+            query: {
+                url: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamRelatedPage"];
                 };
             };
             /** @description Validation error */
@@ -8993,6 +9967,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_status_api_system_update_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateControlRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    start_update_api_system_update_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateControlRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_update_api_system_update_cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateControlRead"];
                 };
             };
             /** @description Validation error */

@@ -1,17 +1,23 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
   usePlaybackActions,
   usePlaybackSession,
 } from "../context/PlaybackContext";
+import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import RedownloadDialog from "./watch/RedownloadDialog";
 import WatchActions from "./watch/WatchActions";
 import WatchInfoPanels from "./watch/WatchInfoPanels";
 import WatchPlayerSection from "./watch/WatchPlayerSection";
-import { RelatedGrid, WatchSidebar } from "./watch/WatchSidebar";
+import {
+  RelatedGrid,
+  StreamRelatedGrid,
+  WatchSidebar,
+} from "./watch/WatchSidebar";
+import { libraryRelatedItems, streamRelatedItems } from "./watch/relatedItems";
 import { useRelatedFeed } from "./watch/useRelatedFeed";
 import { useStreamDownload } from "./watch/useStreamDownload";
 import { useWatchActions } from "./watch/useWatchActions";
@@ -51,6 +57,16 @@ export default function Watch() {
   const actions = useWatchActions({ video, setSource });
   const ai = useWatchAi(source, setVideo);
   const related = useRelatedFeed(video?.id);
+  const streamRelated = useStreamRelated(
+    source?.kind === "stream" ? source.url : undefined
+  );
+  const relatedItems = useMemo(
+    () =>
+      video
+        ? libraryRelatedItems(related.videos)
+        : streamRelatedItems(streamRelated.items),
+    [video, related.videos, streamRelated.items]
+  );
 
   // Registered here, above the early returns: the loading and error views must
   // not unregister the dock, or the player would jump to the mini player.
@@ -88,11 +104,10 @@ export default function Watch() {
 
   const isWide = !isMobile && mode === "theater";
   const showRelatedRight =
-    !!video &&
     !isMobile &&
     mode === "standard" &&
     settings.showRelatedVideos &&
-    related.videos.length > 0;
+    relatedItems.length > 0;
   const queueVisible = !!video && queue.length > 0;
   const contentClass = showRelatedRight
     ? "mx-auto max-w-[90rem] 2xl:max-w-[116rem]"
@@ -133,13 +148,22 @@ export default function Watch() {
               onVideoUpdated={setVideo}
             />
           )}
-          {video && !showRelatedRight && related.videos.length > 0 && (
-            <RelatedGrid related={related} />
-          )}
+          {!showRelatedRight &&
+            relatedItems.length > 0 &&
+            (video ? (
+              <RelatedGrid related={related} />
+            ) : (
+              <StreamRelatedGrid items={relatedItems} />
+            ))}
         </WatchPlayerSection>
 
         {showRelatedRight && (
-          <WatchSidebar related={related} hasQueue={queue.length > 0} />
+          <WatchSidebar
+            items={relatedItems}
+            sentinelRef={video ? related.sentinelRef : undefined}
+            loadingMore={video ? related.loadingMore : false}
+            hasQueue={queueVisible}
+          />
         )}
       </div>
 
