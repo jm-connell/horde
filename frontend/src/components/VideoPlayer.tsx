@@ -27,6 +27,7 @@ import SubtitleOverlay from "./SubtitleOverlay";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
+import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { VideoPlayerProps } from "./videoPlayerTypes";
@@ -36,8 +37,9 @@ export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
 export default function VideoPlayer({
   src,
-  streamType = "file",
-  progressiveFallbackSrc,
+  streamType: streamTypeProp = "file",
+  live = false,
+  progressiveFallbackSrc: progressiveFallbackProp,
   videoId,
   mimeType = "video/mp4",
   poster = null,
@@ -81,6 +83,8 @@ export default function VideoPlayer({
   onSourceError,
 }: VideoPlayerProps) {
   const isMini = variant === "mini";
+  const streamType = live ? "dash" : streamTypeProp;
+  const progressiveFallbackSrc = live ? undefined : progressiveFallbackProp;
   const isMobile = useIsMobile();
   const [settings] = useSettings();
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -249,6 +253,7 @@ export default function VideoPlayer({
     effectiveStreamType,
     dashReloadToken,
     mediaSuspended,
+    live,
     videoRef,
     shakaPlayerRef,
     qualityChoiceRef,
@@ -285,6 +290,8 @@ export default function VideoPlayer({
     subtitlesPending,
     onSubtitlesRefresh,
   });
+
+  const liveWindow = useLiveWindow(shakaPlayerRef, live, shakaReady);
 
   const seekTo = useCallback(
     (sec: number) => {
@@ -436,6 +443,30 @@ export default function VideoPlayer({
       subtitleSize,
     });
 
+  // Live: the seek bar spans the DVR window, 0 = its oldest segment.
+  const liveStart = liveWindow?.start ?? 0;
+  const barCurrent = liveWindow
+    ? Math.min(Math.max(0, current - liveStart), liveWindow.end - liveStart)
+    : current;
+  const barDuration = liveWindow ? liveWindow.end - liveStart : duration;
+  const barSeekTo = useCallback(
+    (sec: number) => seekTo(liveStart + sec),
+    [seekTo, liveStart]
+  );
+  const goLive = useCallback(() => {
+    const p = shakaPlayerRef.current;
+    if (p) p.goToLive();
+    else if (liveWindow) seekTo(liveWindow.end);
+    videoRef.current?.play().catch(() => undefined);
+  }, [liveWindow, seekTo]);
+  const liveControl = live
+    ? {
+        behindSec: liveWindow ? behindLive(liveWindow, current) : 0,
+        isLive: liveWindow?.isLive ?? true,
+        onGoLive: goLive,
+      }
+    : null;
+
   // Ultrawide (e.g. 2:1) letterboxes inside a 16:9 dock — compact the up-next
   // card so it stays within the visible video picture.
   const compactUpNext = videoAspect != null && videoAspect >= 2.0;
@@ -538,9 +569,10 @@ export default function VideoPlayer({
             mode={mode}
             playing={playing}
             togglePlay={togglePlay}
-            current={current}
-            duration={duration}
-            seekTo={seekTo}
+            current={live ? barCurrent : current}
+            duration={live ? barDuration : duration}
+            seekTo={live ? barSeekTo : seekTo}
+            live={liveControl}
             onInteractionStart={onControlsInteractionStart}
             onInteractionEnd={onControlsInteractionEnd}
             scrubberRef={scrubberRef}
@@ -569,7 +601,7 @@ export default function VideoPlayer({
             hasTracks={tracks.length > 0}
             captionsOn={Boolean(captionLang)}
             onCycleCaptions={cycleCaptions}
-            castAvailable={castAvailable}
+            castAvailable={castAvailable && !live}
             casting={casting}
             castDeviceName={castDeviceName}
             onCastClick={onCastClick}

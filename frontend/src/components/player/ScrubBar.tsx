@@ -15,6 +15,8 @@ interface Props {
   hoveredChapter: Chapter | null;
   onHoverChapter: (startSec: number | null) => void;
   seekTo: (sec: number) => void;
+  /** Hover label for a position (default: its timestamp). */
+  formatTime?: (sec: number) => string;
   /** Keep the control bar up while the pointer is dragging the thumb. */
   onInteractionStart: () => void;
   onInteractionEnd: () => void;
@@ -30,6 +32,7 @@ export default function ScrubBar({
   hoveredChapter,
   onHoverChapter,
   seekTo,
+  formatTime = formatTimestamp,
   onInteractionStart,
   onInteractionEnd,
 }: Props) {
@@ -189,7 +192,7 @@ export default function ScrubBar({
                   {hoveredChapter.title}
                 </>
               ) : (
-                formatTimestamp(scrubPreview.time)
+                formatTime(scrubPreview.time)
               )}
             </span>
           </div>

@@ -1,4 +1,4 @@
-/** Minimal typings for the Shaka DASH build used by VideoPlayer. */
+/** Minimal typings for the Shaka DASH and HLS builds used by VideoPlayer. */
 declare module "shaka-player/dist/shaka-player.dash.js" {
   export interface ShakaVariantTrack {
     id: number;
@@ -58,6 +58,7 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     attach(element: HTMLMediaElement): Promise<void>;
     load(manifestUri: string): Promise<void>;
     destroy(): Promise<void>;
+    unload?(initializeMediaSource?: boolean): Promise<void>;
     configure(config: Record<string, unknown>): void;
     getConfiguration(): Record<string, unknown>;
     addEventListener(type: string, listener: EventListener): void;
@@ -66,6 +67,10 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     selectVariantTrack(track: ShakaVariantTrack, clearBuffer?: boolean): void;
     getStats(): ShakaStats;
     retryStreaming(retryDelay?: number): boolean;
+    isLive(): boolean;
+    /** Seekable window in media time (a live stream's DVR window). */
+    seekRange(): { start: number; end: number };
+    goToLive(): void;
     addTextTrackAsync(
       uri: string,
       language: string,
@@ -107,4 +112,9 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
 
   export const Player: ShakaNamespace["Player"];
   export const polyfill: ShakaNamespace["polyfill"];
+}
+
+/** The HLS build (live streams) exposes the same API. */
+declare module "shaka-player/dist/shaka-player.hls.js" {
+  export * from "shaka-player/dist/shaka-player.dash.js";
 }

@@ -3,6 +3,7 @@ import { api } from "../api";
 import type { ChannelSearchHit, ChannelStat } from "../types";
 import { formatCompactCount } from "../utils";
 import Collapse from "./Collapse";
+import LiveNowSection from "./LiveNowSection";
 
 const CHANNEL_SIDEBAR_LIMIT = 30;
 
@@ -82,6 +83,7 @@ export default function ChannelSidebar({
 
   return (
     <div className="space-y-2" data-horde="channel-list">
+      <LiveNowSection />
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
