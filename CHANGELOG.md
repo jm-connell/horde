@@ -69,6 +69,15 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Added
 
+- Followed channels and live streams. Users follow channels automatically
+  when a download they queued finishes, or by hand, including channels with no
+  videos on the server. A quiet **Live** list in the sidebar shows followed
+  channels that are live, with title and game. Live streams play through a
+  server-side HLS proxy that refreshes YouTube's URLs on its own, with
+  scrub-back up to `HORDE_LIVE_DVR_HOURS` (default 4). Per-user toggle under
+  **Settings → Library → Show live streams**; `HORDE_LIVE_POLL_SEC=0` turns
+  the server's live checks off. Migration `0007_channel_follows`. See
+  [docs/design/live-streams.md](docs/design/live-streams.md).
 - Accounts: sign-in, an admin plus members with per-account permissions, per-user
   watch history, AI chat and UI preferences, signed media URLs for Chromecast and
   AirPlay, and a recovery CLI (`python -m app.cli`).

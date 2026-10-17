@@ -13,6 +13,14 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 | Progress bar on all library videos | `showProgressOnAllVideos` | `false` | UI blob |
 | Show dates on video cards | `showCardDates` | `true` | UI blob |
 
+### Live streams
+
+| Setting | Key | Default | Storage |
+|---------|-----|---------|---------|
+| Show live streams | `showLiveStreams` | `true` | UI blob |
+
+**Followed channels** (below the toggle) lists the channels you follow, with **Unfollow**, and takes a channel URL or `@handle` to follow a channel that has no videos on the server. Follows are per user. See [Channels → Following and live streams](../guides/channels.md#following-and-live-streams).
+
 ### Progress expiry
 
 | Setting | Key | Default | Range | Storage |

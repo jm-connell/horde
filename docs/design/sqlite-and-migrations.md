@@ -85,6 +85,7 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 | `0004_permissions_chat` | Member permissions; chat messages belong to a user |
 | `0005_tags_search` | `video_tags`, the `videos_fts` full-text index, `videos.youtube_id` (all backfilled from existing rows) |
 | `0006_video_tags_delete` | `AFTER DELETE ON videos` trigger that clears the video's `video_tags` rows even on a connection without `foreign_keys` |
+| `0007_channel_follows` | `channel_follows` table (per-user followed channels, with unfollow tombstones) and `download_requesters` (who queued a download job) |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
 

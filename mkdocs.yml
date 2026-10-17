@@ -112,6 +112,7 @@ nav:
       - 0006 Downloader package split: adr/0006-downloader-package-split.md
       - 0007 FTS5 triggers and vector index: adr/0007-fts5-triggers-and-vector-index.md
       - 0008 Releases and rollback: adr/0008-releases-and-rollback.md
+      - 0009 Live streams HLS proxy: adr/0009-live-streams-hls-proxy.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
@@ -125,6 +126,7 @@ nav:
       - Local vs cloud AI: design/local-vs-cloud-ai.md
       - Workload profiles: design/workload-profiles.md
       - Player architecture: design/player-architecture.md
+      - Live streams: design/live-streams.md
       - Settings split: design/settings-split.md
       - Single-flight AI: design/single-flight-ai.md
       - Application context: design/app-context.md
