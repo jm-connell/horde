@@ -175,3 +175,43 @@ test("the description box keeps a readable width on a wide window", async ({
   };
   await expect.poll(offCentre).toBeLessThan(4);
 });
+
+test("dragged description and chapter sizes stick on this device", async ({
+  page,
+}) => {
+  test.skip(!hasDesktopPlayerChrome(page), "resizing is desktop only");
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const description = page
+    .locator(".ui-panel")
+    .filter({ has: page.getByText("Aurora over the ridge line.") })
+    .last();
+  const width = async () => (await description.boundingBox())?.width ?? 0;
+  await expect.poll(width).toBeGreaterThan(0);
+  const before = await width();
+
+  const split = page.getByRole("separator", {
+    name: "Resize description and chapters",
+  });
+  const handle = await split.boundingBox();
+  if (!handle) throw new Error("split handle is not laid out");
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 120, y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(width).toBeLessThan(before - 100);
+
+  // Saved per device: a reload keeps the split.
+  await page.reload();
+  await expect.poll(width).toBeLessThan(before - 100);
+
+  // Double-click puts the default back.
+  await split.dblclick();
+  await expect
+    .poll(async () => Math.abs((await width()) - before))
+    .toBeLessThan(2);
+});

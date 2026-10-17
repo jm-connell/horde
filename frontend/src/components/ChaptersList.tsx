@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { useAnimatedClipHeight } from "../hooks/useAnimatedClipHeight";
 import OverlayScrollThumb from "./OverlayScrollThumb";
+import ResizeHandle, { type ResizeHandleProps } from "./ResizeHandle";
 import { formatTimestamp, type Chapter } from "../utils";
 
 interface Props {
@@ -10,6 +11,11 @@ interface Props {
   /** Collapsed max height in rem. Matches the description clip when side-by-side. */
   collapsedRem?: number;
   className?: string;
+  /** Desktop: drag the bottom edge to change the collapsed height. */
+  resize?: Pick<
+    ResizeHandleProps,
+    "toValue" | "onChange" | "onCommit" | "onReset"
+  > | null;
 }
 
 /** Chapter list panel only (no independent title/toggle — parent owns expand). */
@@ -18,6 +24,7 @@ export default function ChaptersList({
   expanded = false,
   collapsedRem = 12,
   className = "",
+  resize = null,
 }: Props) {
   const scrollRef = useRef<HTMLUListElement>(null);
   const chaptersKey = chapters
@@ -66,6 +73,17 @@ export default function ChaptersList({
         scrollRef={scrollRef}
         revision={`${expanded}-${chaptersKey}`}
       />
+      {resize && !expanded && (
+        <ResizeHandle
+          axis="y"
+          label="Resize chapters"
+          className="absolute inset-x-0 bottom-0 h-2.5"
+          getStart={() =>
+            scrollRef.current?.getBoundingClientRect().height ?? 0
+          }
+          {...resize}
+        />
+      )}
     </div>
   );
 }

@@ -52,6 +52,10 @@ External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c
 
 Chapters come from, in order: timestamp lines in the video **description**, yt-dlp native chapters saved at download, or an optional **AI** pass over captions when those are missing (queued after download, or from a Watch button). When two or more valid ascending timestamps exist, chapter markers appear on the scrubber; ++n++ jumps to the next chapter. Timestamp lines may be hidden from the description panel when chapters are shown separately. Stream preview still uses description timestamps only.
 
+## Resizing the panels under the video
+
+On desktop, the AI summary, AI chat, description and chapters panels can be resized: hover a panel and drag the faint bar on its bottom edge, or drag the gap between the description and chapters to change their widths. Double-click a handle to go back to the default size; with a handle focused, the arrow keys nudge it. Sizes are remembered per device (in the browser), not per account, and apply to every video. The description and the chapters beside it share one height.
+
 ## Scrub sprites
 
 For library videos with generated sprite sheets, hovering the scrubber shows a **preview thumbnail** for that time. Sprites are lazy-loaded during playback.
