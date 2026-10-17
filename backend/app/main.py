@@ -276,6 +276,8 @@ async def lifespan(app: FastAPI):
         restore_signals = _install_shutdown_signals(ctx.shutdown_event)
         if ctx.e2e:
             _boot_e2e(app, ctx)
+            # Never used offline, but a test serving a local stream needs it.
+            await preview.init_preview_client()
         else:
             await _boot_production(app, ctx)
         yield
