@@ -129,7 +129,7 @@ After pulling a new image or rebuilding the frontend, browsers may keep old hash
 
 **Fix:** hard reload — +++ctrl+shift+r+++ (Windows/Linux) or +++cmd+shift+r+++ (macOS).
 
-If Settings → System still shows an old version, confirm the container actually restarted on the new image (`horde_version` / `horde_sha` on `/api/health`).
+If Settings → System still shows an old version, confirm the container actually restarted on the new image (`horde_version` / `horde_sha` on `/api/health` while signed in; `docker exec horde cat /app/BUILD_INFO` also shows the build).
 
 ## Settings or library empty after update
 

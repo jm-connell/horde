@@ -75,7 +75,7 @@ jobs:
         run: |
           curl -fsS http://127.0.0.1:18080/api/ping
           echo
-          curl -fsS http://127.0.0.1:18080/api/health | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] == "ok", d; print("health ok:", d["horde_sha"][:7])'
+          curl -fsS http://127.0.0.1:18080/api/health | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["status"] == "ok" and d["setup_required"] is True and d["auth_required"] is True, d; assert "horde_sha" not in d, d; print("health ok (anonymous):", d)'
           curl -fsS -o /dev/null http://127.0.0.1:18080/
           curl -fsS -o /dev/null http://127.0.0.1:18080/wiki/
 
