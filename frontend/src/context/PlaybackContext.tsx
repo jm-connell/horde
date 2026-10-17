@@ -39,7 +39,7 @@ import {
 } from "../utils/miniPlayerLayout";
 import type { SubtitleTrack, Video } from "../types";
 
-import { undismissContinueWatching } from "../hooks/useContinueWatchingDismiss";
+import { useProgressSaver } from "../hooks/useProgressSaver";
 import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 export interface StreamSession {
   url: string;
@@ -292,36 +292,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const activeSession = Boolean(current || stream);
 
-  // Persist watch position at most once every 5s while playing.
-  // Skip saving near the end (>=90%) — treat as finished (restart next time).
-  const progressTimer = useRef<number | null>(null);
-  const saveProgress = useCallback(
-    (id: number, sec: number, durationSec?: number | null) => {
-      if (
-        durationSec &&
-        durationSec > 0 &&
-        sec > 0 &&
-        sec >= durationSec * 0.9
-      ) {
-        if (progressTimer.current !== null) return;
-        progressTimer.current = window.setTimeout(() => {
-          progressTimer.current = null;
-        }, 5000);
-        api.saveProgress(id, 0).catch(() => undefined);
-        return;
-      }
-      if (progressTimer.current !== null) return;
-      progressTimer.current = window.setTimeout(() => {
-        progressTimer.current = null;
-      }, 5000);
-      // Resuming watch (≥30s) should bring the video back to Continue watching.
-      if (sec >= 30) {
-        undismissContinueWatching(id);
-      }
-      api.saveProgress(id, sec).catch(() => undefined);
-    },
-    []
-  );
+  // Persist the watch position for this account (throttled; see the hook).
+  const progressSaver = useProgressSaver();
 
   useEffect(() => {
     setJson(QUEUE_KEY, queue, "session");
@@ -673,7 +645,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const handleEnded = useCallback(() => {
     if (stream) return;
     if (current) {
-      api.saveProgress(current.id, 0).catch(() => undefined);
+      progressSaver.finish(current.id);
       recentWatchedRef.current = [
         current.id,
         ...recentWatchedRef.current.filter((id) => id !== current.id),
@@ -698,6 +670,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [
     current,
     stream,
+    progressSaver,
     advance,
     startUpNextCountdown,
     settings.autoplayRelated,
@@ -934,7 +907,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         initialPosition={current.last_position_sec}
         onProgress={(sec) => {
           libraryPosRef.current = sec;
-          saveProgress(current.id, sec, current.duration_sec);
+          progressSaver.report(current.id, sec, current.duration_sec);
         }}
         chapters={libraryChapters}
         sponsorSegments={sponsorSegments}

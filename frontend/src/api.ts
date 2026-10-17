@@ -367,6 +367,8 @@ export const api = {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ position_sec: positionSec }),
+        // Sent as the page is hidden or closed too: let it outlive the page.
+        keepalive: true,
       });
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;

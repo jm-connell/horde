@@ -105,6 +105,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- Pausing, seeking, hiding the tab or closing the page now saves where you
+  stopped. Saves were throttled to one every 5 seconds with nothing sent at the
+  end of the window, so another device could resume up to 5 seconds early, or
+  from an older place after a seek.
 - Videos saved for offline viewing resume per account. A shared device used to
   keep one position per saved video, so it resumed wherever whoever played it
   last had stopped, and could ignore newer progress made on another device.

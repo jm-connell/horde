@@ -158,6 +158,29 @@ test("a position saved on one device is where the account's other devices start"
   await Promise.all([pcCtx, memberCtx, viewerCtx].map((c) => c.close()));
 });
 
+test("pausing saves the position the player stopped at", async ({
+  page: phone,
+  browser,
+  baseURL,
+}) => {
+  const idOf = await seededIds(phone);
+  const kiln = idOf("Kiln fire");
+  await phone.goto(`/watch/${kiln}`);
+  await watchTo(phone, kiln, 6);
+  // A save just went out; stop a few seconds later, inside the throttle window.
+  await parkAt(phone, 11);
+  await expect
+    .poll(() => serverPosition(phone, kiln), { timeout: 10_000 })
+    .toBe(11);
+
+  const { ctx, page: pc } = await signedInDevice(browser, baseURL, "admin");
+  await pc.goto(`/watch/${kiln}`);
+  const start = await startPosition(pc);
+  expect(start).toBeGreaterThanOrEqual(10.5);
+  expect(start).toBeLessThan(15);
+  await ctx.close();
+});
+
 /** Positions queued in this browser while progress saves could not get through. */
 function pendingProgress(
   page: Page
