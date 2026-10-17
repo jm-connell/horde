@@ -238,6 +238,7 @@ function OnlineLibrary() {
               order={order}
               onSortChange={handleSortChange}
               onToggleOrder={toggleOrder}
+              showSort={!onRecommendedTab}
               showTagsButton={!isHome && !onRecommendedTab && hasTags}
               showTags={showTags}
               onToggleTags={() => setShowTags((s) => !s)}

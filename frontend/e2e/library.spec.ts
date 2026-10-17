@@ -293,3 +293,33 @@ test("an in-app change of the ?tag= link replaces the open tag", async ({
   ).toBeVisible();
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
 });
+
+test("the Recommended tab has no sort control", async ({ page }) => {
+  // Recommended needs a ready AI backend; report one.
+  await page.route(/\/api\/ai\/status$/, async (route) => {
+    let response;
+    let status: Record<string, unknown>;
+    try {
+      response = await route.fetch();
+      status = await response.json();
+    } catch {
+      return; // the page closed while a status poll was in flight
+    }
+    await route.fulfill({
+      response,
+      json: { ...status, enabled: true, ready: true, paused: false },
+    });
+  });
+  await page.goto("/");
+  const sort = page.getByRole("button", { name: "Sort library" });
+  await expect(sort).toBeVisible();
+
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await expect(sort).toHaveCount(0);
+  await expect(
+    page.locator('button[title="Toggle sort direction"]')
+  ).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await expect(sort).toBeVisible();
+});

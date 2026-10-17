@@ -14,6 +14,7 @@ export default function HomeControls({
   order,
   onSortChange,
   onToggleOrder,
+  showSort,
   showTagsButton,
   showTags,
   onToggleTags,
@@ -28,6 +29,8 @@ export default function HomeControls({
   order: "asc" | "desc";
   onSortChange: (sort: LibrarySort) => void;
   onToggleOrder: () => void;
+  /** False on the Recommended tab, which has its own fixed order. */
+  showSort: boolean;
   /** The narrow-screen tags button (wide screens have one by the chips). */
   showTagsButton: boolean;
   showTags: boolean;
@@ -56,22 +59,28 @@ export default function HomeControls({
         />
         <YoutubeSearchChip />
       </div>
-      <ThemedSelect
-        aria-label="Sort library"
-        value={sort}
-        options={[...LIBRARY_SORT_OPTIONS]}
-        onChange={onSortChange}
-        className="min-w-0 w-[min(12.5rem,100%)] max-md:flex-1 md:min-w-[12.5rem] md:shrink-0"
-        buttonClassName="w-full sm:px-3"
-        align="right"
-      />
-      <button
-        onClick={onToggleOrder}
-        className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
-        title={sort === "random" ? "Shuffle again" : "Toggle sort direction"}
-      >
-        {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
-      </button>
+      {showSort && (
+        <>
+          <ThemedSelect
+            aria-label="Sort library"
+            value={sort}
+            options={[...LIBRARY_SORT_OPTIONS]}
+            onChange={onSortChange}
+            className="min-w-0 w-[min(12.5rem,100%)] max-md:flex-1 md:min-w-[12.5rem] md:shrink-0"
+            buttonClassName="w-full sm:px-3"
+            align="right"
+          />
+          <button
+            onClick={onToggleOrder}
+            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
+            title={
+              sort === "random" ? "Shuffle again" : "Toggle sort direction"
+            }
+          >
+            {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
+          </button>
+        </>
+      )}
       {showTagsButton && (
         <button
           onClick={onToggleTags}
