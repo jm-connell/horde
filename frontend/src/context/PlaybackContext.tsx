@@ -124,6 +124,21 @@ const MINI_WIDTH_KEY = "horde.mini-width";
 const DEFAULT_MINI_WIDTH_MOBILE = 224;
 const DEFAULT_MINI_WIDTH_DESKTOP = 704;
 
+/**
+ * A fresh copy of the playing video's details. Its resume position is where
+ * the player started; from then on the player owns the position, and a newer
+ * saved one (a few seconds behind, from this very playback) would seek it
+ * back. So the details change, the position does not.
+ */
+function withPlayingPosition(playing: Video, fresh: Video): Video {
+  return {
+    ...playing,
+    ...fresh,
+    last_position_sec: playing.last_position_sec,
+    last_watched_at: playing.last_watched_at,
+  };
+}
+
 function loadMiniWidth(): number | null {
   const raw = getItem(MINI_WIDTH_KEY);
   if (!raw) return null;
@@ -688,19 +703,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     enabledSponsorBlockCategories(settings.sponsorBlockCategories)
   );
 
+  const updateCurrentVideo = useCallback((video: Video) => {
+    setCurrent((prev) =>
+      prev?.id === video.id ? withPlayingPosition(prev, video) : prev
+    );
+  }, []);
+
   const refreshCurrentVideo = useCallback(() => {
     if (!current) return;
     api
       .getVideo(current.id)
-      .then(setCurrent)
+      .then(updateCurrentVideo)
       .catch(() => undefined);
-  }, [current]);
-
-  const updateCurrentVideo = useCallback((video: Video) => {
-    setCurrent((prev) =>
-      prev?.id === video.id ? { ...prev, ...video } : prev
-    );
-  }, []);
+  }, [current, updateCurrentVideo]);
 
   const pollCurrentVideo =
     !!current &&

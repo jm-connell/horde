@@ -105,6 +105,10 @@ level. Detailed per-area entries are added by the maintainer at release time.
 
 ### Fixed
 
+- A playing video no longer jumps back a few seconds every time its details
+  refresh (while subtitles, a summary, sprites or chapters are still being
+  made): the refreshed copy carried the position saved a moment earlier, and
+  the player sought back to it.
 - Pausing, seeking, hiding the tab or closing the page now saves where you
   stopped. Saves were throttled to one every 5 seconds with nothing sent at the
   end of the window, so another device could resume up to 5 seconds early, or

@@ -181,6 +181,43 @@ test("pausing saves the position the player stopped at", async ({
   await ctx.close();
 });
 
+test("refreshing the details of a playing video does not rewind it", async ({
+  page,
+}) => {
+  test.setTimeout(90_000);
+  const idOf = await seededIds(page);
+  const kiln = idOf("Kiln fire");
+  // Subtitles still being fetched: the page and the player re-read the video
+  // every few seconds, each time with the position saved a moment ago.
+  await page.route(`**/api/videos/${kiln}`, async (route) => {
+    const response = await route.fetch();
+    const json = { ...(await response.json()), subtitles_pending: true };
+    await route.fulfill({ response, json });
+  });
+  await page.goto(`/watch/${kiln}`);
+  await waitForMedia(page);
+  const video = player(page);
+  await video.evaluate((v: HTMLVideoElement) => {
+    const w = window as unknown as { rewinds: number[] };
+    w.rewinds = [];
+    let last = v.currentTime;
+    v.addEventListener("timeupdate", () => {
+      if (v.currentTime < last - 1) w.rewinds.push(last);
+      last = v.currentTime;
+    });
+  });
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
+      timeout: 30_000,
+    })
+    .toBeGreaterThan(14);
+  expect(
+    await page.evaluate(
+      () => (window as unknown as { rewinds: number[] }).rewinds
+    )
+  ).toEqual([]);
+});
+
 /** Positions queued in this browser while progress saves could not get through. */
 function pendingProgress(
   page: Page
