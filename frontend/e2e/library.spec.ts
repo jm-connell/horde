@@ -293,3 +293,16 @@ test("an in-app change of the ?tag= link replaces the open tag", async ({
   ).toBeVisible();
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
 });
+
+test("on a phone a feed card does not reserve a second title line", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 430, height: 932 });
+  await page.goto("/?channel=Kiln");
+  const card = feedCard(page, "Kiln fire");
+  await expect(card).toBeVisible();
+  const title = await card.getByText("Kiln fire").boundingBox();
+  expect(title).not.toBeNull();
+  // A one-line title is one line tall (20px), not a reserved two-line box.
+  expect(title!.height).toBeLessThan(30);
+});

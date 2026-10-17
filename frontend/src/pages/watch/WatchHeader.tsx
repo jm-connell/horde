@@ -44,14 +44,29 @@ export default function WatchHeader({
     : "/";
 
   return (
-    <div className="mt-5 flex items-start justify-between gap-3">
-      <div className="min-w-0 flex-1">
-        <h1 className="text-xl font-bold text-gray-100">{title}</h1>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-400">
+    <div className="mt-5">
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="min-w-0 flex-1 text-xl font-bold text-gray-100">
+          {title}
+        </h1>
+        {!isLibrary && (
+          <Link
+            to={backHref}
+            className="shrink-0 text-sm text-gray-400 hover:text-accent"
+          >
+            ← Back
+          </Link>
+        )}
+      </div>
+      {/* Phones keep the details on one line (the channel name truncates)
+          with the download control at its right end; wider screens let
+          the items wrap with the control inline after them. */}
+      <div className="mt-2 flex items-center gap-x-3 gap-y-1.5 text-sm text-gray-400 max-sm:gap-x-2 sm:flex-wrap">
+        <div className="flex min-w-0 flex-1 items-center gap-x-2 overflow-hidden whitespace-nowrap text-xs sm:contents sm:whitespace-normal sm:text-sm">
           {channelName && (
             <Link
               to={channelHref}
-              className="font-medium text-accent hover:underline"
+              className="font-medium text-accent hover:underline max-sm:min-w-0 max-sm:truncate"
             >
               {channelName}
             </Link>
@@ -97,19 +112,13 @@ export default function WatchHeader({
                 {Math.round(source.video.frame_rate)}fps
               </span>
             )}
-          {!isLibrary && !isLive && (
-            <StreamDownloadControl download={streamDownload} />
-          )}
         </div>
+        {!isLibrary && !isLive && (
+          <div className="shrink-0">
+            <StreamDownloadControl download={streamDownload} />
+          </div>
+        )}
       </div>
-      {!isLibrary && (
-        <Link
-          to={backHref}
-          className="shrink-0 text-sm text-gray-400 hover:text-accent"
-        >
-          ← Back
-        </Link>
-      )}
     </div>
   );
 }

@@ -96,14 +96,18 @@ function FeedMetaRow({
   const stats = joinDotList([dateLabel, views, likeLabel]);
   const likeTip = likeRatioTitle(entry.like_count, entry.dislike_count);
   return (
-    <div className="flex min-w-0 flex-col gap-1">
+    // Phones put the download button beside the channel and stats lines
+    // instead of on a line of its own.
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 sm:grid-cols-1">
       <FeedChannelName
         name={channelName}
         onChannelClick={onChannelClick}
         className="min-w-0 truncate text-xs leading-4 text-gray-400"
       />
       <span
-        className="block min-h-4 min-w-0 truncate text-xs leading-4 text-muted"
+        className={`block min-h-4 min-w-0 truncate text-xs leading-4 text-muted ${
+          stats ? "" : "max-sm:hidden"
+        }`}
         title={
           likeTip
             ? `${stats}${stats ? " · " : ""}${likeTip}`
@@ -112,7 +116,7 @@ function FeedMetaRow({
       >
         {stats || "\u00a0"}
       </span>
-      <div className="flex h-6 min-w-0 items-center gap-2">
+      <div className="flex h-6 min-w-0 items-center gap-2 max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:self-center">
         {inLibrary ? (
           <span className="text-xs font-medium leading-none text-emerald-400">
             Downloaded
@@ -132,7 +136,7 @@ function FeedMetaRow({
           </button>
         ) : null}
         {maxRes ? (
-          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted">
+          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted max-sm:order-first">
             {maxRes}
           </span>
         ) : null}
@@ -433,7 +437,7 @@ export default function ChannelFeedCard({
         >
           <CardTitle
             text={titleText}
-            className="line-clamp-2 min-h-10 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            className="line-clamp-2 overflow-hidden sm:min-h-10 break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             style={{
               display: "-webkit-box",
               WebkitBoxOrient: "vertical",
