@@ -272,10 +272,32 @@ def test_last_admin_cannot_be_removed_through_the_api(client, admin_user):
     for call in (
         client.patch(f"/api/users/{admin_user.id}", json={"is_admin": False}),
         client.patch(f"/api/users/{admin_user.id}", json={"disabled": True}),
-        client.delete(f"/api/users/{admin_user.id}"),
     ):
-        assert (call.status_code, call.json()["code"]) == (409, "last_admin")
+        assert (call.status_code, call.json()["code"]) == (409, "self_lockout")
+    call = client.delete(f"/api/users/{admin_user.id}")
+    assert (call.status_code, call.json()["code"]) == (409, "last_admin")
     assert client.get("/api/videos").status_code == 200
+
+
+def test_an_admin_cannot_demote_or_disable_themselves(client, admin_user):
+    other = client.post(
+        "/api/users",
+        json={"username": "other", "password": "other-password", "is_admin": True},
+    ).json()
+    for body in ({"is_admin": False}, {"disabled": True}):
+        call = client.patch(f"/api/users/{admin_user.id}", json=body)
+        assert (call.status_code, call.json()["code"]) == (409, "self_lockout")
+    me = next(u for u in client.get("/api/users").json() if u["id"] == admin_user.id)
+    assert me["is_admin"] and not me["disabled"]
+    # Harmless self edits and changes to another admin still go through.
+    assert (
+        client.patch(
+            f"/api/users/{admin_user.id}", json={"is_admin": True, "disabled": False}
+        ).status_code
+        == 200
+    )
+    demoted = client.patch(f"/api/users/{other['id']}", json={"is_admin": False})
+    assert demoted.status_code == 200 and not demoted.json()["is_admin"]
 
 
 def test_members_cannot_manage_users(member_client):

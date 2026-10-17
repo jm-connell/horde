@@ -117,6 +117,41 @@ test("the admin adds a member, who has their own history", async ({
   await ctx.close();
 });
 
+test("an admin cannot demote or disable their own account", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=users");
+  const rows = page.locator('[data-horde="user-row"]');
+  const self = rows.filter({ hasText: "(you)" });
+  await self.getByRole("button", { name: "Edit admin" }).click();
+  await expect(
+    self.getByText("You can't remove your own administrator access")
+  ).toBeVisible();
+  await expect(self.getByRole("radio", { name: "Member" })).toHaveCount(0);
+  await expect(
+    self.getByRole("button", { name: "Disable account" })
+  ).toHaveCount(0);
+
+  // The server refuses it too, not just the UI.
+  const state = await page.request.get("/api/auth/state");
+  const id = ((await state.json()) as { user: { id: number } }).user.id;
+  const res = await page.request.patch(`/api/users/${id}`, {
+    data: { is_admin: false },
+    headers: CSRF_HEADERS,
+  });
+  expect(res.status()).toBe(409);
+  expect(((await res.json()) as { code: string }).code).toBe("self_lockout");
+
+  // Another account can still be edited the usual way.
+  await self.getByRole("button", { name: "Close" }).click();
+  const other = rows.filter({ hasText: /^member/ });
+  await other.getByRole("button", { name: "Edit member" }).click();
+  await expect(other.getByRole("radio", { name: "Member" })).toBeVisible();
+  await expect(
+    other.getByRole("button", { name: "Disable account" })
+  ).toBeVisible();
+});
+
 test("a member does not see the Users settings", async ({
   page,
   browser,

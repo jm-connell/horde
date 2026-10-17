@@ -66,9 +66,9 @@ Changes apply on the person's next request; they do not need to sign in again. A
 
 ## Managing users (admins)
 
-*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay.
+*Settings → Users* lists accounts. You can add a user (username, password, type and permissions), change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
 
-The server refuses any change that would leave **no enabled administrator**.
+The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 
 ## Passwords and sessions
 
@@ -116,7 +116,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 |----------|--------|
 | `HORDE_TRUST_PROXY=1` | Use `X-Forwarded-For` for the client address (rate limiting) and `X-Forwarded-Proto` for the `Secure` cookie flag. Set only when a proxy you control is the only way in. The proxy must **set or append** `X-Forwarded-For` and never pass a client-supplied value through unchanged: Horde reads the entry counted from the **right**, because everything to the left is whatever the client claimed. |
 | `HORDE_TRUSTED_PROXY_HOPS=1` | How many proxies append to `X-Forwarded-For` (default 1 = the last entry). Raise it for a chain such as CDN, then proxy. |
-| `HORDE_AUTH_DISABLED=1` | Turn sign-in off. Every request acts as the first administrator. **Only** for a deployment where a reverse proxy authenticates users and is the only route to the port. A warning is logged on every start. |
+| `HORDE_AUTH_DISABLED=1` | Turn sign-in off. Every request acts as the first administrator. That account can still manage every other user, but cannot demote or disable itself (it is the one acting); delete it if it must go. **Only** for a deployment where a reverse proxy authenticates users and is the only route to the port. A warning is logged on every start. |
 | `HORDE_TRUSTED_USER_HEADER=X-Remote-User` | With `HORDE_AUTH_DISABLED=1` **and** `HORDE_TRUST_PROXY=1`, act as the existing user named in this header (their history, permissions). A missing or unknown name is refused. Setting the header without `HORDE_TRUST_PROXY=1` is an error: Horde **refuses to start** rather than ignore the header and make everyone an administrator. |
 
 !!! danger "HORDE_AUTH_DISABLED"

@@ -79,6 +79,13 @@ class LastAdmin(AccountError):
     code = "last_admin"
 
 
+class SelfLockout(AccountError):
+    """An admin tried to demote or disable their own account."""
+
+    status_code = 409
+    code = "self_lockout"
+
+
 class UserNotFound(AccountError):
     status_code = 404
     code = "user_not_found"

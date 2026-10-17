@@ -66,6 +66,13 @@ def update_user(
     admin: AuthUser = Depends(require_admin),
 ):
     changes = payload.model_fields_set
+    # Another admin has to take away an admin's access, so nobody locks
+    # themselves out (and a lone admin can never leave the server ownerless).
+    if user_id == admin.id and (payload.is_admin is False or payload.disabled):
+        raise accounts.SelfLockout(
+            "You can't remove your own administrator access or disable your own "
+            "account. Ask another administrator to do it."
+        )
     # Resetting your own password must not sign you out of this browser.
     token = request.cookies.get(accounts.SESSION_COOKIE)
     keep = accounts.hash_token(token) if token and user_id == admin.id else None
