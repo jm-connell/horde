@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import LoadingIndicator from "../../../components/LoadingIndicator";
 import { swUpdates } from "../../../offline/register";
-import { formatRelative } from "../../../utils";
+import { formatRelative, safeHref } from "../../../utils";
 import { PANEL_BTN } from "../constants";
 import { useSettingsPage } from "../context";
 import { Section } from "../ui";
@@ -96,6 +96,7 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
   }, [showReload]);
 
   const latest = updateCheck?.latest_version || updateCheck?.latest_short;
+  const latestHref = available ? safeHref(updateCheck?.latest_html_url) : null;
   const when = control?.finished_at ? formatRelative(control.finished_at) : "";
 
   return (
@@ -111,7 +112,8 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
           "version",
           "cron",
           "truenas",
-          "release"
+          "release",
+          "github"
         )
       }
     >
@@ -128,6 +130,16 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
                 : "Up to date"}
             </span>
           ) : null}
+          {latestHref && (
+            <a
+              href={latestHref}
+              target="_blank"
+              rel="noreferrer"
+              className="text-xs text-accent underline underline-offset-2"
+            >
+              {updateCheck?.latest_version ? "Release notes" : "What changed"}
+            </a>
+          )}
           <button
             type="button"
             disabled={updateChecking}

@@ -3,7 +3,6 @@ import { useSettingsPage } from "./context";
 import { useAiCore } from "./ai/useAiCore";
 import ResetHordePanel from "./system/ResetHordePanel";
 import StatusSection from "./system/StatusSection";
-import UpdateNotice from "./system/UpdateNotice";
 import UpdatesSection from "./system/UpdatesSection";
 import { useSystemState } from "./useSystemState";
 import { Section } from "./ui";
@@ -42,7 +41,6 @@ export default function SystemTab() {
 
   return (
     <>
-      <UpdateNotice system={system} />
       <UpdatesSection system={system} />
 
       <Section

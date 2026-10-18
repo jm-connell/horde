@@ -132,6 +132,7 @@ export interface StorageMigration {
 const SETTINGS_KEY = "horde.settings";
 const LEGACY_PREVIEW_MUTE_KEY = "horde.previewMuted";
 const SETTINGS_TAB_KEY = "horde.settings.tab";
+const UPDATE_DISMISSED_KEY = "horde.settings.updateDismissedSha";
 
 /**
  * Ordered, append-only. Each step must be idempotent: a factory reset clears
@@ -182,6 +183,13 @@ export const STORAGE_MIGRATIONS: readonly StorageMigration[] = [
       if (getItem(SETTINGS_TAB_KEY) === "downloads") {
         setItem(SETTINGS_TAB_KEY, "library");
       }
+    },
+  },
+  {
+    version: 4,
+    description: "Drop the dismissed update banner (the banner was removed)",
+    run: () => {
+      removeItem(UPDATE_DISMISSED_KEY);
     },
   },
 ];

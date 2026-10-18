@@ -398,4 +398,3 @@ export const NAV_INDICATOR_OPTIONS: {
 ];
 
 export const TAB_STORAGE_KEY = "horde.settings.tab";
-export const UPDATE_DISMISS_KEY = "horde.settings.updateDismissedSha";
