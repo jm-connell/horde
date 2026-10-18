@@ -74,7 +74,7 @@ export default function StreamDownloadControl({
           </div>
           <MenuFlyout
             open={presetMenuOpen}
-            className="absolute left-0 z-30 mt-1 min-w-[12rem]"
+            className="absolute right-0 z-30 mt-1 min-w-[12rem] sm:left-0 sm:right-auto"
             menu={{
               label: "Download quality",
               onClose: () => setPresetMenuOpen(false),
@@ -121,14 +121,14 @@ export default function StreamDownloadControl({
                 ? "Queued…"
                 : `Downloading ${downloadPercent}%`}
           </span>
-          <span className="inline-block h-1 w-20 overflow-hidden rounded-full bg-ink-800">
+          <span className="inline-block h-1 w-12 overflow-hidden rounded-full bg-ink-800 sm:w-20">
             <span
               className="block h-full rounded-full bg-accent/70 transition-all duration-300"
               style={{ width: `${downloadPercent}%` }}
             />
           </span>
           {(live?.downloaded_bytes != null || live?.total_bytes != null) && (
-            <span className="text-[10px] text-muted">
+            <span className="text-[10px] text-muted max-sm:hidden">
               {live.downloaded_bytes != null
                 ? formatSize(live.downloaded_bytes)
                 : "…"}

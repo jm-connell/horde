@@ -323,3 +323,16 @@ test("the Recommended tab has no sort control", async ({ page }) => {
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(sort).toBeVisible();
 });
+
+test("on a phone a feed card does not reserve a second title line", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 430, height: 932 });
+  await page.goto("/?channel=Kiln");
+  const card = feedCard(page, "Kiln fire");
+  await expect(card).toBeVisible();
+  const title = await card.getByText("Kiln fire").boundingBox();
+  expect(title).not.toBeNull();
+  // A one-line title is one line tall (20px), not a reserved two-line box.
+  expect(title!.height).toBeLessThan(30);
+});

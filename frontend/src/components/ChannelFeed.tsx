@@ -5,6 +5,7 @@ import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
+import { useIsMobile } from "../hooks/useIsMobile";
 import {
   feedSearchStatusLabel,
   formatSearchMatchCount,
@@ -193,6 +194,7 @@ export default function ChannelFeed({
   } = useChannelDownloadQueue(channel);
 
   const [panelDismissed, setPanelDismissed] = useState(false);
+  const isMobile = useIsMobile();
 
   const softLiveRefresh = useCallback(async () => {
     if (!channelUrl && !channel) return;
@@ -690,7 +692,9 @@ export default function ChannelFeed({
         </>
       )}
 
-      {!panelDismissed && (
+      {/* Phones skip the idle quality widget; it still appears while a
+          queued download can be cancelled or edited. */}
+      {!panelDismissed && (!isMobile || pending.length > 0) && (
         <ChannelDownloadPanel
           defaultPreset={defaultPreset}
           onDefaultPresetChange={setDefaultPreset}
