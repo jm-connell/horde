@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-18
+
 ### Changed
 
 - The frontend is built with Tailwind CSS 4 through its Vite plugin; PostCSS
@@ -290,5 +292,6 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.0...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.1...main
+[1.0.1]: https://github.com/jm-connell/horde/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/jm-connell/horde/commits/v1.0.0
