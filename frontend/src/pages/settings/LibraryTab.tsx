@@ -506,7 +506,7 @@ export default function LibraryTab() {
                     !metadataSyncFields.includes("all")
               }
               onClick={() => toggleSyncField(value)}
-              className="!py-1.5"
+              className="py-1.5!"
             >
               {label}
             </Chip>

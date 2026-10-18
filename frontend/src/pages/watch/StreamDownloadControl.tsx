@@ -74,7 +74,7 @@ export default function StreamDownloadControl({
           </div>
           <MenuFlyout
             open={presetMenuOpen}
-            className="absolute right-0 z-30 mt-1 min-w-[12rem] sm:left-0 sm:right-auto"
+            className="absolute right-0 z-30 mt-1 min-w-48 sm:left-0 sm:right-auto"
             menu={{
               label: "Download quality",
               onClose: () => setPresetMenuOpen(false),

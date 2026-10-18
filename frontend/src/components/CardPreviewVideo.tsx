@@ -254,9 +254,9 @@ function PreviewSeekBar({
     >
       <div
         ref={tipRef}
-        className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 rounded bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white opacity-0 transition-opacity"
+        className="pointer-events-none absolute bottom-full mb-1 -translate-x-1/2 rounded-sm bg-black/80 px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-white opacity-0 transition-opacity"
       />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-visible bg-white/20 transition-[height] group-hover/seek:h-1 group-data-[engaged]/seek:h-1">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-visible bg-white/20 transition-[height] group-hover/seek:h-1 group-data-engaged/seek:h-1">
         <div
           ref={fillRef}
           className="h-full w-full origin-left bg-accent will-change-transform"
@@ -264,7 +264,7 @@ function PreviewSeekBar({
         />
         <div
           ref={knobRef}
-          className="absolute top-1/2 z-[1] h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-0 shadow-sm group-hover/seek:opacity-100 group-data-[engaged]/seek:opacity-100"
+          className="absolute top-1/2 z-1 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent opacity-0 shadow-xs group-hover/seek:opacity-100 group-data-engaged/seek:opacity-100"
           style={{ left: "0%" }}
         />
       </div>
@@ -451,7 +451,7 @@ export default function CardPreviewVideo({
         disablePictureInPicture
         aria-hidden
         tabIndex={-1}
-        className={`pointer-events-none absolute inset-0 z-[1] h-full w-full object-cover transition-opacity duration-200 ${
+        className={`pointer-events-none absolute inset-0 z-1 h-full w-full object-cover transition-opacity duration-200 ${
           ready && active ? "opacity-100" : "opacity-0"
         }`}
         data-horde="card-preview"

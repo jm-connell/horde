@@ -77,7 +77,7 @@ export default function BackgroundSection({
             onChange={(value) =>
               update({ backgroundEffect: value as BackgroundEffect })
             }
-            className="w-[12rem] min-w-[11rem]"
+            className="w-48 min-w-44"
           />
           <p className="mt-2 text-xs text-muted">
             {
@@ -101,7 +101,7 @@ export default function BackgroundSection({
               onChange={(value) =>
                 update({ backgroundEffect: value as BackgroundEffect })
               }
-              className="w-[12rem] min-w-[11rem]"
+              className="w-48 min-w-44"
             />
             <p className="mt-2 text-xs text-muted">
               {
@@ -197,7 +197,7 @@ export default function BackgroundSection({
                           e.stopPropagation();
                           void deleteLibraryBackground(item.id);
                         }}
-                        className="absolute right-1 top-1 rounded bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
+                        className="absolute right-1 top-1 rounded-sm bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
                       >
                         ✕
                       </button>
@@ -264,10 +264,10 @@ export default function BackgroundSection({
                 onChange={(e) =>
                   update({ customBackgroundTint: e.target.value })
                 }
-                className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                className="h-9 w-14 cursor-pointer rounded-sm border border-ink-700 bg-transparent p-0.5"
               />
             </label>
-            <label className="block min-w-[12rem] flex-1">
+            <label className="block min-w-48 flex-1">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                 <span>Tint opacity</span>
                 <span className="tabular-nums text-muted">
@@ -336,7 +336,7 @@ export default function BackgroundSection({
                     backgroundEffect: value as BackgroundEffect,
                   })
                 }
-                className="w-[12rem] min-w-[11rem]"
+                className="w-48 min-w-44"
               />
               <p className="mt-2 text-xs text-muted">
                 {
@@ -377,7 +377,7 @@ export default function BackgroundSection({
                         backgroundEffectColor: e.target.value,
                       })
                     }
-                    className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                    className="h-9 w-14 cursor-pointer rounded-sm border border-ink-700 bg-transparent p-0.5"
                   />
                 </label>
               )}

@@ -250,10 +250,10 @@ export default function InterfaceSection({
                     onChange={(e) =>
                       update({ translucentPanelTint: e.target.value })
                     }
-                    className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+                    className="h-9 w-14 cursor-pointer rounded-sm border border-ink-700 bg-transparent p-0.5"
                   />
                 </label>
-                <label className="block min-w-[12rem] flex-1">
+                <label className="block min-w-48 flex-1">
                   <span className="mb-2 flex items-center justify-between text-sm text-gray-300">
                     <span>Strength</span>
                     <span className="tabular-nums text-muted">
@@ -319,7 +319,7 @@ export default function InterfaceSection({
                 onClick={() => update({ loadingStyle: opt.value })}
                 title={`${opt.label} — ${opt.description}`}
                 aria-label={opt.label}
-                className="flex h-20 w-20 shrink-0 items-center justify-center overflow-visible !px-1.5 !py-1.5"
+                className="flex h-20 w-20 shrink-0 items-center justify-center overflow-visible px-1.5! py-1.5!"
               >
                 <LoadingMark style={opt.value} compact />
               </Chip>

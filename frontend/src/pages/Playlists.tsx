@@ -118,7 +118,7 @@ export default function Playlists() {
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && create()}
                   placeholder="Playlist name"
-                  className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                 />
                 <button
                   onClick={create}
@@ -140,7 +140,7 @@ export default function Playlists() {
                     onChange={(e) => setSubscribeUrl(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && subscribe()}
                     placeholder="YouTube playlist URL"
-                    className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                   />
                   <button
                     onClick={subscribe}
@@ -165,7 +165,7 @@ export default function Playlists() {
                     className="w-44 shrink-0"
                     buttonClassName="w-full py-2"
                   />
-                  <p className="min-w-[10rem] flex-1 text-xs leading-snug text-muted">
+                  <p className="min-w-40 flex-1 text-xs leading-snug text-muted">
                     Horde periodically checks for and downloads new playlist
                     videos.
                   </p>

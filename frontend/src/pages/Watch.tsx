@@ -110,7 +110,7 @@ export default function Watch() {
     relatedItems.length > 0;
   const queueVisible = !!video && queue.length > 0;
   const contentClass = showRelatedRight
-    ? "mx-auto max-w-[90rem] 2xl:max-w-[116rem]"
+    ? "mx-auto max-w-360 2xl:max-w-[116rem]"
     : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-[116rem]";
 
   return (

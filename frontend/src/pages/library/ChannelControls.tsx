@@ -52,13 +52,13 @@ export default function ChannelControls({
   const youtubeChannel = isYoutubeChannelUrl(channelUrl);
   return (
     <>
-      <div className="relative min-w-[10rem] w-40 max-w-64 grow sm:min-w-[13rem] sm:w-52">
+      <div className="relative min-w-40 w-40 max-w-64 grow sm:min-w-52 sm:w-52">
         <input
           data-header-search
           value={feedSearch}
           onChange={(e) => onFeedSearch(e.target.value)}
           placeholder="Search this channel"
-          className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent sm:pl-4 ${
+          className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent sm:pl-4 ${
             youtubeChannel ? "pr-8" : "pr-3 sm:pr-4"
           }`}
         />
@@ -95,7 +95,7 @@ export default function ChannelControls({
           { value: "popular", label: "Popular" },
         ]}
         onChange={onFeedSort}
-        className="min-w-[6.5rem] shrink-0"
+        className="min-w-26 shrink-0"
         buttonClassName="w-full sm:px-3"
       />
       <button

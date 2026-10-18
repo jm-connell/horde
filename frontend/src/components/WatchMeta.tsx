@@ -69,7 +69,7 @@ function DescriptionBoxToggle({
       type="button"
       onClick={onToggle}
       ref={buttonRef}
-      className={`absolute right-3 z-[2] flex h-8 min-w-8 items-center justify-end text-muted hover:text-accent ${
+      className={`absolute right-3 z-2 flex h-8 min-w-8 items-center justify-end text-muted hover:text-accent ${
         corner === "top" ? "top-0" : "bottom-0"
       }`}
       aria-label={label}
@@ -77,7 +77,7 @@ function DescriptionBoxToggle({
     >
       <svg
         viewBox="0 0 24 24"
-        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-[400ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-400 ease-[cubic-bezier(0.22,1,0.36,1)] ${
           expanded ? "rotate-180" : ""
         }`}
         fill="none"
@@ -216,7 +216,7 @@ export default function WatchMeta({
         <button
           type="button"
           onClick={() => setExtrasOpen((v) => !v)}
-          className="ui-panel-toggle ui-interactive mt-2 shrink-0 text-xs font-medium text-accent outline-none focus:outline-none"
+          className="ui-panel-toggle ui-interactive mt-2 shrink-0 text-xs font-medium text-accent outline-hidden focus:outline-hidden"
         >
           <span className="ui-panel-toggle-press inline-flex transition-transform">
             {extrasOpen ? `Hide ${extrasLabel}` : `Show ${extrasLabel}`}
@@ -312,7 +312,7 @@ export default function WatchMeta({
                     value={tagDraft}
                     onChange={(e) => setTagDraft(e.target.value)}
                     placeholder="Add tag…"
-                    className="ui-panel w-28 max-w-[9rem] rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-100 outline-none focus:border-accent"
+                    className="ui-panel w-28 max-w-36 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-100 outline-hidden focus:border-accent"
                   />
                   <button
                     type="submit"

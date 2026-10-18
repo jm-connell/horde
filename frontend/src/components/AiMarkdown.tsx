@@ -37,7 +37,7 @@ function parseInline(text: string): ReactNode[] {
           {
             key: `c-${key++}`,
             className:
-              "rounded bg-ink-950/80 px-1 py-0.5 font-mono text-[0.85em] text-gray-300",
+              "rounded-sm bg-ink-950/80 px-1 py-0.5 font-mono text-[0.85em] text-gray-300",
           },
           token.slice(1, -1)
         )

@@ -578,7 +578,7 @@ export default function Download() {
                 setUrl(e.target.value);
               }}
               placeholder="Video or playlist URL (YouTube, etc.)"
-              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
             />
             <button
               type="button"
@@ -649,7 +649,7 @@ export default function Download() {
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="Auto-detected"
-                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
+                className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
               />
             </div>
             <Collapse open={!toDevice}>
@@ -670,7 +670,7 @@ export default function Download() {
 
         <Collapse
           open={!!(preview && isPlaylist)}
-          className={preview && isPlaylist ? undefined : "!mt-0"}
+          className={preview && isPlaylist ? undefined : "mt-0!"}
         >
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
             <div>
@@ -733,7 +733,7 @@ export default function Download() {
                   value={playlistName}
                   onChange={(e) => setPlaylistName(e.target.value)}
                   placeholder="Playlist name"
-                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
+                  className="ui-interactive w-full rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
                 />
               </div>
             )}
@@ -780,7 +780,7 @@ export default function Download() {
                             className="mt-1 shrink-0 accent-accent"
                           />
                         )}
-                        <div className="h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
+                        <div className="h-14 w-24 shrink-0 overflow-hidden rounded-sm bg-ink-800">
                           {thumbSrc ? (
                             <img
                               decoding="async"

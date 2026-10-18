@@ -142,7 +142,7 @@ export default function PlaybackTab() {
                     defaultStreamQuality: value as StreamQuality,
                   })
                 }
-                className="w-full min-w-[10rem] max-w-[14rem]"
+                className="w-full min-w-40 max-w-56"
               />
             }
           />

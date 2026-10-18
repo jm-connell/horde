@@ -61,7 +61,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
             height={63}
             src={`/api/thumbnails/${job.video_id}`}
             alt=""
-            className="aspect-video w-28 shrink-0 rounded object-cover ring-1 ring-ink-700"
+            className="aspect-video w-28 shrink-0 rounded-sm object-cover ring-1 ring-ink-700"
           />
         ) : null}
       </dd>

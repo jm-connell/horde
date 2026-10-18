@@ -33,7 +33,7 @@ function formatElapsed(startedAt: number, finishedAt?: number | null): string {
 function EngineChip({ engine }: { engine: string | null | undefined }) {
   if (!engine) return null;
   return (
-    <span className="rounded bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-300/90">
+    <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-300/90">
       {engine}
     </span>
   );
@@ -41,7 +41,7 @@ function EngineChip({ engine }: { engine: string | null | undefined }) {
 
 function GroupBadge({ group }: { group: string }) {
   return (
-    <span className="rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+    <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400">
       {GROUP_LABELS[group] || group}
     </span>
   );
@@ -228,7 +228,7 @@ export default function BackgroundActivity({
               ref={recentScrollRef}
               // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
               tabIndex={0}
-              className="horde-meta-scrollbar max-h-[calc(8*2.75rem)] divide-y divide-ink-800/80 overflow-y-auto overscroll-contain"
+              className="horde-meta-scrollbar max-h-88 divide-y divide-ink-800/80 overflow-y-auto overscroll-contain"
               aria-label="Recent activity"
             >
               {recent.map((task) => (

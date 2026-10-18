@@ -130,7 +130,7 @@ function FeedMetaRow({
               onDownload();
             }}
             disabled={downloading}
-            className="h-6 shrink-0 rounded bg-accent px-2.5 text-xs font-medium leading-none text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+            className="h-6 shrink-0 rounded-sm bg-accent px-2.5 text-xs font-medium leading-none text-ink-950 hover:bg-accent-soft disabled:opacity-60"
           >
             {downloading ? "Downloading" : "Download"}
           </button>
@@ -360,7 +360,7 @@ export default function ChannelFeedCard({
           thumbSrc={thumbSrc}
           duration={duration}
           showDuration={false}
-          className="h-[4.5rem] w-32 shrink-0 rounded-lg"
+          className="h-18 w-32 shrink-0 rounded-lg"
           matchTip={matchTip}
           previewSrc={previewSrc}
           previewVideoId={libraryVideoId}
@@ -372,11 +372,11 @@ export default function ChannelFeedCard({
               text={titleText}
               className="line-clamp-2 text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             />
-            <span className="break-words text-xs text-gray-400">
+            <span className="wrap-break-word text-xs text-gray-400">
               <FeedChannelName
                 name={channelName}
                 onChannelClick={handleChannelClick}
-                className="break-words text-xs leading-4 text-gray-400"
+                className="wrap-break-word text-xs leading-4 text-gray-400"
               />
             </span>
             <p
@@ -390,7 +390,7 @@ export default function ChannelFeedCard({
               {listStats}
             </p>
           </div>
-          <div className="flex h-full min-h-[4.5rem] shrink-0 flex-col items-end justify-between py-0.5 pl-3">
+          <div className="flex h-full min-h-18 shrink-0 flex-col items-end justify-between py-0.5 pl-3">
             {!inLibrary ? (
               can("download") ? (
                 <button
@@ -437,7 +437,7 @@ export default function ChannelFeedCard({
         >
           <CardTitle
             text={titleText}
-            className="line-clamp-2 overflow-hidden sm:min-h-10 break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+            className="line-clamp-2 overflow-hidden sm:min-h-10 wrap-break-word text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
             style={{
               display: "-webkit-box",
               WebkitBoxOrient: "vertical",

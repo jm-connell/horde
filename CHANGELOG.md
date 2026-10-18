@@ -7,6 +7,13 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The frontend is built with Tailwind CSS 4 through its Vite plugin; PostCSS
+  and Autoprefixer are no longer used. The interface looks the same: colors,
+  line heights, button cursors and spacing keep their Tailwind 3 values. Date
+  and time fields are 2px shorter and now match the text fields beside them.
+
 ### Fixed
 
 - The H.264 compatibility copy of a YouTube video could be YouTube's default
@@ -24,10 +31,12 @@ All notable changes to Horde are documented here. The format follows
   [GHSA-wrjc-x8rr-h8h6](https://github.com/advisories/GHSA-wrjc-x8rr-h8h6)) and
   an SSR hydration flaw Horde was not exposed to
   ([GHSA-337j-9hxr-rhxg](https://github.com/advisories/GHSA-337j-9hxr-rhxg)).
-- The frontend build pins postcss-selector-parser to 7.1.6
-  ([GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf)).
-  It only parses Horde's own stylesheets at build time, and the built CSS is
-  unchanged.
+- The frontend now builds with Tailwind CSS 4, which drops the build-time
+  packages behind two advisories: postcss-selector-parser
+  ([GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf))
+  and braces through chokidar and micromatch
+  ([GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm),
+  no patched release). Both only read Horde's own source at build time.
 
 ## [1.0.0] - 2026-10-17
 

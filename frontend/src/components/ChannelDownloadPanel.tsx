@@ -89,7 +89,7 @@ export default function ChannelDownloadPanel({
       onClick={onDismiss}
       title="Hide download panel"
       aria-label="Hide download panel"
-      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded text-sm text-muted hover:bg-ink-800 hover:text-gray-300"
+      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-sm text-sm text-muted hover:bg-ink-800 hover:text-gray-300"
     >
       ×
     </button>

@@ -52,7 +52,7 @@ export default function HomeControls({
             }
           }}
           placeholder="Search"
-          className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent sm:pl-4"
+          className="ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent sm:pl-4"
         />
         <YoutubeSearchChip />
       </div>
@@ -61,7 +61,7 @@ export default function HomeControls({
         value={sort}
         options={[...LIBRARY_SORT_OPTIONS]}
         onChange={onSortChange}
-        className="min-w-0 w-[min(12.5rem,100%)] max-md:flex-1 md:min-w-[12.5rem] md:shrink-0"
+        className="min-w-0 w-[min(12.5rem,100%)] max-md:flex-1 md:min-w-50 md:shrink-0"
         buttonClassName="w-full sm:px-3"
         align="right"
       />

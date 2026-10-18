@@ -108,7 +108,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <summary className="cursor-pointer select-none">
               Error details
             </summary>
-            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded bg-ink-900 p-3 text-gray-300">
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-sm bg-ink-900 p-3 text-gray-300">
               {`${error.name}: ${error.message}\n${error.stack ?? ""}${
                 componentStack ? `\nComponent stack:${componentStack}` : ""
               }`}

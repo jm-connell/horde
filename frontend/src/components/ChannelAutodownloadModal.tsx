@@ -70,7 +70,7 @@ export default function ChannelAutodownloadModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4"
       role="presentation"
       onClick={backdropClick(onClose)}
     >
@@ -80,7 +80,7 @@ export default function ChannelAutodownloadModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="autodownload-title"
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
+        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl border border-ink-700 bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -143,7 +143,7 @@ export default function ChannelAutodownloadModal({
                 value={previousCount}
                 onChange={(e) => setPreviousCount(e.target.value)}
                 onFocus={() => setPreviousMode("count")}
-                className="w-16 rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-sm text-gray-100 outline-none focus:border-accent"
+                className="w-16 rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-sm text-gray-100 outline-hidden focus:border-accent"
               />
               previous + all future
             </span>

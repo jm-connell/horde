@@ -41,7 +41,7 @@ export default function ChannelDownloadEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4"
       role="presentation"
       onClick={backdropClick(onClose)}
     >
@@ -51,7 +51,7 @@ export default function ChannelDownloadEditModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto outline-none rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2
@@ -96,7 +96,7 @@ export default function ChannelDownloadEditModal({
               id={titleInputId}
               value={item.title}
               onChange={(e) => onSave({ title: e.target.value })}
-              className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+              className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
             />
           </div>
           <div>
@@ -134,7 +134,7 @@ export default function ChannelDownloadEditModal({
               onChange={(e) => onSave({ notes: e.target.value })}
               rows={3}
               placeholder="Personal note about this video..."
-              className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+              className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
             />
           </div>
         </div>

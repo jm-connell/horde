@@ -82,11 +82,11 @@ export default function UsersTab() {
                   {u.id === me?.id && (
                     <span className="text-xs text-muted">(you)</span>
                   )}
-                  <span className="rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-300">
+                  <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-gray-300">
                     {u.is_admin ? "Admin" : "Member"}
                   </span>
                   {u.disabled && (
-                    <span className="rounded bg-red-900/40 px-1.5 py-0.5 text-xs text-red-300">
+                    <span className="rounded-sm bg-red-900/40 px-1.5 py-0.5 text-xs text-red-300">
                       Disabled
                     </span>
                   )}

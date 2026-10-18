@@ -38,7 +38,7 @@ export default function RedownloadDialog({
             role="dialog"
             aria-modal="true"
             aria-labelledby="redownload-title"
-            className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-none ring-1 ring-ink-700"
+            className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-hidden ring-1 ring-ink-700"
           >
             <h2
               id="redownload-title"

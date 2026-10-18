@@ -156,7 +156,7 @@ export default function SystemTab() {
                         setCatalogIndexing(false);
                       }
                     }}
-                    className={PANEL_BTN + " !px-2.5 !py-1 !text-xs"}
+                    className={PANEL_BTN + " px-2.5! py-1! text-xs!"}
                   >
                     {catalogIndexing ? "Working…" : "Refresh catalogs"}
                   </button>
@@ -192,7 +192,7 @@ export default function SystemTab() {
                     }}
                     className={
                       PANEL_BTN +
-                      " !px-2.5 !py-1 !text-xs !border-ink-600 !text-gray-400 hover:!text-gray-200"
+                      " px-2.5! py-1! text-xs! border-ink-600! text-gray-400! hover:text-gray-200!"
                     }
                   >
                     Full reindex…

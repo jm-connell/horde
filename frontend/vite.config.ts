@@ -1,10 +1,11 @@
 /// <reference types="vitest/config" />
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { hordeServiceWorker } from "./vite-plugin-sw";
 
 export default defineConfig({
-  plugins: [react(), hordeServiceWorker()],
+  plugins: [react(), tailwindcss(), hordeServiceWorker()],
   test: {
     environment: "node",
     // Playwright specs live next to the app but are not Vitest tests.

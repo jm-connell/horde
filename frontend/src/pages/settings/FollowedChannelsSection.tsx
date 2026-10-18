@@ -74,7 +74,7 @@ export default function FollowedChannelsSection() {
               placeholder="Channel URL or @handle"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className={`${INPUT_COMPACT} !w-56`}
+              className={`${INPUT_COMPACT} w-56!`}
             />
             <button
               type="submit"

@@ -42,7 +42,7 @@ export default function ChangePasswordModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4"
       role="presentation"
       onClick={backdropClick(onClose)}
     >
@@ -52,7 +52,7 @@ export default function ChangePasswordModal({
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="ui-panel ui-panel-legible w-full max-w-sm rounded-xl bg-ink-900 p-5 shadow-xl outline-none ring-1 ring-ink-600"
+        className="ui-panel ui-panel-legible w-full max-w-sm rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600"
       >
         <h2 id={titleId} className="mb-4 text-base font-semibold text-gray-100">
           Change password
@@ -93,7 +93,7 @@ export default function ChangePasswordModal({
             <button
               type="submit"
               disabled={busy}
-              className={`${AUTH_PRIMARY} !w-auto`}
+              className={`${AUTH_PRIMARY} w-auto!`}
             >
               {busy ? "Saving…" : "Change password"}
             </button>

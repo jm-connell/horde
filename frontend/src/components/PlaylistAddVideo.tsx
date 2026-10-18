@@ -310,7 +310,7 @@ export default function PlaylistAddVideo({
                 aria-expanded={open}
                 aria-label="Add Video"
                 onClick={() => setOpen(true)}
-                className={`absolute inset-0 z-[1] flex items-center whitespace-nowrap px-3 text-sm text-gray-300 transition-opacity duration-200 ease-out hover:text-accent motion-reduce:transition-none ${
+                className={`absolute inset-0 z-1 flex items-center whitespace-nowrap px-3 text-sm text-gray-300 transition-opacity duration-200 ease-out hover:text-accent motion-reduce:transition-none ${
                   open ? "pointer-events-none opacity-0" : "opacity-100"
                 }`}
               >
@@ -375,7 +375,7 @@ export default function PlaylistAddVideo({
                     }
                   }
                 }}
-                className={`absolute inset-0 z-0 min-w-0 bg-transparent py-1.5 pl-3 text-sm text-gray-100 outline-none transition-opacity duration-200 ease-out motion-reduce:transition-none ${
+                className={`absolute inset-0 z-0 min-w-0 bg-transparent py-1.5 pl-3 text-sm text-gray-100 outline-hidden transition-opacity duration-200 ease-out motion-reduce:transition-none ${
                   open
                     ? busy
                       ? "pr-8 opacity-50"
@@ -389,7 +389,7 @@ export default function PlaylistAddVideo({
                 onClick={close}
                 title="Close"
                 aria-label="Close add video"
-                className={`absolute right-0.5 top-1/2 z-[1] flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-muted transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
+                className={`absolute right-0.5 top-1/2 z-1 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-sm text-muted transition-opacity duration-200 ease-out hover:bg-ink-800 hover:text-accent motion-reduce:transition-none ${
                   open ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               >

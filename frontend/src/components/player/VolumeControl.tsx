@@ -88,7 +88,7 @@ export default function VolumeControl({
         onPointerCancel={onVolumePointerUp}
         aria-label="Volume"
         aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
-        className="accent-scrubber w-[6.25rem] sm:w-[8.75rem] xl:w-[11.25rem]"
+        className="accent-scrubber w-25 sm:w-35 xl:w-45"
       />
     </div>
   );

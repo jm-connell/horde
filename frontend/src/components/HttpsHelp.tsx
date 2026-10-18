@@ -117,7 +117,7 @@ export function HttpsNotice() {
           type="button"
           onClick={dismiss}
           aria-label="Dismiss"
-          className="ui-interactive shrink-0 rounded p-1 text-gray-400 hover:text-gray-100"
+          className="ui-interactive shrink-0 rounded-sm p-1 text-gray-400 hover:text-gray-100"
         >
           ✕
         </button>

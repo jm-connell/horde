@@ -23,7 +23,7 @@ const SHELL_PATH = "/mnt/tank/dockge/stacks/horde";
 
 function Code({ children }: { children: string }) {
   return (
-    <pre className="overflow-x-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
+    <pre className="overflow-x-auto rounded-sm bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
       {children}
     </pre>
   );
@@ -197,7 +197,7 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
             <summary className="cursor-pointer text-xs text-muted hover:text-gray-400">
               Show details
             </summary>
-            <pre className="mt-2 max-h-64 overflow-auto rounded bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
+            <pre className="mt-2 max-h-64 overflow-auto rounded-sm bg-ink-900/80 p-2 font-mono text-[11px] leading-relaxed text-gray-300">
               {(control.log_tail ?? []).join("\n")}
             </pre>
           </details>

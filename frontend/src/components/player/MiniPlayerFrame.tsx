@@ -36,7 +36,7 @@ export default function MiniPlayerFrame({
         />
       )}
       <div
-        className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-gradient-to-b from-black/90 to-transparent px-2 pb-3 pt-1.5 text-gray-100 transition-opacity duration-300 ${
+        className={`absolute inset-x-0 top-0 z-10 flex items-center gap-1 bg-linear-to-b from-black/90 to-transparent px-2 pb-3 pt-1.5 text-gray-100 transition-opacity duration-300 ${
           controlsVisible
             ? "pointer-events-auto opacity-100"
             : "pointer-events-none opacity-0"
@@ -60,7 +60,7 @@ export default function MiniPlayerFrame({
               type="button"
               data-mini-no-drag
               onClick={onTogglePiP}
-              className="flex min-h-[44px] shrink-0 touch-manipulation items-center justify-center rounded px-2 text-xs font-medium hover:text-accent"
+              className="flex min-h-[44px] shrink-0 touch-manipulation items-center justify-center rounded-sm px-2 text-xs font-medium hover:text-accent"
               title="Picture in picture"
               aria-label="Picture in picture"
             >
