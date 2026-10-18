@@ -420,6 +420,16 @@ input[type="range"].accent-scrubber {
   cursor: pointer;
 }
 
+/* The volume level left of the thumb, tinted with the accent (subtle, so the
+   thumb stays the focus). --fill is set inline from the value. */
+input[type="range"].accent-scrubber.accent-scrubber--fill {
+  background: linear-gradient(
+    to right,
+    rgb(var(--accent) / 0.45) var(--fill, 0%),
+    rgb(var(--ink-600)) var(--fill, 0%)
+  );
+}
+
 input[type="range"].accent-scrubber::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
