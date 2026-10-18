@@ -557,7 +557,7 @@ test.describe("player behaviour across state changes", () => {
   function controlBar(page: Page) {
     return page
       .getByRole("slider", { name: "Seek" })
-      .locator("xpath=ancestor::div[contains(@class,'bg-gradient-to-t')][1]");
+      .locator("xpath=ancestor::div[contains(@class,'bg-linear-to-t')][1]");
   }
   const play = (page: Page) =>
     page
