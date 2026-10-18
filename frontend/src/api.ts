@@ -7,6 +7,7 @@ import type {
   AuthState,
   AuthUser,
   MediaToken,
+  NextPart,
   PermissionInfo,
   UserAccount,
   UserCreateInput,
@@ -336,6 +337,11 @@ export const api = {
 
   login(username: string, password: string): Promise<{ user: AuthUser }> {
     return request("/api/auth/login", jsonInit("POST", { username, password }));
+  },
+
+  /** The channel's next upload when it clearly continues this video's series. */
+  getNextPart(videoId: number): Promise<NextPart> {
+    return request<NextPart>(`/api/videos/${videoId}/next-part`);
   },
 
   /** Ask for a one-time reset code; the server writes it to its log. */

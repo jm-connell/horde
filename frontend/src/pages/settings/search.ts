@@ -74,7 +74,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   // Playback
   {
     tab: "playback",
-    keywords: "watch page description related videos autoplay sidebar",
+    keywords:
+      "watch page description related videos autoplay sidebar next part series",
   },
   {
     tab: "playback",

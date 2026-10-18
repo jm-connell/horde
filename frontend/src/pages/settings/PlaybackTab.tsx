@@ -89,6 +89,21 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
+            title="Autoplay the next part"
+            description="When a video ends, play the channel's next upload if it clearly continues the series (Day 12 → Day 13, the same series tag), even if it is not downloaded. Otherwise a related video plays as above. Needs the channel indexed, or the next part downloaded."
+            hidden={!!q && !match("autoplay next part series channel")}
+            control={
+              <Toggle
+                checked={settings.autoplayNextPart}
+                onChange={() =>
+                  update({
+                    autoplayNextPart: !settings.autoplayNextPart,
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
             title="Single-key player shortcuts"
             description="Space, K, C, T, F, N, comma and period control the player while it is on screen. Turn off if these clash with speech-input or assistive software; arrow keys and Escape keep working."
             hidden={

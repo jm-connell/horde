@@ -2297,6 +2297,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/{video_id}/next-part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Next Part
+         * @description The channel's next upload when it clearly continues this video's series.
+         *
+         *     For "autoplay the next part": the player plays it (downloaded or not)
+         *     instead of a related video. ``entry`` is None when there is no clear one.
+         */
+        get: operations["next_part_api_videos__video_id__next_part_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}/progress": {
         parameters: {
             query?: never;
@@ -4398,6 +4421,18 @@ export interface components {
              * @default 0
              */
             total: number;
+        };
+        /**
+         * NextPartRead
+         * @description The upload that clearly continues a video (same series), if there is one.
+         *
+         *     ``entry`` is None when the channel's next upload is not clearly the next
+         *     part, or the channel is unknown; ``reason`` says why it matched.
+         */
+        NextPartRead: {
+            entry?: components["schemas"]["ChannelFeedEntry"] | null;
+            /** Reason */
+            reason?: string | null;
         };
         /** OkResponse */
         OkResponse: {
@@ -11627,6 +11662,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaTokenRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    next_part_api_videos__video_id__next_part_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextPartRead"];
                 };
             };
             /** @description Validation error */

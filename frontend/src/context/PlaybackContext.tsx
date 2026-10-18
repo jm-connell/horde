@@ -30,8 +30,10 @@ import { enabledSponsorBlockCategories } from "../sponsorBlock";
 import {
   dedupeSubtitleTracks,
   resolveLibraryChapters,
+  youtubeThumbnailUrl,
   type Chapter,
 } from "../utils";
+import { watchHref } from "../utils/watchHref";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
 import {
   clampMiniPos,
@@ -619,7 +621,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const queueRef = useRef(queue);
   queueRef.current = queue;
 
-  const [upNext, setUpNext] = useState<Video | null>(null);
+  // A related library video, or the channel's next part (maybe not downloaded).
+  const [upNext, setUpNext] = useState<QueueEntry | null>(null);
   const [upNextSeconds, setUpNextSeconds] = useState<number | null>(null);
   const upNextTimer = useRef<number | null>(null);
 
@@ -638,12 +641,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   // Turning autoplay off mid-countdown cancels the overlay.
   useEffect(() => {
-    if (!settings.autoplayRelated) clearUpNext();
-  }, [settings.autoplayRelated, clearUpNext]);
+    if (!settings.autoplayRelated && !settings.autoplayNextPart) clearUpNext();
+  }, [settings.autoplayRelated, settings.autoplayNextPart, clearUpNext]);
 
   const playSuggested = useCallback(
-    (video: Video) => {
+    (video: QueueEntry) => {
       clearUpNext();
+      if (isQueuedStream(video)) {
+        // Not downloaded (or only known by its link): the watch page plays it.
+        navigate(video.href);
+        return;
+      }
       setStream(null);
       setMediaSuspended(false);
       libraryPosRef.current = 0;
@@ -655,7 +663,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   const startUpNextCountdown = useCallback(
-    (video: Video) => {
+    (video: QueueEntry) => {
       clearUpNext();
       setUpNext(video);
       setUpNextSeconds(8);
@@ -711,18 +719,51 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       advance();
       return;
     }
-    if (!current || !settings.autoplayRelated) return;
+    if (!current) return;
     const endedId = current.id;
     const exclude = new Set(recentWatchedRef.current);
     exclude.add(endedId);
+    const playRelated = () => {
+      if (!settings.autoplayRelated) return;
+      api
+        .getRelatedVideos(endedId, 12)
+        .then((rows) => {
+          if (queueRef.current.length > 0) return;
+          const next = rows.find((v) => !exclude.has(v.id));
+          if (next) startUpNextCountdown(next);
+        })
+        .catch(() => undefined);
+    };
+    if (!settings.autoplayNextPart) {
+      playRelated();
+      return;
+    }
+    // The channel's next upload first, when it clearly continues the series;
+    // otherwise a related video as before.
     api
-      .getRelatedVideos(endedId, 12)
-      .then((rows) => {
+      .getNextPart(endedId)
+      .then(({ entry }) => {
         if (queueRef.current.length > 0) return;
-        const next = rows.find((v) => !exclude.has(v.id));
-        if (next) startUpNextCountdown(next);
+        const href = entry ? watchHref(entry, entry.channel ?? "") : null;
+        if (
+          !entry ||
+          !href ||
+          (entry.video_id != null && exclude.has(entry.video_id))
+        ) {
+          playRelated();
+          return;
+        }
+        startUpNextCountdown({
+          queue_kind: "stream",
+          url: entry.url,
+          href,
+          title: entry.title || "Untitled",
+          channel: entry.channel ?? null,
+          thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
+          duration: entry.duration ?? null,
+        });
       })
-      .catch(() => undefined);
+      .catch(playRelated);
   }, [
     current,
     stream,
@@ -730,6 +771,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     advance,
     startUpNextCountdown,
     settings.autoplayRelated,
+    settings.autoplayNextPart,
   ]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
@@ -994,7 +1036,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             ? {
                 title: upNext.title,
                 channel: upNext.channel,
-                poster: thumbnailUrl(upNext),
+                poster: isQueuedStream(upNext)
+                  ? upNext.thumbnail
+                  : thumbnailUrl(upNext),
+                note: isQueuedStream(upNext)
+                  ? upNext.href.startsWith("/watch?")
+                    ? "Next part · not downloaded"
+                    : "Next part"
+                  : null,
                 seconds: upNextSeconds ?? 0,
               }
             : null

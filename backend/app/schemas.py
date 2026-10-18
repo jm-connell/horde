@@ -352,6 +352,17 @@ class ChannelFeedEntry(BaseModel):
     match_reason: SearchMatchReason | None = None
 
 
+class NextPartRead(BaseModel):
+    """The upload that clearly continues a video (same series), if there is one.
+
+    ``entry`` is None when the channel's next upload is not clearly the next
+    part, or the channel is unknown; ``reason`` says why it matched.
+    """
+
+    entry: ChannelFeedEntry | None = None
+    reason: str | None = None
+
+
 class StreamRelatedPage(BaseModel):
     """Related videos for a stream: library and not-downloaded ones, marked.
 

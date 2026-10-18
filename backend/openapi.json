@@ -5065,6 +5065,34 @@
         "title": "MetadataSyncStatus",
         "type": "object"
       },
+      "NextPartRead": {
+        "description": "The upload that clearly continues a video (same series), if there is one.\n\n``entry`` is None when the channel's next upload is not clearly the next\npart, or the channel is unknown; ``reason`` says why it matched.",
+        "properties": {
+          "entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelFeedEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "NextPartRead",
+        "type": "object"
+      },
       "OkResponse": {
         "properties": {
           "ok": {
@@ -16559,6 +16587,59 @@
           }
         },
         "summary": "Media Token",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/api/videos/{video_id}/next-part": {
+      "get": {
+        "description": "The channel's next upload when it clearly continues this video's series.\n\nFor \"autoplay the next part\": the player plays it (downloaded or not)\ninstead of a related video. ``entry`` is None when there is no clear one.",
+        "operationId": "next_part_api_videos__video_id__next_part_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextPartRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Next Part",
         "tags": [
           "videos"
         ]
