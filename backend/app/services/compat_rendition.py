@@ -53,6 +53,7 @@ from .paths import (
     to_rel_path,
 )
 from .workers import BackgroundWorker
+from .ytdlp_extract import is_youtube_url
 from .ytdlp_formats import (
     COMPAT_MAX_HEIGHT,
     FORMAT_SORT_H264,
@@ -559,11 +560,8 @@ def _load_source(video_id: int) -> _Source | None:
 
 
 def _is_youtube(src: _Source) -> bool:
-    url = (src.source_url or "").lower()
-    return (
-        "youtube" in (src.platform or "").lower()
-        or "youtube.com" in url
-        or "youtu.be" in url
+    return "youtube" in (src.platform or "").lower() or is_youtube_url(
+        src.source_url or ""
     )
 
 
