@@ -131,6 +131,12 @@ After pulling a new image or rebuilding the frontend, browsers may keep old hash
 
 If Settings → System still shows an old version, confirm the container actually restarted on the new image (`horde_version` / `horde_sha` on `/api/health` while signed in; `docker exec horde cat /app/BUILD_INFO` also shows the build).
 
+## Panels or overlays look wrong on an old browser
+
+The interface needs Safari 16.4 / iOS 16.4, Chrome or Edge 111, or Firefox 128 or newer. Older browsers load the page but can draw translucent panels and dimmed overlays as solid fills, and may show other styling glitches.
+
+**Fix:** update the browser (on an iPhone or iPad, update iOS / iPadOS).
+
 ## Settings or library empty after update
 
 **Symptoms:** theme/AI/catalog settings back to defaults, library looks empty, or downloads land in a different folder after `bash update.sh`.

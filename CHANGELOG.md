@@ -13,6 +13,8 @@ All notable changes to Horde are documented here. The format follows
   and Autoprefixer are no longer used. The interface looks the same: colors,
   line heights, button cursors and spacing keep their Tailwind 3 values. Date
   and time fields are 2px shorter and now match the text fields beside them.
+  The interface now needs Safari / iOS 16.4, Chrome or Edge 111, or Firefox 128
+  or newer; older browsers draw translucent panels and overlays as solid fills.
 
 ### Fixed
 
