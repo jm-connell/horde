@@ -106,7 +106,7 @@ export default function ProvidersPane() {
         </div>
       </Section>
 
-      <div className="mb-4 mt-6 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+      <div className="mt-6 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         {(
           [
             { id: "local" as const, label: "Local AI" },

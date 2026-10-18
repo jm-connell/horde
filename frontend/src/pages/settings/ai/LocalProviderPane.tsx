@@ -125,7 +125,9 @@ export default function LocalProviderPane() {
             </div>
             <div
               className={
-                localAiUnused ? `space-y-4 ${OPTIONS_MUTED}` : "space-y-4"
+                localAiUnused
+                  ? `flex flex-col gap-4 ${OPTIONS_MUTED}`
+                  : "flex flex-col gap-4"
               }
               aria-disabled={localAiUnused || undefined}
             >

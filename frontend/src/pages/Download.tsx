@@ -670,7 +670,7 @@ export default function Download() {
 
         <Collapse
           open={!!(preview && isPlaylist)}
-          className={preview && isPlaylist ? undefined : "mt-0!"}
+          className={preview && isPlaylist ? undefined : "mb-0!"}
         >
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
             <div>
