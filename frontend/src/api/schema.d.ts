@@ -343,6 +343,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot Password
+         * @description Write a one-time reset code for ``username`` to the server log.
+         *
+         *     The answer is the same whether or not the account exists, so the form does
+         *     not reveal usernames. The code reaches only whoever can read the log.
+         */
+        post: operations["forgot_password_api_auth_forgot_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -391,6 +414,28 @@ export interface paths {
          * @description Change your own password. Your other browsers are signed out.
          */
         post: operations["change_password_api_auth_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Set a new password with a code from the server log, and sign in.
+         *
+         *     Every other session of the account is signed out.
+         */
+        post: operations["reset_password_api_auth_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4127,6 +4172,11 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** ForgotPasswordRequest */
+        ForgotPasswordRequest: {
+            /** Username */
+            username: string;
+        };
         /** GpuStats */
         GpuStats: {
             /** Name */
@@ -4502,6 +4552,15 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /** Code */
+            code: string;
+            /** New Password */
+            new_password: string;
+            /** Username */
+            username: string;
         };
         /** PausedResponse */
         PausedResponse: {
@@ -6235,6 +6294,46 @@ export interface operations {
             };
         };
     };
+    forgot_password_api_auth_forgot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -6332,6 +6431,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_password_api_auth_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLoginResult"];
+                };
             };
             /** @description Validation error */
             422: {

@@ -671,6 +671,17 @@ class AuthLoginResult(BaseModel):
     user: AuthUserRead
 
 
+class ForgotPasswordRequest(BaseModel):
+    username: str = Field(max_length=200)
+
+
+class PasswordResetRequest(BaseModel):
+    username: str = Field(max_length=200)
+    #: The code from the server log; case, spaces and dashes do not matter.
+    code: str = Field(max_length=64)
+    new_password: str = Field(max_length=2000)
+
+
 class PasswordChange(BaseModel):
     current_password: str = Field(max_length=2000)
     new_password: str = Field(max_length=2000)

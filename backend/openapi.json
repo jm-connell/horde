@@ -4446,6 +4446,20 @@
         "title": "FontRead",
         "type": "object"
       },
+      "ForgotPasswordRequest": {
+        "properties": {
+          "username": {
+            "maxLength": 200,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
       "GpuStats": {
         "properties": {
           "name": {
@@ -5411,6 +5425,32 @@
           "new_password"
         ],
         "title": "PasswordChange",
+        "type": "object"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 2000,
+            "title": "New Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 200,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "code",
+          "new_password"
+        ],
+        "title": "PasswordResetRequest",
         "type": "object"
       },
       "PausedResponse": {
@@ -9302,6 +9342,51 @@
         ]
       }
     },
+    "/api/auth/forgot": {
+      "post": {
+        "description": "Write a one-time reset code for ``username`` to the server log.\n\nThe answer is the same whether or not the account exists, so the form does\nnot reveal usernames. The code reaches only whoever can read the log.",
+        "operationId": "forgot_password_api_auth_forgot_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Forgot Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "login_api_auth_login_post",
@@ -9427,6 +9512,58 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/reset": {
+      "post": {
+        "description": "Set a new password with a code from the server log, and sign in.\n\nEvery other session of the account is signed out.",
+        "operationId": "reset_password_api_auth_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reset Password",
         "tags": [
           "auth"
         ]

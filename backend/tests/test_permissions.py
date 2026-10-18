@@ -176,6 +176,8 @@ OPEN_MUTATIONS = {
 PUBLIC = {
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/bootstrap"),
+    ("POST", "/api/auth/forgot"),
+    ("POST", "/api/auth/reset"),
 }
 SAFE = {"GET", "HEAD", "OPTIONS"}
 

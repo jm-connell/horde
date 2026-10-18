@@ -338,6 +338,23 @@ export const api = {
     return request("/api/auth/login", jsonInit("POST", { username, password }));
   },
 
+  /** Ask for a one-time reset code; the server writes it to its log. */
+  forgotPassword(username: string): Promise<void> {
+    return request<void>("/api/auth/forgot", jsonInit("POST", { username }));
+  },
+
+  /** Set a new password with a code from the server log; signs in. */
+  resetPassword(
+    username: string,
+    code: string,
+    newPassword: string
+  ): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/reset",
+      jsonInit("POST", { username, code, new_password: newPassword })
+    );
+  },
+
   bootstrapAdmin(
     username: string,
     password: string

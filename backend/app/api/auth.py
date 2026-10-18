@@ -12,18 +12,20 @@ from sqlmodel import Session
 
 from ..auth import CodedHTTPException, current_user
 from ..context import get_session
-from ..models import User
+from ..models import User, require_id
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     AuthLoginResult,
     AuthState,
     AuthUserRead,
     BootstrapRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     PasswordChange,
+    PasswordResetRequest,
 )
 from ..services import app_settings, uploads
-from ..services.auth import accounts, avatars, passwords
+from ..services.auth import accounts, avatars, passwords, reset_codes
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
 
@@ -139,6 +141,8 @@ def login(
             401, "Invalid username or password", "invalid_credentials"
         )
     runtime.limiter.record_success(address, norm)
+    # The password was remembered after all: pending reset codes go.
+    runtime.reset_codes.discard(user.username_norm)
     _open_session(session, request, response, runtime, user)
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
@@ -155,6 +159,98 @@ def logout(
     response = Response(status_code=204)
     response.delete_cookie(accounts.SESSION_COOKIE, path="/")
     return response
+
+
+def _refuse_when_auth_disabled(runtime: AuthRuntime) -> None:
+    if runtime.config.disabled:
+        raise CodedHTTPException(
+            400, "Sign-in is disabled on this server", "auth_disabled"
+        )
+
+
+@router.post("/forgot", status_code=204)
+def forgot_password(
+    payload: ForgotPasswordRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    """Write a one-time reset code for ``username`` to the server log.
+
+    The answer is the same whether or not the account exists, so the form does
+    not reveal usernames. The code reaches only whoever can read the log.
+    """
+    runtime = _runtime(request)
+    _refuse_when_auth_disabled(runtime)
+    user = accounts.get_by_username(session, payload.username)
+    if user is None or user.disabled:
+        return Response(status_code=204)
+    code = runtime.reset_codes.issue(
+        user.username_norm,
+        reset_codes.account_binding(require_id(user), user.password_hash),
+    )
+    if code is None:
+        return Response(status_code=204)  # asked again within the cooldown
+    minutes = int(reset_codes.CODE_TTL_SEC // 60)
+    logger.warning(
+        "PASSWORD RESET CODE for %r: %s  (asked from %s; valid %d minutes, "
+        "single use). Enter it on the sign-in page under 'Forgot password?'.",
+        user.username,
+        code,
+        runtime.client_address(request),
+        minutes,
+    )
+    return Response(status_code=204)
+
+
+@router.post("/reset", response_model=AuthLoginResult)
+def reset_password(
+    payload: PasswordResetRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    """Set a new password with a code from the server log, and sign in.
+
+    Every other session of the account is signed out.
+    """
+    runtime = _runtime(request)
+    _refuse_when_auth_disabled(runtime)
+    address = runtime.client_address(request)
+    norm = payload.username.strip().lower()
+    throttle_key = f"reset:{norm}"
+    wait = runtime.limiter.retry_after(address, throttle_key)
+    if wait:
+        raise CodedHTTPException(
+            429,
+            f"Too many failed attempts. Try again in {wait} seconds.",
+            "rate_limited",
+            headers={"Retry-After": str(wait)},
+        )
+    # Refuse a weak password before using the code, so it can be retried. Run
+    # for every name, known or not, so the answer does not reveal accounts.
+    accounts.check_password_policy(payload.new_password, payload.username.strip())
+    user = accounts.get_by_username(session, payload.username)
+    # One step under a lock: a code works for exactly one request.
+    if (
+        user is None
+        or user.disabled
+        or not runtime.reset_codes.redeem(
+            user.username_norm,
+            payload.code,
+            reset_codes.account_binding(require_id(user), user.password_hash),
+        )
+    ):
+        runtime.limiter.record_failure(address, throttle_key)
+        raise CodedHTTPException(
+            400,
+            "That reset code is wrong or has expired. Ask for a new one.",
+            "invalid_reset_code",
+        )
+    runtime.limiter.record_success(address, throttle_key)
+    accounts.set_password(session, user, payload.new_password)
+    logger.info("password reset with a log code for %r", user.username)
+    _open_session(session, request, response, runtime, user)
+    return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
 
 @router.post("/password", status_code=204)

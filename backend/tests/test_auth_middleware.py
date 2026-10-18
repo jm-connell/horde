@@ -25,6 +25,9 @@ EXPECTED_PUBLIC = {
     ("GET", "/api/auth/state"),
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/bootstrap"),
+    # Forgot password: the code only ever goes to the server log.
+    ("POST", "/api/auth/forgot"),
+    ("POST", "/api/auth/reset"),
 }
 
 

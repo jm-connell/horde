@@ -159,6 +159,11 @@ def clean_username(raw: str) -> tuple[str, str]:
     return name, name.lower()
 
 
+def check_password_policy(password: str, username: str) -> None:
+    """Raise ``WeakPassword`` unless ``password`` meets the password rules."""
+    _check_password(password, username)
+
+
 def _check_password(password: str, username: str) -> None:
     try:
         passwords.validate_password(password, username)

@@ -306,3 +306,43 @@ test("a different user signing in on a browser that still holds the previous use
   expect(adminUi.theme).toBe("oled");
   await again.close();
 });
+
+test("forgot password asks for a log code and refuses a wrong one", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  void page;
+  const ctx = await anonymousContext(browser, baseURL);
+  const visitor = await ctx.newPage();
+  await visitor.goto("/");
+  await visitor.getByLabel("Username").fill("member");
+  await visitor.getByRole("button", { name: "Forgot password?" }).click();
+  await expect(
+    visitor.getByRole("heading", { name: "Reset your password" })
+  ).toBeVisible();
+  // The name typed on the sign-in form carries over.
+  await expect(visitor.getByLabel("Username")).toHaveValue("member");
+  await visitor.getByRole("button", { name: "Get a reset code" }).click();
+
+  await expect(
+    visitor.getByRole("status").filter({ hasText: "server log" })
+  ).toContainText("PASSWORD RESET CODE");
+  await visitor.getByLabel("Reset code").fill("AAAAA-AAAAA");
+  await visitor
+    .getByLabel("New password", { exact: true })
+    .fill("whatever-new-1");
+  await visitor.getByLabel("Repeat new password").fill("whatever-new-1");
+  await visitor
+    .getByRole("button", { name: "Reset password and sign in" })
+    .click();
+  await expect(
+    visitor.getByRole("alert").filter({ hasText: "wrong or has expired" })
+  ).toBeVisible();
+
+  await visitor.getByRole("button", { name: "Back to sign in" }).click();
+  await expect(
+    visitor.getByRole("heading", { name: "Sign in to Horde" })
+  ).toBeVisible();
+  await ctx.close();
+});

@@ -81,9 +81,19 @@ The server refuses any change that would leave **no enabled administrator** (`co
 - Changing your own password signs out your other browsers. Signing out deletes the session.
 - After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. While such an attack is actually running, the real user can still be slowed down (attacker requests take most of the one-second slots); it clears within a second of the attack stopping. Guessing the current password in *Account settings → Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
 
-## Forgot the admin password
+## Forgot your password
 
-Run this on the Docker host; it reads the new password from the terminal (or from standard input when piped):
+Click **Forgot password?** on the sign-in page and enter your username. Horde writes a one-time **reset code** to its server log, which whoever runs Horde can read:
+
+```bash
+docker logs horde 2>&1 | grep "PASSWORD RESET CODE"
+```
+
+(On TrueNAS, the app's log view shows the same line.) Enter the code with a new password on the same page: you are signed in, and every other browser of that account is signed out. A code works once and expires after 15 minutes; it is tied to the account and its current password, so it stops working once the password changes some other way or the account is signed into normally. Asking again writes a new code at most every 30 seconds, and the three newest stay valid, so use the newest line. Five wrong codes in a row cancel the account's pending codes. Anyone on the network can ask for a code or burn one with wrong guesses (they never see it), so a determined prankster can keep you from finishing; the command below always works. Nothing is logged for a username that does not exist or is disabled, and the page answers the same either way. Why it works this way: [ADR 0012](../adr/0012-password-reset-through-the-server-log.md). An administrator can also reset a member's password in *Account settings → Users*.
+
+### Without the log
+
+If you cannot read the log (or set `HORDE_LOG_LEVEL=ERROR`, which hides the code), run this on the Docker host instead; it reads the new password from the terminal (or from standard input when piped):
 
 ```bash
 docker exec -it horde python -m app.cli reset-password <username>
@@ -104,6 +114,8 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 | `GET /api/auth/state` | The app asks who is signed in |
 | `POST /api/auth/login` | Sign in |
 | `POST /api/auth/bootstrap` | Create the first admin; `409` once any account exists |
+| `POST /api/auth/forgot` | Write a one-time reset code to the server log; always `204` |
+| `POST /api/auth/reset` | New password with that code; signs in |
 | the SPA files, `/wiki/*` | No data |
 | stream, subtitle and thumbnail URLs with a valid `?mt=` token | Cast and AirPlay receivers send no cookie |
 
