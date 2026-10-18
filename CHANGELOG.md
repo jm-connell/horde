@@ -7,6 +7,16 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The H.264 compatibility copy of a YouTube video could be YouTube's default
+  best stream (often 4K VP9 or AV1) instead of its 1080p H.264 stream, so
+  devices that needed the copy, such as an M1 iPad with an AV1 video, still
+  could not play it. Copies are now checked after download and encoded locally
+  when they are not H.264. Bad copies saved earlier are removed at startup, so
+  the player offers to make them again. The progress bar no longer runs to 99%
+  twice while the copy downloads.
+
 ## [1.0.0] - 2026-10-17
 
 This section summarizes the architecture and operations overhaul at a high
