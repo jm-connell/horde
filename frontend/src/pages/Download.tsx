@@ -943,7 +943,7 @@ export default function Download() {
 
       {activeSectionVisible && (
         <section
-          className={`ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40 transition-[opacity,transform] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40 transition-[opacity,translate] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
             activeSectionEntered
               ? "translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0"

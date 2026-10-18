@@ -3,7 +3,7 @@ import type { DragEvent } from "react";
 export function ExpandChevron({ open }: { open: boolean }) {
   return (
     <span
-      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-[transform,color,background-color] duration-200 ease-out group-hover:bg-ink-800 group-hover:text-gray-300 ${
+      className={`inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted transition-[rotate,color,background-color] duration-200 ease-out group-hover:bg-ink-800 group-hover:text-gray-300 ${
         open ? "rotate-90 text-gray-300" : ""
       }`}
       aria-hidden

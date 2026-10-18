@@ -170,7 +170,7 @@ function FeedThumbnail({
     <div className={`relative ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
         <div
-          className={`relative h-full w-full transition-[transform,filter] duration-200 sm:group-hover:scale-105 ${
+          className={`relative h-full w-full transition-[scale,filter] duration-200 sm:group-hover:scale-105 ${
             previewing ? "" : "group-hover:brightness-[0.6]"
           }`}
         >
