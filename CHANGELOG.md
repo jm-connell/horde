@@ -17,6 +17,18 @@ All notable changes to Horde are documented here. The format follows
   the player offers to make them again. The progress bar no longer runs to 99%
   twice while the copy downloads.
 
+### Security
+
+- React Router is now 7.18, which fixes open redirects through crafted
+  navigation paths ([GHSA-jjmj-jmhj-qwj2](https://github.com/advisories/GHSA-jjmj-jmhj-qwj2),
+  [GHSA-wrjc-x8rr-h8h6](https://github.com/advisories/GHSA-wrjc-x8rr-h8h6)) and
+  an SSR hydration flaw Horde was not exposed to
+  ([GHSA-337j-9hxr-rhxg](https://github.com/advisories/GHSA-337j-9hxr-rhxg)).
+- The frontend build pins postcss-selector-parser to 7.1.6
+  ([GHSA-rj75-hqrm-r3gf](https://github.com/advisories/GHSA-rj75-hqrm-r3gf)).
+  It only parses Horde's own stylesheets at build time, and the built CSS is
+  unchanged.
+
 ## [1.0.0] - 2026-10-17
 
 This section summarizes the architecture and operations overhaul at a high

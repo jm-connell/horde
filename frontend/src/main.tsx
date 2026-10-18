@@ -34,7 +34,11 @@ registerServiceWorker();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    {/* React Router 7 wraps location updates in startTransition by default,
+        so state set alongside a navigate() (setup finishing, the mini player,
+        dialog focus) renders against the old URL first. Keep the v6
+        behaviour: the location updates in the same render as that state. */}
+    <BrowserRouter useTransitions={false}>
       <App />
     </BrowserRouter>
   </React.StrictMode>
