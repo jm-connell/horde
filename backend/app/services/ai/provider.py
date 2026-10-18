@@ -907,6 +907,24 @@ def get_openrouter_provider(
     return OpenRouterProvider(key, timeout=timeout)
 
 
+def _connection_error_detail(exc: Exception) -> str:
+    """User-facing reason a connection test failed.
+
+    Unlike ``classify_provider_error`` this never echoes the exception text,
+    which can carry internal URLs or response bodies; that goes to the log.
+    """
+    if isinstance(exc, httpx.HTTPStatusError):
+        code = exc.response.status_code
+        if code in (401, 403):
+            return "AI provider rejected credentials"
+        return f"AI provider HTTP {code}"
+    if isinstance(exc, httpx.TimeoutException):
+        return "AI provider request timed out"
+    if isinstance(exc, httpx.RequestError):
+        return "Could not reach AI provider"
+    return "Unexpected response from the AI provider (see the server log)"
+
+
 def test_openrouter_connection(api_key: str | None = None) -> dict[str, Any]:
     """Probe OpenRouter with the given key (or stored/env key)."""
     key = (api_key or "").strip()
@@ -918,8 +936,8 @@ def test_openrouter_connection(api_key: str | None = None) -> dict[str, Any]:
     try:
         models = provider.list_models()
     except Exception as exc:
-        logger.debug("provider connection test failed", exc_info=True)
-        return {"ok": False, "detail": str(exc)}
+        logger.warning("provider connection test failed", exc_info=True)
+        return {"ok": False, "detail": _connection_error_detail(exc)}
     return {
         "ok": True,
         "detail": f"Connected ({len(models)} models)",
@@ -1380,8 +1398,12 @@ def test_connection(base_url: str | None = None) -> dict[str, Any]:
         try:
             models = provider.list_models()
         except Exception as exc:
-            logger.debug("listing Ollama models failed", exc_info=True)
-            return {"ok": False, "base_url": url, "detail": str(exc)}
+            logger.warning("listing Ollama models failed", exc_info=True)
+            return {
+                "ok": False,
+                "base_url": url,
+                "detail": _connection_error_detail(exc),
+            }
         return {"ok": True, "base_url": url, "models": models}
 
     resolved_url = resolve_base_url(force=True)
@@ -1392,6 +1414,6 @@ def test_connection(base_url: str | None = None) -> dict[str, Any]:
     try:
         models = provider.list_models()
     except Exception as exc:
-        logger.debug("listing Ollama models failed", exc_info=True)
-        return {"ok": False, "base_url": url, "detail": str(exc)}
+        logger.warning("listing Ollama models failed", exc_info=True)
+        return {"ok": False, "base_url": url, "detail": _connection_error_detail(exc)}
     return {"ok": True, "base_url": url, "models": models}
