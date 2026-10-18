@@ -39,6 +39,15 @@ import {
   type MiniPos,
 } from "../utils/miniPlayerLayout";
 import type { SubtitleTrack, Video } from "../types";
+import {
+  isQueuedStream,
+  type QueueEntry,
+  withEntryAtEnd,
+  withEntryFirst,
+  withoutKey,
+  withoutStream,
+  withoutVideo,
+} from "./playbackQueue";
 
 import { useProgressSaver } from "../hooks/useProgressSaver";
 import { useAccountPosition } from "../hooks/useAccountPosition";
@@ -75,7 +84,7 @@ export type MiniPlayerRect = {
 export interface PlaybackSession {
   current: Video | null;
   stream: StreamSession | null;
-  queue: Video[];
+  queue: QueueEntry[];
   mode: ViewMode;
   /** True when the floating mini-player is showing (browsing away from Watch). */
   miniPlayerActive: boolean;
@@ -100,9 +109,10 @@ export interface PlaybackActions {
   getStreamPosition: () => number;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
-  addToQueue: (video: Video) => void;
-  playNext: (video: Video) => void;
-  removeFromQueue: (id: number) => void;
+  addToQueue: (entry: QueueEntry) => void;
+  playNext: (entry: QueueEntry) => void;
+  /** Remove by `queueKey(entry)`. */
+  removeFromQueue: (key: string) => void;
   reorderQueue: (from: number, to: number) => void;
   clearQueue: () => void;
   close: () => void;
@@ -234,10 +244,10 @@ function miniRectFromHost(host: HTMLElement): MiniPlayerRect | null {
   };
 }
 
-function loadQueue(): Video[] {
-  return getJson<Video[]>(
+function loadQueue(): QueueEntry[] {
+  return getJson<QueueEntry[]>(
     QUEUE_KEY,
-    (v): v is Video[] => Array.isArray(v),
+    (v): v is QueueEntry[] => Array.isArray(v),
     [],
     "session"
   );
@@ -257,7 +267,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const isMobile = useIsMobile();
   const [current, setCurrent] = useState<Video | null>(null);
   const [stream, setStream] = useState<StreamSession | null>(null);
-  const [queue, setQueue] = useState<Video[]>(loadQueue);
+  const [queue, setQueue] = useState<QueueEntry[]>(loadQueue);
   const [dock, setDock] = useState<HTMLElement | null>(null);
   const [mode, setModeState] = useState<ViewMode>(
     () => loadSettings().playbackMode
@@ -524,9 +534,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       streamPosRef.current = 0;
       libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
-        setQueue(opts.queue.filter((v) => v.id !== video.id));
+        setQueue(withoutVideo(opts.queue, video.id));
       } else {
-        setQueue((q) => q.filter((v) => v.id !== video.id));
+        setQueue((q) => withoutVideo(q, video.id));
       }
     },
     [startPosition]
@@ -539,21 +549,22 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     streamPosRef.current = 0;
     libraryPosRef.current = 0;
     setStream(session);
+    setQueue((q) => withoutStream(q, session.url));
   }, []);
 
   const getStreamPosition = useCallback(() => streamPosRef.current, []);
   const getCurrentPosition = useCallback(() => libraryPosRef.current, []);
 
-  const addToQueue = useCallback((video: Video) => {
-    setQueue((q) => (q.some((v) => v.id === video.id) ? q : [...q, video]));
+  const addToQueue = useCallback((entry: QueueEntry) => {
+    setQueue((q) => withEntryAtEnd(q, entry));
   }, []);
 
-  const playNext = useCallback((video: Video) => {
-    setQueue((q) => [video, ...q.filter((v) => v.id !== video.id)]);
+  const playNext = useCallback((entry: QueueEntry) => {
+    setQueue((q) => withEntryFirst(q, entry));
   }, []);
 
-  const removeFromQueue = useCallback((id: number) => {
-    setQueue((q) => q.filter((v) => v.id !== id));
+  const removeFromQueue = useCallback((key: string) => {
+    setQueue((q) => withoutKey(q, key));
   }, []);
 
   const reorderQueue = useCallback((from: number, to: number) => {
@@ -637,7 +648,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setMediaSuspended(false);
       libraryPosRef.current = 0;
       setCurrent(video);
-      setQueue((q) => q.filter((v) => v.id !== video.id));
+      setQueue((q) => withoutVideo(q, video.id));
       navigate(`/watch/${video.id}`);
     },
     [clearUpNext, navigate]
@@ -666,21 +677,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   const advance = useCallback(() => {
-    setQueue((q) => {
-      if (q.length === 0) return q;
-      const [next, ...rest] = q;
-      setStream(null);
-      setMediaSuspended(false);
-      setCurrent(next);
-      navigate(`/watch/${next.id}`);
-      return rest;
-    });
+    const [next, ...rest] = queueRef.current;
+    if (!next) return;
+    setQueue(rest);
+    if (isQueuedStream(next)) {
+      // The watch page loads it and starts playback, as when its card is opened.
+      navigate(next.href);
+      return;
+    }
+    setStream(null);
+    setMediaSuspended(false);
+    setCurrent(next);
+    navigate(`/watch/${next.id}`);
   }, [navigate]);
 
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
-    if (stream) return;
+    if (stream) {
+      // A not-downloaded video saves no progress and has no related up-next,
+      // but the queue still moves on.
+      if (queueRef.current.length > 0) advance();
+      return;
+    }
     if (current) {
       progressSaver.finish(current.id);
       recentWatchedRef.current = [

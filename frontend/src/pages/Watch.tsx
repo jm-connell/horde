@@ -108,7 +108,7 @@ export default function Watch() {
     mode === "standard" &&
     settings.showRelatedVideos &&
     relatedItems.length > 0;
-  const queueVisible = !!video && queue.length > 0;
+  const queueVisible = queue.length > 0;
   // Theater puts the player full-bleed, so the column only holds the details
   // under it: keep it at a readable width, centred under the video.
   const contentClass = showRelatedRight

@@ -249,6 +249,37 @@ test("related videos of a stream mark downloaded ones and link to the right page
   await expect(page).toHaveURL(new RegExp(`/watch/${library.id}$`));
 });
 
+test("a not-downloaded related video can be queued and played from the queue", async ({
+  page,
+}) => {
+  await mockStream(page, [
+    {
+      id: "rem1",
+      url: "https://video.example.test/watch?v=rem1",
+      title: "Not yet downloaded clip",
+      duration: 75,
+      thumbnail_url: "https://i.ytimg.com/vi/rem1/mqdefault.jpg",
+      channel: "Other Channel",
+      in_library: false,
+      video_id: null,
+    },
+  ]);
+  await page.goto(WATCH);
+  const remote = page.getByRole("link", { name: /Not yet downloaded clip/ });
+  await remote.hover();
+  await remote.getByTitle("Add to queue").click();
+  // Adding does not open it.
+  await expect(page).toHaveURL(WATCH);
+
+  const queue = page.getByText(/^Up next \(1\)$/).locator("xpath=../..");
+  await expect(queue.getByText("Not yet downloaded clip")).toBeVisible();
+  await expect(queue.getByText(/Not downloaded/)).toBeVisible();
+
+  await queue.getByRole("button", { name: /Not yet downloaded clip/ }).click();
+  await expect(page).toHaveURL(/\/watch\?url=.*rem1/);
+  await expect(page.getByText(/^Up next/)).toHaveCount(0);
+});
+
 test("related videos of a stream show as a grid on a narrow screen", async ({
   page,
 }) => {
