@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-10-17
+
 This section summarizes the architecture and operations overhaul at a high
 level. Detailed per-area entries are added by the maintainer at release time.
 
@@ -255,4 +257,5 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/commits/main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.0...main
+[1.0.0]: https://github.com/jm-connell/horde/commits/v1.0.0
