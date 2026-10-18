@@ -33,3 +33,32 @@ def test_classify_auth_and_rate(monkeypatch):
 def test_format_provider_error_includes_kind():
     text = format_provider_error(httpx.ConnectError("down"))
     assert "(network)" in text
+
+
+def test_connection_tests_do_not_echo_exception_text(client, monkeypatch):
+    from app.services.ai import provider
+
+    def boom(self):
+        raise RuntimeError("internal detail http://10.0.0.5/secret")
+
+    monkeypatch.setattr(provider.OpenRouterProvider, "list_models", boom)
+    body = client.post("/api/ai/openrouter/test", json={"api_key": "k"}).json()
+    assert body["ok"] is False
+    assert "10.0.0.5" not in body["detail"]
+    assert "server log" in body["detail"]
+
+    req = httpx.Request("GET", "https://openrouter.ai/api/v1/models")
+    resp = httpx.Response(401, request=req)
+
+    def rejected(self):
+        raise httpx.HTTPStatusError("401 body", request=req, response=resp)
+
+    monkeypatch.setattr(provider.OpenRouterProvider, "list_models", rejected)
+    body = client.post("/api/ai/openrouter/test", json={"api_key": "k"}).json()
+    assert body == {"ok": False, "detail": "AI provider rejected credentials"}
+
+    monkeypatch.setattr(provider.OllamaProvider, "ping", lambda self: True)
+    monkeypatch.setattr(provider.OllamaProvider, "list_models", boom)
+    body = client.post("/api/ai/test", json={"base_url": "http://x:1"}).json()
+    assert body["ok"] is False
+    assert "10.0.0.5" not in body["detail"]

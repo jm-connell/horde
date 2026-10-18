@@ -632,9 +632,11 @@ def is_youtube_url(url: str) -> bool:
     raw = (url or "").strip()
     if not raw:
         return False
-    parsed = urlparse(raw if "://" in raw else f"https://{raw}")
-    host = (parsed.netloc or "").lower().replace("www.", "")
-    return "youtube.com" in host or host == "youtu.be"
+    try:
+        host = urlparse(raw if "://" in raw else f"https://{raw}").hostname or ""
+    except ValueError:
+        return False
+    return host in ("youtube.com", "youtu.be") or host.endswith(".youtube.com")
 
 
 def channel_search_url(channel_url: str, query: str) -> str:

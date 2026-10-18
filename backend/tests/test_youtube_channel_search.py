@@ -32,6 +32,14 @@ def test_is_youtube_url():
     assert is_youtube_url("https://youtube.com/channel/UCabc") is True
     assert is_youtube_url("https://vimeo.com/foo") is False
     assert is_youtube_url("") is False
+    assert is_youtube_url("https://m.youtube.com/@x") is True
+    assert is_youtube_url("youtu.be/abc") is True
+    # The host must be YouTube's, not merely contain it.
+    assert is_youtube_url("https://notyoutube.com/@x") is False
+    assert is_youtube_url("https://youtube.com.evil.example/@x") is False
+    assert is_youtube_url("https://evil.example/?u=youtube.com") is False
+    assert is_youtube_url("https://youtube.com@evil.example/") is False
+    assert is_youtube_url("https://[bad") is False
 
 
 def test_search_skips_short_query_and_non_youtube(monkeypatch):
