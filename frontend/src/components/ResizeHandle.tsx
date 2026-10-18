@@ -134,7 +134,7 @@ export default function ResizeHandle({
       onDoubleClick={reset}
       onFocus={() => report(getStart())}
       onKeyDown={onKeyDown}
-      className={`group/resize z-[3] flex touch-none select-none items-center justify-center opacity-0 outline-none transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 active:opacity-100 group-hover:opacity-60 ${
+      className={`group/resize z-[3] flex touch-none select-none items-center justify-center opacity-0 outline-hidden transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 active:opacity-100 group-hover:opacity-60 ${
         axis === "y" ? "cursor-row-resize" : "cursor-col-resize"
       } ${className}`}
     >

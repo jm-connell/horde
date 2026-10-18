@@ -23,7 +23,7 @@ export default function QueueButton({
         addToQueue(entry);
       }}
       title="Add to queue"
-      className={`pointer-events-none absolute z-30 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity hover:bg-accent hover:text-ink-950 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 ${className}`}
+      className={`pointer-events-none absolute z-30 rounded-sm bg-black/70 px-2 py-1 text-xs font-medium text-white opacity-0 transition-opacity hover:bg-accent hover:text-ink-950 focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover:pointer-events-auto group-hover:opacity-100 ${className}`}
     >
       + Queue
     </button>

@@ -53,7 +53,7 @@ export default function ProfileSection() {
         <div className="min-w-0 space-y-2">
           <p className="text-base font-medium text-gray-100">
             {user.username}{" "}
-            <span className="ml-1 rounded bg-ink-800 px-1.5 py-0.5 align-middle text-xs font-normal text-gray-300">
+            <span className="ml-1 rounded-sm bg-ink-800 px-1.5 py-0.5 align-middle text-xs font-normal text-gray-300">
               {isAdmin ? "Admin" : "Member"}
             </span>
           </p>
