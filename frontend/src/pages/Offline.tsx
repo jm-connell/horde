@@ -122,7 +122,7 @@ function DownloadingRow({
             </button>
           ) : null}
           <button
-            className={`${btn} !border-red-500/40 !text-red-400 hover:!bg-red-500/10`}
+            className={`${btn} border-red-500/40! text-red-400! hover:bg-red-500/10!`}
             onClick={() => onRemove(item)}
           >
             Remove
@@ -153,7 +153,7 @@ function DownloadedCard({
         <div className="relative">
           <Thumb item={item} className="aspect-video w-full rounded-lg" />
           {dur ? (
-            <span className="absolute bottom-1.5 right-1.5 rounded bg-black/80 px-1.5 py-0.5 text-xs text-white">
+            <span className="absolute bottom-1.5 right-1.5 rounded-sm bg-black/80 px-1.5 py-0.5 text-xs text-white">
               {formatDuration(dur)}
             </span>
           ) : null}

@@ -55,7 +55,7 @@ export default function ChaptersList({
               >
                 {formatTimestamp(ch.startSec)}
               </span>
-              <span className="min-w-0 flex-1 whitespace-normal break-words">
+              <span className="min-w-0 flex-1 whitespace-normal wrap-break-word">
                 {ch.title}
               </span>
             </button>

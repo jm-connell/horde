@@ -151,7 +151,7 @@ export default function HelpTip({
           <span
             id={tipId}
             role="tooltip"
-            className="ui-panel ui-panel-legible pointer-events-none fixed z-[200] w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-xs leading-relaxed text-gray-300 shadow-xl ring-1 ring-ink-700"
+            className="ui-panel ui-panel-legible pointer-events-none fixed z-200 w-72 max-w-[calc(100vw-1.5rem)] rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-left text-xs leading-relaxed text-gray-300 shadow-xl ring-1 ring-ink-700"
             style={{
               top: coords.top,
               left: coords.left,

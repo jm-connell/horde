@@ -119,7 +119,7 @@ export function FlipMenuPanel({
             unmountOnExit={false}
             menu={menu}
             data-horde="flip-menu"
-            className={`fixed z-[80] ${className}`}
+            className={`fixed z-80 ${className}`}
             style={coords}
             onMouseDown={(e) => e.stopPropagation()}
           >

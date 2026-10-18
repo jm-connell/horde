@@ -56,7 +56,7 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4"
       role="presentation"
       onClick={backdropClick(() => {
         if (!busy) onCancel();
@@ -69,7 +69,7 @@ export default function ConfirmDialog({
         aria-labelledby={titleId}
         aria-describedby={hasBody ? bodyId : undefined}
         tabIndex={-1}
-        className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-none ring-1 ring-ink-600"
+        className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600"
       >
         <h2 id={titleId} className="text-base font-semibold text-gray-100">
           {title}
@@ -77,7 +77,7 @@ export default function ConfirmDialog({
         {hasBody ? (
           <div id={bodyId} className="mt-2 text-sm text-gray-300">
             {typeof body === "string" ? (
-              <p className="break-words whitespace-pre-wrap">{body}</p>
+              <p className="wrap-break-word whitespace-pre-wrap">{body}</p>
             ) : (
               body
             )}

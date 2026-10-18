@@ -341,7 +341,7 @@ export default function TopNav() {
         ref={headerRef}
         data-horde="nav"
         data-nav-hidden={navHidden ? "true" : undefined}
-        className={`ui-panel fixed inset-x-0 top-0 z-30 border-b border-ink-700 bg-ink-950/90 pt-[env(safe-area-inset-top)] backdrop-blur motion-reduce:transition-none ${
+        className={`ui-panel fixed inset-x-0 top-0 z-30 border-b border-ink-700 bg-ink-950/90 pt-[env(safe-area-inset-top)] backdrop-blur-sm motion-reduce:transition-none ${
           settings.translucentPanelLegibility ? "ui-panel-legible" : ""
         } ${
           useHamburger ? "transition-transform duration-200 ease-out" : ""
@@ -438,7 +438,7 @@ export default function TopNav() {
                     placeholder="Search"
                     enterKeyHint="search"
                     aria-label="Search library"
-                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent"
+                    className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
                   />
                   <YoutubeSearchChip />
                 </div>

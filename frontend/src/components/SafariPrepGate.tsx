@@ -16,7 +16,7 @@ export default function SafariPrepGate({
   return (
     <div
       role="status"
-      className="absolute inset-0 z-[7] flex flex-col items-center justify-center gap-2 bg-black/85 px-4 text-center"
+      className="absolute inset-0 z-7 flex flex-col items-center justify-center gap-2 bg-black/85 px-4 text-center"
     >
       <p
         className={isMini ? "text-xs text-gray-200" : "text-base text-gray-100"}

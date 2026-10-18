@@ -50,7 +50,7 @@ export default function ThemeSection({
               label: t.label,
             }))}
             onChange={(value) => update({ theme: value })}
-            className="w-full min-w-[12rem] max-w-[18rem]"
+            className="w-full min-w-48 max-w-[18rem]"
           />
         </div>
         <div>
@@ -130,7 +130,7 @@ export default function ThemeSection({
                   },
                 })
               }
-              className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+              className="h-9 w-14 cursor-pointer rounded-sm border border-ink-700 bg-transparent p-0.5"
             />
           </label>
           <label className="flex items-center justify-between gap-4">
@@ -146,7 +146,7 @@ export default function ThemeSection({
                   },
                 })
               }
-              className="h-9 w-14 cursor-pointer rounded border border-ink-700 bg-transparent p-0.5"
+              className="h-9 w-14 cursor-pointer rounded-sm border border-ink-700 bg-transparent p-0.5"
             />
           </label>
           <div className="flex items-center gap-2 pt-1">

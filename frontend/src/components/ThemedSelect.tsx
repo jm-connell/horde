@@ -140,7 +140,7 @@ export default function ThemedSelect<T extends string>({
               {showGroup ? (
                 <li
                   role="presentation"
-                  className="sticky top-0 z-[1] border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted"
+                  className="sticky top-0 z-1 border-b border-ink-800 bg-ink-900 px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-muted"
                 >
                   {opt.group}
                 </li>
@@ -215,9 +215,9 @@ export default function ThemedSelect<T extends string>({
     <div ref={anchorRef} className={`relative inline-block ${className}`}>
       {searchable ? (
         <div
-          className={`ui-panel ui-menu ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-none focus-within:border-accent ${
+          className={`ui-panel ui-menu ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-hidden focus-within:border-accent ${
             compact
-              ? "gap-1 rounded px-1.5 py-0.5"
+              ? "gap-1 rounded-sm px-1.5 py-0.5"
               : "gap-2 rounded-lg px-3 py-2"
           } ${disabled ? "cursor-not-allowed opacity-50" : ""} ${buttonClassName}`}
           // Pointer helper: clicking anywhere on the control focuses the search field.
@@ -256,7 +256,7 @@ export default function ThemedSelect<T extends string>({
               if (!open) setOpen(true);
             }}
             onKeyDown={onTriggerKeyDown}
-            className={`min-w-0 flex-1 bg-transparent outline-none placeholder:text-gray-400 ${
+            className={`min-w-0 flex-1 bg-transparent outline-hidden placeholder:text-gray-400 ${
               compact ? "text-xs text-gray-400" : "text-sm text-gray-100"
             }`}
           />
@@ -287,9 +287,9 @@ export default function ThemedSelect<T extends string>({
           aria-controls={listId}
           onClick={() => !disabled && setOpen((v) => !v)}
           onKeyDown={onTriggerKeyDown}
-          className={`ui-panel ui-menu ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-none hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${
+          className={`ui-panel ui-menu ui-interactive inline-flex max-w-full items-center border border-ink-700 bg-ink-900 text-left outline-hidden hover:border-accent focus:border-accent disabled:cursor-not-allowed disabled:opacity-50 ${
             compact
-              ? "gap-1 rounded px-1.5 py-0.5 text-xs text-gray-400"
+              ? "gap-1 rounded-sm px-1.5 py-0.5 text-xs text-gray-400"
               : "gap-2 rounded-lg px-3 py-2 text-sm text-gray-100"
           } ${buttonClassName}`}
         >

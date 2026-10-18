@@ -38,7 +38,7 @@ export default function CompatGate({
 
   if (isMini) {
     return (
-      <div className="absolute inset-0 z-[7] flex items-center justify-center bg-black/85 px-3 text-center text-xs text-white">
+      <div className="absolute inset-0 z-7 flex items-center justify-center bg-black/85 px-3 text-center text-xs text-white">
         {pending
           ? `Preparing compatible copy… ${pct}%`
           : `Can’t play ${label} here`}
@@ -47,7 +47,7 @@ export default function CompatGate({
   }
 
   return (
-    <div className="absolute inset-0 z-[7] flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center">
+    <div className="absolute inset-0 z-7 flex flex-col items-center justify-center gap-3 bg-black/85 px-6 text-center">
       <p className="text-base font-medium text-gray-100">
         {originalFailed
           ? `This device couldn’t play the ${label} video`

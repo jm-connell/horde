@@ -467,7 +467,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   }
                 }}
                 placeholder="Title"
-                className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-950 px-2 py-1 text-sm font-medium text-gray-100 outline-none focus:border-accent"
+                className="min-w-0 flex-1 rounded-md border border-ink-600 bg-ink-950 px-2 py-1 text-sm font-medium text-gray-100 outline-hidden focus:border-accent"
               />
             ) : (
               <>
@@ -486,7 +486,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   <button
                     type="button"
                     onClick={startTitleEdit}
-                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:text-accent"
+                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-sm text-muted hover:text-accent"
                     title="Edit title"
                     aria-label="Edit title"
                   >
@@ -508,22 +508,22 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               </>
             )}
             {job.superseded && (
-              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+              <span className="shrink-0 rounded-sm bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                 Replaced
               </span>
             )}
             {job.video_missing && !job.superseded && (
-              <span className="shrink-0 rounded bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+              <span className="shrink-0 rounded-sm bg-ink-800 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
                 Removed
               </span>
             )}
             {isReplacing && (
-              <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+              <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
                 Replacing
               </span>
             )}
             {isDeviceJob && (
-              <span className="shrink-0 rounded bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
+              <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
                 Offline
               </span>
             )}
@@ -560,7 +560,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
         <div className="flex items-start gap-4">
           <div
-            className={`hidden h-[6.75rem] w-52 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
+            className={`hidden h-27 w-52 shrink-0 overflow-hidden rounded-lg bg-ink-800 sm:block${
               videoGone ? " grayscale" : ""
             }`}
           >
@@ -634,7 +634,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
                   placeholder="Personal note about this video..."
-                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                  className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                 />
               </div>
             )}
@@ -801,7 +801,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               ) : resLabel ? (
                 <span
                   data-collapse="res"
-                  className="shrink-0 whitespace-nowrap rounded bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400"
+                  className="shrink-0 whitespace-nowrap rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-gray-400"
                 >
                   {resLabel}
                 </span>
@@ -835,7 +835,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               type="checkbox"
               checked={dontAskAgain}
               onChange={(e) => setDontAskAgain(e.target.checked)}
-              className="rounded border-ink-600"
+              className="rounded-sm border-ink-600"
             />
             Don&apos;t ask again
           </label>

@@ -118,7 +118,7 @@ export default function PlaybackQueue({
                   onClick={() => play(v)}
                   className="flex min-w-0 flex-1 items-center gap-3 text-left"
                 >
-                  <div className="h-10 w-16 shrink-0 overflow-hidden rounded bg-ink-800">
+                  <div className="h-10 w-16 shrink-0 overflow-hidden rounded-sm bg-ink-800">
                     {thumb && (
                       <img
                         loading="lazy"

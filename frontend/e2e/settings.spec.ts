@@ -52,7 +52,7 @@ test("appearance changes theme and loading animation", async ({ page }) => {
 test("the panel blur slider changes the blur on panels", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
   const slider = page.getByRole("slider", { name: "Panel blur" });
-  // The header also carries Tailwind's `backdrop-blur`, which the slider must beat.
+  // The header also carries Tailwind's `backdrop-blur-sm`, which the slider must beat.
   const header = page.locator("header.ui-panel").first();
   const backdrop = () =>
     header.evaluate((el) => getComputedStyle(el).backdropFilter);

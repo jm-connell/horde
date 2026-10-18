@@ -262,7 +262,7 @@ export default function VideoEditForm({
   const stats = [resLabel, sizeLabel, durLabel].filter(Boolean).join(" · ");
 
   const inputClass =
-    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
+    "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent";
   const labelClass =
     "mb-1 block text-xs font-medium uppercase tracking-wide text-muted";
 
@@ -311,7 +311,7 @@ export default function VideoEditForm({
                 >
                   ›
                 </button>
-                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded bg-ink-950/80 px-2 py-0.5 text-[10px] text-gray-300">
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-ink-950/80 px-2 py-0.5 text-[10px] text-gray-300">
                   {candIndex + 1} / {candidates.length}
                 </span>
               </>

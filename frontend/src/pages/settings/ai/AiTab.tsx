@@ -21,7 +21,7 @@ export default function AiTab({ paneState }: { paneState: AiPaneState }) {
   const panes = useAiPanes(core, paneState);
   return (
     <AiPageContext.Provider value={{ ...core, ...panes }}>
-      <div className="mb-4 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
+      <div className="flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         {PANES.map((pane) => {
           const active = aiPane === pane.id;
           return (

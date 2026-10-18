@@ -100,7 +100,7 @@ export default function AccountMenu({
             aria-expanded={open}
             aria-controls={open ? menuId : undefined}
             onClick={() => setOpen((v) => !v)}
-            className="ui-interactive flex max-w-[10rem] items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-300 hover:text-gray-100"
+            className="ui-interactive flex max-w-40 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-300 hover:text-gray-100"
           >
             <span
               aria-hidden

@@ -372,7 +372,7 @@ export default function VideoAiChat({
             rows={2}
             disabled={sending}
             placeholder="Ask this video…"
-            className="horde-scrollbar min-h-[2.5rem] flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-none"
+            className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden"
           />
           {sending ? (
             <button

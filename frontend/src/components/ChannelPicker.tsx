@@ -17,7 +17,7 @@ const COMBOBOX_THRESHOLD = 30;
 const CUSTOM = "__custom__";
 
 const inputClass =
-  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-muted outline-none focus:border-accent";
+  "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2.5 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent";
 
 export default function ChannelPicker({
   value,

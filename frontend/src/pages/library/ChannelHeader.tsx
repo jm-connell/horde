@@ -61,7 +61,7 @@ export default function ChannelHeader({
           if (e.key === "Enter") submitRename(activeChannel);
           if (e.key === "Escape") setRenaming(null);
         }}
-        className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-none"
+        className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-hidden"
       />
     );
   }

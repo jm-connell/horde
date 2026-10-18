@@ -175,7 +175,7 @@ export default function VideoCard({
           </span>
         )}
         {progress !== undefined && progress > 0 && !previewActive && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[2] h-1 bg-black/50">
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-2 h-1 bg-black/50">
             <div
               className="h-full bg-accent"
               style={{ width: `${Math.min(100, progress * 100)}%` }}
@@ -186,7 +186,7 @@ export default function VideoCard({
           <div
             className={`absolute left-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded border-2 transition-colors ${
               selected
-                ? "border-accent bg-accent shadow-sm"
+                ? "border-accent bg-accent shadow-xs"
                 : "border-white/80 bg-black/50 group-hover:border-accent"
             }`}
           >
@@ -241,7 +241,7 @@ export default function VideoCard({
         <span
           ref={sizerRef}
           aria-hidden
-          className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 break-words text-sm font-semibold leading-5"
+          className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 wrap-break-word text-sm font-semibold leading-5"
         >
           {video.title}
         </span>
@@ -268,7 +268,7 @@ export default function VideoCard({
         <CardTitle
           text={video.title}
           truncated={titleNeeded > titleLines}
-          className="min-h-0 flex-1 overflow-hidden break-words text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
+          className="min-h-0 flex-1 overflow-hidden wrap-break-word text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
           style={{
             display: "-webkit-box",
             WebkitBoxOrient: "vertical",
@@ -294,7 +294,7 @@ export default function VideoCard({
               <div className="flex min-w-0 items-start gap-2">
                 <CardChannelName
                   channel={video.channel!}
-                  className="min-w-0 break-words text-xs leading-4 text-gray-400 hover:text-accent"
+                  className="min-w-0 wrap-break-word text-xs leading-4 text-gray-400 hover:text-accent"
                 />
                 {resolution ? (
                   <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-muted">

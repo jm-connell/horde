@@ -164,7 +164,7 @@ export default function Settings() {
           onChange={(e) => setSearchQuery(e.target.value)}
           placeholder="Search…"
           aria-label="Search settings"
-          className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-100 outline-none placeholder:text-muted focus:border-accent sm:ml-auto sm:w-44 sm:shrink-0"
+          className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-100 outline-hidden placeholder:text-muted focus:border-accent sm:ml-auto sm:w-44 sm:shrink-0"
         />
       </div>
 

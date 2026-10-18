@@ -1,6 +1,97 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+/* Tailwind 4 limits hover: to devices that can hover. Keep v3's plain :hover so
+   touch screens still reveal hover-only controls on tap. */
+@custom-variant hover (&:hover);
+
+/* Theme colors read the per-theme RGB triples defined below. `inline` puts
+   rgb(var(--accent)) into each utility, as Tailwind 3 did, so a custom CSS
+   override of --accent on any element reaches the utilities inside it.
+   `font-sans` uses the --font-sans hook directly (set on :root and by the UI
+   font setting). */
+@theme inline {
+  --color-ink-950: rgb(var(--ink-950));
+  --color-ink-900: rgb(var(--ink-900));
+  --color-ink-800: rgb(var(--ink-800));
+  --color-ink-700: rgb(var(--ink-700));
+  --color-ink-600: rgb(var(--ink-600));
+
+  /* Secondary text that meets WCAG AA (4.5:1) on every theme surface;
+     use instead of text-gray-500/600. */
+  --color-muted: rgb(var(--text-muted));
+
+  --color-accent: rgb(var(--accent));
+  --color-accent-soft: rgb(var(--accent-soft));
+  --color-accent-deep: rgb(var(--accent-deep));
+}
+
+@theme {
+  /* Tailwind 3 sRGB values for the palette shades in use. The theme overrides
+     below and the contrast checks were tuned against these; Tailwind 4's
+     oklch palette is visibly shifted for reds and greens. */
+  --color-gray-100: #f3f4f6;
+  --color-gray-200: #e5e7eb;
+  --color-gray-300: #d1d5db;
+  --color-gray-400: #9ca3af;
+  --color-gray-500: #6b7280;
+  --color-gray-600: #4b5563;
+  --color-gray-700: #374151;
+  --color-red-100: #fee2e2;
+  --color-red-200: #fecaca;
+  --color-red-300: #fca5a5;
+  --color-red-400: #f87171;
+  --color-red-500: #ef4444;
+  --color-red-900: #7f1d1d;
+  --color-red-950: #450a0a;
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-sky-300: #7dd3fc;
+  --color-sky-500: #0ea5e9;
+
+  /* Tailwind 3 line heights. Tailwind 4's are unitless ratios, which children
+     inherit and rescale (text-[10px] inside text-xs would shrink). */
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl--line-height: 1.75rem;
+  --text-2xl--line-height: 2rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-4xl--line-height: 2.5rem;
+}
+
+/* Tailwind 3 preflight defaults that Tailwind 4 changed and the UI relies on. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--color-gray-400);
+  }
+
+  [type="search"] {
+    -webkit-appearance: textfield;
+    outline-offset: -2px;
+  }
+}
 
 html {
   overflow-y: auto;
@@ -306,106 +397,112 @@ body {
   color: #374151;
 }
 
-/* Light themes: remap Tailwind gray text (base + hover) for legibility */
-[data-theme="light"] .text-gray-100,
-[data-theme="light"] .text-gray-200,
-[data-theme="light"] .hover\:text-gray-100:hover,
-[data-theme="light"] .hover\:text-gray-200:hover,
-[data-theme="earthy"] .text-gray-100,
-[data-theme="earthy"] .text-gray-200,
-[data-theme="earthy"] .hover\:text-gray-100:hover,
-[data-theme="earthy"] .hover\:text-gray-200:hover,
-[data-theme="frozen"] .text-gray-100,
-[data-theme="frozen"] .text-gray-200,
-[data-theme="frozen"] .hover\:text-gray-100:hover,
-[data-theme="frozen"] .hover\:text-gray-200:hover,
-[data-theme="mocha"] .text-gray-100,
-[data-theme="mocha"] .text-gray-200,
-[data-theme="mocha"] .hover\:text-gray-100:hover,
-[data-theme="mocha"] .hover\:text-gray-200:hover {
-  color: #0f0f0f;
-}
+/* These rules override utility classes, so they sit in the utilities layer:
+   as in Tailwind 3, specificity decides first (hover:/enabled: variants still
+   win), then source order (these come after the generated utilities). */
+@layer utilities {
+  /* Light themes: remap Tailwind gray text (base + hover) for legibility */
+  [data-theme="light"] .text-gray-100,
+  [data-theme="light"] .text-gray-200,
+  [data-theme="light"] .hover\:text-gray-100:hover,
+  [data-theme="light"] .hover\:text-gray-200:hover,
+  [data-theme="earthy"] .text-gray-100,
+  [data-theme="earthy"] .text-gray-200,
+  [data-theme="earthy"] .hover\:text-gray-100:hover,
+  [data-theme="earthy"] .hover\:text-gray-200:hover,
+  [data-theme="frozen"] .text-gray-100,
+  [data-theme="frozen"] .text-gray-200,
+  [data-theme="frozen"] .hover\:text-gray-100:hover,
+  [data-theme="frozen"] .hover\:text-gray-200:hover,
+  [data-theme="mocha"] .text-gray-100,
+  [data-theme="mocha"] .text-gray-200,
+  [data-theme="mocha"] .hover\:text-gray-100:hover,
+  [data-theme="mocha"] .hover\:text-gray-200:hover {
+    color: #0f0f0f;
+  }
 
-[data-theme="light"] .text-gray-300,
-[data-theme="light"] .hover\:text-gray-300:hover,
-[data-theme="earthy"] .text-gray-300,
-[data-theme="earthy"] .hover\:text-gray-300:hover,
-[data-theme="frozen"] .text-gray-300,
-[data-theme="frozen"] .hover\:text-gray-300:hover,
-[data-theme="mocha"] .text-gray-300,
-[data-theme="mocha"] .hover\:text-gray-300:hover {
-  color: #1a1a1a;
-}
+  [data-theme="light"] .text-gray-300,
+  [data-theme="light"] .hover\:text-gray-300:hover,
+  [data-theme="earthy"] .text-gray-300,
+  [data-theme="earthy"] .hover\:text-gray-300:hover,
+  [data-theme="frozen"] .text-gray-300,
+  [data-theme="frozen"] .hover\:text-gray-300:hover,
+  [data-theme="mocha"] .text-gray-300,
+  [data-theme="mocha"] .hover\:text-gray-300:hover {
+    color: #1a1a1a;
+  }
 
-[data-theme="light"] .text-gray-400,
-[data-theme="light"] .hover\:text-gray-400:hover,
-[data-theme="earthy"] .text-gray-400,
-[data-theme="earthy"] .hover\:text-gray-400:hover,
-[data-theme="frozen"] .text-gray-400,
-[data-theme="frozen"] .hover\:text-gray-400:hover,
-[data-theme="mocha"] .text-gray-400,
-[data-theme="mocha"] .hover\:text-gray-400:hover {
-  color: #606060;
-}
+  [data-theme="light"] .text-gray-400,
+  [data-theme="light"] .hover\:text-gray-400:hover,
+  [data-theme="earthy"] .text-gray-400,
+  [data-theme="earthy"] .hover\:text-gray-400:hover,
+  [data-theme="frozen"] .text-gray-400,
+  [data-theme="frozen"] .hover\:text-gray-400:hover,
+  [data-theme="mocha"] .text-gray-400,
+  [data-theme="mocha"] .hover\:text-gray-400:hover {
+    color: #606060;
+  }
 
-/* Theme-specific primary text colors */
-[data-theme="light"] .text-gray-100,
-[data-theme="light"] .text-gray-200,
-[data-theme="light"] .hover\:text-gray-100:hover,
-[data-theme="light"] .hover\:text-gray-200:hover {
-  color: #0f172a;
-}
+  /* Theme-specific primary text colors */
+  [data-theme="light"] .text-gray-100,
+  [data-theme="light"] .text-gray-200,
+  [data-theme="light"] .hover\:text-gray-100:hover,
+  [data-theme="light"] .hover\:text-gray-200:hover {
+    color: #0f172a;
+  }
 
-[data-theme="earthy"] .text-gray-100,
-[data-theme="earthy"] .text-gray-200,
-[data-theme="earthy"] .hover\:text-gray-100:hover,
-[data-theme="earthy"] .hover\:text-gray-200:hover {
-  color: #1c1917;
-}
+  [data-theme="earthy"] .text-gray-100,
+  [data-theme="earthy"] .text-gray-200,
+  [data-theme="earthy"] .hover\:text-gray-100:hover,
+  [data-theme="earthy"] .hover\:text-gray-200:hover {
+    color: #1c1917;
+  }
 
-[data-theme="frozen"] .text-gray-100,
-[data-theme="frozen"] .text-gray-200,
-[data-theme="frozen"] .hover\:text-gray-100:hover,
-[data-theme="frozen"] .hover\:text-gray-200:hover {
-  color: #1e2937;
-}
+  [data-theme="frozen"] .text-gray-100,
+  [data-theme="frozen"] .text-gray-200,
+  [data-theme="frozen"] .hover\:text-gray-100:hover,
+  [data-theme="frozen"] .hover\:text-gray-200:hover {
+    color: #1e2937;
+  }
 
-[data-theme="mocha"] .text-gray-100,
-[data-theme="mocha"] .text-gray-200,
-[data-theme="mocha"] .hover\:text-gray-100:hover,
-[data-theme="mocha"] .hover\:text-gray-200:hover {
-  color: #374151;
-}
+  [data-theme="mocha"] .text-gray-100,
+  [data-theme="mocha"] .text-gray-200,
+  [data-theme="mocha"] .hover\:text-gray-100:hover,
+  [data-theme="mocha"] .hover\:text-gray-200:hover {
+    color: #374151;
+  }
 
-/* Accent used as TEXT colour: the raw accent can fail AA on some surfaces
-   (teal on white, indigo on dark navy), so text uses a per-theme adjusted
-   --accent-text that keeps the hue. Fills, rings and borders keep --accent. */
-.text-accent,
-.hover\:text-accent:hover,
-.group:hover .group-hover\:text-accent {
-  color: rgb(var(--accent-text));
-}
+  /* Accent used as TEXT colour: the raw accent can fail AA on some surfaces
+     (teal on white, indigo on dark navy), so text uses a per-theme adjusted
+     --accent-text that keeps the hue. Fills, rings and borders keep --accent. */
+  .text-accent,
+  .hover\:text-accent:hover,
+  .group:hover .group-hover\:text-accent {
+    color: rgb(var(--accent-text));
+  }
 
-/* text-gray-400 is secondary text; on these mid-tone dark themes it falls
-   below 4.5:1, so it uses the AA-safe muted colour there. */
-[data-theme="nord"] .text-gray-400,
-[data-theme="nord"] .hover\:text-gray-400:hover,
-[data-theme="sunset"] .text-gray-400,
-[data-theme="sunset"] .hover\:text-gray-400:hover,
-[data-theme="forest"] .text-gray-400,
-[data-theme="forest"] .hover\:text-gray-400:hover,
-[data-theme="slate"] .text-gray-400,
-[data-theme="slate"] .hover\:text-gray-400:hover {
-  color: rgb(var(--text-muted));
-}
+  /* text-gray-400 is secondary text; on these mid-tone dark themes it falls
+     below 4.5:1, so it uses the AA-safe muted colour there. */
+  [data-theme="nord"] .text-gray-400,
+  [data-theme="nord"] .hover\:text-gray-400:hover,
+  [data-theme="sunset"] .text-gray-400,
+  [data-theme="sunset"] .hover\:text-gray-400:hover,
+  [data-theme="forest"] .text-gray-400,
+  [data-theme="forest"] .hover\:text-gray-400:hover,
+  [data-theme="slate"] .text-gray-400,
+  [data-theme="slate"] .hover\:text-gray-400:hover {
+    color: rgb(var(--text-muted));
+  }
 
-/* Neon Cyber: subtle glow on accent controls */
-[data-theme="cyber"] input[type="range"].accent-scrubber::-webkit-slider-thumb {
-  box-shadow: 0 0 10px rgb(var(--accent) / 0.8);
-}
+  /* Neon Cyber: subtle glow on accent controls */
+  [data-theme="cyber"]
+    input[type="range"].accent-scrubber::-webkit-slider-thumb {
+    box-shadow: 0 0 10px rgb(var(--accent) / 0.8);
+  }
 
-[data-theme="cyber"] .bg-accent {
-  box-shadow: 0 0 14px rgb(var(--accent) / 0.35);
+  [data-theme="cyber"] .bg-accent {
+    box-shadow: 0 0 14px rgb(var(--accent) / 0.35);
+  }
 }
 
 /* Custom range styling for the player scrubber and volume. */

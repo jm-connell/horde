@@ -88,7 +88,7 @@ export default function ChannelSidebar({
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search channels"
-        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-muted outline-none focus:border-accent"
+        className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-xs text-gray-100 placeholder-muted outline-hidden focus:border-accent"
       />
       <ul className="space-y-0.5">
         {!debounced && (

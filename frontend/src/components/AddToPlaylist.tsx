@@ -119,11 +119,11 @@ export default function AddToPlaylist({
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && createAndAdd()}
             placeholder="New playlist"
-            className="min-w-0 flex-1 rounded border border-ink-700 bg-ink-950 px-2 py-1 text-sm text-gray-100 outline-none focus:border-accent"
+            className="min-w-0 flex-1 rounded-sm border border-ink-700 bg-ink-950 px-2 py-1 text-sm text-gray-100 outline-hidden focus:border-accent"
           />
           <button
             onClick={createAndAdd}
-            className="shrink-0 rounded bg-accent px-2 py-1 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
+            className="shrink-0 rounded-sm bg-accent px-2 py-1 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
           >
             Add
           </button>

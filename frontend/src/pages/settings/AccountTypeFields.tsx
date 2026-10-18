@@ -59,7 +59,7 @@ export default function AccountTypeFields({
       </fieldset>
       {!isAdmin && (
         <fieldset className="mb-3 space-y-2" disabled={disabled}>
-          <legend className="mb-1 text-sm text-gray-300">Permissions</legend>
+          <legend className="mb-3 text-sm text-gray-300">Permissions</legend>
           {catalog.map((p) => (
             <label key={p.name} className="flex items-start gap-2">
               <input

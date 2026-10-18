@@ -32,7 +32,7 @@ export default function UpNextOverlay({
           <div
             className={
               compact
-                ? "max-h-[4.5rem] w-full shrink-0 overflow-hidden bg-ink-800 sm:max-h-[5.5rem]"
+                ? "max-h-18 w-full shrink-0 overflow-hidden bg-ink-800 sm:max-h-22"
                 : "aspect-video w-full overflow-hidden bg-ink-800"
             }
           >

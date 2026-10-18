@@ -153,7 +153,7 @@ export default function LibraryBulkBar({
                     onChange={(e) => onNoteChange(e.target.value)}
                     rows={3}
                     placeholder="Note to apply to all selected..."
-                    className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent"
+                    className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                     ref={focusOnMount}
                   />
                   <button

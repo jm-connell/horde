@@ -132,7 +132,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         t.variant === "error" ? "ring-red-400/60" : "ring-ink-600"
       }`}
     >
-      <span className="min-w-0 break-words">{t.message}</span>
+      <span className="min-w-0 wrap-break-word">{t.message}</span>
       {t.action ? (
         <button
           type="button"
@@ -140,7 +140,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
             t.action?.onClick();
             dismissToast(t.id);
           }}
-          className="shrink-0 rounded px-2 py-0.5 font-medium text-accent hover:underline"
+          className="shrink-0 rounded-sm px-2 py-0.5 font-medium text-accent hover:underline"
         >
           {t.action.label}
         </button>
@@ -150,7 +150,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           type="button"
           onClick={() => dismissToast(t.id)}
           aria-label="Dismiss notification"
-          className="shrink-0 rounded px-1 text-muted hover:text-gray-100"
+          className="shrink-0 rounded-sm px-1 text-muted hover:text-gray-100"
         >
           <span aria-hidden>×</span>
         </button>

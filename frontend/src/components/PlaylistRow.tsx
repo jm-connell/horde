@@ -290,7 +290,7 @@ export default function PlaylistRow({
         <div className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-2">
           <PlaylistThumb
             src={coverSrcBusted}
-            className="h-[5.5rem] w-[9.75rem] shrink-0 rounded-lg"
+            className="h-22 w-39 shrink-0 rounded-lg"
           />
           <div className="min-w-0 flex-1">
             <h3 className="min-w-0">
@@ -318,7 +318,7 @@ export default function PlaylistRow({
                       setEditing(false);
                     }
                   }}
-                  className="w-full min-w-0 rounded-md border border-ink-600 bg-ink-950 px-2 py-0.5 font-semibold text-gray-100 outline-none focus:border-accent disabled:opacity-50"
+                  className="w-full min-w-0 rounded-md border border-ink-600 bg-ink-950 px-2 py-0.5 font-semibold text-gray-100 outline-hidden focus:border-accent disabled:opacity-50"
                 />
               ) : (
                 <span className="block truncate font-semibold text-gray-100">
@@ -519,7 +519,7 @@ export default function PlaylistRow({
                             className="aspect-video w-full"
                           />
                           {index === 0 && playlist.cover_video_id == null && (
-                            <span className="absolute bottom-0.5 left-0.5 rounded bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
+                            <span className="absolute bottom-0.5 left-0.5 rounded-sm bg-ink-950/80 px-1 py-px text-[9px] font-medium uppercase tracking-wide text-gray-300">
                               Auto
                             </span>
                           )}
@@ -612,7 +612,7 @@ export default function PlaylistRow({
                           to={`/watch/${v.id}`}
                           className="flex min-w-0 flex-1 items-center gap-3"
                         >
-                          <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded bg-ink-800">
+                          <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-sm bg-ink-800">
                             {thumb && (
                               <img
                                 loading="lazy"
@@ -637,7 +637,7 @@ export default function PlaylistRow({
                         <button
                           type="button"
                           onClick={() => addToQueue(v)}
-                          className="shrink-0 rounded px-2 py-1 text-xs text-gray-400 hover:text-accent"
+                          className="shrink-0 rounded-sm px-2 py-1 text-xs text-gray-400 hover:text-accent"
                           title="Add to queue"
                         >
                           + Queue

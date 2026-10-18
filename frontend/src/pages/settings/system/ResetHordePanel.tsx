@@ -79,18 +79,18 @@ export default function ResetHordePanel({
         ? createPortal(
             <>
               <div
-                className="fixed inset-0 z-[80] bg-black/60"
+                className="fixed inset-0 z-80 bg-black/60"
                 onClick={close}
                 aria-hidden
               />
-              <div className="pointer-events-none fixed inset-0 z-[81] flex items-start justify-center p-4 pt-[max(1rem,calc(50dvh-8rem))]">
+              <div className="pointer-events-none fixed inset-0 z-81 flex items-start justify-center p-4 pt-[max(1rem,calc(50dvh-8rem))]">
                 <div
                   ref={resetDialogRef}
                   tabIndex={-1}
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="reset-horde-title"
-                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-none rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
+                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
                 >
                   <h2
                     id="reset-horde-title"

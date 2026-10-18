@@ -72,7 +72,7 @@ export default function FontSection({
             value={settings.uiFont}
             options={fontSelectOptions(settings.customFonts)}
             onChange={(value: UiFont) => update({ uiFont: value })}
-            className="w-full min-w-[12rem] max-w-[18rem]"
+            className="w-full min-w-48 max-w-[18rem]"
           />
           <p className="mt-2 text-sm text-gray-400">
             The quick brown fox jumps over the lazy dog 0123456789
@@ -97,7 +97,7 @@ export default function FontSection({
                 key={opt.value}
                 active={settings.fontSize === opt.value}
                 onPointerDown={() => update({ fontSize: opt.value })}
-                className="!py-1.5"
+                className="py-1.5!"
               >
                 {opt.label}
               </Chip>

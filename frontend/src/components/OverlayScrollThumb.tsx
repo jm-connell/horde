@@ -191,7 +191,7 @@ export default function OverlayScrollThumb({
       data-horde={viewport ? "page-scroll" : undefined}
       data-active={revealed ? "true" : undefined}
       className={`horde-overlay-scroll-thumb pointer-events-none w-1.5 rounded-full bg-accent transition-opacity duration-150 ${
-        viewport ? "fixed right-[3px] z-[45]" : "absolute right-[3px] z-[1]"
+        viewport ? "fixed right-[3px] z-45" : "absolute right-[3px] z-1"
       } ${
         revealed
           ? "opacity-100"

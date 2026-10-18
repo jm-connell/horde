@@ -129,7 +129,7 @@ export default function ControlBar({
     chapters.length > 0 ? activeChapterAt(chapters, current) : null;
   return (
     <div
-      className={`absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/70 to-transparent px-4 pb-2 pt-10 transition-opacity duration-300 ${
+      className={`absolute inset-x-0 bottom-0 bg-linear-to-t from-black/95 via-black/70 to-transparent px-4 pb-2 pt-10 transition-opacity duration-300 ${
         visible
           ? "pointer-events-auto opacity-100"
           : "pointer-events-none opacity-0"

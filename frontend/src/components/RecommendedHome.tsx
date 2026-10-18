@@ -204,7 +204,7 @@ export default function RecommendedHome({
         )}
         <div
           ref={chipScrollRef}
-          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
           <button
             type="button"

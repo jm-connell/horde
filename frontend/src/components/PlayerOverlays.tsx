@@ -29,7 +29,7 @@ export default function PlayerOverlays({
   return (
     <>
       {buffering && !mediaError && !casting && (
-        <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-black/35">
+        <div className="pointer-events-none absolute inset-0 z-5 flex items-center justify-center bg-black/35">
           <LoadingIndicator
             label={bufferingLabel}
             labelVisible={isPreview}
@@ -39,7 +39,7 @@ export default function PlayerOverlays({
       )}
 
       {mediaError && !isMini && (
-        <div className="absolute inset-0 z-[6] flex flex-col items-center justify-center gap-3 bg-black/80 px-4">
+        <div className="absolute inset-0 z-6 flex flex-col items-center justify-center gap-3 bg-black/80 px-4">
           <p className="max-w-sm text-center text-sm text-red-300">
             {mediaError}
           </p>
@@ -54,7 +54,7 @@ export default function PlayerOverlays({
       )}
 
       {(qualityNotice || compatMode) && !mediaError && !isMini && (
-        <div className="pointer-events-none absolute left-1/2 top-4 z-[6] -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
+        <div className="pointer-events-none absolute left-1/2 top-4 z-6 -translate-x-1/2 rounded-full bg-black/70 px-3 py-1 text-xs text-white">
           {qualityNotice ??
             (compatMode ? "Reduced quality (compatibility mode)" : null)}
         </div>

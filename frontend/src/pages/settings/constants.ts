@@ -23,16 +23,16 @@ export const CHIP_ACTIVE =
 export const PANEL_BTN =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
 export const INPUT =
-  "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+  "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 /** Short values: numbers, filters, times. */
 export const INPUT_COMPACT =
-  "ui-panel w-28 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+  "ui-panel w-28 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 /** Shorter host / URL fields beside action buttons. */
 export const INPUT_INLINE =
-  "ui-panel w-56 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+  "ui-panel w-56 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 /** Narrower API key field. */
 export const INPUT_KEY =
-  "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-none focus:border-accent";
+  "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 
 export const CATALOG_INDEX_TIP =
   "YouTube channels only. When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";

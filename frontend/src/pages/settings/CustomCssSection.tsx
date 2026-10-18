@@ -53,7 +53,7 @@ export default function CustomCssSection() {
               maxLength={CUSTOM_CSS_MAX_CHARS}
               placeholder={CUSTOM_CSS_PLACEHOLDER}
               aria-label="Custom CSS"
-              className="horde-scrollbar ui-panel w-full min-h-[16rem] resize-y rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 font-mono text-[13px] leading-relaxed text-gray-100 outline-none focus:border-accent"
+              className="horde-scrollbar ui-panel w-full min-h-64 resize-y rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 font-mono text-[13px] leading-relaxed text-gray-100 outline-hidden focus:border-accent"
             />
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-xs tabular-nums text-muted">

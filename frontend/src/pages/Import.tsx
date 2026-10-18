@@ -110,13 +110,13 @@ export default function Import() {
       title: "Keep this file?",
       body: (
         <>
-          <p className="break-words">
+          <p className="wrap-break-word">
             Keep &ldquo;{keep.title}&rdquo; and permanently delete{" "}
             {others.length} other file{others.length === 1 ? "" : "s"}:
           </p>
           <ul className="mt-2 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5 text-gray-400">
             {others.map((v) => (
-              <li key={v.id} className="break-words">
+              <li key={v.id} className="wrap-break-word">
                 {v.title}
               </li>
             ))}
@@ -530,7 +530,7 @@ export default function Import() {
                                 <button
                                   type="button"
                                   onClick={() => void keepVideo(group, v)}
-                                  className="rounded border border-accent/40 px-3 py-1 text-xs text-accent hover:bg-accent/10"
+                                  className="rounded-sm border border-accent/40 px-3 py-1 text-xs text-accent hover:bg-accent/10"
                                   title="Delete the other files in this group"
                                 >
                                   Keep this
@@ -539,7 +539,7 @@ export default function Import() {
                                   <button
                                     type="button"
                                     onClick={() => void deleteVideoFile(v)}
-                                    className="rounded border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                    className="rounded-sm border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
                                   >
                                     Delete
                                   </button>
