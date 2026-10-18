@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 THUMB_FETCH_MAX_BYTES = 15 * 1024 * 1024
 # Longest edge of a stored full-size thumbnail; keeps decoded memory bounded.
 FULL_THUMB_MAX_PX = 3840
+# Largest image (width x height) decoded from an upload: checked from the header,
+# before any pixels are read, so a small, highly compressed file cannot make the
+# server allocate gigabytes. 50 MP is larger than any real photo or poster.
+MAX_DECODE_PIXELS = 50_000_000
 # Formats we accept as thumbnails. Everything else is rejected before decoding.
 _IMAGE_FORMATS = ("JPEG", "PNG", "WEBP", "GIF", "BMP", "MPO")
 
@@ -55,6 +59,9 @@ def normalize_to_jpeg(data: bytes, *, max_px: int = FULL_THUMB_MAX_PX) -> bytes:
 
     try:
         img = Image.open(io.BytesIO(data), formats=_IMAGE_FORMATS)
+        width, height = img.size
+        if width * height > MAX_DECODE_PIXELS:
+            raise ValueError(f"Image too large to decode ({width}x{height})")
         img.verify()
         # verify() leaves the image unusable; decode a fresh copy.
         img = _open_rgb(data)

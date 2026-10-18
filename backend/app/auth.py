@@ -52,6 +52,8 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/auth/state"),
         ("POST", "/api/auth/login"),
         ("POST", "/api/auth/bootstrap"),
+        ("POST", "/api/auth/forgot"),
+        ("POST", "/api/auth/reset"),
     }
 )
 #: Only mounted (and only public) when the Playwright suite runs the app: ``main``

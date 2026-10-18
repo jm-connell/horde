@@ -109,6 +109,8 @@ class AuthUser:
     is_admin: bool
     #: Effective permissions: everything for an administrator.
     permissions: frozenset[str] = frozenset()
+    #: Profile picture cache key; None without one (see services/auth/avatars).
+    avatar_version: int | None = None
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -117,6 +119,7 @@ class AuthUser:
             username=user.username,
             is_admin=user.is_admin,
             permissions=effective_permissions(user),
+            avatar_version=user.avatar_version,
         )
 
     def can(self, permission: str) -> bool:
@@ -154,6 +157,11 @@ def clean_username(raw: str) -> tuple[str, str]:
             "Username must be 1-64 characters: letters, digits, and . _ - @ +"
         )
     return name, name.lower()
+
+
+def check_password_policy(password: str, username: str) -> None:
+    """Raise ``WeakPassword`` unless ``password`` meets the password rules."""
+    _check_password(password, username)
 
 
 def _check_password(password: str, username: str) -> None:

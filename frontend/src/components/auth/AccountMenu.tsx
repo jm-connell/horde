@@ -1,13 +1,14 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import ChangePasswordModal from "./ChangePasswordModal";
+import UserAvatar from "./UserAvatar";
 
 const ITEM =
   "block w-full rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-gray-100";
 
 /**
- * Who is signed in, with Change password, Users (admins) and Sign out.
+ * Who is signed in, with Account settings (profile picture, password, and
+ * for administrators the users) and Sign out.
  * `list` renders the same actions inline for the mobile navigation panel.
  */
 export default function AccountMenu({
@@ -17,9 +18,8 @@ export default function AccountMenu({
   variant: "dropdown" | "list";
   onNavigate?: () => void;
 }) {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, signOut } = useAuth();
   const [open, setOpen] = useState(false);
-  const [changing, setChanging] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
 
@@ -47,27 +47,14 @@ export default function AccountMenu({
   };
   const items = (
     <>
-      <button
-        type="button"
+      <Link
+        to="/account"
         role={variant === "dropdown" ? "menuitem" : undefined}
         className={ITEM}
-        onClick={() => {
-          close();
-          setChanging(true);
-        }}
+        onClick={close}
       >
-        Change password
-      </button>
-      {isAdmin && (
-        <Link
-          to="/settings?tab=users"
-          role={variant === "dropdown" ? "menuitem" : undefined}
-          className={ITEM}
-          onClick={close}
-        >
-          Users
-        </Link>
-      )}
+        Account settings
+      </Link>
       <button
         type="button"
         role={variant === "dropdown" ? "menuitem" : undefined}
@@ -102,12 +89,11 @@ export default function AccountMenu({
             onClick={() => setOpen((v) => !v)}
             className="ui-interactive flex max-w-40 items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-gray-300 hover:text-gray-100"
           >
-            <span
-              aria-hidden
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-accent/20 text-xs font-bold uppercase text-accent"
-            >
-              {user.username.slice(0, 1)}
-            </span>
+            <UserAvatar
+              userId={user.id}
+              username={user.username}
+              version={user.avatar_version}
+            />
             <span className="truncate">{user.username}</span>
           </button>
           {open && (
@@ -122,7 +108,6 @@ export default function AccountMenu({
           )}
         </div>
       )}
-      {changing && <ChangePasswordModal onClose={() => setChanging(false)} />}
     </>
   );
 }

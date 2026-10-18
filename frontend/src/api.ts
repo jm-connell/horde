@@ -7,6 +7,7 @@ import type {
   AuthState,
   AuthUser,
   MediaToken,
+  NextPart,
   PermissionInfo,
   UserAccount,
   UserCreateInput,
@@ -338,6 +339,28 @@ export const api = {
     return request("/api/auth/login", jsonInit("POST", { username, password }));
   },
 
+  /** The channel's next upload when it clearly continues this video's series. */
+  getNextPart(videoId: number): Promise<NextPart> {
+    return request<NextPart>(`/api/videos/${videoId}/next-part`);
+  },
+
+  /** Ask for a one-time reset code; the server writes it to its log. */
+  forgotPassword(username: string): Promise<void> {
+    return request<void>("/api/auth/forgot", jsonInit("POST", { username }));
+  },
+
+  /** Set a new password with a code from the server log; signs in. */
+  resetPassword(
+    username: string,
+    code: string,
+    newPassword: string
+  ): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/reset",
+      jsonInit("POST", { username, code, new_password: newPassword })
+    );
+  },
+
   bootstrapAdmin(
     username: string,
     password: string
@@ -360,6 +383,20 @@ export const api = {
         new_password: newPassword,
       })
     );
+  },
+
+  /** Set your own profile picture; returns your account with the new version. */
+  uploadAvatar(file: File): Promise<AuthUser> {
+    const form = new FormData();
+    form.append("file", file);
+    return request<AuthUser>("/api/auth/avatar", {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  removeAvatar(): Promise<AuthUser> {
+    return request<AuthUser>("/api/auth/avatar", { method: "DELETE" });
   },
 
   getMediaToken(videoId: number): Promise<MediaToken> {
@@ -1547,6 +1584,11 @@ export function playlistCoverUrl(playlist: Playlist): string | null {
     return listThumbnailUrl(playlist.thumbnail_video_id);
   }
   return null;
+}
+
+/** A profile picture; the version in the URL changes on every upload. */
+export function avatarUrl(userId: number, version: number): string {
+  return `/api/auth/avatar/${userId}?v=${version}`;
 }
 
 export function spritesMetaUrl(id: number): string {

@@ -7,20 +7,14 @@ import {
   useSystemActivity,
 } from "../../queries/status";
 import type { HealthStats, StorageStats, UpdateCheck } from "../../types";
-import { useSettingsPage } from "./context";
-import { loadDismissedUpdateSha } from "./helpers";
 import { useUpdateRun } from "./system/useUpdateRun";
 
 /** State and polling of the System tab: versions, storage, catalog and job activity. */
 export function useSystemState() {
-  const { q, match } = useSettingsPage();
   const [storage, setStorage] = useState<StorageStats | null>(null);
   const [health, setHealth] = useState<HealthStats | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
-  const [dismissedUpdateSha, setDismissedUpdateSha] = useState<string | null>(
-    loadDismissedUpdateSha
-  );
   const [catalogIndexing, setCatalogIndexing] = useState(false);
   const updateRun = useUpdateRun();
 
@@ -57,14 +51,6 @@ export function useSystemState() {
     void refreshUpdates(false);
   }, [refreshUpdates]);
 
-  const showUpdateNotice = Boolean(
-    updateCheck?.update_available &&
-    updateCheck.latest_sha &&
-    updateCheck.latest_sha !== dismissedUpdateSha &&
-    (!q ||
-      match("update", "version", "github", "git pull", "docker", "rebuild"))
-  );
-
   return {
     storage,
     health,
@@ -72,8 +58,6 @@ export function useSystemState() {
     updateChecking,
     refreshUpdates,
     updateRun,
-    showUpdateNotice,
-    setDismissedUpdateSha,
     catalogStatus,
     catalogIndexing,
     setCatalogIndexing,

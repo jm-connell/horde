@@ -194,7 +194,9 @@ test.describe("offline downloads (mobile)", () => {
       for (const label of ["Playlists", "History", "Download", "Import"]) {
         await expect(nav.getByText(label, { exact: true })).toHaveCount(0);
       }
-      await expect(nav.getByRole("link", { name: "Settings" })).toBeVisible();
+      await expect(
+        nav.getByRole("link", { name: "Settings", exact: true })
+      ).toBeVisible();
     });
 
     await test.step("reconnect via connection tag", async () => {

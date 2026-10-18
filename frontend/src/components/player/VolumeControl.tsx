@@ -88,7 +88,12 @@ export default function VolumeControl({
         onPointerCancel={onVolumePointerUp}
         aria-label="Volume"
         aria-valuetext={`${Math.round((muted ? 0 : volume) * 100)}%`}
-        className="accent-scrubber w-25 sm:w-35 xl:w-45"
+        className="accent-scrubber accent-scrubber--fill w-25 sm:w-35 xl:w-45"
+        style={
+          {
+            "--fill": `${(muted ? 0 : volume) * 100}%`,
+          } as React.CSSProperties
+        }
       />
     </div>
   );

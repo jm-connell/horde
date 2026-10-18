@@ -1876,6 +1876,17 @@
       "AuthUserRead": {
         "description": "The signed-in user. ``permissions`` is effective: all of them for an admin.",
         "properties": {
+          "avatar_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Version"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -1974,6 +1985,20 @@
           "animated"
         ],
         "title": "BackgroundRead",
+        "type": "object"
+      },
+      "Body_upload_avatar_api_auth_avatar_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_avatar_api_auth_avatar_post",
         "type": "object"
       },
       "Body_upload_background_api_backgrounds_post": {
@@ -4421,6 +4446,20 @@
         "title": "FontRead",
         "type": "object"
       },
+      "ForgotPasswordRequest": {
+        "properties": {
+          "username": {
+            "maxLength": 200,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username"
+        ],
+        "title": "ForgotPasswordRequest",
+        "type": "object"
+      },
       "GpuStats": {
         "properties": {
           "name": {
@@ -5026,6 +5065,34 @@
         "title": "MetadataSyncStatus",
         "type": "object"
       },
+      "NextPartRead": {
+        "description": "The upload that clearly continues a video (same series), if there is one.\n\n``entry`` is None when the channel's next upload is not clearly the next\npart, or the channel is unknown; ``reason`` says why it matched.",
+        "properties": {
+          "entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelFeedEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "title": "NextPartRead",
+        "type": "object"
+      },
       "OkResponse": {
         "properties": {
           "ok": {
@@ -5386,6 +5453,32 @@
           "new_password"
         ],
         "title": "PasswordChange",
+        "type": "object"
+      },
+      "PasswordResetRequest": {
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "new_password": {
+            "maxLength": 2000,
+            "title": "New Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 200,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "code",
+          "new_password"
+        ],
+        "title": "PasswordResetRequest",
         "type": "object"
       },
       "PausedResponse": {
@@ -7280,6 +7373,17 @@
       },
       "UserRead": {
         "properties": {
+          "avatar_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Version"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -9068,6 +9172,152 @@
         ]
       }
     },
+    "/api/auth/avatar": {
+      "delete": {
+        "description": "Remove your own profile picture.",
+        "operationId": "remove_avatar_api_auth_avatar_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Avatar",
+        "tags": [
+          "auth"
+        ]
+      },
+      "post": {
+        "description": "Set your own profile picture (any image; stored as a square JPEG).",
+        "operationId": "upload_avatar_api_auth_avatar_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_avatar_api_auth_avatar_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Upload Avatar",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/avatar/{user_id}": {
+      "get": {
+        "description": "Any account's profile picture, for any signed-in user (it is shown to others).",
+        "operationId": "get_avatar_api_auth_avatar__user_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "JPEG image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Avatar",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/bootstrap": {
       "post": {
         "description": "Create the first (administrator) account. Refused once any user exists.",
@@ -9115,6 +9365,51 @@
           }
         },
         "summary": "Bootstrap",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/forgot": {
+      "post": {
+        "description": "Write a one-time reset code for ``username`` to the server log.\n\nThe answer is the same whether or not the account exists, so the form does\nnot reveal usernames. The code reaches only whoever can read the log.",
+        "operationId": "forgot_password_api_auth_forgot_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ForgotPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Forgot Password",
         "tags": [
           "auth"
         ]
@@ -9245,6 +9540,58 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/reset": {
+      "post": {
+        "description": "Set a new password with a code from the server log, and sign in.\n\nEvery other session of the account is signed out.",
+        "operationId": "reset_password_api_auth_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reset Password",
         "tags": [
           "auth"
         ]
@@ -16240,6 +16587,59 @@
           }
         },
         "summary": "Media Token",
+        "tags": [
+          "videos"
+        ]
+      }
+    },
+    "/api/videos/{video_id}/next-part": {
+      "get": {
+        "description": "The channel's next upload when it clearly continues this video's series.\n\nFor \"autoplay the next part\": the player plays it (downloaded or not)\ninstead of a related video. ``entry`` is None when there is no clear one.",
+        "operationId": "next_part_api_videos__video_id__next_part_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextPartRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Next Part",
         "tags": [
           "videos"
         ]

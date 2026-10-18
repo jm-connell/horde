@@ -34,9 +34,11 @@ from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
+    ChannelFeedEntry,
     MediaTokenRead,
     MetadataRefreshResult,
     MetadataSyncStatus,
+    NextPartRead,
     StorageStats,
     TagStat,
     VideoRead,
@@ -45,6 +47,7 @@ from ..schemas import (
     WatchProgressUpdate,
 )
 from ..services import library, uploads, user_state
+from ..services import next_part as next_part_svc
 from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
@@ -415,6 +418,40 @@ def related_videos(
         raise HTTPException(status_code=404, detail="Video not found")
     rows = library.related_videos(session, video_id, limit=limit, offset=offset)
     return _to_read_many(rows, session, viewer=user, compact=True)
+
+
+@router.get("/videos/{video_id}/next-part", response_model=NextPartRead)
+def next_part(
+    video_id: int,
+    session: Session = Depends(get_session),
+    _user: AuthUser = Depends(current_user),
+):
+    """The channel's next upload when it clearly continues this video's series.
+
+    For "autoplay the next part": the player plays it (downloaded or not)
+    instead of a related video. ``entry`` is None when there is no clear one.
+    """
+    video = session.get(Video, video_id)
+    if video is None:
+        raise HTTPException(status_code=404, detail="Video not found")
+    found = next_part_svc.find_next_part(session, video)
+    if found is None:
+        return NextPartRead()
+    return NextPartRead(
+        entry=ChannelFeedEntry(
+            id=found.yt_id,
+            url=found.url,
+            title=found.title,
+            duration=found.duration,
+            thumbnail_url=found.thumbnail_url,
+            published_at=found.published_at,
+            channel=found.channel,
+            channel_url=found.channel_url,
+            in_library=found.video_id is not None,
+            video_id=found.video_id,
+        ),
+        reason=found.reason,
+    )
 
 
 @router.patch(

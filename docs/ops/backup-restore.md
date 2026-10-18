@@ -13,7 +13,7 @@ Back up both volume roots used by Compose (or your local dirs):
 | Host path | In-container | Contents |
 |-----------|--------------|----------|
 | `DOWNLOADS_PATH` | `DOWNLOADS_DIR` (`/downloads`) | Media library, imports, subtitle sidecars |
-| `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db` (and WAL sidecars `horde.db-wal` / `horde.db-shm`), settings, caches, user fonts/backgrounds |
+| `DATA_PATH` | `DATA_DIR` (`/app/data`) | `horde.db` (and WAL sidecars `horde.db-wal` / `horde.db-shm`), settings, caches, user fonts/backgrounds, profile pictures |
 
 If you restore a file into `DATA_PATH` yourself (for example `horde.db` from a backup, as root), you do not need to `chown` it: on the next start the container notices any file in the data directory with the wrong owner or group and repairs the ownership.
 

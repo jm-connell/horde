@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0008_stream_ai"
+HEAD = "0009_user_avatars"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -792,6 +792,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;
             DROP TABLE stream_ai_state;
+            ALTER TABLE users DROP COLUMN avatar_version;
             UPDATE alembic_version SET version_num = '0005_tags_search';
             INSERT INTO playlists (name, source_type, subscribed, position,
                 created_at, cover_video_id)

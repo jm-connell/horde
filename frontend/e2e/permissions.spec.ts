@@ -33,8 +33,8 @@ test("the admin turns permissions off and the member's screens follow after a re
   await expect(member.getByPlaceholder("Playlist name")).toBeVisible();
   await expect(member.getByRole("link", { name: /^Download\b/ })).toBeVisible();
 
-  // The admin edits the member's account type in the Users settings.
-  await page.goto("/settings?tab=users");
+  // The admin edits the member's account type in Account settings.
+  await page.goto("/account");
   await page.getByRole("button", { name: "Edit member", exact: true }).click();
   for (const label of [
     "Manage playlists",

@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import ChannelAutodownloadModal from "../components/ChannelAutodownloadModal";
 import ChannelFeed from "../components/ChannelFeed";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -35,7 +35,7 @@ import { useTagDrawer } from "./library/useTagDrawer";
 
 function OnlineLibrary() {
   const [settings, update] = useSettings();
-  const { search, setSearch, commitSearch } = useSearch();
+  const { search } = useSearch();
   const [showAllChannels, setShowAllChannels] = useState(false);
 
   const {
@@ -51,6 +51,13 @@ function OnlineLibrary() {
     toggleOrder,
   } = useLibraryQuery(settings, update);
   const { homeTab, setHomeTab, aiReady } = useHomeTab(search);
+
+  // The nav search searches the whole library from any page. A channel opened
+  // from the sidebar is page state, not a URL the nav can leave, so typing
+  // there closes it here (channel pages search their feed in their own box).
+  useEffect(() => {
+    if (search.trim() && activeChannel) setActiveChannel(null);
+  }, [search, activeChannel, setActiveChannel]);
 
   const isHome = !activeChannel && !activeTag;
   const onChannelPage = Boolean(activeChannel);
@@ -231,13 +238,11 @@ function OnlineLibrary() {
             />
           ) : (
             <HomeControls
-              search={search}
-              onSearch={setSearch}
-              onCommitSearch={commitSearch}
               sort={sort}
               order={order}
               onSortChange={handleSortChange}
               onToggleOrder={toggleOrder}
+              showSort={!onRecommendedTab}
               showTagsButton={!isHome && !onRecommendedTab && hasTags}
               showTags={showTags}
               onToggleTags={() => setShowTags((s) => !s)}

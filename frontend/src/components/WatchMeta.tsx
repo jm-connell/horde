@@ -1,16 +1,30 @@
-import { useRef, useState, type Ref } from "react";
+import { useRef, useState, type CSSProperties, type Ref } from "react";
 import { Link } from "react-router-dom";
 import ChaptersList from "./ChaptersList";
 import Collapse from "./Collapse";
 import LinkifiedText from "./LinkifiedText";
 import OverlayScrollThumb from "./OverlayScrollThumb";
-import { useAnimatedClipHeight } from "../hooks/useAnimatedClipHeight";
+import ResizeHandle from "./ResizeHandle";
+import { remPx, useAnimatedClipHeight } from "../hooks/useAnimatedClipHeight";
+import { useIsMobile } from "../hooks/useIsMobile";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import { useSettings } from "../hooks/useSettings";
 import type { Chapter } from "../utils";
 
 const COLLAPSED_REM_SIDE = 12;
 const COLLAPSED_REM_STACKED = 7.5;
 const TOGGLE_INSET = "pr-24";
+/** Smallest collapsed height a drag can set, in rem. */
+const MIN_CLIP_REM = 3;
+/** Narrowest the description and chapters columns can be dragged, in rem. */
+const MIN_DESCRIPTION_REM = 20;
+const MIN_CHAPTERS_REM = 12;
+/** The 1rem gutter between them, which holds the split handle. */
+const SPLIT_GUTTER_REM = 1;
 
 /** Jump back so the description box sits just under the sticky nav. */
 function scrollToBoxTop(box: HTMLElement) {
@@ -142,6 +156,7 @@ export default function WatchMeta({
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [boxExpanded, setBoxExpanded] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
+  const isMobile = useIsMobile();
 
   const descriptionBody = (description ?? "").trim() ? description : null;
   const hasTags = tags.length > 0 || aiTags.length > 0 || userTags.length > 0;
@@ -156,10 +171,57 @@ export default function WatchMeta({
 
   const panelRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
   const topToggleRef = useRef<HTMLButtonElement>(null);
-  const collapsedRem = metaSideBySide
-    ? COLLAPSED_REM_SIDE
-    : COLLAPSED_REM_STACKED;
+  // Heights the user dragged the collapsed boxes to, one per layout; the
+  // description and the chapters beside it share one so the row stays even.
+  const sideHeight = usePanelSize("metaSide");
+  const stackedHeight = usePanelSize("metaStacked");
+  const [clipPx, setClipPx, commitClipPx] = metaSideBySide
+    ? sideHeight
+    : stackedHeight;
+  const [split, setSplit, commitSplit] = usePanelSize("metaSplit");
+  const collapsedRem =
+    clipPx != null && !isMobile
+      ? clipPx / remPx(1)
+      : metaSideBySide
+        ? COLLAPSED_REM_SIDE
+        : COLLAPSED_REM_STACKED;
+  const heightResize = isMobile
+    ? null
+    : {
+        toValue: (start: number, delta: number) =>
+          clampPanelHeight(start + delta, MIN_CLIP_REM),
+        onChange: setClipPx,
+        onCommit: commitClipPx,
+        onReset: () => commitClipPx(null),
+        ...panelHeightRange(MIN_CLIP_REM),
+      };
+
+  /** Width the two columns share (the grid minus the gutter). */
+  const splitTotal = () =>
+    (gridRef.current?.getBoundingClientRect().width ?? 0) -
+    remPx(SPLIT_GUTTER_REM);
+  const splitStart = () => {
+    const total = splitTotal();
+    const desc = panelRef.current?.getBoundingClientRect().width ?? 0;
+    return total > 0 ? desc / total : 0.5;
+  };
+  const splitToValue = (start: number, delta: number) => {
+    const total = splitTotal();
+    if (total <= 0) return start;
+    const min = remPx(MIN_DESCRIPTION_REM) / total;
+    const max = 1 - remPx(MIN_CHAPTERS_REM) / total;
+    const next = (start * total + delta) / total;
+    return Math.round(Math.min(Math.max(next, min), max) * 1000) / 1000;
+  };
+  const splitStyle =
+    split != null && !isMobile
+      ? ({
+          "--meta-desc": `${split}fr`,
+          "--meta-ch": `${1 - split}fr`,
+        } as CSSProperties)
+      : undefined;
 
   useAnimatedClipHeight(clipRef, boxExpanded, collapsedRem, descriptionBody);
 
@@ -338,9 +400,12 @@ export default function WatchMeta({
 
   const metaBody = (
     <div
+      ref={gridRef}
+      style={metaSideBySide ? splitStyle : undefined}
       className={
         metaSideBySide
-          ? "grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(12rem,0.85fr)]"
+          ? // The middle 1rem column is the gutter, holding the split handle.
+            "grid items-start gap-4 lg:grid-cols-[minmax(0,var(--meta-desc,1.75fr))_1rem_minmax(12rem,var(--meta-ch,0.85fr))] lg:gap-x-0"
           : undefined
       }
     >
@@ -387,15 +452,44 @@ export default function WatchMeta({
                   corner="bottom"
                 />
               )}
+              {heightResize && !boxExpanded && (
+                <ResizeHandle
+                  axis="y"
+                  label="Resize description"
+                  className="absolute inset-x-0 bottom-0 h-2.5"
+                  getStart={() =>
+                    clipRef.current?.getBoundingClientRect().height ?? 0
+                  }
+                  {...heightResize}
+                />
+              )}
             </>
           )}
         </div>
       )}
+      {metaSideBySide &&
+        (isMobile ? (
+          <div className="hidden lg:block" aria-hidden />
+        ) : (
+          <ResizeHandle
+            axis="x"
+            label="Resize description and chapters"
+            className="hidden self-stretch lg:flex"
+            getStart={splitStart}
+            toValue={splitToValue}
+            onChange={setSplit}
+            onCommit={commitSplit}
+            onReset={() => commitSplit(null)}
+            valueMin={0}
+            valueMax={1}
+          />
+        ))}
       {chapters.length > 0 && (
         <ChaptersList
           chapters={chapters}
           expanded={boxExpanded}
           collapsedRem={collapsedRem}
+          resize={heightResize}
         />
       )}
     </div>

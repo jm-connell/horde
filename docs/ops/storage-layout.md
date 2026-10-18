@@ -102,6 +102,7 @@ data/
   sprites/                 # Seek-preview sprite sheets (+ JSON sidecars)
   backgrounds/             # Custom UI backgrounds
   fonts/                   # Uploaded UI fonts
+  avatars/                 # Profile pictures (`{user_id}_{version}.jpg`)
 ```
 
 | Path | Regenerable? |
@@ -112,6 +113,7 @@ data/
 | `thumbnails/` | Yes — regenerate from media / source |
 | `sprites/` | Yes — regenerate on demand |
 | `backgrounds/`, `fonts/` | User uploads — keep if you customized appearance |
+| `avatars/` | User uploads — profile pictures; lost pictures just show initials |
 
 Embeddings live **inside** `horde.db` (not as loose files). They are regenerable via AI maintenance jobs after a restore of media + DB schema, but wiping the DB loses tags, notes, watch position, and playlists.
 

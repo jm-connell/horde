@@ -7,6 +7,7 @@ import {
   Field,
   FormError,
 } from "../components/auth/AuthForm";
+import ForgotPassword from "../components/auth/ForgotPassword";
 import { safeNextPath } from "../utils/authPaths";
 import { clearLocalSettings } from "../hooks/useSettings";
 
@@ -16,6 +17,13 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [forgot, setForgot] = useState(false);
+
+  const enterApp = () => {
+    // A full load starts the app from a clean slate for this user.
+    clearLocalSettings();
+    window.location.assign(safeNextPath(params.get("next")));
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,9 +32,7 @@ export default function LoginPage() {
     setError(null);
     try {
       await api.login(username.trim(), password);
-      // A full load starts the app from a clean slate for this user.
-      clearLocalSettings();
-      window.location.assign(safeNextPath(params.get("next")));
+      enterApp();
     } catch (err) {
       setBusy(false);
       if (err instanceof ApiError && err.code === "rate_limited") {
@@ -41,6 +47,18 @@ export default function LoginPage() {
       setPassword("");
     }
   };
+
+  if (forgot) {
+    return (
+      <AuthCard title="Reset your password">
+        <ForgotPassword
+          initialUsername={username}
+          onBack={() => setForgot(false)}
+          onSignedIn={enterApp}
+        />
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard title="Sign in to Horde">
@@ -63,6 +81,18 @@ export default function LoginPage() {
         <button type="submit" disabled={busy} className={AUTH_PRIMARY}>
           {busy ? "Signing in…" : "Sign in"}
         </button>
+        <div className="mt-4 text-center">
+          <button
+            type="button"
+            onClick={() => {
+              setError(null);
+              setForgot(true);
+            }}
+            className="text-sm text-gray-400 underline-offset-2 hover:text-accent hover:underline"
+          >
+            Forgot password?
+          </button>
+        </div>
       </form>
     </AuthCard>
   );

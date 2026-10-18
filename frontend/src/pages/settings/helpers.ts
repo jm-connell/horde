@@ -1,17 +1,9 @@
-import { getItem, setItem } from "../../storage";
-import { TAB_STORAGE_KEY, TABS, UPDATE_DISMISS_KEY } from "./constants";
+import { getItem } from "../../storage";
+import { TAB_STORAGE_KEY, TABS } from "./constants";
 import type { SettingsTab } from "./types";
 
 export function plural(n: number, one: string, many: string) {
   return `${n} ${n === 1 ? one : many}`;
-}
-
-export function loadDismissedUpdateSha(): string | null {
-  return getItem(UPDATE_DISMISS_KEY);
-}
-
-export function saveDismissedUpdateSha(sha: string) {
-  setItem(UPDATE_DISMISS_KEY, sha);
 }
 
 export function loadTab(): SettingsTab {

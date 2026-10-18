@@ -563,6 +563,9 @@ class User(SQLModel, table=True):
     # JSON list of granted permission names (see services/auth/permissions.py).
     # Meaningful for members only: administrators implicitly have everything.
     permissions: str = Field(default="[]")
+    # Profile picture version (the client's cache key); None when the account
+    # has none. The image is DATA_DIR/avatars/{id}_{version}.jpg.
+    avatar_version: int | None = None
 
 
 class UserSession(SQLModel, table=True):

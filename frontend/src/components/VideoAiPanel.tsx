@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useIsMobile } from "../hooks/useIsMobile";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import { useSettings } from "../hooks/useSettings";
 import AiMarkdown from "./AiMarkdown";
 import Collapse from "./Collapse";
+import OverlayScrollThumb from "./OverlayScrollThumb";
+import ResizeHandle from "./ResizeHandle";
 import TypingDots from "./TypingDots";
 import type { AiTarget } from "./aiTarget";
 import VideoAiChat from "./VideoAiChat";
 
 type AiTab = "summary" | "chat";
+
+/** Smallest height the summary can be dragged to, in rem. */
+const MIN_SUMMARY_REM = 4;
 
 interface Props {
   target: AiTarget;
@@ -28,6 +39,14 @@ export default function VideoAiPanel({
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const summarizeAbortRef = useRef<AbortController | null>(null);
+  const summaryScrollRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  const [summaryHeight, setSummaryHeight, commitSummaryHeight] =
+    usePanelSize("aiSummary");
+  // A dragged height is fixed (not a cap), so the handle always follows the
+  // pointer, even past the end of a short summary.
+  const summaryFixed =
+    !isMobile && summaryHeight != null ? summaryHeight : null;
 
   const expanded = settings.aiExpanded;
   const showToggle = canSummarize && canChat;
@@ -165,35 +184,71 @@ export default function VideoAiPanel({
       <Collapse open={expanded}>
         <div>
           {activeTab === "summary" && canSummarize && (
-            <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
-              <div className="px-4 py-3">
-                {summaryError && (
-                  <p className="mb-2 text-xs text-amber-400/90">
-                    {summaryError}
-                  </p>
-                )}
-                {hasAiSummary ? (
-                  <AiMarkdown text={summaryText} />
-                ) : waitingOnSummary ? (
-                  <div className="flex justify-center py-8">
-                    <TypingDots label="Generating summary" />
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-start gap-3 py-2">
-                    <p className="text-xs text-muted">
-                      No summary yet. Summaries are generated from captions and
-                      video metadata.
+            <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+              <div
+                ref={summaryScrollRef}
+                className={
+                  summaryFixed != null
+                    ? "horde-meta-scrollbar overflow-y-auto"
+                    : undefined
+                }
+                style={
+                  summaryFixed != null ? { height: summaryFixed } : undefined
+                }
+              >
+                <div className="px-4 py-3">
+                  {summaryError && (
+                    <p className="mb-2 text-xs text-amber-400/90">
+                      {summaryError}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => void runSummarize(false)}
-                      className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
-                    >
-                      Generate summary
-                    </button>
-                  </div>
-                )}
+                  )}
+                  {hasAiSummary ? (
+                    <AiMarkdown text={summaryText} />
+                  ) : waitingOnSummary ? (
+                    <div className="flex justify-center py-8">
+                      <TypingDots label="Generating summary" />
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-start gap-3 py-2">
+                      <p className="text-xs text-muted">
+                        No summary yet. Summaries are generated from captions
+                        and video metadata.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void runSummarize(false)}
+                        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
+                      >
+                        Generate summary
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
+              {summaryFixed != null && (
+                <OverlayScrollThumb
+                  scrollRef={summaryScrollRef}
+                  revision={`${summaryFixed}-${summaryText.length}`}
+                />
+              )}
+              {!isMobile && (
+                <ResizeHandle
+                  axis="y"
+                  label="Resize summary"
+                  className="absolute inset-x-0 bottom-0 h-2.5"
+                  getStart={() =>
+                    summaryScrollRef.current?.getBoundingClientRect().height ??
+                    0
+                  }
+                  toValue={(start, delta) =>
+                    clampPanelHeight(start + delta, MIN_SUMMARY_REM)
+                  }
+                  onChange={setSummaryHeight}
+                  onCommit={commitSummaryHeight}
+                  onReset={() => commitSummaryHeight(null)}
+                  {...panelHeightRange(MIN_SUMMARY_REM)}
+                />
+              )}
             </div>
           )}
 

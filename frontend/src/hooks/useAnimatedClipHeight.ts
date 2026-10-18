@@ -29,6 +29,7 @@ function measureContentHeight(clip: HTMLElement): number {
  * Expanded resting state is `height: auto` so the box is only as tall as
  * its content (no extra whitespace). Content changes (e.g. regenerated
  * chapters) remeasure and resize even when the expand state is unchanged.
+ * A change of `collapsedRem` alone (the user dragging the box) applies at once.
  */
 export function useAnimatedClipHeight(
   clipRef: { readonly current: HTMLElement | null },
@@ -38,6 +39,7 @@ export function useAnimatedClipHeight(
   onSettled?: (expanded: boolean) => void
 ) {
   const prevExpandedRef = useRef<boolean | null>(null);
+  const prevContentKeyRef = useRef(contentKey);
   const onSettledRef = useRef(onSettled);
   onSettledRef.current = onSettled;
 
@@ -71,9 +73,16 @@ export function useAnimatedClipHeight(
     const prev = prevExpandedRef.current;
     prevExpandedRef.current = expanded;
     const expandedChanged = prev !== null && prev !== expanded;
+    const contentChanged = prevContentKeyRef.current !== contentKey;
+    prevContentKeyRef.current = contentKey;
 
     const from = clip.getBoundingClientRect().height;
-    if (prev === null || reduceMotion || Math.abs(from - target) < 1) {
+    if (
+      prev === null ||
+      reduceMotion ||
+      (!expandedChanged && !contentChanged) ||
+      Math.abs(from - target) < 1
+    ) {
       applyResting();
       if (expandedChanged) onSettledRef.current?.(expanded);
       return;

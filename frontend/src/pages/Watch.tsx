@@ -108,10 +108,14 @@ export default function Watch() {
     mode === "standard" &&
     settings.showRelatedVideos &&
     relatedItems.length > 0;
-  const queueVisible = !!video && queue.length > 0;
+  const queueVisible = queue.length > 0;
+  // Theater puts the player full-bleed, so the column only holds the details
+  // under it: keep it at a readable width, centred under the video.
   const contentClass = showRelatedRight
     ? "mx-auto max-w-360 2xl:max-w-[116rem]"
-    : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-[116rem]";
+    : isWide
+      ? "mx-auto max-w-5xl xl:max-w-6xl"
+      : "mx-auto max-w-5xl xl:max-w-6xl 2xl:max-w-[116rem]";
 
   return (
     <div
@@ -138,6 +142,7 @@ export default function Watch() {
             ai={ai}
             queueVisible={queueVisible}
             sidebarShown={showRelatedRight}
+            columnBounded={showRelatedRight || isWide}
             onVideoUpdated={setVideo}
           />
           {video && (

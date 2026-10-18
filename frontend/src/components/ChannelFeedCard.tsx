@@ -3,6 +3,7 @@ import { useAuth } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import { api, streamUrl } from "../api";
 import { usePlaybackSession } from "../context/PlaybackContext";
+import type { QueueEntry } from "../context/playbackQueue";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { maxPresetLabel } from "../presets";
 import type { ChannelFeedEntry } from "../types";
@@ -21,7 +22,9 @@ import { setWatchResume } from "../utils/watchHandoff";
 import { watchHref } from "../utils/watchHref";
 import CardPreviewVideo from "./CardPreviewVideo";
 import CardTitle from "./CardTitle";
+import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
+import QueueButton from "./QueueButton";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
 const maxResCache = new Map<string, string>();
@@ -154,7 +157,10 @@ function FeedThumbnail({
   previewSrc,
   previewVideoId,
   previewActive,
+  queueEntry,
 }: {
+  /** Shows a "+ Queue" button on hover. */
+  queueEntry?: QueueEntry | null;
   thumbSrc: string | null;
   duration: string;
   className: string;
@@ -168,14 +174,14 @@ function FeedThumbnail({
 
   return (
     <div className={`relative ${className}`}>
-      <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+      <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-ink-800/60">
         <div
           className={`relative h-full w-full transition-[scale,filter] duration-200 sm:group-hover:scale-105 ${
             previewing ? "" : "group-hover:brightness-[0.6]"
           }`}
         >
           {thumbSrc ? (
-            <img
+            <FadeImage
               decoding="async"
               width={320}
               height={180}
@@ -217,6 +223,7 @@ function FeedThumbnail({
           </span>
         )}
       </div>
+      {queueEntry && <QueueButton entry={queueEntry} />}
       <MatchReasonBadge text={matchTip} />
     </div>
   );
@@ -288,6 +295,18 @@ export default function ChannelFeedCard({
     channelName
   );
   const matchTip = visibleMatchReasonTip(entry.match_reason, searchQuery);
+  const queueEntry: QueueEntry | null =
+    href && entry.url
+      ? {
+          queue_kind: "stream",
+          url: entry.url,
+          href,
+          title: entry.title || "Untitled",
+          channel: channelName || entry.channel || null,
+          thumbnail: thumbSrc,
+          duration: entry.duration ?? null,
+        }
+      : null;
   const titleText = entry.title || "Untitled";
   const handleChannelClick = onChannelClick
     ? () =>
@@ -365,6 +384,7 @@ export default function ChannelFeedCard({
           previewSrc={previewSrc}
           previewVideoId={libraryVideoId}
           previewActive={previewActive}
+          queueEntry={queueEntry}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -429,6 +449,7 @@ export default function ChannelFeedCard({
           previewSrc={previewSrc}
           previewVideoId={libraryVideoId}
           previewActive={previewActive}
+          queueEntry={queueEntry}
         />
         <div
           className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
@@ -464,8 +485,8 @@ export default function ChannelFeedCard({
       data-preview-active={previewActive ? "true" : undefined}
       className={
         layout === "grid"
-          ? "h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
-          : undefined
+          ? "ui-card-enter h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
+          : "ui-card-enter"
       }
     >
       {href ? (

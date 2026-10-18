@@ -16,6 +16,7 @@ export type CompatSummary = S["CompatSummaryRead"];
 export type VideoUpdate = S["VideoUpdate"];
 export type ChannelStat = S["ChannelStat"];
 export type ChannelFeedEntry = S["ChannelFeedEntry"];
+export type NextPart = S["NextPartRead"];
 export type ChannelFeedPage = S["ChannelFeedPage"];
 export type ChannelCatalogStatusItem = S["ChannelCatalogStatusItem"];
 export type ChannelAutodownload = S["ChannelAutodownloadRead"];

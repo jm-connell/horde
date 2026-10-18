@@ -279,6 +279,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Avatar
+         * @description Set your own profile picture (any image; stored as a square JPEG).
+         */
+        post: operations["upload_avatar_api_auth_avatar_post"];
+        /**
+         * Remove Avatar
+         * @description Remove your own profile picture.
+         */
+        delete: operations["remove_avatar_api_auth_avatar_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/avatar/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Avatar
+         * @description Any account's profile picture, for any signed-in user (it is shown to others).
+         */
+        get: operations["get_avatar_api_auth_avatar__user_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/bootstrap": {
         parameters: {
             query?: never;
@@ -293,6 +337,29 @@ export interface paths {
          * @description Create the first (administrator) account. Refused once any user exists.
          */
         post: operations["bootstrap_api_auth_bootstrap_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/forgot": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forgot Password
+         * @description Write a one-time reset code for ``username`` to the server log.
+         *
+         *     The answer is the same whether or not the account exists, so the form does
+         *     not reveal usernames. The code reaches only whoever can read the log.
+         */
+        post: operations["forgot_password_api_auth_forgot_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -347,6 +414,28 @@ export interface paths {
          * @description Change your own password. Your other browsers are signed out.
          */
         post: operations["change_password_api_auth_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Password
+         * @description Set a new password with a code from the server log, and sign in.
+         *
+         *     Every other session of the account is signed out.
+         */
+        post: operations["reset_password_api_auth_reset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2208,6 +2297,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/{video_id}/next-part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Next Part
+         * @description The channel's next upload when it clearly continues this video's series.
+         *
+         *     For "autoplay the next part": the player plays it (downloaded or not)
+         *     instead of a related video. ``entry`` is None when there is no clear one.
+         */
+        get: operations["next_part_api_videos__video_id__next_part_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}/progress": {
         parameters: {
             query?: never;
@@ -3171,6 +3283,8 @@ export interface components {
          * @description The signed-in user. ``permissions`` is effective: all of them for an admin.
          */
         AuthUserRead: {
+            /** Avatar Version */
+            avatar_version?: number | null;
             /** Id */
             id: number;
             /** Is Admin */
@@ -3202,6 +3316,11 @@ export interface components {
             mime: string;
             /** Url */
             url: string;
+        };
+        /** Body_upload_avatar_api_auth_avatar_post */
+        Body_upload_avatar_api_auth_avatar_post: {
+            /** File */
+            file: string;
         };
         /** Body_upload_background_api_backgrounds_post */
         Body_upload_background_api_backgrounds_post: {
@@ -4076,6 +4195,11 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** ForgotPasswordRequest */
+        ForgotPasswordRequest: {
+            /** Username */
+            username: string;
+        };
         /** GpuStats */
         GpuStats: {
             /** Name */
@@ -4298,6 +4422,18 @@ export interface components {
              */
             total: number;
         };
+        /**
+         * NextPartRead
+         * @description The upload that clearly continues a video (same series), if there is one.
+         *
+         *     ``entry`` is None when the channel's next upload is not clearly the next
+         *     part, or the channel is unknown; ``reason`` says why it matched.
+         */
+        NextPartRead: {
+            entry?: components["schemas"]["ChannelFeedEntry"] | null;
+            /** Reason */
+            reason?: string | null;
+        };
         /** OkResponse */
         OkResponse: {
             /**
@@ -4451,6 +4587,15 @@ export interface components {
             current_password: string;
             /** New Password */
             new_password: string;
+        };
+        /** PasswordResetRequest */
+        PasswordResetRequest: {
+            /** Code */
+            code: string;
+            /** New Password */
+            new_password: string;
+            /** Username */
+            username: string;
         };
         /** PausedResponse */
         PausedResponse: {
@@ -5096,6 +5241,8 @@ export interface components {
         };
         /** UserRead */
         UserRead: {
+            /** Avatar Version */
+            avatar_version?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -6020,6 +6167,126 @@ export interface operations {
             };
         };
     };
+    upload_avatar_api_auth_avatar_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_avatar_api_auth_avatar_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_avatar_api_auth_avatar_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_avatar_api_auth_avatar__user_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     bootstrap_api_auth_bootstrap_post: {
         parameters: {
             query?: never;
@@ -6041,6 +6308,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthLoginResult"];
                 };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    forgot_password_api_auth_forgot_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation error */
             422: {
@@ -6159,6 +6466,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_password_api_auth_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLoginResult"];
+                };
             };
             /** @description Validation error */
             422: {
@@ -11313,6 +11662,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MediaTokenRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    next_part_api_videos__video_id__next_part_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextPartRead"];
                 };
             };
             /** @description Validation error */

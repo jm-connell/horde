@@ -2,6 +2,7 @@ import { listThumbnailUrl, thumbnailUrl } from "../../api";
 import type { ChannelFeedEntry, Video } from "../../types";
 import { youtubeThumbnailUrl } from "../../utils";
 import { watchHref } from "../../utils/watchHref";
+import type { QueueEntry } from "../../context/playbackQueue";
 
 /** One related video, library or stream, as the sidebar and grid show it. */
 export interface RelatedItem {
@@ -13,6 +14,8 @@ export interface RelatedItem {
   durationSec: number | null;
   /** Set on the stream page, where related videos can be either. */
   downloaded?: boolean;
+  /** What "+ Queue" adds: the library video, or the stream by its link. */
+  queueEntry: QueueEntry | null;
 }
 
 export function libraryRelatedItems(videos: Video[]): RelatedItem[] {
@@ -23,6 +26,7 @@ export function libraryRelatedItems(videos: Video[]): RelatedItem[] {
     thumb: thumbnailUrl(v),
     channel: v.channel ?? null,
     durationSec: v.duration_sec ?? null,
+    queueEntry: v,
   }));
 }
 
@@ -46,6 +50,17 @@ export function streamRelatedItems(entries: ChannelFeedEntry[]): RelatedItem[] {
       channel: e.channel ?? null,
       durationSec: e.duration ?? null,
       downloaded,
+      queueEntry: e.url
+        ? {
+            queue_kind: "stream",
+            url: e.url,
+            href,
+            title: e.title || "Untitled",
+            channel: e.channel ?? null,
+            thumbnail: thumb,
+            duration: e.duration ?? null,
+          }
+        : null,
     });
   }
   return out;

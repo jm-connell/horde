@@ -11,6 +11,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
 import Library from "./pages/Library";
 import {
+  Account,
   Download,
   History,
   Import,
@@ -60,6 +61,13 @@ function PreviewRedirect() {
   if (channel) qs.set("channel", channel);
   const search = qs.toString();
   return <Navigate to={search ? `/watch?${search}` : "/"} replace />;
+}
+
+/** Users moved from Settings to Account settings; keep old links working. */
+function SettingsRoute() {
+  const [params] = useSearchParams();
+  if (params.get("tab") === "users") return <Navigate to="/account" replace />;
+  return <Settings />;
 }
 
 function AppRoutes() {
@@ -113,7 +121,8 @@ function AppRoutes() {
               }
             />
             <Route path="/review" element={<Navigate to="/import" replace />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/settings" element={<SettingsRoute />} />
+            <Route path="/account" element={<Account />} />
             <Route path="/setup" element={<Navigate to="/" replace />} />
             <Route path="/watch/:id" element={<Watch />} />
             <Route path="/watch" element={<Watch />} />

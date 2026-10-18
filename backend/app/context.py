@@ -79,6 +79,10 @@ class Paths:
         return self.data / "fonts"
 
     @property
+    def avatars(self) -> Path:
+        return self.data / "avatars"
+
+    @property
     def db_path(self) -> Path:
         return self.data / "horde.db"
 
@@ -95,6 +99,7 @@ class Paths:
             self.sprites,
             self.backgrounds,
             self.fonts,
+            self.avatars,
         ):
             directory.mkdir(parents=True, exist_ok=True)
 

@@ -173,11 +173,10 @@ test("a second administrator sees every setting the first one does", async ({
     "Playback",
     "AI",
     "System",
-    "Users",
   ]);
   await expect(tabsOf(second)).toHaveText(await tabsOf(page).allTextContents());
 
-  for (const tab of ["Appearance", "Library", "Playback", "System", "Users"]) {
+  for (const tab of ["Appearance", "Library", "Playback", "System"]) {
     await expectSameView(page, second, tab);
   }
   for (const pane of ["Providers", "Features", "Jobs"]) {
@@ -225,7 +224,7 @@ test("a promotion or demotion reaches an open page without a reload", async ({
   await member.evaluate(() =>
     document.dispatchEvent(new Event("visibilitychange"))
   );
-  await expect(tabs.getByRole("tab")).toHaveCount(6);
+  await expect(tabs.getByRole("tab")).toHaveCount(5);
   await expect(
     member.getByRole("heading", { name: "Metadata and catalog" })
   ).toBeVisible();
