@@ -70,14 +70,23 @@ async function watchTo(page: Page, videoId: number, sec: number) {
 /**
  * Where the player started: the first playhead past 1 s. A player that
  * resumed is already there; one that started from 0 is read as it passes 1 s.
+ *
+ * `leaving` is where a player already on the page sits paused (the
+ * mini-player of the same video): it keeps that playhead until the opened
+ * video arrives, so the start is the first playhead away from it. One that
+ * wrongly carries on from there is read as it plays past.
  */
-async function startPosition(page: Page): Promise<number> {
+async function startPosition(page: Page, leaving?: number): Promise<number> {
   const video = player(page);
+  const started = (t: number) =>
+    t > 1 && (leaving === undefined || Math.abs(t - leaving) > 0.5);
   await expect
-    .poll(() => video.evaluate((v: HTMLVideoElement) => v.currentTime), {
-      timeout: 20_000,
-    })
-    .toBeGreaterThan(1);
+    .poll(
+      async () =>
+        started(await video.evaluate((v: HTMLVideoElement) => v.currentTime)),
+      { timeout: 20_000 }
+    )
+    .toBe(true);
   return video.evaluate((v: HTMLVideoElement) => v.currentTime);
 }
 
@@ -148,7 +157,7 @@ test("a position saved on one device is where the account's other devices start"
   // The PC opens it again, without a reload, and picks up there.
   await videoCard(pc, "Kiln fire").first().click();
   await expect(pc).toHaveURL(new RegExp(`/watch/${kiln}$`));
-  const pcStart = await startPosition(pc);
+  const pcStart = await startPosition(pc, 2);
   expect(pcStart).toBeGreaterThanOrEqual(11.5);
   expect(pcStart).toBeLessThan(16);
 
