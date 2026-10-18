@@ -642,6 +642,79 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
   }
 }
 
+/* Cards rise and fade in as they mount, a few at a time (first 12 staggered,
+   the rest together), so a grid settles in instead of popping. "backwards"
+   holds the start state only during the delay; afterwards the card's own
+   hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
+html[data-page-fade="on"] .ui-card-enter {
+  animation: card-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation-delay: var(--card-enter-delay, 0ms);
+}
+
+.ui-card-enter:nth-child(2),
+:nth-child(2) > .ui-card-enter {
+  --card-enter-delay: 30ms;
+}
+.ui-card-enter:nth-child(3),
+:nth-child(3) > .ui-card-enter {
+  --card-enter-delay: 60ms;
+}
+.ui-card-enter:nth-child(4),
+:nth-child(4) > .ui-card-enter {
+  --card-enter-delay: 90ms;
+}
+.ui-card-enter:nth-child(5),
+:nth-child(5) > .ui-card-enter {
+  --card-enter-delay: 120ms;
+}
+.ui-card-enter:nth-child(6),
+:nth-child(6) > .ui-card-enter {
+  --card-enter-delay: 150ms;
+}
+.ui-card-enter:nth-child(7),
+:nth-child(7) > .ui-card-enter {
+  --card-enter-delay: 180ms;
+}
+.ui-card-enter:nth-child(8),
+:nth-child(8) > .ui-card-enter {
+  --card-enter-delay: 210ms;
+}
+.ui-card-enter:nth-child(9),
+:nth-child(9) > .ui-card-enter {
+  --card-enter-delay: 240ms;
+}
+.ui-card-enter:nth-child(10),
+:nth-child(10) > .ui-card-enter {
+  --card-enter-delay: 270ms;
+}
+.ui-card-enter:nth-child(11),
+:nth-child(11) > .ui-card-enter {
+  --card-enter-delay: 300ms;
+}
+.ui-card-enter:nth-child(12),
+:nth-child(12) > .ui-card-enter {
+  --card-enter-delay: 330ms;
+}
+.ui-card-enter:nth-child(n + 13),
+:nth-child(n + 13) > .ui-card-enter {
+  --card-enter-delay: 360ms;
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+html[data-page-fade="on"] .ui-fade-img {
+  transition: opacity 320ms ease-out;
+}
+
+.ui-fade-img[data-loaded="false"] {
+  opacity: 0;
+}
+
 @keyframes wizard-step-in-next {
   from {
     opacity: 0;
@@ -995,6 +1068,14 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
 @media (prefers-reduced-motion: reduce) {
   html[data-page-fade="on"] .page-shell {
     animation: none;
+  }
+
+  .ui-card-enter {
+    animation: none !important;
+  }
+
+  .ui-fade-img {
+    transition: none !important;
   }
 
   html[data-hover-motion="subtle"] .ui-card,

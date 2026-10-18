@@ -21,6 +21,7 @@ import { setWatchResume } from "../utils/watchHandoff";
 import { watchHref } from "../utils/watchHref";
 import CardPreviewVideo from "./CardPreviewVideo";
 import CardTitle from "./CardTitle";
+import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 
@@ -164,14 +165,14 @@ function FeedThumbnail({
 
   return (
     <div className={`relative ${className}`}>
-      <div className="relative h-full w-full overflow-hidden rounded-[inherit]">
+      <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-ink-800/60">
         <div
           className={`relative h-full w-full transition-[transform,filter] duration-200 sm:group-hover:scale-105 ${
             previewing ? "" : "group-hover:brightness-[0.6]"
           }`}
         >
           {thumbSrc ? (
-            <img
+            <FadeImage
               decoding="async"
               width={320}
               height={180}
@@ -460,8 +461,8 @@ export default function ChannelFeedCard({
       data-preview-active={previewActive ? "true" : undefined}
       className={
         layout === "grid"
-          ? "h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
-          : undefined
+          ? "ui-card-enter h-full max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0"
+          : "ui-card-enter"
       }
     >
       {href ? (
