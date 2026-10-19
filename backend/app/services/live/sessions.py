@@ -278,7 +278,7 @@ class LiveSession:
                 return variant.rendered
             try:
                 playlist = await self._fetch_playlist(variant)
-            except (LiveUpstreamError, httpx.HTTPError):
+            except LiveUpstreamError, httpx.HTTPError:
                 if (
                     variant.rendered is not None
                     and now - variant.fetched_at < _STALE_PLAYLIST_GRACE_SEC
@@ -467,7 +467,7 @@ class LiveSession:
         async with variant.lock:
             try:
                 playlist = await self._fetch_playlist(variant)
-            except (LiveUpstreamError, httpx.HTTPError):
+            except LiveUpstreamError, httpx.HTTPError:
                 logger.warning(
                     "live playlist refresh after a segment 403 failed for %s",
                     self.video_id,

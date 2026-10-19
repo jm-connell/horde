@@ -59,7 +59,7 @@ def fetch_votes(video_id: str) -> dict[str, int] | None:
     try:
         like_count = int(likes) if likes is not None else None
         dislike_count = int(dislikes) if dislikes is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if like_count is None or dislike_count is None:
         return None

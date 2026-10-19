@@ -788,7 +788,7 @@ def usd_per_million(raw: Any) -> float | None:
         return None
     try:
         per_token = float(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if per_token < 0 or per_token != per_token:
         return None

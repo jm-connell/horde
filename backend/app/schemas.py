@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Annotated, Literal, Optional
+from typing import Annotated, Literal
 from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
@@ -88,7 +88,7 @@ class VideoRead(BaseModel):
     # ≤1080p H.264 sidecar: compact lists only report has_compat.
     has_compat: bool = False
     compat_size: int | None = None
-    compat: Optional["CompatState"] = None
+    compat: CompatState | None = None
     view_count: int | None
     channel_subscriber_count: int | None
     published_at: datetime | None

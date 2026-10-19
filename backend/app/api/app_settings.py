@@ -236,7 +236,7 @@ def _settings_read(
         ui = server_ui if isinstance(server_ui, dict) else {}
     try:
         interval = int(data.get("metadata_sync_interval_hours") or 24)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         interval = 24
     interval = max(1, min(168, interval))
     read = AppSettingsRead(

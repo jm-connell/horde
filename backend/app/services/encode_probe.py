@@ -160,7 +160,7 @@ def _run_ffmpeg(args: list[str], timeout: float = 8.0) -> str:
             check=False,
             env={**os.environ, "AV_LOG_FORCE_NOCOLOR": "1"},
         )
-    except (OSError, subprocess.SubprocessError):
+    except OSError, subprocess.SubprocessError:
         return ""
     # ffmpeg prints -encoders / -hwaccels to stdout (sometimes stderr).
     return (result.stdout or "") + "\n" + (result.stderr or "")

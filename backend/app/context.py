@@ -267,6 +267,6 @@ def get_ctx(request: Request) -> AppContext:
     return ctx_for_app(request.app)
 
 
-def get_session(ctx: AppContext = Depends(get_ctx)) -> Generator[Session, None, None]:
+def get_session(ctx: AppContext = Depends(get_ctx)) -> Generator[Session]:
     with Session(ctx.engine) as session:
         yield session

@@ -106,7 +106,7 @@ def parse_chapter_list(raw: Any) -> list[Chapter]:
     if isinstance(raw, str):
         try:
             raw = json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
+        except json.JSONDecodeError, TypeError:
             return []
     if not isinstance(raw, list):
         return []
@@ -139,7 +139,7 @@ def normalize_ytdlp_chapters(raw: Any) -> list[Chapter]:
             continue
         try:
             start_sec = float(start)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if start_sec < 0 or not title:
             continue

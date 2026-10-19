@@ -88,7 +88,7 @@ def follow_channel(
     if not ctx.e2e and time.time() >= directory.paused_until:
         try:
             html = fetch_live_page(url, timeout=10.0)
-        except (UrlFetchError, UnsafeUrlError):
+        except UrlFetchError, UnsafeUrlError:
             logger.debug("could not look up followed channel %s", url, exc_info=True)
     if html is not None:
         try:

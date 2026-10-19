@@ -45,7 +45,7 @@ def normalize_previous_mode(value: Any) -> str:
 def normalize_previous_count(value: Any) -> int:
     try:
         n = int(value) if value is not None else DEFAULT_PREVIOUS_COUNT
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         n = DEFAULT_PREVIOUS_COUNT
     return max(PREVIOUS_COUNT_MIN, min(PREVIOUS_COUNT_MAX, n))
 
@@ -85,7 +85,7 @@ def should_skip_live(
     dur_ok = False
     try:
         dur_ok = duration is not None and float(duration) > 0
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         dur_ok = False
     if not status and not dur_ok:
         return "live"

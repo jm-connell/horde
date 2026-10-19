@@ -26,7 +26,7 @@ def is_within(path: Path, root: Path | None = None) -> bool:
     base = _root(root)
     try:
         (path.parent.resolve() / path.name).relative_to(base)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return False
     return True
 
@@ -36,7 +36,7 @@ def safe_rel(path: Path, root: Path | None = None) -> str | None:
     base = _root(root)
     try:
         return path.resolve().relative_to(base).as_posix()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return None
 
 

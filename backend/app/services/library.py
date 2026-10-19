@@ -45,7 +45,7 @@ def parse_tags(raw: str) -> list[str]:
     try:
         value = json.loads(raw)
         return [str(t) for t in value] if isinstance(value, list) else []
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return []
 
 
@@ -60,7 +60,7 @@ def parse_subtitles(raw: str | None) -> list[dict]:
         return (
             [t for t in value if isinstance(t, dict)] if isinstance(value, list) else []
         )
-    except (json.JSONDecodeError, TypeError):
+    except json.JSONDecodeError, TypeError:
         return []
 
 

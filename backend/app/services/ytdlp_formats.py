@@ -283,7 +283,7 @@ def audio_abrs(info: dict[str, Any]) -> list[float]:
             continue
         try:
             abr = float(raw)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if abr > 0:
             abrs.append(abr)
@@ -361,7 +361,7 @@ def decode_available_presets(raw: str | None) -> list[str]:
         return []
     try:
         data = json.loads(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return []
     if not isinstance(data, list):
         return []
