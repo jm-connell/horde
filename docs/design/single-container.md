@@ -20,7 +20,7 @@ Health reports `wiki_available` when the built wiki directory exists. In the UI,
 
 The image is built in three stages:
 
-1. **frontend** (`node:20-alpine`) — `npm install` + `npm run build` → static `dist/`
+1. **frontend** (`node:24-alpine`) — `npm install` + `npm run build` → static `dist/`
 2. **docs** (`python:3.12-slim`) — `mkdocs build --strict` → HTML site
 3. **runtime** (`python:3.12-slim`) — install Python deps + ffmpeg (jellyfin-ffmpeg when available), copy `backend/app`, copy frontend build to `./static`, copy wiki to `./static/wiki`
 
