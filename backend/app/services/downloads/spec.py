@@ -40,7 +40,7 @@ class JobSpec:
         return normalize_video_codec(self.video_codec)
 
     @classmethod
-    def load(cls, job_id: int) -> "JobSpec | None":
+    def load(cls, job_id: int) -> JobSpec | None:
         with Session(get_engine()) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:

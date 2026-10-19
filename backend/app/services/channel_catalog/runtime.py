@@ -501,7 +501,7 @@ def maybe_enqueue_for_feed(
         return
     try:
         interval = int(app_settings.load().get("metadata_sync_interval_hours") or 24)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         interval = 24
     cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
 
@@ -636,7 +636,7 @@ def refresh_stale_catalogs() -> None:
         return
     try:
         interval = int(app_settings.load().get("metadata_sync_interval_hours") or 24)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         interval = 24
     cutoff = datetime.now(UTC) - timedelta(hours=max(1, interval))
     with Session(get_engine()) as session:

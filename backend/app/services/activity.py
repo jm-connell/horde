@@ -215,7 +215,7 @@ def track(
     total: int | None = None,
     done: int | None = None,
     group: str | None = None,
-) -> Generator[ActivityHandle, None, None]:
+) -> Generator[ActivityHandle]:
     handle = start(
         kind,
         label,

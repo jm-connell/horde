@@ -260,7 +260,7 @@ async def queue_events(request: Request) -> StreamingResponse:
 
     guard = StreamAuthGuard.of(request)
 
-    async def event_stream() -> AsyncGenerator[str, None]:
+    async def event_stream() -> AsyncGenerator[str]:
         last_payloads: dict[int, Any] = {}
         while not shutdown_requested(request):
             alive = await guard.tick()
@@ -719,7 +719,7 @@ async def job_events(job_id: int, request: Request) -> StreamingResponse:
 
     guard = StreamAuthGuard.of(request)
 
-    async def event_stream() -> AsyncGenerator[str, None]:
+    async def event_stream() -> AsyncGenerator[str]:
         last_payload = None
         ticks = 0
         while not shutdown_requested(request):

@@ -154,7 +154,7 @@ def stream_chat_events(
     message: str,
     user_id: int,
     authorized: Authorized | None = None,
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     """SSE generator that owns its DB session for the full stream lifetime."""
     with Session(get_engine()) as session:
         yield from stream_chat(session, video_id, message, user_id, authorized)
@@ -245,7 +245,7 @@ def stream_chat(
     message: str,
     user_id: int,
     authorized: Authorized | None = None,
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     """Yield SSE event strings for a chat turn about a library video."""
     yield from run_chat_turn(
         session, _LibraryChat(video_id, user_id), message, user_id, authorized
@@ -258,7 +258,7 @@ def run_chat_turn(
     message: str,
     user_id: int,
     authorized: Authorized | None = None,
-) -> Generator[str, None, None]:
+) -> Generator[str]:
     """Yield SSE event strings for a chat turn.
 
     Events:

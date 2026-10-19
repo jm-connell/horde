@@ -211,7 +211,7 @@ def probe_media(path: Path) -> MediaProbe | None:
         if result.returncode != 0:
             return None
         data = json.loads(result.stdout)
-    except (subprocess.SubprocessError, ValueError, OSError, json.JSONDecodeError):
+    except subprocess.SubprocessError, ValueError, OSError, json.JSONDecodeError:
         return None
     video_codec: str | None = None
     audio_codec: str | None = None
