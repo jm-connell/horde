@@ -64,6 +64,10 @@ test("a video opens from its card and the actions menu works without a mouse", a
   await page.keyboard.press("Enter");
   const menu = page.getByRole("menu", { name: "Video actions" });
   await expect(menu).toBeVisible();
+  // Focus moves in once the menu has expanded; Enter before that hits the trigger.
+  await expect(
+    menu.getByRole("menuitem", { name: "Edit details" })
+  ).toBeFocused();
   // Enter on "Edit details" opens the form; Escape in the form leaves the page usable.
   await page.keyboard.press("Enter");
   await expect(
