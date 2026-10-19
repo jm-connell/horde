@@ -86,7 +86,7 @@ def main(argv: list[str]) -> int:
     for line in found:
         print(f"stale lock: {line}", file=sys.stderr)
     print(
-        "Regenerate it: uv pip compile --generate-hashes --python-version 3.12 "
+        "Regenerate it: uv pip compile --generate-hashes --python-version 3.14 "
         "backend/requirements.txt -o backend/requirements.lock "
         "(see docs/development/dependencies.md)",
         file=sys.stderr,
