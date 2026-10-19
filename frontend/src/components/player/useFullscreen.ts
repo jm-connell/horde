@@ -12,8 +12,8 @@ import {
  * can be told apart.
  */
 export function useFullscreen(
-  playerRootRef: RefObject<HTMLDivElement>,
-  videoRef: RefObject<HTMLVideoElement>
+  playerRootRef: RefObject<HTMLDivElement | null>,
+  videoRef: RefObject<HTMLVideoElement | null>
 ) {
   const userInitiatedFullscreen = useRef(false);
   const [isNativeFullscreen, setIsNativeFullscreen] = useState(false);

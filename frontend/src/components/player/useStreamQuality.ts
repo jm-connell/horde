@@ -21,7 +21,7 @@ import {
 import type { StreamType } from "../videoPlayerTypes";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
   src: string;
   streamType: StreamType;

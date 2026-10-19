@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, type RefObject } from "react";
 import { HOLD_DELAY_MS } from "./constants";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   isMini: boolean;
   isMobile: boolean;
   rate: number;

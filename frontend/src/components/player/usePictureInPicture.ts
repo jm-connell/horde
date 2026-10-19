@@ -5,7 +5,7 @@ import { useCallback, useEffect, type RefObject } from "react";
  * entering PiP when the tab is hidden mid-playback (leaving it on return).
  */
 export function usePictureInPicture(
-  videoRef: RefObject<HTMLVideoElement>,
+  videoRef: RefObject<HTMLVideoElement | null>,
   isMobile: boolean
 ) {
   const enterPiP = useCallback(async () => {

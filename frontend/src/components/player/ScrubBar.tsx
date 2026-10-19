@@ -7,7 +7,7 @@ import { useSeekSprites } from "./useSeekSprites";
 
 interface Props {
   /** The pointer-handling track; the player also uses it to lift captions. */
-  scrubberRef: RefObject<HTMLDivElement>;
+  scrubberRef: RefObject<HTMLDivElement | null>;
   videoId?: number;
   current: number;
   duration: number;

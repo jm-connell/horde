@@ -21,7 +21,7 @@ const MENU_GAP_PX = 4;
 export function useFlipMenu(
   open: boolean,
   estimatedHeight = 280
-): { flip: Flip; anchorRef: RefObject<HTMLDivElement> } {
+): { flip: Flip; anchorRef: RefObject<HTMLDivElement | null> } {
   const [flip, setFlip] = useState<Flip>("up");
   const anchorRef = useRef<HTMLDivElement>(null!);
 

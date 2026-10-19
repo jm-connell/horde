@@ -10,7 +10,7 @@ import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 import type { StreamType, SubtitleSource, ViewMode } from "../videoPlayerTypes";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   shakaPlayerRef: RefObject<ShakaPlayer | null>;
   src: string;
   tracks: SubtitleSource[];

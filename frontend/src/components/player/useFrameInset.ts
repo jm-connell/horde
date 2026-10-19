@@ -6,7 +6,7 @@ import type { ViewMode } from "../videoPlayerTypes";
  */
 export function useFrameInset(
   onFrameInsetChange: ((inset: number) => void) | undefined,
-  videoRef: RefObject<HTMLVideoElement>,
+  videoRef: RefObject<HTMLVideoElement | null>,
   {
     isMini,
     isNativeFullscreen,
