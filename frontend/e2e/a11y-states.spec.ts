@@ -21,7 +21,7 @@ test("an open playlist with the add-video search has no serious accessibility vi
 test("the user editor with its permission list has no serious accessibility violations", async ({
   page,
 }) => {
-  await page.goto("/settings?tab=users");
+  await page.goto("/account");
   await page.getByRole("button", { name: "Edit member", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "Save account type" })

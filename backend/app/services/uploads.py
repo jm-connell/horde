@@ -27,7 +27,7 @@ GB = 1024 * MB
 
 FONT_MAX_BYTES = 8 * MB
 BACKGROUND_MAX_BYTES = 100 * MB
-IMAGE_MAX_BYTES = 15 * MB  # video thumbnails and playlist covers
+IMAGE_MAX_BYTES = 15 * MB  # video thumbnails, playlist covers, profile pictures
 
 #: Most files kept in each user-asset folder (fonts, backgrounds).
 MAX_STORED_FONTS = 50

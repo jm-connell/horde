@@ -45,7 +45,13 @@ def prepare(ctx: AppContext, mode: str) -> None:
     paths = ctx.paths
     paths.data.mkdir(parents=True, exist_ok=True)
     _empty_dir(paths.downloads)
-    for extra in (paths.thumbnails, paths.sprites, paths.backgrounds, paths.fonts):
+    for extra in (
+        paths.thumbnails,
+        paths.sprites,
+        paths.backgrounds,
+        paths.fonts,
+        paths.avatars,
+    ):
         _empty_dir(extra)
 
     init_db(engine)
@@ -154,6 +160,7 @@ def _seed_accounts(engine) -> None:
             account.is_admin = is_admin
             account.disabled = False
             account.permissions = permissions.dump(wanted)
+            account.avatar_version = None
             session.add(account)
         session.commit()
 

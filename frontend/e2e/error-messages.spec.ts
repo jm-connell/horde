@@ -6,7 +6,7 @@ import { expect, test } from "./fixtures";
 test("refusing to delete the last administrator shows the server's reason in a toast", async ({
   page,
 }) => {
-  await page.goto("/settings?tab=users");
+  await page.goto("/account");
   await page.getByRole("button", { name: "Edit admin", exact: true }).click();
   await page.getByRole("button", { name: "Delete user" }).click();
   const dialog = page.getByRole("dialog", { name: "Delete admin?" });
@@ -25,7 +25,8 @@ test("refusing to delete the last administrator shows the server's reason in a t
 test("adding a user with a taken name shows the reason next to the form", async ({
   page,
 }) => {
-  await page.goto("/settings?tab=users");
+  await page.goto("/account");
+  await page.getByRole("button", { name: "Add a user" }).click();
   await page.getByLabel("Username").fill("member");
   await page.getByLabel("Password", { exact: true }).fill("another-password");
   await page.getByRole("button", { name: "Add user" }).click();

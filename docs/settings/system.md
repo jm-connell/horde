@@ -2,13 +2,9 @@
 
 Controls under **Settings → System** (`?tab=system`). This tab is mostly **status and actions** — it does not own many persisted preference keys (catalog/AI pause reuse settings from [Library](library.md) and [AI](ai.md)).
 
-## Update notice
+## Updates
 
-When GitHub reports a newer commit than this install:
-
-- Banner shows current → latest short SHAs
-- **How to update** — TrueNAS/Dockge `bash update.sh` guidance, hard-refresh tip, link to the latest commit
-- **Check again** / **Dismiss** — dismiss stores the SHA in `localStorage` (`horde.settings.updateDismissedSha`) so the same version stays quiet
+The first section of the tab shows this install's version and, when GitHub reports a newer one, **Update available** with the latest version or commit and a link to its release notes (or the commit). **Check for updates** checks again now. With the [update button](../getting-started/updating.md#update-from-the-app) set up, **Update now** installs it; otherwise the section explains how to set the button up or run `bash update.sh` on the server.
 
 See also [Updating](../getting-started/updating.md).
 

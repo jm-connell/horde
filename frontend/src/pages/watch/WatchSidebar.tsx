@@ -2,6 +2,7 @@ import type { Ref } from "react";
 import { Link } from "react-router-dom";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import PlaybackQueue from "../../components/PlaybackQueue";
+import QueueButton from "../../components/QueueButton";
 import VideoCard from "../../components/VideoCard";
 import { formatDuration } from "../../utils";
 import type { RelatedItem } from "./relatedItems";
@@ -42,7 +43,13 @@ export function WatchSidebar({
                 to={v.href}
                 className="group flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
               >
-                <div className="aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
+                <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
+                  {v.queueEntry && (
+                    <QueueButton
+                      entry={v.queueEntry}
+                      className="right-1 top-1 px-1.5 py-0.5 text-[11px]"
+                    />
+                  )}
                   {v.thumb ? (
                     <img
                       decoding="async"
@@ -122,7 +129,8 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
             to={v.href}
             className="group block min-w-0 rounded-lg transition-colors hover:bg-ink-800"
           >
-            <div className="aspect-video w-full overflow-hidden rounded-lg bg-ink-800">
+            <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-ink-800">
+              {v.queueEntry && <QueueButton entry={v.queueEntry} />}
               {v.thumb ? (
                 <img
                   decoding="async"

@@ -352,6 +352,17 @@ class ChannelFeedEntry(BaseModel):
     match_reason: SearchMatchReason | None = None
 
 
+class NextPartRead(BaseModel):
+    """The upload that clearly continues a video (same series), if there is one.
+
+    ``entry`` is None when the channel's next upload is not clearly the next
+    part, or the channel is unknown; ``reason`` says why it matched.
+    """
+
+    entry: ChannelFeedEntry | None = None
+    reason: str | None = None
+
+
 class StreamRelatedPage(BaseModel):
     """Related videos for a stream: library and not-downloaded ones, marked.
 
@@ -646,6 +657,8 @@ class AuthUserRead(BaseModel):
     username: str
     is_admin: bool
     permissions: list[str]
+    #: Profile picture cache key; None when there is none.
+    avatar_version: int | None = None
 
 
 class AuthState(BaseModel):
@@ -667,6 +680,17 @@ class BootstrapRequest(BaseModel):
 
 class AuthLoginResult(BaseModel):
     user: AuthUserRead
+
+
+class ForgotPasswordRequest(BaseModel):
+    username: str = Field(max_length=200)
+
+
+class PasswordResetRequest(BaseModel):
+    username: str = Field(max_length=200)
+    #: The code from the server log; case, spaces and dashes do not matter.
+    code: str = Field(max_length=64)
+    new_password: str = Field(max_length=2000)
 
 
 class PasswordChange(BaseModel):
@@ -695,6 +719,8 @@ class UserRead(BaseModel):
     permissions: list[str]
     created_at: datetime
     last_login_at: datetime | None = None
+    #: Profile picture cache key; None when there is none.
+    avatar_version: int | None = None
 
 
 class UserCreate(BaseModel):

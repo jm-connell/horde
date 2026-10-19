@@ -201,6 +201,12 @@ export interface Settings {
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;
+  /**
+   * After a video ends, play the channel's next upload when it clearly
+   * continues the series, even if it is not downloaded (before any related
+   * video).
+   */
+  autoplayNextPart: boolean;
   /** Single-character player shortcuts (WCAG 2.1.4: must be switchable off). */
   playerShortcuts: boolean;
   /** Muted thumbnail preview on mouse hover (desktop / fine pointer). */

@@ -20,12 +20,15 @@ export default function WatchInfoPanels({
   ai,
   queueVisible,
   sidebarShown,
+  columnBounded,
   onVideoUpdated,
 }: {
   source: WatchSource;
   ai: WatchAi;
   queueVisible: boolean;
   sidebarShown: boolean;
+  /** The page column already has a readable width (sidebar or theater). */
+  columnBounded: boolean;
   onVideoUpdated: (video: Video) => void;
 }) {
   const { can } = useAuth();
@@ -43,9 +46,9 @@ export default function WatchInfoPanels({
       className={
         !sidebarShown && queueVisible
           ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
-          : // Without the sidebar the column can be ~116rem wide; keep the
-            // description and AI panel at a readable width.
-            `mt-4 space-y-4 ${sidebarShown ? "" : "max-w-5xl"}`
+          : // An unbounded column can be ~116rem wide; keep the description
+            // and AI panel at a readable width.
+            `mt-4 space-y-4 ${columnBounded ? "" : "max-w-5xl"}`
       }
     >
       <div className="min-w-0 space-y-4">

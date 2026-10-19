@@ -298,6 +298,7 @@ _UPLOAD_LIMITS: tuple[tuple[re.Pattern[str], Callable[[], int]], ...] = (
     (re.compile(r"/api/backgrounds"), lambda: uploads.BACKGROUND_MAX_BYTES),
     (re.compile(r"/api/videos/\d+/thumbnail"), lambda: uploads.IMAGE_MAX_BYTES),
     (re.compile(r"/api/playlists/\d+/thumbnail"), lambda: uploads.IMAGE_MAX_BYTES),
+    (re.compile(r"/api/auth/avatar"), lambda: uploads.IMAGE_MAX_BYTES),
     (re.compile(r"/api/review/upload"), uploads.max_video_upload_bytes),
 )
 

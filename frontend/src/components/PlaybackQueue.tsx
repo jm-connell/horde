@@ -5,6 +5,11 @@ import {
   usePlaybackActions,
   usePlaybackSession,
 } from "../context/PlaybackContext";
+import {
+  isQueuedStream,
+  queueKey,
+  type QueueEntry,
+} from "../context/playbackQueue";
 
 interface Props {
   className?: string;
@@ -40,9 +45,15 @@ export default function PlaybackQueue({
 
   if (queue.length === 0) return null;
 
-  const play = (video: (typeof queue)[number]) => {
-    playVideo(video);
-    navigate(`/watch/${video.id}`);
+  const play = (entry: QueueEntry) => {
+    if (isQueuedStream(entry)) {
+      // Not downloaded: its watch page loads and plays it.
+      removeFromQueue(queueKey(entry));
+      navigate(entry.href);
+    } else {
+      playVideo(entry);
+      navigate(`/watch/${entry.id}`);
+    }
     onPlay?.();
   };
 
@@ -92,10 +103,11 @@ export default function PlaybackQueue({
           }`}
         >
           {queue.map((v, index) => {
-            const thumb = thumbnailUrl(v);
+            const stream = isQueuedStream(v);
+            const thumb = stream ? v.thumbnail : thumbnailUrl(v);
             return (
               <li
-                key={v.id}
+                key={queueKey(v)}
                 draggable
                 onDragStart={() => (dragIndex.current = index)}
                 onDragOver={(e) => e.preventDefault()}
@@ -131,12 +143,20 @@ export default function PlaybackQueue({
                       />
                     )}
                   </div>
-                  <span className="min-w-0 flex-1 line-clamp-2 text-sm leading-snug text-gray-200">
-                    {v.title}
+                  <span className="min-w-0 flex-1">
+                    <span className="line-clamp-2 text-sm leading-snug text-gray-200">
+                      {v.title}
+                    </span>
+                    {stream && (
+                      <span className="text-[11px] text-muted">
+                        Not downloaded
+                        {v.channel ? ` · ${v.channel}` : ""}
+                      </span>
+                    )}
                   </span>
                 </button>
                 <button
-                  onClick={() => removeFromQueue(v.id)}
+                  onClick={() => removeFromQueue(queueKey(v))}
                   className="shrink-0 px-2 text-muted hover:text-accent"
                   title="Remove"
                 >

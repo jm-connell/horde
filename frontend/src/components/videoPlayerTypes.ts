@@ -19,6 +19,8 @@ export interface UpNext {
   channel: string | null;
   poster: string | null;
   seconds: number;
+  /** A short line under the channel, e.g. "Next part · not downloaded". */
+  note?: string | null;
 }
 
 export interface VideoPlayerProps {

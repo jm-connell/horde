@@ -1,10 +1,10 @@
 # Search
 
-Horde uses a **single search box** on the Library home page, plus a separate **channel-page search** when a channel is open. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever AI search indexes are available.
+Horde uses a **single search box** in the top navigation bar, on every page, plus a separate **channel-page search** when a channel is open. There is no separate Search screen and no UI toggle for “semantic” vs “keyword” mode — hybrid ranking runs on the backend whenever AI search indexes are available.
 
 ## Where to search
 
-Open the [Library](library.md) (`/`) and type in the search field in the toolbar (desktop) or the mobile search control. Library and catalog results update as you type (debounced). A compact **YT** control inside the home search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
+Type in the search field in the navigation bar, just left of your account button (on narrow screens, tap the search icon). Typing on any other page, or on a channel page, takes you to the [Library](library.md) home page with the results. Library and catalog results update as you type (debounced). A compact **YT** control inside the search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
 On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [Direct YouTube search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from home **YouTube video search**.
 

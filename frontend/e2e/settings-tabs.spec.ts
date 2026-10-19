@@ -11,7 +11,6 @@ test("the tab bar moves with the arrow keys and keeps the chosen tab", async ({
     "Playback",
     "AI",
     "System",
-    "Users",
   ]);
   await tabs.getByRole("tab", { name: "Appearance" }).focus();
   await page.keyboard.press("ArrowRight");
@@ -21,12 +20,15 @@ test("the tab bar moves with the arrow keys and keeps the chosen tab", async ({
   );
   await expect(page.getByText("Progress expiry")).toBeVisible();
   await page.keyboard.press("End");
-  await expect(tabs.getByRole("tab", { name: "Users" })).toBeFocused();
-  await expect(page.locator('[data-horde="users-tab"]')).toBeVisible();
+  await expect(tabs.getByRole("tab", { name: "System" })).toBeFocused();
+  await expect(page.getByRole("tabpanel")).toHaveAttribute(
+    "aria-labelledby",
+    "settings-tab-system"
+  );
 
   // The last tab is remembered when Settings is opened without a deep link.
   await page.goto("/settings");
-  await expect(tabs.getByRole("tab", { name: "Users" })).toHaveAttribute(
+  await expect(tabs.getByRole("tab", { name: "System" })).toHaveAttribute(
     "aria-selected",
     "true"
   );

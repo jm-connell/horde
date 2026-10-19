@@ -247,7 +247,7 @@ sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose --profile ai up -d
 
 ## Update notices in the UI
 
-Settings → System → Updates can show a quiet notice when a newer version is available (dismissible until a still-newer one appears). When the [update button](#update-from-the-app) is set up, the notice sits next to **Update now**; otherwise it just tells you to update. The check runs at most once a day and fails silently when GitHub is unreachable. The notice only informs: nothing is installed until an administrator presses the button or runs `update.sh`.
+Settings → System → Updates shows **Update available** next to the version when a newer one exists, with a link to what changed. When the [update button](#update-from-the-app) is set up, **Update now** sits below it; otherwise the section tells you how to update. The check runs at most once a day and fails silently when GitHub is unreachable. The notice only informs: nothing is installed until an administrator presses the button or runs `update.sh`.
 
 - When the image has a release version baked in (`HORDE_VERSION`, set for tagged releases and by `update.sh` from your nearest `v*` tag), Horde compares it with the **latest GitHub release**.
 - Otherwise, or while the repository has no releases, it compares the baked commit SHA with `main` and **ignores** commits by the `github-actions[bot]` stats bot and changes that only touch docs, so a daily bot commit no longer shows up as an update.

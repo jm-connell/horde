@@ -59,6 +59,11 @@ export default function UpNextOverlay({
               {upNext.channel}
             </p>
           )}
+          {upNext.note && (
+            <p className="mt-0.5 truncate text-xs text-accent/80">
+              {upNext.note}
+            </p>
+          )}
           <div
             className={`flex flex-wrap items-center gap-3 ${
               compact ? "mt-3" : "mt-4"

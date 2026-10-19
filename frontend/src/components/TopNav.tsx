@@ -62,6 +62,9 @@ const OFFLINE_LINK: NavLinkDef = {
   end: false,
 };
 
+/** Search box and account button before the desktop layout has been measured. */
+const DESKTOP_RIGHT_ESTIMATE_PX = 380;
+
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
 
@@ -118,6 +121,8 @@ export default function TopNav() {
   const headerRowRef = useRef<HTMLDivElement>(null);
   const brandRef = useRef<HTMLAnchorElement>(null);
   const tagRef = useRef<HTMLDivElement>(null);
+  /** Width of the desktop right side, last time it was laid out. */
+  const desktopRightW = useRef<number | null>(null);
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -197,12 +202,20 @@ export default function TopNav() {
       const row = headerRowRef.current;
       if (!measure || !row) return;
       const brandW = brandRef.current?.offsetWidth ?? 110;
-      const tagW = tagRef.current?.offsetWidth ?? 0;
+      // Judge "fits" against the desktop right side (connection tag, search
+      // box, account) in both modes. In hamburger mode that side is not
+      // rendered; measuring what is there instead made the two modes disagree
+      // and flip back and forth across a band of window widths.
+      const right = tagRef.current;
+      if (right?.dataset.navRight === "desktop") {
+        desktopRightW.current = right.offsetWidth;
+      }
+      const rightW =
+        desktopRightW.current ??
+        (right?.offsetWidth ?? 0) + DESKTOP_RIGHT_ESTIMATE_PX;
       const gap = 16;
       const menuW = 48;
-      const searchW = 48;
-      const available =
-        row.clientWidth - brandW - tagW - menuW - searchW - gap * 3;
+      const available = row.clientWidth - brandW - rightW - menuW - gap * 3;
       setUseHamburger(measure.scrollWidth > available - 4);
     };
     check();
@@ -267,6 +280,17 @@ export default function TopNav() {
     if (location.pathname !== "/" || location.search) {
       navigate({ pathname: "/", search: "" });
     }
+  };
+
+  // Search lives in the nav on every page; results are the home page's, so
+  // typing anywhere else, or on a `?channel=` page, goes home (Library closes a
+  // channel opened from the sidebar itself). A tag filter on home is kept.
+  const onSearchInput = (value: string) => {
+    setSearch(value);
+    const onHome =
+      location.pathname === "/" &&
+      !new URLSearchParams(location.search).has("channel");
+    if (!onHome) navigate("/");
   };
 
   const closeSearch = () => {
@@ -409,9 +433,33 @@ export default function TopNav() {
           {!useHamburger && (
             <div
               ref={tagRef}
+              data-nav-right="desktop"
               className="ml-auto flex shrink-0 pl-4 empty:hidden"
             >
               <ConnectionTag popupAlign="end" />
+              <div
+                data-horde="nav-search"
+                className="relative mr-2 w-44 self-center xl:w-60"
+              >
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(e) => onSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      commitSearch();
+                    } else if (e.key === "Escape") {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  placeholder="Search"
+                  enterKeyHint="search"
+                  aria-label="Search library"
+                  className="ui-panel w-full rounded-lg border border-ink-700 bg-ink-900 py-1.5 pl-3 pr-8 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
+                />
+                <YoutubeSearchChip />
+              </div>
               <AccountMenu variant="dropdown" />
             </div>
           )}
@@ -428,7 +476,7 @@ export default function TopNav() {
                     ref={searchInputRef}
                     type="search"
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    onChange={(e) => onSearchInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();

@@ -2,7 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { VideoAiChatMessage } from "../types";
 import { formatUsdCost } from "../utils";
 import type { AiChatApi } from "./aiTarget";
+import { useIsMobile } from "../hooks/useIsMobile";
+import {
+  clampPanelHeight,
+  panelHeightRange,
+  usePanelSize,
+} from "../hooks/usePanelSize";
 import AiMarkdown from "./AiMarkdown";
+import ResizeHandle from "./ResizeHandle";
+
+/** Smallest height the message input can be dragged to, in rem. */
+const MIN_INPUT_REM = 2.5;
 import TypingDots from "./TypingDots";
 
 interface Props {
@@ -52,6 +62,12 @@ export default function VideoAiChat({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
+  // Dragging the chat box's bottom edge sizes the message input; the thread
+  // above keeps its own height.
+  const [inputHeight, setInputHeight, commitInputHeight] =
+    usePanelSize("aiChatInput");
+  const inputFixed = !isMobile && inputHeight != null ? inputHeight : null;
   const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // The latest operations, read by the effects below without re-running them.
@@ -253,7 +269,7 @@ export default function VideoAiChat({
   if (!active) return null;
 
   return (
-    <div className="ui-panel isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
+    <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
       {threadCostLabel && (
         <div className="flex items-center justify-end border-b border-ink-800/80 px-3 py-1">
           <span
@@ -370,6 +386,7 @@ export default function VideoAiChat({
               }
             }}
             rows={2}
+            style={inputFixed != null ? { height: inputFixed } : undefined}
             disabled={sending}
             placeholder="Ask this video…"
             className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden"
@@ -404,6 +421,21 @@ export default function VideoAiChat({
           )}
         </form>
       </div>
+      {!isMobile && (
+        <ResizeHandle
+          axis="y"
+          label="Resize chat"
+          className="absolute inset-x-0 bottom-0 h-2"
+          getStart={() => inputRef.current?.getBoundingClientRect().height ?? 0}
+          toValue={(start, delta) =>
+            clampPanelHeight(start + delta, MIN_INPUT_REM)
+          }
+          onChange={setInputHeight}
+          onCommit={commitInputHeight}
+          onReset={() => commitInputHeight(null)}
+          {...panelHeightRange(MIN_INPUT_REM)}
+        />
+      )}
     </div>
   );
 }
