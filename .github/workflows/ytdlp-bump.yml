@@ -47,7 +47,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Is there a newer yt-dlp?
         id: version
@@ -79,7 +79,7 @@ jobs:
         run: |
           python -m pip install uv==0.13.1
           sed -i -E "s/^yt-dlp==.*/yt-dlp==${LATEST}/" backend/requirements.txt
-          uv pip compile --generate-hashes --python-version 3.12 \
+          uv pip compile --generate-hashes --python-version 3.14 \
             backend/requirements.txt -o backend/requirements.lock \
             --upgrade-package yt-dlp
           git diff --stat
@@ -139,11 +139,11 @@ jobs:
           git diff --stat
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Regenerate the lock (resolution only, no package code runs)
         run: |
           python -m pip install uv==0.13.1
-          uv pip compile --generate-hashes --python-version 3.12 \
+          uv pip compile --generate-hashes --python-version 3.14 \
             backend/requirements.txt -o backend/requirements.lock \
             --upgrade-package yt-dlp
           git diff --stat -- backend/requirements.lock
