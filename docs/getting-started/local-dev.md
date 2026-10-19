@@ -7,7 +7,7 @@ Run the FastAPI backend and Vite frontend on your machine for UI and API work. C
 
 ## Prerequisites
 
-- Python 3 with `venv`
+- Python 3.14 with `venv` (the backend uses 3.14-only syntax; the Docker image and CI run 3.14)
 - Node.js and npm
 - Git (you need a clone of this repo)
 - `curl` (Linux/macOS helper scripts wait on `/api/health`)
