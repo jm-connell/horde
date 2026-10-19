@@ -9,7 +9,7 @@ produces the same software as a rebuild today.
 | Frontend deps | `frontend/package.json` and `frontend/package-lock.json` | `npm ci` |
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
 | Base images | `Dockerfile` `FROM` lines | exact version tag plus `@sha256` digest |
-| Node / Python in CI | `.nvmrc` (22) and `.github/workflows` | same major as the Dockerfile |
+| Node / Python in CI | `.nvmrc` (24) and `.github/workflows` | same major as the Dockerfile |
 
 The Docker image installs the lock file with `pip install --require-hashes`, so a
 tampered or unexpectedly changed package fails the build instead of shipping.
@@ -67,4 +67,4 @@ npm ci            # exact install from the lock file (what CI and Docker do)
 npm audit --omit=dev --audit-level=high
 ```
 
-Node 22 is required (`engines` in `package.json`, `.nvmrc` at the repo root).
+Node 24 is required (`engines` in `package.json`, `.nvmrc` at the repo root).
