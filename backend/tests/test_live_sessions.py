@@ -209,6 +209,62 @@ def test_dvr_probe_extends_the_playlist_back_to_what_youtube_keeps():
     run(go())
 
 
+class SplitYouTube(FakeYouTube):
+    """Video-only and audio-only formats (how YouTube serves most broadcasts
+    now); every fetch yields so concurrent playlist requests interleave."""
+
+    def info(self) -> dict[str, Any]:
+        info = super().info()
+        manifest = info["formats"][0]["url"]
+        info["formats"] = [
+            {
+                "format_id": "232",
+                "protocol": "m3u8_native",
+                "url": manifest.replace("/itag/95/", "/itag/232/"),
+                "vcodec": "avc1.4D401F",
+                "acodec": "none",
+                "height": 720,
+                "width": 1280,
+                "tbr": 2400,
+            },
+            {
+                "format_id": "234",
+                "protocol": "m3u8_native",
+                "url": manifest.replace("/itag/95/", "/itag/234/"),
+                "vcodec": "none",
+                "acodec": None,
+            },
+        ]
+        return info
+
+    async def fetch(
+        self, url: str, headers: dict[str, str], stream: bool
+    ) -> httpx.Response:
+        await asyncio.sleep(0)
+        return await super().fetch(url, headers, stream)
+
+
+def test_split_audio_and_video_playlists_start_at_the_same_segment():
+    async def go():
+        yt, clock = SplitYouTube(head=1000, window=4, dvr_floor=600), Clock()
+        s = _session(yt, clock, dvr_sec=3600)
+        assert "v/234.m3u8" in s.master() and 'AUDIO="audio"' in s.master()
+        # The player asks for both playlists at once; the second must not
+        # render before the DVR probe the first one started has finished.
+        video, audio = await asyncio.gather(s.media("232"), s.media("234"))
+        first = [
+            int(ln.split(":")[1])
+            for ln in (video, audio)
+            for ln in ln.splitlines()
+            if ln.startswith("#EXT-X-MEDIA-SEQUENCE:")
+        ]
+        assert first[0] == first[1] == s.dvr_floor
+        assert "../seg/234/1000.aac" in audio
+        assert "../seg/232/1000.ts" in video
+
+    run(go())
+
+
 def test_dvr_window_is_capped_and_starts_at_zero_for_a_young_stream():
     async def go():
         yt, clock = FakeYouTube(head=50, window=4), Clock()

@@ -230,10 +230,6 @@ class _Variant:
     fetched_at: float = 0.0
     advanced_at: float = 0.0
     rendered: str | None = None
-    #: The lowest MEDIA-SEQUENCE this variant's playlist has shown. HLS players
-    #: map sequence numbers to time from the first playlist they load, so a
-    #: later playlist must never start earlier than that (RFC 8216 6.2.2).
-    start_floor: int | None = None
     #: Consecutive stall refreshes without the head moving (backs the watchdog off).
     stalls: int = 0
 
@@ -258,6 +254,12 @@ class LiveSession:
         self.variants = {k: _Variant(upstream=u) for k, u in upstreams.items()}
         self.ended = False
         self.dvr_floor: int | None = None
+        #: The lowest MEDIA-SEQUENCE any playlist may start at. HLS players map
+        #: sequence numbers to time from the first playlist they load, so a later
+        #: playlist must never start earlier (RFC 8216 6.2.2). It is shared: with
+        #: a separate audio rendition the player reads two playlists at once, and
+        #: they must start at the same segment for the timelines to line up.
+        self.start_floor: int | None = None
         self.template_ok: bool | None = None
         self.generation = 0
         self._fetch = fetcher
@@ -267,6 +269,8 @@ class LiveSession:
         self._resolve_lock = asyncio.Lock()
         self._resolved_at = clock()
         self._probed_at: float | None = None
+        #: The first DVR probe; every variant's first playlist waits for it.
+        self._first_probe: asyncio.Future[None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self.last_access = clock()
 
@@ -312,6 +316,8 @@ class LiveSession:
             )
 
     def close(self) -> None:
+        if self._first_probe is not None:
+            self._first_probe.cancel()
         for task in list(self._tasks):
             task.cancel()
         self._tasks.clear()
@@ -363,13 +369,18 @@ class LiveSession:
             if playlist is not None:
                 self._ingest(variant, playlist, now)
             if self._probed_at is None and self._should_probe(now) and variant.template:
-                # The first playlist must already carry the DVR window: adding
-                # earlier segments later would move MEDIA-SEQUENCE backwards.
                 self._probed_at = now
+                self._first_probe = asyncio.ensure_future(self._probe_dvr(variant))
+            if self._first_probe is not None and not self._first_probe.done():
+                # The first playlists must already carry the DVR window: adding
+                # earlier segments later would move MEDIA-SEQUENCE backwards.
                 try:
-                    await asyncio.wait_for(self._probe_dvr(variant), _FIRST_PROBE_SEC)
+                    await asyncio.wait_for(
+                        asyncio.shield(self._first_probe), _FIRST_PROBE_SEC
+                    )
                 except TimeoutError:
                     logger.warning("live stream %s: DVR probe timed out", self.video_id)
+                    self._first_probe.cancel()
             self._maybe_refresh_urls(variant, now)
             variant.rendered = self._render(variant)
             variant.fetched_at = now
@@ -451,9 +462,7 @@ class LiveSession:
         entries: list[tuple[int, float]] = []
         if head is not None:
             floor = (
-                min(variant.start_floor, head)
-                if variant.start_floor is not None
-                else None
+                min(self.start_floor, head) if self.start_floor is not None else None
             )
             if self.template_ok and self.dvr_floor is not None and variant.template:
                 start = max(self.dvr_floor, head - self._window_segments(target))
@@ -475,7 +484,7 @@ class LiveSession:
                     sq -= 1
                 entries.reverse()
         if entries:
-            variant.start_floor = entries[0][0]
+            self.start_floor = max(self.start_floor or 0, entries[0][0])
         ext = "aac" if variant.upstream.audio else "ts"
         return hls.render_media(
             entries,
