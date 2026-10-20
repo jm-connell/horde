@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { FollowedChannel, LiveChannel } from "../types";
+import type { ChannelFeedEntry, FollowedChannel, LiveChannel } from "../types";
 import { queryKeys } from "./keys";
 
 const NO_FOLLOWS: FollowedChannel[] = [];
@@ -56,4 +56,32 @@ export function useLiveNow({ enabled }: { enabled: boolean }) {
     refetchIntervalInBackground: false,
   });
   return { ...query, live: query.data?.items ?? NO_LIVE };
+}
+
+/**
+ * The broadcast a channel is live with right now, as a feed entry (null when
+ * it is not live). Re-checked every two minutes while the page is open.
+ */
+export function useChannelLive(url: string | null) {
+  const query = useQuery({
+    queryKey: queryKeys.live.channel(url ?? ""),
+    queryFn: ({ signal }) => api.getChannelLive(url ?? "", { signal }),
+    enabled: Boolean(url),
+    staleTime: 60_000,
+    refetchInterval: 120_000,
+    refetchIntervalInBackground: false,
+  });
+  const live = query.data?.live ?? null;
+  const entry: ChannelFeedEntry | null = live
+    ? {
+        id: live.video_id,
+        url: live.watch_url,
+        title: live.title ?? null,
+        thumbnail_url: live.thumbnail_url,
+        view_count: null,
+        in_library: false,
+        live_status: "is_live",
+      }
+    : null;
+  return { ...query, live, entry };
 }

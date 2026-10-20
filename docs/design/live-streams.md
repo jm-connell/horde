@@ -22,18 +22,20 @@ The `live-poller` worker (`services/live/directory.py`) checks every channel tha
 - A failed check keeps the previous answer. A live entry that has not been confirmed for 20 minutes is dropped.
 - Following a channel checks it at once, so the list does not wait for the next pass.
 - `GET /api/live` reads this directory, filtered to the user's follows. The SPA polls it every 60 s, and only while **Show live streams** is on.
+- `GET /api/live/channel?url=` answers for one channel (its channel page). It reads the directory when the channel's last check is recent (a followed channel), and otherwise checks the channel's `/live` page once and keeps the answer for two minutes. The channel page shows the broadcast as the first card, marked **LIVE**.
 
 ## Playing: the HLS proxy
 
-YouTube serves live broadcasts as HLS: MPEG-TS segments with audio and video muxed together. yt-dlp's PO-token guide notes that live HLS does not need a PO token (the iOS client aside), which is what makes this path more dependable than adaptive playback of normal videos. The browser cannot fetch YouTube's URLs itself, because they are bound to the server's IP and send no CORS headers. So the server proxies everything (`api/live.py`, `services/live/sessions.py`):
+YouTube serves live broadcasts as HLS. Older broadcasts come as MPEG-TS variants with audio and video muxed together; most now come as video-only TS variants plus audio-only formats (itags 233/234) whose segments are packed AAC with an ID3 timestamp. The session uses the muxed variants when there are any, otherwise the video-only variants with the best audio-only format as one shared audio rendition (`EXT-X-MEDIA TYPE=AUDIO` in the master playlist). yt-dlp's PO-token guide notes that live HLS does not need a PO token (the iOS client aside), which is what makes this path more dependable than adaptive playback of normal videos. The browser cannot fetch YouTube's URLs itself, because they are bound to the server's IP and send no CORS headers. So the server proxies everything (`api/live.py`, `services/live/sessions.py`):
 
 | URL | Served from |
 |---|---|
 | `/api/live/{id}/master.m3u8` | A master playlist Horde writes from yt-dlp's HLS formats, one variant per height |
 | `/api/live/{id}/v/{key}.m3u8` | YouTube's variant playlist, re-rendered with Horde segment URIs and the DVR window |
-| `/api/live/{id}/seg/{key}/{sq}.ts` | The segment, streamed through from googlevideo |
+| `/api/live/{id}/seg/{key}/{sq}.ts` | A video (or muxed) segment, streamed through from googlevideo |
+| `/api/live/{id}/seg/{key}/{sq}.aac` | A segment of the separate audio rendition (`audio/aac`) |
 
-One `LiveSession` per broadcast is shared by every viewer. Sessions live on `AppContext.live` and are closed after 10 idle minutes. The player is Shaka's HLS build (`useShakaDash` with `live`), which transmuxes TS in the browser.
+One `LiveSession` per broadcast is shared by every viewer. Sessions live on `AppContext.live` and are closed after 10 idle minutes. The player is Shaka's HLS build (`useShakaDash` with `live`), which transmuxes TS and packed AAC in the browser.
 
 ### What keeps it stable
 
@@ -45,7 +47,7 @@ One `LiveSession` per broadcast is shared by every viewer. Sessions live on `App
 
 ### Scrubbing back (DVR)
 
-Every YouTube segment URL carries its sequence number (`/sq/<n>/`). Segments of a broadcast stay addressable by number for as long as YouTube keeps its DVR window. After the first playlist, the session builds a template from the newest segment URL (`hls.segment_template`). It then probes how far back the broadcast still serves segments, trying the full window, then half, a quarter and so on, one request each. Once probed, playlists list every segment from that point (capped at `HORDE_LIVE_DVR_HOURS`, default 4 hours) to the live edge. Earlier segments are fetched through the template, signed with the current extraction's URL. The probe repeats every 30 minutes.
+Every YouTube segment URL carries its sequence number (`/sq/<n>/`), the same number across a broadcast's audio and video formats. Segments of a broadcast stay addressable by number for as long as YouTube keeps its DVR window. After the first playlist, the session builds a template from the newest segment URL (`hls.segment_template`). It then probes how far back the broadcast still serves segments, trying the full window, then half, a quarter and so on, one request each. Every variant's first playlist waits for that one probe, and all playlists share one start floor: with a separate audio rendition the player reads two playlists at once and lines them up by sequence number, so they must start at the same segment. Once probed, playlists list every segment from that point (capped at `HORDE_LIVE_DVR_HOURS`, default 4 hours) to the live edge. Earlier segments are fetched through the template, signed with the current extraction's URL. The probe repeats every 30 minutes.
 
 When the probe finds nothing (a broadcast with DVR turned off, or a URL layout without a sequence number), the playlist lists what the session has seen since it opened. The stream still plays; it just cannot go back further than that.
 

@@ -83,7 +83,7 @@ You can play a remote YouTube URL in the same shell (`/watch?url=…`) to previe
 
 ## Live streams
 
-Follow channels (automatically for channels you download from, or by URL / `@handle`) and a small **Live** list in the sidebar shows which are live, with title and game. Live streams play through a server-side HLS proxy that refreshes YouTube's URLs on its own, and you can scrub back up to 4 hours by default. Toggle it in **Settings → Library → Show live streams**. Details: [Live streams](design/live-streams.md).
+Follow channels (automatically for channels you download from, or by URL / `@handle`) and a small **Live** list in the sidebar shows which are live, with title and game. A channel's page leads with its current broadcast, and its **Live** tab lists past streams to watch or download (with a storage warning for streams over two hours). Live streams play through a server-side HLS proxy that refreshes YouTube's URLs on its own, and you can scrub back up to 4 hours by default. Toggle it in **Settings → Library → Show live streams**. Details: [Live streams](design/live-streams.md).
 
 ## Playlists
 

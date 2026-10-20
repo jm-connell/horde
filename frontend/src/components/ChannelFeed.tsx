@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
+import { api, type ChannelTab } from "../api";
 import ChannelDownloadPanel from "./ChannelDownloadPanel";
 import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useConfirm } from "../context/ConfirmContext";
+import {
+  isLongStream,
+  isPastStream,
+  longStreamConfirm,
+} from "../utils/longStream";
 import {
   feedSearchStatusLabel,
   formatSearchMatchCount,
@@ -137,6 +143,8 @@ export default function ChannelFeed({
   feedOrder,
   feedLayout,
   showUndownloaded,
+  tab = "videos",
+  liveEntry = null,
   catalogIndexing = false,
   queueDockedBottom = false,
   directYoutubeSearch = false,
@@ -149,6 +157,10 @@ export default function ChannelFeed({
   feedOrder: "asc" | "desc";
   feedLayout: FeedLayout;
   showUndownloaded: boolean;
+  /** Uploads, or the channel's live streams (past and current). */
+  tab?: ChannelTab;
+  /** The channel's current broadcast, shown first on the uploads tab. */
+  liveEntry?: ChannelFeedEntry | null;
   catalogIndexing?: boolean;
   queueDockedBottom?: boolean;
   directYoutubeSearch?: boolean;
@@ -195,6 +207,21 @@ export default function ChannelFeed({
 
   const [panelDismissed, setPanelDismissed] = useState(false);
   const isMobile = useIsMobile();
+  const confirm = useConfirm();
+  const streamsTab = tab === "streams";
+
+  const requestDownload = useCallback(
+    async (entry: ChannelFeedEntry) => {
+      if (
+        isLongStream(isPastStream(entry.live_status), entry.duration) &&
+        !(await confirm(longStreamConfirm(entry.duration ?? 0)))
+      ) {
+        return;
+      }
+      queueDownload(entry);
+    },
+    [confirm, queueDownload]
+  );
 
   const softLiveRefresh = useCallback(async () => {
     if (!channelUrl && !channel) return;
@@ -291,6 +318,7 @@ export default function ChannelFeed({
           offset,
           limit: PAGE_SIZE,
           live: false,
+          tab,
         });
         setEntries((prev) =>
           append ? [...prev, ...page.entries] : page.entries
@@ -302,7 +330,7 @@ export default function ChannelFeed({
         if (!append && usedCatalog) {
           void softLiveRefresh();
         }
-        if (!append) {
+        if (!append && !streamsTab) {
           const needsMeta = page.entries.some(
             (e) =>
               e.view_count == null ||
@@ -322,7 +350,7 @@ export default function ChannelFeed({
         setLoadingMore(false);
       }
     },
-    [channel, channelUrl, softLiveRefresh, softMetaRefresh]
+    [channel, channelUrl, tab, streamsTab, softLiveRefresh, softMetaRefresh]
   );
 
   useEffect(() => {
@@ -365,7 +393,7 @@ export default function ChannelFeed({
     searchAbort.current?.abort();
     searchAbort.current = null;
 
-    if (!q) {
+    if (!q || streamsTab) {
       setSearchEntries(null);
       setLibrarySearchEntries(null);
       setYoutubeEntries([]);
@@ -499,12 +527,19 @@ export default function ChannelFeed({
       if (searchTimer.current) clearTimeout(searchTimer.current);
       searchAbort.current?.abort();
     };
-  }, [feedSearch, channel, channelUrl, directYoutubeSearch]);
+  }, [feedSearch, channel, channelUrl, directYoutubeSearch, streamsTab]);
 
   const filteredEntries = useMemo(() => {
     const q = feedSearch.trim();
     let list: ChannelFeedEntry[];
-    if (!q) {
+    if (streamsTab) {
+      // The streams tab has no catalog to search: filter what is loaded. The
+      // server already marks streams that are in the library.
+      const needle = q.toLowerCase();
+      list = needle
+        ? entries.filter((e) => e.title?.toLowerCase().includes(needle))
+        : entries;
+    } else if (!q) {
       list = mergeFeedWithLibrary(entries, libraryEntries);
     } else if (searchEntries != null || librarySearchEntries != null) {
       list = mergeFeedWithLibrary(
@@ -515,6 +550,7 @@ export default function ChannelFeed({
       list = [];
     }
     if (
+      !streamsTab &&
       q &&
       youtubeEntries.length &&
       (searchEntries != null || librarySearchEntries != null)
@@ -523,16 +559,29 @@ export default function ChannelFeed({
     }
     if (!showUndownloaded) {
       list = list.filter(
-        (e) => e.in_library || e.video_id != null || resolveVideoId(e) != null
+        (e) =>
+          e.live_status === "is_live" ||
+          e.in_library ||
+          e.video_id != null ||
+          resolveVideoId(e) != null
       );
     }
-    return applyChannelFeedSort(
+    const sorted = applyChannelFeedSort(
       list,
       feedSort,
       feedOrder,
-      q ? "search" : "browse"
+      q && !streamsTab ? "search" : "browse"
     );
+    // A channel that is live now leads with its broadcast, whatever the sort.
+    const live =
+      (!streamsTab && !q ? liveEntry : null) ??
+      sorted.find((e) => e.live_status === "is_live") ??
+      null;
+    if (!live) return sorted;
+    return [live, ...sorted.filter((e) => e !== live && e.id !== live.id)];
   }, [
+    streamsTab,
+    liveEntry,
     entries,
     libraryEntries,
     librarySearchEntries,
@@ -545,7 +594,8 @@ export default function ChannelFeed({
     resolveVideoId,
   ]);
 
-  const canLoadMore = hasMore && !feedSearch.trim() && !loading && !loadingMore;
+  const canLoadMore =
+    hasMore && (streamsTab || !feedSearch.trim()) && !loading && !loadingMore;
 
   useEffect(() => {
     const el = loadMoreRef.current;
@@ -570,8 +620,9 @@ export default function ChannelFeed({
     q.length > 0 &&
     filteredEntries.length === 0 &&
     (searchBusy || youtubeLoading);
-  const indexIncomplete = q.length > 0 && (catalogIndexing || searchIndexing);
-  const showFeedLoading = Boolean(loading && channelUrl && !q);
+  const indexIncomplete =
+    q.length > 0 && !streamsTab && (catalogIndexing || searchIndexing);
+  const showFeedLoading = Boolean(loading && channelUrl && (!q || streamsTab));
   const showSearchBanner =
     q.length > 0 &&
     !waitingForFirstHits &&
@@ -650,7 +701,9 @@ export default function ChannelFeed({
               ? "Try a different search term."
               : !channelUrl
                 ? "No YouTube URL is known for this channel yet."
-                : "This channel has no public uploads, or they could not be loaded."}
+                : streamsTab
+                  ? "This channel has no public live streams, or they could not be loaded."
+                  : "This channel has no public uploads, or they could not be loaded."}
           </p>
         </div>
       ) : (
@@ -678,8 +731,10 @@ export default function ChannelFeed({
                   inLibrary={inLibrary}
                   videoId={videoId ?? undefined}
                   downloading={!inLibrary && isDownloading(entry)}
-                  onDownload={() => queueDownload(entry)}
-                  skipRemotePreview={fromCatalog}
+                  onDownload={() => void requestDownload(entry)}
+                  skipRemotePreview={
+                    fromCatalog || entry.live_status === "is_live"
+                  }
                   searchQuery={feedSearch}
                 />
               );

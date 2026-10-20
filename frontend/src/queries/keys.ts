@@ -60,6 +60,7 @@ export const queryKeys = {
   },
   live: {
     now: ["live", "now"] as const,
+    channel: (url: string) => ["live", "channel", url] as const,
   },
   playlists: {
     all: ["playlists"] as const,

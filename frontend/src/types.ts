@@ -37,6 +37,7 @@ export type FollowList = S["FollowListResponse"];
 export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
+export type ChannelLive = S["ChannelLiveResponse"];
 export type StorageStats = S["StorageStats"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];

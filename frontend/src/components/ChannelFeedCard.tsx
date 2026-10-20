@@ -120,7 +120,9 @@ function FeedMetaRow({
         {stats || "\u00a0"}
       </span>
       <div className="flex h-6 min-w-0 items-center gap-2 max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:self-center">
-        {inLibrary ? (
+        {entry.live_status === "is_live" ? (
+          <LiveNowLabel />
+        ) : inLibrary ? (
           <span className="text-xs font-medium leading-none text-emerald-400">
             Downloaded
           </span>
@@ -148,10 +150,23 @@ function FeedMetaRow({
   );
 }
 
+function LiveNowLabel() {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold leading-none text-red-400">
+      <span
+        aria-hidden
+        className="h-2 w-2 animate-pulse rounded-full bg-red-500 motion-reduce:animate-none"
+      />
+      Live now
+    </span>
+  );
+}
+
 function FeedThumbnail({
   thumbSrc,
   duration,
   className,
+  live = false,
   showDuration = true,
   matchTip,
   previewSrc,
@@ -164,6 +179,8 @@ function FeedThumbnail({
   thumbSrc: string | null;
   duration: string;
   className: string;
+  /** A broadcast that is live right now: a LIVE badge instead of the length. */
+  live?: boolean;
   showDuration?: boolean;
   matchTip?: string | null;
   previewSrc?: string | null;
@@ -213,7 +230,13 @@ function FeedThumbnail({
             ▶
           </span>
         </div>
-        {showDuration && duration && (
+        {live && (
+          <span className="pointer-events-none absolute bottom-2 right-2 z-20 inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold tracking-wide text-white">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white" />
+            LIVE
+          </span>
+        )}
+        {!live && showDuration && duration && (
           <span
             className={`pointer-events-none absolute right-2 z-20 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ${
               previewing ? "bottom-3.5" : "bottom-2"
@@ -254,6 +277,7 @@ export default function ChannelFeedCard({
   onChannelClick?: (hit: { name: string; url: string | null }) => void;
 }) {
   const { can } = useAuth();
+  const isLive = entry.live_status === "is_live";
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement | null>(null);
@@ -374,10 +398,15 @@ export default function ChannelFeedCard({
 
   const cardInner =
     layout === "list" ? (
-      <div className="group flex w-full gap-3 rounded-xl bg-ink-900 p-2.5 ring-1 ring-ink-700">
+      <div
+        className={`group flex w-full gap-3 rounded-xl bg-ink-900 p-2.5 ${
+          isLive ? "ring-2 ring-red-500/70" : "ring-1 ring-ink-700"
+        }`}
+      >
         <FeedThumbnail
           thumbSrc={thumbSrc}
           duration={duration}
+          live={isLive}
           showDuration={false}
           className="h-18 w-32 shrink-0 rounded-lg"
           matchTip={matchTip}
@@ -411,7 +440,9 @@ export default function ChannelFeedCard({
             </p>
           </div>
           <div className="flex h-full min-h-18 shrink-0 flex-col items-end justify-between py-0.5 pl-3">
-            {!inLibrary ? (
+            {isLive ? (
+              <LiveNowLabel />
+            ) : !inLibrary ? (
               can("download") ? (
                 <button
                   type="button"
@@ -440,10 +471,15 @@ export default function ChannelFeedCard({
         </div>
       </div>
     ) : (
-      <div className="ui-card video-card--feed group flex h-full flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 sm:ring-1 sm:ring-ink-700">
+      <div
+        className={`ui-card video-card--feed group flex h-full flex-col overflow-hidden max-sm:rounded-none max-sm:bg-transparent max-sm:ring-0 sm:rounded-xl sm:bg-ink-900 ${
+          isLive ? "sm:ring-2 sm:ring-red-500/70" : "sm:ring-1 sm:ring-ink-700"
+        }`}
+      >
         <FeedThumbnail
           thumbSrc={thumbSrc}
           duration={duration}
+          live={isLive}
           className="aspect-video w-full"
           matchTip={matchTip}
           previewSrc={previewSrc}

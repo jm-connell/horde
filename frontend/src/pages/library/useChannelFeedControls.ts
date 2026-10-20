@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import type { ChannelTab } from "../../api";
 import { loadFeedLayout, saveFeedLayout } from "../libraryStorage";
 
 export type FeedSort = "recent" | "popular";
@@ -10,8 +11,10 @@ export function useChannelFeedControls(activeChannel: string | null) {
   const [feedSort, setFeedSort] = useState<FeedSort>("recent");
   const [feedOrder, setFeedOrder] = useState<"asc" | "desc">("desc");
   const [feedLayout, setFeedLayoutState] = useState<FeedLayout>(loadFeedLayout);
+  const [channelTab, setChannelTab] = useState<ChannelTab>("videos");
 
   useEffect(() => {
+    setChannelTab("videos");
     setFeedSearch("");
     setFeedSort("recent");
     setFeedOrder("desc");
@@ -34,5 +37,7 @@ export function useChannelFeedControls(activeChannel: string | null) {
     toggleFeedOrder,
     feedLayout,
     setFeedLayout,
+    channelTab,
+    setChannelTab,
   };
 }

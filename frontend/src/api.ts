@@ -20,6 +20,7 @@ import type {
   FollowedChannel,
   FollowList,
   LiveList,
+  ChannelLive,
   UnfollowResult,
   DownloadJob,
   DownloadOverrides,
@@ -328,7 +329,11 @@ export interface ChannelFeedQuery {
   limit?: number;
   /** When true, fetch/merge from YouTube (slower). Default prefers local catalog. */
   live?: boolean;
+  /** The channel tab: uploads (default) or past and current live streams. */
+  tab?: ChannelTab;
 }
+
+export type ChannelTab = "videos" | "streams";
 
 export const api = {
   getAuthState(): Promise<AuthState> {
@@ -1062,6 +1067,13 @@ export const api = {
 
   getLiveNow(opts?: ReadOptions): Promise<LiveList> {
     return request<LiveList>("/api/live", opts);
+  },
+
+  getChannelLive(url: string, opts?: ReadOptions): Promise<ChannelLive> {
+    return request<ChannelLive>(
+      `/api/live/channel?url=${encodeURIComponent(url)}`,
+      opts
+    );
   },
 
   extractBackgroundPalette(

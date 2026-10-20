@@ -6,9 +6,11 @@ import { queryKeys } from "../../queries/keys";
 import { videoDetailQuery } from "../../queries/videos";
 import { isActiveJob, useDownloads } from "../../context/DownloadContext";
 import { usePlaybackActions } from "../../context/PlaybackContext";
+import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
 import { PRESET_ORDER, resolveQualityPreset } from "../../presets";
 import { downloadProgressPercent } from "../../utils";
+import { isLongStream, longStreamConfirm } from "../../utils/longStream";
 import { setWatchResume } from "../../utils/watchHandoff";
 import type { WatchSource } from "./useWatchVideo";
 
@@ -44,6 +46,7 @@ export function useStreamDownload({
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast, showError } = useToast();
+  const confirm = useConfirm();
   const { onJobCompleted, submitDownload, changeJobQuality, progress, jobs } =
     useDownloads();
   const { playVideo, getStreamPosition } = usePlaybackActions();
@@ -213,6 +216,15 @@ export function useStreamDownload({
   async function handleStreamDownload() {
     if (source?.kind !== "stream" || queuing) return;
     setPresetMenuOpen(false);
+    const { was_live: wasLive, duration } = source.meta;
+    if (
+      isLongStream(Boolean(wasLive), duration) &&
+      !(await confirm(
+        longStreamConfirm(duration ?? 0, presetSizes[selectedPreset])
+      ))
+    ) {
+      return;
+    }
     setQueuing(true);
     try {
       const job = await submitDownload(source.url, selectedPreset, {
