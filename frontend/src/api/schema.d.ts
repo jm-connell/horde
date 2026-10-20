@@ -1139,7 +1139,9 @@ export interface paths {
          * @description Whether one channel is live right now (for its channel page).
          *
          *     Answered from the background checks when they are recent (followed
-         *     channels), otherwise by reading the channel's ``/live`` page once.
+         *     channels), otherwise by reading the channel's ``/live`` page once. Nothing
+         *     is fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused
+         *     after YouTube rate-limited them.
          */
         get: operations["channel_live_api_live_channel_get"];
         put?: never;

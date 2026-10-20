@@ -22,7 +22,7 @@ The `live-poller` worker (`services/live/directory.py`) checks every channel tha
 - A failed check keeps the previous answer. A live entry that has not been confirmed for 20 minutes is dropped.
 - Following a channel checks it at once, so the list does not wait for the next pass.
 - `GET /api/live` reads this directory, filtered to the user's follows. The SPA polls it every 60 s, and only while **Show live streams** is on.
-- `GET /api/live/channel?url=` answers for one channel (its channel page). It reads the directory when the channel's last check is recent (a followed channel), and otherwise checks the channel's `/live` page once and keeps the answer for two minutes. The channel page shows the broadcast as the first card, marked **LIVE**.
+- `GET /api/live/channel?url=` answers for one channel (its channel page). It reads the directory when the channel's last check is recent (a followed channel), and otherwise checks the channel's `/live` page once and keeps the answer for two minutes. It fetches nothing while live checks are off or paused after a 429, and a broadcast not confirmed for 20 minutes is not reported. YouTube URLs only. The channel page shows the broadcast as the first card, marked **LIVE**.
 
 ## Playing: the HLS proxy
 

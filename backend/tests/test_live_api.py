@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,6 +10,7 @@ import httpx
 import pytest
 
 from app.services import follows
+from app.services.live.directory import STALE_LIVE_SEC
 from app.services.live.page import LiveBroadcast
 
 VID = "abcdefghijk"
@@ -166,6 +168,67 @@ def test_channel_live_is_null_when_not_live_or_the_check_fails(
     monkeypatch.setattr("app.api.live.check_channel", boom)
     body = client.get("/api/live/channel", params={"url": MEMBER_CHAN}).json()
     assert body == {"live": None}
+
+
+def test_channel_live_survives_a_ytdlp_failure(client, directory, monkeypatch):
+    def boom(url):
+        raise RuntimeError("ERROR: [youtube] Sign in to confirm")
+
+    monkeypatch.setattr("app.api.live.check_channel", boom)
+    resp = client.get("/api/live/channel", params={"url": OTHER_CHAN})
+    assert resp.status_code == 200
+    assert resp.json() == {"live": None}
+
+
+def test_channel_live_drops_a_broadcast_no_check_has_confirmed_lately(
+    client, directory, monkeypatch
+):
+    directory.record(OTHER_CHAN, "Other", _broadcast())
+    state = directory.get(OTHER_CHAN)
+    assert state is not None
+    old = state.confirmed_at - STALE_LIVE_SEC - 60
+    directory.seed([replace(state, confirmed_at=old)])  # checked_at stays fresh
+    body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+    assert body == {"live": None}
+
+
+def test_channel_live_backs_off_after_a_429(client, directory, monkeypatch):
+    from app.services.url_safety import UrlFetchError
+
+    calls: list[str] = []
+
+    def limited(url):
+        calls.append(url)
+        raise UrlFetchError("HTTP 429")
+
+    monkeypatch.setattr("app.api.live.check_channel", limited)
+    client.get("/api/live/channel", params={"url": OTHER_CHAN})
+    client.get("/api/live/channel", params={"url": MEMBER_CHAN})
+    assert calls == [OTHER_CHAN]  # paused after the first
+    assert directory.paused_until > 0
+
+
+def test_channel_live_fetches_nothing_when_checks_are_off(
+    client, directory, monkeypatch
+):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("live checks are off")
+
+    monkeypatch.setattr("app.api.live.LIVE_POLL_SEC", 0)
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+    assert body == {"live": None}
+    assert directory.get(OTHER_CHAN) is None
+
+
+def test_channel_live_refuses_other_hosts(client, monkeypatch):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("not a YouTube URL")
+
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    resp = client.get("/api/live/channel", params={"url": "https://example.com/@x"})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "invalid_url"
 
 
 def test_channel_live_rejects_a_non_url(client):

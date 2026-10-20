@@ -30,7 +30,12 @@ from ..openapi_responses import RAW, media_response
 from ..schemas import ChannelLiveResponse, LiveChannelRead, LiveListResponse
 from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
-from ..services.live.directory import ChannelLiveState, check_channel
+from ..services.live.directory import (
+    RATE_LIMIT_BACKOFF_SEC,
+    STALE_LIVE_SEC,
+    ChannelLiveState,
+    check_channel,
+)
 from ..services.live.sessions import (
     LiveNotAvailable,
     LiveSegmentMissing,
@@ -38,6 +43,7 @@ from ..services.live.sessions import (
     LiveUpstreamError,
 )
 from ..services.url_safety import UnsafeUrlError, UrlFetchError
+from ..services.ytdlp_extract import is_youtube_url
 from .preview import _send_validated, get_preview_client
 
 router = APIRouter(prefix="/api/live", tags=["live"])
@@ -102,27 +108,51 @@ async def channel_live(
     """Whether one channel is live right now (for its channel page).
 
     Answered from the background checks when they are recent (followed
-    channels), otherwise by reading the channel's ``/live`` page once.
+    channels), otherwise by reading the channel's ``/live`` page once. Nothing
+    is fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused
+    after YouTube rate-limited them.
     """
     channel_url = follows.normalize_channel_url(url)
-    if not channel_url:
-        raise CodedHTTPException(400, "Not a channel URL", "invalid_url")
+    if not channel_url or not is_youtube_url(channel_url):
+        raise CodedHTTPException(400, "Not a YouTube channel URL", "invalid_url")
     directory = get_ctx(request).live.directory
     state = directory.get(channel_url)
-    fresh = state is not None and time.time() - state.checked_at < max(
+    now = time.time()
+    fresh = state is not None and now - state.checked_at < max(
         CHANNEL_CHECK_FRESH_SEC, float(LIVE_POLL_SEC)
     )
-    if not fresh and not e2e_mode.enabled():
+    may_fetch = (
+        LIVE_POLL_SEC > 0 and now >= directory.paused_until and not e2e_mode.enabled()
+    )
+    if not fresh and may_fetch:
+        name = state.channel_name if state else None
         try:
             async with request.app.state.ytdlp_slots.slot():
                 broadcast = await run_in_threadpool(check_channel, channel_url)
-        except (UrlFetchError, UnsafeUrlError):
-            logger.debug("live check failed for %s", channel_url, exc_info=True)
-            directory.record_failure(channel_url, None)
+        except UrlFetchError as exc:
+            directory.record_failure(channel_url, name)
+            if "429" in str(exc):
+                directory.paused_until = time.time() + RATE_LIMIT_BACKOFF_SEC
+                logger.warning(
+                    "YouTube rate-limited live checks; pausing them for %s minutes",
+                    RATE_LIMIT_BACKOFF_SEC // 60,
+                )
+            else:
+                logger.debug("live check failed for %s", channel_url, exc_info=True)
+        except UnsafeUrlError:
+            directory.record_failure(channel_url, name)
+            logger.debug("live check refused for %s", channel_url, exc_info=True)
+        except Exception:
+            # The page fallback runs yt-dlp, which fails in its own ways.
+            directory.record_failure(channel_url, name)
+            logger.warning("live check failed for %s", channel_url, exc_info=True)
         else:
-            directory.record(channel_url, None, broadcast)
+            directory.record(channel_url, name, broadcast)
         state = directory.get(channel_url)
-    return ChannelLiveResponse(live=_live_read(state) if state else None)
+    if state is None or time.time() - state.confirmed_at > STALE_LIVE_SEC:
+        # Never confirmed, or failed checks kept an old answer too long.
+        return ChannelLiveResponse(live=None)
+    return ChannelLiveResponse(live=_live_read(state))
 
 
 # --- HLS proxy -----------------------------------------------------------------

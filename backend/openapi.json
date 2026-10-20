@@ -12227,7 +12227,7 @@
     },
     "/api/live/channel": {
       "get": {
-        "description": "Whether one channel is live right now (for its channel page).\n\nAnswered from the background checks when they are recent (followed\nchannels), otherwise by reading the channel's ``/live`` page once.",
+        "description": "Whether one channel is live right now (for its channel page).\n\nAnswered from the background checks when they are recent (followed\nchannels), otherwise by reading the channel's ``/live`` page once. Nothing\nis fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused\nafter YouTube rate-limited them.",
         "operationId": "channel_live_api_live_channel_get",
         "parameters": [
           {
