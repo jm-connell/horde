@@ -7,6 +7,73 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-20
+
+### Upgrade notes
+
+- **Building from source now needs Python 3.14 and Node 24.** The image,
+  CI and docs all moved from Python 3.12 and Node 22 to Python 3.14 and Node
+  24 LTS. The Docker image needs no action: `docker compose pull && docker
+  compose up -d` picks it up.
+- The database gains a column for profile pictures (migration
+  `0009_user_avatars`, a plain `ADD COLUMN`). It runs on its own at startup.
+  Pictures are stored under `DATA_DIR/avatars/`.
+
+### Added
+
+- Profile pictures. Everyone can set a picture for their own account; it is
+  shown next to their name.
+- A "Forgot password?" link on the sign-in page. It writes a one-time code to
+  the server log (`docker logs horde`); the code and a new password reset the
+  account. Codes last 15 minutes and allow 5 wrong guesses. See
+  [docs/ops/authentication.md](docs/ops/authentication.md).
+- Videos that are not downloaded yet can be queued: "+ Queue" appears on the
+  watch page's related videos and on channel feed and search cards.
+- An opt-in setting, "Autoplay the next part", plays the channel's next upload
+  when it clearly continues the series you just finished, downloaded or not.
+- Channel pages show a live broadcast first, with a LIVE badge, and have a
+  Videos / Live switch that lists the channel's past streams. Downloading a
+  past stream longer than 2 hours asks first and shows the estimated size.
+- Desktop users can resize the watch page panels, and the AI chat input grows
+  from the box edge.
+
+### Changed
+
+- React 19. Menus, dialogs and the player behave the same; report anything
+  that does not.
+- Account settings moved to `/account`, and search moved into the navigation
+  bar.
+- In theater mode the video details sit centred under the player. On very
+  wide screens with the related sidebar off, the AI panel and description sit
+  side by side.
+- The Recommended home tab hides the sort controls, and video cards and
+  thumbnails fade in as pages load.
+- The volume slider's level uses the accent colour, and the System tab's update
+  banner is part of the Updates section.
+- Opening the page of a YouTube channel you do not follow checks whether it is
+  live: at most one YouTube `/live` page fetch per channel every 2 minutes,
+  skipped when live checks are off or paused after a 429.
+
+### Fixed
+
+- Live streams that YouTube serves as separate audio and video (most
+  broadcasts now) play again, with sound. They answered "This video is not
+  live right now". Seeking back in the DVR window keeps audio and video in
+  step.
+- The Vite dev proxy keeps the browser's `Host` header, so the dev server no
+  longer fails the CSRF origin check.
+
+### Security
+
+- YouTube URLs are matched by exact host (`youtube.com`, `*.youtube.com`,
+  `youtu.be`), so hosts such as `notyoutube.com` or
+  `youtube.com.evil.example` are no longer treated as YouTube.
+- The Ollama and OpenRouter connection tests no longer return raw exception
+  text, which could include internal URLs or upstream responses. They give a
+  short reason and log the details.
+- certifi is now 2026.10.19
+  ([GHSA-6q48-6c7w-9gw2](https://github.com/advisories/GHSA-6q48-6c7w-9gw2)).
+
 ## [1.0.1] - 2026-10-18
 
 ### Changed
@@ -292,6 +359,7 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.1...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.2...main
+[1.0.2]: https://github.com/jm-connell/horde/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/jm-connell/horde/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/jm-connell/horde/commits/v1.0.0
