@@ -265,6 +265,65 @@ def test_split_audio_and_video_playlists_start_at_the_same_segment():
     run(go())
 
 
+def _media_sequence(playlist: str) -> int:
+    return next(
+        int(ln.split(":")[1])
+        for ln in playlist.splitlines()
+        if ln.startswith("#EXT-X-MEDIA-SEQUENCE:")
+    )
+
+
+class SlowProbeYouTube(SplitYouTube):
+    """Segment requests (the DVR probe) take a second."""
+
+    async def fetch(
+        self, url: str, headers: dict[str, str], stream: bool
+    ) -> httpx.Response:
+        if "googlevideo" in url:
+            await asyncio.sleep(1)
+        return await super().fetch(url, headers, stream)
+
+
+def test_a_slow_dvr_probe_does_not_fail_the_other_playlist(monkeypatch):
+    monkeypatch.setattr(live, "_FIRST_PROBE_SEC", 0.2)
+
+    async def go():
+        yt, clock = SlowProbeYouTube(head=1000, window=4, dvr_floor=600), Clock()
+        s = _session(yt, clock, dvr_sec=3600)
+
+        async def later():
+            await asyncio.sleep(0.05)
+            return await s.media("234")
+
+        video, audio = await asyncio.gather(s.media("232"), later())
+        # Both answered (without the DVR window) and start at the same segment.
+        assert _media_sequence(video) == _media_sequence(audio)
+        s.close()
+
+    run(go())
+
+
+def test_a_full_dvr_window_keeps_audio_and_video_aligned():
+    async def go():
+        # The broadcast is older than the window: the probe finds all of it.
+        yt, clock = SplitYouTube(head=1000, window=4, dvr_floor=0), Clock()
+        s = _session(yt, clock, dvr_sec=3600)
+        video = await s.media("232")
+        yt.head += 1
+        clock.now += 10
+        audio = await s.media("234")
+        assert _media_sequence(video) == _media_sequence(audio)
+        # It still slides: far enough on, the start moves forward for both.
+        yt.head += 100
+        clock.now += 10
+        later_video = await s.media("232")
+        later_audio = await s.media("234")
+        assert _media_sequence(later_video) == _media_sequence(later_audio)
+        assert _media_sequence(later_video) > _media_sequence(video)
+
+    run(go())
+
+
 def test_dvr_window_is_capped_and_starts_at_zero_for_a_young_stream():
     async def go():
         yt, clock = FakeYouTube(head=50, window=4), Clock()

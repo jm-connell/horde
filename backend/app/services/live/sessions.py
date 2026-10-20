@@ -53,6 +53,9 @@ _REPROBE_SEC = 30 * 60
 _STALE_PLAYLIST_GRACE_SEC = 30.0
 _MAX_PLAYLIST_BYTES = 4 * 1024 * 1024
 _FIRST_PROBE_SEC = 10.0
+#: A full DVR window slides in steps of this many segments, not one per
+#: playlist, so variants rendered a segment apart still share their start.
+_WINDOW_SLACK_SEGMENTS = 30
 #: Low-latency broadcasts (1-2 s segments) would make a 4 hour playlist huge.
 _MAX_WINDOW_SEGMENTS = 7200
 #: An open that just failed is answered from memory for this long, so a player
@@ -316,8 +319,6 @@ class LiveSession:
             )
 
     def close(self) -> None:
-        if self._first_probe is not None:
-            self._first_probe.cancel()
         for task in list(self._tasks):
             task.cancel()
         self._tasks.clear()
@@ -371,6 +372,8 @@ class LiveSession:
             if self._probed_at is None and self._should_probe(now) and variant.template:
                 self._probed_at = now
                 self._first_probe = asyncio.ensure_future(self._probe_dvr(variant))
+                self._tasks.add(self._first_probe)
+                self._first_probe.add_done_callback(self._task_done)
             if self._first_probe is not None and not self._first_probe.done():
                 # The first playlists must already carry the DVR window: adding
                 # earlier segments later would move MEDIA-SEQUENCE backwards.
@@ -379,8 +382,9 @@ class LiveSession:
                         asyncio.shield(self._first_probe), _FIRST_PROBE_SEC
                     )
                 except TimeoutError:
+                    # Left running (other variants may be waiting on it too);
+                    # the shared start floor keeps later playlists aligned.
                     logger.warning("live stream %s: DVR probe timed out", self.video_id)
-                    self._first_probe.cancel()
             self._maybe_refresh_urls(variant, now)
             variant.rendered = self._render(variant)
             variant.fetched_at = now
@@ -465,9 +469,10 @@ class LiveSession:
                 min(self.start_floor, head) if self.start_floor is not None else None
             )
             if self.template_ok and self.dvr_floor is not None and variant.template:
-                start = max(self.dvr_floor, head - self._window_segments(target))
-                if floor is not None:
-                    start = max(start, floor)
+                window = self._window_segments(target)
+                if floor is None or head - floor > window + _WINDOW_SLACK_SEGMENTS:
+                    floor = max(floor or 0, head - window)
+                start = max(self.dvr_floor, floor)
                 entries = [
                     (
                         sq,
