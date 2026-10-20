@@ -7,6 +7,14 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Security
+
+- Pillow is now 13.0, which fixes out-of-bounds reads, decompression bomb
+  bypasses and other flaws in its image decoders (CVE-2026-112395,
+  CVE-2026-112397, CVE-2026-112400, CVE-2026-112404, CVE-2026-112895,
+  CVE-2026-112896, CVE-2026-112897, CVE-2026-112899). Horde decodes uploaded
+  backgrounds and avatars and downloaded thumbnails with Pillow.
+
 ## [1.0.2] - 2026-10-20
 
 ### Upgrade notes
