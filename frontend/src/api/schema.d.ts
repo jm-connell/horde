@@ -1144,6 +1144,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live/{video_id}/seg/{key}/{sq}.aac": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Audio Segment
+         * @description A segment of the separate audio rendition (packed AAC with an ID3 timestamp).
+         */
+        get: operations["live_audio_segment_api_live__video_id__seg__key___sq__aac_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live/{video_id}/seg/{key}/{sq}.ts": {
         parameters: {
             query?: never;
@@ -8483,6 +8503,48 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_audio_segment_api_live__video_id__seg__key___sq__aac_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Packed AAC audio segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/aac": string;
                 };
             };
             /** @description Validation error */

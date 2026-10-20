@@ -337,6 +337,51 @@ def test_live_without_muxed_hls_formats_is_409(client, upstream, extracted):
     assert resp.json()["code"] == "not_live"
 
 
+def _split_info() -> dict[str, Any]:
+    """How YouTube serves many broadcasts now: video-only TS + audio-only AAC."""
+    info = _info()
+    base = {"protocol": "m3u8_native", "url": MANIFEST}
+    info["formats"] = [
+        {**base, "format_id": "233", "vcodec": "none", "acodec": None},
+        {**base, "format_id": "234", "vcodec": "none", "acodec": None},
+        {
+            **base,
+            "format_id": "232",
+            "vcodec": "avc1.4D401F",
+            "acodec": "none",
+            "height": 720,
+            "width": 1280,
+            "tbr": 2448,
+        },
+    ]
+    return info
+
+
+def test_split_audio_and_video_streams_play(client, upstream, extracted):
+    extracted["info"] = _split_info()
+    master = client.get(f"/api/live/{VID}/master.m3u8")
+    assert master.status_code == 200
+    assert (
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",DEFAULT=YES,'
+        'AUTOSELECT=YES,URI="v/234.m3u8"' in master.text
+    )
+    inf = next(ln for ln in master.text.splitlines() if ln.startswith("#EXT-X-STREAM"))
+    assert 'CODECS="avc1.4D401F,mp4a.40.2"' in inf
+    assert 'AUDIO="audio"' in inf
+    assert _media_lines(master.text) == ["v/232.m3u8"]
+
+    audio = client.get(f"/api/live/{VID}/v/234.m3u8")
+    assert audio.status_code == 200
+    assert _media_lines(audio.text)[-1] == f"../seg/234/{PLAYLIST_HEAD}.aac"
+    video = client.get(f"/api/live/{VID}/v/232.m3u8")
+    assert _media_lines(video.text)[-1] == f"../seg/232/{PLAYLIST_HEAD}.ts"
+
+    seg = client.get(f"/api/live/{VID}/seg/234/101.aac")
+    assert seg.status_code == 200
+    assert seg.headers["content-type"] == "audio/aac"
+    assert seg.content == b"TS101"
+
+
 def test_extraction_failure_is_502(client, upstream, monkeypatch):
     def boom(url: str, *, force: bool = False):
         raise RuntimeError("yt-dlp exploded")

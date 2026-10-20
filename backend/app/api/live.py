@@ -43,6 +43,7 @@ HLS_PLAYLIST = media_response(
     "application/vnd.apple.mpegurl", description="HLS playlist"
 )
 TS_SEGMENT = media_response("video/mp2t", description="MPEG-TS media segment")
+AAC_SEGMENT = media_response("audio/aac", description="Packed AAC audio segment")
 _PLAYLIST_TYPE = "application/vnd.apple.mpegurl"
 _CHUNK = 256 * 1024
 
@@ -161,13 +162,9 @@ async def _close(resp: httpx.Response) -> None:
         logger.debug("closing a live segment response failed", exc_info=True)
 
 
-@router.get("/{video_id}/seg/{key}/{sq}.ts", response_class=RAW, responses=TS_SEGMENT)
-async def live_segment(
-    request: Request,
-    video_id: str = VideoId,
-    key: str = VariantKey,
-    sq: int = Path(..., ge=0),
-):
+async def _segment(
+    request: Request, video_id: str, key: str, sq: int, media_type: str
+) -> StreamingResponse:
     session = await _session(request, video_id)
     try:
         upstream = await session.segment(key, sq)
@@ -191,8 +188,29 @@ async def live_segment(
 
     return StreamingResponse(
         body(),
-        media_type="video/mp2t",
+        media_type=media_type,
         # A segment number always names the same media.
         headers={"Cache-Control": "private, max-age=3600"},
         background=BackgroundTask(_close, upstream),
     )
+
+
+@router.get("/{video_id}/seg/{key}/{sq}.ts", response_class=RAW, responses=TS_SEGMENT)
+async def live_segment(
+    request: Request,
+    video_id: str = VideoId,
+    key: str = VariantKey,
+    sq: int = Path(..., ge=0),
+):
+    return await _segment(request, video_id, key, sq, "video/mp2t")
+
+
+@router.get("/{video_id}/seg/{key}/{sq}.aac", response_class=RAW, responses=AAC_SEGMENT)
+async def live_audio_segment(
+    request: Request,
+    video_id: str = VideoId,
+    key: str = VariantKey,
+    sq: int = Path(..., ge=0),
+):
+    """A segment of the separate audio rendition (packed AAC with an ID3 timestamp)."""
+    return await _segment(request, video_id, key, sq, "audio/aac")

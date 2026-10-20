@@ -131,17 +131,30 @@ class VariantInfo:
     codecs: str | None
 
 
-def render_master(variants: list[VariantInfo]) -> str:
-    """A master playlist whose variant URIs are ``v/<key>.m3u8`` (relative)."""
+def render_master(variants: list[VariantInfo], audio: VariantInfo | None = None) -> str:
+    """A master playlist whose variant URIs are ``v/<key>.m3u8`` (relative).
+
+    ``audio`` is a separate audio-only rendition (YouTube serves split audio and
+    video for many broadcasts); every variant then plays it alongside.
+    """
     lines = ["#EXTM3U", "#EXT-X-VERSION:3", "#EXT-X-INDEPENDENT-SEGMENTS"]
+    if audio is not None:
+        lines.append(
+            '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",'
+            f'DEFAULT=YES,AUTOSELECT=YES,URI="v/{audio.key}.m3u8"'
+        )
     for v in variants:
-        attrs = [f"BANDWIDTH={max(1, v.bandwidth)}"]
+        bandwidth = v.bandwidth + (audio.bandwidth if audio is not None else 0)
+        attrs = [f"BANDWIDTH={max(1, bandwidth)}"]
         if v.width and v.height:
             attrs.append(f"RESOLUTION={v.width}x{v.height}")
-        if v.codecs:
-            attrs.append(f'CODECS="{v.codecs}"')
+        codecs = ",".join(c for c in (v.codecs, audio.codecs if audio else None) if c)
+        if codecs:
+            attrs.append(f'CODECS="{codecs}"')
         if v.fps:
             attrs.append(f"FRAME-RATE={v.fps:.3f}")
+        if audio is not None:
+            attrs.append('AUDIO="audio"')
         lines.append("#EXT-X-STREAM-INF:" + ",".join(attrs))
         lines.append(f"v/{v.key}.m3u8")
     return "\n".join(lines) + "\n"
