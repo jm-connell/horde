@@ -89,7 +89,7 @@ def normalize_openrouter_embed_model(value: Any) -> str:
 def clamp_category_min_score(value: Any) -> float:
     try:
         score = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         score = float(AI_DEFAULTS["category_min_score"])
     return max(_CATEGORY_MIN_SCORE_LO, min(_CATEGORY_MIN_SCORE_HI, score))
 
@@ -111,7 +111,7 @@ def normalize_ai_chapters_mode(value: Any) -> str:
 def clamp_tag_rescan_days(value: Any) -> int:
     try:
         days = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         days = int(AI_DEFAULTS["tag_rescan_days"])
     return max(_TAG_RESCAN_DAYS_LO, min(_TAG_RESCAN_DAYS_HI, days))
 
@@ -122,7 +122,7 @@ def clamp_vram_gb(value: Any) -> float | None:
         return None
     try:
         gb = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if gb <= 0:
         return None
@@ -135,7 +135,7 @@ def clamp_weekly_budget_usd(value: Any) -> float | None:
         return None
     try:
         amount = float(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if amount <= 0 or amount != amount:  # NaN
         return None
@@ -164,7 +164,7 @@ CHANNEL_CATALOG_DESC_LIMIT = 200
 def clamp_catalog_max_videos(value: Any) -> int:
     try:
         n = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         n = int(DEFAULTS["channel_catalog_max_videos"])
     return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
 

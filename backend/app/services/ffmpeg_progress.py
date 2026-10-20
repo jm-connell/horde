@@ -44,7 +44,7 @@ def terminate_process(
                 proc.terminate()
             else:
                 proc.kill()
-        except (ProcessLookupError, PermissionError):
+        except ProcessLookupError, PermissionError:
             return  # already gone
 
     hard_kill = getattr(signal, "SIGKILL", signal.SIGTERM)

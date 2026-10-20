@@ -158,7 +158,7 @@ async def _run(url: str, minutes: float, variant_pick: str | None) -> int:
                 resp = await session.segment(key, session.dvr_floor + 1)
                 dvr_ok = resp.status_code < 400
                 await resp.aclose()
-            except (LiveSegmentMissing, LiveUpstreamError, httpx.HTTPError):
+            except LiveSegmentMissing, LiveUpstreamError, httpx.HTTPError:
                 dvr_ok = False
     finally:
         session.close()

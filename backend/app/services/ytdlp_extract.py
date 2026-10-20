@@ -67,7 +67,7 @@ def _duration_seconds(info: dict[str, Any]) -> float | None:
         return None
     try:
         duration = float(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return duration if duration > 0 else None
 
@@ -79,7 +79,7 @@ def _bitrate_bytes(fmt: dict[str, Any], duration: float | None) -> int | None:
         return None
     try:
         n = int(float(tbr) * 1000 / 8 * float(dur))
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return n if n > 0 else None
 
@@ -89,7 +89,7 @@ def _format_byte_size(fmt: dict[str, Any], duration: float | None = None) -> int
     if exact:
         try:
             n = int(exact)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             n = 0
         if n > 0:
             return n
@@ -98,7 +98,7 @@ def _format_byte_size(fmt: dict[str, Any], duration: float | None = None) -> int
     if approx:
         try:
             parsed = int(approx)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             parsed = 0
         if parsed > 0:
             approx_n = parsed
@@ -288,7 +288,7 @@ def extract_preview(
     if view_count is not None:
         try:
             view_count = int(view_count)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             view_count = None
     from .feed_meta_cache import published_meta_from_entry
 
@@ -346,7 +346,7 @@ def extract_playlist_entries(url: str) -> dict[str, Any]:
         if view_count is not None:
             try:
                 view_count = int(view_count)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 view_count = None
         entries.append(
             {
@@ -419,7 +419,7 @@ def _iter_sized_thumbs(info: dict[str, Any]):
         try:
             width = int(w)
             height = int(h)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             width, height = 0, 0
         yield width, height, url_s
 
@@ -501,7 +501,7 @@ def _short_era_timestamp(entry: dict[str, Any]) -> float | None:
     try:
         if ts is not None:
             return float(ts)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         pass
     published = entry.get("published_at")
     if not isinstance(published, str) or len(published) < 10:
@@ -527,7 +527,7 @@ def is_youtube_short_entry(entry: dict[str, Any]) -> bool:
     duration = entry.get("duration")
     try:
         dur = float(duration) if duration is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         dur = None
     if dur is None or dur <= 0 or dur > 60:
         return False
@@ -571,7 +571,7 @@ def _map_flat_video_entry(entry: dict[str, Any]) -> dict[str, Any] | None:
     if view_count is not None:
         try:
             view_count = int(view_count)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             view_count = None
     from .feed_meta_cache import published_meta_from_entry
 
@@ -604,7 +604,7 @@ def _playlist_count(info: dict[str, Any]) -> int | None:
         return None
     try:
         n = int(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return n if n > 0 else None
 

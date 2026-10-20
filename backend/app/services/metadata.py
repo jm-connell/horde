@@ -33,7 +33,7 @@ def probe_duration(path: Path) -> float | None:
         data = json.loads(result.stdout)
         duration = data.get("format", {}).get("duration")
         return float(duration) if duration is not None else None
-    except (subprocess.SubprocessError, ValueError, OSError):
+    except subprocess.SubprocessError, ValueError, OSError:
         logger.debug("ffprobe duration failed", exc_info=True)
         return None
 
@@ -79,7 +79,7 @@ def probe_is_playable(path: Path) -> bool:
         if duration is None:
             return False
         return float(duration) > 0
-    except (subprocess.SubprocessError, ValueError, OSError):
+    except subprocess.SubprocessError, ValueError, OSError:
         logger.debug("ffprobe playability check failed", exc_info=True)
         return False
 
@@ -114,7 +114,7 @@ def probe_dimensions(path: Path) -> tuple[int, int] | None:
         if width and height:
             return int(width), int(height)
         return None
-    except (subprocess.SubprocessError, ValueError, OSError):
+    except subprocess.SubprocessError, ValueError, OSError:
         logger.debug("ffprobe dimensions failed", exc_info=True)
         return None
 
@@ -151,7 +151,7 @@ def probe_frame_rate(path: Path) -> float | None:
             if int(den):
                 return round(int(num) / int(den), 3)
         return None
-    except (subprocess.SubprocessError, ValueError, OSError, ZeroDivisionError):
+    except subprocess.SubprocessError, ValueError, OSError, ZeroDivisionError:
         logger.debug("ffprobe frame rate failed", exc_info=True)
         return None
 
@@ -169,7 +169,7 @@ def _run_ffmpeg_tracked(
     except FfmpegCancelled:
         logger.debug("ffmpeg cancelled: %s", cmd[-1])
         return False
-    except (subprocess.SubprocessError, OSError):
+    except subprocess.SubprocessError, OSError:
         logger.debug("ffmpeg failed: %s", cmd[-1], exc_info=True)
         return False
     return True
@@ -302,7 +302,7 @@ def load_sprite_meta(sprites_dir: Path, video_id: int) -> dict | None:
     try:
         meta: dict | None = json.loads(path.read_text(encoding="utf-8"))
         return meta
-    except (OSError, json.JSONDecodeError, ValueError):
+    except OSError, json.JSONDecodeError, ValueError:
         logger.debug("sprite metadata unreadable", exc_info=True)
         return None
 
@@ -424,7 +424,7 @@ def _sprite_via_frame_montage(
         image_path.parent.mkdir(parents=True, exist_ok=True)
         sheet.save(image_path, format="JPEG", quality=85)
         return image_path.is_file()
-    except (OSError, ValueError):
+    except OSError, ValueError:
         logger.debug("frame-montage sprite failed", exc_info=True)
         return False
     finally:
@@ -497,7 +497,7 @@ def generate_sprite_sheet(
             if columns > 0 and rows > 0:
                 tile_width = max(1, sheet_w // columns)
                 tile_height = max(1, sheet_h // rows)
-    except (OSError, ImportError, ValueError):
+    except OSError, ImportError, ValueError:
         logger.debug("could not measure the sprite sheet image", exc_info=True)
 
     _write_sprite_meta(

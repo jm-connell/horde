@@ -25,7 +25,7 @@ interface Props {
   onInteractionStart: () => void;
   onInteractionEnd: () => void;
   // Seek bar
-  scrubberRef: RefObject<HTMLDivElement>;
+  scrubberRef: RefObject<HTMLDivElement | null>;
   videoId?: number;
   chapters: Chapter[];
   hoveredChapter: Chapter | null;

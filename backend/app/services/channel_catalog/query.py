@@ -93,7 +93,7 @@ def update_catalog_video_fields(
             if views is not None:
                 try:
                     views_i = int(views)
-                except (TypeError, ValueError):
+                except TypeError, ValueError:
                     views_i = None
                 if views_i is not None and row.view_count != views_i:
                     row.view_count = views_i

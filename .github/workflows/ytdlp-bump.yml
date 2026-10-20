@@ -41,13 +41,13 @@ jobs:
       current: ${{ steps.version.outputs.current }}
       latest: ${{ steps.version.outputs.latest }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           persist-credentials: false
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
 
       - name: Is there a newer yt-dlp?
         id: version
@@ -79,7 +79,7 @@ jobs:
         run: |
           python -m pip install uv==0.13.1
           sed -i -E "s/^yt-dlp==.*/yt-dlp==${LATEST}/" backend/requirements.txt
-          uv pip compile --generate-hashes --python-version 3.12 \
+          uv pip compile --generate-hashes --python-version 3.14 \
             backend/requirements.txt -o backend/requirements.lock \
             --upgrade-package yt-dlp
           git diff --stat
@@ -117,7 +117,7 @@ jobs:
       LATEST: ${{ needs.bump.outputs.latest }}
       CURRENT: ${{ needs.bump.outputs.current }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           token: ${{ secrets.BOT_TOKEN || secrets.GITHUB_TOKEN }}
@@ -139,11 +139,11 @@ jobs:
           git diff --stat
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
-          python-version: "3.12"
+          python-version: "3.14"
       - name: Regenerate the lock (resolution only, no package code runs)
         run: |
           python -m pip install uv==0.13.1
-          uv pip compile --generate-hashes --python-version 3.12 \
+          uv pip compile --generate-hashes --python-version 3.14 \
             backend/requirements.txt -o backend/requirements.lock \
             --upgrade-package yt-dlp
           git diff --stat -- backend/requirements.lock

@@ -103,7 +103,7 @@ def cleanup_device_job_files(job_id: int, device_file_path: str | None = None) -
     try:
         resolved = job_dir.resolve()
         resolved.relative_to(staging)
-    except (OSError, ValueError):
+    except OSError, ValueError:
         return
     if resolved.is_dir():
         shutil.rmtree(resolved, ignore_errors=True)

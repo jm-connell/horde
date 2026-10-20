@@ -11,7 +11,7 @@ import type { StreamType } from "../videoPlayerTypes";
 import { BUFFERING_INDICATOR_DELAY_MS } from "./constants";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
   isSeekingRef: RefObject<boolean>;
   src: string;

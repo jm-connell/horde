@@ -50,7 +50,7 @@ def record_cost(
         return None
     try:
         value = float(cost)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     if value < 0 or value != value:  # NaN
         return None
@@ -94,7 +94,7 @@ def cost_from_usage_payload(usage: Any) -> float | None:
         return None
     try:
         return float(raw)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -105,11 +105,11 @@ def tokens_from_usage_payload(usage: Any) -> tuple[int | None, int | None]:
     completion = usage.get("completion_tokens")
     try:
         p = int(prompt) if prompt is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         p = None
     try:
         c = int(completion) if completion is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         c = None
     return p, c
 

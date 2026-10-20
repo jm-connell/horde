@@ -1,7 +1,7 @@
 # Direct dependencies. The fully pinned, hash-checked set that CI and the
 # Docker image install is backend/requirements.lock — regenerate it after
 # editing this file (see docs/development/dependencies.md).
-fastapi==0.143.1
+fastapi==0.143.2
 uvicorn[standard]==0.54.0
 sqlmodel>=0.0.48,<0.1
 yt-dlp==2026.8.19
@@ -9,7 +9,7 @@ bgutil-ytdlp-pot-provider==2.0.2
 watchdog==6.0.0
 httpx==0.28.1
 python-multipart==0.0.32
-psutil>=5.9.8,<8
+psutil>=7.2.2,<8
 Pillow>=12.3.0,<13
-alembic>=1.16,<2
+alembic>=1.20.0,<2
 numpy>=2.5.4,<3

@@ -128,7 +128,7 @@ def _positive_int(value: Any) -> int | None:
         return None
     try:
         n = int(value)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
     return n if n > 0 else None
 
@@ -152,7 +152,7 @@ def _progress_filename(d: dict[str, Any]) -> str:
     raw = d.get("filename") or ""
     try:
         return Path(str(raw)).name
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return str(raw)
 
 
@@ -288,7 +288,7 @@ def set_processing_stage(
     else:
         try:
             progress_n = min(100.0, max(0.0, float(progress)))
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             progress_n = 0.0
     return publish_job_progress(
         job_id,

@@ -32,7 +32,7 @@ export interface FocusTrapOptions {
    * Element to focus on open. Defaults to the first `[data-autofocus]` child,
    * else the container itself (give it tabIndex={-1}).
    */
-  initialFocus?: RefObject<HTMLElement>;
+  initialFocus?: RefObject<HTMLElement | null>;
 }
 
 /**
@@ -41,7 +41,7 @@ export interface FocusTrapOptions {
  * to whatever had it before when the modal closes or unmounts.
  */
 export function useFocusTrap(
-  containerRef: RefObject<HTMLElement>,
+  containerRef: RefObject<HTMLElement | null>,
   { active = true, onEscape, initialFocus }: FocusTrapOptions = {}
 ): void {
   const onEscapeRef = useRef(onEscape);

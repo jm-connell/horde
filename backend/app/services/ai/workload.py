@@ -90,7 +90,7 @@ def _num(raw: Any) -> float | None:
         if not text or text.upper() in ("N/A", "NA", "NONE", "-"):
             return None
         return float(text)
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 
@@ -458,7 +458,7 @@ def probe_ollama_gpu(base_url: str) -> GpuInfo | None:
             continue
         try:
             total_i = int(total)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
         if total_i > best_total:
             best_total = total_i
@@ -471,7 +471,7 @@ def probe_ollama_gpu(base_url: str) -> GpuInfo | None:
     free = best.get("free_memory")
     try:
         used = best_total - int(free) if free is not None else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         used = None
 
     return GpuInfo(
@@ -499,7 +499,7 @@ def detect_gpu_for_ai(
         if raw is not None and raw != "":
             try:
                 vram_gb = float(raw)
-            except (TypeError, ValueError):
+            except TypeError, ValueError:
                 vram_gb = None
 
     if vram_gb is not None and vram_gb > 0:

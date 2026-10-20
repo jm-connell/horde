@@ -19,7 +19,7 @@ interface Options {
   isMini: boolean;
   playing: boolean;
   isMobile: boolean;
-  playerRootRef: RefObject<HTMLDivElement>;
+  playerRootRef: RefObject<HTMLDivElement | null>;
   /** Set while a drag is in flight so the click that ends it doesn't toggle play. */
   suppressClick: { current: boolean };
   miniWidth: number | null;

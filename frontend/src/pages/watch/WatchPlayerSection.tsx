@@ -26,7 +26,7 @@ export default function WatchPlayerSection({
   streamDownload: StreamDownload;
   onVideoUpdated: (video: Video) => void;
   /** The element the player is reparented into; registered by the page. */
-  dockRef: RefObject<HTMLDivElement>;
+  dockRef: RefObject<HTMLDivElement | null>;
   children: ReactNode;
 }) {
   const playerOuterClass = isMobile

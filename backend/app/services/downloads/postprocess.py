@@ -93,7 +93,7 @@ def apply_loudnorm(
     except FfmpegCancelled:
         safe_unlink(tmp)
         raise
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError):
+    except subprocess.CalledProcessError, subprocess.TimeoutExpired, OSError:
         safe_unlink(tmp)
         return "Volume normalization failed"
     finally:
@@ -136,7 +136,7 @@ def _duration_hint(path: Path, info: dict[str, Any]) -> float | None:
     duration = probe_duration(path) or info.get("duration")
     try:
         return float(duration) if duration else None
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return None
 
 

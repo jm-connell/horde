@@ -184,7 +184,7 @@ def _from_unix(value: float) -> str | None:
         return None
     try:
         return datetime.fromtimestamp(n, tz=UTC).isoformat()
-    except (OverflowError, OSError, ValueError):
+    except OverflowError, OSError, ValueError:
         return None
 
 

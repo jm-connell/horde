@@ -376,7 +376,7 @@ def _bandwidth_bps(fmt: dict[str, Any], *, kind: str) -> int:
             # yt-dlp tbr is kbps.
             avg = max(1, int(float(val) * 1000))
             break
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             continue
     if avg <= 0:
         filesize = fmt.get("filesize") or fmt.get("filesize_approx")
@@ -437,18 +437,18 @@ def _build_representation(
         fps = fmt.get("fps")
         try:
             rep["fps"] = int(float(fps)) if fps is not None else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             rep["fps"] = None
     else:
         channels = fmt.get("audio_channels") or 2
         try:
             rep["audio_channels"] = int(channels)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             rep["audio_channels"] = 2
         asr = fmt.get("asr")
         try:
             rep["audio_sampling_rate"] = int(asr) if asr else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             rep["audio_sampling_rate"] = None
         lang = fmt.get("language") or fmt.get("lang") or info.get("language")
         rep["lang"] = str(lang) if lang else "und"
@@ -639,13 +639,13 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
     if view_count is not None:
         try:
             view_count = int(view_count)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             view_count = None
     duration = info.get("duration")
     if duration is not None:
         try:
             duration = float(duration)
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             duration = None
     source = info.get("webpage_url") or info.get("original_url") or url
     subtitles = [
@@ -794,7 +794,7 @@ def _build_manifest_entry(url: str, info: dict[str, Any]) -> dict[str, Any]:
         duration = info.get("duration")
         try:
             duration_f = float(duration) if duration is not None else None
-        except (TypeError, ValueError):
+        except TypeError, ValueError:
             duration_f = None
 
     heights = [int(r["height"]) for r in video_reps if r.get("height")]
@@ -911,7 +911,7 @@ def build_dash_manifest(session: dict[str, Any]) -> str:
     duration = session.get("duration")
     try:
         dur = float(duration) if duration is not None else 0.0
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         dur = 0.0
     media_duration = f"PT{max(dur, 0.1):.3f}S"
 

@@ -48,7 +48,7 @@ function PreviewSeekBar({
   videoId,
   startSec,
 }: {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   videoId: number;
   startSec: number;
 }) {

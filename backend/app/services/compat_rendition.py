@@ -469,7 +469,7 @@ def _worker(job: _Job) -> None:
             _run_safari(job)
         else:
             _run_compat(job)
-    except (FfmpegCancelled, _Cancelled):
+    except FfmpegCancelled, _Cancelled:
         logger.info("compat job %s cancelled", job.video_id)
     except Exception as exc:
         msg = str(exc) or exc.__class__.__name__

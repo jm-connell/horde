@@ -178,7 +178,7 @@ def is_age_restricted_entry(entry: dict[str, Any] | None) -> bool:
     try:
         if age_limit is not None and int(age_limit) >= 18:
             return True
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         pass
     return False
 

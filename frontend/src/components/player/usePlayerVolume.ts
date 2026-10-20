@@ -6,7 +6,7 @@ import { useCallback, useEffect, useState, type RefObject } from "react";
  * `applyVolume`, which can also persist the level as the preference.
  */
 export function usePlayerVolume(
-  videoRef: RefObject<HTMLVideoElement>,
+  videoRef: RefObject<HTMLVideoElement | null>,
   src: string,
   initialVolume: number,
   onVolumeChange?: (volume: number) => void

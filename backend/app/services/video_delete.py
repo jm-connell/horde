@@ -88,7 +88,7 @@ def remove_files(paths: list[Path]) -> None:
     for path in paths:
         try:
             resolved = path.resolve()
-        except (OSError, RuntimeError):
+        except OSError, RuntimeError:
             logger.warning("Not deleting unresolvable path %s", path, exc_info=True)
             continue
         if not any(resolved.is_relative_to(root) for root in roots):

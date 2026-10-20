@@ -5,7 +5,7 @@ import { useChromecast } from "../../hooks/useChromecast";
 import type { SubtitleSource } from "../videoPlayerTypes";
 
 interface Options {
-  videoRef: RefObject<HTMLVideoElement>;
+  videoRef: RefObject<HTMLVideoElement | null>;
   videoId?: number;
   src: string;
   mimeType: string;
