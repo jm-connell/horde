@@ -40,19 +40,25 @@ export default function WatchInfoPanels({
       : source.meta.description;
   const chapters = video ? resolveLibraryChapters(video) : ai.streamChapters;
   const descriptionBody = stripChapterLines(description);
+  const showAi = Boolean(ai.target && ai.showAiSection && can("use_ai"));
+  const queueBeside = !sidebarShown && queueVisible;
+  // An unbounded column is ~116rem wide on 2xl screens: put the AI panel and
+  // the description side by side there instead of one narrow column hugging
+  // the left edge. Narrower screens keep one column at a readable width.
+  const sideBySide = !columnBounded && !queueBeside && showAi;
 
   return (
     <div
       className={
-        !sidebarShown && queueVisible
+        queueBeside
           ? "mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[minmax(0,1fr)_24rem]"
-          : // An unbounded column can be ~116rem wide; keep the description
-            // and AI panel at a readable width.
-            `mt-4 space-y-4 ${columnBounded ? "" : "max-w-5xl"}`
+          : sideBySide
+            ? "mt-4 grid max-w-5xl items-start gap-4 2xl:max-w-none 2xl:grid-cols-2"
+            : `mt-4 space-y-4 ${columnBounded ? "" : "max-w-5xl"}`
       }
     >
-      <div className="min-w-0 space-y-4">
-        {ai.target && ai.showAiSection && can("use_ai") && (
+      <div className={sideBySide ? "contents" : "min-w-0 space-y-4"}>
+        {showAi && ai.target && (
           <Suspense fallback={<LoadingIndicator className="py-4" />}>
             <VideoAiPanel
               target={ai.target}
@@ -112,7 +118,7 @@ export default function WatchInfoPanels({
         />
       </div>
 
-      {!sidebarShown && queueVisible && (
+      {queueBeside && (
         <PlaybackQueue className="lg:sticky lg:top-20 lg:self-start" />
       )}
     </div>
