@@ -122,6 +122,8 @@ function FeedMetaRow({
       <div className="flex h-6 min-w-0 items-center gap-2 max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:self-center">
         {entry.live_status === "is_live" ? (
           <LiveNowLabel />
+        ) : entry.live_status === "is_upcoming" ? (
+          <UpcomingLabel />
         ) : inLibrary ? (
           <span className="text-xs font-medium leading-none text-emerald-400">
             Downloaded
@@ -158,6 +160,15 @@ function LiveNowLabel() {
         className="h-2 w-2 animate-pulse rounded-full bg-red-500 motion-reduce:animate-none"
       />
       Live now
+    </span>
+  );
+}
+
+/** A scheduled stream: nothing to download until it has aired. */
+function UpcomingLabel() {
+  return (
+    <span className="text-xs font-medium leading-none text-muted">
+      Upcoming
     </span>
   );
 }
@@ -442,6 +453,8 @@ export default function ChannelFeedCard({
           <div className="flex h-full min-h-18 shrink-0 flex-col items-end justify-between py-0.5 pl-3">
             {isLive ? (
               <LiveNowLabel />
+            ) : entry.live_status === "is_upcoming" ? (
+              <UpcomingLabel />
             ) : !inLibrary ? (
               can("download") ? (
                 <button

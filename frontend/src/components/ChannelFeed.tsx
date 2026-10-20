@@ -188,6 +188,8 @@ export default function ChannelFeed({
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const searchAbort = useRef<AbortController | null>(null);
   const liveRefreshGen = useRef(0);
+  /** Bumped per channel and tab, so a slow page of the previous one is dropped. */
+  const loadGen = useRef(0);
 
   const {
     defaultPreset,
@@ -308,6 +310,8 @@ export default function ChannelFeed({
   const loadPage = useCallback(
     async (offset: number, append: boolean) => {
       if (!channelUrl && !channel) return;
+      const gen = loadGen.current;
+      const stale = () => gen !== loadGen.current;
       if (append) setLoadingMore(true);
       else setLoading(true);
       setError(null);
@@ -320,6 +324,7 @@ export default function ChannelFeed({
           live: false,
           tab,
         });
+        if (stale()) return;
         setEntries((prev) =>
           append ? [...prev, ...page.entries] : page.entries
         );
@@ -343,11 +348,14 @@ export default function ChannelFeed({
           }
         }
       } catch (err) {
+        if (stale()) return;
         setError(err instanceof Error ? err.message : "Failed to load feed");
         if (!append) setEntries([]);
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        if (!stale()) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       }
     },
     [channel, channelUrl, tab, streamsTab, softLiveRefresh, softMetaRefresh]
@@ -380,6 +388,7 @@ export default function ChannelFeed({
     setHasMore(false);
     setFromCatalog(false);
     liveRefreshGen.current += 1;
+    loadGen.current += 1;
     if (!channelUrl) {
       setLoading(false);
       return;
@@ -573,10 +582,13 @@ export default function ChannelFeed({
       q && !streamsTab ? "search" : "browse"
     );
     // A channel that is live now leads with its broadcast, whatever the sort.
-    const live =
-      (!streamsTab && !q ? liveEntry : null) ??
-      sorted.find((e) => e.live_status === "is_live") ??
-      null;
+    // The uploads tab trusts only the live check (catalog rows can keep an
+    // old "is_live"); the streams tab comes fresh from YouTube.
+    const live = streamsTab
+      ? (sorted.find((e) => e.live_status === "is_live") ?? null)
+      : q
+        ? null
+        : liveEntry;
     if (!live) return sorted;
     return [live, ...sorted.filter((e) => e !== live && e.id !== live.id)];
   }, [
