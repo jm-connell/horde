@@ -53,6 +53,9 @@ _REPROBE_SEC = 30 * 60
 _STALE_PLAYLIST_GRACE_SEC = 30.0
 _MAX_PLAYLIST_BYTES = 4 * 1024 * 1024
 _FIRST_PROBE_SEC = 10.0
+#: A full DVR window slides in steps of this many segments, not one per
+#: playlist, so variants rendered a segment apart still share their start.
+_WINDOW_SLACK_SEGMENTS = 30
 #: Low-latency broadcasts (1-2 s segments) would make a 4 hour playlist huge.
 _MAX_WINDOW_SEGMENTS = 7200
 #: An open that just failed is answered from memory for this long, so a player
@@ -91,23 +94,70 @@ class _Upstream:
     url: str
     headers: dict[str, str]
     info: hls.VariantInfo
+    #: An audio-only rendition (packed AAC segments) played beside the video.
+    audio: bool = False
+
+
+def _hls_formats(info: dict[str, Any]) -> list[dict[str, Any]]:
+    return [
+        fmt
+        for fmt in info.get("formats") or []
+        if isinstance(fmt, dict)
+        and fmt.get("url")
+        and str(fmt.get("protocol") or "").startswith("m3u8")
+    ]
+
+
+def _has(codec: Any) -> bool:
+    return bool(codec) and str(codec) != "none"
+
+
+def _upstream(fmt: dict[str, Any], info: hls.VariantInfo, *, audio: bool) -> _Upstream:
+    return _Upstream(
+        url=str(fmt["url"]),
+        headers={str(k): str(v) for k, v in (fmt.get("http_headers") or {}).items()},
+        info=info,
+        audio=audio,
+    )
+
+
+def _key(fmt: dict[str, Any], fallback: int) -> str:
+    return _KEY_RE.sub("_", str(fmt.get("format_id") or fallback)) or str(fallback)
 
 
 def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
-    """The muxed HLS formats of a live broadcast, one per height (best bitrate)."""
+    """The HLS formats of a live broadcast, one video variant per height.
+
+    YouTube used to serve muxed (audio + video) TS variants; many broadcasts now
+    come as video-only TS variants plus audio-only packed-AAC ones. Muxed
+    variants are used when there are any, otherwise the video-only ones with
+    the best audio-only format as their shared audio rendition.
+    """
     if not is_live_info(info):
         raise LiveNotAvailable("This video is not live")
+    formats = _hls_formats(info)
+    muxed = [f for f in formats if _has(f.get("vcodec")) and _has(f.get("acodec"))]
+    audio_fmt: dict[str, Any] | None = None
+    video = muxed
+    if not muxed:
+        video = [
+            f for f in formats if _has(f.get("vcodec")) and not _has(f.get("acodec"))
+        ]
+        audio_only = [f for f in formats if not _has(f.get("vcodec"))]
+        if video and audio_only:
+            # tbr is often missing on the audio formats; the higher itag (234
+            # over 233) is the higher bitrate.
+            audio_fmt = max(
+                audio_only,
+                key=lambda f: (
+                    float(f.get("tbr") or 0),
+                    int(f["format_id"]) if str(f.get("format_id")).isdigit() else 0,
+                ),
+            )
+        else:
+            video = []
     by_height: dict[int, tuple[float, dict[str, Any]]] = {}
-    for fmt in info.get("formats") or []:
-        if not isinstance(fmt, dict) or not fmt.get("url"):
-            continue
-        if not str(fmt.get("protocol") or "").startswith("m3u8"):
-            continue
-        vcodec = str(fmt.get("vcodec") or "none")
-        acodec = str(fmt.get("acodec") or "none")
-        # YouTube's live HLS variants carry audio and video in one TS stream.
-        if vcodec == "none" or acodec == "none":
-            continue
+    for fmt in video:
         height = int(fmt.get("height") or 0)
         tbr = float(fmt.get("tbr") or 0)
         current = by_height.get(height)
@@ -115,19 +165,16 @@ def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
             by_height[height] = (tbr, fmt)
     out: dict[str, _Upstream] = {}
     for height, (tbr, fmt) in sorted(by_height.items()):
-        key = _KEY_RE.sub("_", str(fmt.get("format_id") or height)) or str(height)
+        key = _key(fmt, height)
         codecs = ",".join(
             c
             for c in (str(fmt.get("vcodec") or ""), str(fmt.get("acodec") or ""))
             if c and c != "none" and "." in c
         )
         fps = fmt.get("fps")
-        out[key] = _Upstream(
-            url=str(fmt["url"]),
-            headers={
-                str(k): str(v) for k, v in (fmt.get("http_headers") or {}).items()
-            },
-            info=hls.VariantInfo(
+        out[key] = _upstream(
+            fmt,
+            hls.VariantInfo(
                 key=key,
                 bandwidth=int(tbr * 1000) if tbr else 500_000 + height * 4000,
                 width=int(fmt["width"]) if fmt.get("width") else None,
@@ -135,9 +182,26 @@ def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
                 fps=float(fps) if fps else None,
                 codecs=codecs or None,
             ),
+            audio=False,
         )
     if not out:
         raise LiveNotAvailable("No live HLS stream is available for this video")
+    if audio_fmt is not None:
+        key = _key(audio_fmt, 0)
+        acodec = str(audio_fmt.get("acodec") or "")
+        tbr = float(audio_fmt.get("tbr") or 0)
+        out[key] = _upstream(
+            audio_fmt,
+            hls.VariantInfo(
+                key=key,
+                bandwidth=int(tbr * 1000) if tbr else 128_000,
+                width=None,
+                height=None,
+                fps=None,
+                codecs=acodec if "." in acodec else "mp4a.40.2",
+            ),
+            audio=True,
+        )
     return out
 
 
@@ -169,10 +233,6 @@ class _Variant:
     fetched_at: float = 0.0
     advanced_at: float = 0.0
     rendered: str | None = None
-    #: The lowest MEDIA-SEQUENCE this variant's playlist has shown. HLS players
-    #: map sequence numbers to time from the first playlist they load, so a
-    #: later playlist must never start earlier than that (RFC 8216 6.2.2).
-    start_floor: int | None = None
     #: Consecutive stall refreshes without the head moving (backs the watchdog off).
     stalls: int = 0
 
@@ -197,6 +257,12 @@ class LiveSession:
         self.variants = {k: _Variant(upstream=u) for k, u in upstreams.items()}
         self.ended = False
         self.dvr_floor: int | None = None
+        #: The lowest MEDIA-SEQUENCE any playlist may start at. HLS players map
+        #: sequence numbers to time from the first playlist they load, so a later
+        #: playlist must never start earlier (RFC 8216 6.2.2). It is shared: with
+        #: a separate audio rendition the player reads two playlists at once, and
+        #: they must start at the same segment for the timelines to line up.
+        self.start_floor: int | None = None
         self.template_ok: bool | None = None
         self.generation = 0
         self._fetch = fetcher
@@ -206,6 +272,8 @@ class LiveSession:
         self._resolve_lock = asyncio.Lock()
         self._resolved_at = clock()
         self._probed_at: float | None = None
+        #: The first DVR probe; every variant's first playlist waits for it.
+        self._first_probe: asyncio.Future[None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self.last_access = clock()
 
@@ -263,7 +331,14 @@ class LiveSession:
 
     def master(self) -> str:
         self.touch()
-        return hls.render_master([v.upstream.info for v in self.variants.values()])
+        video = [
+            v.upstream.info for v in self.variants.values() if not v.upstream.audio
+        ]
+        audio = next(
+            (v.upstream.info for v in self.variants.values() if v.upstream.audio),
+            None,
+        )
+        return hls.render_master(video, audio)
 
     async def media(self, key: str) -> str:
         """The media playlist for one variant. Raises KeyError for an unknown key."""
@@ -295,12 +370,20 @@ class LiveSession:
             if playlist is not None:
                 self._ingest(variant, playlist, now)
             if self._probed_at is None and self._should_probe(now) and variant.template:
-                # The first playlist must already carry the DVR window: adding
-                # earlier segments later would move MEDIA-SEQUENCE backwards.
                 self._probed_at = now
+                self._first_probe = asyncio.ensure_future(self._probe_dvr(variant))
+                self._tasks.add(self._first_probe)
+                self._first_probe.add_done_callback(self._task_done)
+            if self._first_probe is not None and not self._first_probe.done():
+                # The first playlists must already carry the DVR window: adding
+                # earlier segments later would move MEDIA-SEQUENCE backwards.
                 try:
-                    await asyncio.wait_for(self._probe_dvr(variant), _FIRST_PROBE_SEC)
+                    await asyncio.wait_for(
+                        asyncio.shield(self._first_probe), _FIRST_PROBE_SEC
+                    )
                 except TimeoutError:
+                    # Left running (other variants may be waiting on it too);
+                    # the shared start floor keeps later playlists aligned.
                     logger.warning("live stream %s: DVR probe timed out", self.video_id)
             self._maybe_refresh_urls(variant, now)
             variant.rendered = self._render(variant)
@@ -383,14 +466,13 @@ class LiveSession:
         entries: list[tuple[int, float]] = []
         if head is not None:
             floor = (
-                min(variant.start_floor, head)
-                if variant.start_floor is not None
-                else None
+                min(self.start_floor, head) if self.start_floor is not None else None
             )
             if self.template_ok and self.dvr_floor is not None and variant.template:
-                start = max(self.dvr_floor, head - self._window_segments(target))
-                if floor is not None:
-                    start = max(start, floor)
+                window = self._window_segments(target)
+                if floor is None or head - floor > window + _WINDOW_SLACK_SEGMENTS:
+                    floor = max(floor or 0, head - window)
+                start = max(self.dvr_floor, floor)
                 entries = [
                     (
                         sq,
@@ -407,10 +489,11 @@ class LiveSession:
                     sq -= 1
                 entries.reverse()
         if entries:
-            variant.start_floor = entries[0][0]
+            self.start_floor = max(self.start_floor or 0, entries[0][0])
+        ext = "aac" if variant.upstream.audio else "ts"
         return hls.render_media(
             entries,
-            segment_uri=f"../seg/{variant.upstream.info.key}/{{sq}}.ts",
+            segment_uri=f"../seg/{variant.upstream.info.key}/{{sq}}.{ext}",
             ended=self.ended,
             target_duration=target,
         )

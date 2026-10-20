@@ -416,6 +416,7 @@ def preview_meta(
         available_presets=meta.get("available_presets") or [],
         subtitles=meta.get("subtitles") or [],
         is_live=bool(meta.get("is_live")),
+        was_live=bool(meta.get("was_live")),
     )
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
@@ -560,6 +560,11 @@ def channel_feed(
         description="If true, fetch from YouTube and merge into the catalog. "
         "If false, prefer the local catalog for a fast response.",
     ),
+    tab: Literal["videos", "streams"] = Query(
+        "videos",
+        description="The channel tab: uploads, or past and current live streams. "
+        "Streams always come from YouTube (the catalog holds uploads only).",
+    ),
     session: Session = Depends(get_session),
 ):
     channel_url = _checked_url(url)
@@ -571,21 +576,34 @@ def channel_feed(
             channel=channel_name, channel_url=None, entries=[], has_more=False
         )
 
-    # Kick off / refresh catalog in the background without blocking the response.
-    try:
-        channel_catalog.maybe_enqueue_for_feed(channel_url, channel_name=channel_name)
-    except Exception:
-        logger.warning(
-            "could not queue a catalog refresh for %s",
-            channel_url,
-            exc_info=True,
-        )
+    if tab == "videos":
+        # Kick off / refresh catalog in the background without blocking.
+        try:
+            channel_catalog.maybe_enqueue_for_feed(
+                channel_url, channel_name=channel_name
+            )
+        except Exception:
+            logger.warning(
+                "could not queue a catalog refresh for %s",
+                channel_url,
+                exc_info=True,
+            )
 
     data = None
     from_catalog = False
     indexing = False
 
-    if live:
+    if tab == "streams":
+        try:
+            data = ytdlp_extract.fetch_channel_feed(
+                channel_url, offset=offset, limit=limit, tab="streams"
+            )
+        except Exception as exc:
+            logger.warning(
+                "could not load the streams of %s", channel_url, exc_info=True
+            )
+            raise _feed_unavailable() from exc
+    elif live:
         live_error: Exception | None
         # Blocking YouTube fetch — used as a soft refresh after catalog paint.
         try:
@@ -725,6 +743,7 @@ def channel_feed(
                 video_id=video_id,
                 library_height_px=library_height,
                 max_height=int(max_height) if max_height else None,
+                live_status=raw.get("live_status"),
             )
         )
     if to_cache:

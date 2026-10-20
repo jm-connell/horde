@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from typing import Any
 
@@ -9,6 +10,7 @@ import httpx
 import pytest
 
 from app.services import follows
+from app.services.live.directory import STALE_LIVE_SEC
 from app.services.live.page import LiveBroadcast
 
 VID = "abcdefghijk"
@@ -118,6 +120,128 @@ def test_live_list_enabled_flag(client, monkeypatch):
 
 def test_live_list_requires_sign_in(anon_client):
     assert anon_client.get("/api/live").status_code == 401
+
+
+# --- GET /api/live/channel ----------------------------------------------------
+
+
+def test_channel_live_reads_a_fresh_background_check(client, directory, monkeypatch):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("fresh state must not be re-checked")
+
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    directory.record(ADMIN_CHAN, "Admin Chan", _broadcast())
+    body = client.get(
+        "/api/live/channel", params={"url": "https://www.youtube.com/@AdminChan/videos"}
+    ).json()
+    assert body["live"]["video_id"] == VID
+    assert body["live"]["channel_url"] == ADMIN_CHAN
+
+
+def test_channel_live_checks_an_unknown_channel_once(client, directory, monkeypatch):
+    calls: list[str] = []
+
+    def check(url):
+        calls.append(url)
+        return _broadcast("ccccccccccc")
+
+    monkeypatch.setattr("app.api.live.check_channel", check)
+    for _ in range(2):
+        body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+        assert body["live"]["video_id"] == "ccccccccccc"
+    assert calls == [OTHER_CHAN]
+
+
+def test_channel_live_is_null_when_not_live_or_the_check_fails(
+    client, directory, monkeypatch
+):
+    from app.services.url_safety import UrlFetchError
+
+    monkeypatch.setattr("app.api.live.check_channel", lambda url: None)
+    assert client.get("/api/live/channel", params={"url": OTHER_CHAN}).json() == {
+        "live": None
+    }
+
+    def boom(url):
+        raise UrlFetchError("HTTP 500")
+
+    monkeypatch.setattr("app.api.live.check_channel", boom)
+    body = client.get("/api/live/channel", params={"url": MEMBER_CHAN}).json()
+    assert body == {"live": None}
+
+
+def test_channel_live_survives_a_ytdlp_failure(client, directory, monkeypatch):
+    def boom(url):
+        raise RuntimeError("ERROR: [youtube] Sign in to confirm")
+
+    monkeypatch.setattr("app.api.live.check_channel", boom)
+    resp = client.get("/api/live/channel", params={"url": OTHER_CHAN})
+    assert resp.status_code == 200
+    assert resp.json() == {"live": None}
+
+
+def test_channel_live_drops_a_broadcast_no_check_has_confirmed_lately(
+    client, directory, monkeypatch
+):
+    directory.record(OTHER_CHAN, "Other", _broadcast())
+    state = directory.get(OTHER_CHAN)
+    assert state is not None
+    old = state.confirmed_at - STALE_LIVE_SEC - 60
+    directory.seed([replace(state, confirmed_at=old)])  # checked_at stays fresh
+    body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+    assert body == {"live": None}
+
+
+def test_channel_live_backs_off_after_a_429(client, directory, monkeypatch):
+    from app.services.url_safety import UrlFetchError
+
+    calls: list[str] = []
+
+    def limited(url):
+        calls.append(url)
+        raise UrlFetchError("HTTP 429")
+
+    monkeypatch.setattr("app.api.live.check_channel", limited)
+    client.get("/api/live/channel", params={"url": OTHER_CHAN})
+    client.get("/api/live/channel", params={"url": MEMBER_CHAN})
+    assert calls == [OTHER_CHAN]  # paused after the first
+    assert directory.paused_until > 0
+
+
+def test_channel_live_fetches_nothing_when_checks_are_off(
+    client, directory, monkeypatch
+):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("live checks are off")
+
+    monkeypatch.setattr("app.api.live.LIVE_POLL_SEC", 0)
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+    assert body == {"live": None}
+    assert directory.get(OTHER_CHAN) is None
+
+
+def test_channel_live_refuses_other_hosts(client, monkeypatch):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("not a YouTube URL")
+
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    resp = client.get("/api/live/channel", params={"url": "https://example.com/@x"})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "invalid_url"
+
+
+def test_channel_live_rejects_a_non_url(client):
+    resp = client.get("/api/live/channel", params={"url": "   "})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "invalid_url"
+
+
+def test_channel_live_requires_sign_in(anon_client):
+    assert (
+        anon_client.get("/api/live/channel", params={"url": OTHER_CHAN}).status_code
+        == 401
+    )
 
 
 # --- HLS proxy -----------------------------------------------------------------
@@ -337,6 +461,51 @@ def test_live_without_muxed_hls_formats_is_409(client, upstream, extracted):
     assert resp.json()["code"] == "not_live"
 
 
+def _split_info() -> dict[str, Any]:
+    """How YouTube serves many broadcasts now: video-only TS + audio-only AAC."""
+    info = _info()
+    base = {"protocol": "m3u8_native", "url": MANIFEST}
+    info["formats"] = [
+        {**base, "format_id": "233", "vcodec": "none", "acodec": None},
+        {**base, "format_id": "234", "vcodec": "none", "acodec": None},
+        {
+            **base,
+            "format_id": "232",
+            "vcodec": "avc1.4D401F",
+            "acodec": "none",
+            "height": 720,
+            "width": 1280,
+            "tbr": 2448,
+        },
+    ]
+    return info
+
+
+def test_split_audio_and_video_streams_play(client, upstream, extracted):
+    extracted["info"] = _split_info()
+    master = client.get(f"/api/live/{VID}/master.m3u8")
+    assert master.status_code == 200
+    assert (
+        '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio",NAME="Audio",DEFAULT=YES,'
+        'AUTOSELECT=YES,URI="v/234.m3u8"' in master.text
+    )
+    inf = next(ln for ln in master.text.splitlines() if ln.startswith("#EXT-X-STREAM"))
+    assert 'CODECS="avc1.4D401F,mp4a.40.2"' in inf
+    assert 'AUDIO="audio"' in inf
+    assert _media_lines(master.text) == ["v/232.m3u8"]
+
+    audio = client.get(f"/api/live/{VID}/v/234.m3u8")
+    assert audio.status_code == 200
+    assert _media_lines(audio.text)[-1] == f"../seg/234/{PLAYLIST_HEAD}.aac"
+    video = client.get(f"/api/live/{VID}/v/232.m3u8")
+    assert _media_lines(video.text)[-1] == f"../seg/232/{PLAYLIST_HEAD}.ts"
+
+    seg = client.get(f"/api/live/{VID}/seg/234/101.aac")
+    assert seg.status_code == 200
+    assert seg.headers["content-type"] == "audio/aac"
+    assert seg.content == b"TS101"
+
+
 def test_extraction_failure_is_502(client, upstream, monkeypatch):
     def boom(url: str, *, force: bool = False):
         raise RuntimeError("yt-dlp exploded")
@@ -395,6 +564,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
         "title": "Some stream",
         "channel": "Chan",
         "is_live": live,
+        "was_live": not live,
         "available_presets": [],
         "subtitles": [],
     }
@@ -406,6 +576,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["is_live"] is live
+    assert resp.json()["was_live"] is (not live)
 
 
 def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
@@ -418,3 +589,4 @@ def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["is_live"] is False
+    assert resp.json()["was_live"] is False

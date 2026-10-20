@@ -9,11 +9,14 @@ import {
   type CatalogProgress,
 } from "../libraryCatalogProgress";
 import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "../settings/constants";
+import type { ChannelTab } from "../../api";
 import type { FeedLayout, FeedSort } from "./useChannelFeedControls";
 
 /** Search, sort, layout and index controls on a channel page. */
 export default function ChannelControls({
   channelUrl,
+  channelTab,
+  onChannelTab,
   feedSearch,
   onFeedSearch,
   feedSort,
@@ -32,6 +35,8 @@ export default function ChannelControls({
   onToggleTags,
 }: {
   channelUrl: string | null;
+  channelTab: ChannelTab;
+  onChannelTab: (tab: ChannelTab) => void;
   feedSearch: string;
   onFeedSearch: (value: string) => void;
   feedSort: FeedSort;
@@ -50,19 +55,49 @@ export default function ChannelControls({
   onToggleTags: () => void;
 }) {
   const youtubeChannel = isYoutubeChannelUrl(channelUrl);
+  const streamsTab = channelTab === "streams";
   return (
     <>
+      {youtubeChannel && (
+        <div
+          role="group"
+          aria-label="Channel tab"
+          className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5"
+        >
+          {(
+            [
+              ["videos", "Videos", "Uploads"],
+              ["streams", "Live", "Past and current live streams"],
+            ] as const
+          ).map(([tab, label, title]) => (
+            <button
+              key={tab}
+              type="button"
+              aria-pressed={channelTab === tab}
+              title={title}
+              onClick={() => onChannelTab(tab)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                channelTab === tab
+                  ? "bg-accent/15 text-accent"
+                  : "text-gray-400 hover:text-gray-200"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="relative min-w-40 w-40 max-w-64 grow sm:min-w-52 sm:w-52">
         <input
           data-header-search
           value={feedSearch}
           onChange={(e) => onFeedSearch(e.target.value)}
-          placeholder="Search this channel"
+          placeholder={streamsTab ? "Filter streams" : "Search this channel"}
           className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent sm:pl-4 ${
             youtubeChannel ? "pr-8" : "pr-3 sm:pr-4"
           }`}
         />
-        {youtubeChannel ? (
+        {youtubeChannel && !streamsTab ? (
           <YoutubeSearchChip
             checked={catalogProgress?.youtubeSearchEffective ?? true}
             disabled={youtubePrefSaving || !channelUrl}
@@ -76,6 +111,7 @@ export default function ChannelControls({
         ) : null}
       </div>
       {youtubeChannel &&
+        !streamsTab &&
         (indexingChannel || showChannelIndexButton(catalogProgress)) && (
           <button
             type="button"
@@ -138,7 +174,7 @@ export default function ChannelControls({
           {showTags ? "Hide tags" : "Show tags"}
         </button>
       )}
-      {catalogProgress && (
+      {catalogProgress && !streamsTab && (
         <span
           className={`ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs ${
             catalogProgress.status === "error" ? "text-red-400" : "text-muted"

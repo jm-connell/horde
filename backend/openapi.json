@@ -2775,6 +2775,17 @@
             ],
             "title": "Like Count"
           },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
+          },
           "match_reason": {
             "anyOf": [
               {
@@ -2976,6 +2987,23 @@
           }
         },
         "title": "ChannelFeedPage",
+        "type": "object"
+      },
+      "ChannelLiveResponse": {
+        "description": "The broadcast a channel is live with right now, or ``live: null``.",
+        "properties": {
+          "live": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiveChannelRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ChannelLiveResponse",
         "type": "object"
       },
       "ChannelRename": {
@@ -6773,6 +6801,11 @@
               }
             ],
             "title": "View Count"
+          },
+          "was_live": {
+            "default": false,
+            "title": "Was Live",
+            "type": "boolean"
           }
         },
         "title": "StreamPreviewMeta",
@@ -10452,6 +10485,22 @@
               "title": "Live",
               "type": "boolean"
             }
+          },
+          {
+            "description": "The channel tab: uploads, or past and current live streams. Streams always come from YouTube (the catalog holds uploads only).",
+            "in": "query",
+            "name": "tab",
+            "required": false,
+            "schema": {
+              "default": "videos",
+              "description": "The channel tab: uploads, or past and current live streams. Streams always come from YouTube (the catalog holds uploads only).",
+              "enum": [
+                "videos",
+                "streams"
+              ],
+              "title": "Tab",
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -12176,6 +12225,62 @@
         ]
       }
     },
+    "/api/live/channel": {
+      "get": {
+        "description": "Whether one channel is live right now (for its channel page).\n\nAnswered from the background checks when they are recent (followed\nchannels), otherwise by reading the channel's ``/live`` page once. Nothing\nis fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused\nafter YouTube rate-limited them.",
+        "operationId": "channel_live_api_live_channel_get",
+        "parameters": [
+          {
+            "description": "The channel's URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "description": "The channel's URL",
+              "maxLength": 2048,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLiveResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Channel Live",
+        "tags": [
+          "live"
+        ]
+      }
+    },
     "/api/live/{video_id}/master.m3u8": {
       "get": {
         "operationId": "live_master_api_live__video_id__master_m3u8_get",
@@ -12225,6 +12330,81 @@
           }
         },
         "summary": "Live Master",
+        "tags": [
+          "live"
+        ]
+      }
+    },
+    "/api/live/{video_id}/seg/{key}/{sq}.aac": {
+      "get": {
+        "description": "A segment of the separate audio rendition (packed AAC with an ID3 timestamp).",
+        "operationId": "live_audio_segment_api_live__video_id__seg__key___sq__aac_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "title": "Video Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "pattern": "^[A-Za-z0-9_-]{1,40}$",
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sq",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Sq",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "audio/aac": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Packed AAC audio segment"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Audio Segment",
         "tags": [
           "live"
         ]

@@ -1127,6 +1127,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/live/channel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Channel Live
+         * @description Whether one channel is live right now (for its channel page).
+         *
+         *     Answered from the background checks when they are recent (followed
+         *     channels), otherwise by reading the channel's ``/live`` page once. Nothing
+         *     is fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused
+         *     after YouTube rate-limited them.
+         */
+        get: operations["channel_live_api_live_channel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live/{video_id}/master.m3u8": {
         parameters: {
             query?: never;
@@ -1136,6 +1161,26 @@ export interface paths {
         };
         /** Live Master */
         get: operations["live_master_api_live__video_id__master_m3u8_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/live/{video_id}/seg/{key}/{sq}.aac": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Audio Segment
+         * @description A segment of the separate audio rendition (packed AAC with an ID3 timestamp).
+         */
+        get: operations["live_audio_segment_api_live__video_id__seg__key___sq__aac_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3643,6 +3688,8 @@ export interface components {
             library_height_px?: number | null;
             /** Like Count */
             like_count?: number | null;
+            /** Live Status */
+            live_status?: string | null;
             match_reason?: components["schemas"]["SearchMatchReason"] | null;
             /** Max Height */
             max_height?: number | null;
@@ -3705,6 +3752,13 @@ export interface components {
             indexing: boolean;
             /** Youtube Video Search Effective */
             youtube_video_search_effective?: boolean | null;
+        };
+        /**
+         * ChannelLiveResponse
+         * @description The broadcast a channel is live with right now, or ``live: null``.
+         */
+        ChannelLiveResponse: {
+            live?: components["schemas"]["LiveChannelRead"] | null;
         };
         /** ChannelRename */
         ChannelRename: {
@@ -5053,6 +5107,11 @@ export interface components {
             title?: string | null;
             /** View Count */
             view_count?: number | null;
+            /**
+             * Was Live
+             * @default false
+             */
+            was_live: boolean;
         };
         /**
          * StreamRelatedPage
@@ -7109,6 +7168,8 @@ export interface operations {
                 limit?: number;
                 /** @description If true, fetch from YouTube and merge into the catalog. If false, prefer the local catalog for a fast response. */
                 live?: boolean;
+                /** @description The channel tab: uploads, or past and current live streams. Streams always come from YouTube (the catalog holds uploads only). */
+                tab?: "videos" | "streams";
             };
             header?: never;
             path?: never;
@@ -8465,6 +8526,47 @@ export interface operations {
             };
         };
     };
+    channel_live_api_live_channel_get: {
+        parameters: {
+            query: {
+                /** @description The channel's URL */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelLiveResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     live_master_api_live__video_id__master_m3u8_get: {
         parameters: {
             query?: never;
@@ -8483,6 +8585,48 @@ export interface operations {
                 };
                 content: {
                     "application/vnd.apple.mpegurl": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_audio_segment_api_live__video_id__seg__key___sq__aac_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+                key: string;
+                sq: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Packed AAC audio segment */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "audio/aac": string;
                 };
             };
             /** @description Validation error */

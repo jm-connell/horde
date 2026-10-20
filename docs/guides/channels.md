@@ -80,6 +80,10 @@ Horde finds new uploads from the channel catalog (opening the feed, periodic cat
 
 Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** next to the channel's name on its page, or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
 
+A YouTube channel's page has two tabs. **Videos** lists its uploads. **Live** lists its live streams, newest first: past broadcasts are ordinary videos you can watch or download, and the **Filter streams** box filters the loaded list by title. When the channel is live right now, its broadcast is the first card on either tab, with a red **LIVE** badge and **Live now** in place of the download button.
+
+Downloading a past livestream longer than two hours asks first, because a recording that long can take a while and use a lot of storage (the watch page shows the estimated size at the chosen quality). **Download anyway** queues it as usual.
+
 When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. How it works: [Live streams](../design/live-streams.md).
 
 ## Catalog indexing

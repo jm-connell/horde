@@ -205,6 +205,8 @@ class StreamPreviewMeta(BaseModel):
     subtitles: list[SubtitleTrack] = []
     #: Live right now: play it through ``/api/live/{id}/master.m3u8``.
     is_live: bool = False
+    #: A recording of a finished live stream (often hours long).
+    was_live: bool = False
 
 
 class StreamAiRead(BaseModel):
@@ -350,6 +352,8 @@ class ChannelFeedEntry(BaseModel):
     library_height_px: int | None = None
     max_height: int | None = None
     match_reason: SearchMatchReason | None = None
+    #: yt-dlp live_status: ``is_live`` (live now), ``was_live`` (a past stream), ...
+    live_status: str | None = None
 
 
 class NextPartRead(BaseModel):
@@ -775,6 +779,12 @@ class LiveChannelRead(BaseModel):
     started_at: datetime | None = None
     thumbnail_url: str
     watch_url: str
+
+
+class ChannelLiveResponse(BaseModel):
+    """The broadcast a channel is live with right now, or ``live: null``."""
+
+    live: LiveChannelRead | None = None
 
 
 class LiveListResponse(BaseModel):

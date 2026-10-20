@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import ChannelAutodownloadModal from "../components/ChannelAutodownloadModal";
 import ChannelFeed from "../components/ChannelFeed";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
+import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
@@ -10,6 +11,7 @@ import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
+import { useChannelLive } from "../queries/follows";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import HomeControls from "./library/HomeControls";
@@ -124,6 +126,11 @@ function OnlineLibrary() {
   }, [activeChannel, channels, channelNav.channelUrlOverrides]);
   const catalog = useChannelCatalog(activeChannel, activeChannelUrl);
   const feed = useChannelFeedControls(activeChannel);
+  const channelLive = useChannelLive(
+    onChannelPage && isYoutubeChannelUrl(activeChannelUrl)
+      ? activeChannelUrl
+      : null
+  );
 
   const { dismiss, dismissAll, isDismissed } = useContinueWatchingDismiss();
   const visibleContinueWatching = useMemo(
@@ -217,6 +224,8 @@ function OnlineLibrary() {
           {onChannelPage ? (
             <ChannelControls
               channelUrl={activeChannelUrl}
+              channelTab={feed.channelTab}
+              onChannelTab={feed.setChannelTab}
               feedSearch={feed.feedSearch}
               onFeedSearch={feed.setFeedSearch}
               feedSort={feed.feedSort}
@@ -306,6 +315,8 @@ function OnlineLibrary() {
               feedOrder={feed.feedOrder}
               feedLayout={feed.feedLayout}
               showUndownloaded={settings.showUndownloadedOnChannel}
+              tab={feed.channelTab}
+              liveEntry={channelLive.entry}
               catalogIndexing={Boolean(catalog.catalogProgress?.indexing)}
               queueDockedBottom={queueDock.dockedBottom}
               directYoutubeSearch={

@@ -93,6 +93,20 @@ def test_render_master_lists_each_variant():
     assert body.strip().endswith("v/95.m3u8")
 
 
+def test_render_master_with_a_separate_audio_rendition():
+    body = hls.render_master(
+        [hls.VariantInfo("232", 2_400_000, 1280, 720, None, "avc1.4d401f")],
+        hls.VariantInfo("234", 128_000, None, None, None, "mp4a.40.2"),
+    )
+    assert '#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID="audio"' in body
+    assert 'URI="v/234.m3u8"' in body
+    assert (
+        'BANDWIDTH=2528000,RESOLUTION=1280x720,CODECS="avc1.4d401f,mp4a.40.2",'
+        'AUDIO="audio"' in body
+    )
+    assert body.strip().endswith("v/232.m3u8")
+
+
 # Keep in step with frontend/src/utils/followUrl.test.ts (same table).
 NORMALIZE_CASES = [
     ("https://www.youtube.com/@Foo/live", "https://youtube.com/@foo"),

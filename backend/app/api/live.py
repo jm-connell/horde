@@ -10,30 +10,40 @@ from __future__ import annotations
 
 import gzip
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
+from .. import e2e_mode
 from ..auth import current_user
 from ..config import LIVE_POLL_SEC
 from ..context import get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..openapi_responses import RAW, media_response
-from ..schemas import LiveChannelRead, LiveListResponse
+from ..schemas import ChannelLiveResponse, LiveChannelRead, LiveListResponse
 from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
+from ..services.live.directory import (
+    RATE_LIMIT_BACKOFF_SEC,
+    STALE_LIVE_SEC,
+    ChannelLiveState,
+    check_channel,
+)
 from ..services.live.sessions import (
     LiveNotAvailable,
     LiveSegmentMissing,
     LiveSession,
     LiveUpstreamError,
 )
+from ..services.url_safety import UnsafeUrlError, UrlFetchError
+from ..services.ytdlp_extract import is_youtube_url
 from .preview import _send_validated, get_preview_client
 
 router = APIRouter(prefix="/api/live", tags=["live"])
@@ -43,10 +53,13 @@ HLS_PLAYLIST = media_response(
     "application/vnd.apple.mpegurl", description="HLS playlist"
 )
 TS_SEGMENT = media_response("video/mp2t", description="MPEG-TS media segment")
+AAC_SEGMENT = media_response("audio/aac", description="Packed AAC audio segment")
 _PLAYLIST_TYPE = "application/vnd.apple.mpegurl"
 _CHUNK = 256 * 1024
 
 VideoId = Path(..., pattern=r"^[A-Za-z0-9_-]{11}$")
+#: A channel page re-checks its ``/live`` page at most this often.
+CHANNEL_CHECK_FRESH_SEC = 120.0
 VariantKey = Path(..., pattern=r"^[A-Za-z0-9_-]{1,40}$")
 
 
@@ -62,24 +75,84 @@ def live_now(
     items: list[LiveChannelRead] = []
     seen: set[str] = set()
     for state in directory.live(followed):
-        b = state.broadcast
-        if b is None or b.video_id in seen:
+        item = _live_read(state)
+        if item is None or item.video_id in seen:
             continue
-        seen.add(b.video_id)
-        items.append(
-            LiveChannelRead(
-                channel_url=state.channel_url,
-                channel_name=state.channel_name,
-                video_id=b.video_id,
-                title=b.title,
-                game=b.game,
-                viewers=b.viewers,
-                started_at=b.started_at,
-                thumbnail_url=b.thumbnail_url,
-                watch_url=f"https://www.youtube.com/watch?v={b.video_id}",
-            )
-        )
+        seen.add(item.video_id)
+        items.append(item)
     return LiveListResponse(items=items, enabled=LIVE_POLL_SEC > 0)
+
+
+def _live_read(state: ChannelLiveState) -> LiveChannelRead | None:
+    b = state.broadcast
+    if b is None:
+        return None
+    return LiveChannelRead(
+        channel_url=state.channel_url,
+        channel_name=state.channel_name,
+        video_id=b.video_id,
+        title=b.title,
+        game=b.game,
+        viewers=b.viewers,
+        started_at=b.started_at,
+        thumbnail_url=b.thumbnail_url,
+        watch_url=f"https://www.youtube.com/watch?v={b.video_id}",
+    )
+
+
+@router.get("/channel", response_model=ChannelLiveResponse)
+async def channel_live(
+    request: Request,
+    url: str = Query(..., max_length=2048, description="The channel's URL"),
+):
+    """Whether one channel is live right now (for its channel page).
+
+    Answered from the background checks when they are recent (followed
+    channels), otherwise by reading the channel's ``/live`` page once. Nothing
+    is fetched while live checks are off (``HORDE_LIVE_POLL_SEC=0``) or paused
+    after YouTube rate-limited them.
+    """
+    channel_url = follows.normalize_channel_url(url)
+    if not channel_url or not is_youtube_url(channel_url):
+        raise CodedHTTPException(400, "Not a YouTube channel URL", "invalid_url")
+    directory = get_ctx(request).live.directory
+    state = directory.get(channel_url)
+    now = time.time()
+    fresh = state is not None and now - state.checked_at < max(
+        CHANNEL_CHECK_FRESH_SEC, float(LIVE_POLL_SEC)
+    )
+    may_fetch = (
+        LIVE_POLL_SEC > 0 and now >= directory.paused_until and not e2e_mode.enabled()
+    )
+    if not fresh and may_fetch:
+        name = state.channel_name if state else None
+        try:
+            async with request.app.state.ytdlp_slots.slot():
+                broadcast = await run_in_threadpool(check_channel, channel_url)
+        except UrlFetchError as exc:
+            directory.record_failure(channel_url, name)
+            if "429" in str(exc):
+                directory.paused_until = time.time() + RATE_LIMIT_BACKOFF_SEC
+                logger.warning(
+                    "YouTube rate-limited live checks; pausing them for %s minutes",
+                    RATE_LIMIT_BACKOFF_SEC // 60,
+                )
+            else:
+                logger.debug("live check failed for %s", channel_url, exc_info=True)
+        except UnsafeUrlError:
+            directory.record_failure(channel_url, name)
+            logger.debug("live check refused for %s", channel_url, exc_info=True)
+        except Exception:
+            # The page fallback runs yt-dlp, which fails in its own ways.
+            directory.record_failure(channel_url, name)
+            logger.warning("live check failed for %s", channel_url, exc_info=True)
+        else:
+            directory.record(channel_url, name, broadcast)
+        state = directory.get(channel_url)
+    if state is None or time.time() - state.confirmed_at > STALE_LIVE_SEC:
+        # Never confirmed, or failed checks kept an old answer too long.
+        return ChannelLiveResponse(live=None)
+    return ChannelLiveResponse(live=_live_read(state))
 
 
 # --- HLS proxy -----------------------------------------------------------------
@@ -161,13 +234,9 @@ async def _close(resp: httpx.Response) -> None:
         logger.debug("closing a live segment response failed", exc_info=True)
 
 
-@router.get("/{video_id}/seg/{key}/{sq}.ts", response_class=RAW, responses=TS_SEGMENT)
-async def live_segment(
-    request: Request,
-    video_id: str = VideoId,
-    key: str = VariantKey,
-    sq: int = Path(..., ge=0),
-):
+async def _segment(
+    request: Request, video_id: str, key: str, sq: int, media_type: str
+) -> StreamingResponse:
     session = await _session(request, video_id)
     try:
         upstream = await session.segment(key, sq)
@@ -191,8 +260,29 @@ async def live_segment(
 
     return StreamingResponse(
         body(),
-        media_type="video/mp2t",
+        media_type=media_type,
         # A segment number always names the same media.
         headers={"Cache-Control": "private, max-age=3600"},
         background=BackgroundTask(_close, upstream),
     )
+
+
+@router.get("/{video_id}/seg/{key}/{sq}.ts", response_class=RAW, responses=TS_SEGMENT)
+async def live_segment(
+    request: Request,
+    video_id: str = VideoId,
+    key: str = VariantKey,
+    sq: int = Path(..., ge=0),
+):
+    return await _segment(request, video_id, key, sq, "video/mp2t")
+
+
+@router.get("/{video_id}/seg/{key}/{sq}.aac", response_class=RAW, responses=AAC_SEGMENT)
+async def live_audio_segment(
+    request: Request,
+    video_id: str = VideoId,
+    key: str = VariantKey,
+    sq: int = Path(..., ge=0),
+):
+    """A segment of the separate audio rendition (packed AAC with an ID3 timestamp)."""
+    return await _segment(request, video_id, key, sq, "audio/aac")
