@@ -185,6 +185,7 @@ def catalog_feed_page(
             "thumbnail_url": r.thumbnail_url,
             "view_count": r.view_count,
             "published_at": r.published_at,
+            "live_status": r.live_status,
         }
         for r in rows
     ]

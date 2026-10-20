@@ -10,30 +10,34 @@ from __future__ import annotations
 
 import gzip
 import logging
+import time
 from collections.abc import AsyncIterator
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, Path, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import Response, StreamingResponse
 from sqlmodel import Session
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
+from .. import e2e_mode
 from ..auth import current_user
 from ..config import LIVE_POLL_SEC
 from ..context import get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..openapi_responses import RAW, media_response
-from ..schemas import LiveChannelRead, LiveListResponse
+from ..schemas import ChannelLiveResponse, LiveChannelRead, LiveListResponse
 from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
+from ..services.live.directory import ChannelLiveState, check_channel
 from ..services.live.sessions import (
     LiveNotAvailable,
     LiveSegmentMissing,
     LiveSession,
     LiveUpstreamError,
 )
+from ..services.url_safety import UnsafeUrlError, UrlFetchError
 from .preview import _send_validated, get_preview_client
 
 router = APIRouter(prefix="/api/live", tags=["live"])
@@ -48,6 +52,8 @@ _PLAYLIST_TYPE = "application/vnd.apple.mpegurl"
 _CHUNK = 256 * 1024
 
 VideoId = Path(..., pattern=r"^[A-Za-z0-9_-]{11}$")
+#: A channel page re-checks its ``/live`` page at most this often.
+CHANNEL_CHECK_FRESH_SEC = 120.0
 VariantKey = Path(..., pattern=r"^[A-Za-z0-9_-]{1,40}$")
 
 
@@ -63,24 +69,60 @@ def live_now(
     items: list[LiveChannelRead] = []
     seen: set[str] = set()
     for state in directory.live(followed):
-        b = state.broadcast
-        if b is None or b.video_id in seen:
+        item = _live_read(state)
+        if item is None or item.video_id in seen:
             continue
-        seen.add(b.video_id)
-        items.append(
-            LiveChannelRead(
-                channel_url=state.channel_url,
-                channel_name=state.channel_name,
-                video_id=b.video_id,
-                title=b.title,
-                game=b.game,
-                viewers=b.viewers,
-                started_at=b.started_at,
-                thumbnail_url=b.thumbnail_url,
-                watch_url=f"https://www.youtube.com/watch?v={b.video_id}",
-            )
-        )
+        seen.add(item.video_id)
+        items.append(item)
     return LiveListResponse(items=items, enabled=LIVE_POLL_SEC > 0)
+
+
+def _live_read(state: ChannelLiveState) -> LiveChannelRead | None:
+    b = state.broadcast
+    if b is None:
+        return None
+    return LiveChannelRead(
+        channel_url=state.channel_url,
+        channel_name=state.channel_name,
+        video_id=b.video_id,
+        title=b.title,
+        game=b.game,
+        viewers=b.viewers,
+        started_at=b.started_at,
+        thumbnail_url=b.thumbnail_url,
+        watch_url=f"https://www.youtube.com/watch?v={b.video_id}",
+    )
+
+
+@router.get("/channel", response_model=ChannelLiveResponse)
+async def channel_live(
+    request: Request,
+    url: str = Query(..., max_length=2048, description="The channel's URL"),
+):
+    """Whether one channel is live right now (for its channel page).
+
+    Answered from the background checks when they are recent (followed
+    channels), otherwise by reading the channel's ``/live`` page once.
+    """
+    channel_url = follows.normalize_channel_url(url)
+    if not channel_url:
+        raise CodedHTTPException(400, "Not a channel URL", "invalid_url")
+    directory = get_ctx(request).live.directory
+    state = directory.get(channel_url)
+    fresh = state is not None and time.time() - state.checked_at < max(
+        CHANNEL_CHECK_FRESH_SEC, float(LIVE_POLL_SEC)
+    )
+    if not fresh and not e2e_mode.enabled():
+        try:
+            async with request.app.state.ytdlp_slots.slot():
+                broadcast = await run_in_threadpool(check_channel, channel_url)
+        except (UrlFetchError, UnsafeUrlError):
+            logger.debug("live check failed for %s", channel_url, exc_info=True)
+            directory.record_failure(channel_url, None)
+        else:
+            directory.record(channel_url, None, broadcast)
+        state = directory.get(channel_url)
+    return ChannelLiveResponse(live=_live_read(state) if state else None)
 
 
 # --- HLS proxy -----------------------------------------------------------------

@@ -609,11 +609,12 @@ def _playlist_count(info: dict[str, Any]) -> int | None:
     return n if n > 0 else None
 
 
-def _channel_videos_url(channel_url: str) -> str:
+def _channel_videos_url(channel_url: str, tab: str = "videos") -> str:
     url = channel_url.strip().rstrip("/")
-    if url.endswith("/videos"):
+    if url.endswith(f"/{tab}"):
         return url
     for suffix in (
+        "/videos",
         "/shorts",
         "/streams",
         "/playlists",
@@ -622,8 +623,8 @@ def _channel_videos_url(channel_url: str) -> str:
         "/search",
     ):
         if url.endswith(suffix):
-            return url[: -len(suffix)] + "/videos"
-    return f"{url}/videos"
+            return url[: -len(suffix)] + f"/{tab}"
+    return f"{url}/{tab}"
 
 
 def is_youtube_url(url: str) -> bool:
@@ -651,14 +652,14 @@ def channel_search_url(channel_url: str, query: str) -> str:
 
 
 def fetch_channel_feed(
-    channel_url: str, offset: int = 0, limit: int = 30
+    channel_url: str, offset: int = 0, limit: int = 30, *, tab: str = "videos"
 ) -> dict[str, Any]:
-    """Fetch a page of uploads from a YouTube channel tab."""
+    """Fetch a page of a YouTube channel tab (``videos`` or ``streams``)."""
     import yt_dlp
 
     offset = max(0, offset)
     limit = max(1, min(limit, 100))
-    feed_url = _channel_videos_url(channel_url)
+    feed_url = _channel_videos_url(channel_url, tab)
     cache_key = (feed_url, offset, limit, 3)
     now = time.time()
     with _feed_cache_lock:

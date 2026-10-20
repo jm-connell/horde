@@ -120,6 +120,67 @@ def test_live_list_requires_sign_in(anon_client):
     assert anon_client.get("/api/live").status_code == 401
 
 
+# --- GET /api/live/channel ----------------------------------------------------
+
+
+def test_channel_live_reads_a_fresh_background_check(client, directory, monkeypatch):
+    def no_fetch(url):  # pragma: no cover - must not be called
+        raise AssertionError("fresh state must not be re-checked")
+
+    monkeypatch.setattr("app.api.live.check_channel", no_fetch)
+    directory.record(ADMIN_CHAN, "Admin Chan", _broadcast())
+    body = client.get(
+        "/api/live/channel", params={"url": "https://www.youtube.com/@AdminChan/videos"}
+    ).json()
+    assert body["live"]["video_id"] == VID
+    assert body["live"]["channel_url"] == ADMIN_CHAN
+
+
+def test_channel_live_checks_an_unknown_channel_once(client, directory, monkeypatch):
+    calls: list[str] = []
+
+    def check(url):
+        calls.append(url)
+        return _broadcast("ccccccccccc")
+
+    monkeypatch.setattr("app.api.live.check_channel", check)
+    for _ in range(2):
+        body = client.get("/api/live/channel", params={"url": OTHER_CHAN}).json()
+        assert body["live"]["video_id"] == "ccccccccccc"
+    assert calls == [OTHER_CHAN]
+
+
+def test_channel_live_is_null_when_not_live_or_the_check_fails(
+    client, directory, monkeypatch
+):
+    from app.services.url_safety import UrlFetchError
+
+    monkeypatch.setattr("app.api.live.check_channel", lambda url: None)
+    assert client.get("/api/live/channel", params={"url": OTHER_CHAN}).json() == {
+        "live": None
+    }
+
+    def boom(url):
+        raise UrlFetchError("HTTP 500")
+
+    monkeypatch.setattr("app.api.live.check_channel", boom)
+    body = client.get("/api/live/channel", params={"url": MEMBER_CHAN}).json()
+    assert body == {"live": None}
+
+
+def test_channel_live_rejects_a_non_url(client):
+    resp = client.get("/api/live/channel", params={"url": "   "})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "invalid_url"
+
+
+def test_channel_live_requires_sign_in(anon_client):
+    assert (
+        anon_client.get("/api/live/channel", params={"url": OTHER_CHAN}).status_code
+        == 401
+    )
+
+
 # --- HLS proxy -----------------------------------------------------------------
 
 
@@ -440,6 +501,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
         "title": "Some stream",
         "channel": "Chan",
         "is_live": live,
+        "was_live": not live,
         "available_presets": [],
         "subtitles": [],
     }
@@ -451,6 +513,7 @@ def test_preview_meta_reports_is_live(client, monkeypatch, live):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["is_live"] is live
+    assert resp.json()["was_live"] is (not live)
 
 
 def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
@@ -463,3 +526,4 @@ def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
     )
     assert resp.status_code == 200
     assert resp.json()["is_live"] is False
+    assert resp.json()["was_live"] is False
