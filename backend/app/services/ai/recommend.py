@@ -9,6 +9,7 @@ seed or per category.
 from __future__ import annotations
 
 import heapq
+from collections import Counter
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -95,7 +96,7 @@ def _category_assignments(session: Session) -> dict[str, list[tuple[int, float]]
         return {}
     # Categories are refreshed together, so they share one dimension; any left
     # over from an older embed model cannot be compared and are skipped.
-    dim = len(named[-1][1])
+    dim = Counter(len(vec) for _, vec in named).most_common(1)[0][0]
     named = [(name, vec) for name, vec in named if len(vec) == dim]
 
     video_ids, scores = vector_index.video_scores(session, [v for _, v in named])
@@ -159,8 +160,9 @@ def videos_for_category(
 def _engagement(position_sec: float, duration_sec: float | None) -> float:
     """How much a watch says about the user's taste, from how far they got."""
     if position_sec <= 0:
-        # Finished and reset, or an old position that expired: unknown.
-        return 0.75
+        # The player stores a finished video as 0 (useProgressSaver.finish); an
+        # old position that expired is also 0, but recency already discounts it.
+        return 1.0
     if duration_sec and duration_sec > 0:
         fraction = position_sec / duration_sec
         if fraction >= 0.5:
@@ -172,23 +174,29 @@ def _engagement(position_sec: float, duration_sec: float | None) -> float:
 
 
 def _diversify(scored: dict[int, float], channels: dict[int, str]) -> list[int]:
-    """Order by score, lowering each channel's later picks so one channel cannot fill the shelf."""
-    heap = [(-score, vid, 0) for vid, score in scored.items()]
+    """Order by score, lowering each channel's later picks so one channel cannot fill the shelf.
+
+    The penalty is the same for every video of a channel, so each channel keeps
+    its own order: merge the channels' queues by their heads' penalised scores.
+    """
+    queues: dict[str | int, list[tuple[float, int]]] = {}
+    for vid, score in scored.items():
+        # A video without a channel is its own queue: nothing to spread.
+        queues.setdefault(channels.get(vid) or vid, []).append((score, vid))
+    heap: list[tuple[float, int, str | int, int]] = []
+    for key, queue in queues.items():
+        queue.sort(key=lambda item: (-item[0], item[1]))
+        heap.append((-queue[0][0], queue[0][1], key, 0))
     heapq.heapify(heap)
-    picked_per_channel: dict[str, int] = {}
     out: list[int] = []
     while heap:
-        neg, vid, seen_count = heapq.heappop(heap)
-        channel = channels.get(vid, "")
-        count = picked_per_channel.get(channel, 0) if channel else 0
-        if count != seen_count:
-            # The channel gained picks since this entry was scored: re-queue it.
-            penalty = CHANNEL_REPEAT_PENALTY * (count - seen_count)
-            heapq.heappush(heap, (neg + penalty, vid, count))
-            continue
+        _neg, vid, key, index = heapq.heappop(heap)
         out.append(vid)
-        if channel:
-            picked_per_channel[channel] = count + 1
+        queue = queues[key]
+        if index + 1 < len(queue):
+            score, nxt = queue[index + 1]
+            penalised = score - CHANNEL_REPEAT_PENALTY * (index + 1)
+            heapq.heappush(heap, (-penalised, nxt, key, index + 1))
     return out
 
 
