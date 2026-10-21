@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import json
 import math
+import random
 import re
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from app.models import AiCategory, Video, VideoEmbedding
 from app.services import follows, library
@@ -563,3 +564,125 @@ def test_enrich_tags_reuses_the_librarys_spelling(session, add_video, monkeypatc
     session.expire_all()
     tags = library.parse_tags(session.get(Video, target.id).tags)
     assert tags == ["Gaming", "speedrun"]
+
+
+def test_enrich_tags_keeps_distinct_tags_that_normalise_alike(
+    session, add_video, monkeypatch
+):
+    for title in ("One", "Two"):
+        add_video(title=title, channel="A", tags=["C++", "News", "Glass"])
+    target = add_video(title="Three", channel="C", tags=[])
+    llm = SimpleNamespace(
+        chat=lambda prompt, model, **kw: json.dumps(
+            {"tags": ["C#", "new", "Glasses", "news"], "remove": []}
+        )
+    )
+    monkeypatch.setattr(tasks, "get_llm_provider", lambda: llm)
+    monkeypatch.setattr(tasks, "require_llm_chat_model", lambda *a, **k: None)
+
+    assert tasks.run_enrich_tags(session, target.id) is None
+
+    session.expire_all()
+    tags = library.parse_tags(session.get(Video, target.id).tags)
+    # Only a difference in case takes the library's spelling.
+    assert tags == ["C#", "new", "Glasses"]
+
+
+# --- review regressions -------------------------------------------------------
+
+
+def test_finished_seed_counts_fully():
+    # The player records a finished video as position 0.
+    assert recommend._engagement(0.0, 600.0) == recommend._engagement(400.0, 600.0)
+    assert recommend._engagement(10.0, 600.0) < recommend._engagement(0.0, 600.0)
+
+
+def test_diversify_matches_greedy_selection():
+    rng = random.Random(5)  # noqa: S311 - deterministic test data
+    penalty = recommend.CHANNEL_REPEAT_PENALTY
+
+    def greedy(scored, channels):
+        left, picks, out = dict(scored), {}, []
+        while left:
+            vid = min(
+                left,
+                key=lambda v: (
+                    -(left[v] - penalty * picks.get(channels.get(v) or v, 0)),
+                    v,
+                ),
+            )
+            key = channels.get(vid) or vid
+            picks[key] = picks.get(key, 0) + 1
+            out.append(vid)
+            del left[vid]
+        return out
+
+    for _ in range(100):
+        n = rng.randint(0, 30)
+        # Scores on a 1/1024 grid so penalised ties compare exactly.
+        scored = {i: rng.randint(200, 800) / 1024 for i in range(n)}
+        channels = {i: rng.choice(["a", "b", "c", ""]) for i in range(n)}
+        assert recommend._diversify(scored, channels) == greedy(scored, channels)
+
+
+def test_profiles_stay_exact_through_incremental_changes(session, add_video):
+    rng = random.Random(1)  # noqa: S311 - deterministic test data
+    videos = [add_video(title=f"P{i}") for i in range(40)]
+
+    def vec():
+        return [rng.uniform(-1, 1) for _ in range(4)]
+
+    def store(video):
+        _embed(session, video, vec())
+        for chunk in range(rng.randint(0, 3)):
+            _embed(session, video, vec(), chunk=chunk)
+
+    def check():
+        rows = session.exec(select(VideoEmbedding)).all()
+        by_video: dict[int, tuple[list[float], list[list[float]]]] = {}
+        for row in rows:
+            meta, captions = by_video.setdefault(row.video_id, ([], []))
+            vector = embeddings.unpack_vector(row.vector, row.dim)
+            if row.chunk_index == -1:
+                meta.extend(vector)
+            else:
+                captions.append(vector)
+        expected = {vid: _profile(m, c) for vid, (m, c) in by_video.items()}
+        got = vector_index.profile_vectors(session, list(expected))
+        assert set(got) == set(expected)
+        for vid, profile in expected.items():
+            assert got[vid] == pytest.approx(profile, abs=1e-5)
+
+    for video in videos:
+        store(video)
+    check()
+    for _ in range(15):
+        video = rng.choice(videos)
+        session.exec(delete(VideoEmbedding).where(VideoEmbedding.video_id == video.id))
+        session.commit()
+        if rng.random() < 0.7:
+            store(video)
+        check()
+
+
+def test_related_pages_are_one_ranking_when_scores_are_close(
+    session, add_video, embed_ready
+):
+    source = add_video(title="Source", channel="S", tags=["rare", "common"])
+    _embed(session, source, [1.0, 0.0])
+    for i in range(120):
+        sim = 0.95 - i * 0.001
+        video = add_video(
+            title=f"Close {i}",
+            channel="S" if i % 7 == 0 else f"C{i}",
+            tags=["rare"] if i % 11 == 0 else ["common"],
+        )
+        _embed(session, video, [sim, math.sqrt(1 - sim * sim)])
+
+    def page(offset, limit):
+        rows = library.related_videos(session, source.id, limit=limit, offset=offset)
+        return [v.id for v in rows]
+
+    by_eight = [vid for offset in range(0, 48, 8) for vid in page(offset, 8)]
+    assert by_eight == page(0, 24) + page(24, 24)
+    assert len(set(by_eight)) == 48
