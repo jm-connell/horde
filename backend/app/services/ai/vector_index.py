@@ -46,6 +46,23 @@ _IN_BATCH = 500
 _COMPACT_FRACTION = 0.2
 _REBUILD_FRACTION = 0.2
 _REBUILD_MIN_VIDEOS = 50
+# A video's profile is its metadata vector plus this much of its captions' mean.
+_CAPTION_WEIGHT = 0.5
+
+
+def _normalise_rows(matrix: np.ndarray) -> None:
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    np.divide(matrix, norms, out=matrix, where=norms > 0)
+
+
+class _Profiles:
+    """A block's per-video profile vectors, as of ``version``."""
+
+    def __init__(self, version: int, video_ids: np.ndarray, matrix: np.ndarray):
+        self.version = version
+        self.video_ids = video_ids
+        self.matrix = matrix
+        self.row_of = {int(v): i for i, v in enumerate(video_ids)}
 
 
 class _Block:
@@ -60,6 +77,9 @@ class _Block:
         self.video_ids = np.empty(capacity, dtype=np.int64)
         self.chunk_indexes = np.empty(capacity, dtype=np.int64)
         self.alive = np.zeros(capacity, dtype=bool)
+        # Bumped on every change, so cached profiles know when they are stale.
+        self.version = 0
+        self._profiles: _Profiles | None = None
 
     def _grow(self) -> None:
         capacity = self.matrix.shape[0] * 2
@@ -81,11 +101,36 @@ class _Block:
         self.chunk_indexes[self.n] = chunk_index
         self.alive[self.n] = True
         self.n += 1
+        self.version += 1
 
     def mask(self, video_ids: np.ndarray) -> None:
         hit = self.alive[: self.n] & np.isin(self.video_ids[: self.n], video_ids)
         self.alive[: self.n][hit] = False
         self.dead += int(hit.sum())
+        self.version += 1
+
+    def profiles(self) -> _Profiles:
+        """One unit vector per video: metadata plus a share of its captions.
+
+        Comparing whole videos this way, rather than by their single best chunk,
+        keeps one caption passage that happens to match from pulling in an
+        unrelated video, while captions still count when metadata is thin.
+        """
+        if self._profiles is not None and self._profiles.version == self.version:
+            return self._profiles
+        rows = np.flatnonzero(self.alive[: self.n])
+        ids, inverse = np.unique(self.video_ids[rows], return_inverse=True)
+        vectors = np.zeros((len(ids), self.dim), dtype=np.float32)
+        is_meta = self.chunk_indexes[rows] == -1
+        # Chunk -1 is unique per video; stored rows are already unit length.
+        vectors[inverse[is_meta]] = self.matrix[rows[is_meta]]
+        captions = np.zeros_like(vectors)
+        np.add.at(captions, inverse[~is_meta], self.matrix[rows[~is_meta]])
+        _normalise_rows(captions)
+        vectors += _CAPTION_WEIGHT * captions
+        _normalise_rows(vectors)
+        self._profiles = _Profiles(self.version, ids, vectors)
+        return self._profiles
 
     def compact(self) -> _Block:
         keep = np.flatnonzero(self.alive[: self.n])
@@ -252,6 +297,35 @@ class EmbeddingMatrixCache:
                     break
             return out
 
+    def video_scores(
+        self, engine: Engine, queries: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """(video_ids, scores): cosine of each video's profile to each query.
+
+        ``queries`` is ``(m, dim)`` and must be L2-normalised; ``scores`` is ``(n, m)``.
+        """
+        with self._lock:
+            block = self._refresh(engine).get(int(queries.shape[1]))
+            if block is None or block.n == 0:
+                return np.empty(0, dtype=np.int64), np.empty((0, len(queries)))
+            profiles = block.profiles()
+            return profiles.video_ids, profiles.matrix @ queries.T
+
+    def profile_vectors(
+        self, engine: Engine, video_ids: list[int]
+    ) -> dict[int, list[float]]:
+        with self._lock:
+            out: dict[int, list[float]] = {}
+            for block in self._refresh(engine).values():
+                if block.n == 0:
+                    continue
+                profiles = block.profiles()
+                for vid in video_ids:
+                    row = profiles.row_of.get(vid)
+                    if row is not None and vid not in out:
+                        out[vid] = profiles.matrix[row].tolist()
+            return out
+
 
 _CREATE_LOCK = threading.Lock()
 
@@ -291,6 +365,26 @@ def top_chunks(
         exclude_ids=exclude_ids,
         min_score=min_score,
     )
+
+
+def video_scores(
+    session: Session, queries: list[list[float]]
+) -> tuple[np.ndarray, np.ndarray]:
+    """(video_ids, scores) of every video's profile against ``queries``.
+
+    ``scores[i, j]`` is the cosine of video ``video_ids[i]`` to ``queries[j]``.
+    All queries must share one dimension; zero vectors score 0. Do not modify the
+    returned ``video_ids``: it is shared with the cache.
+    """
+    matrix = np.asarray(queries, dtype=np.float32)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    matrix = np.divide(matrix, norms, out=np.zeros_like(matrix), where=norms > 0)
+    return cache_for(session).video_scores(_bind_engine(session), matrix)
+
+
+def profile_vectors(session: Session, video_ids: list[int]) -> dict[int, list[float]]:
+    """Each indexed video's profile vector (see ``_Block.profiles``), by id."""
+    return cache_for(session).profile_vectors(_bind_engine(session), video_ids)
 
 
 @event.listens_for(VideoEmbedding, "after_insert")
