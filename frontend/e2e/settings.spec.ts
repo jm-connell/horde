@@ -209,9 +209,15 @@ test("a change made just before a reload is still saved", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Sort library" })
   ).toContainText("Title");
-  // The server has it too, not just this browser.
-  const ui = (await (await page.request.get("/api/settings")).json()).ui;
-  expect(ui.default_library_sort).toBe("title");
+  // The server has it too, not just this browser. The page shows the pending
+  // change before its debounced re-send lands, so wait for the server.
+  await expect
+    .poll(
+      async () =>
+        (await (await page.request.get("/api/settings")).json()).ui
+          .default_library_sort
+    )
+    .toBe("title");
 });
 
 test("a change still in flight when the page reloads is not overwritten by the server's older copy", async ({
