@@ -333,7 +333,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
             remove_keys.add(key)
 
     merged = [t for t in existing if t.lower() not in remove_keys]
-    canonical = {_tag_norm_key(t): t for t in reversed(vocabulary)}
+    canonical = {t.lower(): t for t in reversed(vocabulary)}
     seen = {t.lower() for t in merged}
     seen_norms = {_tag_norm_key(t) for t in merged}
     added_ai: list[str] = []
@@ -344,7 +344,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         if not cleaned or len(cleaned) > 40:
             continue
         # "gaming" when the library says "Gaming": keep the library's spelling.
-        cleaned = canonical.get(_tag_norm_key(cleaned), cleaned)
+        cleaned = canonical.get(cleaned.lower(), cleaned)
         key = cleaned.lower()
         if key in seen or _is_near_duplicate(cleaned, seen_norms):
             continue
@@ -848,7 +848,7 @@ def _parse_category_examples(raw: Any) -> list[int]:
     for item in raw:
         if isinstance(item, bool):
             continue
-        if isinstance(item, str) and item.strip().lstrip("[").rstrip("]").isdigit():
+        if isinstance(item, str) and item.strip().lstrip("[").rstrip("]").isdecimal():
             item = int(item.strip().lstrip("[").rstrip("]"))
         if isinstance(item, int) and item > 0 and item not in out:
             out.append(item)
