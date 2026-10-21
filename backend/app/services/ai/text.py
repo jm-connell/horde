@@ -506,9 +506,19 @@ def summary_prompt(
     )
 
 
-def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
+def tag_enrich_prompt(
+    video: Video, existing_tags: list[str], library_tags: list[str] | None = None
+) -> str:
+    """``library_tags`` are the library's most used tags, offered for reuse."""
     excerpt = subtitle_excerpt(video)
     desc = (video.description or "")[:2000]
+    vocabulary = (
+        "- When a tag from Library tags fits, use it with that exact spelling "
+        "instead of a synonym or variant, so related videos share tags. Only "
+        "use the ones that truly apply.\n"
+        if library_tags
+        else ""
+    )
     return (
         "Suggest a complete set of short topical tags for this archived video.\n"
         'Return JSON: {"tags": ["tag1", "tag2", ...], "remove": ["bad1", ...]}.\n'
@@ -523,11 +533,13 @@ def tag_enrich_prompt(video: Video, existing_tags: list[str]) -> str:
         "for this video. Prefer removing poor AI guesses; leave correct tags alone. "
         "Use an empty list when nothing should be removed.\n"
         "- If existing tags already cover the video well, return fewer new tags "
-        "(or an empty list) rather than inventing redundant ones.\n\n"
+        "(or an empty list) rather than inventing redundant ones.\n"
+        f"{vocabulary}\n"
         f"Title: {video.title}\n"
         f"Channel: {video.channel or ''}\n"
         f"Existing tags: {', '.join(existing_tags) or '(none)'}\n"
-        f"Description: {desc or '(none)'}\n"
+        + (f"Library tags: {', '.join(library_tags)}\n" if library_tags else "")
+        + f"Description: {desc or '(none)'}\n"
         f"Subtitle excerpt: {excerpt or '(none)'}\n"
     )
 
@@ -599,14 +611,18 @@ def category_system_prompt() -> str:
     return (
         "You invent distinctive browse category chips for a personal video archive. "
         "Cover the sample's main themes. Prefer specific, concrete topics over "
-        "universal mega-buckets when the sample supports it. Avoid near-duplicate "
-        "names. Reply with JSON only."
+        "universal mega-buckets when the sample supports it. Categories should "
+        "overlap little: most videos should clearly fit one category best. Every "
+        "category must be backed by videos in the sample. Reply with JSON only."
     )
 
 
 def category_prompt(entries: list[str]) -> str:
-    """Build the invent prompt from preformatted sample video entries."""
-    body = "\n\n".join(entries)
+    """Build the invent prompt from preformatted sample video entries.
+
+    Entries are numbered from 1 so the model can name each category's examples.
+    """
+    body = "\n\n".join(f"[{i}] {entry}" for i, entry in enumerate(entries, 1))
     return (
         "Given these videos from a personal archive, propose 8-15 browse categories "
         "specific to this library.\n"
@@ -614,11 +630,15 @@ def category_prompt(entries: list[str]) -> str:
         "- Prefer concrete topics (e.g. Homelab Networking, Mechanical Keyboards) "
         "over mega-buckets (Tech, Gaming) when the sample supports it.\n"
         "- Names should be about 2-4 words.\n"
-        "- Avoid near-duplicates (Tech vs Technology, same topic reworded).\n"
+        "- Avoid near-duplicates (Tech vs Technology, same topic reworded) and "
+        "categories that mostly contain the same videos.\n"
+        "- Group by what a video is about, not by channel or format alone.\n"
         "- Each category needs a short one-line blurb describing what belongs in it.\n"
+        '- Each category lists "examples": the numbers of 3-8 sample videos that '
+        "clearly belong in it. Skip a category with fewer than 3 clear examples.\n"
         "Return JSON:\n"
         '{"categories": [{"name": "Homelab Networking", '
-        '"blurb": "Routers, VLANs, self-hosted infra"}, ...]}\n\n'
+        '"blurb": "Routers, VLANs, self-hosted infra", "examples": [4, 17, 23]}, ...]}\n\n'
         f"Videos:\n{body}\n"
     )
 
