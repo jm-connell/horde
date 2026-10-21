@@ -7,6 +7,27 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Recommendations and category shelves are rebuilt on whole-video profiles
+  (title/description plus a share of the captions) instead of a single best
+  caption chunk, so one caption passage that happens to match no longer pulls
+  in an unrelated video.
+- **For you** is tuned to the viewer: seeded from the 30 most recent watches,
+  weighted by recency and by how much of each was watched, mixing channels
+  instead of filling the shelf from one, boosting followed channels, and
+  moving already-watched videos to the end so infinite scroll still pages
+  through the whole library.
+- **Category shelves** are grounded in real examples: the chat model names
+  sample videos for each category, unbacked proposals are dropped, and a
+  video joins a shelf only when the category is among its best matches.
+- **More like this** re-ranks one fixed nearest-neighbour pool on every page
+  (pages continue a single ranking), nudged by same channel, shared tags
+  (rare tags count more) and −0.05 for videos the viewer has watched.
+- Tag enrichment reuses the library's most used tags with their exact
+  spelling, so tag chips and the related-videos tag boost stay consistent.
+- Embedding-profile matrices rebuild only changed videos' profiles.
+
 ### Security
 
 - Pillow is now 13.0, which fixes out-of-bounds reads, decompression bomb

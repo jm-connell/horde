@@ -35,7 +35,7 @@ Continue watching on the [Library](library.md) and [History](history.md) pages u
 
 ## Related videos
 
-When enabled in [Settings → Playback](../settings/playback.md), the watch page shows a **related videos** sidebar (library recommendations / neighbors). Related suggestions improve when AI embeddings are available ([AI features](ai-features.md)).
+When enabled in [Settings → Playback](../settings/playback.md), the watch page shows a **related videos** sidebar (library recommendations / neighbors). Related suggestions improve when AI embeddings are available ([AI features](ai-features.md)): they rank by how similar the videos are as a whole (title, description, tags, then captions), favour the same channel and shared distinctive tags, and push down videos you have already watched.
 
 On a **stream preview** the related list also includes videos from channels you have indexed that are not downloaded yet; each downloaded one is marked **Downloaded** and opens the library copy, the others open as streams. A stream also gets the AI panel (summary, chat, chapters); see [AI features](ai-features.md#streamed-videos).
 

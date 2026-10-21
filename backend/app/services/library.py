@@ -1,6 +1,7 @@
 import bisect
 import json
 import logging
+import math
 import random as py_random
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -468,17 +469,105 @@ def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, i
     return sorted(((tag, int(n)) for tag, n in rows), key=lambda kv: (-kv[1], kv[0]))
 
 
+_RELATED_MIN_SCORE = 0.2
+# Nearest neighbours re-ranked with the boosts below. Fixed, so every page
+# slices the same ranking (pages reach 48 videos; boosts move items at most 0.18).
+_RELATED_CANDIDATES = 200
+_RELATED_SAME_CHANNEL_BOOST = 0.05
+# Per shared tag, scaled by its rarity in the library (0..1), and capped.
+_RELATED_TAG_BOOST = 0.03
+_RELATED_TAG_BOOST_MAX = 0.08
+_RELATED_WATCHED_PENALTY = 0.05
+
+
+def _tag_rarity(session: Session, tags: set[str]) -> dict[str, float]:
+    """How distinctive each tag is: 1 for a tag on one video, near 0 for one on most."""
+    if not tags:
+        return {}
+    total = session.exec(
+        select(func.count(col(Video.id))).where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
+    ).one()
+    rows = session.exec(
+        select(VideoTag.tag, func.count(func.distinct(VideoTag.video_id)))
+        .where(col(VideoTag.tag).in_(tags))
+        .group_by(col(VideoTag.tag))
+    ).all()
+    scale = math.log(max(int(total), 2))
+    return {
+        tag.lower(): max(0.0, math.log(max(int(total), 1) / max(int(n), 1)) / scale)
+        for tag, n in rows
+    }
+
+
+def _embedding_related(
+    session: Session, source: Video, user_id: int | None
+) -> list[Video]:
+    """Embedding neighbours of ``source``, best first (empty without AI)."""
+    from .ai import vector_index
+    from .ai.provider import get_embed_provider
+    from .user_state import get_states
+
+    source_id = require_id(source)
+    if get_embed_provider() is None:
+        return []
+    profile = vector_index.profile_vectors(session, [source_id]).get(source_id)
+    if profile is None:
+        return []
+    video_ids, sims = vector_index.video_scores(session, [profile])
+    best = {
+        int(video_ids[i]): float(sims[i, 0])
+        for i in sims[:, 0].argsort()[::-1][: _RELATED_CANDIDATES + 1]
+        if sims[i, 0] >= _RELATED_MIN_SCORE and int(video_ids[i]) != source_id
+    }
+    rows = session.exec(
+        select(Video).where(
+            col(Video.id).in_(list(best)),
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+    ).all()
+    candidates = sorted(
+        ((best[require_id(v)], v) for v in rows),
+        key=lambda item: (-item[0], require_id(item[1])),
+    )
+
+    source_tags = {t.lower() for t in parse_tags(source.tags)}
+    rarity = _tag_rarity(session, source_tags)
+    states = (
+        get_states(session, user_id, [require_id(v) for _, v in candidates])
+        if user_id is not None
+        else {}
+    )
+    scored: list[tuple[float, Video]] = []
+    for score, video in candidates:
+        boost = 0.0
+        if source.channel and video.channel == source.channel:
+            boost += _RELATED_SAME_CHANNEL_BOOST
+        shared = source_tags & {t.lower() for t in parse_tags(video.tags)}
+        if shared:
+            weight = sum(rarity.get(t, 0.0) for t in shared)
+            boost += min(_RELATED_TAG_BOOST_MAX, _RELATED_TAG_BOOST * weight)
+        state = states.get(require_id(video))
+        if state is not None and state.last_watched_at is not None:
+            boost -= _RELATED_WATCHED_PENALTY
+        scored.append((score + boost, video))
+    scored.sort(key=lambda item: (-item[0], require_id(item[1])))
+    return [v for _, v in scored]
+
+
 def related_videos(
     session: Session,
     video_id: int,
     limit: int = 6,
     *,
     offset: int = 0,
+    user_id: int | None = None,
 ) -> list[Video]:
     """Return related library videos.
 
-    First page (offset < 8) prefers embedding neighbors when AI is ready.
-    Later pages use cheaper same-channel / tag / recency signals to cut GPU load.
+    Ranked by embedding similarity of the whole videos when AI is ready,
+    nudged up for the same channel and for shared tags (rare tags count more),
+    and down for videos ``user_id`` has already watched. Same-channel, shared-tag
+    and random videos fill the rest. Every page slices the same ranking.
     """
     source = session.get(Video, video_id)
     if source is None:
@@ -490,7 +579,6 @@ def related_videos(
     pool_limit = min(50, offset + limit)
     picked: list[Video] = []
     seen: set[int] = {video_id}
-    use_ai = offset < 8
 
     def add_candidates(candidates: list[Video]) -> None:
         for video in candidates:
@@ -501,43 +589,14 @@ def related_videos(
             if len(picked) >= pool_limit:
                 return
 
-    if use_ai:
-        # 1) Embedding nearest neighbors (soft-boost same channel / tag overlap).
-        try:
-            from .ai import embeddings as ai_embeddings
-            from .ai.provider import get_embed_provider
-
-            if get_embed_provider() is not None:
-                centroid = ai_embeddings.video_centroid(session, video_id)
-                if centroid is not None:
-                    source_tags = {t.lower() for t in parse_tags(source.tags)}
-                    hits = ai_embeddings.similar_video_ids(
-                        session,
-                        centroid,
-                        limit=max(pool_limit * 4, 32),
-                        exclude_ids={video_id},
-                        min_score=0.2,
-                    )
-                    scored: list[tuple[float, Video]] = []
-                    for vid, score in hits:
-                        video = session.get(Video, vid)
-                        if video is None or video.needs_review:
-                            continue
-                        boost = 0.0
-                        if source.channel and video.channel == source.channel:
-                            boost += 0.05
-                        if source_tags:
-                            row_tags = {t.lower() for t in parse_tags(video.tags)}
-                            boost += 0.02 * len(source_tags & row_tags)
-                        scored.append((score + boost, video))
-                    scored.sort(key=lambda item: item[0], reverse=True)
-                    add_candidates([v for _, v in scored])
-        except Exception:
-            logger.debug(
-                "embedding-based related videos unavailable for video %s",
-                source.id,
-                exc_info=True,
-            )
+    try:
+        add_candidates(_embedding_related(session, source, user_id))
+    except Exception:
+        logger.warning(
+            "embedding-based related videos unavailable for video %s",
+            source.id,
+            exc_info=True,
+        )
 
     if len(picked) < pool_limit and source.channel:
         channel_rows = query_videos(

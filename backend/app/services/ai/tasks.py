@@ -18,11 +18,13 @@ from ...models import (
     UserVideoState,
     Video,
     VideoAiMeta,
+    VideoTag,
+    require_id,
     utcnow,
 )
 from .. import app_settings, library
 from .. import chapters as chapters_svc
-from . import embeddings
+from . import embeddings, vector_index
 from . import text as ai_text
 from .provider import (
     OpenRouterProvider,
@@ -245,6 +247,23 @@ def _is_near_duplicate(tag: str, seen_norms: set[str]) -> bool:
     return any(frozenset(existing.split()) == tokens for existing in seen_norms)
 
 
+_TAG_VOCABULARY_SIZE = 60
+
+
+def _library_tag_vocabulary(session: Session, *, exclude: list[str]) -> list[str]:
+    """The library's most used tags (on two or more videos), most used first."""
+    skip = {t.lower() for t in exclude}
+    uses = func.count(func.distinct(VideoTag.video_id))
+    rows = session.exec(
+        select(VideoTag.tag, uses)
+        .group_by(col(VideoTag.tag))
+        .having(uses >= 2)
+        .order_by(uses.desc(), col(VideoTag.tag))
+        .limit(_TAG_VOCABULARY_SIZE + len(skip))
+    ).all()
+    return [tag for tag, _n in rows if tag.lower() not in skip][:_TAG_VOCABULARY_SIZE]
+
+
 def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None:
     if video_id is None:
         raise RuntimeError("enrich_tags requires video_id")
@@ -274,7 +293,8 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         raise RuntimeError(missing)
 
     existing = library.parse_tags(video.tags)
-    prompt = ai_text.tag_enrich_prompt(video, existing)
+    vocabulary = _library_tag_vocabulary(session, exclude=existing)
+    prompt = ai_text.tag_enrich_prompt(video, existing, vocabulary)
     session.commit()
     raw = provider.chat(
         prompt,
@@ -313,6 +333,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
             remove_keys.add(key)
 
     merged = [t for t in existing if t.lower() not in remove_keys]
+    canonical = {t.lower(): t for t in reversed(vocabulary)}
     seen = {t.lower() for t in merged}
     seen_norms = {_tag_norm_key(t) for t in merged}
     added_ai: list[str] = []
@@ -322,6 +343,8 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         cleaned = tag.strip()
         if not cleaned or len(cleaned) > 40:
             continue
+        # "gaming" when the library says "Gaming": keep the library's spelling.
+        cleaned = canonical.get(cleaned.lower(), cleaned)
         key = cleaned.lower()
         if key in seen or _is_near_duplicate(cleaned, seen_norms):
             continue
@@ -811,14 +834,36 @@ def _category_sample_videos(session: Session, *, limit: int = 100) -> list[Video
     return out
 
 
-def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
-    """Normalize LLM category list to (name, blurb) pairs."""
-    cleaned: list[tuple[str, str]] = []
+class CategoryProposal(NamedTuple):
+    name: str
+    blurb: str
+    # 1-based numbers of the sample videos the model said belong here.
+    examples: list[int]
+
+
+def _parse_category_examples(raw: Any) -> list[int]:
+    if not isinstance(raw, list):
+        return []
+    out: list[int] = []
+    for item in raw:
+        if isinstance(item, bool):
+            continue
+        if isinstance(item, str) and item.strip().lstrip("[").rstrip("]").isdecimal():
+            item = int(item.strip().lstrip("[").rstrip("]"))
+        if isinstance(item, int) and item > 0 and item not in out:
+            out.append(item)
+    return out
+
+
+def _parse_category_items(raw_items: list[Any]) -> list[CategoryProposal]:
+    """Normalize the LLM category list to proposals."""
+    cleaned: list[CategoryProposal] = []
     seen: set[str] = set()
     seen_norms: set[str] = set()
     for item in raw_items:
         name = ""
         blurb = ""
+        examples: list[int] = []
         if isinstance(item, str):
             name = item
         elif isinstance(item, dict):
@@ -828,6 +873,7 @@ def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
             raw_blurb = item.get("blurb")
             if isinstance(raw_blurb, str):
                 blurb = raw_blurb
+            examples = _parse_category_examples(item.get("examples"))
         else:
             continue
         label = " ".join(name.strip().split())
@@ -841,10 +887,14 @@ def _parse_category_items(raw_items: list[Any]) -> list[tuple[str, str]]:
             about = about[:120].rstrip()
         seen.add(key)
         seen_norms.add(_tag_norm_key(label))
-        cleaned.append((label, about))
+        cleaned.append(CategoryProposal(label, about, examples))
         if len(cleaned) >= 15:
             break
     return cleaned
+
+
+_CATEGORY_MIN_LABELLED_EXAMPLES = 2
+_CATEGORY_MAX_EXAMPLES = 8
 
 
 def run_refresh_categories(session: Session, _video_id: int | None = None) -> None:
@@ -896,6 +946,8 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
     entries = ai_text.bound_category_entries(
         entries, budget=runtime.invent_budget_chars
     )
+    # Prompt number n (1-based) is prompt_videos[n - 1]; trimming keeps a prefix.
+    numbered_ids = [require_id(v) for v in prompt_videos[: len(entries)]]
     titled_ids = [v.id for v in titled if v.id is not None]
     session.commit()
 
@@ -909,42 +961,55 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
     categories_value = data.get("categories")
     raw_cats = categories_value if isinstance(categories_value, list) else []
     cleaned = _parse_category_items(raw_cats)
+
+    centroids = vector_index.profile_vectors(session, titled_ids)
+
+    def labelled(proposal: CategoryProposal) -> list[int]:
+        ids = [numbered_ids[n - 1] for n in proposal.examples if n <= len(numbered_ids)]
+        return [vid for vid in ids if vid in centroids]
+
+    # When the model followed the format, a category it could not back with
+    # sample videos is a guess: drop it. Small models that ignore the examples
+    # field fall back to picking examples by embedding below.
+    if sum(1 for p in cleaned if labelled(p)) * 2 >= len(cleaned):
+        cleaned = [
+            p for p in cleaned if len(labelled(p)) >= _CATEGORY_MIN_LABELLED_EXAMPLES
+        ]
     # Need a few solid chips before wiping the existing table.
     if len(cleaned) < 3:
         return
 
-    # Precompute invent-sample centroids for example picking.
-    sample_centroids: list[tuple[Video, list[float]]] = []
-    for video_id in titled_ids:
-        video = session.get(Video, video_id)
-        if video is None:
-            continue
-        cent = embeddings.video_centroid(session, video_id)
-        if cent:
-            sample_centroids.append((video, cent))
-
     example_min = 0.28
     prepared: list[tuple[str, str | None, list[float]]] = []
-    for name, blurb in cleaned:
-        provisional = ai_text.category_embed_text(name, blurb)
-        q = embed_provider.embed(provisional, embed_model, usage_kind="embed")
-        ranked: list[tuple[float, Video, list[float]]] = []
-        for video, cent in sample_centroids:
-            score = embeddings.cosine(q, cent)
-            if score >= example_min:
-                ranked.append((score, video, cent))
-        ranked.sort(key=lambda t: t[0], reverse=True)
-        examples = ranked[:5]
-        example_titles = [
-            (v.title or "").strip() for _, v, _ in examples if (v.title or "").strip()
-        ]
+    for proposal in cleaned:
+        name, blurb = proposal.name, proposal.blurb
+        example_ids = labelled(proposal)[:_CATEGORY_MAX_EXAMPLES]
+        if len(example_ids) < _CATEGORY_MIN_LABELLED_EXAMPLES:
+            provisional = ai_text.category_embed_text(name, blurb)
+            q = embed_provider.embed(provisional, embed_model, usage_kind="embed")
+            ranked = sorted(
+                (
+                    (score, vid)
+                    for vid, cent in centroids.items()
+                    if (score := embeddings.cosine(q, cent)) >= example_min
+                ),
+                reverse=True,
+            )
+            example_ids = [vid for _, vid in ranked[:5]]
+        example_titles: list[str] = []
+        for vid in example_ids[:5]:
+            video = session.get(Video, vid)
+            if video is not None and (video.title or "").strip():
+                example_titles.append((video.title or "").strip())
         doc = ai_text.category_embed_text(name, blurb, example_titles=example_titles)
         text_vec = embed_provider.embed(doc, embed_model, usage_kind="embed")
-        cent = embeddings.mean_vectors([c for _, _, c in examples])
+        cent = embeddings.mean_vectors([centroids[vid] for vid in example_ids])
         if cent is None:
             store_vec = embeddings.l2_normalize(text_vec)
         else:
-            store_vec = embeddings.blend_vectors(text_vec, cent, weight_a=0.5)
+            # Videos are matched on their profile vectors, so the examples'
+            # centroid (same space) carries more weight than the label text.
+            store_vec = embeddings.blend_vectors(text_vec, cent, weight_a=0.4)
         prepared.append((name, blurb or None, store_vec))
 
     existing = session.exec(select(AiCategory)).all()
