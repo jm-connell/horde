@@ -155,19 +155,6 @@ class _Block:
         vectors += _CAPTION_WEIGHT * captions
         _normalise_rows(vectors)
         return ids, vectors
-        rows = np.flatnonzero(self.alive[: self.n])
-        ids, inverse = np.unique(self.video_ids[rows], return_inverse=True)
-        vectors = np.zeros((len(ids), self.dim), dtype=np.float32)
-        is_meta = self.chunk_indexes[rows] == -1
-        # Chunk -1 is unique per video; stored rows are already unit length.
-        vectors[inverse[is_meta]] = self.matrix[rows[is_meta]]
-        captions = np.zeros_like(vectors)
-        np.add.at(captions, inverse[~is_meta], self.matrix[rows[~is_meta]])
-        _normalise_rows(captions)
-        vectors += _CAPTION_WEIGHT * captions
-        _normalise_rows(vectors)
-        self._profiles = _Profiles(self.version, ids, vectors)
-        return self._profiles
 
     def compact(self) -> _Block:
         keep = np.flatnonzero(self.alive[: self.n])
