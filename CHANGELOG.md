@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-21
+
 ### Changed
 
 - Recommendations and category shelves are rebuilt on whole-video profiles
@@ -388,7 +390,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.2...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.3...main
+[1.0.3]: https://github.com/jm-connell/horde/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/jm-connell/horde/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/jm-connell/horde/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/jm-connell/horde/commits/v1.0.0
