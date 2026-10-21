@@ -470,6 +470,9 @@ def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, i
 
 
 _RELATED_MIN_SCORE = 0.2
+# Nearest neighbours re-ranked with the boosts below. Fixed, so every page
+# slices the same ranking (pages reach 48 videos; boosts move items at most 0.18).
+_RELATED_CANDIDATES = 200
 _RELATED_SAME_CHANNEL_BOOST = 0.05
 # Per shared tag, scaled by its rarity in the library (0..1), and capped.
 _RELATED_TAG_BOOST = 0.03
@@ -497,7 +500,7 @@ def _tag_rarity(session: Session, tags: set[str]) -> dict[str, float]:
 
 
 def _embedding_related(
-    session: Session, source: Video, pool_limit: int, user_id: int | None
+    session: Session, source: Video, user_id: int | None
 ) -> list[Video]:
     """Embedding neighbours of ``source``, best first (empty without AI)."""
     from .ai import vector_index
@@ -511,13 +514,21 @@ def _embedding_related(
     if profile is None:
         return []
     video_ids, sims = vector_index.video_scores(session, [profile])
-    order = [i for i in sims[:, 0].argsort()[::-1] if sims[i, 0] >= _RELATED_MIN_SCORE]
-    candidates: list[tuple[float, Video]] = []
-    for i in order[: max(pool_limit * 4, 32) + 1]:
-        video = session.get(Video, int(video_ids[i]))
-        if video is None or video.id == source_id or video.needs_review:
-            continue
-        candidates.append((float(sims[i, 0]), video))
+    best = {
+        int(video_ids[i]): float(sims[i, 0])
+        for i in sims[:, 0].argsort()[::-1][: _RELATED_CANDIDATES + 1]
+        if sims[i, 0] >= _RELATED_MIN_SCORE and int(video_ids[i]) != source_id
+    }
+    rows = session.exec(
+        select(Video).where(
+            col(Video.id).in_(list(best)),
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+    ).all()
+    candidates = sorted(
+        ((best[require_id(v)], v) for v in rows),
+        key=lambda item: (-item[0], require_id(item[1])),
+    )
 
     source_tags = {t.lower() for t in parse_tags(source.tags)}
     rarity = _tag_rarity(session, source_tags)
@@ -539,7 +550,7 @@ def _embedding_related(
         if state is not None and state.last_watched_at is not None:
             boost -= _RELATED_WATCHED_PENALTY
         scored.append((score + boost, video))
-    scored.sort(key=lambda item: item[0], reverse=True)
+    scored.sort(key=lambda item: (-item[0], require_id(item[1])))
     return [v for _, v in scored]
 
 
@@ -579,9 +590,9 @@ def related_videos(
                 return
 
     try:
-        add_candidates(_embedding_related(session, source, pool_limit, user_id))
+        add_candidates(_embedding_related(session, source, user_id))
     except Exception:
-        logger.debug(
+        logger.warning(
             "embedding-based related videos unavailable for video %s",
             source.id,
             exc_info=True,
