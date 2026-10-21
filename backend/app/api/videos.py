@@ -416,7 +416,9 @@ def related_videos(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
-    rows = library.related_videos(session, video_id, limit=limit, offset=offset)
+    rows = library.related_videos(
+        session, video_id, limit=limit, offset=offset, user_id=user.id
+    )
     return _to_read_many(rows, session, viewer=user, compact=True)
 
 
