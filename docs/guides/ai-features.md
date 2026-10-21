@@ -48,7 +48,7 @@ Results are saved per video. Opening the stream again shows them without spendin
 
 ## Enrich tags
 
-**Enrich tags** proposes tags from **title, channel, and description** (subtitle excerpt is optional when captions exist). Existing tags are respected (avoid near-duplicates). Tags then appear as library chips when counts exceed the display threshold ([Library](library.md)).
+**Enrich tags** proposes tags from **title, channel, and description** (subtitle excerpt is optional when captions exist). Existing tags are respected (avoid near-duplicates), and the model is shown the library's most used tags so it reuses their exact spelling instead of inventing synonyms. Tags then appear as library chips when counts exceed the display threshold ([Library](library.md)).
 
 Summaries still require downloaded captions; tag enrichment does not.
 
@@ -57,9 +57,11 @@ Summaries still require downloaded captions; tag enrichment does not.
 When AI is ready, the library home shows:
 
 - **Library** — normal grid
-- **Recommended** — category shelves filled by embedding similarity to category centroids / seeds
+- **Recommended** — "For you", ranked from your own watch history, plus category shelves
 
-Categories are invented/maintained by the AI pipeline; match strictness is tunable (`category_min_score` and related settings). Opening Recommended without providers simply won’t appear or will show empty/loading states until indexes exist.
+**For you** favours what you watched recently and watched through, leaves out what you have already seen (it moves to the end), boosts channels you follow, and mixes channels instead of filling the row from one.
+
+**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed with **Refresh categories**. A video is shown only under the categories it fits best, so a shelf does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Opening Recommended without providers simply won’t appear or will show empty/loading states until indexes exist.
 
 ## Duplicate confirmation
 
