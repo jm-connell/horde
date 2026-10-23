@@ -25,6 +25,7 @@ from sqlmodel import Session, col
 
 from ...database import rowcount
 from ...models import (
+    TrashEntry,
     User,
     UserSession,
     UserSettings,
@@ -400,6 +401,11 @@ def delete_user(session: Session, user_id: int) -> None:
     session.execute(delete(UserSettings).where(col(UserSettings.user_id) == user_id))
     session.execute(
         delete(VideoAiChatMessage).where(col(VideoAiChatMessage.user_id) == user_id)
+    )
+    session.execute(
+        update(TrashEntry)
+        .where(col(TrashEntry.trashed_by_user_id) == user_id)
+        .values(trashed_by_user_id=None)
     )
     session.delete(user)
     if was_active_admin:

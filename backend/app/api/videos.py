@@ -12,6 +12,7 @@ from sqlmodel import Session, col, select
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
 from ..context import AppContext, get_ctx, get_paths, get_session
+from ..errors import CodedHTTPException
 from ..models import DownloadJob, JobStatus, User, Video, require_id
 from ..openapi_responses import (
     EVENT_STREAM,
@@ -47,7 +48,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library, uploads, user_state
+from ..services import library, trash, uploads, user_state
 from ..services import next_part as next_part_svc
 from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
@@ -102,6 +103,33 @@ from .video_serialize import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["videos"])
+
+#: Set on the 204 of a delete that moved the video to the trash, so the client can
+#: offer Undo (``POST /api/trash/{id}/restore``). The bulk form lists the ids.
+TRASH_ENTRY_HEADER = "X-Horde-Trash-Entry"
+TRASH_ENTRIES_HEADER = "X-Horde-Trash-Entries"
+_DELETE_RESPONSES: dict[int | str, dict] = {
+    204: {
+        "description": "Deleted. A video moved to the trash carries its entry id.",
+        "headers": {
+            TRASH_ENTRY_HEADER: {
+                "description": "Trash entry id, when the video went to the trash.",
+                "schema": {"type": "integer"},
+            }
+        },
+    }
+}
+_BULK_DELETE_RESPONSES: dict[int | str, dict] = {
+    204: {
+        "description": "Deleted. Videos moved to the trash are listed by entry id.",
+        "headers": {
+            TRASH_ENTRIES_HEADER: {
+                "description": "Comma-separated trash entry ids.",
+                "schema": {"type": "string"},
+            }
+        },
+    }
+}
 
 
 class _Paging(TypedDict):
@@ -332,24 +360,48 @@ def storage_stats(session: Session = Depends(get_session)):
     "/videos/bulk-delete",
     status_code=204,
     dependencies=[Depends(require_permission("delete_videos"))],
+    responses=_BULK_DELETE_RESPONSES,
 )
 def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
 ):
+    use_trash = payload.delete_files and trash.enabled()
     doomed: list[Path] = []
+    entry_ids: list[int] = []
+    failed = 0
     for vid_id in payload.video_ids:
         video = session.get(Video, vid_id)
         if video is None:
             continue
-        doomed += delete_video_cascade(
-            session, video, payload.delete_files, commit=False
-        )
+        if not use_trash:
+            doomed += delete_video_cascade(
+                session, video, payload.delete_files, commit=False
+            )
+            continue
+        try:
+            entry_ids.append(require_id(trash.trash_video(session, video, user.id)))
+        except trash.TrashError:
+            failed += 1  # already logged; the rest still go to the trash
     session.commit()
     remove_files(doomed)
-    ctx.download_queue.library_changed(room_made=True)
-    return Response(status_code=204)
+    # Trashed bytes still use disk, so a trash move does not make room.
+    ctx.download_queue.library_changed(room_made=not use_trash)
+    if failed:
+        raise CodedHTTPException(
+            500,
+            f"Could not move {failed} video(s) to the trash; "
+            f"{len(entry_ids)} were moved.",
+            "trash_failed",
+        )
+    return Response(
+        status_code=204,
+        headers={TRASH_ENTRIES_HEADER: ",".join(map(str, entry_ids))}
+        if entry_ids
+        else None,
+    )
 
 
 @router.patch(
@@ -577,16 +629,29 @@ def update_progress(
     "/videos/{video_id}",
     status_code=204,
     dependencies=[Depends(require_permission("delete_videos"))],
+    responses=_DELETE_RESPONSES,
 )
 def delete_video(
     video_id: int,
     delete_file: bool = False,
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
 ):
+    """Delete a video. With ``delete_file`` it waits in the trash (when enabled)."""
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    if delete_file and trash.enabled():
+        try:
+            entry = trash.trash_video(session, video, user.id)
+        except trash.TrashError as exc:
+            raise CodedHTTPException(500, str(exc), "trash_failed") from exc
+        # Trashed bytes still use disk, so a trash move does not make room.
+        ctx.download_queue.library_changed()
+        return Response(
+            status_code=204, headers={TRASH_ENTRY_HEADER: str(require_id(entry))}
+        )
     delete_video_cascade(session, video, delete_file)
     ctx.download_queue.library_changed(room_made=True)
     return Response(status_code=204)

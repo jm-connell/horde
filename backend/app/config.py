@@ -26,6 +26,20 @@ STREAM_AI_RETENTION_DAYS: int = max(
     1, int(os.environ.get("HORDE_STREAM_AI_RETENTION_DAYS", "30"))
 )
 
+
+# A video the user deletes waits in the trash this many days before it is erased
+# for good. 0 turns the trash off: a delete is immediate, as it used to be.
+def _non_negative_int(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = int(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+TRASH_DAYS: int = _non_negative_int("HORDE_TRASH_DAYS", 7)
+
 # Video extensions the scanner treats as importable media.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
 

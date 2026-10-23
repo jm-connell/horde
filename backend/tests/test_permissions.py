@@ -71,6 +71,18 @@ GATES: dict[tuple[str, str], str] = {
     ("DELETE", "/api/videos/{video_id}"): "delete_videos",
     # Removing the H.264 sidecar deletes a file from the server.
     ("DELETE", "/api/videos/{video_id}/compat"): "delete_videos",
+    # The trash holds deleted videos: seeing, restoring and erasing them is the same right.
+    **{
+        (m, p): "delete_videos"
+        for m, p in [
+            ("GET", "/api/trash"),
+            ("GET", "/api/trash/summary"),
+            ("POST", "/api/trash/empty"),
+            ("GET", "/api/trash/{entry_id}/thumbnail"),
+            ("POST", "/api/trash/{entry_id}/restore"),
+            ("DELETE", "/api/trash/{entry_id}"),
+        ]
+    },
     # --- download ---
     **{
         (m, p): "download"

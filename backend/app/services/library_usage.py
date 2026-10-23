@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlmodel import Session, col, func, select
 
 from ..context import get_paths
-from ..models import Video
+from ..models import TrashEntry, Video
 
 
 @dataclass(frozen=True)
@@ -17,6 +17,8 @@ class LibraryUsage:
     compat_bytes: int
     thumbnail_bytes: int
     video_count: int
+    #: Deleted videos waiting in the trash. They still use disk, so they count.
+    trash_bytes: int = 0
 
 
 def library_usage(session: Session) -> LibraryUsage:
@@ -41,10 +43,17 @@ def library_usage(session: Session) -> LibraryUsage:
         thumbnail_bytes = sum(
             f.stat().st_size for f in thumbnails.glob("*") if f.is_file()
         )
+    trash_bytes = session.exec(
+        select(func.coalesce(func.sum(col(TrashEntry.size_bytes)), 0))
+    ).one()
     return LibraryUsage(
-        total_bytes=int(video_bytes or 0) + int(compat_bytes or 0) + thumbnail_bytes,
+        total_bytes=int(video_bytes or 0)
+        + int(compat_bytes or 0)
+        + thumbnail_bytes
+        + int(trash_bytes or 0),
         video_bytes=int(video_bytes or 0),
         compat_bytes=int(compat_bytes or 0),
         thumbnail_bytes=thumbnail_bytes,
         video_count=int(video_count or 0),
+        trash_bytes=int(trash_bytes or 0),
     )

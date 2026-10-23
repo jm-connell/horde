@@ -19,7 +19,7 @@ from ..models import (
     JobStatus,
     utcnow,
 )
-from . import app_settings, library
+from . import app_settings, library, trash
 from .url_clean import clean_url, youtube_video_id
 from .workers import BackgroundWorker
 from .ytdlp_extract import is_youtube_short_entry
@@ -230,6 +230,8 @@ def enqueue_catalog_row(
             return None
         if library.find_video_by_youtube_id(session, yt_id) is not None:
             return None
+        if yt_id in trash.trashed_youtube_ids(session):
+            return None
         job = DownloadJob(
             url=url,
             quality_preset=policy.quality_preset or DEFAULT_PRESET,
@@ -256,7 +258,9 @@ def _eligible_rows(
     *,
     queued_ids: set[str],
 ) -> list[ChannelCatalogVideo]:
+    # A video waiting in the trash is as good as in the library: do not fetch it again.
     lib_ids = set(library.youtube_library_map(session).keys())
+    lib_ids |= trash.trashed_youtube_ids(session)
     out: list[ChannelCatalogVideo] = []
     for row in rows:
         if candidate_skip_reason(

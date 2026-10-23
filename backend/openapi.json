@@ -6590,6 +6590,11 @@
             "title": "Total Bytes",
             "type": "integer"
           },
+          "trash_bytes": {
+            "default": 0,
+            "title": "Trash Bytes",
+            "type": "integer"
+          },
           "video_bytes": {
             "title": "Video Bytes",
             "type": "integer"
@@ -7201,6 +7206,177 @@
           "candidates"
         ],
         "title": "ThumbnailCandidates",
+        "type": "object"
+      },
+      "TrashEmptied": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "freed_bytes": {
+            "title": "Freed Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted",
+          "freed_bytes"
+        ],
+        "title": "TrashEmptied",
+        "type": "object"
+      },
+      "TrashItemRead": {
+        "description": "A deleted video in the trash.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trashed_at": {
+            "format": "date-time",
+            "title": "Trashed At",
+            "type": "string"
+          },
+          "trashed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trashed By"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "integer"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          }
+        },
+        "required": [
+          "id",
+          "video_id",
+          "title",
+          "size_bytes",
+          "trashed_at",
+          "expires_at"
+        ],
+        "title": "TrashItemRead",
+        "type": "object"
+      },
+      "TrashPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TrashPage",
+        "type": "object"
+      },
+      "TrashRestored": {
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "title"
+        ],
+        "title": "TrashRestored",
+        "type": "object"
+      },
+      "TrashSummary": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "total_bytes",
+          "retention_days"
+        ],
+        "title": "TrashSummary",
         "type": "object"
       },
       "UnfollowResult": {
@@ -15289,6 +15465,316 @@
         ]
       }
     },
+    "/api/trash": {
+      "get": {
+        "description": "Deleted videos, newest first.",
+        "operationId": "list_trash_api_trash_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/empty": {
+      "post": {
+        "description": "Erase everything in the trash for good.",
+        "operationId": "empty_trash_api_trash_empty_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEmptied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Empty Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/summary": {
+      "get": {
+        "operationId": "trash_summary_api_trash_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Trash Summary",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}": {
+      "delete": {
+        "description": "Erase one video from the trash for good.",
+        "operationId": "delete_forever_api_trash__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Forever",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}/restore": {
+      "post": {
+        "description": "Put the video back in the library, with its tags, playlists and watch history.",
+        "operationId": "restore_from_trash_api_trash__entry_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashRestored"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Restore From Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}/thumbnail": {
+      "get": {
+        "operationId": "trash_thumbnail_api_trash__entry_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "JPEG image"
+          },
+          "404": {
+            "description": "No thumbnail"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Trash Thumbnail",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
     "/api/updates": {
       "get": {
         "description": "Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline.\n\nForcing a fresh check (``refresh``) is for administrators.",
@@ -15786,7 +16272,15 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Deleted. Videos moved to the trash are listed by entry id.",
+            "headers": {
+              "X-Horde-Trash-Entries": {
+                "description": "Comma-separated trash entry ids.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -15954,6 +16448,7 @@
     },
     "/api/videos/{video_id}": {
       "delete": {
+        "description": "Delete a video. With ``delete_file`` it waits in the trash (when enabled).",
         "operationId": "delete_video_api_videos__video_id__delete",
         "parameters": [
           {
@@ -15978,7 +16473,15 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Deleted. A video moved to the trash carries its entry id.",
+            "headers": {
+              "X-Horde-Trash-Entry": {
+                "description": "Trash entry id, when the video went to the trash.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "422": {
             "content": {

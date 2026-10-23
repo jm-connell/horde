@@ -51,6 +51,7 @@ def prepare(ctx: AppContext, mode: str) -> None:
         paths.backgrounds,
         paths.fonts,
         paths.avatars,
+        paths.data / "trash",
     ):
         _empty_dir(extra)
 

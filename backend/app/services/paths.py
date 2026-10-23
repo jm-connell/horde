@@ -13,6 +13,10 @@ _YT_ID_IN_PATH = re.compile(r"\[([A-Za-z0-9_-]{11})\]")
 # Hidden per-job download staging under DOWNLOADS_DIR (never scanned or served).
 STAGING_DIR_NAME = ".horde-staging"
 
+# Hidden folder under DOWNLOADS_DIR where deleted videos wait (``services/trash.py``).
+# The scanner, the import queue and the temp sweep never look inside.
+TRASH_DIR_NAME = ".horde-trash"
+
 # yt-dlp appends ``.f<format_id>`` before the container extension of every
 # per-format download that still has to be merged (``Title [id].f137.mp4``,
 # ``Title [id].f251-drc.webm``, ``Title [id].fhls-1080p.mp4``).
@@ -96,6 +100,11 @@ def staging_dir(job_id: int) -> Path:
 def is_staging_rel_path(rel_path: str) -> bool:
     posix = (rel_path or "").replace("\\", "/").lstrip("/")
     return posix == STAGING_DIR_NAME or posix.startswith(f"{STAGING_DIR_NAME}/")
+
+
+def is_trash_rel_path(rel_path: str) -> bool:
+    posix = (rel_path or "").replace("\\", "/").lstrip("/")
+    return posix == TRASH_DIR_NAME or posix.startswith(f"{TRASH_DIR_NAME}/")
 
 
 def to_rel_path(path: Path) -> str:

@@ -41,6 +41,7 @@ EXPECTED_WORKERS = {
     "subtitle-retry",
     "stream-ai",
     "job-metadata",
+    "trash-purge",
     "codec-probe-backfill",
     "nightly-backup",
 }

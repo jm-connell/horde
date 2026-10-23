@@ -494,6 +494,8 @@ class StorageStats(BaseModel):
     video_count: int
     # H.264 sidecars (counted in total_bytes, not video_bytes).
     compat_bytes: int = 0
+    # Deleted videos waiting in the trash (counted in total_bytes: they still use disk).
+    trash_bytes: int = 0
 
 
 class ChannelRename(BaseModel):
@@ -800,3 +802,43 @@ class LiveListResponse(BaseModel):
     next_cursor: str | None = None
     #: False when the server's live checks are turned off (``HORDE_LIVE_POLL_SEC=0``).
     enabled: bool = True
+
+
+class TrashItemRead(BaseModel):
+    """A deleted video in the trash."""
+
+    id: int
+    video_id: int
+    youtube_id: str | None = None
+    title: str
+    channel: str | None = None
+    size_bytes: int
+    trashed_at: datetime
+    #: When it is erased for good (``trashed_at`` plus ``HORDE_TRASH_DAYS``).
+    expires_at: datetime
+    #: Username of who deleted it (None when that account is gone).
+    trashed_by: str | None = None
+    #: Served by ``GET /api/trash/{id}/thumbnail``; None when it had none.
+    thumbnail_url: str | None = None
+
+
+class TrashPage(BaseModel):
+    items: list[TrashItemRead]
+    next_cursor: str | None = None
+
+
+class TrashSummary(BaseModel):
+    count: int
+    total_bytes: int
+    #: ``HORDE_TRASH_DAYS``: 0 means deletes are immediate and the trash stays empty.
+    retention_days: int
+
+
+class TrashRestored(BaseModel):
+    video_id: int
+    title: str
+
+
+class TrashEmptied(BaseModel):
+    deleted: int
+    freed_bytes: int

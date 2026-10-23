@@ -1993,6 +1993,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description Deleted videos, newest first.
+         */
+        get: operations["list_trash_api_trash_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty Trash
+         * @description Erase everything in the trash for good.
+         */
+        post: operations["empty_trash_api_trash_empty_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trash Summary */
+        get: operations["trash_summary_api_trash_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Forever
+         * @description Erase one video from the trash for good.
+         */
+        delete: operations["delete_forever_api_trash__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore From Trash
+         * @description Put the video back in the library, with its tags, playlists and watch history.
+         */
+        post: operations["restore_from_trash_api_trash__entry_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trash Thumbnail */
+        get: operations["trash_thumbnail_api_trash__entry_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/updates": {
         parameters: {
             query?: never;
@@ -2175,7 +2289,10 @@ export interface paths {
         get: operations["get_video_api_videos__video_id__get"];
         put?: never;
         post?: never;
-        /** Delete Video */
+        /**
+         * Delete Video
+         * @description Delete a video. With ``delete_file`` it waits in the trash (when enabled).
+         */
         delete: operations["delete_video_api_videos__video_id__delete"];
         options?: never;
         head?: never;
@@ -5032,6 +5149,11 @@ export interface components {
             thumbnail_bytes: number;
             /** Total Bytes */
             total_bytes: number;
+            /**
+             * Trash Bytes
+             * @default 0
+             */
+            trash_bytes: number;
             /** Video Bytes */
             video_bytes: number;
             /** Video Count */
@@ -5231,6 +5353,68 @@ export interface components {
         ThumbnailCandidates: {
             /** Candidates */
             candidates: components["schemas"]["ThumbnailCandidate"][];
+        };
+        /** TrashEmptied */
+        TrashEmptied: {
+            /** Deleted */
+            deleted: number;
+            /** Freed Bytes */
+            freed_bytes: number;
+        };
+        /**
+         * TrashItemRead
+         * @description A deleted video in the trash.
+         */
+        TrashItemRead: {
+            /** Channel */
+            channel?: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: number;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Trashed At
+             * Format: date-time
+             */
+            trashed_at: string;
+            /** Trashed By */
+            trashed_by?: string | null;
+            /** Video Id */
+            video_id: number;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
+        /** TrashPage */
+        TrashPage: {
+            /** Items */
+            items: components["schemas"]["TrashItemRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** TrashRestored */
+        TrashRestored: {
+            /** Title */
+            title: string;
+            /** Video Id */
+            video_id: number;
+        };
+        /** TrashSummary */
+        TrashSummary: {
+            /** Count */
+            count: number;
+            /** Retention Days */
+            retention_days: number;
+            /** Total Bytes */
+            total_bytes: number;
         };
         /** UnfollowResult */
         UnfollowResult: {
@@ -10735,6 +10919,248 @@ export interface operations {
             };
         };
     };
+    list_trash_api_trash_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    empty_trash_api_trash_empty_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEmptied"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trash_summary_api_trash_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashSummary"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_forever_api_trash__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_from_trash_api_trash__entry_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashRestored"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trash_thumbnail_api_trash__entry_id__thumbnail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description No thumbnail */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     updates_api_updates_get: {
         parameters: {
             query?: {
@@ -11038,9 +11464,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Deleted. Videos moved to the trash are listed by entry id. */
             204: {
                 headers: {
+                    /** @description Comma-separated trash entry ids. */
+                    "X-Horde-Trash-Entries"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -11238,9 +11666,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Deleted. A video moved to the trash carries its entry id. */
             204: {
                 headers: {
+                    /** @description Trash entry id, when the video went to the trash. */
+                    "X-Horde-Trash-Entry"?: number;
                     [name: string]: unknown;
                 };
                 content?: never;

@@ -610,6 +610,38 @@ class UserSettings(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=utcnow)
 
 
+class TrashEntry(SQLModel, table=True):
+    """A deleted video waiting in the trash (``services/trash.py``).
+
+    A tombstone, not a soft-delete flag: the ``videos`` row and everything that
+    hangs off it are really deleted, so no query has to remember to filter them.
+    ``snapshot_json`` holds what a restore needs to put the rows back and
+    ``files_json`` lists the files moved into ``.horde-trash``. ``video_id`` is the
+    id the video had (it is reused on restore) and is deliberately not a foreign
+    key. Never read the two JSON columns for a listing: they can be large.
+    """
+
+    __tablename__ = "trash_entries"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    video_id: int
+    youtube_id: str | None = Field(default=None, index=True)
+    title: str
+    channel: str | None = None
+    # The media file's path relative to DOWNLOADS_DIR before it was trashed.
+    relative_path: str
+    # Bytes of the files moved into the trash (media and sidecars).
+    size_bytes: int = 0
+    trashed_at: datetime = Field(default_factory=utcnow, index=True)
+    trashed_by_user_id: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    # JSON list of {"root": "downloads" | "data", "path": str, "size": int}.
+    files_json: str = Field(default="[]")
+    snapshot_json: str = Field(default="{}")
+
+
 class DownloadRequester(SQLModel, table=True):
     """Who queued a download job (automatic jobs have no row).
 

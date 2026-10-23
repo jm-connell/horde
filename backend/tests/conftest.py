@@ -89,6 +89,14 @@ def _no_free_space_floor(monkeypatch):
     monkeypatch.setattr(config, "MIN_FREE_GB", 0.0)
 
 
+@pytest.fixture(autouse=True)
+def _trash_off(monkeypatch):
+    """Deletes are immediate unless a test turns the trash on (tests/test_trash.py)."""
+    from app import config
+
+    monkeypatch.setattr(config, "TRASH_DAYS", 0)
+
+
 @pytest.fixture
 def tmp_dirs(tmp_path, monkeypatch):
     """A fresh AppContext over a temp tree, active for the length of the test."""

@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0009_user_avatars"
+HEAD = "0010_trash"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -788,6 +788,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            DROP TABLE trash_entries;
             DROP TABLE channel_follows;
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;

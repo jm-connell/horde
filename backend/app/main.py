@@ -29,6 +29,7 @@ from .api import (
     review,
     setup,
     system,
+    trash,
     users,
     videos,
 )
@@ -163,6 +164,9 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         stream_ai,
         subtitle_retry,
     )
+    from .services import (
+        trash as trash_svc,
+    )
     from .services.ai import worker as ai_worker
     from .services.live import directory as live_directory
     from .services.metadata_sync import create_sync_worker
@@ -197,6 +201,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(subtitle_retry.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
+    registry.start(trash_svc.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
     backup_worker = create_backup_worker(ctx.engine)
@@ -575,6 +580,7 @@ def include_api(target: FastAPI) -> None:
         live,
         review,
         playlists,
+        trash,
         app_settings,
         ai,
         system,
