@@ -179,6 +179,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "system",
     keywords:
+      "notifications notify alerts push ntfy discord webhook message failed download disk full update live channel send test",
+  },
+  {
+    tab: "system",
+    keywords:
       "reset factory wipe erase setup wizard restore defaults media library",
   },
   {

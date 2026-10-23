@@ -294,3 +294,83 @@ test("members cannot set the disk usage limit", async ({
   expect((await refused.json()).code).toBe("admin_required");
   await ctx.close();
 });
+
+test("the administrator adds, tests, edits and removes a notification target", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await page.goto("/settings?tab=system");
+  const section = page.locator("#settings-panel");
+  await expect(
+    section.getByRole("heading", { name: "Notifications" })
+  ).toBeVisible();
+  await section.getByRole("button", { name: "Add target" }).click();
+
+  const form = section.getByRole("form", { name: "Add notification target" });
+  // The events a new target starts with come from the server's list.
+  await expect(form.getByLabel("Download failed")).toBeChecked();
+  await expect(form.getByLabel("Download finished")).not.toBeChecked();
+  await expect(form.getByText("Only automatic downloads")).toHaveCount(0);
+
+  await form.getByLabel("Name").fill("My phone");
+  await form.getByLabel("Server URL").fill("http://127.0.0.1:9");
+  await form.getByLabel("Topic").fill("horde-e2e");
+  await form.getByLabel("Access token (optional)").fill("tk_e2e_secret_1234");
+  await form.getByLabel("Download finished").check();
+  await expect(form.getByLabel("Only automatic downloads")).toBeChecked();
+
+  // Nothing listens on that port, so the test fails in words, not a stack trace.
+  await form.getByRole("button", { name: "Send test" }).click();
+  await expect(form.getByRole("alert")).toHaveText(
+    "Not delivered: Could not connect to the server"
+  );
+  await form.getByRole("button", { name: "Add target" }).click();
+
+  const row = section.getByRole("listitem").filter({ hasText: "My phone" });
+  await expect(row).toContainText("Download failed, Download finished");
+  await expect(
+    row.getByRole("switch", { name: "Send notifications to My phone" })
+  ).toBeChecked();
+
+  // The token never comes back, only its tail.
+  await page.reload();
+  await row.getByRole("button", { name: "Edit My phone" }).click();
+  const edit = section.getByRole("form", { name: "Edit My phone" });
+  await expect(edit.getByLabel("Access token (optional)")).toHaveAttribute(
+    "placeholder",
+    "Saved (••••1234); type to replace"
+  );
+  await expect(page.locator("body")).not.toContainText("tk_e2e_secret_1234");
+  await edit.getByLabel("Name").fill("Phone");
+  await edit.getByRole("button", { name: "Save", exact: true }).click();
+
+  const renamed = section.getByRole("listitem").filter({ hasText: "Phone" });
+  await renamed.getByRole("button", { name: "Send test to Phone" }).click();
+  await expect(renamed.getByRole("alert")).toContainText("Not delivered");
+  await renamed
+    .getByRole("switch", { name: "Send notifications to Phone" })
+    .click();
+  await expect(
+    renamed.getByRole("switch", { name: "Send notifications to Phone" })
+  ).not.toBeChecked();
+
+  // Searching the settings finds the section from another tab.
+  await page.getByRole("tab", { name: "Library" }).click();
+  await page.getByLabel("Search settings").fill("ntfy");
+  await expect(
+    page.getByRole("tab", { name: "System", exact: true })
+  ).toHaveAttribute("aria-selected", "true");
+  await page.getByLabel("Search settings").fill("");
+
+  await renamed.getByRole("button", { name: "Delete Phone" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(section.getByRole("listitem")).toHaveCount(0);
+
+  // Members cannot read or change them.
+  const ctx = await contextAs(browser, baseURL, "member");
+  const denied = await ctx.request.get("/api/notifications");
+  expect(denied.status()).toBe(403);
+  expect((await denied.json()).code).toBe("admin_required");
+  await ctx.close();
+});

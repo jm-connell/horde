@@ -12,6 +12,7 @@ import { api } from "../../api";
 import { useConfirm } from "../../context/ConfirmContext";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
+import NotificationsSection from "./NotificationsSection";
 import SystemStatsSnippet from "./SystemStatsSnippet";
 
 export default function SystemTab() {
@@ -306,6 +307,8 @@ export default function SystemTab() {
           )}
         </div>
       </Section>
+
+      <NotificationsSection />
 
       {health?.wiki_available ? (
         <Section

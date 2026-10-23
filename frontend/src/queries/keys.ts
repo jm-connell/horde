@@ -71,6 +71,7 @@ export const queryKeys = {
   history: {
     all: ["history"] as const,
   },
+  notifications: ["notifications"] as const,
   trash: {
     all: ["trash"] as const,
     summary: ["trash", "summary"] as const,
