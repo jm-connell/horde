@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+from contextlib import AbstractContextManager
 from dataclasses import asdict
+from typing import cast
 
 from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
@@ -21,12 +23,18 @@ from ..schemas import (
 )
 from ..services.auth import accounts, avatars, permissions, sessions, two_factor
 from ..services.auth.accounts import AuthUser
+from ..services.auth.runtime import AuthRuntime
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/users", tags=["users"], dependencies=[Depends(require_admin)]
 )
+
+
+def _hashing(request: Request) -> AbstractContextManager[None]:
+    """A slot from the app's password-hashing cap (503 ``busy`` when none is free)."""
+    return cast(AuthRuntime, request.app.state.auth).hashing.slot()
 
 
 def _read(user: User) -> UserRead:
@@ -61,15 +69,18 @@ def list_permissions():
 
 
 @router.post("", response_model=UserRead, status_code=201)
-def create_user(payload: UserCreate, session: Session = Depends(get_session)):
-    user = accounts.create_user(
-        session,
-        payload.username,
-        payload.password,
-        is_admin=payload.is_admin,
-        granted=payload.permissions,
-        share_downloads=payload.share_downloads,
-    )
+def create_user(
+    payload: UserCreate, request: Request, session: Session = Depends(get_session)
+):
+    with _hashing(request):
+        user = accounts.create_user(
+            session,
+            payload.username,
+            payload.password,
+            is_admin=payload.is_admin,
+            granted=payload.permissions,
+            share_downloads=payload.share_downloads,
+        )
     return _read(user)
 
 
@@ -92,16 +103,17 @@ def update_user(
     # Resetting your own password must not sign you out of this browser.
     token = request.cookies.get(accounts.SESSION_COOKIE)
     keep = accounts.hash_token(token) if token and user_id == admin.id else None
-    user = accounts.update_user(
-        session,
-        user_id,
-        is_admin=payload.is_admin if "is_admin" in changes else None,
-        disabled=payload.disabled if "disabled" in changes else None,
-        password=payload.password if "password" in changes else None,
-        granted=payload.permissions if "permissions" in changes else None,
-        share_downloads=payload.share_downloads,
-        keep_token_hash=keep,
-    )
+    with _hashing(request):
+        user = accounts.update_user(
+            session,
+            user_id,
+            is_admin=payload.is_admin if "is_admin" in changes else None,
+            disabled=payload.disabled if "disabled" in changes else None,
+            password=payload.password if "password" in changes else None,
+            granted=payload.permissions if "permissions" in changes else None,
+            share_downloads=payload.share_downloads,
+            keep_token_hash=keep,
+        )
     return _read(user)
 
 

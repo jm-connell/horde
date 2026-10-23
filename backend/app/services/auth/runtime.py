@@ -17,6 +17,7 @@ from fastapi import Request
 from ...context import get_paths
 from . import media_token, passwords
 from .alerts import FailureWatch
+from .hash_gate import HashGate
 from .limiter import LoginLimiter
 from .login_tickets import PendingLogins
 from .reset_codes import ResetCodes
@@ -87,6 +88,8 @@ class AuthConfig:
 class AuthRuntime:
     config: AuthConfig = field(default_factory=AuthConfig)
     limiter: LoginLimiter = field(default_factory=LoginLimiter)
+    #: Caps password hashes running at once (503 ``busy`` beyond it).
+    hashing: HashGate = field(default_factory=HashGate)
     #: "Forgot password?" codes written to the server log.
     reset_codes: ResetCodes = field(default_factory=ResetCodes)
     #: Counts failed sign-ins per name to tell the administrator about an attack.

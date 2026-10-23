@@ -55,6 +55,7 @@ from ..services.auth import (
     user_agent,
 )
 from ..services.auth.accounts import AuthUser
+from ..services.auth.limiter import Attempt, Throttled
 from ..services.auth.runtime import AuthRuntime
 from ..services.notifications import events
 
@@ -169,16 +170,32 @@ def bootstrap(
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
 
-def _check_throttle(runtime: AuthRuntime, address: str, key: str) -> None:
-    """429 while ``key`` (a username, or ``reset:``/``password:`` + name) must wait."""
-    wait = runtime.limiter.retry_after(address, key)
-    if wait:
+def _begin(
+    request: Request,
+    key: str,
+    *,
+    known: bool = True,
+    code_name: str | None = None,
+) -> Attempt:
+    """Reserve one try for ``key`` (a username, or ``reset:``/``password:`` + name).
+
+    429 while the key must wait, or while its free tries are all in flight: the
+    password or code is only hashed and checked once this has returned, and the
+    caller settles the attempt (``failure`` / ``success``) when it has judged it.
+    Leaving the ``with`` block unsettled gives the try back.
+    """
+    runtime = _runtime(request)
+    try:
+        return runtime.limiter.begin(
+            runtime.client_address(request), key, known=known, code_name=code_name
+        )
+    except Throttled as exc:
         raise CodedHTTPException(
             429,
-            f"Too many failed attempts. Try again in {wait} seconds.",
+            f"Too many failed attempts. Try again in {exc.wait} seconds.",
             "rate_limited",
-            headers={"Retry-After": str(wait)},
-        )
+            headers={"Retry-After": str(exc.wait)},
+        ) from exc
 
 
 def _note_failed_sign_in(
@@ -211,10 +228,8 @@ def _complete_sign_in(
     response: Response,
     runtime: AuthRuntime,
     user: User,
-    address: str,
 ) -> AuthLoginResult:
-    """The last step of every way in: forget the failures, start the session."""
-    runtime.limiter.record_success(address, user.username_norm)
+    """The last step of every way in: start the session (the caller settled the throttle)."""
     # The password was remembered after all: pending reset codes go.
     runtime.reset_codes.discard(user.username_norm)
     _open_session(session, request, response, runtime, user)
@@ -244,25 +259,35 @@ def login(
         raise CodedHTTPException(
             400, "Sign-in is disabled on this server", "auth_disabled"
         )
-    address = runtime.client_address(request)
     norm = payload.username.strip().lower()
-    _check_throttle(runtime, address, norm)
-    user = accounts.authenticate(
-        session, payload.username, payload.password, dummy_hash=runtime.dummy_hash()
-    )
-    if user is None:
-        runtime.limiter.record_failure(address, norm)
-        logger.warning("Failed sign-in for %r from %s", norm[:64], address)
-        _note_failed_sign_in(request, session, runtime, norm)
-        raise CodedHTTPException(
-            401, "Invalid username or password", "invalid_credentials"
-        )
-    if two_factor.is_enabled(user):
-        # A right password proves nothing about the second factor: the failure
-        # counters stay as they are until the code step succeeds, so alternating
-        # right passwords with wrong codes cannot reset the throttle.
-        raise _totp_required(runtime, user)
-    return _complete_sign_in(session, request, response, runtime, user, address)
+    known = accounts.get_by_username(session, norm) is not None
+    with _begin(request, norm, known=known) as attempt:
+        with runtime.hashing.slot():
+            user = accounts.authenticate(
+                session,
+                payload.username,
+                payload.password,
+                dummy_hash=runtime.dummy_hash(),
+            )
+        if user is None:
+            attempt.failure()
+            logger.warning(
+                "Failed sign-in for %r from %s",
+                norm[:64],
+                runtime.client_address(request),
+            )
+            _note_failed_sign_in(request, session, runtime, norm)
+            raise CodedHTTPException(
+                401, "Invalid username or password", "invalid_credentials"
+            )
+        if two_factor.is_enabled(user):
+            # A right password proves nothing about the second factor: the failure
+            # counters stay as they are until the code step succeeds, so alternating
+            # right passwords with wrong codes cannot reset the throttle (leaving
+            # the block gives the try back without settling it).
+            raise _totp_required(runtime, user)
+        attempt.success()
+    return _complete_sign_in(session, request, response, runtime, user)
 
 
 @router.post("/login/totp", response_model=AuthLoginResult)
@@ -295,23 +320,28 @@ def login_totp(
         )
     ):
         raise expired
-    address = runtime.client_address(request)
-    _check_throttle(runtime, address, user.username_norm)
-    if not runtime.pending_logins.attempt(ticket):
-        raise expired
-    if two_factor.check_code(session, user, payload.code, key=runtime.secret()) is None:
-        runtime.limiter.record_failure(address, user.username_norm)
-        logger.warning(
-            "Failed second step for %r from %s", user.username_norm[:64], address
-        )
-        _note_failed_sign_in(request, session, runtime, user.username_norm)
-        raise CodedHTTPException(
-            401, "That code is wrong or has already been used", "invalid_totp"
-        )
-    if not runtime.pending_logins.finish(ticket):
-        raise expired  # a parallel request used this ticket first
+    with _begin(request, user.username_norm, code_name=user.username_norm) as attempt:
+        if not runtime.pending_logins.attempt(ticket):
+            raise expired
+        if (
+            two_factor.check_code(session, user, payload.code, key=runtime.secret())
+            is None
+        ):
+            attempt.failure(code_step=True)
+            logger.warning(
+                "Failed second step for %r from %s",
+                user.username_norm[:64],
+                runtime.client_address(request),
+            )
+            _note_failed_sign_in(request, session, runtime, user.username_norm)
+            raise CodedHTTPException(
+                401, "That code is wrong or has already been used", "invalid_totp"
+            )
+        if not runtime.pending_logins.finish(ticket):
+            raise expired  # a parallel request used this ticket first
+        attempt.success(code_step=True)
     accounts.mark_login(session, user)
-    return _complete_sign_in(session, request, response, runtime, user, address)
+    return _complete_sign_in(session, request, response, runtime, user)
 
 
 @router.post("/logout", status_code=204)
@@ -382,32 +412,32 @@ def reset_password(
     """
     runtime = _runtime(request)
     _refuse_when_auth_disabled(runtime)
-    address = runtime.client_address(request)
     norm = payload.username.strip().lower()
-    throttle_key = f"reset:{norm}"
-    _check_throttle(runtime, address, throttle_key)
-    # Refuse a weak password before using the code, so it can be retried. Run
-    # for every name, known or not, so the answer does not reveal accounts.
-    accounts.check_password_policy(payload.new_password, payload.username.strip())
     user = accounts.get_by_username(session, payload.username)
-    # One step under a lock: a code works for exactly one request.
-    if (
-        user is None
-        or user.disabled
-        or not runtime.reset_codes.redeem(
-            user.username_norm,
-            payload.code,
-            reset_codes.account_binding(require_id(user), user.password_hash),
-        )
-    ):
-        runtime.limiter.record_failure(address, throttle_key)
-        raise CodedHTTPException(
-            400,
-            "That reset code is wrong or has expired. Ask for a new one.",
-            "invalid_reset_code",
-        )
-    runtime.limiter.record_success(address, throttle_key)
-    accounts.set_password(session, user, payload.new_password)
+    with _begin(request, f"reset:{norm}", known=user is not None) as attempt:
+        # Refuse a weak password before using the code, so it can be retried. Run
+        # for every name, known or not, so the answer does not reveal accounts.
+        accounts.check_password_policy(payload.new_password, payload.username.strip())
+        # Take the hashing slot first: a busy server must not burn the code.
+        with runtime.hashing.slot():
+            # One step under a lock: a code works for exactly one request.
+            if (
+                user is None
+                or user.disabled
+                or not runtime.reset_codes.redeem(
+                    user.username_norm,
+                    payload.code,
+                    reset_codes.account_binding(require_id(user), user.password_hash),
+                )
+            ):
+                attempt.failure()
+                raise CodedHTTPException(
+                    400,
+                    "That reset code is wrong or has expired. Ask for a new one.",
+                    "invalid_reset_code",
+                )
+            attempt.success()
+            accounts.set_password(session, user, payload.new_password)
     logger.info("password reset with a log code for %r", user.username)
     if two_factor.is_enabled(user):
         # The log proves the password may change, not who is typing: the second
@@ -417,32 +447,45 @@ def reset_password(
     return AuthLoginResult(user=user_read(flag_enrollment(runtime, AuthUser.of(user))))
 
 
-def _verify_current_password(
-    request: Request,
-    session: Session,
-    user: AuthUser,
-    password: str,
-    *,
-    forgive: bool = True,
-) -> User:
-    """The signed-in user's row, once ``password`` is proven to be theirs.
+def _password_attempt(
+    request: Request, user: AuthUser, *, code_step: bool = False
+) -> Attempt:
+    """A reserved try at the signed-in user's own password (and, if asked, a code).
 
     Guessing the current password is guessing the password: same throttle as
-    sign-in, counted separately so it cannot lock the account out of signing in.
-    ``forgive=False`` leaves the failure counters alone on success, for a caller
-    that still has a second check to make (a right password must not wipe the
-    wrong codes counted before it).
+    sign-in, counted under its own key so it cannot lock the account out of
+    signing in.
     """
+    return _begin(
+        request,
+        f"password:{user.username.lower()}",
+        code_name=user.username.lower() if code_step else None,
+    )
+
+
+def _check_own_password(
+    request: Request, session: Session, user: AuthUser, password: str, attempt: Attempt
+) -> User:
+    """The user's row once ``password`` is proven to be theirs; a wrong one is judged a failure."""
     runtime = _runtime(request)
-    address = runtime.client_address(request)
-    throttle_key = f"password:{user.username.lower()}"
-    _check_throttle(runtime, address, throttle_key)
     row = accounts.get_user(session, user.id)
-    if row is None or not passwords.verify_password(password, row.password_hash):
-        runtime.limiter.record_failure(address, throttle_key)
+    with runtime.hashing.slot():
+        matched = row is not None and passwords.verify_password(
+            password, row.password_hash
+        )
+    if row is None or not matched:
+        attempt.failure()
         raise CodedHTTPException(400, "Current password is incorrect", "wrong_password")
-    if forgive:
-        runtime.limiter.record_success(address, throttle_key)
+    return row
+
+
+def _verify_current_password(
+    request: Request, session: Session, user: AuthUser, password: str
+) -> User:
+    """The signed-in user's row, once ``password`` is proven to be theirs."""
+    with _password_attempt(request, user) as attempt:
+        row = _check_own_password(request, session, user, password, attempt)
+        attempt.success()
     return row
 
 
@@ -456,12 +499,13 @@ def change_password(
     """Change your own password. Your other browsers are signed out."""
     row = _verify_current_password(request, session, user, payload.current_password)
     token = request.cookies.get(accounts.SESSION_COOKIE)
-    accounts.set_password(
-        session,
-        row,
-        payload.new_password,
-        keep_token_hash=accounts.hash_token(token) if token else None,
-    )
+    with _runtime(request).hashing.slot():
+        accounts.set_password(
+            session,
+            row,
+            payload.new_password,
+            keep_token_hash=accounts.hash_token(token) if token else None,
+        )
     return Response(status_code=204)
 
 
@@ -527,18 +571,19 @@ def _prove_second_factor(
 
     Turning two-step sign-in off, or replacing its recovery codes, is as sensitive
     as signing in, so both factors are checked, and a wrong guess of either counts
-    in the same per-user throttle as a wrong current password.
+    in the same per-user throttle as a wrong current password. A wrong code also
+    feeds the name's code counter (see ``limiter``). One reserved try covers both
+    checks: a right password must not wipe the wrong codes counted before it.
     """
-    row = _verify_current_password(request, session, user, password, forgive=False)
     runtime = _runtime(request)
-    address = runtime.client_address(request)
-    throttle_key = f"password:{user.username.lower()}"
-    if two_factor.check_code(session, row, code, key=runtime.secret()) is None:
-        runtime.limiter.record_failure(address, throttle_key)
-        raise CodedHTTPException(
-            400, "That code is wrong or has already been used", "invalid_totp"
-        )
-    runtime.limiter.record_success(address, throttle_key)
+    with _password_attempt(request, user, code_step=True) as attempt:
+        row = _check_own_password(request, session, user, password, attempt)
+        if two_factor.check_code(session, row, code, key=runtime.secret()) is None:
+            attempt.failure(code_step=True)
+            raise CodedHTTPException(
+                400, "That code is wrong or has already been used", "invalid_totp"
+            )
+        attempt.success(code_step=True)
     return row
 
 
@@ -603,16 +648,14 @@ def two_factor_confirm(
     """
     runtime = _runtime(request)
     row = _own_row(session, request, user)
-    address = runtime.client_address(request)
-    throttle_key = f"password:{user.username.lower()}"
-    _check_throttle(runtime, address, throttle_key)
-    try:
-        codes = two_factor.confirm_enrollment(
-            session, row, payload.code, key=runtime.secret()
-        )
-    except two_factor.InvalidCode:
-        runtime.limiter.record_failure(address, throttle_key)
-        raise
+    with _password_attempt(request, user) as attempt:
+        try:
+            codes = two_factor.confirm_enrollment(
+                session, row, payload.code, key=runtime.secret()
+            )
+        except two_factor.InvalidCode:
+            attempt.failure()
+            raise
     token = request.cookies.get(accounts.SESSION_COOKIE)
     sessions.revoke_others(session, user.id, token)
     response.headers.update(_NO_STORE)
