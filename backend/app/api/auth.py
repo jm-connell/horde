@@ -46,6 +46,7 @@ from ..services.auth import (
     accounts,
     alerts,
     avatars,
+    device_cookie,
     login_tickets,
     passwords,
     reset_codes,
@@ -175,6 +176,7 @@ def _begin(
     key: str,
     *,
     known: bool = True,
+    device: str | None = None,
     code_name: str | None = None,
 ) -> Attempt:
     """Reserve one try for ``key`` (a username, or ``reset:``/``password:`` + name).
@@ -187,7 +189,11 @@ def _begin(
     runtime = _runtime(request)
     try:
         return runtime.limiter.begin(
-            runtime.client_address(request), key, known=known, code_name=code_name
+            runtime.client_address(request),
+            key,
+            known=known,
+            device=device,
+            code_name=code_name,
         )
     except Throttled as exc:
         raise CodedHTTPException(
@@ -196,6 +202,30 @@ def _begin(
             "rate_limited",
             headers={"Retry-After": str(exc.wait)},
         ) from exc
+
+
+def _known_device(
+    request: Request, runtime: AuthRuntime, user: User | None
+) -> str | None:
+    """The device id if the browser holds a current known-device cookie for ``user``."""
+    value = request.cookies.get(device_cookie.COOKIE)
+    return device_cookie.verify(runtime.secret(), value, user) if value else None
+
+
+def _remember_device(
+    response: Response, request: Request, runtime: AuthRuntime, user: User
+) -> None:
+    """Hand the browser (or renew) its known-device cookie for ``user``."""
+    device_id = _known_device(request, runtime, user) or device_cookie.new_device_id()
+    response.set_cookie(
+        device_cookie.COOKIE,
+        device_cookie.sign(runtime.secret(), user, device_id),
+        max_age=device_cookie.MAX_AGE_SEC,
+        httponly=True,
+        samesite="lax",
+        secure=runtime.is_https(request),
+        path="/",
+    )
 
 
 def _note_failed_sign_in(
@@ -230,6 +260,7 @@ def _complete_sign_in(
     user: User,
 ) -> AuthLoginResult:
     """The last step of every way in: start the session (the caller settled the throttle)."""
+    _remember_device(response, request, runtime, user)
     # The password was remembered after all: pending reset codes go.
     runtime.reset_codes.discard(user.username_norm)
     _open_session(session, request, response, runtime, user)
@@ -260,8 +291,9 @@ def login(
             400, "Sign-in is disabled on this server", "auth_disabled"
         )
     norm = payload.username.strip().lower()
-    known = accounts.get_by_username(session, norm) is not None
-    with _begin(request, norm, known=known) as attempt:
+    row = accounts.get_by_username(session, norm)
+    device = _known_device(request, runtime, row)
+    with _begin(request, norm, known=row is not None, device=device) as attempt:
         with runtime.hashing.slot():
             user = accounts.authenticate(
                 session,
@@ -320,7 +352,12 @@ def login_totp(
         )
     ):
         raise expired
-    with _begin(request, user.username_norm, code_name=user.username_norm) as attempt:
+    with _begin(
+        request,
+        user.username_norm,
+        device=_known_device(request, runtime, user),
+        code_name=user.username_norm,
+    ) as attempt:
         if not runtime.pending_logins.attempt(ticket):
             raise expired
         if (

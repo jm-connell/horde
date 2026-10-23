@@ -18,6 +18,7 @@ from collections import Counter
 
 import httpx
 import pytest
+from fastapi.testclient import TestClient
 from sqlmodel import Session
 
 from app.services.auth import accounts, hash_gate, passwords, totp, two_factor
@@ -359,3 +360,114 @@ def test_the_code_step_is_refused_while_the_counter_waits(
     assert anon_client.post("/api/auth/login/totp", json=body).status_code == 200
     # A right code cleared the counter.
     assert limiter.retry_after("9.9.9.9", "admin", code_name="admin") == 0
+
+
+# --- 3. a known device is spared the name-wide lanes ---------------------------------
+
+
+def _saturate_daily_ceiling(limiter, name="admin"):
+    """Enough failures from enough addresses to put ``name`` in its daily slow lane."""
+    from app.services.auth.limiter import DAILY_CEILING
+
+    for i in range(DAILY_CEILING):
+        limiter.record_failure(f"10.9.{i // 250}.{i % 250}", name)
+
+
+def _login(client, username="admin", password=ADMIN_PASSWORD):
+    return client.post(
+        "/api/auth/login", json={"username": username, "password": password}
+    )
+
+
+def test_sign_in_sets_a_signed_long_lived_device_cookie(app, anon_client, admin_user):
+    from app.services.auth import device_cookie
+
+    res = _login(anon_client)
+    assert res.status_code == 200
+    header = next(
+        h
+        for h in res.headers.get_list("set-cookie")
+        if h.startswith(f"{device_cookie.COOKIE}=")
+    )
+    assert "HttpOnly" in header
+    assert "SameSite=lax" in header
+    assert f"Max-Age={device_cookie.MAX_AGE_SEC}" in header
+    value = anon_client.cookies[device_cookie.COOKIE]
+    assert device_cookie.verify(app.state.auth.secret(), value, admin_user)
+    # Signing in again from the same browser keeps its device id.
+    _login(anon_client)
+    assert anon_client.cookies[device_cookie.COOKIE] == value
+
+
+def test_a_known_device_signs_in_while_the_name_is_in_its_daily_slow_lane(
+    app, anon_client, admin_user
+):
+    from app.services.auth import device_cookie
+
+    assert _login(anon_client).status_code == 200  # get the cookie
+    cookie = anon_client.cookies[device_cookie.COOKIE]
+    stranger = TestClient(app, headers=CSRF)
+    _saturate_daily_ceiling(app.state.auth.limiter)
+
+    blocked = _login(stranger)
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+    stranger.cookies.set(device_cookie.COOKIE, cookie)
+    assert _login(stranger).status_code == 200
+    stranger.close()
+
+
+def test_a_device_cookie_is_only_good_for_its_own_account(
+    app, anon_client, admin_user, member_user
+):
+    from app.services.auth import device_cookie
+
+    assert _login(anon_client, "member", "member-password").status_code == 200
+    members_cookie = anon_client.cookies[device_cookie.COOKIE]
+    _saturate_daily_ceiling(app.state.auth.limiter)
+    stranger = TestClient(app, headers=CSRF)
+    stranger.cookies.set(device_cookie.COOKIE, members_cookie)
+    blocked = _login(stranger)  # the admin's name, the member's cookie
+    assert blocked.status_code == 429
+    stranger.close()
+
+
+def test_a_forged_or_retired_device_cookie_is_ignored(app, init_db, admin_user):
+    from app.services.auth import device_cookie
+
+    secret = app.state.auth.secret()
+    device_id = device_cookie.new_device_id()
+    good = device_cookie.sign(secret, admin_user, device_id)
+    assert device_cookie.verify(secret, good, admin_user) == device_id
+    assert device_cookie.verify(secret, good[:-1] + "0", admin_user) is None
+    assert device_cookie.verify(b"x" * 32, good, admin_user) is None
+    assert device_cookie.verify(secret, "garbage", admin_user) is None
+    assert device_cookie.verify(secret, None, admin_user) is None
+    assert device_cookie.verify(secret, good, None) is None
+    # A new password retires every device cookie of the account.
+    with Session(init_db["engine"]) as s:
+        user = accounts.get_user(s, admin_user.id)
+        accounts.set_password(s, user, "a-brand-new-password")
+        s.refresh(user)
+        assert device_cookie.verify(secret, good, user) is None
+
+
+def test_a_device_keeps_its_own_back_off():
+    """Exempt from the name-wide lanes, not from per-device or per-address lockouts."""
+    limiter = LoginLimiter(clock=lambda: 0.0)
+    for _ in range(FREE_ATTEMPTS):
+        limiter.record_failure("198.51.100.1", "alice", device="d1")
+    assert limiter.retry_after("198.51.100.1", "alice", device="d1") > 0  # its address
+    assert limiter.retry_after("198.51.100.2", "alice", device="d1") > 0  # its device
+    assert limiter.retry_after("198.51.100.2", "alice", device="d2") == 0
+    _saturate_daily_ceiling(limiter, "alice")
+    assert limiter.retry_after("198.51.100.3", "alice") > 0
+    assert limiter.retry_after("198.51.100.3", "alice", device="d2") == 0
+
+
+def test_a_known_device_is_not_spared_the_code_counter():
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    _wrong_codes(limiter, 10, clock)
+    with pytest.raises(Throttled):
+        limiter.begin("9.9.9.9", "alice", device="d1", code_name="alice")
+    limiter.begin("9.9.9.9", "alice", device="d1").release()  # the password step is
