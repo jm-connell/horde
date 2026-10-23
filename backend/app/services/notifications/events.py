@@ -17,6 +17,8 @@ QUEUE_HELD = "queue_held"
 UPDATE_AVAILABLE = "update_available"
 UPDATE_FAILED = "update_failed"
 CHANNEL_LIVE = "channel_live"
+LOGIN_FAILURES = "login_failures"
+NEW_DEVICE_SIGN_IN = "new_device_sign_in"
 
 #: ``download_completed``: only count jobs Horde queued by itself (channel
 #: auto-download, subscribed playlists), not ones somebody watched happen.
@@ -93,6 +95,20 @@ EVENTS: tuple[EventSpec, ...] = (
         "A channel somebody follows started a live broadcast.",
         default=False,
         coalesce=True,
+    ),
+    EventSpec(
+        LOGIN_FAILURES,
+        "Failed sign-ins",
+        "Many failed sign-ins for one account within an hour: someone is guessing. "
+        "At most one message per account per hour.",
+        default=True,
+    ),
+    EventSpec(
+        NEW_DEVICE_SIGN_IN,
+        "Sign-in from a new device",
+        "Somebody signed in from a browser or device their account was not already "
+        "signed in on. Every account counts, so it can be chatty on a shared server.",
+        default=False,
     ),
 )
 

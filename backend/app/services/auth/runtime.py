@@ -16,6 +16,7 @@ from fastapi import Request
 
 from ...context import get_paths
 from . import media_token, passwords
+from .alerts import FailureWatch
 from .limiter import LoginLimiter
 from .login_tickets import PendingLogins
 from .reset_codes import ResetCodes
@@ -88,6 +89,8 @@ class AuthRuntime:
     limiter: LoginLimiter = field(default_factory=LoginLimiter)
     #: "Forgot password?" codes written to the server log.
     reset_codes: ResetCodes = field(default_factory=ResetCodes)
+    #: Counts failed sign-ins per name to tell the administrator about an attack.
+    failure_watch: FailureWatch = field(default_factory=FailureWatch)
     #: Tickets between the password step and the code step of a two-step sign-in.
     pending_logins: PendingLogins = field(default_factory=PendingLogins)
     #: How often an open event stream re-checks that its caller may still be

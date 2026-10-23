@@ -17,7 +17,7 @@ from ..auth import (
     flag_enrollment,
     two_factor_requirement,
 )
-from ..context import get_session
+from ..context import get_ctx, get_session
 from ..models import User, as_utc, require_id
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
@@ -44,6 +44,7 @@ from ..schemas import (
 from ..services import app_settings, uploads
 from ..services.auth import (
     accounts,
+    alerts,
     avatars,
     login_tickets,
     passwords,
@@ -51,9 +52,11 @@ from ..services.auth import (
     sessions,
     totp,
     two_factor,
+    user_agent,
 )
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
+from ..services.notifications import events
 
 logger = logging.getLogger(__name__)
 
@@ -91,13 +94,37 @@ def _set_session_cookie(
     )
 
 
+def _announce_new_device(
+    request: Request, session: Session, runtime: AuthRuntime, user: User
+) -> None:
+    """Notify (if anyone subscribed) when no live session of ``user`` looks like this one."""
+    device = user_agent.describe(request.headers.get("user-agent"))
+    known = {s.device for s in sessions.list_sessions(session, require_id(user))}
+    if device in known:
+        return
+    get_ctx(request).notifier.emit(
+        events.NEW_DEVICE_SIGN_IN,
+        {
+            "username": user.username,
+            "device": device,
+            "address": runtime.client_address(request),
+        },
+        dedupe_key=f"new-device:{user.id}:{device}",
+        dedupe_ttl=300,
+    )
+
+
 def _open_session(
     session: Session,
     request: Request,
     response: Response,
     runtime: AuthRuntime,
     user,
+    *,
+    announce: bool = True,
 ) -> None:
+    if announce:
+        _announce_new_device(request, session, runtime, user)
     token = accounts.start_session(
         session,
         user,
@@ -138,7 +165,7 @@ def bootstrap(
             is_admin=True,
             share_downloads=payload.share_downloads,
         )
-    _open_session(session, request, response, runtime, user)
+    _open_session(session, request, response, runtime, user, announce=False)
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
 
@@ -151,6 +178,30 @@ def _check_throttle(runtime: AuthRuntime, address: str, key: str) -> None:
             f"Too many failed attempts. Try again in {wait} seconds.",
             "rate_limited",
             headers={"Retry-After": str(wait)},
+        )
+
+
+def _note_failed_sign_in(
+    request: Request, session: Session, runtime: AuthRuntime, username: str
+) -> None:
+    """Count a failed sign-in for the "someone is guessing" notification.
+
+    Only names that belong to an account are counted, so spraying made-up names
+    neither fills the table nor hides an attack on a real one.
+    """
+    user = accounts.get_by_username(session, username)
+    if user is None:
+        return
+    payload = runtime.failure_watch.note(
+        user.username_norm, runtime.client_address(request)
+    )
+    if payload is not None:
+        payload["username"] = user.username
+        get_ctx(request).notifier.emit(
+            events.LOGIN_FAILURES,
+            payload,
+            dedupe_key=f"login-failures:{user.username_norm}",
+            dedupe_ttl=alerts.COOLDOWN_SEC,
         )
 
 
@@ -202,6 +253,7 @@ def login(
     if user is None:
         runtime.limiter.record_failure(address, norm)
         logger.warning("Failed sign-in for %r from %s", norm[:64], address)
+        _note_failed_sign_in(request, session, runtime, norm)
         raise CodedHTTPException(
             401, "Invalid username or password", "invalid_credentials"
         )
@@ -252,6 +304,7 @@ def login_totp(
         logger.warning(
             "Failed second step for %r from %s", user.username_norm[:64], address
         )
+        _note_failed_sign_in(request, session, runtime, user.username_norm)
         raise CodedHTTPException(
             401, "That code is wrong or has already been used", "invalid_totp"
         )

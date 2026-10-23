@@ -135,6 +135,7 @@ def test_defaults_are_the_documented_ones():
         "download_failed",
         "queue_held",
         "update_failed",
+        "login_failures",
     ]
     assert events.default_options() == {"only_automatic": True}
 
@@ -168,7 +169,12 @@ def test_a_new_target_gets_the_default_events_and_hides_its_token(client):
     )
     assert resp.status_code == 200, resp.text
     made = resp.json()
-    assert made["events"] == ["download_failed", "queue_held", "update_failed"]
+    assert made["events"] == [
+        "download_failed",
+        "queue_held",
+        "update_failed",
+        "login_failures",
+    ]
     assert made["options"] == {"only_automatic": True}
     assert made["enabled"] is True
     assert made["token"] == "••••1234" and made["token_set"] is True
@@ -1205,3 +1211,152 @@ def test_the_module_function_without_a_context_does_not_raise(monkeypatch):
 
     monkeypatch.setattr(context, "_active", None)
     notifications.emit("download_failed", {})
+
+
+# -- sign-in alerts ----------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def many_addresses(app):
+    """Sign-ins come from many addresses and the throttle is out of the way (it has its own tests)."""
+    counter = iter(range(1, 10_000))
+    app.state.auth.client_address = lambda request: f"203.0.113.{next(counter) % 250}"
+    app.state.auth.limiter.retry_after = lambda address, key: 0
+
+
+def _fail_login(c, username="admin", times=1):
+    for _ in range(times):
+        res = c.post(
+            "/api/auth/login", json={"username": username, "password": "wrong-wrong"}
+        )
+        assert res.status_code == 401
+
+
+def test_many_failed_sign_ins_for_one_account_notify_once_an_hour(
+    anon_client, admin_user, notifier, many_addresses, app
+):
+    from app.services.auth import alerts
+
+    n, sent, _clock = notifier()
+    _add_target(events=["login_failures"])
+    _fail_login(anon_client, times=alerts.THRESHOLD - 1)
+    n.pump()
+    assert sent.sent == []
+
+    _fail_login(anon_client, times=30)  # past the line: one message, not a flood
+    n.pump()
+    assert len(sent.sent) == 1
+    message = sent.sent[0][1]
+    assert message.title == "Failed sign-ins for admin"
+    assert "10 failed sign-ins in the last hour from" in message.body
+    assert message.urgent and message.path == "/account"
+    assert "wrong-wrong" not in message.body
+
+
+def test_failures_for_made_up_names_never_notify(
+    anon_client, admin_user, notifier, many_addresses
+):
+    from app.services.auth import alerts
+
+    n, sent, _clock = notifier()
+    _add_target(events=["login_failures"])
+    _fail_login(anon_client, "nobody-here", times=alerts.THRESHOLD + 5)
+    n.pump()
+    assert sent.sent == []
+
+
+def test_wrong_second_step_codes_count_towards_the_alert(
+    anon_client, admin_user, notifier, many_addresses, client
+):
+    from app.services.auth import alerts, totp, two_factor
+
+    n, sent, _clock = notifier()
+    _add_target(events=["login_failures"])
+    res = client.post(
+        "/api/auth/2fa/setup", json={"current_password": "admin-password"}
+    )
+    secret = res.json()["secret"]
+    client.post(
+        "/api/auth/2fa/confirm",
+        json={"code": totp.code_at(secret, two_factor.time.time())},
+    )
+    ticket = anon_client.post(
+        "/api/auth/login", json={"username": "admin", "password": "admin-password"}
+    ).json()["extra"]["pending_token"]
+    for i in range(alerts.THRESHOLD):
+        anon_client.post(
+            "/api/auth/login/totp",
+            json={"pending_token": ticket, "code": f"00000{i % 10}"},
+        )
+        if i % 4 == 3:  # a ticket lasts five tries
+            ticket = anon_client.post(
+                "/api/auth/login",
+                json={"username": "admin", "password": "admin-password"},
+            ).json()["extra"]["pending_token"]
+    n.pump()
+    assert [m.title for _t, m in sent.sent] == ["Failed sign-ins for admin"]
+
+
+def test_failure_watch_forgets_old_failures_and_alerts_again_after_the_cooldown():
+    from app.services.auth import alerts
+
+    now = [0.0]
+    watch = alerts.FailureWatch(clock=lambda: now[0])
+    first = None
+    for i in range(alerts.THRESHOLD):
+        first = watch.note("jon", f"10.0.0.{i % 5}")
+    assert first == {"username": "jon", "count": alerts.THRESHOLD, "addresses": 5}
+    assert watch.note("jon", "10.0.0.1") is None  # inside the cooldown
+    now[0] += alerts.COOLDOWN_SEC + 1
+    # An hour on, the old failures are gone: it takes a whole new run to alert.
+    assert watch.note("jon", "10.0.0.1") is None
+    results = [watch.note("jon", "10.0.0.9") for _ in range(alerts.THRESHOLD)]
+    fired = [r for r in results if r is not None]
+    assert len(fired) == 1 and fired[0]["addresses"] == 2
+
+
+def test_a_new_device_notifies_only_when_subscribed_and_only_once_per_device(
+    anon_client, admin_user, notifier
+):
+    n, sent, _clock = notifier()
+    login = {"username": "admin", "password": "admin-password"}
+    phone = {
+        "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+    }
+    firefox = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0"
+    }
+
+    anon_client.post(
+        "/api/auth/login", json=login, headers=firefox
+    )  # nobody subscribed
+    n.pump()
+    assert sent.sent == []
+
+    _add_target(events=["new_device_sign_in"])
+    anon_client.post(
+        "/api/auth/login", json=login, headers=firefox
+    )  # already signed in there
+    n.pump()
+    assert sent.sent == []
+
+    anon_client.post("/api/auth/login", json=login, headers=phone)
+    n.pump()
+    assert [m.title for _t, m in sent.sent] == ["New sign-in for admin"]
+    assert "Safari on iPhone" in sent.sent[0][1].body
+
+
+def test_new_device_alerts_are_off_for_a_new_target():
+    assert "new_device_sign_in" not in events.default_events()
+    spec = events.get("new_device_sign_in")
+    assert spec is not None and spec.default is False
+
+
+def test_alert_wording_is_one_clean_line():
+    message = render(
+        "login_failures", [{"username": "jon\nbad", "count": 12, "addresses": 5}]
+    )
+    assert message.title == "Failed sign-ins for jon bad"
+    assert message.body == "12 failed sign-ins in the last hour from 5 addresses."
+    one = render("login_failures", [{"username": "jon", "count": 10, "addresses": 1}])
+    assert one.body.endswith("from one address.")

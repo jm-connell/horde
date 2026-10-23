@@ -56,6 +56,10 @@ def _listing(lines: list[str], total: int | None = None) -> str:
     return "\n".join(shown)
 
 
+def _count(value: Any, fallback: int) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) else fallback
+
+
 def _single_or_many(count: int, one: str, many: str) -> str:
     return one if count == 1 else many.format(n=count)
 
@@ -176,6 +180,34 @@ def render(
             ),
             "/",
             tags=("red_circle",),
+            data=data,
+        )
+
+    if event == events.LOGIN_FAILURES:
+        name = clean(first.get("username") or "an account", _TITLE_MAX)
+        failures = _count(first.get("count"), 1)
+        addresses = _count(first.get("addresses"), 1)
+        return Message(
+            event,
+            f"Failed sign-ins for {name}",
+            f"{failures} failed sign-ins in the last hour from "
+            f"{_single_or_many(addresses, 'one address', '{n} addresses')}.",
+            "/account",
+            urgent=True,
+            tags=("rotating_light",),
+            data=data,
+        )
+
+    if event == events.NEW_DEVICE_SIGN_IN:
+        name = clean(first.get("username") or "An account", _TITLE_MAX)
+        device = clean(first.get("device") or "an unknown device", _TITLE_MAX)
+        address = clean(first.get("address"), 64)
+        return Message(
+            event,
+            f"New sign-in for {name}",
+            f"{device}" + (f" from {address}" if address else ""),
+            "/account",
+            tags=("key",),
             data=data,
         )
 
