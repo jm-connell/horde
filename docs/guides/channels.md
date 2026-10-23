@@ -84,7 +84,7 @@ News and daily channels pile up. A channel can have a **retention rule** that mo
 |-------|-----------------|
 | **Keep the newest N** | Everything but the newest N videos of the channel (by publish date, else the date it was added) |
 | **Older than D days** | Videos added to Horde more than D days ago |
-| **Finished more than D days ago** | Videos someone watched to the end more than D days ago, on any account |
+| **Finished more than D days ago** | Videos someone watched to the end more than D days ago, on any account, provided nobody has watched it since |
 
 A video that matches any limit goes. Whatever the limits say, these **stay**:
 

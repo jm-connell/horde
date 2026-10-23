@@ -138,6 +138,39 @@ def test_remove_watched_needs_a_finished_video_and_the_wait(
     assert _titles(session) == {partly.title, unseen.title}
 
 
+def test_a_recent_finish_by_another_account_keeps_the_video(
+    session, add_video, admin_user, member_user
+):
+    """One account's old finish must not remove a video another just watched."""
+    (video,) = _news(add_video, 1, start_age=60)
+    long_ago = utcnow() - timedelta(days=40)
+    user_state.record_progress(
+        session, admin_user.id, video.id, 0, long_ago, finished=True
+    )
+    user_state.record_progress(session, member_user.id, video.id, 0, finished=True)
+    row = _rule(session, remove_watched_after_days=30)
+
+    assert _run(session, row) == 0
+    assert len(_titles(session)) == 1
+
+
+def test_any_recent_viewing_by_anyone_keeps_a_finished_video(
+    session, add_video, admin_user, member_user
+):
+    """Past the 7 day in-progress window, a viewing inside the wait still counts."""
+    (video,) = _news(add_video, 1, start_age=100)
+    user_state.record_progress(
+        session, admin_user.id, video.id, 0, _days_ago(40), finished=True
+    )
+    user_state.record_progress(session, member_user.id, video.id, 0, _days_ago(10))
+    row = _rule(session, remove_watched_after_days=30)
+
+    assert _run(session, row) == 0
+
+    # Once nobody has looked at it for the whole wait, it goes.
+    assert _run(session, row, now=utcnow() + timedelta(days=25)) == 1
+
+
 def test_a_half_watch_that_expired_is_not_finished(session, add_video, admin_user):
     """Expiry zeroes the position as a finish does, but never stamps ``finished_at``."""
     (video,) = _news(add_video, 1)

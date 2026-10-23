@@ -5,7 +5,9 @@ any mix of three limits:
 
 * ``keep_latest``: only the newest N videos stay (publish date, else added date);
 * ``max_age_days``: videos added to the library more than D days ago go;
-* ``remove_watched_after_days``: videos some account finished more than D days ago go.
+* ``remove_watched_after_days``: videos some account finished more than D days ago go,
+  provided no account has watched them since (every finish and every viewing is
+  older than D days).
 
 Every removal is ``trash.trash_video``, so it can be undone from the trash for
 ``HORDE_TRASH_DAYS`` and records the ``deleted`` skip that keeps the channel's
@@ -30,6 +32,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
+from sqlalchemy import func
+from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
 from ..context import current, get_engine
@@ -232,15 +236,22 @@ def plan(
 
     if rule.remove_watched_after_days is not None and watched_reason:
         cutoff = now - timedelta(days=rule.remove_watched_after_days)
-        finished = _ids(
-            session,
-            select(col(UserVideoState.video_id))
-            .join(Video, col(Video.id) == col(UserVideoState.video_id))
-            .where(
-                col(Video.channel) == channel,
-                col(UserVideoState.finished_at) <= cutoff,
-            ),
-        )
+        # Every finish and every viewing by anyone is older than the wait: one
+        # account's old finish must not take a video another just watched.
+        finished = {
+            int(video_id)
+            for video_id in session.execute(
+                sa_select(col(UserVideoState.video_id))
+                .join(Video, col(Video.id) == col(UserVideoState.video_id))
+                .where(col(Video.channel) == channel)
+                .group_by(col(UserVideoState.video_id))
+                .having(
+                    func.max(col(UserVideoState.finished_at)) <= cutoff,
+                    func.coalesce(func.max(col(UserVideoState.last_watched_at)), cutoff)
+                    <= cutoff,
+                )
+            ).scalars()
+        }
         for video in videos:
             if require_id(video) in finished:
                 reasons.setdefault(require_id(video), watched_reason)
