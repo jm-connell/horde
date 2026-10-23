@@ -15,11 +15,17 @@ export default function ForgotPassword({
   initialUsername,
   onBack,
   onSignedIn,
+  onSecondStep,
 }: {
   initialUsername: string;
   onBack: () => void;
   /** Signed in with the new password. */
   onSignedIn: (user: AuthUser, password: string) => void | Promise<void>;
+  /**
+   * The password was reset, but the account has two-step sign-in: the sign-in
+   * continues with the code step, using this ticket.
+   */
+  onSecondStep: (pendingToken: string, password: string) => void;
 }) {
   const [step, setStep] = useState<"ask" | "reset">("ask");
   const [username, setUsername] = useState(initialUsername);
@@ -62,6 +68,16 @@ export default function ForgotPassword({
       const { user } = await api.resetPassword(username.trim(), code, next);
       await onSignedIn(user, next);
     } catch (err) {
+      const pendingToken =
+        err instanceof ApiError ? err.extra?.pending_token : null;
+      if (
+        err instanceof ApiError &&
+        err.code === "totp_required" &&
+        typeof pendingToken === "string"
+      ) {
+        onSecondStep(pendingToken, next);
+        return;
+      }
       setBusy(false);
       setError(describe(err));
     }

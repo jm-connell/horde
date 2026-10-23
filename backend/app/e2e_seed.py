@@ -163,6 +163,9 @@ def _seed_accounts(engine) -> None:
             account.permissions = permissions.dump(wanted)
             account.avatar_version = None
             account.share_downloads = True
+            account.totp_secret = None
+            account.totp_enabled_at = None
+            account.totp_last_step = None
             session.add(account)
         session.commit()
 

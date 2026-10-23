@@ -117,6 +117,11 @@ export type UserUpdateInput = Omit<S["UserUpdate"], "permissions"> & {
   permissions?: Permission[];
 };
 export type MediaToken = S["MediaTokenRead"];
+export type TwoFactorStatus = S["TwoFactorStatus"];
+export type TwoFactorSetup = S["TwoFactorSetup"];
+export type SecurityChecklist = S["SecurityChecklistRead"];
+export type SecurityCheckItem = S["SecurityCheckItem"];
+export type TwoFactorRequirement = AppSettings["require_two_factor"];
 /** One signed-in browser of an account. */
 export type DeviceSession = S["SessionRead"];
 

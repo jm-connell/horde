@@ -7,6 +7,9 @@ import type {
   AuthState,
   AuthUser,
   MediaToken,
+  SecurityChecklist,
+  TwoFactorSetup,
+  TwoFactorStatus,
   NextPart,
   PermissionInfo,
   UserAccount,
@@ -409,6 +412,14 @@ export const api = {
     return request("/api/auth/login", jsonInit("POST", { username, password }));
   },
 
+  /** Second step of a two-step sign-in: the ticket from `totp_required` and a code. */
+  loginTotp(pendingToken: string, code: string): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/login/totp",
+      jsonInit("POST", { pending_token: pendingToken, code })
+    );
+  },
+
   /** The channel's next upload when it clearly continues this video's series. */
   getNextPart(videoId: number): Promise<NextPart> {
     return request<NextPart>(`/api/videos/${videoId}/next-part`);
@@ -483,6 +494,56 @@ export const api = {
       "/api/auth/verify-password",
       jsonInit("POST", { password })
     );
+  },
+
+  getTwoFactor(): Promise<TwoFactorStatus> {
+    return request<TwoFactorStatus>("/api/auth/2fa");
+  },
+
+  /** Start setting up two-step sign-in: a new secret and its QR code. */
+  startTwoFactor(currentPassword: string): Promise<TwoFactorSetup> {
+    return request<TwoFactorSetup>(
+      "/api/auth/2fa/setup",
+      jsonInit("POST", { current_password: currentPassword })
+    );
+  },
+
+  /** Turn it on with a current code; returns the recovery codes (once). */
+  async confirmTwoFactor(code: string): Promise<string[]> {
+    const res = await request<{ recovery_codes: string[] }>(
+      "/api/auth/2fa/confirm",
+      jsonInit("POST", { code })
+    );
+    return res.recovery_codes;
+  },
+
+  disableTwoFactor(currentPassword: string, code: string): Promise<void> {
+    return request<void>(
+      "/api/auth/2fa/disable",
+      jsonInit("POST", { current_password: currentPassword, code })
+    );
+  },
+
+  async newRecoveryCodes(
+    currentPassword: string,
+    code: string
+  ): Promise<string[]> {
+    const res = await request<{ recovery_codes: string[] }>(
+      "/api/auth/2fa/recovery-codes",
+      jsonInit("POST", { current_password: currentPassword, code })
+    );
+    return res.recovery_codes;
+  },
+
+  /** Administrators: take two-step sign-in off another account (signs them out). */
+  resetUserTwoFactor(userId: number): Promise<void> {
+    return request<void>(`/api/users/${userId}/two-factor`, {
+      method: "DELETE",
+    });
+  },
+
+  getSecurityChecklist(opts?: ReadOptions): Promise<SecurityChecklist> {
+    return request<SecurityChecklist>("/api/system/security-checklist", opts);
   },
 
   /** Your signed-in browsers, most recently active first. */

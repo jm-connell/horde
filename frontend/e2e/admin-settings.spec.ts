@@ -424,7 +424,10 @@ test("the administrator adds, tests, edits and removes a notification target", a
 
   await renamed.getByRole("button", { name: "Delete Phone" }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
-  await expect(section.getByRole("listitem")).toHaveCount(0);
+  // (The System tab has other lists, such as the security checklist.)
+  await expect(
+    section.getByRole("listitem").filter({ hasText: "Phone" })
+  ).toHaveCount(0);
 
   // Members cannot read or change them.
   const ctx = await contextAs(browser, baseURL, "member");

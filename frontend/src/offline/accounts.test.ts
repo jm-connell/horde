@@ -154,6 +154,8 @@ function user(
     permissions: ["offline_download"],
     avatar_version: null,
     share_downloads: share,
+    two_factor_enabled: false,
+    two_factor_enrollment_required: false,
     ...extra,
   };
 }

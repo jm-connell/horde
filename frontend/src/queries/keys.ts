@@ -23,6 +23,7 @@ export const queryKeys = {
     activity: ["system", "activity"] as const,
     update: ["system", "update"] as const,
     storage: ["system", "storage"] as const,
+    securityChecklist: ["system", "security-checklist"] as const,
   },
   compat: {
     summary: ["compat", "summary"] as const,

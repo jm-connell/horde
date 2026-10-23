@@ -117,6 +117,14 @@ export default function UsersSection() {
                   <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-gray-300">
                     {u.is_admin ? "Admin" : "Member"}
                   </span>
+                  {u.two_factor_enabled && (
+                    <span
+                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-green-400"
+                      title="Signs in with a code from an authenticator app"
+                    >
+                      Two-step
+                    </span>
+                  )}
                   {u.disabled && (
                     <span className="rounded-sm bg-red-900/40 px-1.5 py-0.5 text-xs text-red-300">
                       Disabled
@@ -267,6 +275,7 @@ function UserEditor({
   onDelete: () => void;
 }) {
   const { showToast } = useToast();
+  const confirm = useConfirm();
   const [isAdmin, setIsAdmin] = useState(user.is_admin);
   const [granted, setGranted] = useState<Permission[]>(user.permissions);
   const [password, setPassword] = useState("");
@@ -367,6 +376,42 @@ function UserEditor({
           Reset password
         </button>
       </form>
+      {user.two_factor_enabled && !isSelf && (
+        <div>
+          <p className="mb-2 text-sm text-muted">
+            {user.username} signs in with a code from an authenticator app. If
+            they lost their phone and their recovery codes, turn it off so they
+            can sign in with the password and set it up again.
+          </p>
+          <button
+            type="button"
+            className={PANEL_BTN}
+            disabled={busy}
+            onClick={async () => {
+              const ok = await confirm({
+                title: `Reset two-step sign-in for ${user.username}?`,
+                body: "They are signed out everywhere and can sign in with their password alone (or are asked to set it up again if it is required).",
+                confirmLabel: "Reset two-step sign-in",
+                danger: true,
+              });
+              if (!ok) return;
+              setBusy(true);
+              setError(null);
+              try {
+                await api.resetUserTwoFactor(user.id);
+                showToast(`Two-step sign-in is off for ${user.username}`);
+                await onChanged();
+              } catch (err) {
+                setError(describe(err));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            Reset two-step sign-in
+          </button>
+        </div>
+      )}
       <UserDevices user={user} />
       <FormError message={error} />
       <div className="flex flex-wrap gap-2">

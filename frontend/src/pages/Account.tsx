@@ -2,11 +2,12 @@ import { useAuth } from "../context/AuthContext";
 import DevicesSection from "./account/DevicesSection";
 import DownloadsSection from "./account/DownloadsSection";
 import PasswordSection from "./account/PasswordSection";
+import TwoFactorSection from "./account/TwoFactorSection";
 import ProfileSection from "./account/ProfileSection";
 import UsersSection from "./account/UsersSection";
 
 /**
- * Account settings, from the account menu: your profile picture, password and signed-in devices,
+ * Account settings, from the account menu: your profile picture, password, two-step sign-in and signed-in devices,
  * and for administrators everyone's accounts.
  */
 export default function Account() {
@@ -20,6 +21,9 @@ export default function Account() {
         <ProfileSection />
         <div className="border-t border-ink-700 pt-6">
           <PasswordSection />
+        </div>
+        <div className="border-t border-ink-700 pt-6">
+          <TwoFactorSection />
         </div>
         <div className="border-t border-ink-700 pt-6">
           <DownloadsSection />

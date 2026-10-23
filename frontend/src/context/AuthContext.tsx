@@ -16,6 +16,7 @@ import {
 } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
 import CreateAdminPage from "../pages/CreateAdmin";
+import EnrollTwoFactorPage from "../pages/EnrollTwoFactor";
 import LoginPage from "../pages/Login";
 import { adoptSettingsOwner, clearLocalSettings } from "../hooks/useSettings";
 import { deviceAccounts } from "../offline/accounts";
@@ -68,6 +69,8 @@ function stateOfAccount(account: DeviceAccount): AuthState {
       permissions: account.permissions,
       avatar_version: null,
       share_downloads: account.shareDownloads,
+      two_factor_enabled: false,
+      two_factor_enrollment_required: false,
     },
   };
 }
@@ -307,6 +310,9 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     if (location.pathname === "/login") return <LoginPage />;
     const here = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to={`/login?next=${encodeURIComponent(here)}`} replace />;
+  }
+  if (state.user?.two_factor_enrollment_required) {
+    return <EnrollTwoFactorPage />;
   }
   if (location.pathname === "/login") {
     return (

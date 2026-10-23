@@ -279,6 +279,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/2fa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Two Factor Status
+         * @description Whether your account signs in with a second step, and how many recovery codes are left.
+         */
+        get: operations["two_factor_status_api_auth_2fa_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Confirm
+         * @description Finish setup with a current code. Turns it on and returns the recovery codes once.
+         *
+         *     Your other browsers were signed in without a second step, so they are signed out.
+         */
+        post: operations["two_factor_confirm_api_auth_2fa_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Disable
+         * @description Turn two-step sign-in off. Needs your password and a current (or recovery) code.
+         */
+        post: operations["two_factor_disable_api_auth_2fa_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor New Recovery Codes
+         * @description Replace the recovery codes; the old ones stop working. Shown once.
+         */
+        post: operations["two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Setup
+         * @description Start setting up two-step sign-in: a new secret, as text and as a QR code.
+         *
+         *     Needs your current password (someone holding only a stolen session must not be
+         *     able to attach their own authenticator). Nothing changes at sign-in until
+         *     ``/2fa/confirm`` accepts a code; calling this again starts over with a new secret.
+         */
+        post: operations["two_factor_setup_api_auth_2fa_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/avatar": {
         parameters: {
             query?: never;
@@ -377,6 +483,29 @@ export interface paths {
         put?: never;
         /** Login */
         post: operations["login_api_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login Totp
+         * @description Second step: trade the ticket from ``totp_required`` and a code for the session.
+         *
+         *     The code is an authenticator code or an unused recovery code. Wrong codes
+         *     count in the same throttle as wrong passwords; five wrong tries burn the ticket.
+         */
+        post: operations["login_totp_api_auth_login_totp_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2178,6 +2307,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/system/security-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Security Checklist
+         * @description Pass/warn lines about how this server is exposed (for the Settings → System card).
+         *
+         *     Computed from what the process knows: this request, the proxy and host settings,
+         *     the two-step requirement, which administrators have it, the environment switches
+         *     and the cached update check.
+         */
+        get: operations["get_security_checklist_api_system_security_checklist_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/system/stats": {
         parameters: {
             query?: never;
@@ -2527,6 +2680,30 @@ export interface paths {
          * @description Sign one of a user's devices out.
          */
         delete: operations["revoke_user_session_api_users__user_id__sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset User Two Factor
+         * @description Take two-step sign-in off an account (a lost phone and recovery codes).
+         *
+         *     Signs the account out everywhere; their next sign-in is password only (or the
+         *     enrollment screen, if two-step sign-in is required). Not for your own account:
+         *     turn that off in Account settings, which asks for your password and a code.
+         */
+        delete: operations["reset_user_two_factor_api_users__user_id__two_factor_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -3739,6 +3916,12 @@ export interface components {
             /** Progress Expiry Days */
             progress_expiry_days: number;
             /**
+             * Require Two Factor
+             * @default off
+             * @enum {string}
+             */
+            require_two_factor: "off" | "admins" | "everyone";
+            /**
              * Settings Degraded
              * @default false
              */
@@ -3775,6 +3958,8 @@ export interface components {
             metadata_sync_interval_hours?: number | null;
             /** Progress Expiry Days */
             progress_expiry_days?: number | null;
+            /** Require Two Factor */
+            require_two_factor?: ("off" | "admins" | "everyone") | null;
             /** Setup Completed */
             setup_completed?: boolean | null;
             /** Ui */
@@ -3816,6 +4001,16 @@ export interface components {
              * @default true
              */
             share_downloads: boolean;
+            /**
+             * Two Factor Enabled
+             * @default false
+             */
+            two_factor_enabled: boolean;
+            /**
+             * Two Factor Enrollment Required
+             * @default false
+             */
+            two_factor_enrollment_required: boolean;
             /** Username */
             username: string;
         };
@@ -5897,6 +6092,29 @@ export interface components {
              */
             source: "title" | "description" | "tags" | "notes" | "captions" | "related" | "youtube";
         };
+        /** SecurityCheckItem */
+        SecurityCheckItem: {
+            /** Detail */
+            detail: string;
+            /** Docs */
+            docs: string;
+            /** Id */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "warn";
+            /** Title */
+            title: string;
+        };
+        /** SecurityChecklistRead */
+        SecurityChecklistRead: {
+            /** Exposed */
+            exposed: boolean;
+            /** Items */
+            items: components["schemas"]["SecurityCheckItem"][];
+        };
         /** SessionList */
         SessionList: {
             /** Items */
@@ -6172,6 +6390,16 @@ export interface components {
             /** Candidates */
             candidates: components["schemas"]["ThumbnailCandidate"][];
         };
+        /**
+         * TotpLoginRequest
+         * @description The second step of a two-step sign-in.
+         */
+        TotpLoginRequest: {
+            /** Code */
+            code: string;
+            /** Pending Token */
+            pending_token: string;
+        };
         /** TrashEmptied */
         TrashEmptied: {
             /** Deleted */
@@ -6235,6 +6463,63 @@ export interface components {
             retention_days: number;
             /** Total Bytes */
             total_bytes: number;
+        };
+        /** TwoFactorConfirm */
+        TwoFactorConfirm: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * TwoFactorProof
+         * @description Turning two-step sign-in off, or replacing its recovery codes.
+         */
+        TwoFactorProof: {
+            /** Code */
+            code: string;
+            /** Current Password */
+            current_password: string;
+        };
+        /**
+         * TwoFactorRecoveryCodes
+         * @description Shown once: the server keeps only a keyed hash of each.
+         */
+        TwoFactorRecoveryCodes: {
+            /** Recovery Codes */
+            recovery_codes: string[];
+        };
+        /**
+         * TwoFactorSetup
+         * @description What the person adds to their authenticator app (shown once, never stored in the client).
+         */
+        TwoFactorSetup: {
+            /** Otpauth Uri */
+            otpauth_uri: string;
+            /** Qr Svg */
+            qr_svg: string;
+            /** Secret */
+            secret: string;
+        };
+        /** TwoFactorSetupRequest */
+        TwoFactorSetupRequest: {
+            /** Current Password */
+            current_password: string;
+        };
+        /** TwoFactorStatus */
+        TwoFactorStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Enabled At */
+            enabled_at?: string | null;
+            /**
+             * Recovery Codes Left
+             * @default 0
+             */
+            recovery_codes_left: number;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
         };
         /** UnfollowResult */
         UnfollowResult: {
@@ -6345,6 +6630,11 @@ export interface components {
              * @default true
              */
             share_downloads: boolean;
+            /**
+             * Two Factor Enabled
+             * @default false
+             */
+            two_factor_enabled: boolean;
             /** Username */
             username: string;
         };
@@ -7262,6 +7552,210 @@ export interface operations {
             };
         };
     };
+    two_factor_status_api_auth_2fa_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorStatus"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_confirm_api_auth_2fa_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_disable_api_auth_2fa_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorProof"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorProof"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_setup_api_auth_2fa_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorSetup"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     upload_avatar_api_auth_avatar_post: {
         parameters: {
             query?: never;
@@ -7474,6 +7968,48 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLoginResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    login_totp_api_auth_login_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpLoginRequest"];
             };
         };
         responses: {
@@ -12124,6 +12660,44 @@ export interface operations {
             };
         };
     };
+    get_security_checklist_api_system_security_checklist_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityChecklistRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     system_stats_api_system_stats_get: {
         parameters: {
             query?: never;
@@ -12968,6 +13542,44 @@ export interface operations {
             path: {
                 user_id: number;
                 session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_user_two_factor_api_users__user_id__two_factor_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
             };
             cookie?: never;
         };
