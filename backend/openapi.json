@@ -1926,6 +1926,11 @@
             "title": "Permissions",
             "type": "array"
           },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
+          },
           "username": {
             "title": "Username",
             "type": "string"
@@ -2101,6 +2106,11 @@
             "maxLength": 2000,
             "title": "Password",
             "type": "string"
+          },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
           },
           "username": {
             "maxLength": 200,
@@ -5034,6 +5044,32 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "MeUpdate": {
+        "description": "Changes to your own account preferences.",
+        "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          },
+          "share_downloads": {
+            "title": "Share Downloads",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "share_downloads"
+        ],
+        "title": "MeUpdate",
+        "type": "object"
+      },
       "MediaTokenRead": {
         "properties": {
           "expires_at": {
@@ -7820,6 +7856,11 @@
             ],
             "title": "Permissions"
           },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
+          },
           "username": {
             "maxLength": 200,
             "title": "Username",
@@ -7881,6 +7922,11 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
           },
           "username": {
             "title": "Username",
@@ -7947,6 +7993,17 @@
               }
             ],
             "title": "Permissions"
+          },
+          "share_downloads": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Downloads"
           }
         },
         "title": "UserUpdate",
@@ -9962,6 +10019,58 @@
         ]
       }
     },
+    "/api/auth/me": {
+      "patch": {
+        "description": "Change your own preferences (whether other accounts see your downloads).\n\nStopping sharing needs your password: devices keep a check value derived from\nit, so the downloads can still be unlocked offline.",
+        "operationId": "update_me_api_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Me",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/password": {
       "post": {
         "description": "Change your own password. Your other browsers are signed out.",
@@ -11596,7 +11705,7 @@
     },
     "/api/downloads/dismiss-finished": {
       "post": {
-        "description": "Remove completed, failed, and cancelled jobs from the list.",
+        "description": "Remove completed, failed, and cancelled jobs from the list.\n\nAnother account's private device downloads stay.",
         "operationId": "dismiss_finished_jobs_api_downloads_dismiss_finished_post",
         "responses": {
           "204": {
@@ -12155,7 +12264,7 @@
     },
     "/api/downloads/{job_id}/file": {
       "get": {
-        "description": "Serve an ephemeral device-destination download as a browser attachment.",
+        "description": "Serve an ephemeral device-destination download as a browser attachment.\n\nAnother account's download is a 404 unless that account shares its downloads.",
         "operationId": "download_device_file_api_downloads__job_id__file_get",
         "parameters": [
           {

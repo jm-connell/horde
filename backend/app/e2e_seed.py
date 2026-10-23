@@ -162,6 +162,7 @@ def _seed_accounts(engine) -> None:
             account.disabled = False
             account.permissions = permissions.dump(wanted)
             account.avatar_version = None
+            account.share_downloads = True
             session.add(account)
         session.commit()
 

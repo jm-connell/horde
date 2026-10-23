@@ -112,6 +112,8 @@ class AuthUser:
     permissions: frozenset[str] = frozenset()
     #: Profile picture cache key; None without one (see services/auth/avatars).
     avatar_version: int | None = None
+    #: Other accounts on a device may see this account's downloads there.
+    share_downloads: bool = True
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -121,6 +123,7 @@ class AuthUser:
             is_admin=user.is_admin,
             permissions=effective_permissions(user),
             avatar_version=user.avatar_version,
+            share_downloads=user.share_downloads,
         )
 
     def can(self, permission: str) -> bool:
@@ -207,6 +210,7 @@ def create_user(
     *,
     is_admin: bool = False,
     granted: list[str] | set[str] | frozenset[str] | None = None,
+    share_downloads: bool = True,
 ) -> User:
     """Add a user. The very first user is always an administrator.
 
@@ -230,6 +234,7 @@ def create_user(
         username_norm=norm,
         password_hash=passwords.hash_password(password),
         is_admin=is_admin or first,
+        share_downloads=share_downloads,
     )
     session.add(user)
     try:
@@ -323,6 +328,19 @@ def set_password(
     session.commit()
 
 
+def set_share_downloads(session: Session, user_id: int, share: bool) -> User:
+    """Change whether other accounts may see this account's downloads."""
+    user = session.get(User, user_id)
+    if user is None:
+        raise UserNotFound("User not found")
+    user.share_downloads = share
+    user.updated_at = utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
+
+
 def _enabled_admin_count(session: Session) -> int:
     return int(
         session.scalar(
@@ -347,6 +365,7 @@ def update_user(
     disabled: bool | None = None,
     password: str | None = None,
     granted: list[str] | set[str] | frozenset[str] | None = None,
+    share_downloads: bool | None = None,
     keep_token_hash: str | None = None,
 ) -> User:
     """Admin edit of another (or the same) account.
@@ -374,6 +393,8 @@ def update_user(
         )
     if granted is not None:
         user.permissions = _checked_permissions(granted)
+    if share_downloads is not None:
+        user.share_downloads = share_downloads
     revoke = disabled is True
     if password is not None:
         _check_password(password, user.username)

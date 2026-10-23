@@ -693,6 +693,8 @@ class AuthUserRead(BaseModel):
     permissions: list[str]
     #: Profile picture cache key; None when there is none.
     avatar_version: int | None = None
+    #: Other accounts on a device may see this account's offline downloads there.
+    share_downloads: bool = True
 
 
 class AuthState(BaseModel):
@@ -710,6 +712,15 @@ class LoginRequest(BaseModel):
 class BootstrapRequest(BaseModel):
     username: str = Field(max_length=200)
     password: str = Field(max_length=2000)
+    share_downloads: bool = True
+
+
+class MeUpdate(BaseModel):
+    """Changes to your own account preferences."""
+
+    share_downloads: bool
+    #: Required to stop sharing: that password also unlocks your downloads offline.
+    current_password: str | None = Field(default=None, max_length=2000)
 
 
 class AuthLoginResult(BaseModel):
@@ -774,6 +785,7 @@ class UserRead(BaseModel):
     last_login_at: datetime | None = None
     #: Profile picture cache key; None when there is none.
     avatar_version: int | None = None
+    share_downloads: bool = True
 
 
 class UserCreate(BaseModel):
@@ -782,6 +794,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
     #: Members only. Omitted = the default grants (see /api/users/permissions).
     permissions: list[str] | None = None
+    share_downloads: bool = True
 
 
 class UserUpdate(BaseModel):
@@ -789,6 +802,7 @@ class UserUpdate(BaseModel):
     disabled: bool | None = None
     password: str | None = Field(default=None, max_length=2000)
     permissions: list[str] | None = None
+    share_downloads: bool | None = None
 
 
 class FollowedChannelRead(BaseModel):

@@ -40,6 +40,7 @@ from ..schemas import (
 from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
+from ..services.downloads import device_access
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
 from ..services.downloads import staging as download_staging
@@ -89,6 +90,14 @@ def _duplicate_error(code: str) -> CodedHTTPException:
     return CodedHTTPException(
         409, download_jobs.DUPLICATE_MESSAGES.get(code, "Already added"), code
     )
+
+
+def _visible_job(session: Session, user: AuthUser, job_id: int) -> DownloadJob:
+    """The job, or a 404 when it does not exist or is another account's private one."""
+    job = session.get(DownloadJob, job_id)
+    if job is None or not device_access.can_access(session, user, job):
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job
 
 
 def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobRead]:
@@ -598,15 +607,23 @@ def cancel_job(job_id: int, session: Session = Depends(get_session)):
     status_code=204,
     dependencies=[Depends(require_permission("download"))],
 )
-def dismiss_finished_jobs(session: Session = Depends(get_session)):
-    """Remove completed, failed, and cancelled jobs from the list."""
+def dismiss_finished_jobs(
+    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
+):
+    """Remove completed, failed, and cancelled jobs from the list.
+
+    Another account's private device downloads stay.
+    """
     statement = select(DownloadJob).where(
         col(DownloadJob.status).in_(
             [JobStatus.completed, JobStatus.error, JobStatus.cancelled]
         )
     )
     jobs = list(session.exec(statement).all())
+    hidden = device_access.hidden_job_ids(session, user, jobs)
     for job in jobs:
+        if job.id in hidden:
+            continue
         if job.destination == DownloadDestination.device.value:
             download_staging.cleanup_device_job_files(
                 require_id(job), job.device_file_path
@@ -620,10 +637,12 @@ def dismiss_finished_jobs(session: Session = Depends(get_session)):
 @router.delete(
     "/{job_id}", status_code=204, dependencies=[Depends(require_permission("download"))]
 )
-def dismiss_job(job_id: int, session: Session = Depends(get_session)):
-    job = session.get(DownloadJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+def dismiss_job(
+    job_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    job = _visible_job(session, user, job_id)
     if job.status not in (JobStatus.completed, JobStatus.error, JobStatus.cancelled):
         raise HTTPException(
             status_code=409,
@@ -638,7 +657,9 @@ def dismiss_job(job_id: int, session: Session = Depends(get_session)):
 
 
 @router.get("", response_model=list[DownloadJobRead])
-def list_jobs(session: Session = Depends(get_session)):
+def list_jobs(
+    session: Session = Depends(get_session), user: AuthUser = Depends(current_user)
+):
     active = list(
         session.exec(
             select(DownloadJob)
@@ -662,15 +683,17 @@ def list_jobs(session: Session = Depends(get_session)):
     )
     seen = {job.id for job in active}
     jobs = active + [job for job in recent if job.id not in seen]
-    return _enrich_jobs(session, jobs)
+    hidden = device_access.hidden_job_ids(session, user, jobs)
+    return _enrich_jobs(session, [job for job in jobs if job.id not in hidden])
 
 
 @router.get("/{job_id}", response_model=DownloadJobRead)
-def get_job(job_id: int, session: Session = Depends(get_session)):
-    job = session.get(DownloadJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return _enrich_jobs(session, [job])[0]
+def get_job(
+    job_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    return _enrich_jobs(session, [_visible_job(session, user, job_id)])[0]
 
 
 @router.get(
@@ -679,11 +702,16 @@ def get_job(job_id: int, session: Session = Depends(get_session)):
     responses=FILE_DOWNLOAD,
     dependencies=[Depends(require_permission("offline_download"))],
 )
-def download_device_file(job_id: int, session: Session = Depends(get_session)):
-    """Serve an ephemeral device-destination download as a browser attachment."""
-    job = session.get(DownloadJob, job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
+def download_device_file(
+    job_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Serve an ephemeral device-destination download as a browser attachment.
+
+    Another account's download is a 404 unless that account shares its downloads.
+    """
+    job = _visible_job(session, user, job_id)
     if job.destination != DownloadDestination.device.value:
         raise HTTPException(status_code=409, detail="Job is not a device download")
     if job.status != JobStatus.completed or not job.device_file_path:
@@ -713,16 +741,23 @@ _TERMINAL_STATUSES = (JobStatus.completed, JobStatus.error, JobStatus.cancelled)
 _JOB_STATUS_RECHECK_TICKS = 10
 
 
-def _job_status(job_id: int) -> JobStatus | None:
+def _job_status(job_id: int, user: AuthUser | None = None) -> JobStatus | None:
+    """The job's status; ``None`` if it is gone (or hidden from ``user``)."""
     with Session(get_engine()) as session:
         job = session.get(DownloadJob, job_id)
-        return job.status if job is not None else None
+        if job is None or (
+            user is not None and not device_access.can_access(session, user, job)
+        ):
+            return None
+        return job.status
 
 
 @router.get("/{job_id}/events", response_class=RAW, responses=EVENT_STREAM)
-async def job_events(job_id: int, request: Request) -> StreamingResponse:
+async def job_events(
+    job_id: int, request: Request, user: AuthUser = Depends(current_user)
+) -> StreamingResponse:
     """Progress stream for one job: 404 for an unknown job, closes once it finishes."""
-    if await asyncio.to_thread(_job_status, job_id) is None:
+    if await asyncio.to_thread(_job_status, job_id, user) is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
     guard = StreamAuthGuard.of(request)

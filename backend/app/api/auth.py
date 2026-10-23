@@ -22,6 +22,7 @@ from ..schemas import (
     BootstrapRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    MeUpdate,
     PasswordChange,
     PasswordResetRequest,
     SessionList,
@@ -48,6 +49,7 @@ def user_read(user: AuthUser) -> AuthUserRead:
         is_admin=user.is_admin,
         permissions=sorted(user.permissions),
         avatar_version=user.avatar_version,
+        share_downloads=user.share_downloads,
     )
 
 
@@ -106,7 +108,11 @@ def bootstrap(
         if accounts.count_users(session) > 0:
             raise accounts.AlreadyBootstrapped("An account already exists")
         user = accounts.create_user(
-            session, payload.username, payload.password, is_admin=True
+            session,
+            payload.username,
+            payload.password,
+            is_admin=True,
+            share_downloads=payload.share_downloads,
         )
     _open_session(session, request, response, runtime, user)
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
@@ -256,18 +262,16 @@ def reset_password(
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
 
-@router.post("/password", status_code=204)
-def change_password(
-    payload: PasswordChange,
-    request: Request,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    """Change your own password. Your other browsers are signed out."""
+def _verify_current_password(
+    request: Request, session: Session, user: AuthUser, password: str
+) -> User:
+    """The signed-in user's row, once ``password`` is proven to be theirs.
+
+    Guessing the current password is guessing the password: same throttle as
+    sign-in, counted separately so it cannot lock the account out of signing in.
+    """
     runtime = _runtime(request)
     address = runtime.client_address(request)
-    # Guessing the current password is guessing the password: same throttle as
-    # sign-in, counted separately so it cannot lock the account out of signing in.
     throttle_key = f"password:{user.username.lower()}"
     wait = runtime.limiter.retry_after(address, throttle_key)
     if wait:
@@ -278,12 +282,22 @@ def change_password(
             headers={"Retry-After": str(wait)},
         )
     row = accounts.get_user(session, user.id)
-    if row is None or not passwords.verify_password(
-        payload.current_password, row.password_hash
-    ):
+    if row is None or not passwords.verify_password(password, row.password_hash):
         runtime.limiter.record_failure(address, throttle_key)
         raise CodedHTTPException(400, "Current password is incorrect", "wrong_password")
     runtime.limiter.record_success(address, throttle_key)
+    return row
+
+
+@router.post("/password", status_code=204)
+def change_password(
+    payload: PasswordChange,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Change your own password. Your other browsers are signed out."""
+    row = _verify_current_password(request, session, user, payload.current_password)
     token = request.cookies.get(accounts.SESSION_COOKIE)
     accounts.set_password(
         session,
@@ -292,6 +306,30 @@ def change_password(
         keep_token_hash=accounts.hash_token(token) if token else None,
     )
     return Response(status_code=204)
+
+
+@router.patch("/me", response_model=AuthUserRead)
+def update_me(
+    payload: MeUpdate,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Change your own preferences (whether other accounts see your downloads).
+
+    Stopping sharing needs your password: devices keep a check value derived from
+    it, so the downloads can still be unlocked offline.
+    """
+    if not payload.share_downloads:
+        if not payload.current_password:
+            raise CodedHTTPException(
+                400,
+                "Enter your password to stop sharing your downloads",
+                "password_required",
+            )
+        _verify_current_password(request, session, user, payload.current_password)
+    row = accounts.set_share_downloads(session, user.id, payload.share_downloads)
+    return user_read(AuthUser.of(row))
 
 
 @router.get("/sessions", response_model=SessionList)

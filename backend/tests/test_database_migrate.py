@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0011_playlist_owner"
+HEAD = "0012_share_downloads"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -623,6 +623,34 @@ def test_playlist_owner_revision_gives_existing_playlists_to_the_first_admin(
         assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
 
 
+def test_share_downloads_revision_keeps_existing_accounts_sharing(tmp_dirs):
+    """0011 -> 0012: every existing account keeps sharing its downloads."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0011_playlist_owner")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions) "
+                "VALUES (1, 'boss', 'boss', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT share_downloads FROM users")).fetchall() == [
+            (1,)
+        ]
+
+
 def test_tag_and_search_triggers_follow_every_writer(session, add_video):
     """Plain UPDATE/DELETE statements keep video_tags and videos_fts in step."""
     video = add_video(title="Original title", tags=["alpha"])
@@ -870,6 +898,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;
             DROP TABLE stream_ai_state;
+            ALTER TABLE users DROP COLUMN share_downloads;
             ALTER TABLE users DROP COLUMN avatar_version;
             -- playlists as it was before the owner and visibility columns
             DROP TABLE playlists;

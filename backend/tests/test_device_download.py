@@ -8,8 +8,11 @@ from fastapi import HTTPException
 from sqlmodel import Session, select
 
 from app.models import DownloadDestination, DownloadJob, JobStatus, Video
+from app.services.auth.accounts import AuthUser
 from app.services.downloads import finalize, postprocess, progress, staging
 from app.services.downloads.spec import JobSpec
+
+ADMIN = AuthUser(id=1, username="admin", is_admin=True)
 
 
 def _write_media(path: Path, size: int = 64) -> None:
@@ -176,7 +179,7 @@ def test_device_file_endpoint_and_dismiss_cleanup(init_db):
     _write_media(media)
 
     with Session(init_db["engine"]) as session:
-        resp = downloads_api.download_device_file(job_id, session)
+        resp = downloads_api.download_device_file(job_id, session, ADMIN)
     assert (
         resp.path == str(media.resolve())
         or Path(resp.path).resolve() == media.resolve()
@@ -197,11 +200,11 @@ def test_device_file_endpoint_and_dismiss_cleanup(init_db):
 
     with Session(init_db["engine"]) as session:
         with pytest.raises(HTTPException) as exc:
-            downloads_api.download_device_file(lib_id, session)
+            downloads_api.download_device_file(lib_id, session, ADMIN)
         assert exc.value.status_code == 409
 
     with Session(init_db["engine"]) as session:
-        result = downloads_api.dismiss_job(job_id, session)
+        result = downloads_api.dismiss_job(job_id, session, ADMIN)
     assert result.status_code == 204
     assert not media.exists()
     assert not (downloads / "_device" / str(job_id)).exists()

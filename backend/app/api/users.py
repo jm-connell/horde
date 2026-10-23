@@ -36,6 +36,7 @@ def _read(user: User) -> UserRead:
         created_at=as_utc(user.created_at),
         last_login_at=as_utc(user.last_login_at),
         avatar_version=user.avatar_version,
+        share_downloads=user.share_downloads,
     )
 
 
@@ -63,6 +64,7 @@ def create_user(payload: UserCreate, session: Session = Depends(get_session)):
         payload.password,
         is_admin=payload.is_admin,
         granted=payload.permissions,
+        share_downloads=payload.share_downloads,
     )
     return _read(user)
 
@@ -93,6 +95,7 @@ def update_user(
         disabled=payload.disabled if "disabled" in changes else None,
         password=payload.password if "password" in changes else None,
         granted=payload.permissions if "permissions" in changes else None,
+        share_downloads=payload.share_downloads,
         keep_token_hash=keep,
     )
     return _read(user)

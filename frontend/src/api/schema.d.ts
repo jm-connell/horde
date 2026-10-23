@@ -400,6 +400,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Me
+         * @description Change your own preferences (whether other accounts see your downloads).
+         *
+         *     Stopping sharing needs your password: devices keep a check value derived from
+         *     it, so the downloads can still be unlocked offline.
+         */
+        patch: operations["update_me_api_auth_me_patch"];
+        trace?: never;
+    };
     "/api/auth/password": {
         parameters: {
             query?: never;
@@ -860,6 +883,8 @@ export interface paths {
         /**
          * Dismiss Finished Jobs
          * @description Remove completed, failed, and cancelled jobs from the list.
+         *
+         *     Another account's private device downloads stay.
          */
         post: operations["dismiss_finished_jobs_api_downloads_dismiss_finished_post"];
         delete?: never;
@@ -1039,6 +1064,8 @@ export interface paths {
         /**
          * Download Device File
          * @description Serve an ephemeral device-destination download as a browser attachment.
+         *
+         *     Another account's download is a 404 unless that account shares its downloads.
          */
         get: operations["download_device_file_api_downloads__job_id__file_get"];
         put?: never;
@@ -3573,6 +3600,11 @@ export interface components {
             is_admin: boolean;
             /** Permissions */
             permissions: string[];
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -3633,6 +3665,11 @@ export interface components {
         BootstrapRequest: {
             /** Password */
             password: string;
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -4638,6 +4675,16 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /**
+         * MeUpdate
+         * @description Changes to your own account preferences.
+         */
+        MeUpdate: {
+            /** Current Password */
+            current_password?: string | null;
+            /** Share Downloads */
+            share_downloads: boolean;
         };
         /** MediaTokenRead */
         MediaTokenRead: {
@@ -5676,6 +5723,11 @@ export interface components {
             password: string;
             /** Permissions */
             permissions?: string[] | null;
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -5698,6 +5750,11 @@ export interface components {
             last_login_at?: string | null;
             /** Permissions */
             permissions: string[];
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -5711,6 +5768,8 @@ export interface components {
             password?: string | null;
             /** Permissions */
             permissions?: string[] | null;
+            /** Share Downloads */
+            share_downloads?: boolean | null;
         };
         /** VideoAiChatHistory */
         VideoAiChatHistory: {
@@ -6866,6 +6925,48 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_me_api_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
             };
             /** @description Validation error */
             422: {

@@ -586,6 +586,9 @@ class User(SQLModel, table=True):
     # Profile picture version (the client's cache key); None when the account
     # has none. The image is DATA_DIR/avatars/{id}_{version}.jpg.
     avatar_version: int | None = None
+    # Whether other accounts on a device may see this account's offline downloads
+    # there, and fetch its device-destination downloads from the server.
+    share_downloads: bool = Field(default=True)
 
 
 class UserSession(SQLModel, table=True):
