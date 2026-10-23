@@ -30,6 +30,9 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/users"),
             ("PATCH", "/api/users/{user_id}"),
             ("DELETE", "/api/users/{user_id}"),
+            ("GET", "/api/users/{user_id}/sessions"),
+            ("DELETE", "/api/users/{user_id}/sessions"),
+            ("DELETE", "/api/users/{user_id}/sessions/{session_id}"),
             ("POST", "/api/setup/reset"),
             ("POST", "/api/ai/apply-workload"),
             ("POST", "/api/ai/test"),
@@ -178,6 +181,8 @@ OPEN_MUTATIONS = {
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
+    ("POST", "/api/auth/sessions/revoke-others"),  # your own signed-in devices
+    ("DELETE", "/api/auth/sessions/{session_id}"),
     ("POST", "/api/auth/avatar"),  # your own profile picture
     ("DELETE", "/api/auth/avatar"),
     ("PUT", "/api/follows"),  # your own followed channels

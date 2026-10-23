@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from datetime import timedelta
 from typing import cast
 
@@ -23,9 +24,11 @@ from ..schemas import (
     LoginRequest,
     PasswordChange,
     PasswordResetRequest,
+    SessionList,
+    SessionRead,
 )
 from ..services import app_settings, uploads
-from ..services.auth import accounts, avatars, passwords, reset_codes
+from ..services.auth import accounts, avatars, passwords, reset_codes, sessions
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
 
@@ -289,6 +292,47 @@ def change_password(
         keep_token_hash=accounts.hash_token(token) if token else None,
     )
     return Response(status_code=204)
+
+
+@router.get("/sessions", response_model=SessionList)
+def list_my_sessions(
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Your signed-in devices, most recently active first."""
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    rows = sessions.list_sessions(session, user.id, current_token=token)
+    return SessionList(items=[SessionRead(**asdict(row)) for row in rows])
+
+
+# Declared before ``/sessions/{session_id}`` so the literal path wins.
+@router.post("/sessions/revoke-others", status_code=204)
+def revoke_other_sessions(
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Sign out everywhere except this browser."""
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    sessions.revoke_others(session, user.id, token)
+    return Response(status_code=204)
+
+
+@router.delete("/sessions/{session_id}", status_code=204)
+def revoke_my_session(
+    session_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Sign one of your devices out. Ending this browser's own session signs you out."""
+    revoked = sessions.revoke(session, user.id, session_id)
+    response = Response(status_code=204)
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    if token and accounts.hash_token(token) == revoked:
+        response.delete_cookie(accounts.SESSION_COOKIE, path="/")
+    return response
 
 
 @router.post("/avatar", response_model=AuthUserRead)

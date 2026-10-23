@@ -9,6 +9,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Signed-in devices** in Account settings: every browser signed in to your
+  account, with a device label ("Safari on iPhone"), address and last activity.
+  Sign any of them out, or sign out all your other devices at once; the browser
+  is sent to the sign-in page on its next request. Administrators can see and
+  end a member's sessions, or sign them out everywhere, from Users.
 - **Max disk usage** in Settings → System → Storage: an optional limit (in GB)
   on the library's size, with a usage bar that turns amber from 90 %. Downloads,
   channel auto-downloads and playlist syncs wait while the library is at the

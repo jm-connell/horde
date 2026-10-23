@@ -732,6 +732,25 @@ class PasswordChange(BaseModel):
     new_password: str = Field(max_length=2000)
 
 
+class SessionRead(BaseModel):
+    """One signed-in browser of an account."""
+
+    id: int
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    ip: str | None = None
+    user_agent: str | None = None
+    #: "Safari on iPhone", parsed from ``user_agent``.
+    device: str
+    #: The browser making this request.
+    current: bool
+
+
+class SessionList(BaseModel):
+    items: list[SessionRead]
+
+
 class MediaTokenRead(BaseModel):
     token: str
     expires_at: datetime

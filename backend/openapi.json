@@ -6614,6 +6614,86 @@
         "title": "SearchMatchReason",
         "type": "object"
       },
+      "SessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SessionList",
+        "type": "object"
+      },
+      "SessionRead": {
+        "description": "One signed-in browser of an account.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_seen_at",
+          "expires_at",
+          "device",
+          "current"
+        ],
+        "title": "SessionRead",
+        "type": "object"
+      },
       "SpriteGenerateResult": {
         "properties": {
           "status": {
@@ -9974,6 +10054,129 @@
           }
         },
         "summary": "Reset Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/sessions": {
+      "get": {
+        "description": "Your signed-in devices, most recently active first.",
+        "operationId": "list_my_sessions_api_auth_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List My Sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/sessions/revoke-others": {
+      "post": {
+        "description": "Sign out everywhere except this browser.",
+        "operationId": "revoke_other_sessions_api_auth_sessions_revoke_others_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke Other Sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/sessions/{session_id}": {
+      "delete": {
+        "description": "Sign one of your devices out. Ending this browser's own session signs you out.",
+        "operationId": "revoke_my_session_api_auth_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke My Session",
         "tags": [
           "auth"
         ]
@@ -16162,6 +16365,158 @@
           }
         },
         "summary": "Update User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/sessions": {
+      "delete": {
+        "description": "Sign a user out of every device.",
+        "operationId": "revoke_user_sessions_api_users__user_id__sessions_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke User Sessions",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "A member's signed-in devices (for an administrator ending one).",
+        "operationId": "list_user_sessions_api_users__user_id__sessions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List User Sessions",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/sessions/{session_id}": {
+      "delete": {
+        "description": "Sign one of a user's devices out.",
+        "operationId": "revoke_user_session_api_users__user_id__sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke User Session",
         "tags": [
           "users"
         ]

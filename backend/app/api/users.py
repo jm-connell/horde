@@ -2,14 +2,23 @@
 
 from __future__ import annotations
 
+from dataclasses import asdict
+
 from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
 from ..auth import require_admin
 from ..context import get_session
 from ..models import User, as_utc, require_id
-from ..schemas import PermissionInfo, UserCreate, UserRead, UserUpdate
-from ..services.auth import accounts, avatars, permissions
+from ..schemas import (
+    PermissionInfo,
+    SessionList,
+    SessionRead,
+    UserCreate,
+    UserRead,
+    UserUpdate,
+)
+from ..services.auth import accounts, avatars, permissions, sessions
 from ..services.auth.accounts import AuthUser
 
 router = APIRouter(
@@ -97,4 +106,40 @@ def delete_user(
 ):
     accounts.delete_user(session, user_id, successor_id=admin.id)
     avatars.unlink_avatars(user_id)
+    return Response(status_code=204)
+
+
+def _require_user(session: Session, user_id: int) -> None:
+    if accounts.get_user(session, user_id) is None:
+        raise accounts.UserNotFound("No such user")
+
+
+@router.get("/{user_id}/sessions", response_model=SessionList)
+def list_user_sessions(
+    user_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    """A member's signed-in devices (for an administrator ending one)."""
+    _require_user(session, user_id)
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    rows = sessions.list_sessions(session, user_id, current_token=token)
+    return SessionList(items=[SessionRead(**asdict(row)) for row in rows])
+
+
+@router.delete("/{user_id}/sessions", status_code=204)
+def revoke_user_sessions(user_id: int, session: Session = Depends(get_session)):
+    """Sign a user out of every device."""
+    _require_user(session, user_id)
+    sessions.revoke_others(session, user_id, None)
+    return Response(status_code=204)
+
+
+@router.delete("/{user_id}/sessions/{session_id}", status_code=204)
+def revoke_user_session(
+    user_id: int, session_id: int, session: Session = Depends(get_session)
+):
+    """Sign one of a user's devices out."""
+    _require_user(session, user_id)
+    sessions.revoke(session, user_id, session_id)
     return Response(status_code=204)
