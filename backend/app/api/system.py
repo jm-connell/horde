@@ -301,6 +301,7 @@ def get_security_checklist(
             app_settings.load().get("require_two_factor")
         ),
         admins_without_two_factor=tuple(two_factor.admins_without(session)),
+        members_without_two_factor=tuple(two_factor.members_without(session)),
         auth_disabled=runtime.config.disabled,
         allow_private_urls=url_safety.allow_private_urls(),
         update_available=update_available,

@@ -181,3 +181,45 @@ def test_an_update_check_that_failed_is_a_warning_not_a_crash(client, monkeypatc
         },
     )
     assert _by_id(client)["updates"]["status"] == "warn"
+
+
+# --- accounts that have not enrolled yet -----------------------------------------------
+
+
+def test_accounts_that_have_not_enrolled_are_listed_once_everyone_must():
+    required = Facts(require_two_factor="everyone", members_without_two_factor=("kid",))
+    item = next(i for i in evaluate(required).items if i.id == "members_two_factor")
+    assert item.status == "warn"
+    assert "kid" in item.detail
+    assert "before you open the port" in item.detail
+    enrolled = Facts(require_two_factor="everyone")
+    assert _status(enrolled)["members_two_factor"] == "ok"
+
+
+def test_the_member_line_only_appears_when_everyone_must_use_it():
+    ids = {i.id for i in evaluate(Facts(require_two_factor="admins")).items}
+    assert "members_two_factor" not in ids
+    assert "members_two_factor" in {
+        i.id for i in evaluate(Facts(require_two_factor="everyone")).items
+    }
+
+
+def test_the_endpoint_names_the_members_who_have_not_enrolled(
+    client, member_user, init_db
+):
+    from sqlmodel import Session
+
+    from app.models import utcnow
+    from app.services import app_settings
+    from app.services.auth import accounts
+
+    with Session(init_db["engine"]) as s:  # the admin has enrolled; the member has not
+        admin = accounts.get_by_username(s, "admin")
+        admin.totp_secret = "A" * 32
+        admin.totp_enabled_at = utcnow()
+        s.add(admin)
+        s.commit()
+    app_settings.save({"require_two_factor": "everyone"})
+    item = _by_id(client)["members_two_factor"]
+    assert item["status"] == "warn"
+    assert "member" in item["detail"]

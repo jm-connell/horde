@@ -274,10 +274,19 @@ def _hash_recovery_code(key: bytes, user_id: int, code: str) -> str:
 
 def admins_without(session: Session) -> list[str]:
     """Usernames of the enabled administrators who have not turned it on."""
+    return _enabled_without(session, admins=True)
+
+
+def members_without(session: Session) -> list[str]:
+    """Usernames of the enabled non-administrators who have not turned it on."""
+    return _enabled_without(session, admins=False)
+
+
+def _enabled_without(session: Session, *, admins: bool) -> list[str]:
     rows = session.scalars(
         select(User)
         .where(
-            col(User.is_admin) == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+            col(User.is_admin) == admins,
             col(User.disabled) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
         )
         .order_by(col(User.id))

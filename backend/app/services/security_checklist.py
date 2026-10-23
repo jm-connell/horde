@@ -35,6 +35,9 @@ class Facts:
     require_two_factor: str = two_factor.REQUIRE_OFF
     #: Usernames of enabled administrators without two-step sign-in.
     admins_without_two_factor: tuple[str, ...] = ()
+    #: Usernames of enabled non-administrators without it (only read when it is
+    #: required of everyone).
+    members_without_two_factor: tuple[str, ...] = ()
     auth_disabled: bool = False
     allow_private_urls: bool = False
     #: ``None``: the check could not be made.
@@ -61,11 +64,17 @@ def _item(id_: str, ok: bool, title: str, good: str, bad: str, docs: str) -> Ite
     return Item(id_, "ok" if ok else "warn", title, good if ok else bad, docs)
 
 
+def _names(usernames: tuple[str, ...]) -> str:
+    """The first five names, then how many more."""
+    text = ", ".join(usernames[:5])
+    if len(usernames) > 5:
+        text += f" and {len(usernames) - 5} more"
+    return text
+
+
 def evaluate(facts: Facts) -> Checklist:
     exposed = bool(facts.public_hosts) or facts.any_host
-    names = ", ".join(facts.admins_without_two_factor[:5])
-    if len(facts.admins_without_two_factor) > 5:
-        names += f" and {len(facts.admins_without_two_factor) - 5} more"
+    names = _names(facts.admins_without_two_factor)
     required = facts.require_two_factor == two_factor.REQUIRE_EVERYONE
     items = [
         _item(
@@ -120,6 +129,24 @@ def evaluate(facts: Facts) -> Checklist:
             "Every administrator has it on.",
             f"Without two-step sign-in: {names}.",
             "ops/internet-exposure/#two-step",
+        ),
+        *(
+            [
+                _item(
+                    "members_two_factor",
+                    not facts.members_without_two_factor,
+                    "Every account has enrolled",
+                    "Every account has two-step sign-in on.",
+                    "Not enrolled yet: "
+                    f"{_names(facts.members_without_two_factor)}. Until an account "
+                    "enrolls, anyone who learns its password can set up their own "
+                    "authenticator on it first. Have every account enroll before "
+                    "you open the port.",
+                    "ops/internet-exposure/#two-step",
+                )
+            ]
+            if required
+            else []
         ),
         _item(
             "auth_enabled",
