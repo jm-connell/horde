@@ -5227,6 +5227,249 @@
         "title": "HealthYoutube",
         "type": "object"
       },
+      "HistoryStats": {
+        "properties": {
+          "best_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryStatsDay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsChannel"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "end_day": {
+            "title": "End Day",
+            "type": "string"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "library": {
+            "$ref": "#/components/schemas/HistoryStatsLibrary"
+          },
+          "range": {
+            "enum": [
+              "7d",
+              "30d",
+              "365d",
+              "all"
+            ],
+            "title": "Range",
+            "type": "string"
+          },
+          "start_day": {
+            "title": "Start Day",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsTag"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/HistoryStatsTotals"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "range",
+          "tz",
+          "start_day",
+          "end_day",
+          "totals",
+          "days",
+          "best_day",
+          "channels",
+          "tags",
+          "hours",
+          "library"
+        ],
+        "title": "HistoryStats",
+        "type": "object"
+      },
+      "HistoryStatsChannel": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "seconds",
+          "videos"
+        ],
+        "title": "HistoryStatsChannel",
+        "type": "object"
+      },
+      "HistoryStatsDay": {
+        "properties": {
+          "day": {
+            "description": "Local date, YYYY-MM-DD.",
+            "title": "Day",
+            "type": "string"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "seconds",
+          "finished"
+        ],
+        "title": "HistoryStatsDay",
+        "type": "object"
+      },
+      "HistoryStatsLibrary": {
+        "properties": {
+          "added_in_range": {
+            "title": "Added In Range",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "title": "Total Size Bytes",
+            "type": "integer"
+          },
+          "total_videos": {
+            "title": "Total Videos",
+            "type": "integer"
+          },
+          "watched_share": {
+            "title": "Watched Share",
+            "type": "number"
+          },
+          "watched_videos": {
+            "title": "Watched Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_videos",
+          "total_size_bytes",
+          "added_in_range",
+          "watched_videos",
+          "watched_share"
+        ],
+        "title": "HistoryStatsLibrary",
+        "type": "object"
+      },
+      "HistoryStatsTag": {
+        "properties": {
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "seconds",
+          "videos"
+        ],
+        "title": "HistoryStatsTag",
+        "type": "object"
+      },
+      "HistoryStatsTotals": {
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "current_streak_days": {
+            "title": "Current Streak Days",
+            "type": "integer"
+          },
+          "previous_watch_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Watch Seconds"
+          },
+          "videos_finished": {
+            "title": "Videos Finished",
+            "type": "integer"
+          },
+          "videos_started": {
+            "title": "Videos Started",
+            "type": "integer"
+          },
+          "watch_seconds": {
+            "title": "Watch Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "watch_seconds",
+          "previous_watch_seconds",
+          "videos_started",
+          "videos_finished",
+          "active_days",
+          "current_streak_days"
+        ],
+        "title": "HistoryStatsTotals",
+        "type": "object"
+      },
       "JobStatus": {
         "enum": [
           "queued",
@@ -13970,6 +14213,85 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/history/stats": {
+      "get": {
+        "description": "Watch time, streaks, top channels and tags of the signed-in user only.",
+        "operationId": "history_stats_api_history_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "30d",
+              "enum": [
+                "7d",
+                "30d",
+                "365d",
+                "all"
+              ],
+              "title": "Range",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA time zone the days and hours are counted in (the browser's). Omitted: the server's.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA time zone the days and hours are counted in (the browser's). Omitted: the server's.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "History Stats",
+        "tags": [
+          "history"
+        ]
       }
     },
     "/api/live": {

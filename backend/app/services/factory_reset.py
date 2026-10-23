@@ -27,6 +27,7 @@ from ..models import (
     TrashEntry,
     UserSettings,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
@@ -54,6 +55,7 @@ _ERASE_MEDIA_MODELS = (
     Playlist,
     AiCategory,
     UserVideoState,
+    UserWatchTime,
     Video,
     TrashEntry,
 )

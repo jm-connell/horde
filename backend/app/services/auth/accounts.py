@@ -30,6 +30,7 @@ from ...models import (
     UserSession,
     UserSettings,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     as_utc,
@@ -440,6 +441,7 @@ def delete_user(
     session.execute(
         delete(UserVideoState).where(col(UserVideoState.user_id) == user_id)
     )
+    session.execute(delete(UserWatchTime).where(col(UserWatchTime.user_id) == user_id))
     session.execute(delete(UserSettings).where(col(UserSettings.user_id) == user_id))
     session.execute(
         delete(VideoAiChatMessage).where(col(VideoAiChatMessage.user_id) == user_id)

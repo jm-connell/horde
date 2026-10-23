@@ -45,7 +45,7 @@ from enum import Enum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlmodel import Session, SQLModel, col, func, select
 
 from .. import config
@@ -58,6 +58,7 @@ from ..models import (
     TrashEntry,
     User,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
@@ -314,6 +315,10 @@ def _snapshot(session: Session, video: Video) -> dict[str, Any]:
     covers = session.exec(
         select(col(Playlist.id)).where(col(Playlist.cover_video_id) == video_id)
     ).all()
+    # Watch time outlives the video (its link is cleared); a restore links it again.
+    watch_time = session.exec(
+        select(col(UserWatchTime.id)).where(col(UserWatchTime.video_id) == video_id)
+    ).all()
     return {
         "version": SNAPSHOT_VERSION,
         "video": _encode(video),
@@ -325,6 +330,7 @@ def _snapshot(session: Session, video: Video) -> dict[str, Any]:
             {"playlist_id": i.playlist_id, "position": i.position} for i in items
         ],
         "cover_playlist_ids": [int(p) for p in covers if p is not None],
+        "watch_time_ids": [int(w) for w in watch_time if w is not None],
     }
 
 
@@ -565,6 +571,16 @@ def _insert_rows(session: Session, snapshot: dict[str, Any]) -> Video:
                     position=int(item.get("position") or 0),
                 )
             )
+    watch_time_ids = snapshot.get("watch_time_ids", [])
+    for start in range(0, len(watch_time_ids), 500):
+        session.execute(
+            update(UserWatchTime)
+            .where(
+                col(UserWatchTime.id).in_(watch_time_ids[start : start + 500]),
+                col(UserWatchTime.video_id).is_(None),
+            )
+            .values(video_id=video_id)
+        )
     for playlist_id in snapshot.get("cover_playlist_ids", []):
         playlist = session.get(Playlist, playlist_id)
         if playlist is not None and playlist.cover_video_id is None:

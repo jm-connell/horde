@@ -1263,6 +1263,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/history/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * History Stats
+         * @description Watch time, streaks, top channels and tags of the signed-in user only.
+         */
+        get: operations["history_stats_api_history_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/live": {
         parameters: {
             query?: never;
@@ -4917,6 +4937,89 @@ export interface components {
             /** Cookies Configured */
             cookies_configured: boolean;
             last_extract_failure?: components["schemas"]["ExtractFailure"] | null;
+        };
+        /** HistoryStats */
+        HistoryStats: {
+            best_day: components["schemas"]["HistoryStatsDay"] | null;
+            /** Channels */
+            channels: components["schemas"]["HistoryStatsChannel"][];
+            /** Days */
+            days: components["schemas"]["HistoryStatsDay"][];
+            /** End Day */
+            end_day: string;
+            /** Hours */
+            hours: number[][] | null;
+            library: components["schemas"]["HistoryStatsLibrary"];
+            /**
+             * Range
+             * @enum {string}
+             */
+            range: "7d" | "30d" | "365d" | "all";
+            /** Start Day */
+            start_day: string;
+            /** Tags */
+            tags: components["schemas"]["HistoryStatsTag"][];
+            totals: components["schemas"]["HistoryStatsTotals"];
+            /** Tz */
+            tz: string;
+        };
+        /** HistoryStatsChannel */
+        HistoryStatsChannel: {
+            /** Name */
+            name: string;
+            /** Seconds */
+            seconds: number;
+            /** Videos */
+            videos: number;
+        };
+        /** HistoryStatsDay */
+        HistoryStatsDay: {
+            /**
+             * Day
+             * @description Local date, YYYY-MM-DD.
+             */
+            day: string;
+            /** Finished */
+            finished: number;
+            /** Seconds */
+            seconds: number;
+        };
+        /** HistoryStatsLibrary */
+        HistoryStatsLibrary: {
+            /** Added In Range */
+            added_in_range: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Total Videos */
+            total_videos: number;
+            /** Watched Share */
+            watched_share: number;
+            /** Watched Videos */
+            watched_videos: number;
+        };
+        /** HistoryStatsTag */
+        HistoryStatsTag: {
+            /** Seconds */
+            seconds: number;
+            /** Tag */
+            tag: string;
+            /** Videos */
+            videos: number;
+        };
+        /** HistoryStatsTotals */
+        HistoryStatsTotals: {
+            /** Active Days */
+            active_days: number;
+            /** Current Streak Days */
+            current_streak_days: number;
+            /** Previous Watch Seconds */
+            previous_watch_seconds: number | null;
+            /** Videos Finished */
+            videos_finished: number;
+            /** Videos Started */
+            videos_started: number;
+            /** Watch Seconds */
+            watch_seconds: number;
         };
         /**
          * JobStatus
@@ -9717,6 +9820,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthFull"] | components["schemas"]["HealthPublic"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    history_stats_api_history_stats_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "365d" | "all";
+                /** @description IANA time zone the days and hours are counted in (the browser's). Omitted: the server's. */
+                tz?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryStats"];
                 };
             };
             /** @description Validation error */

@@ -27,6 +27,7 @@ from ..models import (
     PlaylistItem,
     RetentionKeep,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
@@ -53,6 +54,7 @@ _NULLED_REFERENCES: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (DownloadJob, col(DownloadJob.video_id)),
     (DownloadJob, col(DownloadJob.replace_video_id)),
     (OpenRouterUsage, col(OpenRouterUsage.video_id)),
+    (UserWatchTime, col(UserWatchTime.video_id)),
     (Playlist, col(Playlist.cover_video_id)),
 )
 

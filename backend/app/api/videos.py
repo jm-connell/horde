@@ -86,6 +86,7 @@ from ..services.thumbnails import (
 )
 from ..services.url_safety import validate_public_url
 from ..services.video_delete import delete_video_cascade, remove_files
+from ..services.watch_stats import record_save as record_watch_time
 from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import (
@@ -626,10 +627,20 @@ def update_progress(
     payload: WatchProgressUpdate,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    record_watch_time(
+        session,
+        ctx.watch_refs,
+        user.id,
+        video,
+        payload.position_sec,
+        payload.watched_at,
+        finished=payload.finished,
+    )
     # Treat the first few seconds as "not started" so brief opens don't clutter
     # the Continue watching row. A reset to 0 is always honored, but only an
     # explicit ``finished`` counts as having watched the video.

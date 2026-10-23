@@ -164,6 +164,72 @@ class WatchProgressUpdate(BaseModel):
     )
 
 
+HistoryStatsRange = Literal["7d", "30d", "365d", "all"]
+
+
+class HistoryStatsTotals(BaseModel):
+    watch_seconds: float
+    #: The same number of days just before the range (``None`` for ``all``).
+    previous_watch_seconds: float | None
+    #: Distinct videos watched in the range (including history from before watch
+    #: time was recorded).
+    videos_started: int
+    videos_finished: int
+    #: Days in the range with any watch time.
+    active_days: int
+    #: Consecutive days with watch time, ending today (or yesterday when nothing
+    #: has been watched yet today). Not limited to the range.
+    current_streak_days: int
+
+
+class HistoryStatsDay(BaseModel):
+    day: str = Field(description="Local date, YYYY-MM-DD.")
+    seconds: float
+    finished: int
+
+
+class HistoryStatsChannel(BaseModel):
+    name: str
+    seconds: float
+    videos: int
+
+
+class HistoryStatsTag(BaseModel):
+    tag: str
+    seconds: float
+    videos: int
+
+
+class HistoryStatsLibrary(BaseModel):
+    total_videos: int
+    total_size_bytes: int
+    added_in_range: int
+    #: Library videos this user has opened at least once (their History).
+    watched_videos: int
+    #: ``watched_videos / total_videos`` (0 for an empty library).
+    watched_share: float
+
+
+class HistoryStats(BaseModel):
+    range: HistoryStatsRange
+    tz: str
+    #: First and last local day of the range (``all`` starts at the first day
+    #: with watch time, or today).
+    start_day: str
+    end_day: str
+    totals: HistoryStatsTotals
+    #: One entry per day of the range, oldest first.
+    days: list[HistoryStatsDay]
+    #: The day in the range with the most watch time.
+    best_day: HistoryStatsDay | None
+    channels: list[HistoryStatsChannel]
+    tags: list[HistoryStatsTag]
+    #: Watch seconds by local weekday (0 = Monday) and hour; ``None`` when the
+    #: range has no watch time.
+    hours: list[list[float]] | None
+    library: HistoryStatsLibrary
+
+
 class DownloadCreate(BaseModel):
     url: str
     quality_preset: str = "best"

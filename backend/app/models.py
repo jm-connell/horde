@@ -638,6 +638,43 @@ class UserVideoState(SQLModel, table=True):
     finished_at: datetime | None = None
 
 
+class UserWatchTime(SQLModel, table=True):
+    """Seconds one user spent watching one video within one UTC hour.
+
+    Written only by ``services/watch_stats.py`` from progress saves; the History
+    stats read it. Hours rather than days so the viewer's own time zone decides
+    where a day starts (and the weekday × hour chart has something to show). The
+    rows are history that outlives the video: deleting it clears ``video_id``
+    (the channel name stays, so top channels still add up), a restore from the
+    trash links them again. Deleting the account deletes them.
+    """
+
+    __tablename__ = "user_watch_time"
+    __table_args__ = (
+        Index(
+            "ux_user_watch_time_bucket",
+            "user_id",
+            "hour_start",
+            "video_id",
+            unique=True,
+        ),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", index=True, ondelete="SET NULL"
+    )
+    #: The video's channel when the time was recorded (read when the video is gone).
+    channel: str | None = None
+    #: Start of the UTC hour the watching happened in.
+    hour_start: datetime
+    seconds: float = 0.0
+    #: How many times the video was played to its end in this hour.
+    finished: int = 0
+
+
 class UserSettings(SQLModel, table=True):
     """One user's UI preferences (JSON). Server-wide settings stay in app_settings."""
 
