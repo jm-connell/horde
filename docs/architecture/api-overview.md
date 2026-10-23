@@ -119,7 +119,7 @@ The web UI asks for 500 rows at a time and keeps following the cursor, painting 
 | `disk`                                                            | Free/used/total on `DOWNLOADS_DIR`                                                                                              |
 | `library_video_count`, `review_pending_count`, `active_downloads` | Library snapshot                                                                                                                |
 | `wiki_available`                                                  | MkDocs static tree present                                                                                                      |
-| `downloads`                                                       | `{ active, paused }` — pause from in-memory queue + `download_queue_paused`                                                     |
+| `downloads`                                                       | `{ active, paused, held_code, held_reason }` — pause from in-memory queue + `download_queue_paused`; the hold is set while jobs wait for disk space, and `status` is then `warning` |
 | `workers`                                                         | `{ ai_queue_depth, ai_running, catalog_queue_depth, catalog_indexing }`                                                         |
 | `youtube`                                                         | `{ cookies_configured, last_extract_failure }` — last classified extract error (kind, message, optional video/channel `target`) |
 

@@ -21,7 +21,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | Worker (registry name) | Notes |
 |------------------------|-------|
 | `ffmpeg-children` | Terminates ffmpeg processes still running at shutdown. |
-| `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper. |
+| `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
 | `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
@@ -44,6 +44,7 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 **Recover:** `download_queue.recover()` on startup — jobs left `downloading` become `queued`. Jobs interrupted by a clean shutdown are requeued the same way before the process exits. Global pause is restored from app settings key `download_queue_paused` so Pause survives process restart.
 
 - FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` **download** workers (default **2**) plus a separate ffmpeg pool (`MAX_FFMPEG_CONCURRENCY`, default 1 or 2 with GPU).
+- **Disk limits:** before dispatching a library job the queue asks `SpaceGate` (`services/downloads/space.py`) whether the library is under `max_library_bytes` (the number from `services/library_usage.py`, cached for 5 s) and the volume has at least `HORDE_MIN_FREE_GB` free. A job that does not fit stays `queued` and is remembered in memory with a reason (`library_full`, `would_exceed`, `low_disk`, `disk_full`); later jobs that fit may still start. `GET /api/downloads/queue/status`, the job list and the progress snapshots carry `held_reason`. The reaper tick re-checks held jobs every 30 s, and deletes and settings changes call `library_changed()`. After the metadata fetch the runner compares the preset's estimated size with the limit and returns the job to the queue (`DownloadHeld`) when it would not fit. An out-of-space write is classified as `disk_full` and makes the queue hold for five minutes.
 - One multiplex SSE stream (`GET /api/downloads/events`); per-job streams remain for Watch.
 - Per-job cancel/pause events; pause does not kill an in-flight encode. Progress snapshots for SSE (includes typed `error_kind` on failure and `stage` during post-download work).
 - Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing; interactive preview jumps background fills).

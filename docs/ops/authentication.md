@@ -34,6 +34,7 @@ Members do not see how the server is set up: the server settings, AI status and 
 
 - video reads give `embed_error` as "AI indexing failed" and `compat.error` as a generic sentence, and leave out `ai_summary_model` and `ai_summary_cost`;
 - `GET /api/system/activity` lists tasks without `engine`, `detail` or `error`;
+- `GET /api/settings` leaves the server-only fields at their defaults, including the library size limit (`max_library_bytes`);
 - `GET /api/system/stats` leaves out the GPU name and memory and the ffmpeg path;
 - `GET /api/health` leaves out the PO token provider address and error, and the message, target and URL of the last failed YouTube extract; its `storage_warning` says that storage is on a network filesystem without the data directory or mount point;
 - `GET /api/channels/catalog/status` gives a failed catalog's `last_error` as "Indexing failed";

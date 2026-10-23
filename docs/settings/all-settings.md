@@ -27,6 +27,7 @@ See [Settings overview](index.md#three-layer-persistence) for hydration and migr
 | `channel_catalog_max_videos` | `1000` | int | 100–5000 | Top-level |
 | `direct_youtube_search` | `true` | bool | Channel-page YouTube search fallback; per-channel override on `channel_catalogs.direct_youtube_search` | Top-level |
 | `youtube_video_search` | `true` | bool | Library home live YouTube video search (after pause / Enter) | Top-level |
+| `max_library_bytes` | `null` | int or null | Bytes, 1 GiB–1 PiB; `null` or `0` = no limit. Downloads wait while the library is at this size. Admin only: a member's `GET /api/settings` shows `null` | Top-level |
 | `download_queue_paused` | `false` | bool | Restored on startup by download queue recover; set by Pause/Resume on Download | Top-level (**Backend-only** — no Settings control) |
 | `setup_completed` | `false` | bool | First-install wizard. Missing key on an existing `app_settings.json` is treated as **true** (grandfather). PATCH may set `true` only; factory reset sets `false`. | Top-level |
 | `ui` | `{}` | object | Deep-merged on save | UI blob container |

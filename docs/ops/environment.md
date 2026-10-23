@@ -28,6 +28,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `HOST` | `0.0.0.0` | Bind address for uvicorn. |
 | `PORT` | `8080` | Listen port **inside** the process/container. |
 | `MAX_DOWNLOAD_CONCURRENCY` | `2` | Max simultaneous yt-dlp download workers (FIFO queue). |
+| `HORDE_MIN_FREE_GB` | `2` | Downloads wait while the downloads volume has less than this much free space (GB). `0` turns the check off. The library size limit is a setting, not an environment variable: see [Disk limits](../guides/downloads.md#disk-limits). |
 | `MAX_FFMPEG_CONCURRENCY` | *(empty)* → **2** if a GPU encoder is available, else **1** | Max simultaneous remux/transcode/loudnorm/H.264-copy workers. |
 
 In Compose, Horde maps host **8686** → container **8080**. See [Ports & networking](ports-networking.md).

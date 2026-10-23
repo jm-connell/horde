@@ -7,6 +7,29 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Max disk usage** in Settings → System → Storage: an optional limit (in GB)
+  on the library's size, with a usage bar that turns amber from 90 %. Downloads,
+  channel auto-downloads and playlist syncs wait while the library is at the
+  limit or a video would not fit under it, and start again by themselves when
+  space is freed or the limit is raised. A download that already started
+  finishes, so the library can pass the limit by about one video per download
+  slot. Offline (this device) downloads only check the free-space floor.
+- Downloads also wait while the disk has less than `HORDE_MIN_FREE_GB` free
+  (default 2 GB; `0` turns it off), whatever the limit says.
+- Waiting downloads say why on their card ("Paused: library is at its 55 GB
+  limit"), the Download page shows a banner above the queue, and
+  `GET /api/health` reports `status: "warning"` with `downloads.held_reason`.
+
+### Changed
+
+- A download that hits "no space left on device" now fails with its own kind
+  (`disk_full`) and a clear message, stops trying other formats, and holds the
+  queue instead of failing every following download the same way.
+- `update.sh` accepts a `warning` health status, so an update is not rolled back
+  because downloads are waiting for disk space.
+
 ## [1.0.3] - 2026-10-21
 
 ### Changed

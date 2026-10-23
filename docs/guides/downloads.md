@@ -148,6 +148,23 @@ On the Download page:
 
 Pause-all stops claiming new yt-dlp downloads; an encode that already started keeps running. Nothing new starts until you resume. The pause flag is stored as `download_queue_paused` in app settings, so it **survives a container restart**.
 
+### Disk limits { #disk-limits }
+
+Nothing should fill the volume behind your back, least of all unattended channel auto-downloads and playlist subscriptions. Two checks run before a **library** download starts:
+
+| Check | Set with | Default |
+|-------|----------|---------|
+| **Max disk usage** | Settings → System → Storage (admins), in GB | No limit |
+| **Free-space floor** | `HORDE_MIN_FREE_GB` ([environment](../ops/environment.md)) | 2 GB |
+
+The limit counts the same number Storage shows: the videos in the library, their H.264 copies and thumbnails. A job waits when the library is already at the limit, when its estimated size (known once its formats are read) would cross it, or when the downloads volume has less than the floor free. **Offline (this device)** downloads only check the floor.
+
+A waiting job is **held**, not failed: it stays in the queue, its card says why (for example *Paused: library is at its 55 GB limit* or *Paused: less than 2 GB free on disk*) and the Download page shows a banner above the queue. Horde looks again every 30 seconds, and straight away when a video is deleted or the limit is changed, and starts the job by itself once there is room. **Settings → System → Status** shows the same reason on the Active downloads row, and `GET /api/health` reports `status: "warning"` with `downloads.held_reason` while anything waits. Imports are not held (an import only checks that 1 GB stays free).
+
+A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot ([`MAX_DOWNLOAD_CONCURRENCY`](../ops/environment.md)). Set the limit with that margin in mind.
+
+If the disk runs out **while** a download writes (`No space left on device`), the job fails with the kind `disk_full` and the message *The disk is full*, and the queue holds for five minutes (or until you delete a video or change the limit) instead of failing every following job. Free up space and press **Retry**.
+
 ## Single video
 
 1. Paste one video URL, or several separated by commas.
@@ -216,7 +233,7 @@ See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_k
 - [Watching](watching.md) — stream preview → download handoff
 - [Playlists](playlists.md) — after YouTube import
 - [Download pipeline](../architecture/downloads-pipeline.md)
-- [Environment variables](../ops/environment.md) — `MAX_DOWNLOAD_CONCURRENCY`
+- [Environment variables](../ops/environment.md) — `MAX_DOWNLOAD_CONCURRENCY`, `HORDE_MIN_FREE_GB`
 
 ## Upgrading: file and folder names
 
