@@ -1,5 +1,6 @@
 """Shared yt-dlp option helpers."""
 
+import errno
 import heapq
 import logging
 import os
@@ -89,6 +90,14 @@ _UNAVAILABLE_MESSAGE = re.compile(
     r"|is not a valid url"
     r")"
 )
+_DISK_FULL_MESSAGE = re.compile(
+    r"(?i)("
+    r"no space left on device"
+    r"|\[errno 28\]"
+    r"|disk quota exceeded"
+    r"|not enough space on the disk"
+    r")"
+)
 _POSTPROCESS_MESSAGE = re.compile(
     r"(?i)("
     r"unable to rename file"
@@ -108,6 +117,7 @@ ERROR_KIND_COOKIES = "cookies"
 ERROR_KIND_RATE_LIMIT = "rate_limit"
 ERROR_KIND_UNAVAILABLE = "unavailable"
 ERROR_KIND_POSTPROCESS = "postprocess"
+ERROR_KIND_DISK_FULL = "disk_full"
 ERROR_KIND_CANCELLED = "cancelled"
 ERROR_KIND_UNKNOWN = "unknown"
 
@@ -358,6 +368,27 @@ def is_network_error(exc: BaseException) -> bool:
     return False
 
 
+def is_disk_full_message(text: str | None) -> bool:
+    """True when a yt-dlp / ffmpeg log or error line says the disk is full."""
+    return bool(text and _DISK_FULL_MESSAGE.search(text))
+
+
+def is_disk_full_error(exc_or_message: Any) -> bool:
+    """True for an out-of-space failure: ENOSPC, or yt-dlp / ffmpeg saying so."""
+    if isinstance(exc_or_message, BaseException):
+        seen: set[int] = set()
+        current: BaseException | None = exc_or_message
+        while current is not None and id(current) not in seen:
+            seen.add(id(current))
+            if isinstance(current, OSError) and current.errno in (
+                errno.ENOSPC,
+                errno.EDQUOT,
+            ):
+                return True
+            current = current.__cause__ or current.__context__
+    return is_disk_full_message(str(exc_or_message or ""))
+
+
 def classify_ytdlp_error(
     exc_or_message: Any,
     *,
@@ -388,6 +419,13 @@ def classify_ytdlp_error(
             ERROR_KIND_MEMBERS,
             "Members-only video — skipped. Member videos can't be downloaded "
             "anonymously.",
+        )
+
+    if is_disk_full_error(exc_or_message):
+        return _finish(
+            ERROR_KIND_DISK_FULL,
+            "The disk is full, so the download was stopped. Free up space (or raise "
+            "the library limit in Settings → System) and retry.",
         )
 
     if _BOT_MESSAGE.search(raw):

@@ -348,6 +348,10 @@ class OpenRouterHealth(BaseModel):
 class HealthDownloads(BaseModel):
     active: int
     paused: bool
+    #: Set while queued downloads wait for disk space (the library size limit or
+    #: the free-space floor), with the sentence the UI shows.
+    held_code: str | None = None
+    held_reason: str | None = None
 
 
 class HealthWorkers(BaseModel):

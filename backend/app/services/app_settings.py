@@ -151,10 +151,16 @@ DEFAULTS: dict[str, Any] = {
     "direct_youtube_search": True,
     "youtube_video_search": True,
     "download_queue_paused": False,
+    # Downloads wait once the library takes this many bytes. None = no limit.
+    "max_library_bytes": None,
     "setup_completed": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
 }
+
+#: The smallest library size limit the settings accept (1 GiB), and the largest.
+MAX_LIBRARY_BYTES_MIN = 1024**3
+MAX_LIBRARY_BYTES_MAX = 1024**5
 
 CHANNEL_CATALOG_MAX_MIN = 100
 CHANNEL_CATALOG_MAX_MAX = 5000
@@ -167,6 +173,19 @@ def clamp_catalog_max_videos(value: Any) -> int:
     except TypeError, ValueError:
         n = int(DEFAULTS["channel_catalog_max_videos"])
     return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
+
+
+def clamp_max_library_bytes(value: Any) -> int | None:
+    """None/empty/0 means no limit; otherwise a size between 1 GiB and 1 PiB."""
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        size = int(value)
+    except TypeError, ValueError:
+        return None
+    if size <= 0:
+        return None
+    return max(MAX_LIBRARY_BYTES_MIN, min(MAX_LIBRARY_BYTES_MAX, size))
 
 
 def direct_youtube_search_system(data: dict[str, Any] | None = None) -> bool:

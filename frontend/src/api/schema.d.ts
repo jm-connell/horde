@@ -3260,6 +3260,8 @@ export interface components {
              * @default true
              */
             direct_youtube_search: boolean;
+            /** Max Library Bytes */
+            max_library_bytes?: number | null;
             /**
              * Metadata Sync Interval Hours
              * @default 24
@@ -3296,6 +3298,8 @@ export interface components {
             channel_catalog_max_videos?: number | null;
             /** Direct Youtube Search */
             direct_youtube_search?: boolean | null;
+            /** Max Library Bytes */
+            max_library_bytes?: number | null;
             /** Metadata Sync Interval Hours */
             metadata_sync_interval_hours?: number | null;
             /** Progress Expiry Days */
@@ -4011,6 +4015,8 @@ export interface components {
             file_size: number | null;
             /** Height Px */
             height_px?: number | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Id */
             id: number;
             /** Notes Pending */
@@ -4103,6 +4109,10 @@ export interface components {
         DownloadQueueStatus: {
             /** Active Count */
             active_count: number;
+            /** Held Code */
+            held_code?: string | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Paused */
             paused: boolean;
             /** Queued Count */
@@ -4273,6 +4283,10 @@ export interface components {
         HealthDownloads: {
             /** Active */
             active: number;
+            /** Held Code */
+            held_code?: string | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Paused */
             paused: boolean;
         };

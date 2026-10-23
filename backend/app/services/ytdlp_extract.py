@@ -237,6 +237,15 @@ def _estimate_preset_sizes(info: dict[str, Any], presets: list[str]) -> dict[str
     return sizes
 
 
+def estimate_download_bytes(info: dict[str, Any], preset: str) -> int | None:
+    """Expected size of downloading ``info`` at ``preset``, when the formats say."""
+    try:
+        return _estimate_preset_sizes(info, [preset]).get(preset)
+    except Exception:
+        logger.debug("download size estimate failed", exc_info=True)
+        return None
+
+
 def extract_preview(
     url: str, *, priority: int = EXTRACT_PRIORITY_INTERACTIVE
 ) -> dict[str, Any]:

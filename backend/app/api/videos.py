@@ -1,16 +1,17 @@
 import bisect
 import logging
 import re
+from dataclasses import asdict
 from pathlib import Path
 from typing import TypedDict
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
-from sqlmodel import Session, col, func, select
+from sqlmodel import Session, col, select
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..context import get_paths, get_session
+from ..context import AppContext, get_ctx, get_paths, get_session
 from ..models import DownloadJob, JobStatus, User, Video, require_id
 from ..openapi_responses import (
     EVENT_STREAM,
@@ -52,6 +53,7 @@ from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
 from ..services.downloads import jobs as download_jobs
+from ..services.library_usage import library_usage
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
 from ..services.metadata import (
     load_sprite_meta,
@@ -321,32 +323,7 @@ def _tag_page_request(cursor: str | None, limit: int, *, sort: str, kind):
 
 @router.get("/stats/storage", response_model=StorageStats)
 def storage_stats(session: Session = Depends(get_session)):
-    video_bytes = session.exec(
-        select(func.coalesce(func.sum(col(Video.file_size)), 0)).where(
-            Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
-        )
-    ).one()
-    video_count = session.exec(
-        select(func.count(col(Video.id))).where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-    ).one()
-    compat_bytes = session.exec(
-        select(func.coalesce(func.sum(Video.compat_size), 0)).where(
-            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
-            Video.compat_path != None,  # noqa: E711 - SQL column comparison, not a Python truth test
-        )
-    ).one()
-    thumbnail_bytes = 0
-    if get_paths().thumbnails.exists():
-        thumbnail_bytes = sum(
-            f.stat().st_size for f in get_paths().thumbnails.glob("*") if f.is_file()
-        )
-    return StorageStats(
-        total_bytes=int(video_bytes or 0) + int(compat_bytes or 0) + thumbnail_bytes,
-        video_bytes=int(video_bytes or 0),
-        compat_bytes=int(compat_bytes or 0),
-        thumbnail_bytes=thumbnail_bytes,
-        video_count=int(video_count or 0),
-    )
+    return StorageStats(**asdict(library_usage(session)))
 
 
 # Static /videos/... paths must be registered before /videos/{video_id}
@@ -359,6 +336,7 @@ def storage_stats(session: Session = Depends(get_session)):
 def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
 ):
     doomed: list[Path] = []
     for vid_id in payload.video_ids:
@@ -370,6 +348,7 @@ def bulk_delete_videos(
         )
     session.commit()
     remove_files(doomed)
+    ctx.download_queue.library_changed(room_made=True)
     return Response(status_code=204)
 
 
@@ -603,11 +582,13 @@ def delete_video(
     video_id: int,
     delete_file: bool = False,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     delete_video_cascade(session, video, delete_file)
+    ctx.download_queue.library_changed(room_made=True)
     return Response(status_code=204)
 
 

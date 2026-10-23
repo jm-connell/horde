@@ -3,13 +3,20 @@
 import logging
 
 from ..url_clean import youtube_video_id
-from ..ytdlp_common import is_members_only_message
+from ..ytdlp_common import is_disk_full_message, is_members_only_message
 
 logger = logging.getLogger(__name__)
 
 
 class DownloadCancelled(Exception):
     """Raised from yt-dlp progress hooks when a job is cancelled or paused."""
+
+
+class DownloadHeld(Exception):
+    """Raised when a job turns out not to fit the library size limit.
+
+    The job goes back to the queue and starts again once there is room.
+    """
 
 
 def is_recoverable_download_error(exc: Exception) -> bool:
@@ -28,6 +35,9 @@ class YtdlpLogger:
     def __init__(self) -> None:
         self.members_only = False
         self.last_members_only_msg: str | None = None
+        #: yt-dlp ran out of disk (it reports that through the logger when told
+        #: to ignore errors, so the exception never reaches the runner).
+        self.disk_full = False
 
     def debug(self, msg: str) -> None:
         pass
@@ -42,6 +52,9 @@ class YtdlpLogger:
         if "Unable to rename file" in msg:
             return
         if "Unable to download video subtitles" in msg:
+            return
+        if is_disk_full_message(msg):
+            self.disk_full = True
             return
         if is_members_only_message(msg):
             self.members_only = True

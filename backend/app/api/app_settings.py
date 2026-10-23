@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import current_user, ensure_admin
-from ..context import get_session
+from ..context import AppContext, get_ctx, get_session
 from ..services import app_settings, user_settings
 from ..services.ai.provider import (
     invalidate_resolved_url,
@@ -116,6 +116,8 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
+    # Downloads wait once the library takes this many bytes; null = no limit.
+    max_library_bytes: int | None = None
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
     settings_degraded: bool = False
     setup_completed: bool = False
@@ -134,6 +136,10 @@ class AppSettingsUpdate(BaseModel):
     )
     direct_youtube_search: bool | None = None
     youtube_video_search: bool | None = None
+    # null (or 0) removes the limit.
+    max_library_bytes: int | None = Field(
+        default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
+    )
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
     ai: AiSettingsUpdate | None = None
@@ -159,12 +165,13 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 
 #: Top-level fields only the administrator's settings screens read: how often
 #: metadata and catalogs refresh, how large catalogs grow, whether indexing is on,
-#: and whether the settings file is damaged. A member gets the defaults. (The
+#: the library size limit, and whether the settings file is damaged. A member gets the defaults. (The
 #: YouTube search switches and the progress expiry stay: member screens use them.)
 MEMBER_HIDDEN_FIELDS = (
     "metadata_sync_interval_hours",
     "channel_catalog_enabled",
     "channel_catalog_max_videos",
+    "max_library_bytes",
     "settings_degraded",
 )
 
@@ -248,6 +255,9 @@ def _settings_read(
         ),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
+        max_library_bytes=app_settings.clamp_max_library_bytes(
+            data.get("max_library_bytes")
+        ),
         setup_completed=bool(data.get("setup_completed")),
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
@@ -279,6 +289,7 @@ def update_settings(
     payload: AppSettingsUpdate,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
 ):
     """Anyone may change their own ``ui`` preferences; every other field is
     server-wide and needs an administrator."""
@@ -301,6 +312,10 @@ def update_settings(
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
     if payload.youtube_video_search is not None:
         updates["youtube_video_search"] = bool(payload.youtube_video_search)
+    if "max_library_bytes" in payload.model_fields_set:
+        updates["max_library_bytes"] = app_settings.clamp_max_library_bytes(
+            payload.max_library_bytes
+        )
     if payload.setup_completed is False:
         raise HTTPException(
             status_code=400,
@@ -392,6 +407,9 @@ def update_settings(
 
             ai_worker.wake_worker()
     data = app_settings.save(updates) if updates else app_settings.load()
+    if "max_library_bytes" in updates:
+        # Held downloads may fit under the new limit now.
+        ctx.download_queue.library_changed(room_made=True)
     if ui_patch is not None:
         ui = user_settings.save_ui(session, user.id, ui_patch)
     else:

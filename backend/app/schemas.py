@@ -266,6 +266,8 @@ class DownloadJobRead(BaseModel):
     video_missing: bool = False
     superseded: bool = False
     playlist_id: int | None = None
+    #: Why a queued job is not starting: it is waiting for disk space.
+    held_reason: str | None = None
 
     @field_validator("destination", mode="before")
     @classmethod
@@ -305,6 +307,10 @@ class DownloadQueueStatus(BaseModel):
     paused: bool
     active_count: int
     queued_count: int
+    #: Set while queued jobs wait for disk space: ``library_full``, ``would_exceed``,
+    #: ``low_disk`` or ``disk_full``, with the sentence to show.
+    held_code: str | None = None
+    held_reason: str | None = None
 
 
 class VideoRedownload(BaseModel):

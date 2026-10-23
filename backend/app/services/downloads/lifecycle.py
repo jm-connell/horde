@@ -13,7 +13,11 @@ from sqlmodel import Session
 from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob, JobStatus
 from ..ffmpeg_progress import FfmpegCancelled
-from ..ytdlp_common import ERROR_KIND_CANCELLED, classify_ytdlp_error
+from ..ytdlp_common import (
+    ERROR_KIND_CANCELLED,
+    ERROR_KIND_DISK_FULL,
+    classify_ytdlp_error,
+)
 from . import dbwrite
 from .errors import DownloadCancelled
 from .progress import progress_store
@@ -32,6 +36,8 @@ class QueueState(Protocol):
     def take_quality_restart(self, job_id: int) -> bool: ...
 
     def cancel_event(self, job_id: int) -> threading.Event | None: ...
+
+    def note_disk_full(self) -> None: ...
 
 
 def force_job_error(job_id: int, exc: BaseException) -> None:
@@ -117,6 +123,8 @@ def fail_postprocess_job(
         mark_job_cancelled(queue, job_id, destination)
         return
     kind, message = classify_ytdlp_error(exc)
+    if kind == ERROR_KIND_DISK_FULL:
+        queue.note_disk_full()
     dbwrite.update_job(
         job_id,
         status=JobStatus.error,

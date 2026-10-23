@@ -149,6 +149,9 @@ def _enrich_jobs(session: Session, jobs: list[DownloadJob]) -> list[DownloadJobR
                 update={
                     "video_missing": video_missing,
                     "superseded": superseded,
+                    "held_reason": download_queue.held_reason(j.id)
+                    if j.id is not None and j.status == JobStatus.queued
+                    else None,
                     "available_presets": decode_available_presets(
                         j.available_presets_json
                     ),
@@ -217,13 +220,20 @@ def preview_download(
         raise extraction_error(400, detail) from exc
 
 
-@router.get("/queue/status", response_model=DownloadQueueStatus)
-def queue_status():
+def _queue_status() -> DownloadQueueStatus:
+    hold = download_queue.space_hold()
     return DownloadQueueStatus(
         paused=download_queue.is_paused(),
         active_count=download_queue.active_count(),
         queued_count=download_queue.queued_count(),
+        held_code=hold.code if hold else None,
+        held_reason=hold.reason if hold else None,
     )
+
+
+@router.get("/queue/status", response_model=DownloadQueueStatus)
+def queue_status():
+    return _queue_status()
 
 
 @router.post(
@@ -233,11 +243,7 @@ def queue_status():
 )
 def pause_queue():
     download_queue.pause_all()
-    return DownloadQueueStatus(
-        paused=True,
-        active_count=download_queue.active_count(),
-        queued_count=download_queue.queued_count(),
-    )
+    return _queue_status()
 
 
 @router.post(
@@ -247,11 +253,7 @@ def pause_queue():
 )
 def resume_queue():
     download_queue.resume_all()
-    return DownloadQueueStatus(
-        paused=download_queue.is_paused(),
-        active_count=download_queue.active_count(),
-        queued_count=download_queue.queued_count(),
-    )
+    return _queue_status()
 
 
 @router.get("/events", response_class=RAW, responses=EVENT_STREAM)

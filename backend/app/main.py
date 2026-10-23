@@ -433,6 +433,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
     sha = cache.git_sha
 
     downloads_paused = False
+    downloads_hold = ctx.download_queue.space_hold()
     cookies_ok = False
     last_extract = None
     ai_queue_depth = 0
@@ -473,7 +474,8 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         logger.debug("worker status unavailable for health", exc_info=True)
 
     return {
-        "status": "ok",
+        # "warning" while downloads wait for disk space; the rest of the payload says why.
+        "status": "warning" if downloads_hold else "ok",
         "horde_sha": sha,
         "horde_version": short_git_sha(sha),
         "yt_dlp_version": cache.ytdlp_version,
@@ -490,6 +492,8 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         "downloads": {
             "active": active_downloads,
             "paused": downloads_paused,
+            "held_code": downloads_hold.code if downloads_hold else None,
+            "held_reason": downloads_hold.reason if downloads_hold else None,
         },
         "workers": {
             "ai_queue_depth": ai_queue_depth,

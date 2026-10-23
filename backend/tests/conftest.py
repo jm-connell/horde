@@ -81,6 +81,14 @@ def _join_background_workers():
     assert sprite_pool.stop(timeout=30), "sprite threads still running after test"
 
 
+@pytest.fixture(autouse=True)
+def _no_free_space_floor(monkeypatch):
+    """The machine running the tests may be short of disk; tests that care set their own floor."""
+    from app import config
+
+    monkeypatch.setattr(config, "MIN_FREE_GB", 0.0)
+
+
 @pytest.fixture
 def tmp_dirs(tmp_path, monkeypatch):
     """A fresh AppContext over a temp tree, active for the length of the test."""

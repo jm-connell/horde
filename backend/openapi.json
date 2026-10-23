@@ -1681,6 +1681,17 @@
             "title": "Direct Youtube Search",
             "type": "boolean"
           },
+          "max_library_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Library Bytes"
+          },
           "metadata_sync_interval_hours": {
             "default": 24,
             "title": "Metadata Sync Interval Hours",
@@ -1763,6 +1774,19 @@
               }
             ],
             "title": "Direct Youtube Search"
+          },
+          "max_library_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1125899906842624.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Library Bytes"
           },
           "metadata_sync_interval_hours": {
             "anyOf": [
@@ -3664,6 +3688,17 @@
             ],
             "title": "Height Px"
           },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -3979,6 +4014,28 @@
           "active_count": {
             "title": "Active Count",
             "type": "integer"
+          },
+          "held_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Code"
+          },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
           },
           "paused": {
             "title": "Paused",
@@ -4565,6 +4622,28 @@
           "active": {
             "title": "Active",
             "type": "integer"
+          },
+          "held_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Code"
+          },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
           },
           "paused": {
             "title": "Paused",

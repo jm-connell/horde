@@ -37,6 +37,20 @@ PORT: int = int(os.environ.get("PORT", "8080"))
 MAX_DOWNLOAD_CONCURRENCY: int = int(os.environ.get("MAX_DOWNLOAD_CONCURRENCY", "2"))
 
 
+def _non_negative_float(name: str, default: float) -> float:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value >= 0 else default
+
+
+# Downloads hold while the downloads volume has less than this much free space (GB),
+# whatever the library size limit says. 0 turns the check off.
+MIN_FREE_GB: float = _non_negative_float("HORDE_MIN_FREE_GB", 2.0)
+
+
 # Max simultaneous ffmpeg postprocess workers (remux / transcode / loudnorm).
 # Empty = 2 when a GPU encoder is available, otherwise 1.
 def _optional_positive_int(name: str) -> int | None:
