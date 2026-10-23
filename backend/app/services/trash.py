@@ -751,6 +751,8 @@ def _recover_orphan(session: Session, root: str, folder: Path) -> str | None:
         manifest["video_id"],
         folder.name,
     )
+    if _has_files(folder):
+        return "it holds files its manifest does not list"
     _remove_dir(folder)
     return None
 

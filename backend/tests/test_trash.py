@@ -1053,3 +1053,25 @@ def test_trash_off_lets_entries_already_in_it_expire_on_schedule(
     assert item["id"] == entry_id
     assert item["expires_at"] > item["trashed_at"]
     assert trash.purge_expired(utcnow() + timedelta(days=8)) == 1
+
+
+def test_the_sweep_moves_files_back_but_keeps_what_it_does_not_know(
+    init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    media = init_db["downloads"] / video.file_path
+    with Session(init_db["engine"]) as session:
+        row = session.get(Video, video.id)
+        monkeypatch.setattr(session, "commit", lambda: (_ for _ in ()).throw(Crash()))
+        with pytest.raises(Crash):
+            trash.trash_video(session, row, None)
+    monkeypatch.undo()
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+    (folder,) = _trash_folders(init_db)
+    (folder / "stranger.txt").write_text("not ours")
+    _age_trash_folders(init_db)
+
+    trash.purge_expired()
+
+    assert media.read_bytes() == b"M" * 100  # the video's file is back
+    assert (folder / "stranger.txt").read_text() == "not ours"  # and nothing else went
