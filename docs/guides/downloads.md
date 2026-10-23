@@ -185,6 +185,14 @@ Playlist URLs are library-only (device destination is hidden). When Horde detect
 | **Subscribe** | Sync with the YouTube playlist and download new videos as they appear |
 | **Download videos** | Download like regular videos, without organizing into a playlist |
 
+## Sending links to Horde { #sending-links }
+
+Instead of copying a link and pasting it on the Download page, send it from where you found it. Each route opens `/download?url=<link>`, which fills the URL field and reads the link (title, channel, qualities) exactly as if you had pasted it. **Nothing is queued until you press Download**, and the link is then removed from the address bar so a reload does not repeat the lookup. A member without the download permission sees the usual "Not available for your account" page. When you are signed out, you sign in first and come back to the same link.
+
+- **Android share sheet.** Install Horde as an app (see [Offline & installed app](offline.md#install-the-app)); **Horde** then appears in the share sheet of the YouTube app and of Chrome. Sharing a video opens the Download page with the link filled in. This needs the installed app (Chrome only offers it for installed web apps, over HTTPS), and an installed app from before this release must be reinstalled once to pick up the share option.
+- **Bookmarklet (any desktop browser, and phones without the share sheet).** Open the Download page, expand **Send links from your browser** and drag **Send to Horde** to your bookmarks bar. Click it on any video page and that page opens in a new tab on Horde. On a phone, use **Copy bookmarklet**, create any bookmark, and paste the copied text into its address. A few sites (GitHub, for example) forbid bookmarklets with their security policy; use the share sheet or copy the link instead there.
+- **iPhone and iPad.** Safari does not support share targets, so make a Shortcut. In the Shortcuts app, create one named **Send to Horde**, open its settings and turn on **Show in Share Sheet** (accept **URLs** and **Safari web pages**), then add these actions in order: **URL Encode** the **Shortcut Input**; **Text** containing `https://<your-horde>/download?url=` followed by the **URL Encoded Text** variable; **Open URLs** with that text. Replace `<your-horde>` with the address you use for Horde. Sharing a link and picking **Send to Horde** opens the Download page with it filled in. The bookmarklet also works in Safari.
+
 ## Playlist import
 
 Paste a **playlist** URL on the Download page:

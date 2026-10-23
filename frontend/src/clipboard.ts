@@ -25,6 +25,11 @@ function urlFromChunk(part: string): string {
   return match ? stripTrailingUrlPunctuation(match[0]) : "";
 }
 
+/** First http(s) link inside arbitrary text (a share message), or "". */
+export function firstHttpUrl(text: string): string {
+  return urlFromChunk(text);
+}
+
 /** Comma-separated download paste. Keeps the full list, unlike clipboardTextToUrl. */
 export function parseDownloadUrlList(text: string): string[] {
   const trimmed = text.trim();

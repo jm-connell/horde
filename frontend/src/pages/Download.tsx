@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ApiError, api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
+import SendLinksHelp from "../components/SendLinksHelp";
 import ThemedSelect from "../components/ThemedSelect";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
+import { sharedUrlFromParams } from "../shareTarget";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import {
   formatApproxSize,
@@ -91,6 +93,19 @@ export default function Download() {
   } = useDownloads();
 
   const [url, setUrl] = useState("");
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // A link sent from the share sheet, the bookmarklet or an iOS Shortcut
+  // (`/download?url=...`): fill the field so the usual link lookup runs, but
+  // never queue it; that stays the user's click. Then drop the parameters so
+  // a reload does not redo it.
+  useEffect(() => {
+    if (!location.search) return;
+    const shared = sharedUrlFromParams(new URLSearchParams(location.search));
+    if (shared) setUrl(shared);
+    navigate(location.pathname, { replace: true });
+  }, [location.pathname, location.search, navigate]);
   const [pasteHint, setPasteHint] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
   const [preset, setPreset] = useState("best");
@@ -941,6 +956,8 @@ export default function Download() {
           </p>
         )}
       </form>
+
+      <SendLinksHelp />
 
       {activeSectionVisible && (
         <section

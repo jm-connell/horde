@@ -9,6 +9,15 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Send links to Horde in one tap.** Opening `/download?url=<link>` fills in
+  the Download page and reads the link as if you had pasted it; nothing is
+  queued until you press Download, and the link is cleared from the address
+  bar afterwards. The installed app now shows up in Android's share sheet
+  (YouTube and Chrome share links straight to it; reinstall the app once to
+  pick up the option), the Download page has a **Send links from your
+  browser** panel with a draggable bookmarklet and a copy button, and the
+  downloads guide describes an iPhone Shortcut. Signed-out visitors sign in
+  and land back on the same link.
 - **Sharing offline downloads between accounts.** Videos saved for offline
   viewing now remember which account saved them. Each account can keep its
   downloads private from the other accounts on the same device (Account

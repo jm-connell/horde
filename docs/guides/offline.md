@@ -17,6 +17,10 @@ YouTube app's downloads work.
 - **Android (Chrome):** menu → **Install app** (or **Add to Home screen**).
 - **Desktop Chrome / Edge:** the install icon in the address bar.
 
+On Android, the installed app also appears in the share sheet, so you can
+share a video link straight to Horde's Download page; see
+[Sending links to Horde](downloads.md#sending-links).
+
 After the first visit, the UI (scripts, styles, icons) is cached by a service
 worker. Later launches don't re-download it, even on a slow connection;
 new versions are fetched in the background but never swapped in under you:
