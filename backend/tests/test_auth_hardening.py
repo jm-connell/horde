@@ -253,7 +253,7 @@ def test_spraying_made_up_names_evicts_made_up_names_first(monkeypatch):
     monkeypatch.setattr(limiter_module, "MAX_TRACKED_KEYS", 50)
     clock = [0.0]
     limiter = LoginLimiter(clock=lambda: clock[0])
-    for i in range(FREE_ATTEMPTS):
+    for _ in range(FREE_ATTEMPTS):
         limiter.record_failure("198.51.100.1", "victim", known=True)
         clock[0] += 1
     assert limiter.retry_after("198.51.100.1", "victim") > 0
@@ -261,3 +261,101 @@ def test_spraying_made_up_names_evicts_made_up_names_first(monkeypatch):
         limiter.record_failure(f"203.0.113.{i % 250}", f"junk-{i}", known=False)
         clock[0] += 0.001
     assert limiter.retry_after("198.51.100.1", "victim") > 0
+
+
+# --- 5. wrong codes escalate per name over weeks -----------------------------------
+
+
+def _wrong_codes(limiter, count, clock, *, name="alice"):
+    """``count`` wrong second-step codes, each from a new address a minute after the last.
+
+    (A minute apart so neither the per-address lanes nor the per-minute slowdown fire.)
+    """
+    for i in range(count):
+        clock[0] += 61.0
+        limiter.record_failure(f"10.{i // 250}.{i % 250}.1", name, code_name=name)
+
+
+def test_code_step_waits_longer_after_every_ten_wrong_codes():
+    from app.services.auth.limiter import (
+        CODE_BASE_DELAY_SEC,
+        CODE_LOCK_EVERY,
+        CODE_MAX_DELAY_SEC,
+    )
+
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    _wrong_codes(limiter, CODE_LOCK_EVERY - 1, clock)
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") == 0
+    _wrong_codes(limiter, 1, clock)  # the tenth
+    first = limiter.retry_after("9.9.9.9", "alice", code_name="alice")
+    assert CODE_BASE_DELAY_SEC <= first <= CODE_BASE_DELAY_SEC + 1
+    # Only the code step waits: a password try is not held up.
+    assert limiter.retry_after("9.9.9.9", "alice") == 0
+    with pytest.raises(Throttled):
+        limiter.begin("9.9.9.9", "alice", code_name="alice")
+    clock[0] += first
+    _wrong_codes(limiter, CODE_LOCK_EVERY - 1, clock)
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") == 0
+    _wrong_codes(limiter, 1, clock)  # the twentieth: twice as long
+    second = limiter.retry_after("9.9.9.9", "alice", code_name="alice")
+    assert second > first
+    assert 2 * CODE_BASE_DELAY_SEC <= second <= 2 * CODE_BASE_DELAY_SEC + 1
+    # Capped at an hour.
+    for _ in range(40):
+        clock[0] += CODE_MAX_DELAY_SEC
+        _wrong_codes(limiter, CODE_LOCK_EVERY, clock)
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") <= (
+        CODE_MAX_DELAY_SEC + 1
+    )
+    # Another name's code step is untouched.
+    assert limiter.retry_after("9.9.9.9", "bob", code_name="bob") == 0
+
+
+def test_a_right_password_does_not_clear_the_code_counter_but_a_right_code_does():
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    _wrong_codes(limiter, 10, clock)
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") > 0
+    limiter.record_success("9.9.9.9", "alice")  # the password step succeeded
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") > 0
+    limiter.record_success("9.9.9.9", "alice", code_name="alice")  # a right code
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") == 0
+
+
+def test_the_code_counter_decays_after_a_day_without_failures():
+    from app.services.auth.limiter import CODE_FORGET_AFTER_SEC
+
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    _wrong_codes(limiter, 10, clock)
+    clock[0] += CODE_FORGET_AFTER_SEC + 1
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") == 0
+    _wrong_codes(limiter, 9, clock)  # starts over: nine are not yet a lock
+    assert limiter.retry_after("9.9.9.9", "alice", code_name="alice") == 0
+
+
+def test_the_code_step_is_refused_while_the_counter_waits(
+    app, anon_client, admin_user, client, now
+):
+    secret = _enroll(client, now)
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    app.state.auth.limiter = limiter
+    _wrong_codes(limiter, 10, clock, name="admin")
+
+    ticket = anon_client.post(
+        "/api/auth/login", json={"username": "admin", "password": ADMIN_PASSWORD}
+    )
+    assert ticket.json()["code"] == "totp_required"  # the password step still works
+    body = {
+        "pending_token": ticket.json()["extra"]["pending_token"],
+        "code": totp.code_at(secret, now[0] + totp.STEP_SECONDS),
+    }
+    now[0] += totp.STEP_SECONDS
+    blocked = anon_client.post("/api/auth/login/totp", json=body)
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+    clock[0] += 31.0
+    assert anon_client.post("/api/auth/login/totp", json=body).status_code == 200
+    # A right code cleared the counter.
+    assert limiter.retry_after("9.9.9.9", "admin", code_name="admin") == 0
