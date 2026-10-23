@@ -31,6 +31,7 @@ Importing the package binds the process-wide `download_queue` to the runner (`do
 - The queue/runner split removes the import cycle and lets lifecycle functions read scheduler state through a small protocol instead of importing the queue.
 - There is a deliberate window in which two import paths exist. Anything not covered by the facade list (private helpers) is not supported across the move.
 - `download_queue`, `ffmpeg_queue` and `progress_store` are still process-wide objects. They are started and stopped through the `WorkerRegistry` ([ADR 0002](0002-single-process-worker-threads.md)); moving them onto `app.state` is a separate step.
+- Update (1.1.0): the facade and `test_downloader_facade.py` were removed as planned; `services/downloader.py` no longer exists.
 - Log logger names change (`app.services.downloads.runner` instead of `app.services.downloader`), which matters for anyone filtering logs.
 
 Detail: [Download pipeline](../architecture/downloads-pipeline.md).

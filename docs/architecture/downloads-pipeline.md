@@ -23,7 +23,7 @@ URL
 
 ## Module split
 
-Download-related code is split for maintainability. The queue, the yt-dlp attempt loop and the library commit live in the `services/downloads/` package; `downloader.py` is a compatibility façade that only re-exports the names callers used to import from it. The old `start_download` shim had no callers and was removed in the split; use `jobs.enqueue_download` (or `downloader.enqueue_download`).
+Download-related code is split for maintainability. The queue, the yt-dlp attempt loop and the library commit live in the `services/downloads/` package. The old `downloader.py` compatibility façade (and the `start_download` shim) are gone; use `jobs.enqueue_download` and the other package modules directly.
 
 | Module | Role |
 |--------|------|
