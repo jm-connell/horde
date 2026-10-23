@@ -218,3 +218,46 @@ def test_sign_in_is_busy_when_hashing_is_saturated(
     assert res.headers["Retry-After"] == "1"
     # A busy server judged nothing: it is not a failed sign-in.
     assert app.state.auth.limiter.retry_after("testclient", username) == 0
+
+
+# --- 4. IPv6 clients are throttled per /64 ---------------------------------------
+
+
+def test_throttle_address_keys_ipv6_by_slash_64_and_unwraps_mapped_ipv4():
+    from app.services.auth.limiter import throttle_address
+
+    assert throttle_address("2001:db8:1:2:aaaa::1") == throttle_address(
+        "2001:db8:1:2:bbbb:cccc:dddd:eeee"
+    )
+    assert throttle_address("2001:db8:1:2::1") != throttle_address("2001:db8:1:3::1")
+    assert throttle_address("::ffff:203.0.113.9") == "203.0.113.9"
+    assert throttle_address("203.0.113.9") == "203.0.113.9"
+    assert throttle_address("unknown") == "unknown"
+    assert throttle_address("fe80::1%eth0") == throttle_address("fe80::2")
+
+
+def test_rotating_through_a_slash_64_does_not_dodge_the_lockout():
+    limiter = LoginLimiter(clock=lambda: 0.0)
+    for i in range(FREE_ATTEMPTS):
+        limiter.record_failure(f"2001:db8:1:2::{i + 1:x}", "alice")
+    assert limiter.retry_after("2001:db8:1:2:ffff::99", "alice") > 0
+    assert limiter.retry_after("2001:db8:1:3::1", "alice") == 0  # another network
+
+
+# --- 8. made-up names cannot flush a real account's state --------------------------
+
+
+def test_spraying_made_up_names_evicts_made_up_names_first(monkeypatch):
+    from app.services.auth import limiter as limiter_module
+
+    monkeypatch.setattr(limiter_module, "MAX_TRACKED_KEYS", 50)
+    clock = [0.0]
+    limiter = LoginLimiter(clock=lambda: clock[0])
+    for i in range(FREE_ATTEMPTS):
+        limiter.record_failure("198.51.100.1", "victim", known=True)
+        clock[0] += 1
+    assert limiter.retry_after("198.51.100.1", "victim") > 0
+    for i in range(500):  # the attacker sprays junk, later than the victim's failures
+        limiter.record_failure(f"203.0.113.{i % 250}", f"junk-{i}", known=False)
+        clock[0] += 0.001
+    assert limiter.retry_after("198.51.100.1", "victim") > 0
