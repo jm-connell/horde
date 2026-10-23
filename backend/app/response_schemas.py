@@ -217,6 +217,13 @@ class CompatCancelResult(BaseModel):
 
 class ChannelRenameResult(BaseModel):
     updated: int
+    retention_disabled: bool = Field(
+        default=False,
+        description=(
+            "The rename merged two channels and a retention rule that was on "
+            "was turned off, so it does not apply to the other channel's videos."
+        ),
+    )
 
 
 # --- System ------------------------------------------------------------------

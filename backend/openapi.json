@@ -3060,6 +3060,12 @@
       },
       "ChannelRenameResult": {
         "properties": {
+          "retention_disabled": {
+            "default": false,
+            "description": "The rename merged two channels and a retention rule that was on was turned off, so it does not apply to the other channel's videos.",
+            "title": "Retention Disabled",
+            "type": "boolean"
+          },
           "updated": {
             "title": "Updated",
             "type": "integer"

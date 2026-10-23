@@ -321,33 +321,60 @@ def query_videos(
     return list(session.exec(statement).all())
 
 
-def rename_channel(session: Session, old_name: str, new_name: str) -> int:
-    """Rename a channel across all videos. Returns the number of rows updated."""
+@dataclass
+class ChannelRenamed:
+    """What a channel rename did."""
+
+    updated: int
+    # A retention rule that was on was turned off because the rename merged two
+    # channels (see ``rename_channel``).
+    retention_disabled: bool = False
+
+
+def rename_channel(session: Session, old_name: str, new_name: str) -> ChannelRenamed:
+    """Rename a channel across all videos, returning how many rows were updated.
+
+    The retention rule follows the name. A rename onto a name that already has
+    videos or a rule merges two channels, and a rule written for one of them
+    must not silently apply to the other's videos, so every rule involved
+    (the moving one and the target's own) is turned off. When both channels
+    have a rule, the target's stays and the old name's is dropped.
+    """
     rows = session.exec(select(Video).where(Video.channel == old_name)).all()
+    rename = new_name != old_name
+    merged = rename and (
+        session.exec(select(col(Video.id)).where(Video.channel == new_name)).first()
+        is not None
+    )
     for video in rows:
         video.channel = new_name
         session.add(video)
-    # The retention rule follows the name; when the new name has a rule already,
-    # that one stays and the old name's is dropped.
     rule = session.exec(
         select(ChannelRetention).where(col(ChannelRetention.channel) == old_name)
     ).first()
-    if rule is not None and new_name == old_name:
-        rule = None
-    if rule is not None:
-        taken = session.exec(
-            select(col(ChannelRetention.id)).where(
-                col(ChannelRetention.channel) == new_name
-            )
-        ).first()
-        if taken is None:
-            rule.channel = new_name
-            session.add(rule)
-        else:
-            session.delete(rule)
-    if rows or rule is not None:
+    target = session.exec(
+        select(ChannelRetention).where(col(ChannelRetention.channel) == new_name)
+    ).first()
+    disabled = False
+    if rename:
+        if target is not None:
+            merged = True
+        if rule is not None:
+            if target is None:
+                rule.channel = new_name
+                session.add(rule)
+            else:
+                session.delete(rule)
+                disabled = rule.enabled
+        if merged:
+            for involved in (rule if target is None else None, target):
+                if involved is not None and involved.enabled:
+                    involved.enabled = False
+                    session.add(involved)
+                    disabled = True
+    if rows or rule is not None or disabled:
         session.commit()
-    return len(rows)
+    return ChannelRenamed(updated=len(rows), retention_disabled=disabled)
 
 
 def channel_stats(

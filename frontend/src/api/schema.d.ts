@@ -4207,6 +4207,12 @@ export interface components {
         };
         /** ChannelRenameResult */
         ChannelRenameResult: {
+            /**
+             * Retention Disabled
+             * @description The rename merged two channels and a retention rule that was on was turned off, so it does not apply to the other channel's videos.
+             * @default false
+             */
+            retention_disabled: boolean;
             /** Updated */
             updated: number;
         };

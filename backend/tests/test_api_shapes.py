@@ -166,7 +166,7 @@ def test_backgrounds_and_fonts_lists(client):
 def test_rename_channel(client, add_video):
     add_video(channel="Old")
     resp = client.patch("/api/channels", json={"old_name": "Old", "new_name": "New"})
-    assert resp.json() == {"updated": 1}
+    assert resp.json() == {"updated": 1, "retention_disabled": False}
 
 
 def test_video_ai_chat_history(client, session, add_video, admin_user):

@@ -22,6 +22,8 @@ All notable changes to Horde are documented here. The format follows
   /api/channels/retention/preview`, saving needs the `delete_videos`
   permission; the channel list carries a `retention` summary and the trash list
   a `reason`. See [Channels](docs/guides/channels.md#retention).
+  Renaming a channel onto an existing one turns the rules involved off, and
+  `PATCH /api/channels` says so with `retention_disabled`.
 - **Send links to Horde in one tap.** Opening `/download?url=<link>` fills in
   the Download page and reads the link as if you had pasted it; nothing is
   queued until you press Download, and the link is cleared from the address

@@ -96,7 +96,7 @@ A video that matches any limit goes. Whatever the limits say, these **stay**:
 
 Before you save, the preview says how much a rule would remove ("This would move 12 videos (4.3 GB) to the trash now") and how many videos the exceptions keep. A saved, enabled rule runs at once and then about every hour. Each removal shows in **Settings → Library → Trash** with the reason ("Retention: keep latest 20"), no name under "deleted by", and **Restore**. Retention does not free disk by itself: the trash still counts toward the [library size limit](../settings/system.md) until it is erased.
 
-A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
+A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). Renaming onto a name that already has videos merges two channels, so the rules involved are **turned off** instead of applying to videos they were not written for; review and switch them on again. With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
 
 Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Only playing a video to its end counts as finishing it: opening it, seeking back to the start or leaving at 90 % does not.
 

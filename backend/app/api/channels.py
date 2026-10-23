@@ -108,8 +108,11 @@ def rename_channel(payload: ChannelRename, session: Session = Depends(get_sessio
     new = payload.new_name.strip()
     if not old or not new:
         raise HTTPException(status_code=400, detail="Both names are required")
-    updated = library.rename_channel(session, old, new)
-    return {"updated": updated}
+    renamed = library.rename_channel(session, old, new)
+    return {
+        "updated": renamed.updated,
+        "retention_disabled": renamed.retention_disabled,
+    }
 
 
 @router.get(

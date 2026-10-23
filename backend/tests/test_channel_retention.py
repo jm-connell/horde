@@ -127,9 +127,7 @@ def test_remove_watched_needs_a_finished_video_and_the_wait(
     session, add_video, admin_user, member_user
 ):
     seen, partly, unseen = _news(add_video, 3)
-    user_state.record_progress(
-        session, admin_user.id, seen.id, 0, finished=True
-    )
+    user_state.record_progress(session, admin_user.id, seen.id, 0, finished=True)
     user_state.record_progress(session, member_user.id, partly.id, 30)  # partway
     row = _rule(session, remove_watched_after_days=14)
 
@@ -521,6 +519,8 @@ def test_a_rename_carries_the_rule_along(client, session, add_video):
     assert retention.get(session, CHANNEL) is None
     moved = retention.get(session, "Daily News")
     assert moved is not None and moved.keep_latest == 1
+    assert resp.json() == {"updated": 3, "retention_disabled": False}
+    assert moved.enabled
     assert retention.run_all() == 2
     assert _titles(session, "Daily News") == {"Episode 2"}
 
@@ -533,12 +533,75 @@ def test_a_rename_onto_a_channel_with_a_rule_keeps_that_rule(
     _rule(session, keep_latest=1)
     _rule(session, channel="Daily News", max_age_days=9)
 
-    client.patch("/api/channels", json={"old_name": CHANNEL, "new_name": "Daily News"})
+    resp = client.patch(
+        "/api/channels", json={"old_name": CHANNEL, "new_name": "Daily News"}
+    )
 
     session.expire_all()
     assert retention.get(session, CHANNEL) is None
     kept = retention.get(session, "Daily News")
     assert kept.keep_latest is None and kept.max_age_days == 9
+    # The two channels merge: the rule no longer means what its author meant.
+    assert not kept.enabled and resp.json()["retention_disabled"] is True
+
+
+def test_a_merge_does_not_carry_a_rule_onto_the_other_channels_videos(
+    client, session, add_video
+):
+    """Renaming onto a channel with videos must not let a keep-latest-1 rule
+    trash the other channel's library."""
+    add_video(channel=CHANNEL, title="a1", write_file=True, added_at=_days_ago(50))
+    for i in range(3):
+        add_video(
+            channel="Other",
+            title=f"other{i}",
+            write_file=True,
+            added_at=_days_ago(40 - i),
+        )
+    _rule(session, keep_latest=1)
+
+    resp = client.patch(
+        "/api/channels", json={"old_name": CHANNEL, "new_name": "Other"}
+    )
+
+    assert resp.json() == {"updated": 1, "retention_disabled": True}
+    session.expire_all()
+    moved = retention.get(session, "Other")
+    assert moved.keep_latest == 1 and not moved.enabled
+    assert retention.run_all() == 0
+    assert len(_titles(session, "Other")) == 4
+
+
+def test_a_merge_into_a_channel_with_a_rule_disables_that_rule_too(
+    client, session, add_video
+):
+    """The other direction: the target's rule would reach the renamed videos."""
+    add_video(channel=CHANNEL, title="mine", write_file=True, added_at=_days_ago(50))
+    add_video(channel="Other", title="theirs", write_file=True, added_at=_days_ago(40))
+    _rule(session, channel="Other", max_age_days=10)
+
+    resp = client.patch(
+        "/api/channels", json={"old_name": CHANNEL, "new_name": "Other"}
+    )
+
+    assert resp.json()["retention_disabled"] is True
+    session.expire_all()
+    assert not retention.get(session, "Other").enabled
+    assert retention.run_all() == 0
+
+
+def test_a_merge_reports_nothing_disabled_when_no_rule_was_on(
+    client, session, add_video
+):
+    add_video(channel=CHANNEL, title="mine", write_file=True)
+    add_video(channel="Other", title="theirs", write_file=True)
+    _rule(session, enabled=False, keep_latest=1)
+
+    resp = client.patch(
+        "/api/channels", json={"old_name": CHANNEL, "new_name": "Other"}
+    )
+
+    assert resp.json() == {"updated": 1, "retention_disabled": False}
 
 
 def test_renaming_to_the_same_name_keeps_the_rule(client, session, add_video):
