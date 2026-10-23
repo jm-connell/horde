@@ -9,6 +9,14 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Watch stats on History.** A band at the top of History shows your time
+  watched this week (against last week), videos finished, your current streak,
+  your top channel and the last 30 days at a glance. Click it for more: watch
+  time per day, top channels, a weekday × hour chart of when you watch, top
+  tags, and how much of the library you have watched, for 7 days, 30 days, a
+  year or all time. Only your own watching, counted in your browser's time
+  zone; seeking does not count, and the time stays when a video is deleted.
+  API: `GET /api/history/stats`. See [History](docs/guides/history.md#stats).
 - **Files for Jellyfin, Kodi and Plex.** A new, off-by-default setting
   (Settings → Library → Metadata and catalog → Media-server files) writes a
   Kodi `.nfo` file and a `-thumb.jpg` next to every video, and a `tvshow.nfo`
@@ -178,6 +186,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
+- Database migration `0015_user_watch_time` adds the `user_watch_time` table (a
+  new table only; `videos` is not rebuilt). Watch time was never recorded
+  before, so the History stats start counting at the upgrade. Back up and roll
+  back as for any migration (the older version refuses a database it does not
+  know).
 - Database migration `0014_channel_retention` adds the `channel_retention` and
   `retention_keeps` tables and the columns `trash_entries.reason` and
   `user_video_state.finished_at` (new tables and plain `ADD COLUMN`s; `videos` is

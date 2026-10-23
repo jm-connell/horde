@@ -120,6 +120,7 @@ nav:
       - 0012 Password reset codes: adr/0012-password-reset-through-the-server-log.md
       - 0013 Trash tombstones: adr/0013-trash-tombstones.md
       - 0014 Playlist ownership and visibility: adr/0014-playlist-ownership-and-visibility.md
+      - 0015 Watch time per hour: adr/0015-watch-time-per-hour.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

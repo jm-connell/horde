@@ -20,6 +20,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0012](0012-password-reset-through-the-server-log.md) | Forgotten passwords: a one-time code in the server log | Accepted |
 | [0013](0013-trash-tombstones.md) | Deleted videos wait in a trash: a tombstone row and moved files, not a soft-delete flag | Accepted |
 | [0014](0014-playlist-ownership-and-visibility.md) | Playlists belong to a user and are App-wide or Private; a private one answers 404 to everyone else | Accepted |
+| [0015](0015-watch-time-per-hour.md) | Watch time is counted from progress saves, stored per UTC hour, and outlives the video | Accepted |
 
 ## Writing a new record
 
