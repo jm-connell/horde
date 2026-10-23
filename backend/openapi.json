@@ -5656,6 +5656,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5666,6 +5676,11 @@
       },
       "PlaylistDetail": {
         "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "cover_video_id": {
             "anyOf": [
               {
@@ -5726,6 +5741,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "position": {
             "default": 0,
@@ -5790,6 +5815,10 @@
             },
             "title": "Videos",
             "type": "array"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PlaylistVisibility",
+            "default": "public"
           }
         },
         "required": [
@@ -5840,6 +5869,16 @@
           "url": {
             "title": "Url",
             "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5891,6 +5930,24 @@
           "playlist_ids"
         ],
         "title": "PlaylistListReorder",
+        "type": "object"
+      },
+      "PlaylistOwner": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "PlaylistOwner",
         "type": "object"
       },
       "PlaylistPreview": {
@@ -6010,6 +6067,11 @@
       },
       "PlaylistRead": {
         "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "cover_video_id": {
             "anyOf": [
               {
@@ -6071,6 +6133,16 @@
             "title": "Name",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "position": {
             "default": 0,
             "title": "Position",
@@ -6127,6 +6199,10 @@
               }
             ],
             "title": "Thumbnail Video Id"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PlaylistVisibility",
+            "default": "public"
           }
         },
         "required": [
@@ -6256,10 +6332,28 @@
               }
             ],
             "title": "Subscribed"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "PlaylistUpdate",
         "type": "object"
+      },
+      "PlaylistVisibility": {
+        "enum": [
+          "public",
+          "private"
+        ],
+        "title": "PlaylistVisibility",
+        "type": "string"
       },
       "PotProviderStatus": {
         "properties": {
@@ -12884,7 +12978,7 @@
     },
     "/api/playlists": {
       "get": {
-        "description": "Playlists in their saved order; ``limit`` caps a pathological library.",
+        "description": "Public playlists and your own private ones, in their saved order.\n\n``limit`` caps a pathological library.",
         "operationId": "list_playlists_api_playlists_get",
         "parameters": [
           {
@@ -12953,6 +13047,7 @@
         ]
       },
       "post": {
+        "description": "Anyone may make a private playlist; an App-wide one needs manage_playlists.",
         "operationId": "create_playlist_api_playlists_post",
         "requestBody": {
           "content": {
@@ -13158,6 +13253,7 @@
     },
     "/api/playlists/reorder": {
       "patch": {
+        "description": "Put the playlists you can edit in the given order.\n\nPositions are shared, so they are redistributed among the slots those\nplaylists already hold; everyone else's playlists keep their places. Ids you\ncan't edit (or can't see) are ignored.",
         "operationId": "reorder_playlists_api_playlists_reorder_patch",
         "requestBody": {
           "content": {

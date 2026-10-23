@@ -22,7 +22,6 @@ from ..models import (
     DownloadDestination,
     DownloadJob,
     JobStatus,
-    Playlist,
     Video,
     require_id,
 )
@@ -38,7 +37,7 @@ from ..schemas import (
     DownloadQualityUpdate,
     DownloadQueueStatus,
 )
-from ..services import follows, ytdlp_extract, ytdlp_formats
+from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
 from ..services.downloads import jobs as download_jobs
@@ -315,8 +314,8 @@ def create_download(
     destination = payload.destination.value if payload.destination else "library"
     playlist_id = payload.playlist_id
     if playlist_id is not None:
-        if session.get(Playlist, playlist_id) is None:
-            raise HTTPException(status_code=404, detail="Playlist not found")
+        # Somebody else's private playlist answers 404, like everywhere else.
+        playlists.get_editable(session, user, playlist_id)
         if destination != "library":
             playlist_id = None
 

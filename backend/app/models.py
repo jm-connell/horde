@@ -224,12 +224,26 @@ class PlaylistSource(str, Enum):
     youtube = "youtube"
 
 
+class PlaylistVisibility(str, Enum):
+    #: Everyone signed in sees it (the owner and holders of manage_playlists edit it).
+    public = "public"
+    #: Only its owner sees it; to everyone else it does not exist.
+    private = "private"
+
+
 class Playlist(SQLModel, table=True):
     __tablename__ = "playlists"
     __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     name: str
+    # Who made it. NULL only for a public playlist that predates accounts (the
+    # first administrator adopts it). A deleted owner's public playlists are
+    # handed on first (services/playlists.py); the cascade only reaches private ones.
+    owner_user_id: int | None = Field(
+        default=None, foreign_key="users.id", index=True, ondelete="CASCADE"
+    )
+    visibility: PlaylistVisibility = Field(default=PlaylistVisibility.public)
     description: str | None = None
     source_type: PlaylistSource = Field(default=PlaylistSource.user)
     source_url: str | None = None

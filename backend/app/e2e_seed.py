@@ -334,6 +334,7 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             name="Evening set",
             source_type=PlaylistSource.user,
             position=0,
+            owner_user_id=require_id(admin),
         )
         session.add(playlist)
         session.commit()

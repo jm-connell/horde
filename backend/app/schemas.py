@@ -4,7 +4,13 @@ from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
-from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
+from .models import (
+    DownloadDestination,
+    JobStatus,
+    PlaylistSource,
+    PlaylistVisibility,
+    VideoStatus,
+)
 
 #: Largest list a bulk endpoint accepts (video ids, pasted URLs).
 MAX_BULK_ITEMS = 1000
@@ -506,6 +512,8 @@ class ChannelRename(BaseModel):
 class PlaylistCreate(BaseModel):
     name: str
     description: str | None = None
+    #: Omitted: public for holders of manage_playlists, private for everyone else.
+    visibility: PlaylistVisibility | None = None
 
 
 class PlaylistUpdate(BaseModel):
@@ -514,6 +522,13 @@ class PlaylistUpdate(BaseModel):
     subscribed: bool | None = None
     quality_preset: str | None = None
     cover_video_id: int | None = None
+    #: Owner only; making a playlist public takes manage_playlists.
+    visibility: PlaylistVisibility | None = None
+
+
+class PlaylistOwner(BaseModel):
+    id: int
+    username: str
 
 
 class PlaylistRead(BaseModel):
@@ -533,6 +548,11 @@ class PlaylistRead(BaseModel):
     has_custom_cover: bool = False
     thumbnail_video_id: int | None = None
     has_thumbnail: bool = False
+    visibility: PlaylistVisibility = PlaylistVisibility.public
+    #: None for a playlist that predates accounts and has no owner yet.
+    owner: PlaylistOwner | None = None
+    #: Whether the requesting user may rename, change or delete it.
+    can_edit: bool = False
 
 
 class PlaylistDetail(PlaylistRead):
@@ -558,6 +578,8 @@ class PlaylistImport(BaseModel):
     name: str | None = None
     entries: list[str] = Field(default=[], max_length=MAX_PLAYLIST_ITEMS)
     subscribe: bool = False
+    #: Omitted: public for holders of manage_playlists, private for everyone else.
+    visibility: PlaylistVisibility | None = None
 
 
 class PlaylistPreviewEntry(BaseModel):

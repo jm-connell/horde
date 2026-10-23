@@ -98,6 +98,8 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/channels/catalog/index"),
             ("PUT", "/api/channels/autodownload"),
             ("GET", "/api/playlists/preview"),
+            # Also manage_playlists for an App-wide playlist, decided in the handler.
+            ("POST", "/api/playlists/import"),
             ("POST", "/api/review/scan"),
             ("POST", "/api/review/upload"),
         ]
@@ -118,22 +120,6 @@ GATES: dict[tuple[str, str], str] = {
             ("PATCH", "/api/channels"),
             ("PATCH", "/api/channels/catalog/youtube-search"),
             ("POST", "/api/review/{video_id}/skip"),
-        ]
-    },
-    # --- manage_playlists ---
-    **{
-        (m, p): "manage_playlists"
-        for m, p in [
-            ("POST", "/api/playlists"),
-            ("PATCH", "/api/playlists/reorder"),
-            ("PATCH", "/api/playlists/{playlist_id}"),
-            ("DELETE", "/api/playlists/{playlist_id}"),
-            ("POST", "/api/playlists/{playlist_id}/items"),
-            ("POST", "/api/playlists/{playlist_id}/items/bulk"),
-            ("DELETE", "/api/playlists/{playlist_id}/items/{video_id}"),
-            ("PATCH", "/api/playlists/{playlist_id}/reorder"),
-            ("POST", "/api/playlists/{playlist_id}/thumbnail"),
-            ("POST", "/api/playlists/{playlist_id}/sync"),
         ]
     },
     # --- use_ai ---
@@ -157,9 +143,7 @@ GATES: dict[tuple[str, str], str] = {
 }
 
 #: Needs two permissions (both are checked).
-GATES_ALL_OF: dict[tuple[str, str], set[str]] = {
-    ("POST", "/api/playlists/import"): {"manage_playlists", "download"},
-}
+GATES_ALL_OF: dict[tuple[str, str], set[str]] = {}
 
 #: Gated inside the handler because the answer depends on the request.
 CONDITIONAL = {
@@ -167,6 +151,20 @@ CONDITIONAL = {
     ("POST", "/api/downloads/bulk"),
     ("PATCH", "/api/settings"),  # ui: anyone; anything else: admin
     ("GET", "/api/updates"),  # ?refresh=true: admin
+    # Playlists belong to a user: the owner may always change theirs, and anyone with
+    # manage_playlists may change a public one (services/playlists.py decides, 404 for
+    # another user's private playlist, 403 for a public one you may not change).
+    # Making a private playlist needs no grant, an App-wide one needs manage_playlists.
+    ("POST", "/api/playlists"),
+    ("PATCH", "/api/playlists/reorder"),
+    ("PATCH", "/api/playlists/{playlist_id}"),
+    ("DELETE", "/api/playlists/{playlist_id}"),
+    ("POST", "/api/playlists/{playlist_id}/items"),
+    ("POST", "/api/playlists/{playlist_id}/items/bulk"),
+    ("DELETE", "/api/playlists/{playlist_id}/items/{video_id}"),
+    ("PATCH", "/api/playlists/{playlist_id}/reorder"),
+    ("POST", "/api/playlists/{playlist_id}/thumbnail"),
+    ("POST", "/api/playlists/{playlist_id}/sync"),
 }
 
 #: Mutations any signed-in user may make, on purpose. The compat and sprite
@@ -247,6 +245,7 @@ def test_every_permission_is_used_and_documented():
         p for ps in GATES_ALL_OF.values() for p in ps
     }
     used |= {"offline_download"}  # also checked for destination=device
+    used |= {"manage_playlists"}  # checked per playlist (see CONDITIONAL)
     assert used == set(permissions.ALL_PERMISSIONS)
     assert {
         "download",
@@ -325,17 +324,10 @@ def test_each_permission_gates_its_routes(member_with, client):
                 assert _call(client, method, path).status_code != 403
 
 
-def test_playlist_import_needs_both_permissions(member_with):
+def test_playlist_import_needs_download(member_with):
     method, path = "POST", "/api/playlists/import"
-    for held in ({"manage_playlists"}, {"download"}, set()):
-        resp = _call(member_with(*held), method, path)
-        assert resp.status_code == 403
-    assert _call(
-        member_with("manage_playlists", "download"), method, path
-    ).status_code not in (
-        401,
-        403,
-    )
+    assert _call(member_with("manage_playlists"), method, path).status_code == 403
+    assert _call(member_with("download"), method, path).status_code not in (401, 403)
 
 
 def test_new_members_get_the_default_grants(client):
@@ -401,15 +393,19 @@ def test_forcing_an_update_check_is_admin_only(init_db, member_user):
 
 
 def test_permission_changes_apply_to_a_live_session(client, member_client, member_user):
-    assert (
-        member_client.post("/api/playlists", json={"name": "Mine"}).status_code == 200
-    )
+    mine = member_client.post("/api/playlists", json={"name": "Mine"})
+    assert (mine.status_code, mine.json()["visibility"]) == (200, "public")
     resp = client.patch(
         f"/api/users/{member_user.id}", json={"permissions": ["use_ai"]}
     )
     assert resp.status_code == 200
-    denied = member_client.post("/api/playlists", json={"name": "Again"})
+    denied = member_client.post(
+        "/api/playlists", json={"name": "Again", "visibility": "public"}
+    )
     assert (denied.status_code, denied.json()["code"]) == (403, "permission_denied")
+    # A private playlist needs no grant, and stays editable by its owner.
+    private = member_client.post("/api/playlists", json={"name": "Again"})
+    assert (private.status_code, private.json()["visibility"]) == (200, "private")
 
 
 def test_state_reports_effective_permissions(client, member_client):

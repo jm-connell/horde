@@ -93,8 +93,8 @@ def update_user(
 def delete_user(
     user_id: int,
     session: Session = Depends(get_session),
-    _admin: AuthUser = Depends(require_admin),
+    admin: AuthUser = Depends(require_admin),
 ):
-    accounts.delete_user(session, user_id)
+    accounts.delete_user(session, user_id, successor_id=admin.id)
     avatars.unlink_avatars(user_id)
     return Response(status_code=204)

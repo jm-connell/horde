@@ -10,6 +10,8 @@ from sqlmodel import Session, select
 from ..context import get_engine
 from ..models import Playlist, utcnow
 from . import activity
+from .auth.accounts import AuthUser
+from .playlists import visible_to
 from .ytdlp_extract import extract_playlist_entries
 
 logger = logging.getLogger(__name__)
@@ -103,11 +105,17 @@ def sync_subscribed_playlists() -> None:
 
 
 def find_subscribed_by_url(
-    session: Session, source_url: str, *, exclude_id: int | None = None
+    session: Session,
+    source_url: str,
+    viewer: AuthUser,
+    *,
+    exclude_id: int | None = None,
 ) -> Playlist | None:
+    """A subscription to this URL that ``viewer`` can see (not somebody's private one)."""
     query = select(Playlist).where(
         Playlist.subscribed == True,  # noqa: E712 - SQL column comparison, not a Python truth test
         Playlist.source_url == source_url,
+        visible_to(viewer),
     )
     for row in session.exec(query).all():
         if exclude_id is not None and row.id == exclude_id:

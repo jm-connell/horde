@@ -35,7 +35,7 @@ from ...models import (
     as_utc,
     utcnow,
 )
-from .. import app_settings
+from .. import app_settings, playlist_owners
 from ..css_sanitize import sanitize_ui_css
 from . import passwords, permissions
 
@@ -278,6 +278,7 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
             ui_json=json.dumps(sanitize_ui_css(ui) if isinstance(ui, dict) else {}),
         )
     )
+    playlist_owners.adopt_unowned(session, _uid(user))
     logger.info(
         "Moved %s watch history rows to the first administrator", rowcount(moved)
     )
@@ -387,12 +388,32 @@ def update_user(
     return user
 
 
-def delete_user(session: Session, user_id: int) -> None:
-    """Remove an account, its sessions, history and UI preferences."""
+def delete_user(
+    session: Session, user_id: int, *, successor_id: int | None = None
+) -> None:
+    """Remove an account, its sessions, history and UI preferences.
+
+    Its private playlists go with it; its public ones are handed to
+    ``successor_id`` (the administrator deleting it) or, without one, to the
+    first other administrator, so shared lists survive.
+    """
     user = session.get(User, user_id)
     if user is None:
         raise UserNotFound("User not found")
     was_active_admin = _is_active_admin(user)
+    if successor_id is None or successor_id == user_id:
+        heir = session.scalar(
+            select(col(User.id))
+            .where(
+                col(User.is_admin) == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+                col(User.disabled) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+                col(User.id) != user_id,
+            )
+            .order_by(col(User.id))
+            .limit(1)
+        )
+        successor_id = heir
+    covers = playlist_owners.hand_over(session, user_id, successor_id)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
     session.execute(
@@ -417,6 +438,7 @@ def delete_user(session: Session, user_id: int) -> None:
             session.rollback()
             raise LastAdmin("This is the last administrator and cannot be deleted")
     session.commit()
+    playlist_owners.remove_covers(covers)
 
 
 # --- Sessions ----------------------------------------------------------------
