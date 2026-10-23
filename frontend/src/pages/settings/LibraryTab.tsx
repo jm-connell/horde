@@ -19,6 +19,7 @@ import {
 import HelpTip from "../../components/HelpTip";
 import FollowedChannelsSection from "./FollowedChannelsSection";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
+import TrashSection from "./TrashSection";
 
 const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
 
@@ -536,6 +537,8 @@ export default function LibraryTab() {
           </div>
         )}
       </Section>
+
+      <TrashSection />
     </>
   );
 }

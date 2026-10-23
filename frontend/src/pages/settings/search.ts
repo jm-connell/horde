@@ -71,6 +71,12 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     keywords: "channel list order sidebar ascending descending",
   },
+  {
+    tab: "library",
+    access: "delete_videos",
+    keywords:
+      "trash bin recycle deleted videos restore undo empty trash delete forever",
+  },
   // Playback
   {
     tab: "playback",

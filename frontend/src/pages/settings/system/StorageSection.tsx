@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { describeError } from "../../../apiErrors";
 import HelpTip from "../../../components/HelpTip";
 import { useUpdateAppSettings } from "../../../queries/app";
@@ -16,6 +17,13 @@ const BAR_COLOR = {
   full: "bg-red-500",
 } as const;
 
+/** The trash's share of the bar: the same colour, faded (it can be freed). */
+const TRASH_BAR_COLOR = {
+  ok: "bg-accent/35",
+  warn: "bg-amber-500/35",
+  full: "bg-red-500/35",
+} as const;
+
 /** What the library takes on disk, and the limit past which downloads wait. */
 export default function StorageSection({
   storage,
@@ -31,6 +39,12 @@ export default function StorageSection({
   const limit = appSettings?.max_library_bytes ?? null;
   const usage =
     storage && limit ? limitUsage(storage.total_bytes, limit) : null;
+  const trashBytes = storage?.trash_bytes ?? 0;
+  // Of the bar's filled width, the part the trash takes.
+  const trashPercent =
+    usage && storage?.total_bytes
+      ? Math.round((usage.percent * trashBytes) / storage.total_bytes)
+      : 0;
 
   const save = async () => {
     const next = inputToLimit(input);
@@ -66,7 +80,8 @@ export default function StorageSection({
           "library",
           "max disk usage",
           "limit",
-          "quota"
+          "quota",
+          "trash"
         )
       }
     >
@@ -78,6 +93,18 @@ export default function StorageSection({
           <span className="text-xs text-muted">
             {storage.video_count} video
             {storage.video_count === 1 ? "" : "s"}
+            {trashBytes ? (
+              <>
+                {" · "}
+                {formatSize(trashBytes)} in the{" "}
+                <Link
+                  to="/settings?tab=library"
+                  className="underline decoration-dotted underline-offset-2 hover:text-gray-200"
+                >
+                  trash
+                </Link>
+              </>
+            ) : null}
           </span>
         </div>
       ) : (
@@ -118,12 +145,24 @@ export default function StorageSection({
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={usage.percent}
-              className="h-1.5 overflow-hidden rounded-full bg-ink-700"
+              aria-valuetext={
+                trashBytes
+                  ? `${usage.percent}%, of which ${formatSize(trashBytes)} in the trash`
+                  : undefined
+              }
+              className="flex h-1.5 overflow-hidden rounded-full bg-ink-700"
             >
               <div
-                className={`h-full rounded-full ${BAR_COLOR[usage.level]}`}
-                style={{ width: `${usage.percent}%` }}
+                className={`h-full ${BAR_COLOR[usage.level]}`}
+                style={{ width: `${usage.percent - trashPercent}%` }}
               />
+              {trashPercent > 0 ? (
+                <div
+                  data-horde="storage-trash-bar"
+                  className={`h-full ${TRASH_BAR_COLOR[usage.level]}`}
+                  style={{ width: `${trashPercent}%` }}
+                />
+              ) : null}
             </div>
             <p
               className={`mt-1 text-xs ${
@@ -132,6 +171,7 @@ export default function StorageSection({
             >
               {formatSize(storage.total_bytes) || "0 B"} of{" "}
               {limitToInput(limit)} GB
+              {trashBytes ? ` · ${formatSize(trashBytes)} in the trash` : ""}
               {usage.level === "full"
                 ? " · downloads are waiting"
                 : usage.level === "warn"
