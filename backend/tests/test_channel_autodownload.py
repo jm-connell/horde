@@ -1,16 +1,21 @@
 """Channel autodownload policy, candidate selection, and HTTP."""
 
+import pytest
 from sqlmodel import select
 
+from app import config
 from app.models import (
     ChannelAutodownload,
     ChannelCatalog,
+    ChannelCatalogSkip,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
     DownloadJob,
     JobStatus,
 )
 from app.services import channel_autodownload as ad
+from app.services import channel_catalog
+from app.services.channel_catalog.query import catalog_feed_page
 from app.services.ytdlp_extract import (
     _map_flat_video_entry,
     is_youtube_short_entry,
@@ -391,3 +396,131 @@ def test_normalize_helpers():
     assert ad.normalize_quality_preset("2160p") == "2160p"
     assert ad.normalize_previous_mode("ALL") == "all"
     assert ad.normalize_previous_mode("weird") == "none"
+
+
+# --- A deleted video is not downloaded again ---------------------------------
+
+GONE = "deletedvid1"
+NEW = "newvideo002"
+
+
+def _gone_setup(session, add_video):
+    catalog = _catalog(session)
+    gone = _cvid(session, catalog.id, yt_id=GONE, position=1)
+    new = _cvid(session, catalog.id, yt_id=NEW, position=0)
+    policy = _policy(session, previous_mode="all")
+    video = add_video(write_file=True, yt_id=GONE)
+    return catalog, gone, new, policy, video
+
+
+def _eligible_ids(session, policy, rows):
+    return [r.yt_id for r in ad._eligible_rows(session, policy, rows, queued_ids=set())]
+
+
+def _deleted_skips(session):
+    return [
+        s.yt_id
+        for s in session.exec(select(ChannelCatalogSkip)).all()
+        if s.reason == "deleted"
+    ]
+
+
+@pytest.mark.parametrize("trash_days", [7, 0])
+def test_autodownload_does_not_refetch_a_video_the_user_deleted(
+    client, session, add_video, monkeypatch, trash_days
+):
+    monkeypatch.setattr(config, "TRASH_DAYS", trash_days)
+    catalog, gone, new, policy, video = _gone_setup(session, add_video)
+    assert _eligible_ids(session, policy, [gone, new]) == [NEW]  # in the library
+
+    assert client.delete(f"/api/videos/{video.id}?delete_file=true").status_code == 204
+    if trash_days:
+        assert (
+            client.post("/api/trash/empty").json()["deleted"] == 1
+        )  # and gone for good
+
+    session.expire_all()
+    assert _eligible_ids(session, policy, [gone, new]) == [NEW]
+    assert ad.enqueue_catalog_row(session, gone, policy) is None
+    # Still in the channel feed, as a video that is not downloaded.
+    page = catalog_feed_page(session, LTT)
+    assert {e["id"] for e in page["entries"]} == {GONE, NEW}
+    assert GONE not in channel_catalog.skipped_yt_ids(session, catalog.id)
+
+
+def test_restoring_a_video_forgets_that_it_was_deleted(
+    client, session, add_video, monkeypatch
+):
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+    _, _, _, _, video = _gone_setup(session, add_video)
+    entry_id = client.delete(f"/api/videos/{video.id}?delete_file=true").headers[
+        "x-horde-trash-entry"
+    ]
+    session.expire_all()
+    assert _deleted_skips(session) == [GONE]
+
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
+
+    session.expire_all()
+    assert _deleted_skips(session) == []
+
+
+def test_a_manual_download_of_a_deleted_video_removes_the_skip(
+    client, session, add_video, monkeypatch
+):
+    from app.services import job_metadata
+    from app.services.downloads import jobs
+
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+    monkeypatch.setattr(jobs, "enqueue_download", lambda job_id: None)
+    monkeypatch.setattr(job_metadata, "request_job_metadata", lambda job_id: None)
+    _, _, _, _, video = _gone_setup(session, add_video)
+    client.delete(f"/api/videos/{video.id}?delete_file=true")
+    client.post("/api/trash/empty")
+    session.expire_all()
+    assert _deleted_skips(session) == [GONE]
+
+    resp = client.post(
+        "/api/downloads", json={"url": f"https://www.youtube.com/watch?v={GONE}"}
+    )
+
+    assert resp.status_code == 200
+    session.expire_all()
+    assert _deleted_skips(session) == []
+
+
+def test_a_bulk_download_of_a_deleted_video_removes_the_skip(
+    client, session, add_video, monkeypatch
+):
+    from app.services import job_metadata
+    from app.services.downloads import jobs
+
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+    monkeypatch.setattr(jobs, "enqueue_download", lambda job_id: None)
+    monkeypatch.setattr(job_metadata, "request_job_metadata", lambda job_id: None)
+    _, _, _, _, video = _gone_setup(session, add_video)
+    client.delete(f"/api/videos/{video.id}?delete_file=true")
+    client.post("/api/trash/empty")
+    session.expire_all()
+    assert _deleted_skips(session) == [GONE]
+
+    resp = client.post(
+        "/api/downloads/bulk",
+        json={"urls": [f"https://www.youtube.com/watch?v={GONE}"]},
+    )
+
+    assert resp.status_code == 200
+    session.expire_all()
+    assert _deleted_skips(session) == []
+
+
+def test_a_deleted_skip_does_not_hide_a_members_only_one(session):
+    catalog = _catalog(session)
+    channel_catalog.skips.record_catalog_skip(
+        session, catalog.id, GONE, reason="deleted", commit=True
+    )
+    channel_catalog.skips.record_catalog_skip(
+        session, catalog.id, GONE, reason="members_only", commit=True
+    )
+    # The members-only finding wins: the video must leave the feed.
+    assert channel_catalog.skipped_yt_ids(session, catalog.id) == {GONE}

@@ -66,6 +66,8 @@ from ..models import (
     utcnow,
 )
 from . import library, scanner
+from .channel_autodownload import active_youtube_ids
+from .channel_catalog import skips
 from .paths import TRASH_DIR_NAME, find_video_by_path
 from .video_delete import collect_video_files, delete_video_cascade
 from .workers import BackgroundWorker
@@ -412,6 +414,7 @@ def trash_video(session: Session, video: Video, by_user_id: int | None) -> Trash
             is None
         ):
             raise VideoAlreadyDeleted("The video was already deleted.")
+        skips.record_deleted_video(session, video)
         delete_video_cascade(session, video, False, commit=False)
         session.commit()
     except Exception as exc:
@@ -453,12 +456,6 @@ def _moves_of(entry: TrashEntry) -> list[_Move]:
     return moves
 
 
-def _downloading_youtube_ids(session: Session) -> set[str]:
-    from .channel_autodownload import active_youtube_ids
-
-    return active_youtube_ids(session)
-
-
 def _check_restorable(session: Session, entry: TrashEntry, moves: list[_Move]) -> None:
     video_id = entry.video_id
     if session.get(Video, video_id) is not None:
@@ -470,7 +467,7 @@ def _check_restorable(session: Session, entry: TrashEntry, moves: list[_Move]) -
         )
     if find_video_by_path(session, entry.relative_path) is not None:
         raise TrashConflict("Another library video uses the same file path.")
-    if entry.youtube_id and entry.youtube_id in _downloading_youtube_ids(session):
+    if entry.youtube_id and entry.youtube_id in active_youtube_ids(session):
         raise TrashConflict(
             "This video is being downloaded again; wait for it to finish, "
             "or cancel the download, then restore it."
@@ -511,6 +508,7 @@ def restore(session: Session, entry_id: int) -> Video:
         if rowcount(res) != 1:
             raise TrashNotFound(f"Trash entry {entry_id} not found")
         video = _insert_rows(session, snapshot)
+        skips.clear_deleted(session, video.youtube_id)
         session.commit()
     except Exception as exc:
         session.rollback()
@@ -613,14 +611,6 @@ def summary(session: Session) -> tuple[int, int]:
         )
     ).one()
     return int(count or 0), int(total or 0)
-
-
-def trashed_youtube_ids(session: Session) -> set[str]:
-    """YouTube ids waiting in the trash: autodownload must not fetch them again."""
-    rows = session.exec(
-        select(col(TrashEntry.youtube_id)).where(col(TrashEntry.youtube_id) != None)  # noqa: E711 - SQL column comparison, not a Python truth test
-    ).all()
-    return {str(r) for r in rows if r}
 
 
 def _listed_moves(entry: TrashEntry) -> list[_Move]:

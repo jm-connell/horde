@@ -40,6 +40,7 @@ from ..schemas import (
 )
 from ..services import follows, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
+from ..services.channel_catalog import skips as catalog_skips
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
 from ..services.downloads import staging as download_staging
@@ -365,6 +366,10 @@ def create_download(
             paused=download_queue.is_paused(),
         )
         session.add(job)
+        if destination == "library":
+            catalog_skips.clear_deleted(
+                session, yt_id
+            )  # asked for by hand: not "deleted" now
         session.commit()
         session.refresh(job)
         follows.record_requester(session, require_id(job), user.id)
@@ -441,6 +446,8 @@ def create_downloads_bulk(
                 paused=download_queue.is_paused(),
             )
             session.add(job)
+            if destination == "library":
+                catalog_skips.clear_deleted(session, yt_id)
             session.commit()
             session.refresh(job)
             follows.record_requester(session, require_id(job), user.id)

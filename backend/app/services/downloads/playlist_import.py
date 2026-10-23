@@ -10,6 +10,7 @@ from sqlmodel import Session, col, select
 from ...context import get_engine
 from ...models import DownloadDestination, DownloadJob, JobStatus, Playlist
 from .. import activity
+from ..channel_catalog import skips as catalog_skips
 from ..url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
 from ..ytdlp_extract import is_youtube_short_url
 from ..ytdlp_formats import default_download_video_codec
@@ -71,6 +72,7 @@ def enqueue_playlist_entry(
             paused=download_queue.is_paused(),
         )
         session.add(job)
+        catalog_skips.clear_deleted(session, yt_id)  # asked for by hand
         try:
             session.commit()
         except IntegrityError:

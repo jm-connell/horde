@@ -1,10 +1,18 @@
-"""Members-only / skip-list helpers for channel catalogs (leaf module)."""
+"""Members-only / skip-list helpers for channel catalogs (leaf module).
+
+A skip row has a reason. ``members_only`` and ``cookies`` mean the video cannot be
+played or downloaded, so it also leaves the channel feed, related and next-part
+views. ``deleted`` means a user deleted the downloaded copy: the video stays
+visible everywhere (as "not downloaded", so it can be fetched by hand) and only
+keeps the automatic download from fetching it again.
+"""
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
-from sqlmodel import Session, select
+from sqlmodel import Session, col, select
 
 from ...context import get_engine
 from ...models import (
@@ -13,6 +21,7 @@ from ...models import (
     ChannelCatalogEmbedding,
     ChannelCatalogSkip,
     ChannelCatalogVideo,
+    Video,
     require_id,
     utcnow,
 )
@@ -24,11 +33,30 @@ from ..ytdlp_common import (
     is_members_only_entry,
 )
 
+#: Skip reason for a video a user deleted (see the module docstring).
+DELETED = "deleted"
+
 
 def skipped_yt_ids(session: Session, catalog_id: int) -> set[str]:
+    """Videos the catalog hides: unplayable ones, not the ones a user deleted."""
     rows = session.exec(
         select(ChannelCatalogSkip.yt_id).where(
-            ChannelCatalogSkip.catalog_id == catalog_id
+            ChannelCatalogSkip.catalog_id == catalog_id,
+            ChannelCatalogSkip.reason != DELETED,
+        )
+    ).all()
+    return {str(yt_id) for yt_id in rows if yt_id}
+
+
+def deleted_yt_ids(session: Session, catalog_ids: Iterable[int]) -> set[str]:
+    """Videos a user deleted from these catalogs: automatic download skips them."""
+    ids = set(catalog_ids)
+    if not ids:
+        return set()
+    rows = session.exec(
+        select(ChannelCatalogSkip.yt_id).where(
+            col(ChannelCatalogSkip.catalog_id).in_(ids),
+            ChannelCatalogSkip.reason == DELETED,
         )
     ).all()
     return {str(yt_id) for yt_id in rows if yt_id}
@@ -39,6 +67,7 @@ def is_skipped(session: Session, catalog_id: int, yt_id: str) -> bool:
         select(ChannelCatalogSkip).where(
             ChannelCatalogSkip.catalog_id == catalog_id,
             ChannelCatalogSkip.yt_id == yt_id,
+            ChannelCatalogSkip.reason != DELETED,
         )
     ).first()
     return row is not None
@@ -68,8 +97,57 @@ def record_catalog_skip(
                 skipped_at=utcnow(),
             )
         )
+    elif existing.reason == DELETED and reason != DELETED:
+        # Not downloadable after all: it has to leave the feed, not just auto-download.
+        existing.reason = reason
+        existing.skipped_at = utcnow()
+        session.add(existing)
     if commit:
         session.commit()
+
+
+def record_deleted_video(session: Session, video: Video) -> None:
+    """Keep automatic download from fetching ``video`` again after a user deleted it.
+
+    The one function every user or retention delete of downloaded media calls (the
+    trash move, and the permanent delete when the trash is off). Records a
+    ``deleted`` skip in each catalog that lists the video or belongs to its channel;
+    a video of no indexed channel needs none. Part of the caller's transaction.
+    """
+    from .runtime import get_catalog_by_url
+
+    yt_id = video.youtube_id
+    if not yt_id:
+        return
+    catalog_ids = set(
+        session.exec(
+            select(ChannelCatalogVideo.catalog_id).where(
+                ChannelCatalogVideo.yt_id == yt_id
+            )
+        ).all()
+    )
+    if video.channel_url:
+        catalog = get_catalog_by_url(session, video.channel_url)
+        if catalog is not None:
+            catalog_ids.add(require_id(catalog))
+    for catalog_id in catalog_ids:
+        record_catalog_skip(session, catalog_id, yt_id, reason=DELETED)
+
+
+def clear_deleted(session: Session, yt_id: str | None) -> None:
+    """Forget that ``yt_id`` was deleted (restored, or a user asked for it again).
+
+    Part of the caller's transaction.
+    """
+    if not yt_id:
+        return
+    for skip in session.exec(
+        select(ChannelCatalogSkip).where(
+            ChannelCatalogSkip.yt_id == yt_id,
+            ChannelCatalogSkip.reason == DELETED,
+        )
+    ).all():
+        session.delete(skip)
 
 
 def record_members_only_skip(

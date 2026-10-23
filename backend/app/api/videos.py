@@ -53,6 +53,7 @@ from ..services import next_part as next_part_svc
 from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
+from ..services.channel_catalog import skips
 from ..services.downloads import jobs as download_jobs
 from ..services.library_usage import library_usage
 from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
@@ -389,6 +390,8 @@ def bulk_delete_videos(
         if video is None:
             continue
         if not use_trash:
+            if payload.delete_files:
+                skips.record_deleted_video(session, video)
             doomed += delete_video_cascade(
                 session, video, payload.delete_files, commit=False
             )
@@ -670,6 +673,8 @@ def delete_video(
         return Response(
             status_code=204, headers={TRASH_ENTRY_HEADER: str(require_id(entry))}
         )
+    if delete_file:
+        skips.record_deleted_video(session, video)
     delete_video_cascade(session, video, delete_file)
     ctx.download_queue.library_changed(room_made=True)
     return Response(status_code=204)

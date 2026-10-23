@@ -16,8 +16,6 @@ from sqlmodel import Session, select
 
 from app import config
 from app.models import (
-    ChannelAutodownload,
-    ChannelCatalogVideo,
     Playlist,
     PlaylistItem,
     TrashEntry,
@@ -28,7 +26,6 @@ from app.models import (
     VideoEmbedding,
     utcnow,
 )
-from app.services import channel_autodownload as ad
 from app.services import scanner, temp_sweep, trash
 from app.services.auth import accounts
 from app.services.downloads.queue import DownloadQueue
@@ -632,31 +629,6 @@ def test_restoring_does_not_let_the_watcher_import_the_file_twice(
     assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
     assert seen == [True]
     assert scanner._is_active(video.file_path) is False
-
-
-def test_autodownload_does_not_fetch_a_trashed_video(
-    client, init_db, add_video, session
-):
-    video = add_video(write_file=True, yt_id="trashedvid1")
-    client.delete(f"/api/videos/{video.id}?delete_file=true")
-    assert trash.trashed_youtube_ids(session) == {"trashedvid1"}
-
-    rows = [
-        ChannelCatalogVideo(
-            catalog_id=1,
-            yt_id=yt,
-            url=f"https://www.youtube.com/watch?v={yt}",
-            title=yt,
-            duration=600,
-            live_status="not_live",
-            position=i,
-        )
-        for i, yt in enumerate(["trashedvid1", "newvideo001"])
-    ]
-    policy = ChannelAutodownload(channel_url="https://www.youtube.com/@x", enabled=True)
-    eligible = ad._eligible_rows(session, policy, rows, queued_ids=set())
-    assert [r.yt_id for r in eligible] == ["newvideo001"]
-    assert ad.enqueue_catalog_row(session, rows[0], policy) is None
 
 
 def test_factory_reset_with_media_empties_the_trash(client, init_db, add_video):

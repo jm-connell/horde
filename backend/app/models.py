@@ -351,7 +351,12 @@ class ChannelAutodownload(SQLModel, table=True):
 
 
 class ChannelCatalogSkip(SQLModel, table=True):
-    """IDs permanently excluded from a channel catalog (e.g. members-only)."""
+    """IDs excluded from a channel catalog.
+
+    ``members_only`` / ``cookies``: unplayable, hidden everywhere. ``deleted``: a user
+    deleted the downloaded copy; the video stays listed and only automatic download
+    skips it (``services/channel_catalog/skips.py``).
+    """
 
     __tablename__ = "channel_catalog_skips"
     __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
