@@ -22,6 +22,8 @@ import type {
   DownloadBulkResult,
   FollowedChannel,
   FollowList,
+  HistoryStats,
+  HistoryStatsRange,
   LiveList,
   ChannelLive,
   UnfollowResult,
@@ -716,6 +718,17 @@ export const api = {
     return {
       trashEntryIds: parseTrashEntryIds(resp.headers.get(TRASH_ENTRIES_HEADER)),
     };
+  },
+
+  /** The signed-in account's watch stats, counted in the browser's time zone. */
+  historyStats(
+    range: HistoryStatsRange,
+    opts?: ReadOptions
+  ): Promise<HistoryStats> {
+    const params = new URLSearchParams({ range });
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (tz) params.set("tz", tz);
+    return request<HistoryStats>(`/api/history/stats?${params}`, opts);
   },
 
   trashSummary(opts?: ReadOptions): Promise<TrashSummary> {

@@ -198,6 +198,8 @@ export interface Settings {
   descriptionExpanded: boolean;
   /** Watch-page AI panel open/closed (persists across videos and restarts). */
   aiExpanded: boolean;
+  /** History page stats band showing its details (charts) or only the tiles. */
+  historyStatsExpanded: boolean;
   showRelatedVideos: boolean;
   /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
   autoplayRelated: boolean;

@@ -73,6 +73,7 @@ export const queryKeys = {
   },
   history: {
     all: ["history"] as const,
+    stats: (range: string) => ["history", "stats", range] as const,
   },
   notifications: ["notifications"] as const,
   trash: {

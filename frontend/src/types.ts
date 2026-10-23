@@ -49,6 +49,9 @@ export type StorageStats = S["StorageStats"];
 /** A deleted video in the trash. `reason` says why when a rule (not a person) deleted it. */
 export type TrashItem = S["TrashItemRead"];
 export type TrashSummary = S["TrashSummary"];
+export type HistoryStats = S["HistoryStats"];
+export type HistoryStatsRange = HistoryStats["range"];
+export type HistoryStatsDay = S["HistoryStatsDay"];
 export type TrashRestored = S["TrashRestored"];
 export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];

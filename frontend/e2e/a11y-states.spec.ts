@@ -58,3 +58,18 @@ test("a channel page with its settings sheet open has no serious accessibility v
   ).toBeVisible();
   await expectNoSeriousViolations(page, "library/channel-settings");
 });
+
+test("the expanded History stats have no serious accessibility violations", async ({
+  page,
+}) => {
+  await page.goto("/history");
+  await page.getByRole("button", { name: /Your stats/ }).click();
+  await expect(
+    page.getByRole("listbox", { name: /When you watch/ })
+  ).toBeVisible();
+  await expectNoSeriousViolations(page, "history/stats");
+  // The keyboard readout of a chart is part of the page too.
+  await page.getByRole("listbox", { name: /Watch time per day/ }).focus();
+  await page.keyboard.press("ArrowLeft");
+  await expectNoSeriousViolations(page, "history/stats-focused");
+});
