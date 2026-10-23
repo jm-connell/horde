@@ -654,14 +654,20 @@ def thumbnail_file(entry: TrashEntry) -> Path | None:
 # --- Purging ------------------------------------------------------------------
 
 
-def _files_missing(entry: TrashEntry) -> bool:
-    """True when the entry lists files but none of them is in the trash any more."""
-    moves = _listed_moves(entry)
-    return bool(moves) and not any(_exists(m.trashed(entry.folder)) for m in moves)
+def _storage_ready(entry: TrashEntry) -> bool:
+    """False while a trash folder the entry's files live in cannot be seen.
+
+    An unmounted network share or a drive that is not plugged in looks exactly like
+    a trash whose files are gone, and erasing the entry then would cut its retention
+    short and leave the files behind. The entry waits until the folder is back.
+    """
+    return all(
+        _trash_root(root).is_dir() for root in {m.root for m in _listed_moves(entry)}
+    )
 
 
 def purge_expired(now: datetime | None = None, reported: set[str] | None = None) -> int:
-    """Erase entries older than the retention and entries whose files are gone.
+    """Erase entries older than the retention, unless their storage is not available.
 
     Also looks at trash folders that no entry owns: see ``_sweep_orphan_dirs``
     (``reported`` collects the ones already logged, so a long-running worker says
@@ -672,7 +678,7 @@ def purge_expired(now: datetime | None = None, reported: set[str] | None = None)
     with Session(get_engine()) as session:
         entries = list(session.exec(select(TrashEntry)).all())
         doomed = [
-            e for e in entries if as_utc(e.trashed_at) <= cutoff or _files_missing(e)
+            e for e in entries if as_utc(e.trashed_at) <= cutoff and _storage_ready(e)
         ]
         doomed_ids = {require_id(e) for e in doomed}
         known = {e.folder for e in entries if e.id not in doomed_ids}

@@ -349,13 +349,21 @@ def test_purge_removes_expired_entries_only(client, init_db, add_video):
     assert client.get("/api/trash/summary").json()["count"] == 0
 
 
-def test_purge_drops_an_entry_whose_files_went_missing(client, init_db, add_video):
+def test_an_entry_whose_files_went_missing_is_kept_until_it_expires(
+    client, init_db, add_video
+):
     video = add_video(write_file=True)
     entry_id = int(
         client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
     )
     shutil.rmtree(init_db["downloads"] / TRASH_DIR_NAME / _folder(init_db, entry_id))
-    assert trash.purge_expired() == 1
+
+    # The files being gone is no reason to forget the entry early.
+    assert trash.purge_expired() == 0
+    assert client.get("/api/trash/summary").json()["count"] == 1
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 500
+
+    assert trash.purge_expired(utcnow() + timedelta(days=8)) == 1
     assert client.get("/api/trash/summary").json()["count"] == 0
 
 
@@ -811,6 +819,29 @@ def test_a_crashed_trash_does_not_share_its_folder_with_the_next(
     assert client.post("/api/trash/empty").json()["deleted"] == 1
 
     assert _survives(init_db, init_db["downloads"] / crashed.file_path)
+
+
+def test_an_outage_of_the_media_storage_does_not_cut_the_retention_short(
+    client, init_db, add_video
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    root = init_db["downloads"] / TRASH_DIR_NAME
+    hidden = init_db["downloads"].parent / "unmounted"
+    root.rename(hidden)  # the NAS is not mounted: .horde-trash is not visible
+
+    assert trash.purge_expired() == 0
+    assert trash.purge_expired(utcnow() + timedelta(days=30)) == 0  # even when expired
+
+    hidden.rename(root)  # and it is back
+    with Session(init_db["engine"]) as session:
+        assert session.get(TrashEntry, entry_id) is not None
+    _age_trash_folders(init_db)
+    trash.purge_expired()
+    assert _survives(init_db, init_db["downloads"] / video.file_path)
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
 
 
 def test_a_failed_undo_keeps_the_files_it_could_not_put_back(
