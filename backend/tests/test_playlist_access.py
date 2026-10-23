@@ -424,3 +424,63 @@ def test_restoring_a_video_puts_it_back_in_a_private_playlist(
     assert client.get(f"/api/playlists/{private_id}").status_code == 404
     detail = member_client.get(f"/api/playlists/{private_id}").json()
     assert {v["id"] for v in detail["videos"]} == {video.id, other.id}
+
+
+# --- YouTube subscriptions fetch from the network: they need the download grant
+
+
+def _youtube_playlist_of(init_db, name: str, *, subscribed: bool) -> int:
+    from app.models import PlaylistSource
+
+    with Session(init_db["engine"]) as s:
+        owner = s.exec(
+            select(accounts.User).where(accounts.User.username == name)
+        ).one()
+        playlist = Playlist(
+            name="From YouTube",
+            owner_user_id=owner.id,
+            visibility=PlaylistVisibility.private,
+            source_type=PlaylistSource.youtube,
+            source_url="https://www.youtube.com/playlist?list=PL123",
+            subscribed=subscribed,
+        )
+        s.add(playlist)
+        s.commit()
+        s.refresh(playlist)
+        assert playlist.id is not None
+        return playlist.id
+
+
+def test_owning_a_playlist_does_not_replace_the_download_grant(
+    app, init_db, admin_user
+):
+    with _make_client(app, init_db, "nodl", []) as c:
+        off = _youtube_playlist_of(init_db, "nodl", subscribed=False)
+        on = _youtube_playlist_of(init_db, "nodl", subscribed=True)
+        turned_on = c.patch(f"/api/playlists/{off}", json={"subscribed": True})
+        assert (turned_on.status_code, turned_on.json()["code"]) == (
+            403,
+            "permission_denied",
+        )
+        synced = c.post(f"/api/playlists/{on}/sync")
+        assert (synced.status_code, synced.json()["code"]) == (403, "permission_denied")
+        # Turning a subscription off and editing it stay open to the owner.
+        assert (
+            c.patch(f"/api/playlists/{on}", json={"subscribed": False}).status_code
+            == 200
+        )
+
+
+def test_a_member_with_the_download_grant_can_subscribe_and_sync(
+    app, init_db, admin_user, monkeypatch
+):
+    from app.api import playlists as playlists_api
+
+    monkeypatch.setattr(playlists_api, "start_playlist_sync", lambda pid: None)
+    with _make_client(app, init_db, "dl", ["download"]) as c:
+        pid = _youtube_playlist_of(init_db, "dl", subscribed=False)
+        assert (
+            c.patch(f"/api/playlists/{pid}", json={"subscribed": True}).status_code
+            == 200
+        )
+        assert c.post(f"/api/playlists/{pid}/sync").status_code == 200

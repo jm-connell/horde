@@ -7,7 +7,7 @@ from sqlalchemy import delete, func
 from sqlalchemy import update as sa_update
 from sqlmodel import Session, col, select
 
-from ..auth import current_user, require_permission
+from ..auth import current_user, ensure_permission, require_permission
 from ..context import get_session
 from ..models import (
     Playlist,
@@ -438,6 +438,7 @@ def update_playlist(
         playlist.quality_preset = preset
     enable_sub = data.get("subscribed")
     if enable_sub is True:
+        ensure_permission(user, "download")  # subscribing fetches new videos
         if playlist.source_type != PlaylistSource.youtube or not playlist.source_url:
             raise HTTPException(
                 status_code=400,
@@ -664,6 +665,7 @@ def sync_playlist(
     user: AuthUser = Depends(current_user),
 ):
     playlist = access.get_editable(session, user, playlist_id)
+    ensure_permission(user, "download")  # a sync downloads whatever is new
     if not playlist.subscribed:
         raise HTTPException(
             status_code=400, detail="Playlist is not a YouTube subscription"
