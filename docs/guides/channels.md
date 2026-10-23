@@ -76,6 +76,32 @@ After autodownload is on, the header button stays highlighted and reopens the sa
 
 Horde finds new uploads from the channel catalog (opening the feed, periodic catalog refresh, and a dedicated autodownload poll every 15 minutes). YouTube Shorts are not autodownloaded.
 
+## Cleaning up old videos { #retention }
+
+News and daily channels pile up. A channel can have a **retention rule** that moves its old videos to the [trash](library.md#trash) on its own, so a removal can be undone for 7 days (`HORDE_TRASH_DAYS`). Use any mix of three limits:
+
+| Limit | What it removes |
+|-------|-----------------|
+| **Keep the newest N** | Everything but the newest N videos of the channel (by publish date, else the date it was added) |
+| **Older than D days** | Videos added to Horde more than D days ago |
+| **Finished more than D days ago** | Videos someone finished watching (from 90 % on) more than D days ago, on any account |
+
+A video that matches any limit goes. Whatever the limits say, these **stay**:
+
+- videos in any playlist;
+- videos with notes;
+- videos someone is partway through right now (watched in the last 7 days, not finished);
+- videos added in the last 24 hours;
+- videos you restored from the trash (they are never taken again, even if the rule would match).
+
+Before you save, the preview says how much a rule would remove ("This would move 12 videos (4.3 GB) to the trash now") and how many videos the exceptions keep. A saved, enabled rule runs at once and then about every hour. Each removal shows in **Settings → Library → Trash** with the reason ("Retention: keep latest 20"), no name under "deleted by", and **Restore**. Retention does not free disk by itself: the trash still counts toward the [library size limit](../settings/system.md) until it is erased.
+
+A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
+
+Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Seeking back to the very start of a video also counts as finishing it.
+
+Anyone may see a channel's rule; saving one needs the `delete_videos` permission. The API is `GET` / `PUT /api/channels/retention` and `POST /api/channels/retention/preview`.
+
 ## Following and live streams
 
 Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** next to the channel's name on its page, or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.

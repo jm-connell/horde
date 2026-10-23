@@ -9,6 +9,19 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Retention rules for channels.** A channel can now clean up after itself:
+  keep only the newest N videos, remove videos added more than D days ago,
+  and/or remove videos someone finished more than D days ago. Everything goes
+  to the trash, so it can be undone for 7 days, and it shows there with the
+  reason ("Retention: keep latest 20"). Videos in a playlist, with notes,
+  partway through for someone this week, added in the last day or restored from
+  the trash are never removed, and a removed video is not downloaded again by
+  autodownload. A preview says what a rule would remove before you save it;
+  rules run right after saving and then hourly. API:
+  `GET` / `PUT /api/channels/retention` and `POST
+  /api/channels/retention/preview`, saving needs the `delete_videos`
+  permission; the channel list carries a `retention` summary and the trash list
+  a `reason`. See [Channels](docs/guides/channels.md#retention).
 - **Send links to Horde in one tap.** Opening `/download?url=<link>` fills in
   the Download page and reads the link as if you had pasted it; nothing is
   queued until you press Download, and the link is cleared from the address
@@ -136,6 +149,15 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
+- Database migration `0014_channel_retention` adds the `channel_retention` and
+  `retention_keeps` tables and the columns `trash_entries.reason` and
+  `user_video_state.finished_at` (new tables and plain `ADD COLUMN`s; `videos` is
+  not rebuilt). Back up and roll back as for any migration (the older version
+  refuses a database it does not know).
+- Retention's "finished more than D days ago" counts only videos finished after
+  this update: Horde did not record the date before (a half-watch that expired
+  looks the same as a finished video in the old data), so earlier views never
+  make a video removable.
 - Database migration `0013_download_job_origin` adds the `download_jobs.origin`
   column (a plain `ADD COLUMN`; existing jobs count as queued by a person).
   Back up and roll back as for any migration (the older version refuses a

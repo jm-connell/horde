@@ -70,7 +70,7 @@ Deleting a video does not erase it at once. The video disappears from the librar
 - **Restore** it: the video comes back under the same id with its tags, summary, chapters, playlist places, everyone's watch progress and AI chats, and its files return to their old folder.
 - **Delete forever** or **Empty trash** to free the disk space now.
 
-The trash lists each video with its size, who deleted it and when it will be erased, and shows the total size. Anyone who may delete videos (the `delete_videos` permission, and administrators) can see and use it.
+The trash lists each video with its size, who deleted it (or the reason, for a video a channel's [retention rule](channels.md#retention) removed) and when it will be erased, and shows the total size. Anyone who may delete videos (the `delete_videos` permission, and administrators) can see and use it.
 
 In the app:
 

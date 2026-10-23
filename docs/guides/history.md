@@ -38,7 +38,7 @@ Clicking a card opens `/watch/:id` and seeks to the saved position.
 |------|--------|
 | Field | `last_position_sec` on the video |
 | Save cadence | About every **5 seconds** while playing; the position you paused or sought to within 5 seconds; at once when the page is hidden or closed |
-| Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) |
+| Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) and the time is recorded as `finished_at` (watching it again clears it); a channel's [retention rule](channels.md#retention) uses it |
 | History stamp | `last_watched_at` updates as you watch |
 | Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device |
 
