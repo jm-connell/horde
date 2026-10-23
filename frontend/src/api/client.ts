@@ -77,8 +77,28 @@ export function withCsrf(init?: RequestInit): RequestInit | undefined {
 
 /** Fired when the server says the session is gone (401). AuthProvider listens. */
 export const AUTH_REQUIRED_EVENT = "horde:auth-required";
-/** Fired on any 403; the detail is a user-facing sentence. */
+/** Fired on any 403 except `reauth_required`; the detail is a user-facing sentence. */
 export const PERMISSION_DENIED_EVENT = "horde:permission-denied";
+/**
+ * Fired when the server wants the password again before a sensitive action
+ * (403 `reauth_required`). `ReauthProvider` listens, asks, and calls `settle`.
+ */
+export const REAUTH_REQUIRED_EVENT = "horde:reauth-required";
+
+/** What `REAUTH_REQUIRED_EVENT` carries. A listener sets `handled` and later calls `settle`. */
+export interface ReauthRequestDetail {
+  settle: (confirmed: boolean) => void;
+  handled: boolean;
+}
+
+/** Ask the user to confirm their password; false if they decline or nothing can ask. */
+function askToReauthenticate(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const detail: ReauthRequestDetail = { settle: resolve, handled: false };
+    window.dispatchEvent(new CustomEvent(REAUTH_REQUIRED_EVENT, { detail }));
+    if (!detail.handled) resolve(false);
+  });
+}
 
 function notifyAuthFailure(
   status: number,
@@ -87,7 +107,7 @@ function notifyAuthFailure(
 ): void {
   if (status === 401 && code === "auth_required") {
     window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT));
-  } else if (status === 403) {
+  } else if (status === 403 && code !== "reauth_required") {
     // Every 403 envelope (permission_denied, admin_required, csrf_rejected, ...)
     // carries a user-facing `detail`; show it instead of failing silently.
     window.dispatchEvent(
@@ -132,8 +152,16 @@ export async function apiErrorFrom(resp: Response): Promise<ApiError> {
   });
 }
 
-/** Send a request; a non-2xx reply throws its ApiError. */
-export async function send(url: string, init?: RequestInit): Promise<Response> {
+/**
+ * Send a request; a non-2xx reply throws its ApiError. A 403 `reauth_required`
+ * first asks the user for their password (see `ReauthProvider`) and, once
+ * confirmed, sends the same request one more time.
+ */
+export async function send(
+  url: string,
+  init?: RequestInit,
+  reauthenticated = false
+): Promise<Response> {
   // Offline mode: fail fast instead of hanging on a dead/slow connection.
   if (connectivity.offlineMode) throw offlineError();
   let resp: Response;
@@ -148,7 +176,17 @@ export async function send(url: string, init?: RequestInit): Promise<Response> {
     throw err;
   }
   connectivity.reportRequest(performance.now() - t0, false);
-  if (!resp.ok) throw await apiErrorFrom(resp);
+  if (!resp.ok) {
+    const err = await apiErrorFrom(resp);
+    if (
+      err.code === "reauth_required" &&
+      !reauthenticated &&
+      (await askToReauthenticate())
+    ) {
+      return send(url, init, true);
+    }
+    throw err;
+  }
   return resp;
 }
 

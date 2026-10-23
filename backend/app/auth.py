@@ -78,7 +78,9 @@ ENROLLMENT_ROUTES: frozenset[tuple[str, str]] = frozenset(
 )
 #: Only mounted (and only public) when the Playwright suite runs the app: ``main``
 #: passes it to ``install_security(extra_public_routes=...)`` when ``HORDE_E2E`` is set.
-E2E_PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset({("POST", "/api/e2e/reset")})
+E2E_PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {("POST", "/api/e2e/reset"), ("POST", "/api/e2e/age-sessions")}
+)
 
 _PROTECTED_DOCS = frozenset({"/docs", "/redoc", "/openapi.json"})
 

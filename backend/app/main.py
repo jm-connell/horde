@@ -639,6 +639,14 @@ if E2E:
         _boot_e2e(request.app, ctx_for_app(request.app))
         return {"ok": True}
 
+    @app.post("/api/e2e/age-sessions", response_model=OkResponse)
+    def e2e_age_sessions(request: Request):
+        """Make every session look long since confirmed (the reauth dialog's trigger)."""
+        from .e2e_seed import age_sessions
+
+        age_sessions(ctx_for_app(request.app).engine)
+        return {"ok": True}
+
     @app.post("/api/e2e/bulk-videos", response_model=OkResponse)
     def e2e_bulk_videos(request: Request, count: int = Query(600, ge=1, le=5000)):
         """Add ``count`` filler videos so paging specs cross a page boundary."""

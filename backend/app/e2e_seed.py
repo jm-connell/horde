@@ -13,6 +13,7 @@ import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import update
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
@@ -139,7 +140,7 @@ def _seed_accounts(engine) -> None:
     """
     from sqlmodel import Session, select
 
-    from .models import User
+    from .models import User, UserSession, utcnow
     from .services.auth import accounts, passwords, permissions
 
     seeded = {name for name, *_ in E2E_ACCOUNTS}
@@ -167,6 +168,22 @@ def _seed_accounts(engine) -> None:
             account.totp_enabled_at = None
             account.totp_last_step = None
             session.add(account)
+        # A long run outlives the ten minutes after which the sensitive admin
+        # actions ask for the password again: every test starts "just signed in".
+        session.execute(update(UserSession).values(reauth_at=utcnow()))
+        session.commit()
+
+
+def age_sessions(engine) -> None:
+    """Make every session look last confirmed an hour ago (to test the reauth dialog)."""
+    from sqlmodel import Session
+
+    from .models import UserSession, utcnow
+
+    with Session(engine) as session:
+        session.execute(
+            update(UserSession).values(reauth_at=utcnow() - timedelta(hours=1))
+        )
         session.commit()
 
 

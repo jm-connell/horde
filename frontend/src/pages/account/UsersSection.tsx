@@ -355,27 +355,34 @@ function UserEditor({
           }
         />
       )}
-      <form
-        className="max-w-sm"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void run({ password }, `Password reset for ${user.username}`).then(
-            () => setPassword("")
-          );
-        }}
-      >
-        <Field
-          label={`New password for ${user.username}`}
-          type="password"
-          value={password}
-          onChange={setPassword}
-          autoComplete="new-password"
-          hint="They are signed out everywhere."
-        />
-        <button type="submit" className={PANEL_BTN} disabled={busy}>
-          Reset password
-        </button>
-      </form>
+      {isSelf ? (
+        <p className="text-sm text-muted">
+          Change your own password under Change password on this page; it asks
+          for your current one.
+        </p>
+      ) : (
+        <form
+          className="max-w-sm"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run({ password }, `Password reset for ${user.username}`).then(
+              () => setPassword("")
+            );
+          }}
+        >
+          <Field
+            label={`New password for ${user.username}`}
+            type="password"
+            value={password}
+            onChange={setPassword}
+            autoComplete="new-password"
+            hint="They are signed out everywhere."
+          />
+          <button type="submit" className={PANEL_BTN} disabled={busy}>
+            Reset password
+          </button>
+        </form>
+      )}
       {user.two_factor_enabled && !isSelf && (
         <div>
           <p className="mb-2 text-sm text-muted">

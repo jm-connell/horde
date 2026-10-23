@@ -4,6 +4,7 @@ export {
   CSRF_HEADER,
   PAGE_SIZE,
   PERMISSION_DENIED_EVENT,
+  REAUTH_REQUIRED_EVENT,
   isOfflineError,
   offlineError,
   withCsrf,
@@ -13,6 +14,7 @@ export type {
   ChatStreamOptions,
   Page,
   ReadOptions,
+  ReauthRequestDetail,
 } from "./api/client";
 export { parseTrashEntryIds, trashEntryIdsOfError } from "./api/trash";
 export type { DeleteResult } from "./api/trash";

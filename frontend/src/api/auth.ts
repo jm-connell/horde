@@ -92,6 +92,17 @@ export const authApi = {
     );
   },
 
+  /**
+   * Prove your password (and a code, with two-step sign-in) again so the server
+   * lets this browser do the sensitive administrator actions for a few minutes.
+   */
+  reauthenticate(password: string, code = ""): Promise<void> {
+    return request<void>(
+      "/api/auth/reauth",
+      jsonInit("POST", { password, code })
+    );
+  },
+
   /** Confirm your own password with the server (rejects with `wrong_password`). */
   verifyPassword(password: string): Promise<void> {
     return request<void>(
