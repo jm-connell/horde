@@ -97,16 +97,31 @@ meanwhile. When Horde can reach the server again, whoever the server says is
 signed in takes over again, and the positions you saved offline wait for your
 next sign-in (as they do for any account).
 
-To make this work with no server, a device that sees you sign in with sharing
-off keeps a check value of your password (PBKDF2-SHA256, 600 000 iterations
-with a random salt). The password itself is never stored and the check value
-never leaves the device. It is kept when you sign out, and removed when you
-turn sharing back on. If your password changes, sign in again on each device
-with the new one (changing it in Account settings on a device does this there
-for you). Unlock appears only for accounts the device has such a value for: an
-administrator who turned your sharing off for you does not have your password,
-so on a device where you have not signed in since, switch to your account while
-online.
+To make this work with no server, a device keeps a check value of your
+password (PBKDF2-SHA256, 600 000 iterations with a random salt) while you keep
+your downloads private. The password itself is never stored and the check value
+never leaves the device. Because it is a derivative of your password that could
+be attacked offline, a device holds one **only while it holds downloads saved by
+your account**:
+
+- It is stored in that browser's IndexedDB (database `horde-offline`, store
+  `deviceAccounts`), next to your name and whether you share. Nothing else of it
+  is anywhere, and the server never sees it.
+- The first time a private account saves a download on a device, Horde asks
+  once: *"So you can open your private downloads offline, confirm your
+  password."* The server checks the password (the same throttle as changing it),
+  then the device stores the check value. If you choose **Not now**, the
+  download is still saved and the Offline page shows a note with **Set up
+  offline unlock**; without it you cannot unlock your account on that device.
+- Signing in on a device that already holds your downloads refreshes it, and so
+  does changing your password in Account settings there. Signing in on a device
+  without your downloads stores nothing.
+- It is kept when you sign out (that is the camping case above), and deleted when
+  the last download of yours is removed from the device, or when you turn
+  sharing back on.
+- If your password changes elsewhere, sign in again on each device with the new
+  one. Unlock appears only for accounts the device has such a value for, so on
+  a device where you have not set it up, switch to your account while online.
 
 !!! note "Privacy between household accounts, not encryption"
     Private downloads are hidden in the app; the files are not encrypted.
@@ -122,8 +137,10 @@ per video. Ask them to share, or remove it.
 
 Downloads you queue from the Download page with the destination *Offline (this
 device)* follow the same rule on the server: while you keep your downloads
-private, other accounts cannot fetch your finished job (`404`), see it in the
-queue list or dismiss it. Administrators still can.
+private, other accounts cannot fetch your job, see it or its progress, edit,
+retry, cancel, change its quality or dismiss it (`404` on every route), and
+adding the same link yourself makes a separate job instead of reporting that
+it is already queued. Administrators still can see them all.
 
 ## Connection status
 

@@ -19,12 +19,20 @@ All notable changes to Horde are documented here. The format follows
   accounts shared ("Saved by jon") and says how many private videos there are,
   with **Switch account** online. With no connection, **Unlock** takes the
   owner's password and lets them watch their own downloads, so nobody is locked
-  out of them. See [Offline](docs/guides/offline.md#sharing).
+  out of them. The device keeps a check value of that password (never the
+  password) only while it holds downloads saved by the account: it asks for the
+  password once, when a private account saves its first download there, and
+  deletes the value with the last download. While unlocked offline, watch
+  progress is queued for the owner and never sent under the browser's session.
+  See [Offline](docs/guides/offline.md#sharing). The password is confirmed
+  with the new `POST /api/auth/verify-password`.
 - **Signed-in devices** in Account settings: every browser signed in to your
   account, with a device label ("Safari on iPhone"), address and last activity.
   Sign any of them out, or sign out all your other devices at once; the browser
   is sent to the sign-in page on its next request. Administrators can see and
   end a member's sessions, or sign them out everywhere, from Users.
+  Signing a device out does not cancel cast links already handed to a TV
+  (`?mt=`); they run out within 12 hours, or when the password changes.
 - **Max disk usage** in Settings → System → Storage: an optional limit (in GB)
   on the library's size, with a usage bar that turns amber from 90 %. Downloads,
   channel auto-downloads and playlist syncs wait while the library is at the
@@ -57,7 +65,9 @@ All notable changes to Horde are documented here. The format follows
   App-wide / Private switch, the pencil on a playlist changes it later, private
   playlists show a lock badge, and other people's App-wide playlists show who
   made them. Any account can make private playlists; App-wide ones still need
-  **Manage playlists**. See [Playlists](docs/guides/playlists.md).
+  **Manage playlists**. Subscribing to a YouTube playlist or syncing one needs
+  the **Download** permission, owner or not. See
+  [Playlists](docs/guides/playlists.md).
 
 ### Changed
 
@@ -92,8 +102,13 @@ All notable changes to Horde are documented here. The format follows
   that account shares its downloads, by other accounts. Before, any account
   with the offline-download permission could fetch another account's finished
   device download (`GET /api/downloads/{id}/file`, ids are sequential) and see
-  it in the queue list. Others now get `404`, and *Dismiss finished* leaves
-  another account's private downloads alone.
+  it in the queue list. Others now get `404` on every job route (read, edit,
+  retry, cancel, change quality, dismiss, progress stream), the queue-wide
+  progress stream leaves their jobs out, and adding the same link makes a
+  separate job instead of answering "already queued" or touching theirs.
+  *Dismiss finished* leaves another account's private downloads alone. The
+  playlist a library download feeds is no longer named to accounts that cannot
+  see that playlist.
 
 ### Upgrade notes
 

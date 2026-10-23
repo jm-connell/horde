@@ -34,7 +34,7 @@ Use this for series that grow over time (for example “2026 PC Build Log” wit
 
 You can also subscribe from the [Download](downloads.md) page when a playlist URL is detected.
 
-Subscribed lists show a **Subscribed** tag under the source line. Expand a row to **Sync now**, **Stop subscribing** (the list stays), or turn a one-shot YouTube import into a subscription with **Subscribe to updates**.
+Subscribing, and **Sync now**, download videos, so they need the **Download** permission even on a playlist you own. Subscribed lists show a **Subscribed** tag under the source line. Expand a row to **Sync now**, **Stop subscribing** (the list stays), or turn a one-shot YouTube import into a subscription with **Subscribe to updates**.
 
 Removed YouTube entries are **not** dropped from Horde. Video files are never deleted by playlist sync. Existing library files are not re-downloaded; titles and views still follow [metadata sync](../settings/library.md).
 
