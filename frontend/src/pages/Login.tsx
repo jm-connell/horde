@@ -34,8 +34,9 @@ export default function LoginPage() {
     setError(null);
     try {
       const { user } = await api.login(username.trim(), password);
-      // The one moment the password is at hand: keep a way to unlock this
-      // account's private downloads on this device with no connection.
+      // The one moment the password is at hand: if this device already holds
+      // this account's private downloads, keep a way to unlock them with no
+      // connection.
       await deviceAccounts.record(user, password);
       enterApp();
     } catch (err) {

@@ -268,6 +268,7 @@ class OfflineManager {
     this.items.delete(videoId);
     this.live.delete(videoId);
     this.emit(true);
+    this.dropUnlockIfLast(item.owner);
     await deleteItem(videoId).catch(() => undefined);
     await deviceResume.forget(videoId).catch((err) => {
       console.warn("Could not forget the offline resume positions", err);
@@ -315,6 +316,9 @@ class OfflineManager {
     const old = this.items.get(seed.videoId);
     if (old) await this.deleteStoredData(old);
     const viewer = deviceAccounts.getViewer();
+    const firstOfViewer =
+      viewer !== null &&
+      ![...this.items.values()].some((i) => i.owner === viewer.id);
     const item: OfflineItem = {
       ...seed,
       ...(viewer ? { owner: viewer.id, ownerName: viewer.username } : {}),
@@ -329,8 +333,33 @@ class OfflineManager {
       error: null,
     };
     await this.save(item);
+    // Someone else's copy was replaced by this account's.
+    if (old?.owner !== viewer?.id) this.dropUnlockIfLast(old?.owner);
+    if (firstOfViewer) void this.offerUnlockSetup(viewer.id);
     this.requestPersistence();
     this.pump();
+  }
+
+  /**
+   * The password check value (see offline/accounts) lives only while the device
+   * holds downloads of the account: delete it with the last one.
+   */
+  private dropUnlockIfLast(owner: number | undefined): void {
+    if (owner === undefined) return;
+    if ([...this.items.values()].some((i) => i.owner === owner)) return;
+    void deviceAccounts.clearVerifier(owner);
+  }
+
+  /**
+   * The account just saved its first download here: if it keeps them private
+   * and the device cannot yet check its password, ask for it (once).
+   */
+  private async offerUnlockSetup(userId: number): Promise<void> {
+    await deviceAccounts.load();
+    const account = deviceAccounts.getAccounts().get(userId);
+    if (account && !account.shareDownloads && !account.verifier) {
+      deviceAccounts.requestSetup(userId);
+    }
   }
 
   private onConnectivity(): void {

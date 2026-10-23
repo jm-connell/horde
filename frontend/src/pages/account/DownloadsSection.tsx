@@ -9,8 +9,9 @@ import { PANEL_BTN } from "../settings/constants";
 
 /**
  * Whether other accounts on a device may see the videos you save there. Stopping
- * asks for your password: this device keeps a check value made from it, so you
- * can still unlock your downloads with no connection.
+ * asks for your password: if this device already holds your downloads it keeps a
+ * check value made from it, so you can still unlock them with no connection
+ * (otherwise it asks when you save the first one).
  */
 export default function DownloadsSection() {
   const { user, refresh } = useAuth();
@@ -29,7 +30,8 @@ export default function DownloadsSection() {
     setError(null);
     try {
       const updated = await api.setShareDownloads(share, current);
-      // Sharing again needs no check value; stopping makes one from the password.
+      // Sharing again needs no check value; stopping makes one from the password
+      // when downloads of yours are already on this device.
       await deviceAccounts.record(updated, current);
       await refresh();
       setAsking(false);

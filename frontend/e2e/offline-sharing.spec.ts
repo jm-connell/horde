@@ -53,6 +53,45 @@ async function savedVideos(page: Page) {
   );
 }
 
+/** The accounts this browser knows, and whether each has a password check value. */
+async function deviceAccountRows(page: Page) {
+  return page.evaluate(
+    () =>
+      new Promise<{ userId: number; username: string; verifier?: unknown }[]>(
+        (resolve, reject) => {
+          const open = indexedDB.open("horde-offline");
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const all = open.result
+              .transaction("deviceAccounts")
+              .objectStore("deviceAccounts")
+              .getAll();
+            all.onerror = () => reject(all.error);
+            all.onsuccess = () => resolve(all.result);
+          };
+        }
+      )
+  );
+}
+
+async function verifierOf(page: Page, username: string) {
+  const row = (await deviceAccountRows(page)).find(
+    (a) => a.username === username
+  );
+  return row?.verifier;
+}
+
+/** The prompt shown when a private account saves its first download. */
+const SETUP_DIALOG = "Open your private downloads offline";
+
+async function confirmUnlockSetup(page: Page, password: string) {
+  const dialog = page.getByRole("dialog", { name: SETUP_DIALOG });
+  await expect(dialog).toBeVisible();
+  await dialog.getByLabel("Your password").fill(password);
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(dialog).toHaveCount(0);
+}
+
 /** Save the video for offline viewing from the watch page's ••• menu. */
 async function saveForOffline(page: Page, id: number) {
   await page.goto(`/watch/${id}`);
@@ -108,7 +147,12 @@ test.describe("sharing offline downloads between accounts", () => {
       await page.goto("/");
       await page.evaluate(() => navigator.serviceWorker.ready);
       await setSharing(page, false, ADMIN.password);
+      // Signing in left no password check value: nothing of admin's is here yet.
+      expect(await verifierOf(page, "admin")).toBeUndefined();
       await saveForOffline(page, id);
+      // The first download asks to confirm the password, once.
+      await confirmUnlockSetup(page, ADMIN.password);
+      expect(await verifierOf(page, "admin")).toBeDefined();
       // Stamped with the account that saved it.
       expect((await savedVideos(page))[0].owner).toBeGreaterThan(0);
     });
@@ -184,6 +228,75 @@ test.describe("sharing offline downloads between accounts", () => {
       await expect(page).toHaveURL(/\/login\?username=admin$/);
       await expect(page.getByLabel("Username")).toHaveValue("admin");
     });
+  });
+
+  test("cancelling the password prompt still saves the download and the Offline page offers the setup", async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    const id = await videoId(page);
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await setSharing(page, false, ADMIN.password);
+
+    await saveForOffline(page, id);
+    const dialog = page.getByRole("dialog", { name: SETUP_DIALOG });
+    await expect(dialog).toBeVisible();
+    // A wrong password is refused by the server and nothing is kept.
+    await dialog.getByLabel("Your password").fill("not-the-password");
+    await dialog.getByRole("button", { name: "Confirm" }).click();
+    await expect(dialog.getByText("That isn’t your password.")).toBeVisible();
+    await dialog.getByRole("button", { name: "Not now" }).click();
+    await expect(dialog).toHaveCount(0);
+    expect(await verifierOf(page, "admin")).toBeUndefined();
+    expect((await savedVideos(page)).map((v) => v.status)).toEqual([
+      "complete",
+    ]);
+
+    await page.goto("/offline");
+    const hint = page.locator("[data-horde='offline-unlock-hint']");
+    await expect(hint).toContainText("Offline unlock isn’t set up");
+    await hint.getByRole("button", { name: "Set up offline unlock" }).click();
+    await confirmUnlockSetup(page, ADMIN.password);
+    await expect(hint).toHaveCount(0);
+    expect(await verifierOf(page, "admin")).toBeDefined();
+  });
+
+  test("the password check value goes with the last download and stays across sign-outs", async ({
+    page,
+  }) => {
+    test.setTimeout(150_000);
+    const id = await videoId(page);
+    await page.goto("/");
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await setSharing(page, false, ADMIN.password);
+    await saveForOffline(page, id);
+    await confirmUnlockSetup(page, ADMIN.password);
+
+    // Signing out, and another account signing in, leave it for the owner.
+    await signOut(page);
+    await signInAs(page, MEMBER);
+    expect(await verifierOf(page, "admin")).toBeDefined();
+    // The member has no downloads here: nothing of theirs is kept.
+    expect(await verifierOf(page, "member")).toBeUndefined();
+    // Signing in again keeps it fresh, since the downloads are still here.
+    await signOut(page);
+    await signInAs(page, ADMIN);
+    expect(await verifierOf(page, "admin")).toBeDefined();
+
+    await page.goto("/offline");
+    await page
+      .getByRole("button", { name: `Remove ${TITLE} from this device` })
+      .click();
+    await page.getByRole("button", { name: "Remove", exact: true }).click();
+    await expect(
+      page.locator("[data-horde='offline-page']").getByText(TITLE)
+    ).toHaveCount(0);
+    await expect.poll(() => verifierOf(page, "admin")).toBeUndefined();
+    // The account itself is remembered.
+    expect((await deviceAccountRows(page)).map((a) => a.username)).toContain(
+      "admin"
+    );
   });
 
   test("sharing again shows the video to the next account as saved by its owner", async ({

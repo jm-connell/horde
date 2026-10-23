@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import PrivateDownloadsNotice from "../components/PrivateDownloadsNotice";
 import { useAuth } from "../context/AuthContext";
 import { useConfirm } from "../context/ConfirmContext";
-import type { AccountRegistry } from "../offline/accounts";
+import { deviceAccounts, type AccountRegistry } from "../offline/accounts";
 import { connectivity } from "../offline/connectivity";
 import type { OfflineItem } from "../offline/db";
 import {
@@ -261,6 +261,13 @@ export default function OfflinePage({
     };
   }, [snap.items]);
 
+  const me = viewer === undefined ? undefined : accounts.get(viewer);
+  const needsUnlockSetup =
+    !!me &&
+    !me.shareDownloads &&
+    !me.verifier &&
+    snap.items.some((i) => i.owner === viewer);
+
   const summary = [
     `${formatSize(totalBytes) || "0 B"} used by downloads`,
     quota?.usage != null && quota.quota
@@ -298,6 +305,28 @@ export default function OfflinePage({
       <p className="mb-5 text-xs text-muted">{summary}</p>
 
       <PrivateDownloadsNotice groups={snap.hidden} />
+
+      {needsUnlockSetup ? (
+        <div
+          data-horde="offline-unlock-hint"
+          className="ui-panel mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-4 py-3"
+        >
+          <p className="min-w-0 flex-1 text-sm text-gray-200">
+            Offline unlock isn’t set up for your private downloads. If someone
+            else is signed in on this device and you have no connection, you
+            won’t be able to open them.
+          </p>
+          {conn.status !== "offline" && viewer !== undefined ? (
+            <button
+              type="button"
+              className={btn}
+              onClick={() => deviceAccounts.requestSetup(viewer)}
+            >
+              Set up offline unlock
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {snap.unsupported ? (
         <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">

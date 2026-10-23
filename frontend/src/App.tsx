@@ -30,6 +30,7 @@ import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
+import OfflineUnlockSetup from "./components/OfflineUnlockSetup";
 import { ConfirmProvider } from "./context/ConfirmContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
@@ -241,6 +242,7 @@ export default function App() {
                   <SearchProvider>
                     <PlaybackProvider>
                       <AppShell />
+                      <OfflineUnlockSetup />
                       <OverlayScrollThumb viewport />
                     </PlaybackProvider>
                   </SearchProvider>

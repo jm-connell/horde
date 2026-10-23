@@ -158,6 +158,9 @@ function user(
   };
 }
 
+const HAS_ITEMS = async () => true;
+const NO_ITEMS = async () => false;
+
 describe("DeviceAccounts", () => {
   it("remembers who signed in and whether they share", async () => {
     const { store, stored } = memoryStore();
@@ -173,9 +176,9 @@ describe("DeviceAccounts", () => {
     expect(stored.get(JON)?.verifier).toBeUndefined();
   });
 
-  it("makes a check value at the sign-in of an account that does not share", async () => {
+  it("makes a check value at the sign-in of a private account that has downloads here", async () => {
     const { store, stored } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(JON, "jon", false), "jon-password");
     const verifier = stored.get(JON)?.verifier;
     expect(verifier).toBeDefined();
@@ -186,7 +189,7 @@ describe("DeviceAccounts", () => {
 
   it("keeps the check value when the account is seen again without a password", async () => {
     const { store, stored } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(JON, "jon", false), "jon-password");
     const first = stored.get(JON)?.verifier;
     // The server's answer on a later visit (or someone else signing in).
@@ -197,7 +200,7 @@ describe("DeviceAccounts", () => {
 
   it("replaces the check value at the next sign-in with a new password", async () => {
     const { store } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(JON, "jon", false), "old-password");
     await accounts.record(user(JON, "jon", false), "new-password");
     expect(await accounts.unlock(JON, "old-password")).toBeNull();
@@ -206,7 +209,7 @@ describe("DeviceAccounts", () => {
 
   it("drops the check value when the account shares again", async () => {
     const { store, stored } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(JON, "jon", false), "jon-password");
     await accounts.record(user(JON, "jon", true));
     expect(stored.get(JON)?.shareDownloads).toBe(true);
@@ -216,10 +219,73 @@ describe("DeviceAccounts", () => {
 
   it("has nothing to unlock for an account that shares or is unknown", async () => {
     const { store } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(KID, "kid", true), "kid-password");
     expect(await accounts.unlock(KID, "kid-password")).toBeNull();
     expect(await accounts.unlock(99, "x")).toBeNull();
+  });
+
+  it("keeps no check value at a sign-in when the account has no downloads here", async () => {
+    const { store, stored } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, NO_ITEMS);
+    await accounts.record(user(JON, "jon", false), "jon-password");
+    expect(stored.get(JON)?.verifier).toBeUndefined();
+    expect(await accounts.unlock(JON, "jon-password")).toBeNull();
+    expect(accounts.hasVerifier(JON)).toBe(false);
+  });
+
+  it("makes one once the first download is saved and the password is confirmed", async () => {
+    const { store, stored } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, NO_ITEMS);
+    await accounts.record(user(JON, "jon", false), "jon-password");
+    await accounts.setVerifier(JON, "jon-password");
+    expect(stored.get(JON)?.verifier).toBeDefined();
+    expect(accounts.hasVerifier(JON)).toBe(true);
+    expect((await accounts.unlock(JON, "jon-password"))?.userId).toBe(JON);
+  });
+
+  it("refreshes an existing check value at a sign-in even if asked later", async () => {
+    const { store } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, NO_ITEMS);
+    await accounts.record(user(JON, "jon", false), "x");
+    await accounts.setVerifier(JON, "old-password");
+    await accounts.record(user(JON, "jon", false), "new-password");
+    expect(await accounts.unlock(JON, "old-password")).toBeNull();
+    expect(await accounts.unlock(JON, "new-password")).not.toBeNull();
+  });
+
+  it("deletes the check value, and keeps the account, with the last download", async () => {
+    const { store, stored } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
+    await accounts.record(user(JON, "jon", false), "jon-password");
+    expect(accounts.hasVerifier(JON)).toBe(true);
+    await accounts.clearVerifier(JON);
+    expect(accounts.hasVerifier(JON)).toBe(false);
+    expect(stored.get(JON)?.verifier).toBeUndefined();
+    expect(stored.get(JON)?.username).toBe("jon");
+    await accounts.clearVerifier(JON); // nothing left to delete
+    await accounts.clearVerifier(99); // unknown account
+  });
+
+  it("does not make a check value for an account that shares", async () => {
+    const { store, stored } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
+    await accounts.record(user(KID, "kid", true), "kid-password");
+    await accounts.setVerifier(KID, "kid-password");
+    expect(stored.get(KID)?.verifier).toBeUndefined();
+  });
+
+  it("lets the UI ask once for the password, and be told to stop asking", async () => {
+    const { store } = memoryStore();
+    const accounts = new DeviceAccounts(store, FAST, NO_ITEMS);
+    let calls = 0;
+    accounts.subscribe(() => (calls += 1));
+    expect(accounts.getSetupRequest()).toBeNull();
+    accounts.requestSetup(JON);
+    expect(accounts.getSetupRequest()).toBe(JON);
+    accounts.dismissSetup();
+    expect(accounts.getSetupRequest()).toBeNull();
+    expect(calls).toBe(2);
   });
 
   it("loads what an earlier visit stored, offline", async () => {
@@ -231,7 +297,7 @@ describe("DeviceAccounts", () => {
 
   it("answers whether the signed-in account may see a saved video", async () => {
     const { store } = memoryStore();
-    const accounts = new DeviceAccounts(store, FAST);
+    const accounts = new DeviceAccounts(store, FAST, HAS_ITEMS);
     await accounts.record(user(JON, "jon", false), "jon-password");
     accounts.setViewer({ id: KID, username: "kid" });
     expect(await accounts.canSee(saved(1, JON))).toBe(false);

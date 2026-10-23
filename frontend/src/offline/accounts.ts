@@ -9,13 +9,18 @@
  *
  * Because the connection may be gone, the sharing choice of every account that
  * signed in here is kept on the device (refreshed whenever the server answers).
- * For an account that does not share, the registry also keeps a check value for
- * its password, so the owner can unlock the downloads with no connection and
- * nobody is locked out of them (see `createVerifier`).
+ * For an account that does not share, the registry can also keep a check value
+ * for its password, so the owner can unlock the downloads with no connection and
+ * nobody is locked out of them (see `createVerifier`). A check value is a
+ * crackable derivative of the password, so it exists on a device only while the
+ * device holds downloads owned by that account: it is made when that account
+ * saves its first download there (the password confirmed with the server), or at
+ * a sign-in when the downloads are already there, and deleted with the last one.
  */
 import type { AuthUser } from "../types";
 import {
   getAllDeviceAccounts,
+  getAllItems,
   putDeviceAccount,
   type DeviceAccount,
   type OfflineItem,
@@ -170,6 +175,18 @@ const indexedDbStore: AccountStore = {
   put: putDeviceAccount,
 };
 
+/** Whether this device holds downloads saved by the account (swapped in tests). */
+export type OwnsItems = (userId: number) => Promise<boolean>;
+
+const ownsItemsInIndexedDb: OwnsItems = async (userId) => {
+  try {
+    return (await getAllItems()).some((item) => item.owner === userId);
+  } catch (err) {
+    console.warn("Could not look for this account's downloads", err);
+    return false;
+  }
+};
+
 /** The signed-in account as the device knows it. */
 export interface Viewer {
   id: number;
@@ -183,10 +200,12 @@ export class DeviceAccounts {
   private viewer: Viewer | null = null;
   private loading: Promise<void> | null = null;
   private listeners = new Set<() => void>();
+  private setupFor: number | null = null;
 
   constructor(
     private store: AccountStore = indexedDbStore,
-    private iterations: number = VERIFIER_ITERATIONS
+    private iterations: number = VERIFIER_ITERATIONS,
+    private ownsItems: OwnsItems = ownsItemsInIndexedDb
   ) {}
 
   /** Read the stored registry (once). Never rejects: the device may lack storage. */
@@ -227,12 +246,36 @@ export class DeviceAccounts {
     this.notify();
   }
 
+  /** The account the UI should ask to confirm a password for (see `requestSetup`). */
+  getSetupRequest = (): number | null => this.setupFor;
+
+  /**
+   * Ask the UI to get this account's password so the device can keep a check
+   * value for it: the account has just saved its first download here.
+   */
+  requestSetup(userId: number): void {
+    this.setupFor = userId;
+    this.notify();
+  }
+
+  dismissSetup(): void {
+    if (this.setupFor === null) return;
+    this.setupFor = null;
+    this.notify();
+  }
+
+  /** Whether the device can check this account's password with no connection. */
+  hasVerifier(userId: number): boolean {
+    return this.accounts.get(userId)?.verifier !== undefined;
+  }
+
   /**
    * Note an account the server says is signed in. `password` is given only at
-   * a sign-in (the one moment it is at hand): an account that does not share
-   * gets a check value made from it, replacing the old one. Without it, the
-   * old check value stays (it is kept across sign-outs). An account that
-   * shares needs none, so its check value is deleted.
+   * a sign-in (the one moment it is at hand). An account that does not share
+   * gets a check value made from it only if the device already holds its
+   * downloads, or already had a check value (which is replaced). Without a
+   * password, the old check value stays (it is kept across sign-outs). An
+   * account that shares needs none, so its check value is deleted.
    */
   async record(user: AuthUser, password?: string): Promise<void> {
     await this.load();
@@ -241,17 +284,11 @@ export class DeviceAccounts {
     let verifier: PasswordVerifier | undefined;
     if (!shareDownloads) {
       verifier = existing?.verifier;
-      if (password !== undefined) {
-        try {
-          verifier = await createVerifier(password, this.iterations);
-        } catch (err) {
-          // No WebCrypto outside a secure context (plain http), where nothing
-          // can be saved for offline anyway.
-          console.warn(
-            "Could not make an offline unlock for this account",
-            err
-          );
-        }
+      if (
+        password !== undefined &&
+        (verifier !== undefined || (await this.ownsItems(user.id)))
+      ) {
+        verifier = await this.tryCreateVerifier(password, verifier);
       }
     }
     const next: DeviceAccount = {
@@ -264,7 +301,47 @@ export class DeviceAccounts {
     };
     if (password === undefined && existing && sameAccount(existing, next))
       return;
-    this.accounts = new Map(this.accounts).set(user.id, next);
+    await this.put(next);
+  }
+
+  /**
+   * Keep a check value for an account that does not share (its password was
+   * just confirmed with the server). Does nothing for an unknown account.
+   */
+  async setVerifier(userId: number, password: string): Promise<void> {
+    await this.load();
+    const account = this.accounts.get(userId);
+    if (!account || account.shareDownloads) return;
+    const verifier = await this.tryCreateVerifier(password, account.verifier);
+    if (verifier) await this.put({ ...account, verifier });
+  }
+
+  /** Forget the check value: the account has no downloads left on this device. */
+  async clearVerifier(userId: number): Promise<void> {
+    await this.load();
+    const account = this.accounts.get(userId);
+    if (!account?.verifier) return;
+    const without: DeviceAccount = { ...account };
+    delete without.verifier;
+    await this.put(without);
+  }
+
+  private async tryCreateVerifier(
+    password: string,
+    fallback: PasswordVerifier | undefined
+  ): Promise<PasswordVerifier | undefined> {
+    try {
+      return await createVerifier(password, this.iterations);
+    } catch (err) {
+      // No WebCrypto outside a secure context (plain http), where nothing can
+      // be saved for offline anyway.
+      console.warn("Could not make an offline unlock for this account", err);
+      return fallback;
+    }
+  }
+
+  private async put(next: DeviceAccount): Promise<void> {
+    this.accounts = new Map(this.accounts).set(next.userId, next);
     this.notify();
     try {
       await this.store.put(next);

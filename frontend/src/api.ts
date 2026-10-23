@@ -466,6 +466,14 @@ export const api = {
     );
   },
 
+  /** Confirm your own password with the server (rejects with `wrong_password`). */
+  verifyPassword(password: string): Promise<void> {
+    return request<void>(
+      "/api/auth/verify-password",
+      jsonInit("POST", { password })
+    );
+  },
+
   /** Your signed-in browsers, most recently active first. */
   async listSessions(): Promise<DeviceSession[]> {
     const res = await request<{ items: DeviceSession[] }>("/api/auth/sessions");
