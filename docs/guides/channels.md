@@ -84,7 +84,7 @@ News and daily channels pile up. A channel can have a **retention rule** that mo
 |-------|-----------------|
 | **Keep the newest N** | Everything but the newest N videos of the channel (by publish date, else the date it was added) |
 | **Older than D days** | Videos added to Horde more than D days ago |
-| **Finished more than D days ago** | Videos someone finished watching (from 90 % on) more than D days ago, on any account |
+| **Finished more than D days ago** | Videos someone watched to the end more than D days ago, on any account |
 
 A video that matches any limit goes. Whatever the limits say, these **stay**:
 
@@ -98,7 +98,7 @@ Before you save, the preview says how much a rule would remove ("This would move
 
 A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
 
-Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Seeking back to the very start of a video also counts as finishing it.
+Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Only playing a video to its end counts as finishing it: opening it, seeking back to the start or leaving at 90 % does not.
 
 Anyone may see a channel's rule; saving one needs the `delete_videos` permission. The API is `GET` / `PUT /api/channels/retention` and `POST /api/channels/retention/preview`.
 

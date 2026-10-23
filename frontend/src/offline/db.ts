@@ -112,7 +112,10 @@ export interface OwnedPosition {
 }
 
 /** A progress save that could not reach the server, waiting to be sent. */
-export type PendingProgress = OwnedPosition;
+export interface PendingProgress extends OwnedPosition {
+  /** The video played to its end (absent on saves queued before this existed). */
+  finished?: boolean;
+}
 
 /** Where an account is in a video saved on this device (used offline). */
 export type ResumePosition = OwnedPosition;

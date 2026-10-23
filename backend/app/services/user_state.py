@@ -48,6 +48,8 @@ def record_progress(
     video_id: int,
     position_sec: float,
     watched_at: datetime | None = None,
+    *,
+    finished: bool = False,
 ) -> None:
     """Upsert the user's position, stamped with when it was reached.
 
@@ -57,12 +59,16 @@ def record_progress(
     a phone coming back online must not rewind the place the user reached on
     another device meanwhile. A time in the future counts as now.
 
-    A position of 0 is how a finished video is saved (the player clears it from 90%
-    on), so it stamps ``finished_at``; any other position clears it again.
+    ``finished`` is the player saying the video played to its end: it stamps
+    ``finished_at`` (the position is saved as 0). A plain 0 is not a finish, the
+    player reports it on opening a video and after seeking to the start, so it
+    leaves ``finished_at`` as it was; a position above 0 clears it again.
     """
     now = utcnow()
     stamp = now if watched_at is None else min(as_utc(watched_at), now)
-    finished_at = stamp if position_sec == 0 else None
+    if finished:
+        position_sec = 0.0
+    finished_at = stamp if finished else None
     statement = sqlite_insert(UserVideoState).values(
         user_id=user_id,
         video_id=video_id,
@@ -78,14 +84,16 @@ def record_progress(
             col(UserVideoState.last_watched_at) < stamp,
         )
     )
+    changes: dict[str, object] = {
+        "position_sec": position_sec,
+        "last_watched_at": stamp,
+    }
+    if finished or position_sec > 0:
+        changes["finished_at"] = finished_at
     session.execute(
         statement.on_conflict_do_update(
             index_elements=["user_id", "video_id"],
-            set_={
-                "position_sec": position_sec,
-                "last_watched_at": stamp,
-                "finished_at": finished_at,
-            },
+            set_=changes,
             where=newer_only,
         )
     )

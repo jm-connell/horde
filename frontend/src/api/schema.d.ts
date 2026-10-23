@@ -6461,6 +6461,12 @@ export interface components {
         };
         /** WatchProgressUpdate */
         WatchProgressUpdate: {
+            /**
+             * Finished
+             * @description The video played to its end. The position is then saved as 0 and the finish is recorded (channel retention's watched rule reads it). A plain save of 0 is not a finish.
+             * @default false
+             */
+            finished: boolean;
             /** Position Sec */
             position_sec: number;
             /**

@@ -154,8 +154,8 @@ All notable changes to Horde are documented here. The format follows
   `user_video_state.finished_at` (new tables and plain `ADD COLUMN`s; `videos` is
   not rebuilt). Back up and roll back as for any migration (the older version
   refuses a database it does not know).
-- Retention's "finished more than D days ago" counts only videos finished after
-  this update: Horde did not record the date before (a half-watch that expired
+- Retention's "finished more than D days ago" counts only videos played to the
+  end after this update: Horde did not record the date before (a half-watch that expired
   looks the same as a finished video in the old data), so earlier views never
   make a video removable.
 - Database migration `0013_download_job_origin` adds the `download_jobs.origin`

@@ -85,7 +85,7 @@ describe("PendingProgressQueue", () => {
       classify: () => "stop" as const,
     });
     expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(11, 42, NOW);
+    expect(send).toHaveBeenCalledWith(11, 42, NOW, false);
     expect(rows()).toEqual([rec(1, 10)]);
   });
 
@@ -173,6 +173,34 @@ describe("PendingProgressQueue", () => {
     await first;
     expect(sent).toEqual([10, 20]);
     expect(rows()).toEqual([]);
+  });
+
+  it("sends whether a queued save was a finish; older records were not", async () => {
+    const { store } = memoryStore([
+      { ...rec(1, 10), finished: true },
+      rec(1, 11),
+    ]);
+    const queue = new PendingProgressQueue(store, () => NOW);
+    const send = vi.fn(async () => undefined);
+    await queue.flush({
+      whoAmI: async () => 1,
+      send,
+      classify: () => "stop" as const,
+    });
+    expect(send).toHaveBeenNthCalledWith(1, 10, 42, NOW, true);
+    expect(send).toHaveBeenNthCalledWith(2, 11, 42, NOW, false);
+  });
+
+  it("queues a finish with its flag", async () => {
+    const { store, rows } = memoryStore();
+    const queue = new PendingProgressQueue(store, () => NOW);
+    queue.setOwner(7);
+    await queue.add(10, 0, true);
+    await queue.add(11, 5);
+    expect(rows()).toEqual([
+      { owner: 7, videoId: 10, positionSec: 0, at: NOW, finished: true },
+      { owner: 7, videoId: 11, positionSec: 5, at: NOW },
+    ]);
   });
 
   it("keeps a record that fails with a server error and carries on with the next", async () => {

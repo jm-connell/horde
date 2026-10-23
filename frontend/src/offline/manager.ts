@@ -392,8 +392,8 @@ class OfflineManager {
         const state = await api.getAuthState();
         return state.authenticated && state.user ? state.user.id : null;
       },
-      send: (videoId, positionSec, at) =>
-        api.syncProgress(videoId, positionSec, at),
+      send: (videoId, positionSec, at, finished) =>
+        api.syncProgress(videoId, positionSec, at, finished),
       classify: (err) =>
         classifySendFailure(err instanceof ApiError ? err.status : null),
     });

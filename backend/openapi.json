@@ -9733,6 +9733,12 @@
       },
       "WatchProgressUpdate": {
         "properties": {
+          "finished": {
+            "default": false,
+            "description": "The video played to its end. The position is then saved as 0 and the finish is recorded (channel retention's watched rule reads it). A plain save of 0 is not a finish.",
+            "title": "Finished",
+            "type": "boolean"
+          },
           "position_sec": {
             "maximum": 10000000.0,
             "minimum": 0.0,

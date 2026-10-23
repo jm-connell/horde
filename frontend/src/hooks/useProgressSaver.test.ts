@@ -27,9 +27,13 @@ function manualTimers() {
 
 function saverWithLog() {
   const saved: [number, number][] = [];
+  const finished: number[] = [];
   const t = manualTimers();
-  const saver = new ProgressSaver((id, sec) => saved.push([id, sec]), t.timers);
-  return { saver, saved, ...t };
+  const saver = new ProgressSaver((id, sec, done) => {
+    saved.push([id, sec]);
+    if (done) finished.push(id);
+  }, t.timers);
+  return { saver, saved, finished, ...t };
 }
 
 describe("positionToSave", () => {
@@ -91,7 +95,7 @@ describe("ProgressSaver", () => {
   });
 
   it("records a finished video as 0, not its last unsaved position", () => {
-    const { saver, saved, fire } = saverWithLog();
+    const { saver, saved, finished, fire } = saverWithLog();
     saver.report(1, 250, 300);
     saver.report(1, 260, 300);
     saver.finish(1);
@@ -100,5 +104,7 @@ describe("ProgressSaver", () => {
       [1, 250],
       [1, 0],
     ]);
+    // Only the finish says so: a 0 from a seek or a 90% flush is not one.
+    expect(finished).toEqual([1]);
   });
 });

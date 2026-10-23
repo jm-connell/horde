@@ -127,7 +127,9 @@ def test_remove_watched_needs_a_finished_video_and_the_wait(
     session, add_video, admin_user, member_user
 ):
     seen, partly, unseen = _news(add_video, 3)
-    user_state.record_progress(session, admin_user.id, seen.id, 0)  # finished
+    user_state.record_progress(
+        session, admin_user.id, seen.id, 0, finished=True
+    )
     user_state.record_progress(session, member_user.id, partly.id, 30)  # partway
     row = _rule(session, remove_watched_after_days=14)
 
@@ -153,7 +155,7 @@ def test_a_half_watch_that_expired_is_not_finished(session, add_video, admin_use
 
 def test_watching_again_clears_finished(session, add_video, admin_user):
     (video,) = _news(add_video, 1)
-    user_state.record_progress(session, admin_user.id, video.id, 0)
+    user_state.record_progress(session, admin_user.id, video.id, 0, finished=True)
     assert session.exec(select(UserVideoState)).one().finished_at is not None
 
     user_state.record_progress(session, admin_user.id, video.id, 25)
@@ -283,7 +285,7 @@ def test_finished_by_one_person_but_partway_for_another_stays(
     session, add_video, admin_user, member_user
 ):
     (video,) = _news(add_video, 1, start_age=100)
-    user_state.record_progress(session, admin_user.id, video.id, 0)
+    user_state.record_progress(session, admin_user.id, video.id, 0, finished=True)
     user_state.record_progress(session, member_user.id, video.id, 50)
     row = _rule(session, remove_watched_after_days=1)
 

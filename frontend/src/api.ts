@@ -588,21 +588,32 @@ export const api = {
     );
   },
 
-  async saveProgress(id: number, positionSec: number): Promise<void> {
+  /** Save the position; `finished` records that the video played to its end. */
+  async saveProgress(
+    id: number,
+    positionSec: number,
+    finished = false
+  ): Promise<void> {
     notifyOfflineProgress(id, positionSec);
     // Offline-only device downloads have no server record.
     if (id < 0) return;
     // Acting as an account unlocked on this device: the session cookie may be
     // somebody else's, so never send live. The save waits for its owner.
     if (unlockedAccountId() !== null) {
-      await pendingProgress.add(id, positionSec).catch(() => undefined);
+      await pendingProgress
+        .add(id, positionSec, finished)
+        .catch(() => undefined);
       return;
     }
     try {
       await request<void>(`/api/videos/${id}/progress`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position_sec: positionSec }),
+        body: JSON.stringify(
+          finished
+            ? { position_sec: positionSec, finished }
+            : { position_sec: positionSec }
+        ),
         // Sent as the page is hidden or closed too: let it outlive the page.
         keepalive: true,
       });
@@ -610,7 +621,9 @@ export const api = {
       if (!isNetworkFailure(err)) throw err;
       // Sync when the connection is back (offline/manager flushes these),
       // for the account that is signed in now.
-      await pendingProgress.add(id, positionSec).catch(() => undefined);
+      await pendingProgress
+        .add(id, positionSec, finished)
+        .catch(() => undefined);
     }
   },
 
@@ -619,13 +632,19 @@ export const api = {
    * when it was made: the server keeps it only if nothing newer was saved
    * since, on any device.
    */
-  syncProgress(id: number, positionSec: number, at: number): Promise<void> {
+  syncProgress(
+    id: number,
+    positionSec: number,
+    at: number,
+    finished = false
+  ): Promise<void> {
     return request<void>(`/api/videos/${id}/progress`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         position_sec: positionSec,
         watched_at: new Date(at).toISOString(),
+        ...(finished ? { finished } : {}),
       }),
     });
   },

@@ -629,15 +629,21 @@ def update_progress(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     # Treat the first few seconds as "not started" so brief opens don't clutter
-    # the Continue watching row. A reset to 0 (on finish) is always honored.
-    # Near-complete watches (>=90%) are treated as finished — clear progress.
+    # the Continue watching row. A reset to 0 is always honored, but only an
+    # explicit ``finished`` counts as having watched the video.
+    # Near-complete watches (>=90%) clear progress so it leaves Continue watching.
     position = max(0.0, payload.position_sec)
     duration = video.duration_sec
     if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
-    if position >= 5 or position == 0:
+    if position >= 5 or position == 0 or payload.finished:
         user_state.record_progress(
-            session, user.id, video_id, position, payload.watched_at
+            session,
+            user.id,
+            video_id,
+            position,
+            payload.watched_at,
+            finished=payload.finished,
         )
     return Response(status_code=204)
 
