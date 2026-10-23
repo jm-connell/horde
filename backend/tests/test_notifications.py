@@ -471,6 +471,75 @@ def test_an_unreachable_server_is_reported_without_the_address(client, stub):
     }
 
 
+class _SlowServer:
+    """A raw socket server that sends ``preamble`` and then drips bytes slowly."""
+
+    def __init__(self, preamble: bytes, *, drips: int, pause: float) -> None:
+        import socket
+
+        self.sock = socket.socket()
+        self.sock.bind(("127.0.0.1", 0))
+        self.sock.listen(1)
+        self.base = f"http://127.0.0.1:{self.sock.getsockname()[1]}"
+        self.preamble, self.drips, self.pause = preamble, drips, pause
+        self.thread = threading.Thread(target=self._serve, daemon=True)
+        self.thread.start()
+
+    def _serve(self) -> None:
+        try:
+            conn, _ = self.sock.accept()
+        except OSError:
+            return
+        with conn:
+            conn.recv(65536)
+            try:
+                if self.preamble:
+                    conn.sendall(self.preamble)
+                for _ in range(self.drips):
+                    time.sleep(self.pause)
+                    conn.sendall(b"x")
+            except OSError:
+                pass  # the client gave up, which is the point of the test
+
+    def close(self) -> None:
+        self.sock.close()
+        self.thread.join(10)
+
+
+def test_a_response_body_is_not_waited_for(monkeypatch):
+    """Only the status counts: a body that trickles in must not hold the sender."""
+    from app.services.notifications import delivery
+
+    server = _SlowServer(
+        b"HTTP/1.1 200 OK\r\nContent-Length: 100000000\r\n\r\n", drips=8, pause=0.5
+    )
+    try:
+        started = time.monotonic()
+        status = delivery.send({"kind": "webhook", "url": server.base}, sample())
+        assert status == 200
+        assert time.monotonic() - started < 2.0
+    finally:
+        server.close()
+
+
+def test_a_server_that_never_finishes_answering_hits_the_deadline(monkeypatch):
+    """Each read arrives inside the per-read timeout, so only a total deadline ends it."""
+    from app.services.notifications import delivery
+
+    monkeypatch.setattr(delivery, "TIMEOUT_SEC", 1.0)
+    monkeypatch.setattr(delivery, "DEADLINE_SEC", 1.0)
+    server = _SlowServer(b"HTTP/1.1 200 OK\r\nX-Slow: ", drips=20, pause=0.3)
+    try:
+        started = time.monotonic()
+        with pytest.raises(DeliveryError) as err:
+            delivery.send({"kind": "webhook", "url": server.base}, sample())
+        assert time.monotonic() - started < 3.0
+        assert err.value.retryable
+        assert server.base not in str(err.value)
+    finally:
+        server.close()
+
+
 def test_testing_an_invalid_target_is_refused(client):
     resp = client.post(
         "/api/notifications/test",

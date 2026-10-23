@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import threading
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -24,7 +25,10 @@ from .render import Message, clean
 
 logger = logging.getLogger(__name__)
 
+#: Longest wait for any one connect, write or read.
 TIMEOUT_SEC = 10.0
+#: Longest a whole send may take, however slowly the server dribbles its answer.
+DEADLINE_SEC = 15.0
 KIND_NTFY = "ntfy"
 KIND_WEBHOOK = "webhook"
 KIND_DISCORD = "discord"
@@ -165,28 +169,57 @@ def send(
     *,
     transport: httpx.BaseTransport | None = None,
 ) -> int:
-    """Deliver ``message``; returns the HTTP status. Raises ``DeliveryError``."""
+    """Deliver ``message``; returns the HTTP status. Raises ``DeliveryError``.
+
+    Only the status line matters, so the response body is never read: the
+    connection is closed as soon as the status is known. ``TIMEOUT_SEC`` bounds
+    each wait, which a server answering one byte at a time never trips, so a
+    watchdog closes the client after ``DEADLINE_SEC`` in all.
+    """
     request = build_request(target, message)
+    expired = threading.Event()
+    client = httpx.Client(
+        timeout=TIMEOUT_SEC, follow_redirects=False, transport=transport
+    )
+
+    def give_up() -> None:
+        expired.set()
+        client.close()
+
+    watchdog = threading.Timer(DEADLINE_SEC, give_up)
+    watchdog.daemon = True
+    watchdog.start()
     try:
-        with httpx.Client(
-            timeout=TIMEOUT_SEC, follow_redirects=False, transport=transport
-        ) as client:
-            response = client.post(
-                request.url,
-                headers=request.headers,
-                content=request.content,
-                json=request.json,
-            )
-    except httpx.HTTPError as exc:
+        with client.stream(
+            "POST",
+            request.url,
+            headers=request.headers,
+            content=request.content,
+            json=request.json,
+        ) as response:
+            status = response.status_code
+    except (httpx.HTTPError, RuntimeError) as exc:
+        if expired.is_set():
+            logger.debug("notification request hit its deadline", exc_info=True)
+            raise DeliveryError(
+                f"The server did not finish answering within {DEADLINE_SEC:.0f} seconds",
+                retryable=True,
+            ) from None
+        if isinstance(exc, RuntimeError):
+            raise
         logger.debug("notification request failed", exc_info=True)
         raise explain_failure(exc) from None
     except ValueError:
         # httpx rejects a header value or URL it cannot encode.
         logger.debug("notification request was malformed", exc_info=True)
         raise DeliveryError("The request could not be built from this target") from None
-    if not 200 <= response.status_code < 300:
-        raise explain_status(response.status_code)
-    return response.status_code
+    finally:
+        watchdog.cancel()
+        watchdog.join()
+        client.close()
+    if not 200 <= status < 300:
+        raise explain_status(status)
+    return status
 
 
 def validate_address(url: str) -> str:

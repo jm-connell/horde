@@ -98,7 +98,7 @@ Set `HORDE_PUBLIC_URL` (for example `https://horde.example.com`) to the address 
 
 ## Delivery and failures
 
-Messages are queued in memory and sent by a background worker (`notifications` in [`/api/ready`](monitoring.md#ready)), so a slow or dead target never slows a download down. Each send has a 10 second timeout and up to three attempts, 2 and 8 seconds apart; a refusal such as `401` or `404` is not retried. A message that still fails is written to the log as a warning (the reason, never the address or the token) and dropped. The queue holds 500 messages; beyond that the oldest are dropped. Messages still waiting when Horde stops are lost.
+Messages are queued in memory and sent by a background worker (`notifications` in [`/api/ready`](monitoring.md#ready)), so a slow or dead target never slows a download down. Each send waits at most 10 seconds for any one step and 15 seconds in all (only the status is read, never the reply body), with up to three attempts, 2 and 8 seconds apart; a refusal such as `401` or `404` is not retried. A message that still fails is written to the log as a warning (the reason, never the address or the token) and dropped. The queue holds 500 messages; beyond that the oldest are dropped. Messages still waiting when Horde stops are lost.
 
 ## Security
 
