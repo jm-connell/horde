@@ -92,10 +92,11 @@ export type PermissionInfo = Omit<S["PermissionInfo"], "name"> & {
 };
 export type UserCreateInput = Omit<
   S["UserCreate"],
-  "permissions" | "is_admin"
+  "permissions" | "is_admin" | "share_downloads"
 > & {
   is_admin?: boolean;
   permissions?: Permission[];
+  share_downloads?: boolean;
 };
 export type UserUpdateInput = Omit<S["UserUpdate"], "permissions"> & {
   permissions?: Permission[];

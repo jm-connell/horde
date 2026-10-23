@@ -57,6 +57,7 @@ import type {
 import type { ApiResponse } from "./api/typed";
 import { connectivity } from "./offline/connectivity";
 import { getItem as getOfflineItem } from "./offline/db";
+import { deviceAccounts } from "./offline/accounts";
 import { deviceResume } from "./offline/resume";
 import { pendingProgress } from "./offline/pendingProgress";
 
@@ -318,7 +319,10 @@ function notifyOfflineProgress(videoId: number, positionSec: number): void {
 /** A video saved on this device, with this account's place in it. */
 async function offlineVideo(id: number): Promise<Video> {
   const item = await getOfflineItem(id).catch(() => undefined);
-  if (!item) throw new ApiError("Video not found", { status: 404 });
+  // Another account's private download is not here as far as this one knows.
+  if (!item || !(await deviceAccounts.canSee(item))) {
+    throw new ApiError("Video not found", { status: 404 });
+  }
   return deviceResume.offline(item.video);
 }
 
@@ -417,11 +421,33 @@ export const api = {
 
   bootstrapAdmin(
     username: string,
-    password: string
+    password: string,
+    shareDownloads = true
   ): Promise<{ user: AuthUser }> {
     return request(
       "/api/auth/bootstrap",
-      jsonInit("POST", { username, password })
+      jsonInit("POST", {
+        username,
+        password,
+        share_downloads: shareDownloads,
+      })
+    );
+  },
+
+  /**
+   * Whether other accounts on a device may see your downloads. Stopping needs
+   * your password: devices use it to unlock your downloads with no connection.
+   */
+  setShareDownloads(
+    shareDownloads: boolean,
+    currentPassword?: string
+  ): Promise<AuthUser> {
+    return request<AuthUser>(
+      "/api/auth/me",
+      jsonInit("PATCH", {
+        share_downloads: shareDownloads,
+        current_password: currentPassword,
+      })
     );
   },
 
@@ -596,7 +622,9 @@ export const api = {
     } catch (err) {
       if (!isNetworkFailure(err)) throw err;
       const local = await getOfflineItem(id).catch(() => undefined);
-      if (local) return deviceResume.offline(local.video);
+      if (local && (await deviceAccounts.canSee(local))) {
+        return deviceResume.offline(local.video);
+      }
       throw err;
     }
     return deviceResume.online(video);

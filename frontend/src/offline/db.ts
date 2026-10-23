@@ -2,7 +2,7 @@
  * IndexedDB + Cache Storage layout for offline videos. Shared by the app and
  * the service worker (bundled into sw.js), so keep this free of DOM / React.
  */
-import type { Video } from "../types";
+import type { Permission, Video } from "../types";
 
 export const DB_NAME = "horde-offline";
 /**
@@ -11,11 +11,15 @@ export const DB_NAME = "horde-offline";
  * 3: resume positions of saved videos are kept per account in their own store,
  * keyed by [owner, videoId]; the one un-owned position each item carried is
  * dropped on upgrade.
+ * 4: the accounts that have signed in on this device (who shares their
+ * downloads, and the check value for unlocking private ones offline). Saved
+ * videos get an `owner`; the ones saved before have none and stay shared.
  */
-export const DB_VERSION = 3;
+export const DB_VERSION = 4;
 export const ITEMS_STORE = "items";
 export const PENDING_PROGRESS_STORE = "pendingProgress";
 export const RESUME_POSITIONS_STORE = "resumePositions";
+export const DEVICE_ACCOUNTS_STORE = "deviceAccounts";
 
 /** Video bytes, stored as fixed-size chunks so downloads can resume. */
 export const MEDIA_CACHE = "horde-offline-media-v1";
@@ -62,6 +66,39 @@ export interface OfflineItem {
   createdAt: number;
   completedAt?: number;
   error?: string | null;
+  /**
+   * Id of the account that saved it on this device. Missing on videos saved
+   * before accounts could keep their downloads private: those are shared.
+   */
+  owner?: number;
+  /** That account's username when it saved the video (shown if it is unknown). */
+  ownerName?: string;
+}
+
+/**
+ * A way to check a password without keeping it: PBKDF2-SHA256 with a random
+ * salt. Kept on this device only, to unlock an account's private downloads
+ * with no connection (see `offline/accounts.ts`).
+ */
+export interface PasswordVerifier {
+  /** Base64. */
+  salt: string;
+  /** Base64 of the derived key. */
+  hash: string;
+  iterations: number;
+}
+
+/** An account that has signed in on this device. */
+export interface DeviceAccount {
+  userId: number;
+  username: string;
+  /** Whether other accounts on this device may see its downloads. */
+  shareDownloads: boolean;
+  /** Only while it does not share; kept across sign-outs. */
+  verifier?: PasswordVerifier;
+  /** What the account may do, so it can be acted as offline once unlocked. */
+  isAdmin: boolean;
+  permissions: Permission[];
 }
 
 /** One account's place in one video, as recorded on this device. */
@@ -106,51 +143,58 @@ export function bytesDone(item: OfflineItem): number {
   return Math.min(item.totalBytes, item.chunksDone * item.chunkSize);
 }
 
+/** Bring the database from `oldVersion` (0: new) to DB_VERSION. */
+export function upgradeDb(
+  db: IDBDatabase,
+  oldVersion: number,
+  transaction: IDBTransaction | null
+): void {
+  if (!db.objectStoreNames.contains(ITEMS_STORE)) {
+    db.createObjectStore(ITEMS_STORE, { keyPath: "videoId" });
+  }
+  // Version 1 queued progress without saying whose it was. Nobody can tell
+  // any more, and sending it as whoever signs in next would write one
+  // account's position into another's history: drop it.
+  if (oldVersion < 2 && db.objectStoreNames.contains(PENDING_PROGRESS_STORE)) {
+    db.deleteObjectStore(PENDING_PROGRESS_STORE);
+  }
+  if (!db.objectStoreNames.contains(PENDING_PROGRESS_STORE)) {
+    db.createObjectStore(PENDING_PROGRESS_STORE, {
+      keyPath: ["owner", "videoId"],
+    });
+  }
+  if (!db.objectStoreNames.contains(RESUME_POSITIONS_STORE)) {
+    db.createObjectStore(RESUME_POSITIONS_STORE, {
+      keyPath: ["owner", "videoId"],
+    });
+  }
+  if (!db.objectStoreNames.contains(DEVICE_ACCOUNTS_STORE)) {
+    db.createObjectStore(DEVICE_ACCOUNTS_STORE, { keyPath: "userId" });
+  }
+  // Before version 3 each saved video carried one position for the whole
+  // device: whoever played it last. Whose it was is unknown, so it is
+  // dropped (as version 2 did with un-owned queued saves) rather than
+  // handed to whichever account opens the video next.
+  if (oldVersion >= 1 && oldVersion < 3 && transaction) {
+    const items = transaction.objectStore(ITEMS_STORE).openCursor();
+    items.onsuccess = () => {
+      const cursor = items.result;
+      if (!cursor) return;
+      const item = cursor.value as OfflineItem;
+      if (item.video) cursor.update(withoutWatchState(item));
+      cursor.continue();
+    };
+  }
+}
+
 let dbPromise: Promise<IDBDatabase> | null = null;
 
 export function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = (event) => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(ITEMS_STORE)) {
-        db.createObjectStore(ITEMS_STORE, { keyPath: "videoId" });
-      }
-      // Version 1 queued progress without saying whose it was. Nobody can tell
-      // any more, and sending it as whoever signs in next would write one
-      // account's position into another's history: drop it.
-      if (
-        event.oldVersion < 2 &&
-        db.objectStoreNames.contains(PENDING_PROGRESS_STORE)
-      ) {
-        db.deleteObjectStore(PENDING_PROGRESS_STORE);
-      }
-      if (!db.objectStoreNames.contains(PENDING_PROGRESS_STORE)) {
-        db.createObjectStore(PENDING_PROGRESS_STORE, {
-          keyPath: ["owner", "videoId"],
-        });
-      }
-      if (!db.objectStoreNames.contains(RESUME_POSITIONS_STORE)) {
-        db.createObjectStore(RESUME_POSITIONS_STORE, {
-          keyPath: ["owner", "videoId"],
-        });
-      }
-      // Before version 3 each saved video carried one position for the whole
-      // device: whoever played it last. Whose it was is unknown, so it is
-      // dropped (as version 2 did with un-owned queued saves) rather than
-      // handed to whichever account opens the video next.
-      if (event.oldVersion >= 1 && event.oldVersion < 3 && req.transaction) {
-        const items = req.transaction.objectStore(ITEMS_STORE).openCursor();
-        items.onsuccess = () => {
-          const cursor = items.result;
-          if (!cursor) return;
-          const item = cursor.value as OfflineItem;
-          if (item.video) cursor.update(withoutWatchState(item));
-          cursor.continue();
-        };
-      }
-    };
+    req.onupgradeneeded = (event) =>
+      upgradeDb(req.result, event.oldVersion, req.transaction);
     req.onsuccess = () => {
       const db = req.result;
       // Another tab upgrading the schema: let it, reopen lazily next time.
@@ -258,6 +302,14 @@ export async function deleteResumePositions(videoId: number): Promise<void> {
     };
     req.onerror = () => reject(req.error);
   });
+}
+
+export async function getAllDeviceAccounts(): Promise<DeviceAccount[]> {
+  return wrap((await store(DEVICE_ACCOUNTS_STORE, "readonly")).getAll());
+}
+
+export async function putDeviceAccount(account: DeviceAccount): Promise<void> {
+  await wrap((await store(DEVICE_ACCOUNTS_STORE, "readwrite")).put(account));
 }
 
 /** `/api/videos/12/stream` → 12, `/api/videos/-3/stream` → -3. */
