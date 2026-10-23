@@ -1272,11 +1272,16 @@ export interface paths {
         };
         /**
          * List Playlists
-         * @description Playlists in their saved order; ``limit`` caps a pathological library.
+         * @description Public playlists and your own private ones, in their saved order.
+         *
+         *     ``limit`` caps a pathological library.
          */
         get: operations["list_playlists_api_playlists_get"];
         put?: never;
-        /** Create Playlist */
+        /**
+         * Create Playlist
+         * @description Anyone may make a private playlist; an App-wide one needs manage_playlists.
+         */
         post: operations["create_playlist_api_playlists_post"];
         delete?: never;
         options?: never;
@@ -1348,7 +1353,14 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Reorder Playlists */
+        /**
+         * Reorder Playlists
+         * @description Put the playlists you can edit in the given order.
+         *
+         *     Positions are shared, so they are redistributed among the slots those
+         *     playlists already hold; everyone else's playlists keep their places. Ids you
+         *     can't edit (or can't see) are ignored.
+         */
         patch: operations["reorder_playlists_api_playlists_reorder_patch"];
         trace?: never;
     };
@@ -4812,9 +4824,15 @@ export interface components {
             description?: string | null;
             /** Name */
             name: string;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
         /** PlaylistDetail */
         PlaylistDetail: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
             /**
@@ -4842,6 +4860,7 @@ export interface components {
             last_synced_at?: string | null;
             /** Name */
             name: string;
+            owner?: components["schemas"]["PlaylistOwner"] | null;
             /**
              * Position
              * @default 0
@@ -4863,6 +4882,8 @@ export interface components {
             thumbnail_video_id?: number | null;
             /** Videos */
             videos: components["schemas"]["VideoRead"][];
+            /** @default public */
+            visibility: components["schemas"]["PlaylistVisibility"];
         };
         /** PlaylistImport */
         PlaylistImport: {
@@ -4885,6 +4906,7 @@ export interface components {
             subscribe: boolean;
             /** Url */
             url: string;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
         /** PlaylistItemAdd */
         PlaylistItemAdd: {
@@ -4897,6 +4919,13 @@ export interface components {
         PlaylistListReorder: {
             /** Playlist Ids */
             playlist_ids: number[];
+        };
+        /** PlaylistOwner */
+        PlaylistOwner: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
         };
         /** PlaylistPreview */
         PlaylistPreview: {
@@ -4929,6 +4958,11 @@ export interface components {
         };
         /** PlaylistRead */
         PlaylistRead: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
             /**
@@ -4956,6 +4990,7 @@ export interface components {
             last_synced_at?: string | null;
             /** Name */
             name: string;
+            owner?: components["schemas"]["PlaylistOwner"] | null;
             /**
              * Position
              * @default 0
@@ -4975,6 +5010,8 @@ export interface components {
             sync_error?: string | null;
             /** Thumbnail Video Id */
             thumbnail_video_id?: number | null;
+            /** @default public */
+            visibility: components["schemas"]["PlaylistVisibility"];
         };
         /** PlaylistReorder */
         PlaylistReorder: {
@@ -5015,7 +5052,13 @@ export interface components {
             quality_preset?: string | null;
             /** Subscribed */
             subscribed?: boolean | null;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
+        /**
+         * PlaylistVisibility
+         * @enum {string}
+         */
+        PlaylistVisibility: "public" | "private";
         /** PotProviderStatus */
         PotProviderStatus: {
             /** Detail */

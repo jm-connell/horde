@@ -726,13 +726,11 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                     </button>
                   )}
                   <div data-collapse="playlist" className="shrink-0">
-                    {can("manage_playlists") && (
-                      <AddToPlaylist
-                        videoId={videoId}
-                        buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-                        onOpenChange={setPlaylistOpen}
-                      />
-                    )}
+                    <AddToPlaylist
+                      videoId={videoId}
+                      buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                      onOpenChange={setPlaylistOpen}
+                    />
                   </div>
                 </>
               )}

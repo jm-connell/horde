@@ -73,6 +73,7 @@ export type UpdateCheck = S["UpdateCheckRead"];
 export type UpdateControl = S["UpdateControlRead"];
 export type UpdateState = UpdateControl["state"];
 export type PlaylistSource = S["PlaylistSource"];
+export type PlaylistVisibility = S["PlaylistVisibility"];
 export type Playlist = S["PlaylistRead"];
 export type PlaylistDetail = S["PlaylistDetail"];
 export type PlaylistPreviewEntry = S["PlaylistPreviewEntry"];

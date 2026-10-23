@@ -25,7 +25,8 @@ export function useBulkActions(input: {
   const [bulkNoteOpen, setBulkNoteOpen] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const playlistsQuery = usePlaylists(playlistOpen);
-  const playlists = playlistsQuery.playlists;
+  // Only playlists this user may add to.
+  const playlists = playlistsQuery.editable;
   const playlistsFailed = playlistsQuery.isError;
   const [metadataSyncing, setMetadataSyncing] = useState(false);
   const afterDelete = useAfterDelete();

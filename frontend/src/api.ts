@@ -32,6 +32,7 @@ import type {
   Playlist,
   PlaylistDetail,
   PlaylistPreviewData,
+  PlaylistVisibility,
   RecommendationsResponse,
   StorageStats,
   StreamAi,
@@ -1539,11 +1540,15 @@ export const api = {
     return request<PlaylistDetail>(`/api/playlists/${id}`, opts);
   },
 
-  createPlaylist(name: string, description?: string): Promise<Playlist> {
+  /** Without `visibility` the server decides: App-wide for those who may share, else Private. */
+  createPlaylist(
+    name: string,
+    opts: { description?: string; visibility?: PlaylistVisibility } = {}
+  ): Promise<Playlist> {
     return request<Playlist>("/api/playlists", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, description }),
+      body: JSON.stringify({ name, ...opts }),
     });
   },
 
@@ -1555,6 +1560,7 @@ export const api = {
       subscribed?: boolean;
       quality_preset?: string;
       cover_video_id?: number | null;
+      visibility?: PlaylistVisibility;
     }
   ): Promise<Playlist> {
     return request<Playlist>(`/api/playlists/${id}`, {
@@ -1633,7 +1639,12 @@ export const api = {
   importPlaylist(
     url: string,
     quality_preset: string,
-    opts: { name?: string; entries?: string[]; subscribe?: boolean } = {}
+    opts: {
+      name?: string;
+      entries?: string[];
+      subscribe?: boolean;
+      visibility?: PlaylistVisibility;
+    } = {}
   ): Promise<Playlist> {
     return request<Playlist>("/api/playlists/import", {
       method: "POST",
@@ -1644,6 +1655,7 @@ export const api = {
         name: opts.name,
         entries: opts.entries,
         subscribe: opts.subscribe ?? false,
+        visibility: opts.visibility,
       }),
     });
   },
