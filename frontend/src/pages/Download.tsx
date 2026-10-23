@@ -38,41 +38,13 @@ import {
   readClipboardText,
   shouldCapturePagePaste,
 } from "../clipboard";
-import {
-  formatDuration,
-  formatViewCount,
-  youtubeListThumbnailUrl,
-} from "../utils";
 
 import { getItem, setItem } from "../storage";
+import PlaylistEntryList from "./download/PlaylistEntryList";
+import PlaylistModePicker from "./download/PlaylistModePicker";
+import { toastBulkSkips } from "./download/skips";
+
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
-
-const SKIP_TOAST: Record<string, string> = {
-  already_queued: "Already queued",
-  already_downloading: "Already downloading",
-  already_in_library: "Already in library",
-  playlist: "Skipped playlist link — paste it alone to import.",
-  shorts: "Don't watch shorts",
-  duplicate_in_paste: "Skipped duplicate links",
-  invalid_url: "Skipped links that are not public http(s) URLs",
-};
-
-function toastBulkSkips(
-  skips: DownloadBulkSkip[],
-  showToast: (message: string) => void
-) {
-  if (skips.length === 0) return;
-  const counts = new Map<string, number>();
-  for (const skip of skips) {
-    counts.set(skip.reason, (counts.get(skip.reason) ?? 0) + 1);
-  }
-  const parts: string[] = [];
-  for (const [reason, n] of counts) {
-    const msg = SKIP_TOAST[reason] ?? reason;
-    parts.push(n > 1 && reason !== "playlist" ? `${msg} (${n})` : msg);
-  }
-  showToast(parts.join(" · "));
-}
 
 export default function Download() {
   const { showToast } = useToast();
@@ -689,52 +661,10 @@ export default function Download() {
           className={preview && isPlaylist ? undefined : "mb-0!"}
         >
           <div className="space-y-4 rounded-lg border border-accent/30 bg-accent/5 p-4">
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-300">
-                Playlist action
-              </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                {(
-                  [
-                    [
-                      "import",
-                      "Import playlist",
-                      "One-time download of the videos, saved as a playlist in Horde.",
-                    ],
-                    [
-                      "subscribe",
-                      "Subscribe",
-                      "Sync with the YouTube playlist and download new videos as they appear.",
-                    ],
-                    [
-                      "videos",
-                      "Download videos",
-                      "Download them like regular videos, without organizing into a playlist.",
-                    ],
-                  ] as const
-                ).map(([mode, label, hint]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => setPlaylistMode(mode)}
-                    className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                      playlistMode === mode
-                        ? "border-accent bg-accent/15 text-accent"
-                        : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
-                    }`}
-                  >
-                    <span className="block text-sm font-medium">{label}</span>
-                    <span
-                      className={`mt-1 block text-xs font-normal leading-relaxed ${
-                        playlistMode === mode ? "text-accent/80" : "text-muted"
-                      }`}
-                    >
-                      {hint}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
+            <PlaylistModePicker
+              playlistMode={playlistMode}
+              onChange={setPlaylistMode}
+            />
 
             {playlistMode !== "videos" && (
               <div>
@@ -776,70 +706,12 @@ export default function Download() {
                     </button>
                   )}
                 </div>
-                <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg border border-ink-700 bg-ink-950/50 p-2">
-                  {playlistEntries.map((entry) => {
-                    const thumbSrc = youtubeListThumbnailUrl(
-                      entry.id,
-                      entry.thumbnail_url
-                    );
-                    const rowClass =
-                      playlistMode === "subscribe"
-                        ? "flex items-start gap-3 rounded-lg p-2"
-                        : "flex cursor-pointer items-start gap-3 rounded-lg p-2 hover:bg-ink-900";
-                    const body = (
-                      <>
-                        {playlistMode !== "subscribe" && (
-                          <input
-                            type="checkbox"
-                            checked={selectedUrls.has(entry.url)}
-                            onChange={() => togglePlaylistEntry(entry.url)}
-                            className="mt-1 shrink-0 accent-accent"
-                          />
-                        )}
-                        <div className="h-14 w-24 shrink-0 overflow-hidden rounded-sm bg-ink-800">
-                          {thumbSrc ? (
-                            <img
-                              decoding="async"
-                              width={96}
-                              height={56}
-                              src={thumbSrc}
-                              alt=""
-                              loading="lazy"
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-full items-center justify-center text-xs text-muted">
-                              No preview
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="line-clamp-2 text-sm text-gray-200">
-                            {entry.title ?? "Untitled"}
-                          </p>
-                          <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-muted">
-                            {entry.channel && <span>{entry.channel}</span>}
-                            {entry.view_count != null && (
-                              <span>{formatViewCount(entry.view_count)}</span>
-                            )}
-                            {entry.duration != null && (
-                              <span>{formatDuration(entry.duration)}</span>
-                            )}
-                          </div>
-                        </div>
-                      </>
-                    );
-                    return playlistMode === "subscribe" ? (
-                      <div key={entry.url} className={rowClass}>
-                        {body}
-                      </div>
-                    ) : (
-                      <label key={entry.url} className={rowClass}>
-                        {body}
-                      </label>
-                    );
-                  })}
-                </div>
+                <PlaylistEntryList
+                  entries={playlistEntries}
+                  playlistMode={playlistMode}
+                  selectedUrls={selectedUrls}
+                  onToggle={togglePlaylistEntry}
+                />
               </>
             ) : (
               <p className="text-xs text-gray-400">
