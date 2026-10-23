@@ -187,7 +187,7 @@ def test_video_ai_chat_history(client, session, add_video, admin_user):
 def test_sprite_generate_status(client, add_video, monkeypatch):
     video = add_video()
     monkeypatch.setattr(
-        "app.api.videos.enqueue_sprite_generation", lambda *a, **k: "generating"
+        "app.api.video_media.enqueue_sprite_generation", lambda *a, **k: "generating"
     )
     resp = client.post(f"/api/videos/{video.id}/sprites/generate")
     assert resp.json() == {"status": "generating"}

@@ -8,7 +8,9 @@ Python package under `backend/app/`. FastAPI app entry: `main.py`.
 
 | Module | Responsibility |
 |--------|----------------|
-| `videos.py` | Library CRUD, streaming (Range), sprites, subtitles, AI chat/tags on videos |
+| `videos.py` | Library list, tags, storage stats, get/edit/delete (to the trash), bulk edit and delete, watch progress, redownload, metadata refresh |
+| `video_ai.py` | Per-video AI: tags, summary, chapters, chat |
+| `video_media.py` | Thumbnails (upload, candidates), sprites, subtitles, Range streaming, signed media token, file download |
 | `channels.py` | Channel list/rename/search, catalog index/status/search, channel feed |
 | `video_serialize.py` | Shared `VideoRead` serialization + media path resolution |
 | `downloads.py` | Queue jobs, presets, progress SSE, pause/resume |

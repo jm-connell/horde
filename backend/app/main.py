@@ -33,6 +33,8 @@ from .api import (
     system,
     trash,
     users,
+    video_ai,
+    video_media,
     videos,
 )
 from .api import (
@@ -577,6 +579,8 @@ def include_api(target: FastAPI) -> None:
     """
     for module in (
         videos,
+        video_ai,
+        video_media,
         compat,
         channels,
         downloads,
