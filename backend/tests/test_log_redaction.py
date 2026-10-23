@@ -48,3 +48,24 @@ def test_the_uvicorn_access_log_is_filtered(caplog):
         )
     text = "\n".join(r.getMessage() for r in caplog.records)
     assert "deadbeef" not in text and "mt=[redacted]" in text
+
+
+def test_httpx_logs_its_url_object_not_a_string(caplog):
+    """httpx's own request log passes ``request.url`` (an ``httpx.URL``) as an argument."""
+    import httpx
+
+    install_log_redaction()
+    logger = logging.getLogger("httpx")
+    with caplog.at_level(logging.INFO, logger="httpx"):
+        logger.info(
+            'HTTP Request: %s %s "%s %d %s"',
+            "POST",
+            httpx.URL("https://discord.com/api/webhooks/123456/abcDEF-ghi_JKL"),
+            "HTTP/1.1",
+            204,
+            "No Content",
+        )
+    text = "\n".join(r.getMessage() for r in caplog.records)
+    assert "abcDEF" not in text
+    assert "https://discord.com/api/webhooks/123456/[redacted]" in text
+    assert '"HTTP/1.1 204 No Content"' in text  # the other arguments are untouched
