@@ -2084,6 +2084,26 @@ export interface paths {
         patch: operations["update_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/settings/media-sidecars/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Media Sidecars
+         * @description Delete the Jellyfin / Kodi / Plex files Horde wrote, in the background.
+         */
+        post: operations["remove_media_sidecars_api_settings_media_sidecars_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/reset": {
         parameters: {
             query?: never;
@@ -3687,6 +3707,11 @@ export interface components {
             /** Max Library Bytes */
             max_library_bytes?: number | null;
             /**
+             * Media Server Sidecars
+             * @default false
+             */
+            media_server_sidecars: boolean;
+            /**
              * Metadata Sync Interval Hours
              * @default 24
              */
@@ -3724,6 +3749,8 @@ export interface components {
             direct_youtube_search?: boolean | null;
             /** Max Library Bytes */
             max_library_bytes?: number | null;
+            /** Media Server Sidecars */
+            media_server_sidecars?: boolean | null;
             /** Metadata Sync Interval Hours */
             metadata_sync_interval_hours?: number | null;
             /** Progress Expiry Days */
@@ -4951,6 +4978,11 @@ export interface components {
             current_password?: string | null;
             /** Share Downloads */
             share_downloads: boolean;
+        };
+        /** MediaSidecarsRemoval */
+        MediaSidecarsRemoval: {
+            /** Queued */
+            queued: boolean;
         };
         /** MediaTokenRead */
         MediaTokenRead: {
@@ -11769,6 +11801,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppSettingsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_media_sidecars_api_settings_media_sidecars_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaSidecarsRemoval"];
                 };
             };
             /** @description Validation error */

@@ -1068,6 +1068,13 @@ export const api = {
     });
   },
 
+  /** Delete the Jellyfin / Kodi / Plex files Horde wrote (in the background). */
+  removeMediaSidecars(): Promise<
+    ApiResponse<"/api/settings/media-sidecars/remove", "post">
+  > {
+    return request("/api/settings/media-sidecars/remove", { method: "POST" });
+  },
+
   resetApp(
     eraseMedia: boolean,
     confirm: string

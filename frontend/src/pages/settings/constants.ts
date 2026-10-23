@@ -400,3 +400,14 @@ export const NAV_INDICATOR_OPTIONS: {
 ];
 
 export const TAB_STORAGE_KEY = "horde.settings.tab";
+
+/** Search words that find the media-server files setting. */
+export const MEDIA_SERVER_TERMS = [
+  "media server",
+  "jellyfin",
+  "kodi",
+  "plex",
+  "nfo",
+  "sidecar",
+  "artwork",
+];

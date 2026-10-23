@@ -1692,6 +1692,11 @@
             ],
             "title": "Max Library Bytes"
           },
+          "media_server_sidecars": {
+            "default": false,
+            "title": "Media Server Sidecars",
+            "type": "boolean"
+          },
           "metadata_sync_interval_hours": {
             "default": 24,
             "title": "Metadata Sync Interval Hours",
@@ -1787,6 +1792,17 @@
               }
             ],
             "title": "Max Library Bytes"
+          },
+          "media_server_sidecars": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Server Sidecars"
           },
           "metadata_sync_interval_hours": {
             "anyOf": [
@@ -5381,6 +5397,19 @@
           "share_downloads"
         ],
         "title": "MeUpdate",
+        "type": "object"
+      },
+      "MediaSidecarsRemoval": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued"
+        ],
+        "title": "MediaSidecarsRemoval",
         "type": "object"
       },
       "MediaTokenRead": {
@@ -16748,6 +16777,48 @@
           }
         },
         "summary": "Update Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/media-sidecars/remove": {
+      "post": {
+        "description": "Delete the Jellyfin / Kodi / Plex files Horde wrote, in the background.",
+        "operationId": "remove_media_sidecars_api_settings_media_sidecars_remove_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSidecarsRemoval"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Media Sidecars",
         "tags": [
           "settings"
         ]

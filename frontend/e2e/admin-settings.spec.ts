@@ -295,6 +295,65 @@ test("members cannot set the disk usage limit", async ({
   await ctx.close();
 });
 
+test("the administrator turns the media-server files on and removes them once off", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await page.goto("/settings?tab=library");
+  const toggle = page.getByRole("switch", { name: "Write media-server files" });
+  const remove = page.getByRole("button", { name: "Remove sidecar files" });
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(remove).toBeEnabled();
+  try {
+    await toggle.click();
+    await expect(
+      page.getByText(/Writing media-server files in the background/)
+    ).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+    await expect(remove).toBeDisabled();
+
+    await page.reload();
+    await expect(toggle).toHaveAttribute("aria-checked", "true");
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-checked", "false");
+    await expect(remove).toBeEnabled();
+    await remove.click();
+    const dialog = page.getByRole("dialog", {
+      name: "Remove media-server files?",
+    });
+    await dialog.getByRole("button", { name: "Remove files" }).click();
+    await expect(
+      page.getByText(/Removing media-server files in the background/)
+    ).toBeVisible();
+  } finally {
+    await page.request.patch("/api/settings", {
+      headers: CSRF_HEADERS,
+      data: { media_server_sidecars: false },
+    });
+  }
+
+  // Members neither see the switch nor can they use the endpoints.
+  const ctx = await contextAs(browser, baseURL, "member");
+  const member = await ctx.newPage();
+  await member.goto("/settings?tab=library");
+  await expect(
+    member.getByRole("heading", { name: "Display", level: 2 })
+  ).toBeVisible();
+  await expect(
+    member.getByRole("switch", { name: "Write media-server files" })
+  ).toHaveCount(0);
+  const refused = await ctx.request.post(
+    "/api/settings/media-sidecars/remove",
+    {
+      headers: CSRF_HEADERS,
+    }
+  );
+  expect(refused.status()).toBe(403);
+  await ctx.close();
+});
+
 test("the administrator adds, tests, edits and removes a notification target", async ({
   page,
   browser,
