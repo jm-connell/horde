@@ -89,6 +89,7 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 | `0008_stream_ai` | `stream_ai_state` and `stream_ai_chat_messages`: AI results of streamed videos, kept per YouTube id until downloaded or expired ([ADR 0010](../adr/0010-stream-ai-retention.md)) |
 | `0010_trash` | `trash_entries`: one tombstone per video a user deleted, with the rows a restore needs, the list of files moved to the trash and the random `folder` token they sit under ([ADR 0013](../adr/0013-trash-tombstones.md)). A new table only; `videos` is not rebuilt |
 | `0011_playlist_owner` | `playlists.owner_user_id` (FK `users`, CASCADE) and `playlists.visibility` (`public` / `private`). Existing playlists become public and the first enabled administrator's (NULL when there is none yet; that administrator adopts them when created). `playlists` is rebuilt, which is safe because the runner has `foreign_keys` off ([ADR 0014](../adr/0014-playlist-ownership-and-visibility.md)) |
+| `0012_share_downloads` | `users.share_downloads` (default on): whether other accounts on a device may see this account's offline downloads and fetch its device-destination downloads from the server. A plain `ADD COLUMN`; `users` is not rebuilt |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
 

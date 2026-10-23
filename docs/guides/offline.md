@@ -62,6 +62,69 @@ library select mode, and **Save file** on device download job cards.
     for apps added to the Home Screen than for Safari tabs, so install the app
     if you plan to download a lot.
 
+## Sharing downloads between accounts {#sharing}
+
+Videos you save for offline viewing are stored in the browser, so everyone who
+uses the same device could see them. Each account decides whether they do:
+
+- **Share downloads** (the default). Anyone who signs in on the device sees
+  your saved videos, labelled *Saved by <you>*, and can watch or remove them.
+  This is how it worked before accounts could choose.
+- **Private.** Other accounts do not see your saved videos. Instead, the
+  Offline page tells them how many there are (*"3 videos saved by jon on this
+  device are private. Switch to jon to watch them."*) with a **Switch account**
+  button that signs out and opens the sign-in page with the name filled in.
+  Only you can remove a private download.
+
+Set it under **Account settings → Downloads on shared devices** (turning
+sharing off asks for your password). Administrators choose it when they add a
+user or edit one, and the first administrator chooses it in the setup wizard.
+
+The setting travels with the account, but each device has to know it while
+there is no connection, so a device remembers which accounts have signed in on
+it and whether each shares. A change takes effect on a device the next time
+that account is seen by the server there (when it signs in or the app refreshes
+its session).
+
+### Nobody is locked out: unlocking offline
+
+Say you saved videos on your phone, your kid signs in to his own account, and
+then you go camping with no signal. Open the Offline page: it says your videos
+are private and offers **Unlock**. Enter your password and the app acts as you
+on this device until the connection returns, so you can watch your downloads
+and your watch positions stay yours. The account menu shows *<name> (offline)*
+meanwhile. When Horde can reach the server again, whoever the server says is
+signed in takes over again, and the positions you saved offline wait for your
+next sign-in (as they do for any account).
+
+To make this work with no server, a device that sees you sign in with sharing
+off keeps a check value of your password (PBKDF2-SHA256, 600 000 iterations
+with a random salt). The password itself is never stored and the check value
+never leaves the device. It is kept when you sign out, and removed when you
+turn sharing back on. If your password changes, sign in again on each device
+with the new one (changing it in Account settings on a device does this there
+for you). Unlock appears only for accounts the device has such a value for: an
+administrator who turned your sharing off for you does not have your password,
+so on a device where you have not signed in since, switch to your account while
+online.
+
+!!! note "Privacy between household accounts, not encryption"
+    Private downloads are hidden in the app; the files are not encrypted.
+    Someone with full access to the browser profile (the device's own user, or
+    developer tools) can still read them, and the saved check value could be
+    attacked offline with a weak password. It keeps kids and housemates out of
+    each other's list, not a determined attacker out of a shared profile. Use
+    a separate browser profile for real separation.
+
+If the same video is already saved on the device by an account that keeps its
+downloads private, you can't save another copy of it: a device holds one copy
+per video. Ask them to share, or remove it.
+
+Downloads you queue from the Download page with the destination *Offline (this
+device)* follow the same rule on the server: while you keep your downloads
+private, other accounts cannot fetch your finished job (`404`), see it in the
+queue list or dismiss it. Administrators still can.
+
 ## Connection status
 
 A tag next to the **HORDE** logo shows the connection state. It is hidden
@@ -77,6 +140,8 @@ In **offline mode**:
 
 - Home shows only downloaded videos, and they play from local storage.
 - Playlists, History, Download and Import are greyed out.
+- Videos other accounts keep private are not listed; the Offline page says how
+  many there are and offers **Unlock** (see [above](#sharing)).
 - Downloaded videos resume where **you** left off, not where someone else
   using the device did: each account has its own place in a saved video.
   Opened while online, a saved video resumes from your latest position on any

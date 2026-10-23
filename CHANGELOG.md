@@ -9,6 +9,17 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Sharing offline downloads between accounts.** Videos saved for offline
+  viewing now remember which account saved them. Each account can keep its
+  downloads private from the other accounts on the same device (Account
+  settings → Downloads on shared devices, which asks for your password to turn
+  sharing off); administrators choose it when adding or editing a user, and the
+  setup wizard asks for the first administrator. The default is to share, so
+  nothing changes until someone opts out. The Offline page shows what other
+  accounts shared ("Saved by jon") and says how many private videos there are,
+  with **Switch account** online. With no connection, **Unlock** takes the
+  owner's password and lets them watch their own downloads, so nobody is locked
+  out of them. See [Offline](docs/guides/offline.md#sharing).
 - **Signed-in devices** in Account settings: every browser signed in to your
   account, with a device label ("Safari on iPhone"), address and last activity.
   Sign any of them out, or sign out all your other devices at once; the browser
@@ -74,8 +85,25 @@ All notable changes to Horde are documented here. The format follows
   "not downloaded" and downloading it by hand (or restoring it from the trash)
   lifts the skip.
 
+### Security
+
+- A download queued with the destination "this device" is now only visible
+  and fetchable by the account that queued it, by administrators, and, while
+  that account shares its downloads, by other accounts. Before, any account
+  with the offline-download permission could fetch another account's finished
+  device download (`GET /api/downloads/{id}/file`, ids are sequential) and see
+  it in the queue list. Others now get `404`, and *Dismiss finished* leaves
+  another account's private downloads alone.
+
 ### Upgrade notes
 
+- Database migration `0012_share_downloads` adds the `users.share_downloads`
+  column (a plain `ADD COLUMN`, default on for every account). Back up and roll
+  back as for any migration (the older version refuses a database it does not
+  know).
+- Videos already saved for offline viewing have no owner and stay visible to
+  everyone on the device, as before. The browser's offline database moves to a
+  new version on first open; nothing is deleted.
 - Database migration `0011_playlist_owner` adds an owner and a visibility to
   playlists. Every existing playlist becomes App-wide and belongs to the first
   administrator, so what people see does not change. Back up and roll back as
