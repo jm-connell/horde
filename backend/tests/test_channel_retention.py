@@ -194,6 +194,31 @@ def test_watching_again_clears_finished(session, add_video, admin_user):
     assert session.exec(select(UserVideoState)).one().finished_at is None
 
 
+def test_a_change_made_during_a_run_is_honoured(session, add_video, monkeypatch):
+    """Planned, then added to a playlist or given notes before its turn: it stays."""
+    in_playlist, noted, gone = _news(add_video, 3, start_age=100)
+    row = _rule(session, max_age_days=30)
+    real_plan = retention.plan
+
+    def plan_then_change(*args, **kwargs):
+        result = real_plan(*args, **kwargs)
+        assert len(result.removals) == 3
+        playlist = Playlist(name="Late")
+        session.add(playlist)
+        session.commit()
+        session.add(PlaylistItem(playlist_id=playlist.id, video_id=in_playlist.id))
+        late = session.get(Video, noted.id)
+        late.notes = "added during the run"
+        session.add(late)
+        session.commit()
+        return result
+
+    monkeypatch.setattr(retention, "plan", plan_then_change)
+
+    assert _run(session, row) == 1
+    assert _titles(session) == {in_playlist.title, noted.title}
+
+
 def test_other_channels_are_left_alone(session, add_video):
     add_video(
         channel="Other", title="Other old", added_at=_days_ago(90), write_file=True

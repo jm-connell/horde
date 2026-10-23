@@ -32,7 +32,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import and_, func
 from sqlalchemy import select as sa_select
 from sqlmodel import Session, col, select
 
@@ -174,9 +174,16 @@ def _ids(session: Session, statement) -> set[int]:
     return {int(v) for v in session.exec(statement).all()}
 
 
-def _exempt_ids(session: Session, channel: str, now: datetime) -> set[int]:
-    """Videos of ``channel`` kept by the exceptions that live in other tables."""
+def _exempt_ids(
+    session: Session, channel: str, now: datetime, video_id: int | None = None
+) -> set[int]:
+    """Videos of ``channel`` kept by the exceptions that live in other tables.
+
+    With ``video_id``, only that video is looked at.
+    """
     in_channel = col(Video.channel) == channel
+    if video_id is not None:
+        in_channel = and_(in_channel, col(Video.id) == video_id)
     exempt = _ids(
         session,
         select(col(PlaylistItem.video_id))
@@ -305,6 +312,13 @@ def apply_rule(
         video = session.get(Video, removal.video_id)
         if video is None:
             continue  # deleted by hand in the meantime
+        # The plan may be minutes old by now (every move copies a file): honour a
+        # playlist add, a note or a viewing made since it was drawn up.
+        session.refresh(video)
+        if (video.notes or "").strip() or _exempt_ids(
+            session, channel, now or utcnow(), removal.video_id
+        ):
+            continue
         try:
             trash.trash_video(session, video, None, removal.reason)
         except trash.VideoAlreadyDeleted:
