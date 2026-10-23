@@ -20,6 +20,13 @@ export type NextPart = S["NextPartRead"];
 export type ChannelFeedPage = S["ChannelFeedPage"];
 export type ChannelCatalogStatusItem = S["ChannelCatalogStatusItem"];
 export type ChannelAutodownload = S["ChannelAutodownloadRead"];
+export type ChannelRetention = S["ChannelRetentionRead"];
+export type ChannelRetentionPreview = S["ChannelRetentionPreview"];
+/** The three optional limits of a retention rule. */
+export type RetentionLimits = Pick<
+  S["ChannelRetentionRead"],
+  "keep_latest" | "max_age_days" | "remove_watched_after_days"
+>;
 export type ChannelCatalogStatus = S["ChannelCatalogStatusResponse"];
 export type JobStatus = S["JobStatus"];
 export type DownloadDestination = S["DownloadDestination"];

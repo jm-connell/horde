@@ -14,6 +14,8 @@ import type {
   UserCreateInput,
   UserUpdateInput,
   ChannelAutodownload,
+  ChannelRetention,
+  ChannelRetentionPreview,
   ChannelCatalogStatus,
   ChannelFeedPage,
   ChannelStat,
@@ -41,6 +43,7 @@ import type {
   PlaylistPreviewData,
   PlaylistVisibility,
   RecommendationsResponse,
+  RetentionLimits,
   StorageStats,
   StreamAi,
   StreamPreviewMeta,
@@ -985,11 +988,45 @@ export const api = {
     });
   },
 
+  getChannelRetention(
+    channel: string,
+    opts?: ReadOptions
+  ): Promise<ChannelRetention> {
+    const qs = new URLSearchParams({ channel });
+    return request<ChannelRetention>(
+      `/api/channels/retention?${qs.toString()}`,
+      opts
+    );
+  },
+
+  saveChannelRetention(
+    params: RetentionLimits & { channel: string; enabled: boolean }
+  ): Promise<ChannelRetention> {
+    return request<ChannelRetention>("/api/channels/retention", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+  },
+
+  /** What a rule would move to the trash right now; nothing changes. */
+  previewChannelRetention(
+    params: RetentionLimits & { channel: string },
+    opts?: ReadOptions
+  ): Promise<ChannelRetentionPreview> {
+    return request<ChannelRetentionPreview>("/api/channels/retention/preview", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+      signal: opts?.signal,
+    });
+  },
+
   renameChannel(
     oldName: string,
     newName: string
-  ): Promise<{ updated: number }> {
-    return request<{ updated: number }>("/api/channels", {
+  ): Promise<ApiResponse<"/api/channels", "patch">> {
+    return request("/api/channels", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ old_name: oldName, new_name: newName }),

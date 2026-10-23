@@ -1,108 +1,185 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { isYoutubeChannelUrl } from "../../components/channelFeedYoutubeSearch";
 import { useAuth } from "../../context/AuthContext";
-import { focusOnMount } from "../../utils";
+import { useChannelFollow } from "../../queries/follows";
+import type { ChannelAutodownload, ChannelStat } from "../../types";
+import { formatCompactCount, joinDotList } from "../../utils";
 import {
-  useFollows,
-  useFollowMutation,
-  useUnfollowMutation,
-} from "../../queries/follows";
+  formatCatalogProgress,
+  type CatalogProgress,
+} from "../libraryCatalogProgress";
 import {
-  isYoutubeChannelUrl,
-  normalizeChannelUrl,
-} from "../../utils/followUrl";
+  autodownloadChipLabel,
+  channelHandle,
+  retentionChipLabel,
+  type ChannelSettingsSection,
+} from "./channelSettings/channelSettingsText";
 
 /**
- * The page title. On a channel page it carries a pencil to rename the channel
- * in place (for accounts that may edit metadata).
+ * A channel page's header: who the channel is, the primary actions (Follow,
+ * Download…, Channel settings) and chips that sum up its active policies.
  */
 export default function ChannelHeader({
-  headline,
-  activeChannel,
-  isHome,
+  channel,
   channelUrl,
-  onRename,
+  stat,
+  autodownload,
+  catalogProgress,
+  onOpenSettings,
 }: {
-  headline: string;
-  activeChannel: string | null;
-  isHome: boolean;
-  /** The channel's URL from the library list; the follow button needs it. */
-  channelUrl?: string | null;
-  /** Renames the channel; the page follows it. Reports its own errors. */
-  onRename: (oldName: string, newName: string) => Promise<void>;
+  channel: string;
+  channelUrl: string | null;
+  /** The channel's row in the library list (absent for a channel not in it). */
+  stat: ChannelStat | null;
+  autodownload: ChannelAutodownload | null;
+  catalogProgress: CatalogProgress | null;
+  onOpenSettings: (section: ChannelSettingsSection | null) => void;
 }) {
   const { can } = useAuth();
-  const [renaming, setRenaming] = useState<string | null>(null);
-  const [renameValue, setRenameValue] = useState("");
+  const youtube = isYoutubeChannelUrl(channelUrl);
+  const handle = channelHandle(channelUrl);
+  const count = stat?.count ?? 0;
+  const meta = joinDotList([
+    handle,
+    `${count} video${count === 1 ? "" : "s"} in library`,
+    stat?.subscriber_count != null
+      ? `${formatCompactCount(stat.subscriber_count)} subscribers`
+      : null,
+  ]);
 
-  const followable = !!activeChannel && isYoutubeChannelUrl(channelUrl);
-  const { follows } = useFollows(followable);
-  const follow = useFollowMutation();
-  const unfollow = useUnfollowMutation();
-  const [hover, setHover] = useState(false);
-  const normalized = channelUrl ? normalizeChannelUrl(channelUrl) : null;
-  const followed =
-    !!normalized && follows.some((f) => f.channel_url === normalized);
+  const chips: {
+    section: ChannelSettingsSection;
+    label: string;
+    tone: "accent" | "muted" | "error";
+  }[] = [];
+  const autoLabel = autodownloadChipLabel(autodownload);
+  if (autoLabel)
+    chips.push({ section: "autodownload", label: autoLabel, tone: "accent" });
+  const retentionLabel = retentionChipLabel(stat?.retention);
+  if (retentionLabel)
+    chips.push({ section: "retention", label: retentionLabel, tone: "accent" });
+  if (youtube && catalogProgress)
+    chips.push({
+      section: "manage",
+      label: formatCatalogProgress(catalogProgress),
+      tone: catalogProgress.status === "error" ? "error" : "muted",
+    });
 
-  const submitRename = async (oldName: string) => {
-    const next = renameValue.trim();
-    setRenaming(null);
-    if (!next || next === oldName) return;
-    await onRename(oldName, next);
-  };
-
-  if (activeChannel && renaming === activeChannel) {
-    return (
-      <input
-        ref={focusOnMount}
-        value={renameValue}
-        onChange={(e) => setRenameValue(e.target.value)}
-        onBlur={() => submitRename(activeChannel)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") submitRename(activeChannel);
-          if (e.key === "Escape") setRenaming(null);
-        }}
-        className="rounded-lg border border-accent bg-ink-950 px-3 py-1 text-2xl font-bold text-gray-100 outline-hidden"
-      />
-    );
-  }
   return (
-    <>
-      <h1
-        className={`group ${
-          isHome ? "sr-only lg:not-sr-only lg:flex" : "flex"
-        } shrink-0 items-center gap-2 text-2xl font-bold text-gray-100`}
-      >
-        {headline}
-        {activeChannel && can("edit_metadata") && (
-          <button
-            onClick={() => {
-              setRenameValue(activeChannel);
-              setRenaming(activeChannel);
-            }}
-            title="Rename channel"
-            className="text-base text-muted opacity-0 transition-opacity hover:text-accent group-hover:opacity-100"
+    <div className="mb-4">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-60 items-center gap-3">
+          <span
+            aria-hidden="true"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/15 text-lg font-semibold text-accent"
           >
-            ✎
+            {channel.trim().charAt(0).toUpperCase() || "?"}
+          </span>
+          <div className="min-w-0">
+            <h1 className="truncate text-2xl font-bold text-gray-100">
+              {channel}
+            </h1>
+            <p className="truncate text-xs text-muted">{meta}</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {youtube && (
+            <FollowButton channel={channel} channelUrl={channelUrl} />
+          )}
+          {youtube && channelUrl && can("download") && (
+            <Link
+              to={`/download?url=${encodeURIComponent(channelUrl)}`}
+              title="Pick videos from this channel to download"
+              className={actionButton}
+            >
+              Download…
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => onOpenSettings(null)}
+            aria-label="Channel settings"
+            title="Channel settings"
+            className={`${actionButton} px-2.5`}
+          >
+            <GearIcon />
           </button>
-        )}
-      </h1>
-      {followable && channelUrl && (
-        <button
-          type="button"
-          aria-pressed={followed}
-          disabled={follow.isPending || unfollow.isPending}
-          onMouseEnter={() => setHover(true)}
-          onMouseLeave={() => setHover(false)}
-          onClick={() =>
-            followed && normalized
-              ? unfollow.mutate(normalized)
-              : follow.mutate({ url: channelUrl, name: activeChannel })
-          }
-          className="shrink-0 text-xs text-muted transition-colors hover:text-accent disabled:opacity-50"
-        >
-          {followed ? (hover ? "Unfollow" : "Following") : "Follow"}
-        </button>
+        </div>
+      </div>
+      {chips.length > 0 && (
+        <ul aria-label="Channel status" className="mt-3 flex flex-wrap gap-2">
+          {chips.map((chip) => (
+            <li key={chip.section}>
+              <button
+                type="button"
+                onClick={() => onOpenSettings(chip.section)}
+                title="Open in channel settings"
+                className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-accent ${
+                  chip.tone === "accent"
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : chip.tone === "error"
+                      ? "border-red-500/40 bg-red-500/10 text-red-300"
+                      : "border-ink-700 bg-ink-900 text-muted hover:text-gray-200"
+                }`}
+              >
+                {chip.label}
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-    </>
+    </div>
+  );
+}
+
+const actionButton =
+  "ui-panel ui-interactive inline-flex h-9 items-center justify-center rounded-lg border border-ink-700 bg-ink-900 px-3 text-sm text-gray-200 transition-colors hover:border-accent hover:text-accent disabled:opacity-50";
+
+function FollowButton({
+  channel,
+  channelUrl,
+}: {
+  channel: string;
+  channelUrl: string | null;
+}) {
+  const follow = useChannelFollow(channelUrl, channel);
+  const [hover, setHover] = useState(false);
+  return (
+    <button
+      type="button"
+      aria-pressed={follow.followed}
+      disabled={follow.pending}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      onClick={follow.toggle}
+      className={
+        follow.followed
+          ? `${actionButton} border-accent/50 text-accent`
+          : "inline-flex h-9 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-soft disabled:opacity-50"
+      }
+    >
+      {follow.followed ? (hover ? "Unfollow" : "Following") : "Follow"}
+    </button>
+  );
+}
+
+function GearIcon() {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      className="h-4.5 w-4.5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      aria-hidden="true"
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M8.6 2.6h2.8l.4 2.1 1.5.9 2-.7 1.4 2.4-1.6 1.4v1.8l1.6 1.4-1.4 2.4-2-.7-1.5.9-.4 2.1H8.6l-.4-2.1-1.5-.9-2 .7-1.4-2.4 1.6-1.4V9.1L3.3 7.7l1.4-2.4 2 .7 1.5-.9z"
+      />
+      <circle cx="10" cy="10" r="2.4" />
+    </svg>
   );
 }

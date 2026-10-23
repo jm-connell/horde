@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { isYoutubeChannelUrl, normalizeChannelUrl } from "../utils/followUrl";
 import type { ChannelFeedEntry, FollowedChannel, LiveChannel } from "../types";
 import { queryKeys } from "./keys";
 
@@ -40,6 +41,34 @@ export function useUnfollowMutation() {
     mutationFn: (url: string) => api.unfollowChannel(url),
     onSuccess: invalidate,
   });
+}
+
+/**
+ * Follow state of one channel page and a toggle for it. `followable` is false
+ * when the channel has no YouTube URL (nothing to follow).
+ */
+export function useChannelFollow(
+  channelUrl: string | null,
+  channelName: string | null
+) {
+  const followable = isYoutubeChannelUrl(channelUrl);
+  const { follows } = useFollows(followable);
+  const follow = useFollowMutation();
+  const unfollow = useUnfollowMutation();
+  const normalized = channelUrl ? normalizeChannelUrl(channelUrl) : null;
+  const followed =
+    !!normalized && follows.some((f) => f.channel_url === normalized);
+  const toggle = () => {
+    if (!channelUrl) return;
+    if (followed && normalized) unfollow.mutate(normalized);
+    else follow.mutate({ url: channelUrl, name: channelName });
+  };
+  return {
+    followable,
+    followed,
+    pending: follow.isPending || unfollow.isPending,
+    toggle,
+  };
 }
 
 /**

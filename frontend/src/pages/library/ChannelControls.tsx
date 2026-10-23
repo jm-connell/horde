@@ -1,18 +1,20 @@
-import HelpTip from "../../components/HelpTip";
 import ThemedSelect from "../../components/ThemedSelect";
 import YoutubeSearchChip from "../../components/YoutubeSearchChip";
 import { isYoutubeChannelUrl } from "../../components/channelFeedYoutubeSearch";
-import {
-  FEED_INDEX_TIP,
-  formatCatalogProgress,
-  showChannelIndexButton,
-  type CatalogProgress,
-} from "../libraryCatalogProgress";
+import { useAuth } from "../../context/AuthContext";
+import { Toggle } from "../settings/ui";
 import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "../settings/constants";
 import type { ChannelTab } from "../../api";
+import type { CatalogProgress } from "../libraryCatalogProgress";
 import type { FeedLayout, FeedSort } from "./useChannelFeedControls";
 
-/** Search, sort, layout and index controls on a channel page. */
+const box = "ui-panel rounded-lg border border-ink-700 bg-ink-900";
+
+/**
+ * The quick view controls above a channel's feed: search, Videos/Live,
+ * sort, the undownloaded filter, layout and tags. Settings that stick to the
+ * channel live in the channel settings sheet instead.
+ */
 export default function ChannelControls({
   channelUrl,
   channelTab,
@@ -25,9 +27,9 @@ export default function ChannelControls({
   onToggleFeedOrder,
   feedLayout,
   onFeedLayout,
+  showUndownloaded,
+  onToggleUndownloaded,
   catalogProgress,
-  indexingChannel,
-  onIndexChannel,
   youtubePrefSaving,
   onToggleYoutubeSearch,
   hasTags,
@@ -45,24 +47,55 @@ export default function ChannelControls({
   onToggleFeedOrder: () => void;
   feedLayout: FeedLayout;
   onFeedLayout: (layout: FeedLayout) => void;
+  showUndownloaded: boolean;
+  onToggleUndownloaded: () => void;
   catalogProgress: CatalogProgress | null;
-  indexingChannel: boolean;
-  onIndexChannel: () => void;
   youtubePrefSaving: boolean;
   onToggleYoutubeSearch: (value: boolean) => void;
   hasTags: boolean;
   showTags: boolean;
   onToggleTags: () => void;
 }) {
+  const { can } = useAuth();
   const youtubeChannel = isYoutubeChannelUrl(channelUrl);
   const streamsTab = channelTab === "streams";
   return (
-    <>
+    <div
+      role="group"
+      aria-label="Feed view"
+      className={`flex flex-wrap items-center gap-2 ${
+        showTags && hasTags ? "mb-2" : "mb-5"
+      }`}
+    >
+      <div className="relative min-w-0 basis-full sm:max-w-sm sm:flex-1 sm:basis-56">
+        <input
+          type="search"
+          aria-label={streamsTab ? "Filter streams" : "Search this channel"}
+          value={feedSearch}
+          onChange={(e) => onFeedSearch(e.target.value)}
+          placeholder={streamsTab ? "Filter streams" : "Search this channel"}
+          className={`${box} ui-interactive w-full py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent ${
+            youtubeChannel ? "pr-8" : "pr-3"
+          }`}
+        />
+        {youtubeChannel && !streamsTab ? (
+          <YoutubeSearchChip
+            checked={catalogProgress?.youtubeSearchEffective ?? true}
+            disabled={youtubePrefSaving || !channelUrl || !can("edit_metadata")}
+            title={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
+            onToggle={() =>
+              onToggleYoutubeSearch(
+                !(catalogProgress?.youtubeSearchEffective ?? true)
+              )
+            }
+          />
+        ) : null}
+      </div>
       {youtubeChannel && (
         <div
           role="group"
           aria-label="Channel tab"
-          className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5"
+          className={`${box} flex shrink-0 p-0.5`}
         >
           {(
             [
@@ -76,7 +109,7 @@ export default function ChannelControls({
               aria-pressed={channelTab === tab}
               title={title}
               onClick={() => onChannelTab(tab)}
-              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+              className={`rounded-md px-3 py-1 text-sm transition-colors ${
                 channelTab === tab
                   ? "bg-accent/15 text-accent"
                   : "text-gray-400 hover:text-gray-200"
@@ -87,62 +120,39 @@ export default function ChannelControls({
           ))}
         </div>
       )}
-      <div className="relative min-w-40 w-40 max-w-64 grow sm:min-w-52 sm:w-52">
-        <input
-          data-header-search
-          value={feedSearch}
-          onChange={(e) => onFeedSearch(e.target.value)}
-          placeholder={streamsTab ? "Filter streams" : "Search this channel"}
-          className={`ui-panel ui-interactive w-full rounded-lg border border-ink-700 bg-ink-900 py-2 pl-3 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent sm:pl-4 ${
-            youtubeChannel ? "pr-8" : "pr-3 sm:pr-4"
-          }`}
+      <div className="flex shrink-0 items-center gap-1">
+        <ThemedSelect
+          aria-label="Feed sort"
+          value={feedSort}
+          options={[
+            { value: "recent", label: "Recent" },
+            { value: "popular", label: "Popular" },
+          ]}
+          onChange={onFeedSort}
+          className="min-w-26 shrink-0"
+          buttonClassName="w-full sm:px-3"
         />
-        {youtubeChannel && !streamsTab ? (
-          <YoutubeSearchChip
-            checked={catalogProgress?.youtubeSearchEffective ?? true}
-            disabled={youtubePrefSaving || !channelUrl}
-            title={DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP}
-            onToggle={() =>
-              onToggleYoutubeSearch(
-                !(catalogProgress?.youtubeSearchEffective ?? true)
-              )
-            }
-          />
-        ) : null}
+        <button
+          type="button"
+          onClick={onToggleFeedOrder}
+          className={`${box} ui-interactive shrink-0 px-2.5 py-2 text-sm text-gray-100 hover:border-accent`}
+          aria-label={
+            feedOrder === "desc" ? "Sort descending" : "Sort ascending"
+          }
+          title="Toggle sort direction"
+        >
+          {feedOrder === "desc" ? "↓" : "↑"}
+        </button>
       </div>
-      {youtubeChannel &&
-        !streamsTab &&
-        (indexingChannel || showChannelIndexButton(catalogProgress)) && (
-          <button
-            type="button"
-            onClick={onIndexChannel}
-            disabled={indexingChannel || !channelUrl}
-            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
-            title="Index this channel’s uploads for search"
-          >
-            {indexingChannel ? "Queuing…" : "Index channel"}
-          </button>
-        )}
-      <ThemedSelect
-        aria-label="Feed sort"
-        value={feedSort}
-        options={[
-          { value: "recent", label: "Recent" },
-          { value: "popular", label: "Popular" },
-        ]}
-        onChange={onFeedSort}
-        className="min-w-26 shrink-0"
-        buttonClassName="w-full sm:px-3"
-      />
-      <button
-        type="button"
-        onClick={onToggleFeedOrder}
-        className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-2 text-sm text-gray-100 hover:border-accent sm:px-3"
-        title="Toggle sort direction"
+      <label className="inline-flex shrink-0 items-center gap-2 px-1 text-sm text-gray-300">
+        Undownloaded
+        <Toggle checked={showUndownloaded} onChange={onToggleUndownloaded} />
+      </label>
+      <div
+        role="group"
+        aria-label="Layout"
+        className={`${box} flex shrink-0 p-0.5 sm:ml-auto`}
       >
-        {feedOrder === "desc" ? "↓" : "↑"}
-      </button>
-      <div className="ui-panel flex shrink-0 rounded-lg border border-ink-700 bg-ink-900 p-0.5">
         <LayoutButton
           layout="grid"
           current={feedLayout}
@@ -169,23 +179,13 @@ export default function ChannelControls({
         <button
           type="button"
           onClick={onToggleTags}
-          className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
+          aria-pressed={showTags}
+          className={`${box} ui-interactive shrink-0 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent`}
         >
-          {showTags ? "Hide tags" : "Show tags"}
+          {showTags ? "Hide tags" : "Tags"}
         </button>
       )}
-      {catalogProgress && !streamsTab && (
-        <span
-          className={`ml-auto inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-xs ${
-            catalogProgress.status === "error" ? "text-red-400" : "text-muted"
-          }`}
-          title={catalogProgress.lastError || undefined}
-        >
-          {formatCatalogProgress(catalogProgress)}
-          <HelpTip text={FEED_INDEX_TIP} placement="bottom" />
-        </span>
-      )}
-    </>
+    </div>
   );
 }
 
@@ -207,6 +207,8 @@ function LayoutButton({
       type="button"
       onClick={() => onSelect(layout)}
       title={title}
+      aria-label={title}
+      aria-pressed={current === layout}
       className={`rounded-md px-2.5 py-1.5 transition-colors ${
         current === layout
           ? "bg-accent/15 text-accent"

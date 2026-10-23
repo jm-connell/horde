@@ -1,5 +1,4 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
-import ChannelAutodownloadModal from "../components/ChannelAutodownloadModal";
 import ChannelFeed from "../components/ChannelFeed";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
@@ -14,6 +13,9 @@ import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
+import ChannelHeader from "./library/ChannelHeader";
+import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
+import type { ChannelSettingsSection } from "./library/channelSettings/channelSettingsText";
 import HomeControls from "./library/HomeControls";
 import LibraryGrid, { type LibraryGridOptions } from "./library/LibraryGrid";
 import LibraryHeader from "./library/LibraryHeader";
@@ -125,6 +127,16 @@ function OnlineLibrary() {
     );
   }, [activeChannel, channels, channelNav.channelUrlOverrides]);
   const catalog = useChannelCatalog(activeChannel, activeChannelUrl);
+  const activeChannelStat = useMemo(
+    () => channels.find((c) => c.channel === activeChannel) ?? null,
+    [channels, activeChannel]
+  );
+  // The channel settings sheet: closed (undefined), open at the top (null) or
+  // at one section. A different channel closes it.
+  const [settingsSheet, setSettingsSheet] = useState<
+    ChannelSettingsSection | null | undefined
+  >(undefined);
+  useEffect(() => setSettingsSheet(undefined), [activeChannel]);
   const feed = useChannelFeedControls(activeChannel);
   const channelLive = useChannelLive(
     onChannelPage && isYoutubeChannelUrl(activeChannelUrl)
@@ -199,29 +211,16 @@ function OnlineLibrary() {
       />
 
       <div ref={queueDock.mainContentRef} className="min-w-0 flex-1">
-        <LibraryHeader
-          headline={headline}
-          activeChannel={activeChannel}
-          activeTag={activeTag}
-          activeChannelUrl={activeChannelUrl}
-          isHome={isHome}
-          onChannelPage={onChannelPage}
-          showHomeTabs={showHomeTabs}
-          onRecommendedTab={onRecommendedTab}
-          homeTab={homeTab}
-          onHomeTab={setHomeTab}
-          hasTags={hasTags}
-          showTags={showTags}
-          onToggleTags={toggleTagsFromHeader}
-          settings={settings}
-          onShowUndownloaded={(show) =>
-            update({ showUndownloadedOnChannel: show })
-          }
-          autodownload={catalog.autodownload}
-          onOpenAutodownload={() => catalog.setAutodownloadOpen(true)}
-          onRenameChannel={channelNav.renameChannel}
-        >
-          {onChannelPage ? (
+        {onChannelPage && activeChannel ? (
+          <>
+            <ChannelHeader
+              channel={activeChannel}
+              channelUrl={activeChannelUrl}
+              stat={activeChannelStat}
+              autodownload={catalog.autodownload}
+              catalogProgress={catalog.catalogProgress}
+              onOpenSettings={setSettingsSheet}
+            />
             <ChannelControls
               channelUrl={activeChannelUrl}
               channelTab={feed.channelTab}
@@ -234,9 +233,14 @@ function OnlineLibrary() {
               onToggleFeedOrder={feed.toggleFeedOrder}
               feedLayout={feed.feedLayout}
               onFeedLayout={feed.setFeedLayout}
+              showUndownloaded={settings.showUndownloadedOnChannel}
+              onToggleUndownloaded={() =>
+                update({
+                  showUndownloadedOnChannel:
+                    !settings.showUndownloadedOnChannel,
+                })
+              }
               catalogProgress={catalog.catalogProgress}
-              indexingChannel={catalog.indexingChannel}
-              onIndexChannel={() => void catalog.triggerChannelIndex()}
               youtubePrefSaving={catalog.youtubePrefSaving}
               onToggleYoutubeSearch={(value) =>
                 void catalog.setChannelYoutubeSearch(value)
@@ -245,7 +249,20 @@ function OnlineLibrary() {
               showTags={showTags}
               onToggleTags={() => setShowTags((s) => !s)}
             />
-          ) : (
+          </>
+        ) : (
+          <LibraryHeader
+            headline={headline}
+            isHome={isHome}
+            showHomeTabs={showHomeTabs}
+            onRecommendedTab={onRecommendedTab}
+            homeTab={homeTab}
+            onHomeTab={setHomeTab}
+            hasTags={hasTags}
+            showTags={showTags}
+            onToggleTags={toggleTagsFromHeader}
+            settings={settings}
+          >
             <HomeControls
               sort={sort}
               order={order}
@@ -261,8 +278,8 @@ function OnlineLibrary() {
                 selection.selectMode ? selection.exit : selection.enter
               }
             />
-          )}
-        </LibraryHeader>
+          </LibraryHeader>
+        )}
 
         {!onRecommendedTab && (activeTag || hasTags) && (
           <TagDrawer
@@ -361,26 +378,14 @@ function OnlineLibrary() {
       {queueDock.dockedBottom && (
         <QueueBottomDock viewportWidth={sidebar.viewportWidth} />
       )}
-      {catalog.autodownloadOpen && activeChannel && (
-        <ChannelAutodownloadModal
+      {settingsSheet !== undefined && activeChannel && (
+        <ChannelSettingsSheet
           channel={activeChannel}
-          policy={
-            catalog.autodownload ?? {
-              configured: false,
-              enabled: false,
-              previous_mode: "none",
-              previous_count: 10,
-              quality_preset: "1080p",
-              include_completed_streams: false,
-              channel_url: activeChannelUrl,
-              channel_name: activeChannel,
-              pending_estimate: 0,
-              catalog_max_videos: 1000,
-            }
-          }
-          saving={catalog.autodownloadSaving}
-          onClose={() => catalog.setAutodownloadOpen(false)}
-          onSave={(payload) => void catalog.saveAutodownload(payload)}
+          channelUrl={activeChannelUrl}
+          section={settingsSheet}
+          catalog={catalog}
+          onRename={(next) => channelNav.renameChannel(activeChannel, next)}
+          onClose={() => setSettingsSheet(undefined)}
         />
       )}
     </div>

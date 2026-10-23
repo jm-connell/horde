@@ -43,3 +43,18 @@ test("the edit-details form has no serious accessibility violations", async ({
   ).toBeVisible();
   await expectNoSeriousViolations(page, "watch/edit-details");
 });
+
+test("a channel page with its settings sheet open has no serious accessibility violations", async ({
+  page,
+}) => {
+  await page.goto("/?channel=Northwind");
+  await expect(
+    page.getByRole("heading", { name: "Northwind", level: 1 })
+  ).toBeVisible();
+  await expectNoSeriousViolations(page, "library/channel");
+  await page.getByRole("button", { name: "Channel settings" }).click();
+  await expect(
+    page.getByRole("button", { name: "Save cleanup rule" })
+  ).toBeVisible();
+  await expectNoSeriousViolations(page, "library/channel-settings");
+});

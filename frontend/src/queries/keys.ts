@@ -32,6 +32,9 @@ export const queryKeys = {
     list: (sort: string | undefined, order: string | undefined) =>
       ["channels", "list", sort ?? "", order ?? ""] as const,
     catalogStatus: ["channels", "catalog-status"] as const,
+    retention: (channel: string) => ["channels", "retention", channel] as const,
+    retentionPreview: (channel: string, limits: unknown) =>
+      ["channels", "retention-preview", channel, limits] as const,
   },
   metadata: {
     syncStatus: ["metadata", "sync-status"] as const,

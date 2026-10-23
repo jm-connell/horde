@@ -223,14 +223,13 @@ test("a channel link opens that channel and drops the legacy tab parameter", asy
   await expect(page).toHaveURL(/channel=Kiln/);
 });
 
-test("a channel is renamed from its heading", async ({ page }) => {
+test("a channel is renamed from its settings", async ({ page }) => {
   await page.goto("/?channel=Kiln");
-  const heading = page.getByRole("heading", { name: /^Kiln/, level: 1 });
-  await heading.hover();
-  await page.getByTitle("Rename channel").click();
-  const input = page.locator("input.text-2xl");
-  await input.fill("Kiln Works");
-  await input.press("Enter");
+  await page.getByRole("button", { name: "Channel settings" }).click();
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  await sheet.getByLabel("Channel name").fill("Kiln Works");
+  await sheet.getByRole("button", { name: "Rename" }).click();
+  await expect(sheet).toHaveCount(0);
   await expect(
     page.getByRole("heading", { name: "Kiln Works", level: 1 })
   ).toBeVisible();

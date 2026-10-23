@@ -24,7 +24,7 @@ export function useChannelNavigation(input: {
     afterNavigate,
     reloadChannels,
   } = input;
-  const { showError } = useToast();
+  const { showError, showToast } = useToast();
   const { setSearch } = useSearch();
   // URLs of channels opened from a remote search, until the library knows them.
   const [channelUrlOverrides, setChannelUrlOverrides] =
@@ -65,7 +65,11 @@ export function useChannelNavigation(input: {
 
   const renameChannel = async (oldName: string, next: string) => {
     try {
-      await api.renameChannel(oldName, next);
+      const result = await api.renameChannel(oldName, next);
+      if (result.retention_disabled)
+        showToast(
+          "Retention rules were turned off because the channels were merged"
+        );
       if (activeChannel === oldName) setActiveChannel(next);
     } catch (err) {
       showError(`Could not rename channel: ${describeError(err)}`);
