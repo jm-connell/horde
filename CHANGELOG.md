@@ -110,6 +110,18 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **A tidier channel page.** The header now shows the channel (handle, videos
+  in your library, subscribers) with just **Follow**, **Download…** (opens the
+  Download page with the channel's link) and a gear for **Channel settings**.
+  Everything that sticks to the channel lives in that one panel, a side sheet
+  on wide screens and a full-height sheet on phones: automatic downloads, the
+  new cleanup rules with a live preview, following, the YouTube search choice,
+  and rename and indexing under **Manage**. Chips under the name show what is
+  on ("Auto-download on · 1080p", "Keeps latest 20", the index state) and open
+  the matching section. Search, Videos/Live, sort, the undownloaded switch,
+  layout and tags share one compact toolbar above the feed. Sections an
+  account may not change are shown read-only. The Autodownload modal and the
+  pencil beside the channel name are gone.
 - **Manage playlists** now means creating App-wide playlists and editing or
   deleting the ones other people made. Members without it can still make and
   change their own private playlists, and the **+ Playlist** buttons are shown
