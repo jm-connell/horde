@@ -72,8 +72,8 @@ def enqueue_playlist_entry(
             paused=download_queue.is_paused(),
         )
         session.add(job)
-        catalog_skips.clear_deleted(session, yt_id)  # asked for by hand
         try:
+            catalog_skips.clear_deleted(session, yt_id)  # asked for by hand
             session.commit()
         except IntegrityError:
             # The playlist was deleted mid-import (playlist_id is an FK).

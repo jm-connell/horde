@@ -68,6 +68,26 @@ def test_import_returns_immediately_and_tags_jobs_with_playlist(
     assert _order(init_db, playlist) == [lib.id]
 
 
+def test_importing_a_playlist_lifts_the_deleted_skip_of_its_videos(
+    init_db, playlist, queued_only
+):
+    from app.models import ChannelCatalog, ChannelCatalogSkip
+    from app.services.channel_catalog import skips
+
+    with Session(init_db["engine"]) as s:
+        catalog = ChannelCatalog(channel_url="https://www.youtube.com/@x")
+        s.add(catalog)
+        s.commit()
+        skips.record_catalog_skip(
+            s, catalog.id, "pppppppp001", reason="deleted", commit=True
+        )
+
+    run_playlist_entries(playlist, [_url(1)], "best")
+
+    with Session(init_db["engine"]) as s:
+        assert s.exec(select(ChannelCatalogSkip)).all() == []
+
+
 def test_jobs_honour_a_paused_queue(init_db, playlist, queued_only):
     download_queue._global_paused = True
     try:
