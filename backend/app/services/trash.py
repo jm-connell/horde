@@ -446,6 +446,12 @@ def _moves_of(entry: TrashEntry) -> list[_Move]:
     return moves
 
 
+def _downloading_youtube_ids(session: Session) -> set[str]:
+    from .channel_autodownload import active_youtube_ids
+
+    return active_youtube_ids(session)
+
+
 def _check_restorable(session: Session, entry: TrashEntry, moves: list[_Move]) -> None:
     video_id = entry.video_id
     if session.get(Video, video_id) is not None:
@@ -457,6 +463,11 @@ def _check_restorable(session: Session, entry: TrashEntry, moves: list[_Move]) -
         )
     if find_video_by_path(session, entry.relative_path) is not None:
         raise TrashConflict("Another library video uses the same file path.")
+    if entry.youtube_id and entry.youtube_id in _downloading_youtube_ids(session):
+        raise TrashConflict(
+            "This video is being downloaded again; wait for it to finish, "
+            "or cancel the download, then restore it."
+        )
     for move in moves:
         if _exists(move.live()):
             raise TrashConflict(f"A file already exists at {move.rel}.")
@@ -482,7 +493,7 @@ def restore(session: Session, entry_id: int) -> Video:
     media_rel = entry.relative_path
     # The folder watcher must not import the media file as a new video in the
     # moment between moving it back and committing its row.
-    scanner.mark_active(media_rel)
+    scanner.hold(media_rel)
     done: list[_Move] = []
     try:
         # The files first, with no write transaction open; then one short one.
@@ -500,7 +511,7 @@ def restore(session: Session, entry_id: int) -> Video:
         logger.warning("could not restore trash entry %s", entry_id, exc_info=True)
         raise TrashError(f"Could not restore the video: {exc}") from exc
     finally:
-        scanner.unmark_active(media_rel)
+        scanner.release(media_rel)
     _remove_trash_dirs(folder)
     return video
 

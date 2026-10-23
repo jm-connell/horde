@@ -48,6 +48,9 @@ _FRAGMENT_RE = FRAGMENT_RE
 # Relative paths / source IDs the downloader is actively writing.
 _active_downloads: set[str] = set()
 _active_source_ids: set[str] = set()
+# Paths a trash restore is putting back, counted: two holds of one path need two
+# releases, and a download's mark/unmark above never touches them.
+_held_paths: dict[str, int] = {}
 _active_lock = threading.Lock()
 
 _SOURCE_ID_RE = re.compile(r"\[[^\]]+\]")
@@ -82,9 +85,24 @@ def unmark_active(rel_path: str) -> None:
             _active_source_ids.discard(match.group(0))
 
 
+def hold(rel_path: str) -> None:
+    """Keep the scanner from importing ``rel_path`` until ``release`` (a restore)."""
+    with _active_lock:
+        _held_paths[rel_path] = _held_paths.get(rel_path, 0) + 1
+
+
+def release(rel_path: str) -> None:
+    with _active_lock:
+        left = _held_paths.get(rel_path, 0) - 1
+        if left > 0:
+            _held_paths[rel_path] = left
+        else:
+            _held_paths.pop(rel_path, None)
+
+
 def _is_active(rel_path: str) -> bool:
     with _active_lock:
-        if rel_path in _active_downloads:
+        if rel_path in _active_downloads or rel_path in _held_paths:
             return True
         name = Path(rel_path).name
         return any(source_id in name for source_id in _active_source_ids)

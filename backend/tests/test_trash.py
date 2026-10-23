@@ -954,3 +954,64 @@ def test_restoring_an_entry_that_is_already_gone_changes_nothing(
     assert resp.status_code == 404
     with Session(init_db["engine"]) as session:
         assert session.get(Video, video.id) is None
+
+
+# --- Restoring while a download of the same video runs ------------------------
+
+
+def test_restore_refuses_while_the_same_video_is_downloading(
+    client, init_db, add_video
+):
+    from app.models import DownloadJob, JobStatus
+
+    video = add_video(write_file=True, yt_id="inflight001")
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    with Session(init_db["engine"]) as session:
+        session.add(
+            DownloadJob(
+                url="https://www.youtube.com/watch?v=inflight001",
+                status=JobStatus.downloading,
+            )
+        )
+        session.commit()
+
+    resp = client.post(f"/api/trash/{entry_id}/restore")
+
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "trash_conflict"
+    assert (
+        init_db["downloads"]
+        / TRASH_DIR_NAME
+        / _folder(init_db, entry_id)
+        / video.file_path
+    ).exists()
+
+    with Session(init_db["engine"]) as session:
+        job = session.exec(select(DownloadJob)).one()
+        job.status = JobStatus.completed
+        session.add(job)
+        session.commit()
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
+
+
+def test_a_restore_does_not_clear_the_mark_of_a_download_of_the_same_file():
+    rel = "Chan/2024/Title [abcdefghijk].mp4"
+    scanner.mark_active(rel)  # the download's own mark
+    scanner.hold(rel)
+    scanner.release(rel)
+    try:
+        assert scanner._is_active(rel) is True
+    finally:
+        scanner.unmark_active(rel)
+    assert scanner._is_active(rel) is False
+    # And a download finishing does not drop a restore's hold.
+    scanner.hold(rel)
+    scanner.mark_active(rel)
+    scanner.unmark_active(rel)
+    try:
+        assert scanner._is_active(rel) is True
+    finally:
+        scanner.release(rel)
+    assert scanner._is_active(rel) is False
