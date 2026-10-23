@@ -1,5 +1,5 @@
 import json
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -15,10 +15,13 @@ from ..services.ai.provider import (
     normalize_openrouter_model,
     openrouter_api_key_set,
 )
+from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
 from ..services.css_sanitize import sanitize_ui_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+TwoFactorRequirement = Literal["off", "admins", "everyone"]
 
 #: Largest the stored ``ui`` blob may grow to (all keys together, as JSON).
 UI_MAX_BYTES = 256 * 1024
@@ -121,6 +124,8 @@ class AppSettingsRead(BaseModel):
     max_library_bytes: int | None = None
     # Write Jellyfin / Kodi / Plex files (.nfo, -thumb.jpg) beside the media.
     media_server_sidecars: bool = False
+    # Who must sign in with a second step (administrators only see this).
+    require_two_factor: TwoFactorRequirement = "off"
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
     settings_degraded: bool = False
     setup_completed: bool = False
@@ -144,6 +149,7 @@ class AppSettingsUpdate(BaseModel):
         default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
     )
     media_server_sidecars: bool | None = None
+    require_two_factor: TwoFactorRequirement | None = None
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
     ai: AiSettingsUpdate | None = None
@@ -177,6 +183,7 @@ MEMBER_HIDDEN_FIELDS = (
     "channel_catalog_max_videos",
     "max_library_bytes",
     "media_server_sidecars",
+    "require_two_factor",
     "settings_degraded",
 )
 
@@ -264,6 +271,10 @@ def _settings_read(
             data.get("max_library_bytes")
         ),
         media_server_sidecars=bool(data.get(media_sidecars.SETTING)),
+        require_two_factor=cast(
+            TwoFactorRequirement,
+            two_factor.normalize_requirement(data.get("require_two_factor")),
+        ),
         setup_completed=bool(data.get("setup_completed")),
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
@@ -324,6 +335,8 @@ def update_settings(
         )
     if payload.media_server_sidecars is not None:
         updates[media_sidecars.SETTING] = payload.media_server_sidecars
+    if payload.require_two_factor is not None:
+        updates["require_two_factor"] = payload.require_two_factor
     if payload.setup_completed is False:
         raise HTTPException(
             status_code=400,

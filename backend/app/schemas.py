@@ -834,6 +834,11 @@ class AuthUserRead(BaseModel):
     avatar_version: int | None = None
     #: Other accounts on a device may see this account's offline downloads there.
     share_downloads: bool = True
+    #: Signs in with a code from an authenticator app (or a recovery code) as well.
+    two_factor_enabled: bool = False
+    #: An administrator requires two-step sign-in and this account has not set it up:
+    #: until it does, the server answers everything but the setup routes with 403.
+    two_factor_enrollment_required: bool = False
 
 
 class AuthState(BaseModel):
@@ -846,6 +851,55 @@ class AuthState(BaseModel):
 class LoginRequest(BaseModel):
     username: str = Field(max_length=200)
     password: str = Field(max_length=2000)
+
+
+class TotpLoginRequest(BaseModel):
+    """The second step of a two-step sign-in."""
+
+    #: The ``extra.pending_token`` of the ``totp_required`` answer.
+    pending_token: str = Field(max_length=400)
+    #: A code from the authenticator app, or a recovery code.
+    code: str = Field(max_length=64)
+
+
+class TwoFactorStatus(BaseModel):
+    enabled: bool
+    enabled_at: datetime | None = None
+    recovery_codes_left: int = 0
+    #: An administrator requires two-step sign-in of this account.
+    required: bool = False
+
+
+class TwoFactorSetupRequest(BaseModel):
+    current_password: str = Field(max_length=2000)
+
+
+class TwoFactorSetup(BaseModel):
+    """What the person adds to their authenticator app (shown once, never stored in the client)."""
+
+    #: The key in groups of four, for typing it in by hand.
+    secret: str
+    otpauth_uri: str
+    #: The ``otpauth_uri`` as a QR code (SVG markup, drawn on the server).
+    qr_svg: str
+
+
+class TwoFactorConfirm(BaseModel):
+    code: str = Field(max_length=64)
+
+
+class TwoFactorProof(BaseModel):
+    """Turning two-step sign-in off, or replacing its recovery codes."""
+
+    current_password: str = Field(max_length=2000)
+    #: A code from the authenticator app (or an unused recovery code).
+    code: str = Field(max_length=64)
+
+
+class TwoFactorRecoveryCodes(BaseModel):
+    """Shown once: the server keeps only a keyed hash of each."""
+
+    recovery_codes: list[str]
 
 
 class BootstrapRequest(BaseModel):
@@ -929,6 +983,7 @@ class UserRead(BaseModel):
     #: Profile picture cache key; None when there is none.
     avatar_version: int | None = None
     share_downloads: bool = True
+    two_factor_enabled: bool = False
 
 
 class UserCreate(BaseModel):

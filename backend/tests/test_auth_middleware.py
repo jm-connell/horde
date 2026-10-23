@@ -24,6 +24,8 @@ EXPECTED_PUBLIC = {
     ("GET", "/api/health"),
     ("GET", "/api/auth/state"),
     ("POST", "/api/auth/login"),
+    # The second step of a two-step sign-in: needs a signed ticket from the first.
+    ("POST", "/api/auth/login/totp"),
     ("POST", "/api/auth/bootstrap"),
     # Forgot password: the code only ever goes to the server log.
     ("POST", "/api/auth/forgot"),

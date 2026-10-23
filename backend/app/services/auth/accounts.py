@@ -27,6 +27,7 @@ from ...database import rowcount
 from ...models import (
     TrashEntry,
     User,
+    UserRecoveryCode,
     UserSession,
     UserSettings,
     UserVideoState,
@@ -115,6 +116,11 @@ class AuthUser:
     avatar_version: int | None = None
     #: Other accounts on a device may see this account's downloads there.
     share_downloads: bool = True
+    #: Signs in with a second step (services/auth/two_factor.py).
+    two_factor_enabled: bool = False
+    #: The administrator requires two-step sign-in and this account has not set it
+    #: up: set by ``AuthMiddleware``, which then refuses everything but enrollment.
+    must_enroll_two_factor: bool = False
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -125,6 +131,8 @@ class AuthUser:
             permissions=effective_permissions(user),
             avatar_version=user.avatar_version,
             share_downloads=user.share_downloads,
+            two_factor_enabled=user.totp_enabled_at is not None
+            and bool(user.totp_secret),
         )
 
     def can(self, permission: str) -> bool:
@@ -297,7 +305,8 @@ def authenticate(
 
     An unknown name still pays for a full hash check (against ``dummy_hash``) so
     response time does not reveal which names exist. Disabled accounts fail
-    exactly like a wrong password.
+    exactly like a wrong password. An account with two-step sign-in is not signed
+    in by this alone: its ``last_login_at`` waits for the second step (``mark_login``).
     """
     user = get_by_username(session, username)
     stored = user.password_hash if user is not None else dummy_hash
@@ -306,11 +315,20 @@ def authenticate(
         return None
     if passwords.needs_rehash(user.password_hash):
         user.password_hash = passwords.hash_password(password)
-    user.last_login_at = utcnow()
+    if user.totp_enabled_at is None:
+        user.last_login_at = utcnow()
     session.add(user)
     session.commit()
     session.refresh(user)
     return user
+
+
+def mark_login(session: Session, user: User) -> None:
+    """Record a completed sign-in (the second step of a two-step one)."""
+    user.last_login_at = utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
 
 
 def set_password(
@@ -438,6 +456,9 @@ def delete_user(
     covers = playlist_owners.hand_over(session, user_id, successor_id)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
+    session.execute(
+        delete(UserRecoveryCode).where(col(UserRecoveryCode.user_id) == user_id)
+    )
     session.execute(
         delete(UserVideoState).where(col(UserVideoState.user_id) == user_id)
     )

@@ -11,9 +11,14 @@ from fastapi import APIRouter, Depends, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlmodel import Session
 
-from ..auth import CodedHTTPException, current_user
+from ..auth import (
+    CodedHTTPException,
+    current_user,
+    flag_enrollment,
+    two_factor_requirement,
+)
 from ..context import get_session
-from ..models import User, require_id
+from ..models import User, as_utc, require_id
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
     AuthLoginResult,
@@ -28,9 +33,25 @@ from ..schemas import (
     PasswordVerify,
     SessionList,
     SessionRead,
+    TotpLoginRequest,
+    TwoFactorConfirm,
+    TwoFactorProof,
+    TwoFactorRecoveryCodes,
+    TwoFactorSetup,
+    TwoFactorSetupRequest,
+    TwoFactorStatus,
 )
 from ..services import app_settings, uploads
-from ..services.auth import accounts, avatars, passwords, reset_codes, sessions
+from ..services.auth import (
+    accounts,
+    avatars,
+    login_tickets,
+    passwords,
+    reset_codes,
+    sessions,
+    totp,
+    two_factor,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
 
@@ -51,6 +72,8 @@ def user_read(user: AuthUser) -> AuthUserRead:
         permissions=sorted(user.permissions),
         avatar_version=user.avatar_version,
         share_downloads=user.share_downloads,
+        two_factor_enabled=user.two_factor_enabled,
+        two_factor_enrollment_required=user.must_enroll_two_factor,
     )
 
 
@@ -119,6 +142,45 @@ def bootstrap(
     return AuthLoginResult(user=user_read(AuthUser.of(user)))
 
 
+def _check_throttle(runtime: AuthRuntime, address: str, key: str) -> None:
+    """429 while ``key`` (a username, or ``reset:``/``password:`` + name) must wait."""
+    wait = runtime.limiter.retry_after(address, key)
+    if wait:
+        raise CodedHTTPException(
+            429,
+            f"Too many failed attempts. Try again in {wait} seconds.",
+            "rate_limited",
+            headers={"Retry-After": str(wait)},
+        )
+
+
+def _complete_sign_in(
+    session: Session,
+    request: Request,
+    response: Response,
+    runtime: AuthRuntime,
+    user: User,
+    address: str,
+) -> AuthLoginResult:
+    """The last step of every way in: forget the failures, start the session."""
+    runtime.limiter.record_success(address, user.username_norm)
+    # The password was remembered after all: pending reset codes go.
+    runtime.reset_codes.discard(user.username_norm)
+    _open_session(session, request, response, runtime, user)
+    return AuthLoginResult(user=user_read(flag_enrollment(AuthUser.of(user))))
+
+
+def _totp_required(runtime: AuthRuntime, user: User) -> CodedHTTPException:
+    """The answer to a correct password when the account has a second step."""
+    ticket = runtime.pending_logins.issue(runtime.secret(), user)
+    return CodedHTTPException(
+        401,
+        "Enter the code from your authenticator app",
+        "totp_required",
+        extra={"pending_token": ticket},
+    )
+
+
 @router.post("/login", response_model=AuthLoginResult)
 def login(
     payload: LoginRequest,
@@ -133,14 +195,7 @@ def login(
         )
     address = runtime.client_address(request)
     norm = payload.username.strip().lower()
-    wait = runtime.limiter.retry_after(address, norm)
-    if wait:
-        raise CodedHTTPException(
-            429,
-            f"Too many failed attempts. Try again in {wait} seconds.",
-            "rate_limited",
-            headers={"Retry-After": str(wait)},
-        )
+    _check_throttle(runtime, address, norm)
     user = accounts.authenticate(
         session, payload.username, payload.password, dummy_hash=runtime.dummy_hash()
     )
@@ -150,11 +205,60 @@ def login(
         raise CodedHTTPException(
             401, "Invalid username or password", "invalid_credentials"
         )
-    runtime.limiter.record_success(address, norm)
-    # The password was remembered after all: pending reset codes go.
-    runtime.reset_codes.discard(user.username_norm)
-    _open_session(session, request, response, runtime, user)
-    return AuthLoginResult(user=user_read(AuthUser.of(user)))
+    if two_factor.is_enabled(user):
+        # A right password proves nothing about the second factor: the failure
+        # counters stay as they are until the code step succeeds, so alternating
+        # right passwords with wrong codes cannot reset the throttle.
+        raise _totp_required(runtime, user)
+    return _complete_sign_in(session, request, response, runtime, user, address)
+
+
+@router.post("/login/totp", response_model=AuthLoginResult)
+def login_totp(
+    payload: TotpLoginRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+):
+    """Second step: trade the ticket from ``totp_required`` and a code for the session.
+
+    The code is an authenticator code or an unused recovery code. Wrong codes
+    count in the same throttle as wrong passwords; five wrong tries burn the ticket.
+    """
+    runtime = _runtime(request)
+    _refuse_when_auth_disabled(runtime)
+    expired = CodedHTTPException(
+        401, "That sign-in expired. Enter your password again.", "totp_ticket_invalid"
+    )
+    ticket = login_tickets.parse(payload.pending_token)
+    if ticket is None:
+        raise expired
+    user = accounts.get_user(session, ticket.user_id)
+    if (
+        user is None
+        or user.disabled
+        or not two_factor.is_enabled(user)
+        or not login_tickets.verify(
+            runtime.secret(), ticket, login_tickets.ticket_epoch(user)
+        )
+    ):
+        raise expired
+    address = runtime.client_address(request)
+    _check_throttle(runtime, address, user.username_norm)
+    if not runtime.pending_logins.attempt(ticket):
+        raise expired
+    if two_factor.check_code(session, user, payload.code, key=runtime.secret()) is None:
+        runtime.limiter.record_failure(address, user.username_norm)
+        logger.warning(
+            "Failed second step for %r from %s", user.username_norm[:64], address
+        )
+        raise CodedHTTPException(
+            401, "That code is wrong or has already been used", "invalid_totp"
+        )
+    if not runtime.pending_logins.finish(ticket):
+        raise expired  # a parallel request used this ticket first
+    accounts.mark_login(session, user)
+    return _complete_sign_in(session, request, response, runtime, user, address)
 
 
 @router.post("/logout", status_code=204)
@@ -228,14 +332,7 @@ def reset_password(
     address = runtime.client_address(request)
     norm = payload.username.strip().lower()
     throttle_key = f"reset:{norm}"
-    wait = runtime.limiter.retry_after(address, throttle_key)
-    if wait:
-        raise CodedHTTPException(
-            429,
-            f"Too many failed attempts. Try again in {wait} seconds.",
-            "rate_limited",
-            headers={"Retry-After": str(wait)},
-        )
+    _check_throttle(runtime, address, throttle_key)
     # Refuse a weak password before using the code, so it can be retried. Run
     # for every name, known or not, so the answer does not reveal accounts.
     accounts.check_password_policy(payload.new_password, payload.username.strip())
@@ -259,34 +356,40 @@ def reset_password(
     runtime.limiter.record_success(address, throttle_key)
     accounts.set_password(session, user, payload.new_password)
     logger.info("password reset with a log code for %r", user.username)
+    if two_factor.is_enabled(user):
+        # The log proves the password may change, not who is typing: the second
+        # step is still due. The password is already new; the ticket is for it.
+        raise _totp_required(runtime, user)
     _open_session(session, request, response, runtime, user)
-    return AuthLoginResult(user=user_read(AuthUser.of(user)))
+    return AuthLoginResult(user=user_read(flag_enrollment(AuthUser.of(user))))
 
 
 def _verify_current_password(
-    request: Request, session: Session, user: AuthUser, password: str
+    request: Request,
+    session: Session,
+    user: AuthUser,
+    password: str,
+    *,
+    forgive: bool = True,
 ) -> User:
     """The signed-in user's row, once ``password`` is proven to be theirs.
 
     Guessing the current password is guessing the password: same throttle as
     sign-in, counted separately so it cannot lock the account out of signing in.
+    ``forgive=False`` leaves the failure counters alone on success, for a caller
+    that still has a second check to make (a right password must not wipe the
+    wrong codes counted before it).
     """
     runtime = _runtime(request)
     address = runtime.client_address(request)
     throttle_key = f"password:{user.username.lower()}"
-    wait = runtime.limiter.retry_after(address, throttle_key)
-    if wait:
-        raise CodedHTTPException(
-            429,
-            f"Too many failed attempts. Try again in {wait} seconds.",
-            "rate_limited",
-            headers={"Retry-After": str(wait)},
-        )
+    _check_throttle(runtime, address, throttle_key)
     row = accounts.get_user(session, user.id)
     if row is None or not passwords.verify_password(password, row.password_hash):
         runtime.limiter.record_failure(address, throttle_key)
         raise CodedHTTPException(400, "Current password is incorrect", "wrong_password")
-    runtime.limiter.record_success(address, throttle_key)
+    if forgive:
+        runtime.limiter.record_success(address, throttle_key)
     return row
 
 
@@ -347,6 +450,156 @@ def update_me(
         _verify_current_password(request, session, user, payload.current_password)
     row = accounts.set_share_downloads(session, user.id, payload.share_downloads)
     return user_read(AuthUser.of(row))
+
+
+# --- Two-step sign-in -----------------------------------------------------------
+
+#: Secrets and recovery codes must not be kept by any cache.
+_NO_STORE = {"Cache-Control": "no-store"}
+
+
+def _own_row(session: Session, request: Request, user: AuthUser) -> User:
+    """The caller's row, for the two-step routes (which make no sense without sign-in)."""
+    _refuse_when_auth_disabled(_runtime(request))
+    row = accounts.get_user(session, user.id)
+    if row is None:
+        raise CodedHTTPException(401, "Sign in to continue", "auth_required")
+    return row
+
+
+def _prove_second_factor(
+    request: Request, session: Session, user: AuthUser, password: str, code: str
+) -> User:
+    """The caller's row once they gave the current password *and* a valid code.
+
+    Turning two-step sign-in off, or replacing its recovery codes, is as sensitive
+    as signing in, so both factors are checked, and a wrong guess of either counts
+    in the same per-user throttle as a wrong current password.
+    """
+    row = _verify_current_password(request, session, user, password, forgive=False)
+    runtime = _runtime(request)
+    address = runtime.client_address(request)
+    throttle_key = f"password:{user.username.lower()}"
+    if two_factor.check_code(session, row, code, key=runtime.secret()) is None:
+        runtime.limiter.record_failure(address, throttle_key)
+        raise CodedHTTPException(
+            400, "That code is wrong or has already been used", "invalid_totp"
+        )
+    runtime.limiter.record_success(address, throttle_key)
+    return row
+
+
+@router.get("/2fa", response_model=TwoFactorStatus)
+def two_factor_status(
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Whether your account signs in with a second step, and how many recovery codes are left."""
+    row = _own_row(session, request, user)
+    enabled = two_factor.is_enabled(row)
+    return TwoFactorStatus(
+        enabled=enabled,
+        enabled_at=as_utc(row.totp_enabled_at) if enabled else None,
+        recovery_codes_left=two_factor.recovery_codes_left(session, user.id)
+        if enabled
+        else 0,
+        required=two_factor.required_for(
+            two_factor_requirement(), is_admin=user.is_admin
+        ),
+    )
+
+
+@router.post("/2fa/setup", response_model=TwoFactorSetup)
+def two_factor_setup(
+    payload: TwoFactorSetupRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Start setting up two-step sign-in: a new secret, as text and as a QR code.
+
+    Needs your current password (someone holding only a stolen session must not be
+    able to attach their own authenticator). Nothing changes at sign-in until
+    ``/2fa/confirm`` accepts a code; calling this again starts over with a new secret.
+    """
+    _own_row(session, request, user)
+    row = _verify_current_password(request, session, user, payload.current_password)
+    secret = two_factor.begin_enrollment(session, row)
+    uri = totp.provisioning_uri(secret, row.username)
+    response.headers.update(_NO_STORE)
+    return TwoFactorSetup(
+        secret=totp.group_secret(secret),
+        otpauth_uri=uri,
+        qr_svg=two_factor.qr_svg(uri),
+    )
+
+
+@router.post("/2fa/confirm", response_model=TwoFactorRecoveryCodes)
+def two_factor_confirm(
+    payload: TwoFactorConfirm,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Finish setup with a current code. Turns it on and returns the recovery codes once.
+
+    Your other browsers were signed in without a second step, so they are signed out.
+    """
+    runtime = _runtime(request)
+    row = _own_row(session, request, user)
+    address = runtime.client_address(request)
+    throttle_key = f"password:{user.username.lower()}"
+    _check_throttle(runtime, address, throttle_key)
+    try:
+        codes = two_factor.confirm_enrollment(
+            session, row, payload.code, key=runtime.secret()
+        )
+    except two_factor.InvalidCode:
+        runtime.limiter.record_failure(address, throttle_key)
+        raise
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    sessions.revoke_others(session, user.id, token)
+    response.headers.update(_NO_STORE)
+    return TwoFactorRecoveryCodes(recovery_codes=codes)
+
+
+@router.post("/2fa/disable", status_code=204)
+def two_factor_disable(
+    payload: TwoFactorProof,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Turn two-step sign-in off. Needs your password and a current (or recovery) code."""
+    _own_row(session, request, user)
+    row = _prove_second_factor(
+        request, session, user, payload.current_password, payload.code
+    )
+    two_factor.disable(session, row)
+    return Response(status_code=204)
+
+
+@router.post("/2fa/recovery-codes", response_model=TwoFactorRecoveryCodes)
+def two_factor_new_recovery_codes(
+    payload: TwoFactorProof,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Replace the recovery codes; the old ones stop working. Shown once."""
+    _own_row(session, request, user)
+    row = _prove_second_factor(
+        request, session, user, payload.current_password, payload.code
+    )
+    codes = two_factor.regenerate_recovery_codes(
+        session, row, key=_runtime(request).secret()
+    )
+    response.headers.update(_NO_STORE)
+    return TwoFactorRecoveryCodes(recovery_codes=codes)
 
 
 @router.get("/sessions", response_model=SessionList)

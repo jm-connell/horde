@@ -33,6 +33,7 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/users/{user_id}/sessions"),
             ("DELETE", "/api/users/{user_id}/sessions"),
             ("DELETE", "/api/users/{user_id}/sessions/{session_id}"),
+            ("DELETE", "/api/users/{user_id}/two-factor"),
             ("POST", "/api/setup/reset"),
             ("POST", "/api/ai/apply-workload"),
             ("POST", "/api/ai/test"),
@@ -196,6 +197,11 @@ OPEN_MUTATIONS = {
     ("POST", "/api/auth/verify-password"),  # checks your own password, changes nothing
     ("PATCH", "/api/auth/me"),  # your own preferences
     ("POST", "/api/auth/sessions/revoke-others"),  # your own signed-in devices
+    # Your own two-step sign-in; each needs your password (and a code to turn it off).
+    ("POST", "/api/auth/2fa/setup"),
+    ("POST", "/api/auth/2fa/confirm"),
+    ("POST", "/api/auth/2fa/disable"),
+    ("POST", "/api/auth/2fa/recovery-codes"),
     ("DELETE", "/api/auth/sessions/{session_id}"),
     ("POST", "/api/auth/avatar"),  # your own profile picture
     ("DELETE", "/api/auth/avatar"),
@@ -204,6 +210,7 @@ OPEN_MUTATIONS = {
 }
 PUBLIC = {
     ("POST", "/api/auth/login"),
+    ("POST", "/api/auth/login/totp"),
     ("POST", "/api/auth/bootstrap"),
     ("POST", "/api/auth/forgot"),
     ("POST", "/api/auth/reset"),

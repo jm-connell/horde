@@ -160,6 +160,9 @@ DEFAULTS: dict[str, Any] = {
     # Write Jellyfin / Kodi / Plex files (.nfo, thumbnails) beside the media
     # (services/media_sidecars.py).
     "media_server_sidecars": False,
+    # Two-step sign-in required of: "off" | "admins" | "everyone"
+    # (services/auth/two_factor.py).
+    "require_two_factor": "off",
     "setup_completed": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),

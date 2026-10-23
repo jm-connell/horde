@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import asdict
 
 from fastapi import APIRouter, Depends, Request, Response
@@ -18,8 +19,10 @@ from ..schemas import (
     UserRead,
     UserUpdate,
 )
-from ..services.auth import accounts, avatars, permissions, sessions
+from ..services.auth import accounts, avatars, permissions, sessions, two_factor
 from ..services.auth.accounts import AuthUser
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/api/users", tags=["users"], dependencies=[Depends(require_admin)]
@@ -37,6 +40,7 @@ def _read(user: User) -> UserRead:
         last_login_at=as_utc(user.last_login_at),
         avatar_version=user.avatar_version,
         share_downloads=user.share_downloads,
+        two_factor_enabled=two_factor.is_enabled(user),
     )
 
 
@@ -109,6 +113,30 @@ def delete_user(
 ):
     accounts.delete_user(session, user_id, successor_id=admin.id)
     avatars.unlink_avatars(user_id)
+    return Response(status_code=204)
+
+
+@router.delete("/{user_id}/two-factor", status_code=204)
+def reset_user_two_factor(
+    user_id: int,
+    session: Session = Depends(get_session),
+    admin: AuthUser = Depends(require_admin),
+):
+    """Take two-step sign-in off an account (a lost phone and recovery codes).
+
+    Signs the account out everywhere; their next sign-in is password only (or the
+    enrollment screen, if two-step sign-in is required). Not for your own account:
+    turn that off in Account settings, which asks for your password and a code.
+    """
+    if user_id == admin.id:
+        raise accounts.SelfLockout(
+            "Turn off your own two-step sign-in in Account settings."
+        )
+    _require_user(session, user_id)
+    two_factor.reset(session, user_id)
+    logger.warning(
+        "administrator %r reset two-step sign-in of user %d", admin.username, user_id
+    )
     return Response(status_code=204)
 
 

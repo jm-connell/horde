@@ -599,6 +599,25 @@ class User(SQLModel, table=True):
     # Whether other accounts on a device may see this account's offline downloads
     # there, and fetch its device-destination downloads from the server.
     share_downloads: bool = Field(default=True)
+    # Two-step sign-in (services/auth/two_factor.py). ``totp_secret`` is the base32
+    # secret, stored as is like the other keys in DATA_DIR; with ``totp_enabled_at``
+    # still empty it is an enrollment waiting for its first code and is not used to
+    # sign in. ``totp_last_step`` is the newest 30 second step accepted (no replays).
+    totp_secret: str | None = None
+    totp_enabled_at: datetime | None = None
+    totp_last_step: int | None = None
+
+
+class UserRecoveryCode(SQLModel, table=True):
+    """One unused recovery code of an account (keyed hash only; deleted when used)."""
+
+    __tablename__ = "user_recovery_codes"
+    __table_args__ = (UniqueConstraint("user_id", "code_hash"), _AUTOINCREMENT)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    code_hash: str
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class UserSession(SQLModel, table=True):

@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0015_user_watch_time"
+HEAD = "0016_two_factor"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -976,6 +976,10 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            DROP TABLE user_recovery_codes;
+            ALTER TABLE users DROP COLUMN totp_last_step;
+            ALTER TABLE users DROP COLUMN totp_enabled_at;
+            ALTER TABLE users DROP COLUMN totp_secret;
             DROP TABLE user_watch_time;
             DROP TABLE trash_entries;
             DROP TABLE channel_retention;
@@ -1058,3 +1062,42 @@ def test_a_violation_the_repair_cannot_fix_does_not_rotate_the_backups(init_db):
 
     assert all(path.exists() for path in real)
     assert _repair_backups(init_db["data"]) == []
+
+
+def test_two_factor_revision_leaves_existing_accounts_without_it(tmp_dirs):
+    """0015 -> 0016: accounts and their sessions survive; two-step sign-in starts off."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0015_user_watch_time")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions, share_downloads) "
+                "VALUES (1, 'boss', 'boss', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]', 1)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO user_sessions (user_id, token_hash, created_at, "
+                "last_seen_at, expires_at) VALUES (1, 'h', '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', '2099-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(
+            text("SELECT totp_secret, totp_enabled_at, totp_last_step FROM users")
+        ).fetchall() == [(None, None, None)]
+        assert conn.execute(text("SELECT count(*) FROM user_sessions")).scalar() == 1
+        assert (
+            conn.execute(text("SELECT count(*) FROM user_recovery_codes")).scalar() == 0
+        )

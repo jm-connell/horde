@@ -1706,6 +1706,16 @@
             "title": "Progress Expiry Days",
             "type": "integer"
           },
+          "require_two_factor": {
+            "default": "off",
+            "enum": [
+              "off",
+              "admins",
+              "everyone"
+            ],
+            "title": "Require Two Factor",
+            "type": "string"
+          },
           "settings_degraded": {
             "default": false,
             "title": "Settings Degraded",
@@ -1830,6 +1840,22 @@
             ],
             "title": "Progress Expiry Days"
           },
+          "require_two_factor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "admins",
+                  "everyone"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Two Factor"
+          },
           "setup_completed": {
             "anyOf": [
               {
@@ -1945,6 +1971,16 @@
           "share_downloads": {
             "default": true,
             "title": "Share Downloads",
+            "type": "boolean"
+          },
+          "two_factor_enabled": {
+            "default": false,
+            "title": "Two Factor Enabled",
+            "type": "boolean"
+          },
+          "two_factor_enrollment_required": {
+            "default": false,
+            "title": "Two Factor Enrollment Required",
             "type": "boolean"
           },
           "username": {
@@ -8571,6 +8607,27 @@
         "title": "ThumbnailCandidates",
         "type": "object"
       },
+      "TotpLoginRequest": {
+        "description": "The second step of a two-step sign-in.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "pending_token": {
+            "maxLength": 400,
+            "title": "Pending Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pending_token",
+          "code"
+        ],
+        "title": "TotpLoginRequest",
+        "type": "object"
+      },
       "TrashEmptied": {
         "properties": {
           "deleted": {
@@ -8751,6 +8808,131 @@
           "retention_days"
         ],
         "title": "TrashSummary",
+        "type": "object"
+      },
+      "TwoFactorConfirm": {
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TwoFactorConfirm",
+        "type": "object"
+      },
+      "TwoFactorProof": {
+        "description": "Turning two-step sign-in off, or replacing its recovery codes.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "current_password": {
+            "maxLength": 2000,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "code"
+        ],
+        "title": "TwoFactorProof",
+        "type": "object"
+      },
+      "TwoFactorRecoveryCodes": {
+        "description": "Shown once: the server keeps only a keyed hash of each.",
+        "properties": {
+          "recovery_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recovery Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recovery_codes"
+        ],
+        "title": "TwoFactorRecoveryCodes",
+        "type": "object"
+      },
+      "TwoFactorSetup": {
+        "description": "What the person adds to their authenticator app (shown once, never stored in the client).",
+        "properties": {
+          "otpauth_uri": {
+            "title": "Otpauth Uri",
+            "type": "string"
+          },
+          "qr_svg": {
+            "title": "Qr Svg",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "otpauth_uri",
+          "qr_svg"
+        ],
+        "title": "TwoFactorSetup",
+        "type": "object"
+      },
+      "TwoFactorSetupRequest": {
+        "properties": {
+          "current_password": {
+            "maxLength": 2000,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "title": "TwoFactorSetupRequest",
+        "type": "object"
+      },
+      "TwoFactorStatus": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled At"
+          },
+          "recovery_codes_left": {
+            "default": 0,
+            "title": "Recovery Codes Left",
+            "type": "integer"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "TwoFactorStatus",
         "type": "object"
       },
       "UnfollowResult": {
@@ -9090,6 +9272,11 @@
           "share_downloads": {
             "default": true,
             "title": "Share Downloads",
+            "type": "boolean"
+          },
+          "two_factor_enabled": {
+            "default": false,
+            "title": "Two Factor Enabled",
             "type": "boolean"
           },
           "username": {
@@ -10861,6 +11048,249 @@
         ]
       }
     },
+    "/api/auth/2fa": {
+      "get": {
+        "description": "Whether your account signs in with a second step, and how many recovery codes are left.",
+        "operationId": "two_factor_status_api_auth_2fa_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/confirm": {
+      "post": {
+        "description": "Finish setup with a current code. Turns it on and returns the recovery codes once.\n\nYour other browsers were signed in without a second step, so they are signed out.",
+        "operationId": "two_factor_confirm_api_auth_2fa_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorRecoveryCodes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Confirm",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/disable": {
+      "post": {
+        "description": "Turn two-step sign-in off. Needs your password and a current (or recovery) code.",
+        "operationId": "two_factor_disable_api_auth_2fa_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorProof"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Disable",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/recovery-codes": {
+      "post": {
+        "description": "Replace the recovery codes; the old ones stop working. Shown once.",
+        "operationId": "two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorProof"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorRecoveryCodes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor New Recovery Codes",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/setup": {
+      "post": {
+        "description": "Start setting up two-step sign-in: a new secret, as text and as a QR code.\n\nNeeds your current password (someone holding only a stolen session must not be\nable to attach their own authenticator). Nothing changes at sign-in until\n``/2fa/confirm`` accepts a code; calling this again starts over with a new secret.",
+        "operationId": "two_factor_setup_api_auth_2fa_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Setup",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/avatar": {
       "delete": {
         "description": "Remove your own profile picture.",
@@ -11150,6 +11580,58 @@
           }
         },
         "summary": "Login",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/login/totp": {
+      "post": {
+        "description": "Second step: trade the ticket from ``totp_required`` and a code for the session.\n\nThe code is an authenticator code or an unused recovery code. Wrong codes\ncount in the same throttle as wrong passwords; five wrong tries burn the ticket.",
+        "operationId": "login_totp_api_auth_login_totp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Login Totp",
         "tags": [
           "auth"
         ]
@@ -18427,6 +18909,52 @@
           }
         },
         "summary": "Revoke User Session",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/two-factor": {
+      "delete": {
+        "description": "Take two-step sign-in off an account (a lost phone and recovery codes).\n\nSigns the account out everywhere; their next sign-in is password only (or the\nenrollment screen, if two-step sign-in is required). Not for your own account:\nturn that off in Account settings, which asks for your password and a code.",
+        "operationId": "reset_user_two_factor_api_users__user_id__two_factor_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reset User Two Factor",
         "tags": [
           "users"
         ]

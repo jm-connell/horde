@@ -17,6 +17,7 @@ from fastapi import Request
 from ...context import get_paths
 from . import media_token, passwords
 from .limiter import LoginLimiter
+from .login_tickets import PendingLogins
 from .reset_codes import ResetCodes
 
 logger = logging.getLogger(__name__)
@@ -87,6 +88,8 @@ class AuthRuntime:
     limiter: LoginLimiter = field(default_factory=LoginLimiter)
     #: "Forgot password?" codes written to the server log.
     reset_codes: ResetCodes = field(default_factory=ResetCodes)
+    #: Tickets between the password step and the code step of a two-step sign-in.
+    pending_logins: PendingLogins = field(default_factory=PendingLogins)
     #: How often an open event stream re-checks that its caller may still be
     #: there (also its keepalive cadence). Tests shorten it.
     stream_recheck_seconds: float = 15.0
