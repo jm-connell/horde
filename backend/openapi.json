@@ -16292,6 +16292,17 @@
             },
             "description": "Validation error"
           },
+          "500": {
+            "description": "Some videos could not be moved to the trash (code `trash_failed`). The ones that were moved are still listed by entry id.",
+            "headers": {
+              "X-Horde-Trash-Entries": {
+                "description": "Comma-separated trash entry ids of the videos that moved.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
           "default": {
             "content": {
               "application/json": {

@@ -830,7 +830,8 @@ class TrashPage(BaseModel):
 class TrashSummary(BaseModel):
     count: int
     total_bytes: int
-    #: ``HORDE_TRASH_DAYS``: 0 means deletes are immediate and the trash stays empty.
+    #: ``HORDE_TRASH_DAYS``: 0 means new deletes are immediate (entries already in the
+    #: trash still expire after the default 7 days).
     retention_days: int
 
 

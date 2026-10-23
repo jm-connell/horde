@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import defer
 from sqlmodel import Session, col, select
 
+from .. import config
 from ..auth import require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
@@ -93,7 +94,7 @@ def list_trash(
 def trash_summary(session: Session = Depends(get_session)):
     count, total = trash.summary(session)
     return TrashSummary(
-        count=count, total_bytes=total, retention_days=trash.retention().days
+        count=count, total_bytes=total, retention_days=config.TRASH_DAYS
     )
 
 

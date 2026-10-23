@@ -11482,6 +11482,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Some videos could not be moved to the trash (code `trash_failed`). The ones that were moved are still listed by entry id. */
+            500: {
+                headers: {
+                    /** @description Comma-separated trash entry ids of the videos that moved. */
+                    "X-Horde-Trash-Entries"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Error */
             default: {
                 headers: {

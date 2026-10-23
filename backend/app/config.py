@@ -38,7 +38,8 @@ def _non_negative_int(name: str, default: int) -> int:
     return value if value >= 0 else default
 
 
-TRASH_DAYS: int = _non_negative_int("HORDE_TRASH_DAYS", 7)
+TRASH_DAYS_DEFAULT = 7
+TRASH_DAYS: int = _non_negative_int("HORDE_TRASH_DAYS", TRASH_DAYS_DEFAULT)
 
 # Video extensions the scanner treats as importable media.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}

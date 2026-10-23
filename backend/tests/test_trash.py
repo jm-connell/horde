@@ -1015,3 +1015,69 @@ def test_a_restore_does_not_clear_the_mark_of_a_download_of_the_same_file():
     finally:
         scanner.release(rel)
     assert scanner._is_active(rel) is False
+
+
+# --- Smaller fixes --------------------------------------------------------------
+
+
+def test_restore_keeps_a_derived_file_that_was_regenerated_meanwhile(
+    client, init_db, add_video, member_user, admin_user
+):
+    video_id, _, _, files = _build(init_db, add_video, member_user, admin_user)
+    entry_id = int(
+        client.delete(f"/api/videos/{video_id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    # The thumbnail worker made a new one at the old path while the video was away.
+    files["thumb_full"].write_bytes(b"newer thumbnail")
+
+    resp = client.post(f"/api/trash/{entry_id}/restore")
+
+    assert resp.status_code == 200
+    assert files["thumb_full"].read_bytes() == b"newer thumbnail"
+    assert files["sprite"].read_bytes() == b"sprite"  # the others came back
+    assert (init_db["downloads"] / _media(init_db)).read_bytes() == b"M" * 1000
+    assert not (init_db["downloads"] / TRASH_DIR_NAME).exists() or not any(
+        (init_db["downloads"] / TRASH_DIR_NAME).iterdir()
+    )
+
+
+def test_a_partly_failed_bulk_delete_still_reports_what_was_trashed(
+    client, init_db, add_video, monkeypatch
+):
+    first = add_video(write_file=True)
+    second = add_video(write_file=True)
+    real = trash._move
+
+    def fail_for_second(src, dst, **kw):
+        if second.file_path in str(src):
+            raise OSError("disk went away")
+        real(src, dst, **kw)
+
+    monkeypatch.setattr(trash, "_move", fail_for_second)
+
+    resp = client.post(
+        "/api/videos/bulk-delete",
+        json={"video_ids": [first.id, second.id], "delete_files": True},
+    )
+
+    assert resp.status_code == 500
+    assert resp.json()["code"] == "trash_failed"
+    (entry,) = client.get("/api/trash").json()["items"]
+    assert resp.headers[ENTRIES_HEADER] == str(entry["id"])
+    assert client.get(f"/api/videos/{second.id}").status_code == 200
+
+
+def test_trash_off_lets_entries_already_in_it_expire_on_schedule(
+    client, init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True)
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    monkeypatch.setattr(config, "TRASH_DAYS", 0)
+
+    assert trash.purge_expired() == 0  # not wiped just because the setting is 0
+    (item,) = client.get("/api/trash").json()["items"]
+    assert item["id"] == entry_id
+    assert item["expires_at"] > item["trashed_at"]
+    assert trash.purge_expired(utcnow() + timedelta(days=8)) == 1

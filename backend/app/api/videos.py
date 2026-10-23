@@ -128,7 +128,19 @@ _BULK_DELETE_RESPONSES: dict[int | str, dict] = {
                 "schema": {"type": "string"},
             }
         },
-    }
+    },
+    500: {
+        "description": (
+            "Some videos could not be moved to the trash (code `trash_failed`). "
+            "The ones that were moved are still listed by entry id."
+        ),
+        "headers": {
+            TRASH_ENTRIES_HEADER: {
+                "description": "Comma-separated trash entry ids of the videos that moved.",
+                "schema": {"type": "string"},
+            }
+        },
+    },
 }
 
 
@@ -391,19 +403,19 @@ def bulk_delete_videos(
     remove_files(doomed)
     # Trashed bytes still use disk, so a trash move does not make room.
     ctx.download_queue.library_changed(room_made=not use_trash)
+    headers = (
+        {TRASH_ENTRIES_HEADER: ",".join(map(str, entry_ids))} if entry_ids else None
+    )
     if failed:
+        # The ones that did move are in the trash: say so, so the client can offer Undo.
         raise CodedHTTPException(
             500,
             f"Could not move {failed} video(s) to the trash; "
             f"{len(entry_ids)} were moved.",
             "trash_failed",
+            headers=headers,
         )
-    return Response(
-        status_code=204,
-        headers={TRASH_ENTRIES_HEADER: ",".join(map(str, entry_ids))}
-        if entry_ids
-        else None,
-    )
+    return Response(status_code=204, headers=headers)
 
 
 @router.patch(

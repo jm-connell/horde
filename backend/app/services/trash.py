@@ -115,7 +115,9 @@ def enabled() -> bool:
 
 
 def retention() -> timedelta:
-    return timedelta(days=config.TRASH_DAYS)
+    """How long an entry waits. With the trash off (0) entries already in it still
+    expire on the default schedule, rather than all at once."""
+    return timedelta(days=config.TRASH_DAYS or config.TRASH_DAYS_DEFAULT)
 
 
 def expires_at(entry: TrashEntry) -> datetime:
@@ -429,7 +431,12 @@ def trash_video(session: Session, video: Video, by_user_id: int | None) -> Trash
 def _moves_of(entry: TrashEntry) -> list[_Move]:
     try:
         moves = [
-            _Move(str(f["root"]), str(f["path"]), int(f.get("size") or 0))
+            _Move(
+                str(f["root"]),
+                str(f["path"]),
+                int(f.get("size") or 0),
+                bool(f.get("media")),
+            )
             for f in json.loads(entry.files_json or "[]")
         ]
     except (ValueError, KeyError, TypeError) as exc:
@@ -469,7 +476,7 @@ def _check_restorable(session: Session, entry: TrashEntry, moves: list[_Move]) -
             "or cancel the download, then restore it."
         )
     for move in moves:
-        if _exists(move.live()):
+        if move.media and _exists(move.live()):
             raise TrashConflict(f"A file already exists at {move.rel}.")
 
 
@@ -484,10 +491,12 @@ def restore(session: Session, entry_id: int) -> Video:
         raise TrashNotFound(f"Trash entry {entry_id} not found")
     folder = entry.folder
     moves = _moves_of(entry)
-    missing = [m.rel for m in moves if not _exists(m.trashed(folder))]
-    if missing:
-        raise TrashError("Files of this video are no longer in the trash.")
     _check_restorable(session, entry, moves)
+    # A thumbnail, sprite or compat copy made again while the video was away is the
+    # newer one: keep it and let the trashed copy go with the folder.
+    moves = [m for m in moves if m.media or not _exists(m.live())]
+    if any(not _exists(m.trashed(folder)) for m in moves):
+        raise TrashError("Files of this video are no longer in the trash.")
 
     snapshot = json.loads(entry.snapshot_json)
     media_rel = entry.relative_path
@@ -592,15 +601,6 @@ def empty(session: Session) -> tuple[int, int]:
     return len(entries), _erase(session, entries)
 
 
-def purge_all() -> None:
-    """Forget the whole trash without reading it (factory reset, files already wiped)."""
-    with Session(get_engine()) as session:
-        session.execute(delete(TrashEntry))
-        session.commit()
-    for root in (ROOT_DOWNLOADS, ROOT_DATA):
-        _remove_dir(_trash_root(root))
-
-
 # --- Reading ------------------------------------------------------------------
 
 
@@ -613,10 +613,6 @@ def summary(session: Session) -> tuple[int, int]:
         )
     ).one()
     return int(count or 0), int(total or 0)
-
-
-def trash_bytes(session: Session) -> int:
-    return summary(session)[1]
 
 
 def trashed_youtube_ids(session: Session) -> set[str]:
