@@ -42,6 +42,7 @@ EXPECTED_WORKERS = {
     "stream-ai",
     "job-metadata",
     "trash-purge",
+    "notifications",
     "codec-probe-backfill",
     "nightly-backup",
 }

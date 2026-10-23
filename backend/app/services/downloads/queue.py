@@ -17,6 +17,7 @@ from ...config import MAX_DOWNLOAD_CONCURRENCY
 from ...context import get_engine
 from ...logging_config import FailureLog, job_context
 from ...models import DownloadDestination, DownloadJob, JobStatus
+from .. import notifications
 from ..url_safety import UnsafeUrlError, validate_public_url
 from ..workers import BackgroundWorker
 from ..ytdlp_common import ERROR_KIND_CANCELLED
@@ -436,6 +437,16 @@ class DownloadQueue:
             self._space_holds = after = {j: kept[j] for j in queued if j in kept}
             live = set(queued) | self._running | self._held
             self._size_hints = {j: n for j, n in self._size_hints.items() if j in live}
+        if after and not before:
+            # The queue went from running freely to waiting for room. Disk space
+            # that hovers around the floor must not send one a minute.
+            first = next(iter(after.values()))
+            notifications.emit(
+                notifications.events.QUEUE_HELD,
+                {"code": first.code, "reason": first.reason},
+                dedupe_key="queue-held",
+                dedupe_ttl=1800,
+            )
         for job_id, hold in after.items():
             if before.get(job_id) != hold:
                 progress_store.merge(

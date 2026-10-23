@@ -24,6 +24,7 @@ from .api import (
     fonts,
     live,
     member_view,
+    notifications,
     playlists,
     preview,
     review,
@@ -202,6 +203,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
     registry.start(trash_svc.create_worker())
+    registry.start(ctx.notifier.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
     backup_worker = create_backup_worker(ctx.engine)
@@ -581,6 +583,7 @@ def include_api(target: FastAPI) -> None:
         review,
         playlists,
         trash,
+        notifications,
         app_settings,
         ai,
         system,

@@ -1,7 +1,9 @@
-"""Keep secrets that travel in URLs out of the access log.
+"""Keep secrets that travel in URLs and headers out of the logs.
 
 Signed media links carry their token in ``?mt=``. The token is only good for one
 video for 12 hours, but it should not sit in a log file (or a pasted log) at all.
+Notification targets add two more: the token of a Discord webhook is part of its
+path, and an ntfy / webhook token travels as a bearer token.
 """
 
 from __future__ import annotations
@@ -10,11 +12,15 @@ import logging
 import re
 
 _MT = re.compile(r"([?&]mt=)[^&\s\"]*")
+_DISCORD_WEBHOOK = re.compile(r"(/api/webhooks/\d+/)[^/?\s\"]+")
+_BEARER = re.compile(r"(Bearer\s+)[^\s\"',;]+", re.IGNORECASE)
 REDACTED = "[redacted]"
 
 
 def redact_query_secrets(text: str) -> str:
-    return _MT.sub(rf"\1{REDACTED}", text)
+    text = _MT.sub(rf"\1{REDACTED}", text)
+    text = _DISCORD_WEBHOOK.sub(rf"\1{REDACTED}", text)
+    return _BEARER.sub(rf"\1{REDACTED}", text)
 
 
 class RedactQuerySecrets(logging.Filter):

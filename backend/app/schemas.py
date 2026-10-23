@@ -902,3 +902,88 @@ class TrashRestored(BaseModel):
 class TrashEmptied(BaseModel):
     deleted: int
     freed_bytes: int
+
+
+# --- Notifications (ntfy, webhook, Discord) ----------------------------------
+
+NotificationKind = Literal["ntfy", "webhook", "discord"]
+
+
+class NotificationEventOptionRead(BaseModel):
+    key: str
+    label: str
+    description: str
+    default: bool
+
+
+class NotificationEventRead(BaseModel):
+    """An event a target can subscribe to (the registry in ``services/notifications/events.py``)."""
+
+    name: str
+    label: str
+    description: str
+    #: On for a newly added target.
+    default: bool
+    options: list[NotificationEventOptionRead] = Field(default_factory=list)
+
+
+class NotificationTargetRead(BaseModel):
+    id: str
+    name: str
+    kind: NotificationKind
+    url: str
+    #: ntfy only.
+    topic: str | None = None
+    #: The last four characters of the access token (``••••abcd``); the token itself never leaves the server.
+    token: str = ""
+    token_set: bool = False
+    enabled: bool
+    events: list[str]
+    options: dict[str, bool]
+
+
+class NotificationsRead(BaseModel):
+    targets: list[NotificationTargetRead]
+    events: list[NotificationEventRead]
+    max_targets: int
+    #: Whether ``HORDE_PUBLIC_URL`` is set, so messages can link back to Horde.
+    public_url_set: bool
+
+
+class NotificationTargetCreate(BaseModel):
+    name: str = Field(max_length=200)
+    kind: NotificationKind
+    url: str = Field(max_length=4096)
+    topic: str | None = Field(default=None, max_length=200)
+    #: An ntfy access token, or the bearer token a webhook expects.
+    token: str | None = Field(default=None, max_length=1024)
+    enabled: bool = True
+    #: Event names; omitted means the registry's defaults.
+    events: list[str] | None = Field(default=None, max_length=50)
+    options: dict[str, bool] | None = None
+
+
+class NotificationTargetUpdate(BaseModel):
+    """Only the fields sent change. ``token``: omit or send the mask to keep it, "" to remove it."""
+
+    name: str | None = Field(default=None, max_length=200)
+    kind: NotificationKind | None = None
+    url: str | None = Field(default=None, max_length=4096)
+    topic: str | None = Field(default=None, max_length=200)
+    token: str | None = Field(default=None, max_length=1024)
+    enabled: bool | None = None
+    events: list[str] | None = Field(default=None, max_length=50)
+    options: dict[str, bool] | None = None
+
+
+class NotificationTargetTest(NotificationTargetCreate):
+    """A target to try before saving it. ``id`` borrows the stored token of a saved one."""
+
+    id: str | None = Field(default=None, max_length=64)
+
+
+class NotificationTestResult(BaseModel):
+    ok: bool
+    status_code: int | None = None
+    #: A short fixed sentence, never the raw exception.
+    error: str | None = None

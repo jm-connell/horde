@@ -9,7 +9,8 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session
 
 from ...context import get_engine
-from ...models import DownloadJob
+from ...models import DownloadJob, JobStatus
+from .. import notifications
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +46,41 @@ def retry_db_locked[T](fn: Callable[[], T], *, what: str) -> T:
     raise AssertionError("unreachable")  # pragma: no cover
 
 
+def _finished_snapshot(job: DownloadJob) -> dict[str, Any]:
+    """What a notification says about a job that just ended."""
+    return {
+        "job_id": job.id,
+        "status": job.status.value,
+        "title": job.title_override or job.title,
+        "channel": job.channel_override or job.channel,
+        "url": job.url,
+        "error": job.error,
+        "error_kind": job.error_kind,
+        "origin": job.origin,
+        "destination": job.destination,
+        "video_id": job.video_id,
+    }
+
+
 def update_job(job_id: int, **fields: Any) -> None:
-    def write() -> None:
+    """Write ``fields`` to the job. Ending it (error, completed) also notifies."""
+
+    def write() -> dict[str, Any] | None:
         with Session(get_engine()) as session:
             job = session.get(DownloadJob, job_id)
             if job is None:
-                return
+                return None
             for key, value in fields.items():
                 setattr(job, key, value)
             session.add(job)
             session.commit()
+            if job.status in (JobStatus.error, JobStatus.completed):
+                return _finished_snapshot(job)
+            return None
 
-    retry_db_locked(write, what=f"job {job_id}")
+    snapshot = retry_db_locked(write, what=f"job {job_id}")
+    if snapshot is not None and fields.get("status") in (
+        JobStatus.error,
+        JobStatus.completed,
+    ):
+        notifications.job_finished(snapshot)

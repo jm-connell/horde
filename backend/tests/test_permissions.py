@@ -67,6 +67,13 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/videos/refresh-metadata/status"),
             # Queue and worker internals.
             ("GET", "/api/metrics"),
+            # Where notifications go, and the tokens they carry.
+            ("GET", "/api/notifications"),
+            ("POST", "/api/notifications/targets"),
+            ("PATCH", "/api/notifications/targets/{target_id}"),
+            ("DELETE", "/api/notifications/targets/{target_id}"),
+            ("POST", "/api/notifications/targets/{target_id}/test"),
+            ("POST", "/api/notifications/test"),
         ]
     },
     # --- delete_videos ---

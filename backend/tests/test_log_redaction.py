@@ -16,6 +16,19 @@ def test_redacts_the_media_token_only():
     assert redact_query_secrets("/api/videos?smt=keep") == "/api/videos?smt=keep"
 
 
+def test_notification_secrets_are_redacted_too():
+    assert (
+        redact_query_secrets(
+            "POST https://discord.com/api/webhooks/123456/abcDEF-ghi_JKL?wait=true"
+        )
+        == "POST https://discord.com/api/webhooks/123456/[redacted]?wait=true"
+    )
+    assert (
+        redact_query_secrets("headers={'Authorization': 'Bearer tk_secret.1'}")
+        == "headers={'Authorization': 'Bearer [redacted]'}"
+    )
+
+
 def test_the_uvicorn_access_log_is_filtered(caplog):
     install_log_redaction()
     install_log_redaction()  # idempotent

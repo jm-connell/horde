@@ -1355,6 +1355,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notifications */
+        get: operations["get_notifications_api_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Target */
+        post: operations["create_target_api_notifications_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Target */
+        delete: operations["delete_target_api_notifications_targets__target_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Target */
+        patch: operations["update_target_api_notifications_targets__target_id__patch"];
+        trace?: never;
+    };
+    "/api/notifications/targets/{target_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Saved Target
+         * @description Send a sample notification to a saved target.
+         */
+        post: operations["test_saved_target_api_notifications_targets__target_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Unsaved Target
+         * @description Send a sample notification to a target that is not saved yet.
+         *
+         *     With ``id`` set and no new token, the saved target's token is used, so editing a
+         *     target can be tried without typing the secret again.
+         */
+        post: operations["test_unsaved_target_api_notifications_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ping": {
         parameters: {
             query?: never;
@@ -4806,6 +4901,170 @@ export interface components {
             entry?: components["schemas"]["ChannelFeedEntry"] | null;
             /** Reason */
             reason?: string | null;
+        };
+        /** NotificationEventOptionRead */
+        NotificationEventOptionRead: {
+            /** Default */
+            default: boolean;
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * NotificationEventRead
+         * @description An event a target can subscribe to (the registry in ``services/notifications/events.py``).
+         */
+        NotificationEventRead: {
+            /** Default */
+            default: boolean;
+            /** Description */
+            description: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Options */
+            options?: components["schemas"]["NotificationEventOptionRead"][];
+        };
+        /** NotificationTargetCreate */
+        NotificationTargetCreate: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Events */
+            events?: string[] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /** NotificationTargetRead */
+        NotificationTargetRead: {
+            /** Enabled */
+            enabled: boolean;
+            /** Events */
+            events: string[];
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options: {
+                [key: string]: boolean;
+            };
+            /**
+             * Token
+             * @default
+             */
+            token: string;
+            /**
+             * Token Set
+             * @default false
+             */
+            token_set: boolean;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * NotificationTargetTest
+         * @description A target to try before saving it. ``id`` borrows the stored token of a saved one.
+         */
+        NotificationTargetTest: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Events */
+            events?: string[] | null;
+            /** Id */
+            id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * NotificationTargetUpdate
+         * @description Only the fields sent change. ``token``: omit or send the mask to keep it, "" to remove it.
+         */
+        NotificationTargetUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Events */
+            events?: string[] | null;
+            /** Kind */
+            kind?: ("ntfy" | "webhook" | "discord") | null;
+            /** Name */
+            name?: string | null;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** NotificationTestResult */
+        NotificationTestResult: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Status Code */
+            status_code?: number | null;
+        };
+        /** NotificationsRead */
+        NotificationsRead: {
+            /** Events */
+            events: components["schemas"]["NotificationEventRead"][];
+            /** Max Targets */
+            max_targets: number;
+            /** Public Url Set */
+            public_url_set: boolean;
+            /** Targets */
+            targets: components["schemas"]["NotificationTargetRead"][];
         };
         /** OkResponse */
         OkResponse: {
@@ -9430,6 +9689,252 @@ export interface operations {
                 };
                 content: {
                     "text/plain": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_notifications_api_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_target_api_notifications_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_target_api_notifications_targets__target_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_target_api_notifications_targets__target_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_saved_target_api_notifications_targets__target_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_unsaved_target_api_notifications_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetTest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

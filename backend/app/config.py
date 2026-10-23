@@ -66,6 +66,22 @@ def _non_negative_float(name: str, default: float) -> float:
 MIN_FREE_GB: float = _non_negative_float("HORDE_MIN_FREE_GB", 2.0)
 
 
+def _public_url() -> str:
+    """``HORDE_PUBLIC_URL`` without a trailing slash; empty unless it is an http(s) URL."""
+    raw = os.environ.get("HORDE_PUBLIC_URL", "").strip().rstrip("/")
+    if raw and not raw.lower().startswith(("http://", "https://")):
+        logger.warning(
+            "Ignoring HORDE_PUBLIC_URL %r: it must start with http(s)://", raw
+        )
+        return ""
+    return raw
+
+
+# The address people open Horde at. Notifications use it to link back to Horde;
+# without it they carry no link.
+PUBLIC_URL: str = _public_url()
+
+
 # Max simultaneous ffmpeg postprocess workers (remux / transcode / loudnorm).
 # Empty = 2 when a GPU encoder is available, otherwise 1.
 def _optional_positive_int(name: str) -> int | None:

@@ -151,6 +151,10 @@ DEFAULTS: dict[str, Any] = {
     "direct_youtube_search": True,
     "youtube_video_search": True,
     "download_queue_paused": False,
+    # Where outgoing notifications go (services/notifications/targets.py).
+    "notification_targets": [],
+    # Which update/failure notifications were already sent (services/notifications/watchers.py).
+    "notification_state": {},
     # Downloads wait once the library takes this many bytes. None = no limit.
     "max_library_bytes": None,
     "setup_completed": False,
@@ -530,6 +534,17 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
         current.update(updates)
         _write(current)
         return current
+
+
+def edit(change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    """Read, change and save under the settings lock.
+
+    ``change`` gets the current settings and returns the updates to save, so two
+    callers editing the same list (the notification targets) cannot overwrite each
+    other.
+    """
+    with _lock:
+        return save(change(load()))
 
 
 def _sanitize_settings_css(data: dict[str, Any]) -> dict[str, Any]:

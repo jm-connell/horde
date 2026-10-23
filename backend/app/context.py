@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
     from .services.live.runtime import LiveRuntime
+    from .services.notifications.notifier import Notifier
     from .services.workers import WorkerRegistry
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,8 @@ class AppContext:
     ai: AiRuntimeState = field(default_factory=lambda: _new_ai_state())
     #: Who is live and the open live HLS sessions (services/live).
     live: LiveRuntime = field(default_factory=lambda: _new_live_runtime())
+    #: Outgoing notifications: emitters queue here, one worker delivers.
+    notifier: Notifier = field(default_factory=lambda: _new_notifier())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -141,6 +144,12 @@ def _new_live_runtime() -> LiveRuntime:
     from .services.live.runtime import LiveRuntime
 
     return LiveRuntime()
+
+
+def _new_notifier() -> Notifier:
+    from .services.notifications.notifier import Notifier
+
+    return Notifier()
 
 
 def _new_registry() -> WorkerRegistry:
