@@ -62,7 +62,7 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `HORDE_TRUSTED_USER_HEADER` | *(empty)* | With the two above: the header naming the existing Horde user to act as. Requires `HORDE_TRUST_PROXY=1`, otherwise Horde refuses to start. |
 | `HORDE_ALLOW_PRIVATE_URLS` | *(empty)* | `1` lets server-side fetches and link checks target private / loopback addresses (LAN download sources). See [Security](security.md#private-urls). |
 | `HORDE_MAX_UPLOAD_GB` | `50` | Largest video accepted by Import → upload. |
-| `HORDE_PUBLIC_URL` | *(empty)* | The address you open Horde at (`https://horde.example.com`, no trailing path). [Notifications](notifications.md) use it to link back to Horde; without it they carry no link. |
+| `HORDE_PUBLIC_URL` | *(empty)* | The address you open Horde at (`https://horde.example.com`, no trailing path). [Notifications](notifications.md) use it to link back to Horde; without it they carry no link. It must be an `http(s)://` URL with a host and no user name or password; an invalid value is ignored with a warning in the log at startup. |
 
 ## Deploy identity
 

@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 from pathlib import Path
+from urllib.parse import urlsplit
 
 logger = logging.getLogger(__name__)
 
@@ -66,15 +67,46 @@ def _non_negative_float(name: str, default: float) -> float:
 MIN_FREE_GB: float = _non_negative_float("HORDE_MIN_FREE_GB", 2.0)
 
 
+def _valid_public_url(raw: str) -> str | None:
+    """``raw`` as an ASCII http(s) URL with a host (an IDN host is punycoded), else None."""
+    try:
+        parts = urlsplit(raw)
+        host = parts.hostname
+        port = parts.port
+    except ValueError:
+        return None
+    if parts.scheme.lower() not in ("http", "https") or not host:
+        return None
+    if parts.username is not None or parts.password is not None:
+        return None
+    if not raw.isascii():
+        try:
+            ascii_host = host.encode("idna").decode("ascii")
+        except UnicodeError:
+            return None
+        netloc = f"[{ascii_host}]" if ":" in ascii_host else ascii_host
+        if port is not None:
+            netloc += f":{port}"
+        raw = parts._replace(netloc=netloc).geturl()
+        if not raw.isascii():
+            return None
+    return raw
+
+
 def _public_url() -> str:
-    """``HORDE_PUBLIC_URL`` without a trailing slash; empty unless it is an http(s) URL."""
+    """``HORDE_PUBLIC_URL`` without a trailing slash; empty unless it is a usable http(s) URL."""
     raw = os.environ.get("HORDE_PUBLIC_URL", "").strip().rstrip("/")
-    if raw and not raw.lower().startswith(("http://", "https://")):
+    if not raw:
+        return ""
+    valid = _valid_public_url(raw)
+    if valid is None:
         logger.warning(
-            "Ignoring HORDE_PUBLIC_URL %r: it must start with http(s)://", raw
+            "Ignoring HORDE_PUBLIC_URL %r: it must be an http(s):// URL with a host "
+            "(and no user name or password)",
+            raw,
         )
         return ""
-    return raw
+    return valid
 
 
 # The address people open Horde at. Notifications use it to link back to Horde;

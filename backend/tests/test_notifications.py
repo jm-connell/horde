@@ -593,6 +593,33 @@ class _SlowServer:
         self.thread.join(10)
 
 
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://horde.example", "https://horde.example"),
+        (" http://192.168.1.5:8080/ ", "http://192.168.1.5:8080"),
+        ("https://horde.example/base/", "https://horde.example/base"),
+        ("https://bücher.example", "https://xn--bcher-kva.example"),
+        ("http://[::1]:8000", "http://[::1]:8000"),
+        ("", ""),
+        ("horde.example", ""),
+        ("ftp://horde.example", ""),
+        ("https://", ""),
+        ("https:///path", ""),
+        ("https://user:pw@horde.example", ""),
+        ("http://horde.example:notaport", ""),
+        ("https://horde.example/ü", ""),
+        ("https://" + "ü" * 70 + ".example", ""),
+    ],
+)
+def test_the_public_address_is_validated(monkeypatch, caplog, raw, expected):
+    monkeypatch.setenv("HORDE_PUBLIC_URL", raw)
+    with caplog.at_level(logging.WARNING, logger="app.config"):
+        assert config._public_url() == expected
+    warned = any("HORDE_PUBLIC_URL" in r.getMessage() for r in caplog.records)
+    assert warned == (raw.strip() != "" and expected == "")
+
+
 def test_a_response_body_is_not_waited_for(monkeypatch):
     """Only the status counts: a body that trickles in must not hold the sender."""
     from app.services.notifications import delivery
