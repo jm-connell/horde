@@ -46,7 +46,10 @@ def enqueue_playlist_entry(
         existing = jobs.library_video_for_url(session, cleaned)
         if existing is not None and existing.id is not None:
             return "library", existing.id
-        active = jobs.find_active_job_for_identity(session, cleaned)
+        # Only a library job produces the video this playlist is waiting for.
+        active = jobs.find_active_job_for_identity(
+            session, cleaned, destination=DownloadDestination.library.value
+        )
         if active is not None and active.id is not None:
             if active.playlist_id is None:
                 active.playlist_id = playlist_id

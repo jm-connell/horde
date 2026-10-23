@@ -8,12 +8,14 @@ from sqlmodel import Session, col, select
 
 from ...models import DownloadDestination, DownloadJob, JobStatus, Video, require_id
 from .. import library
+from ..auth.accounts import AuthUser
 from ..url_clean import clean_url, youtube_video_id
 from ..ytdlp_formats import (
     QUALITY_FORMATS,
     decode_available_presets,
     resolve_quality_preset,
 )
+from . import device_access
 from .progress import progress_store
 from .queue import download_queue
 from .staging import cleanup_device_job_files
@@ -45,8 +47,18 @@ job_mutate_lock = threading.Lock()
 ACTIVE_JOB_STATUSES = (JobStatus.queued, JobStatus.downloading)
 
 
-def find_active_job_for_identity(session: Session, url: str) -> DownloadJob | None:
-    """Queued/downloading job for the same YouTube id (or cleaned URL)."""
+def find_active_job_for_identity(
+    session: Session,
+    url: str,
+    user: AuthUser | None = None,
+    *,
+    destination: str | None = None,
+) -> DownloadJob | None:
+    """Queued/downloading job for the same YouTube id (or cleaned URL).
+
+    With ``user``, another account's private device job does not count: to that
+    user it does not exist. With ``destination``, only jobs saving there count.
+    """
     yt_id = youtube_video_id(url)
     cleaned = clean_url(url, keep_playlist=False) or url
     jobs = session.exec(
@@ -54,7 +66,10 @@ def find_active_job_for_identity(session: Session, url: str) -> DownloadJob | No
         .where(col(DownloadJob.status).in_(list(ACTIVE_JOB_STATUSES)))
         .order_by(col(DownloadJob.id).asc())
     ).all()
+    hidden = device_access.hidden_job_ids(session, user, jobs) if user else set()
     for job in jobs:
+        if job.id in hidden or (destination and job.destination != destination):
+            continue
         other = job.url or ""
         if yt_id and youtube_video_id(other) == yt_id:
             return job
@@ -74,10 +89,13 @@ def library_video_for_url(session: Session, url: str) -> Video | None:
 
 
 def classify_enqueue_duplicate(
-    session: Session, url: str
+    session: Session, url: str, user: AuthUser | None = None
 ) -> tuple[str, int | None] | None:
-    """Return (code, existing_job_id) when this video must not be queued again."""
-    active = find_active_job_for_identity(session, url)
+    """Return (code, existing_job_id) when this video must not be queued again.
+
+    Jobs hidden from ``user`` (see ``find_active_job_for_identity``) are ignored.
+    """
+    active = find_active_job_for_identity(session, url, user)
     if active is not None:
         code = (
             DUPLICATE_DOWNLOADING
@@ -95,9 +113,10 @@ def find_active_job(
     url: str,
     destination: str,
     quality_preset: str,
+    user: AuthUser | None = None,
 ) -> DownloadJob | None:
     """Return an already-queued/downloading job for the same video."""
-    return find_active_job_for_identity(session, url)
+    return find_active_job_for_identity(session, url, user)
 
 
 def prepare_job_retry(job: DownloadJob) -> None:
@@ -135,9 +154,9 @@ def _queued_snapshot(job: DownloadJob) -> dict[str, Any]:
     }
 
 
-def _changeable_job(session: Session, job_id: int) -> DownloadJob:
+def _changeable_job(session: Session, job_id: int, user: AuthUser) -> DownloadJob:
     job = session.get(DownloadJob, job_id)
-    if job is None:
+    if job is None or not device_access.can_access(session, user, job):
         raise KeyError("Job not found")
     if job.status not in (JobStatus.queued, JobStatus.downloading):
         raise PermissionError("Job already finished")
@@ -202,15 +221,18 @@ def _finish_restart(
 
 
 def change_job_quality(
-    session: Session, job_id: int, requested_preset: str
+    session: Session, job_id: int, requested_preset: str, user: AuthUser
 ) -> DownloadJob:
-    """Change quality on a queued/downloading job. Restarts in-flight work silently."""
+    """Change quality on a queued/downloading job. Restarts in-flight work silently.
+
+    Another account's private job is "not found" (``KeyError``).
+    """
     preset = (requested_preset or "").strip()
     if preset not in QUALITY_FORMATS:
         raise ValueError("Unknown quality preset")
 
     with job_mutate_lock:
-        job = _changeable_job(session, job_id)
+        job = _changeable_job(session, job_id, user)
         available = decode_available_presets(job.available_presets_json)
         resolved = resolve_quality_preset(preset, available)
         if resolved == job.quality_preset:
@@ -221,6 +243,7 @@ def change_job_quality(
             job.url,
             job.destination or DownloadDestination.library.value,
             resolved,
+            user,
         )
         if other is not None and other.id != job.id:
             raise FileExistsError("Another download at that quality is already active")
