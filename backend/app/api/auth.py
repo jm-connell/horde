@@ -25,6 +25,7 @@ from ..schemas import (
     MeUpdate,
     PasswordChange,
     PasswordResetRequest,
+    PasswordVerify,
     SessionList,
     SessionRead,
 )
@@ -305,6 +306,22 @@ def change_password(
         payload.new_password,
         keep_token_hash=accounts.hash_token(token) if token else None,
     )
+    return Response(status_code=204)
+
+
+@router.post("/verify-password", status_code=204)
+def verify_password(
+    payload: PasswordVerify,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Check your own password (204, or 400 ``wrong_password``) and change nothing.
+
+    A device asks before it keeps a check value of the password for offline
+    unlock, so a typo cannot lock the owner out of their own downloads.
+    """
+    _verify_current_password(request, session, user, payload.password)
     return Response(status_code=204)
 
 

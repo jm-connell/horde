@@ -545,6 +545,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/verify-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Password
+         * @description Check your own password (204, or 400 ``wrong_password``) and change nothing.
+         *
+         *     A device asks before it keeps a check value of the password for offline
+         *     unlock, so a typo cannot lock the owner out of their own downloads.
+         */
+        post: operations["verify_password_api_auth_verify_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/backgrounds": {
         parameters: {
             query?: never;
@@ -903,6 +926,8 @@ export interface paths {
         /**
          * Queue Events
          * @description One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).
+         *
+         *     Another account's private device downloads are left out.
          */
         get: operations["queue_events_api_downloads_events_get"];
         put?: never;
@@ -4945,6 +4970,11 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** PasswordVerify */
+        PasswordVerify: {
+            /** Password */
+            password: string;
+        };
         /** PausedResponse */
         PausedResponse: {
             /** Paused */
@@ -7199,6 +7229,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthState"];
                 };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_password_api_auth_verify_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation error */
             422: {

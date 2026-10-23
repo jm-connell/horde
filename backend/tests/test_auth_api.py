@@ -542,6 +542,32 @@ def test_current_password_guesses_are_throttled(client):
         assert _login(other).status_code == 200
 
 
+def test_verify_password_confirms_the_signed_in_accounts_password(client):
+    ok = client.post("/api/auth/verify-password", json={"password": "admin-password"})
+    assert ok.status_code == 204
+    bad = client.post("/api/auth/verify-password", json={"password": "nope"})
+    assert (bad.status_code, bad.json()["code"]) == (400, "wrong_password")
+    # Nothing changed: the same password still works to sign in.
+    with TestClient(client.app, headers=CSRF) as other:
+        assert _login(other).status_code == 200
+
+
+def test_verify_password_guesses_share_the_password_throttle(client):
+    for _ in range(FREE_ATTEMPTS):
+        client.post("/api/auth/verify-password", json={"password": "x"})
+    blocked = client.post(
+        "/api/auth/verify-password", json={"password": "admin-password"}
+    )
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+    body = {"current_password": "admin-password", "new_password": "brand-new-pass"}
+    assert client.post("/api/auth/password", json=body).status_code == 429
+
+
+def test_verify_password_needs_a_session(anon_client):
+    resp = anon_client.post("/api/auth/verify-password", json={"password": "x"})
+    assert resp.status_code == 401
+
+
 def test_an_admin_resetting_their_own_password_stays_signed_in(app, client, admin_user):
     other = TestClient(app, headers=CSRF)
     _login(other)

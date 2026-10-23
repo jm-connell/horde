@@ -181,6 +181,7 @@ OPEN_MUTATIONS = {
     ("POST", "/api/playlists/estimate"),  # read-only size estimate
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
+    ("POST", "/api/auth/verify-password"),  # checks your own password, changes nothing
     ("PATCH", "/api/auth/me"),  # your own preferences
     ("POST", "/api/auth/sessions/revoke-others"),  # your own signed-in devices
     ("DELETE", "/api/auth/sessions/{session_id}"),

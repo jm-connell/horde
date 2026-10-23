@@ -743,6 +743,10 @@ class PasswordChange(BaseModel):
     new_password: str = Field(max_length=2000)
 
 
+class PasswordVerify(BaseModel):
+    password: str = Field(max_length=2000)
+
+
 class SessionRead(BaseModel):
     """One signed-in browser of an account."""
 

@@ -5624,6 +5624,20 @@
         "title": "PasswordResetRequest",
         "type": "object"
       },
+      "PasswordVerify": {
+        "properties": {
+          "password": {
+            "maxLength": 2000,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasswordVerify",
+        "type": "object"
+      },
       "PausedResponse": {
         "properties": {
           "paused": {
@@ -10333,6 +10347,51 @@
         ]
       }
     },
+    "/api/auth/verify-password": {
+      "post": {
+        "description": "Check your own password (204, or 400 ``wrong_password``) and change nothing.\n\nA device asks before it keeps a check value of the password for offline\nunlock, so a typo cannot lock the owner out of their own downloads.",
+        "operationId": "verify_password_api_auth_verify_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Verify Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/backgrounds": {
       "get": {
         "operationId": "list_backgrounds_api_backgrounds_get",
@@ -11740,7 +11799,7 @@
     },
     "/api/downloads/events": {
       "get": {
-        "description": "One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).",
+        "description": "One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).\n\nAnother account's private device downloads are left out.",
         "operationId": "queue_events_api_downloads_events_get",
         "responses": {
           "200": {
