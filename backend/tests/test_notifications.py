@@ -796,6 +796,59 @@ def test_a_burst_becomes_one_summary_per_minute(notifier):
     assert len(sent.sent) == 2
 
 
+def test_a_burst_larger_than_the_pending_cap_is_still_counted(notifier, monkeypatch):
+    from app.services.notifications import notifier as notifier_module
+
+    monkeypatch.setattr(notifier_module, "MAX_PENDING", 3)
+    n, sent, clock = notifier()
+    _add_target(events=["download_completed"], options={"only_automatic": False})
+    done = {"origin": "channel_autodownload", "destination": "library"}
+    n.emit("download_completed", {**done, "title": "First"})
+    n.pump()
+
+    for i in range(40):
+        n.emit("download_completed", {**done, "title": f"Clip {i}"})
+        n.pump()
+    clock.now += 61
+    n.pump()
+
+    message = sent.sent[-1][1]
+    assert message.title == "40 new videos downloaded"
+    assert message.data["count"] == 40
+    assert "and 37 more" in message.body  # 3 kept and listed, of the real 40
+
+    # The next burst starts from zero again.
+    n.emit("download_completed", {**done, "title": "Later"})
+    n.pump()
+    clock.now += 61
+    n.pump()
+    assert sent.sent[-1][1].title == "Downloaded: Later"
+
+
+class _OnePass:
+    """Stands in for the worker: one loop pass, then asked to stop."""
+
+    stopping = False
+
+    def wait_for_wake(self, _seconds: float) -> bool:
+        return True
+
+
+def test_stopping_says_how_many_notifications_were_lost(notifier, caplog):
+    n, sent, _clock = notifier()
+    n.watchers = []
+    _add_target(events=["download_completed"], options={"only_automatic": False})
+    done = {"origin": "channel_autodownload", "destination": "library"}
+    for i in range(6):  # the first goes out, five wait for their summary
+        n.emit("download_completed", {**done, "title": f"Clip {i}"})
+
+    with caplog.at_level(logging.INFO):
+        n._loop(_OnePass())  # type: ignore[arg-type]  # a stand-in for BackgroundWorker
+
+    assert len(sent.sent) == 1
+    assert "stopping with 5 notification(s) undelivered" in caplog.text
+
+
 def test_each_target_is_folded_on_its_own(notifier):
     n, sent, _clock = notifier()
     _add_target(name="A", events=["download_failed"])

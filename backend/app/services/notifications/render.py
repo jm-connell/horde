@@ -47,9 +47,10 @@ def _name(payload: dict[str, Any]) -> str:
     return clean(payload.get("title") or "A video", _TITLE_MAX)
 
 
-def _listing(lines: list[str]) -> str:
+def _listing(lines: list[str], total: int | None = None) -> str:
+    """The first few ``lines`` and "and N more" for the rest of ``total`` (default: all)."""
     shown = lines[:SUMMARY_LISTED]
-    extra = len(lines) - len(shown)
+    extra = max(total or 0, len(lines)) - len(shown)
     if extra > 0:
         shown.append(f"and {extra} more")
     return "\n".join(shown)
@@ -59,11 +60,17 @@ def _single_or_many(count: int, one: str, many: str) -> str:
     return one if count == 1 else many.format(n=count)
 
 
-def render(event: str, payloads: list[dict[str, Any]]) -> Message:
-    """The notification for ``payloads`` (at least one) of ``event``."""
+def render(
+    event: str, payloads: list[dict[str, Any]], total: int | None = None
+) -> Message:
+    """The notification for ``payloads`` (at least one) of ``event``.
+
+    ``total`` is how many occurrences there were when only some of their payloads
+    were kept (a burst larger than the notifier's cap).
+    """
     if not payloads:
         raise ValueError("render needs at least one payload")
-    count = len(payloads)
+    count = max(total or 0, len(payloads))
     first = payloads[0]
     data = {"count": count, "items": payloads[:MAX_ITEMS]}
 
@@ -79,7 +86,8 @@ def render(event: str, payloads: list[dict[str, Any]]) -> Message:
                 [
                     f"{_name(p)}: {clean(p.get('error') or 'Unknown error')}"
                     for p in payloads
-                ]
+                ],
+                count,
             )
         return Message(
             event, title, body, "/download", urgent=True, tags=("warning",), data=data
@@ -100,7 +108,7 @@ def render(event: str, payloads: list[dict[str, Any]]) -> Message:
         return Message(
             event,
             f"{count} new videos downloaded",
-            _listing([_name(p) for p in payloads]),
+            _listing([_name(p) for p in payloads], count),
             "/",
             tags=("white_check_mark",),
             data=data,
@@ -163,7 +171,8 @@ def render(event: str, payloads: list[dict[str, Any]]) -> Message:
             event,
             _single_or_many(count, "A channel is live", "{n} channels went live"),
             _listing(
-                [clean(p.get("channel") or "A channel", _TITLE_MAX) for p in payloads]
+                [clean(p.get("channel") or "A channel", _TITLE_MAX) for p in payloads],
+                count,
             ),
             "/",
             tags=("red_circle",),

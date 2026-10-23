@@ -54,6 +54,8 @@ class _Bucket:
 
     last_sent: float | None = None
     pending: list[dict[str, Any]] = field(default_factory=list)
+    #: Occurrences beyond ``MAX_PENDING``: their payloads are dropped, the count is not.
+    overflow: int = 0
 
 
 class Notifier:
@@ -159,6 +161,8 @@ class Notifier:
             self._deliver(item.target_id, item.event, [item.payload])
         elif len(bucket.pending) < MAX_PENDING:
             bucket.pending.append(item.payload)
+        else:
+            bucket.overflow += 1
 
     def _flush_due(self) -> float:
         now = self._clock()
@@ -171,17 +175,22 @@ class Notifier:
                 wait = min(wait, due_in)
                 continue
             payloads, bucket.pending = bucket.pending, []
+            overflow, bucket.overflow = bucket.overflow, 0
             bucket.last_sent = now
-            self._deliver(target_id, event, payloads)
+            self._deliver(target_id, event, payloads, overflow)
         return wait
 
     def _deliver(
-        self, target_id: str, event: str, payloads: list[dict[str, Any]]
+        self,
+        target_id: str,
+        event: str,
+        payloads: list[dict[str, Any]],
+        overflow: int = 0,
     ) -> None:
         target = targets.get_target(target_id)
         if target is None or not target.get("enabled"):
             return
-        message = render(event, payloads)
+        message = render(event, payloads, len(payloads) + overflow)
         attempts = len(self._backoff) + 1
         for attempt in range(attempts):
             try:
@@ -229,6 +238,7 @@ class Notifier:
         # Say what is still waiting rather than silently losing it.
         with self._lock:
             left = len(self._queue)
+        left += sum(len(b.pending) + b.overflow for b in self._buckets.values())
         if left:
             logger.info("stopping with %d notification(s) undelivered", left)
 
