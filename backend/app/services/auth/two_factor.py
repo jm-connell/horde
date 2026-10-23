@@ -272,6 +272,19 @@ def _hash_recovery_code(key: bytes, user_id: int, code: str) -> str:
     return hmac.new(key, message, hashlib.sha256).hexdigest()
 
 
+def admins_without(session: Session) -> list[str]:
+    """Usernames of the enabled administrators who have not turned it on."""
+    rows = session.scalars(
+        select(User)
+        .where(
+            col(User.is_admin) == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+            col(User.disabled) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+        .order_by(col(User.id))
+    )
+    return [user.username for user in rows if not is_enabled(user)]
+
+
 # --- Turning it off ------------------------------------------------------------------
 
 

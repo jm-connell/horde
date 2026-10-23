@@ -45,6 +45,7 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/ai/resume"),
             ("GET", "/api/ai/jobs"),
             ("GET", "/api/system/update"),
+            ("GET", "/api/system/security-checklist"),
             ("POST", "/api/system/update"),
             ("POST", "/api/system/update/cancel"),
             ("POST", "/api/ai/jobs/retry-failed"),

@@ -7839,6 +7839,64 @@
         "title": "SearchMatchReason",
         "type": "object"
       },
+      "SecurityCheckItem": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "docs": {
+            "title": "Docs",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "title",
+          "detail",
+          "docs"
+        ],
+        "title": "SecurityCheckItem",
+        "type": "object"
+      },
+      "SecurityChecklistRead": {
+        "properties": {
+          "exposed": {
+            "title": "Exposed",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecurityCheckItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "exposed",
+          "items"
+        ],
+        "title": "SecurityChecklistRead",
+        "type": "object"
+      },
       "SessionList": {
         "properties": {
           "items": {
@@ -17757,6 +17815,48 @@
           }
         },
         "summary": "System Activity",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/security-checklist": {
+      "get": {
+        "description": "Pass/warn lines about how this server is exposed (for the Settings → System card).\n\nComputed from what the process knows: this request, the proxy and host settings,\nthe two-step requirement, which administrators have it, the environment switches\nand the cached update check.",
+        "operationId": "get_security_checklist_api_system_security_checklist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityChecklistRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Security Checklist",
         "tags": [
           "system"
         ]

@@ -853,6 +853,21 @@ class LoginRequest(BaseModel):
     password: str = Field(max_length=2000)
 
 
+class SecurityCheckItem(BaseModel):
+    id: str
+    status: Literal["ok", "warn"]
+    title: str
+    detail: str
+    #: Path under the wiki (`/wiki/<docs>`) that explains it.
+    docs: str
+
+
+class SecurityChecklistRead(BaseModel):
+    #: A public host name is allowed, so Horde is (or is about to be) reachable from outside.
+    exposed: bool
+    items: list[SecurityCheckItem]
+
+
 class TotpLoginRequest(BaseModel):
     """The second step of a two-step sign-in."""
 
