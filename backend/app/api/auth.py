@@ -31,6 +31,7 @@ from ..schemas import (
     PasswordChange,
     PasswordResetRequest,
     PasswordVerify,
+    ReauthRequest,
     SessionList,
     SessionRead,
     TotpLoginRequest,
@@ -559,6 +560,31 @@ def verify_password(
     unlock, so a typo cannot lock the owner out of their own downloads.
     """
     _verify_current_password(request, session, user, payload.password)
+    return Response(status_code=204)
+
+
+@router.post("/reauth", status_code=204)
+def reauthenticate(
+    payload: ReauthRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Prove your password (and a code, with two-step sign-in) to this browser again.
+
+    The sensitive administrator actions (a new account, another account's
+    password, ...) need this within the last 10 minutes of a sign-in; they answer
+    403 ``reauth_required`` otherwise. Same throttle as the other password checks.
+    """
+    row = _own_row(session, request, user)
+    token = request.cookies.get(accounts.SESSION_COOKIE)
+    if not token:
+        raise CodedHTTPException(401, "Sign in to continue", "auth_required")
+    if two_factor.is_enabled(row):
+        _prove_second_factor(request, session, user, payload.password, payload.code)
+    else:
+        _verify_current_password(request, session, user, payload.password)
+    accounts.mark_reauthenticated(session, token)
     return Response(status_code=204)
 
 

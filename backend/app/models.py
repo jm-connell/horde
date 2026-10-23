@@ -634,6 +634,9 @@ class UserSession(SQLModel, table=True):
     expires_at: datetime = Field(index=True)
     user_agent: str | None = None
     ip: str | None = None
+    #: When this session last proved the password (sign-in or ``/api/auth/reauth``);
+    #: the sensitive administrator actions need it recently. None: never.
+    reauth_at: datetime | None = None
 
 
 class UserVideoState(SQLModel, table=True):

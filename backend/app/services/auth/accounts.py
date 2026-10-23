@@ -513,10 +513,45 @@ def start_session(
             expires_at=now + SESSION_TTL,
             user_agent=(user_agent or "")[:USER_AGENT_MAX] or None,
             ip=(ip or "")[:IP_MAX] or None,
+            # Signing in just proved the password (and the second step, if any).
+            reauth_at=now,
         )
     )
     session.commit()
     return token
+
+
+#: How long after a sign-in or ``/api/auth/reauth`` the sensitive administrator
+#: actions are still allowed without asking for the password again.
+REAUTH_WINDOW = timedelta(minutes=10)
+
+
+def recently_authenticated(
+    session: Session, token: str | None, *, now: datetime | None = None
+) -> bool:
+    """Whether the session behind ``token`` proved the password within ``REAUTH_WINDOW``."""
+    if not token:
+        return False
+    reauth_at = session.scalar(
+        select(col(UserSession.reauth_at)).where(
+            col(UserSession.token_hash) == hash_token(token)
+        )
+    )
+    return (
+        reauth_at is not None and (now or utcnow()) - as_utc(reauth_at) <= REAUTH_WINDOW
+    )
+
+
+def mark_reauthenticated(
+    session: Session, token: str, *, now: datetime | None = None
+) -> None:
+    """Stamp the session behind ``token`` as having just proved the password."""
+    session.execute(
+        update(UserSession)
+        .where(col(UserSession.token_hash) == hash_token(token))
+        .values(reauth_at=now or utcnow())
+    )
+    session.commit()
 
 
 def resolve_session(

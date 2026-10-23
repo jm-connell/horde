@@ -196,6 +196,7 @@ OPEN_MUTATIONS = {
     ("POST", "/api/auth/logout"),
     ("POST", "/api/auth/password"),  # your own password
     ("POST", "/api/auth/verify-password"),  # checks your own password, changes nothing
+    ("POST", "/api/auth/reauth"),  # proves your own password again
     ("PATCH", "/api/auth/me"),  # your own preferences
     ("POST", "/api/auth/sessions/revoke-others"),  # your own signed-in devices
     # Your own two-step sign-in; each needs your password (and a code to turn it off).

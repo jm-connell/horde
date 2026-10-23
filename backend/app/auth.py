@@ -41,7 +41,7 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .context import get_ctx
+from .context import get_ctx, get_session
 from .errors import CodedHTTPException, error_response
 from .services import app_settings
 from .services.auth import accounts, media_token, two_factor
@@ -343,6 +343,37 @@ def require_admin(user: AuthUser = Depends(current_user)) -> AuthUser:
 
 
 require_admin.admin_only = True  # type: ignore[attr-defined]  # marker read by tests
+
+
+def ensure_recent_auth(request: Request, session: Session) -> None:
+    """403 ``reauth_required`` unless this session proved the password in the last 10 minutes.
+
+    The step-up for the actions that would let a stolen session cookie outlive
+    its theft (a new administrator, another account's password, the two-step
+    requirement ...). A sign-in counts, and so does ``POST /api/auth/reauth``.
+    Nothing to prove when sign-in is disabled (a proxy vouches for the caller
+    and there is no session).
+    """
+    runtime: AuthRuntime = request.app.state.auth
+    if runtime.config.disabled:
+        return
+    if not accounts.recently_authenticated(
+        session, request.cookies.get(accounts.SESSION_COOKIE)
+    ):
+        raise CodedHTTPException(
+            403,
+            "Confirm your password to continue",
+            "reauth_required",
+        )
+
+
+def require_recent_auth(
+    request: Request,
+    _user: AuthUser = Depends(current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """Dependency form of ``ensure_recent_auth`` for routes that always need it."""
+    ensure_recent_auth(request, session)
 
 
 def ensure_permission(user: AuthUser, permission: str) -> None:

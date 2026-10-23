@@ -249,10 +249,14 @@ def test_a_ticket_does_not_survive_a_password_change(
     anon_client, enrolled, now, client, admin_user
 ):
     ticket = _ticket(anon_client)
-    res = client.patch(
-        f"/api/users/{admin_user.id}", json={"password": "a-brand-new-password"}
+    res = client.post(
+        "/api/auth/password",
+        json={
+            "current_password": "admin-password",
+            "new_password": "a-brand-new-password",
+        },
     )
-    assert res.status_code == 200
+    assert res.status_code == 204
     spent = _second_step(anon_client, ticket, _code(enrolled.secret, now, 1))
     assert spent.status_code == 401 and spent.json()["code"] == "totp_ticket_invalid"
 

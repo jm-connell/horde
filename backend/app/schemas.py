@@ -955,6 +955,14 @@ class PasswordVerify(BaseModel):
     password: str = Field(max_length=2000)
 
 
+class ReauthRequest(BaseModel):
+    """Prove the password again (and a code, if the account has two-step sign-in)."""
+
+    password: str = Field(max_length=2000)
+    #: An authenticator code or recovery code; needed when two-step sign-in is on.
+    code: str = Field(default="", max_length=64)
+
+
 class SessionRead(BaseModel):
     """One signed-in browser of an account."""
 

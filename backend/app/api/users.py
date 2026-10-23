@@ -10,8 +10,9 @@ from typing import cast
 from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
-from ..auth import require_admin
+from ..auth import ensure_recent_auth, require_admin, require_recent_auth
 from ..context import get_session
+from ..errors import CodedHTTPException
 from ..models import User, as_utc, require_id
 from ..schemas import (
     PermissionInfo,
@@ -68,7 +69,12 @@ def list_permissions():
     ]
 
 
-@router.post("", response_model=UserRead, status_code=201)
+@router.post(
+    "",
+    response_model=UserRead,
+    status_code=201,
+    dependencies=[Depends(require_recent_auth)],
+)
 def create_user(
     payload: UserCreate, request: Request, session: Session = Depends(get_session)
 ):
@@ -93,6 +99,21 @@ def update_user(
     admin: AuthUser = Depends(require_admin),
 ):
     changes = payload.model_fields_set
+    sets_password = payload.password is not None
+    if sets_password and user_id == admin.id:
+        # Setting your own password needs the current one (and signs your other
+        # browsers out): a stolen session must not be able to choose it.
+        raise CodedHTTPException(
+            400,
+            "Change your own password in Account settings; it asks for the current one.",
+            "use_change_password",
+        )
+    target = accounts.get_user(session, user_id)
+    if (
+        sets_password  # another account's
+        or (payload.is_admin is True and target is not None and not target.is_admin)
+    ):
+        ensure_recent_auth(request, session)
     # Another admin has to take away an admin's access, so nobody locks
     # themselves out (and a lone admin can never leave the server ownerless).
     if user_id == admin.id and (payload.is_admin is False or payload.disabled):
@@ -100,24 +121,22 @@ def update_user(
             "You can't remove your own administrator access or disable your own "
             "account. Ask another administrator to do it."
         )
-    # Resetting your own password must not sign you out of this browser.
-    token = request.cookies.get(accounts.SESSION_COOKIE)
-    keep = accounts.hash_token(token) if token and user_id == admin.id else None
     with _hashing(request):
         user = accounts.update_user(
             session,
             user_id,
             is_admin=payload.is_admin if "is_admin" in changes else None,
             disabled=payload.disabled if "disabled" in changes else None,
-            password=payload.password if "password" in changes else None,
+            password=payload.password,
             granted=payload.permissions if "permissions" in changes else None,
             share_downloads=payload.share_downloads,
-            keep_token_hash=keep,
         )
     return _read(user)
 
 
-@router.delete("/{user_id}", status_code=204)
+@router.delete(
+    "/{user_id}", status_code=204, dependencies=[Depends(require_recent_auth)]
+)
 def delete_user(
     user_id: int,
     session: Session = Depends(get_session),
@@ -128,7 +147,11 @@ def delete_user(
     return Response(status_code=204)
 
 
-@router.delete("/{user_id}/two-factor", status_code=204)
+@router.delete(
+    "/{user_id}/two-factor",
+    status_code=204,
+    dependencies=[Depends(require_recent_auth)],
+)
 def reset_user_two_factor(
     user_id: int,
     session: Session = Depends(get_session),
@@ -171,9 +194,16 @@ def list_user_sessions(
 
 
 @router.delete("/{user_id}/sessions", status_code=204)
-def revoke_user_sessions(user_id: int, session: Session = Depends(get_session)):
-    """Sign a user out of every device."""
+def revoke_user_sessions(
+    user_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    admin: AuthUser = Depends(require_admin),
+):
+    """Sign a user out of every device. For another account this needs a recent password check."""
     _require_user(session, user_id)
+    if user_id != admin.id:
+        ensure_recent_auth(request, session)
     sessions.revoke_others(session, user_id, None)
     return Response(status_code=204)
 

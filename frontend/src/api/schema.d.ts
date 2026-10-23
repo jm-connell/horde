@@ -572,6 +572,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Prove your password (and a code, with two-step sign-in) to this browser again.
+         *
+         *     The sensitive administrator actions (a new account, another account's
+         *     password, ...) need this within the last 10 minutes of a sign-in; they answer
+         *     403 ``reauth_required`` otherwise. Same throttle as the other password checks.
+         */
+        post: operations["reauthenticate_api_auth_reauth_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/reset": {
         parameters: {
             query?: never;
@@ -2657,7 +2681,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke User Sessions
-         * @description Sign a user out of every device.
+         * @description Sign a user out of every device. For another account this needs a recent password check.
          */
         delete: operations["revoke_user_sessions_api_users__user_id__sessions_delete"];
         options?: never;
@@ -6004,6 +6028,19 @@ export interface components {
                 [key: string]: boolean;
             };
         };
+        /**
+         * ReauthRequest
+         * @description Prove the password again (and a code, if the account has two-step sign-in).
+         */
+        ReauthRequest: {
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+            /** Password */
+            password: string;
+        };
         /** RecommendationSectionRead */
         RecommendationSectionRead: {
             /** Kind */
@@ -8130,6 +8167,46 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reauthenticate_api_auth_reauth_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthRequest"];
             };
         };
         responses: {

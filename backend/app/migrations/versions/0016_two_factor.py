@@ -4,9 +4,14 @@
 that has not been confirmed yet), ``users.totp_enabled_at`` and
 ``users.totp_last_step`` (the newest accepted 30 second step, so a code cannot be
 replayed). ``user_recovery_codes`` holds one keyed hash per unused recovery code.
-Plain ADD COLUMNs and a new table: ``users`` is not rebuilt, so nothing that
-depends on it (sessions, the FTS5 triggers on ``videos``) is touched. Every
-account starts with two-step sign-in off.
+``user_sessions.reauth_at`` is when the session last proved the password (a
+sign-in, or ``POST /api/auth/reauth``); the sensitive administrator actions need
+it within ten minutes. Sessions that exist at upgrade have none, so they ask
+once.
+
+Plain ADD COLUMNs and a new table: neither ``users`` nor ``user_sessions`` is
+rebuilt, so nothing that depends on them (the FTS5 triggers on ``videos``) is
+touched. Every account starts with two-step sign-in off.
 
 Revision ID: 0016_two_factor
 Revises: 0015_user_watch_time
@@ -51,6 +56,9 @@ def upgrade() -> None:
         batch_op.add_column(sa.Column("totp_secret", sa.String(), nullable=True))
         batch_op.add_column(sa.Column("totp_enabled_at", sa.DateTime(), nullable=True))
         batch_op.add_column(sa.Column("totp_last_step", sa.Integer(), nullable=True))
+
+    with op.batch_alter_table("user_sessions", schema=None) as batch_op:
+        batch_op.add_column(sa.Column("reauth_at", sa.DateTime(), nullable=True))
 
 
 def downgrade() -> None:

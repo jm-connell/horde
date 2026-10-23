@@ -976,6 +976,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            ALTER TABLE user_sessions DROP COLUMN reauth_at;
             DROP TABLE user_recovery_codes;
             ALTER TABLE users DROP COLUMN totp_last_step;
             ALTER TABLE users DROP COLUMN totp_enabled_at;

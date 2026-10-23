@@ -471,3 +471,190 @@ def test_a_known_device_is_not_spared_the_code_counter():
     with pytest.raises(Throttled):
         limiter.begin("9.9.9.9", "alice", device="d1", code_name="alice")
     limiter.begin("9.9.9.9", "alice", device="d1").release()  # the password step is
+
+
+# --- 2. a stolen admin cookie cannot take the account over -------------------------
+
+
+def _set_reauth(init_db, when):
+    """Pretend every session last proved the password at ``when`` (None: never)."""
+    from sqlalchemy import update
+
+    from app.models import UserSession
+
+    with Session(init_db["engine"]) as s:
+        s.execute(update(UserSession).values(reauth_at=when))
+        s.commit()
+
+
+@pytest.fixture
+def stale(init_db, client):
+    """The signed-in admin client, whose session proved the password long ago.
+
+    That is what a stolen cookie looks like: signed in, but not recently.
+    """
+    from datetime import timedelta
+
+    from app.models import utcnow
+
+    _set_reauth(init_db, utcnow() - timedelta(hours=1))
+    return client
+
+
+def _new_user(client, name="backdoor", is_admin=True):
+    return client.post(
+        "/api/users",
+        json={"username": name, "password": "backdoor-pass-1", "is_admin": is_admin},
+    )
+
+
+def test_a_stolen_cookie_cannot_set_the_admins_own_password(stale, admin_user):
+    res = stale.patch(
+        f"/api/users/{admin_user.id}", json={"password": "attacker-chosen-pw"}
+    )
+    assert (res.status_code, res.json()["code"]) == (400, "use_change_password")
+
+
+def test_a_stolen_cookie_cannot_mint_a_backdoor_administrator(stale, anon_client):
+    res = _new_user(stale)
+    assert (res.status_code, res.json()["code"]) == (403, "reauth_required")
+    assert (
+        anon_client.post(
+            "/api/auth/login",
+            json={"username": "backdoor", "password": "backdoor-pass-1"},
+        ).status_code
+        == 401
+    )
+
+
+def test_reauthenticating_unlocks_the_sensitive_actions_for_a_while(stale):
+    wrong = stale.post("/api/auth/reauth", json={"password": "not-the-password"})
+    assert (wrong.status_code, wrong.json()["code"]) == (400, "wrong_password")
+    assert _new_user(stale).status_code == 403
+    assert (
+        stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD}).status_code
+        == 204
+    )
+    assert _new_user(stale).status_code == 201
+
+
+def test_signing_in_counts_as_proving_the_password(client):
+    assert _new_user(client, "colleague", is_admin=False).status_code == 201
+
+
+def test_the_reauth_window_is_ten_minutes(init_db, client):
+    from datetime import timedelta
+
+    from app.models import utcnow
+
+    _set_reauth(init_db, utcnow() - timedelta(minutes=9))
+    assert _new_user(client, "inside", is_admin=False).status_code == 201
+    _set_reauth(init_db, utcnow() - timedelta(minutes=11))
+    assert _new_user(client, "outside", is_admin=False).status_code == 403
+    _set_reauth(
+        init_db, None
+    )  # a session from before the upgrade has never reauthenticated
+    assert _new_user(client, "never", is_admin=False).status_code == 403
+
+
+def test_reauth_wrong_guesses_share_the_password_throttle(stale):
+    for _ in range(FREE_ATTEMPTS):
+        assert (
+            stale.post("/api/auth/reauth", json={"password": "nope-nope"}).status_code
+            == 400
+        )
+    blocked = stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD})
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+
+
+def test_reauth_needs_a_code_when_the_account_has_two_step(stale, now):
+    secret = _enroll(stale, now)
+    no_code = stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD})
+    assert (no_code.status_code, no_code.json()["code"]) == (400, "invalid_totp")
+    now[0] += totp.STEP_SECONDS
+    ok = stale.post(
+        "/api/auth/reauth",
+        json={"password": ADMIN_PASSWORD, "code": totp.code_at(secret, now[0])},
+    )
+    assert ok.status_code == 204
+
+
+@pytest.mark.parametrize(
+    "request_args",
+    [
+        pytest.param(
+            ("PATCH", "/api/users/{m}", {"password": "attacker-chosen-pw"}),
+            id="another-password",
+        ),
+        pytest.param(
+            ("PATCH", "/api/users/{m}", {"is_admin": True}), id="promote-to-admin"
+        ),
+        pytest.param(("DELETE", "/api/users/{m}", None), id="delete-user"),
+        pytest.param(
+            ("DELETE", "/api/users/{m}/two-factor", None), id="reset-two-factor"
+        ),
+        pytest.param(
+            ("DELETE", "/api/users/{m}/sessions", None), id="sign-out-everywhere"
+        ),
+        pytest.param(
+            ("PATCH", "/api/settings", {"require_two_factor": "everyone"}),
+            id="two-factor-requirement",
+        ),
+    ],
+)
+def test_the_sensitive_admin_actions_need_a_recent_password_check(
+    stale, member_user, request_args
+):
+    method, path, body = request_args
+    res = stale.request(method, path.format(m=member_user.id), json=body)
+    assert (res.status_code, res.json()["code"]) == (403, "reauth_required")
+    assert (
+        stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD}).status_code
+        == 204
+    )
+    res = stale.request(method, path.format(m=member_user.id), json=body)
+    assert res.status_code < 400, res.text
+
+
+def test_everyday_admin_actions_do_not_ask_again(stale, member_user, admin_user):
+    assert (
+        stale.patch(
+            f"/api/users/{member_user.id}", json={"permissions": ["download"]}
+        ).status_code
+        == 200
+    )
+    assert (
+        stale.patch(f"/api/users/{member_user.id}", json={"disabled": True}).status_code
+        == 200
+    )
+    same = stale.patch("/api/settings", json={"require_two_factor": "off"})
+    assert same.status_code == 200  # unchanged: nothing to protect
+    assert (
+        stale.patch("/api/settings", json={"progress_expiry_days": 30}).status_code
+        == 200
+    )
+    assert (
+        stale.delete(f"/api/users/{admin_user.id}/sessions").status_code == 204
+    )  # signing yourself out asks nothing
+
+
+def test_there_is_nothing_to_prove_when_sign_in_is_disabled(
+    init_db, admin_user, monkeypatch
+):
+    from fastapi import FastAPI
+
+    from app.context import install_context
+    from app.main import include_api, install_caches
+    from app.security import install_security
+    from app.services.auth.runtime import AuthConfig
+    from app.services.downloads.queue import DownloadQueue, download_queue
+
+    monkeypatch.setattr(DownloadQueue, "_dispatch", lambda self: None)
+    download_queue.reset()
+    a = FastAPI()
+    include_api(a)
+    install_security(a, auth_config=AuthConfig(disabled=True))
+    install_context(a, init_db["ctx"])
+    install_caches(a, init_db["ctx"])
+    with TestClient(a, headers=CSRF) as c:
+        assert _new_user(c, "proxied", is_admin=False).status_code == 201

@@ -7620,6 +7620,27 @@
         "title": "ReadyResponse",
         "type": "object"
       },
+      "ReauthRequest": {
+        "description": "Prove the password again (and a code, if the account has two-step sign-in).",
+        "properties": {
+          "code": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 2000,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "ReauthRequest",
+        "type": "object"
+      },
       "RecommendationSectionRead": {
         "properties": {
           "kind": {
@@ -11821,6 +11842,51 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/reauth": {
+      "post": {
+        "description": "Prove your password (and a code, with two-step sign-in) to this browser again.\n\nThe sensitive administrator actions (a new account, another account's\npassword, ...) need this within the last 10 minutes of a sign-in; they answer\n403 ``reauth_required`` otherwise. Same throttle as the other password checks.",
+        "operationId": "reauthenticate_api_auth_reauth_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reauthenticate",
         "tags": [
           "auth"
         ]
@@ -18864,7 +18930,7 @@
     },
     "/api/users/{user_id}/sessions": {
       "delete": {
-        "description": "Sign a user out of every device.",
+        "description": "Sign a user out of every device. For another account this needs a recent password check.",
         "operationId": "revoke_user_sessions_api_users__user_id__sessions_delete",
         "parameters": [
           {

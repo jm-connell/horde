@@ -1,11 +1,17 @@
 import json
 from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..auth import current_user, ensure_admin, require_admin
+from ..auth import (
+    current_user,
+    ensure_admin,
+    ensure_recent_auth,
+    require_admin,
+    two_factor_requirement,
+)
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..services import app_settings, media_sidecars, user_settings
@@ -304,6 +310,7 @@ def get_settings(
 @router.patch("", response_model=AppSettingsRead)
 def update_settings(
     payload: AppSettingsUpdate,
+    request: Request,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
     ctx: AppContext = Depends(get_ctx),
@@ -313,6 +320,13 @@ def update_settings(
     server_fields = payload.model_fields_set - {"ui"}
     if server_fields:
         ensure_admin(user)
+    if (
+        payload.require_two_factor is not None
+        and payload.require_two_factor != two_factor_requirement(request.app.state.auth)
+    ):
+        # Dropping the requirement (or raising it) is as sensitive as the sign-in
+        # it protects: a stolen session cookie must not be able to do it.
+        ensure_recent_auth(request, session)
     updates: dict = {}
     ui_patch: dict[str, Any] | None = None
     if payload.progress_expiry_days is not None:

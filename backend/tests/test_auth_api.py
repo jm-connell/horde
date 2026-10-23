@@ -568,13 +568,14 @@ def test_verify_password_needs_a_session(anon_client):
     assert resp.status_code == 401
 
 
-def test_an_admin_resetting_their_own_password_stays_signed_in(app, client, admin_user):
+def test_an_admin_changing_their_own_password_stays_signed_in(app, client, admin_user):
     other = TestClient(app, headers=CSRF)
     _login(other)
-    resp = client.patch(
-        f"/api/users/{admin_user.id}", json={"password": "my-new-password"}
+    resp = client.post(
+        "/api/auth/password",
+        json={"current_password": "admin-password", "new_password": "my-new-password"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 204
     assert client.get("/api/videos").status_code == 200  # this browser stays in
     assert other.get("/api/videos").status_code == 401  # the others do not
     other.close()
