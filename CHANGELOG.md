@@ -9,6 +9,34 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Two-step sign-in.** Any account can ask for a code from an authenticator
+  app as well as the password (Account settings → Two-step sign-in): scan a
+  QR code drawn on the server or type the key, confirm with a code, and keep
+  the ten single-use recovery codes it shows once (copy or download them). A
+  code is accepted for its 30 second step and the ones either side, and never
+  twice. Turning it off or making new recovery codes needs the password and a
+  code. A lost phone is fixed with a recovery code, by an administrator
+  (Users → Edit → Reset two-step sign-in), or on the server with
+  `python -m app.cli reset-2fa <username>`. The password reset with a log code
+  still asks for the second step afterwards. Administrators can require it of
+  administrators or of everyone (Settings → System → Security); accounts that
+  must use it but have not set it up are held at the setup screen, and the
+  server refuses everything else for them. See
+  [Two-step sign-in](docs/ops/authentication.md#two-step-sign-in).
+  API: `POST /api/auth/login/totp`, `/api/auth/2fa*`, `DELETE
+  /api/users/{id}/two-factor`, `require_two_factor` in `/api/settings`.
+- **Internet exposure checklist.** A new guide
+  ([docs/ops/internet-exposure.md](docs/ops/internet-exposure.md)) for putting
+  Horde behind a public name with a login: Caddy and nginx examples, the
+  settings to use, and an honest list of the risks that remain. Settings →
+  System → Security shows a short pass/warn checklist computed by the server
+  (HTTPS on this page, proxy trust, allowed hosts, the two-step requirement,
+  administrators without it, sign-in off, private URLs allowed, updates).
+  API: `GET /api/system/security-checklist`.
+- **Sign-in alerts.** Two new [notification](docs/ops/notifications.md) events:
+  *Failed sign-ins* (ten failures against one account within an hour, at most
+  one message per account per hour; on for new targets) and *Sign-in from a
+  new device* (off by default).
 - **Watch stats on History.** A band at the top of History shows your time
   watched this week (against last week), videos finished, your current streak,
   your top channel and the last 30 days at a glance. Click it for more: watch
@@ -133,6 +161,9 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Documentation no longer says "never expose Horde".** It says LAN or VPN by
+  default and points to the internet exposure checklist for the other case.
+  `HORDE_AUTH_DISABLED` keeps its warning.
 - **A tidier channel page.** The header now shows the channel (handle, videos
   in your library, subscribers) with just **Follow**, **Download…** (opens the
   Download page with the channel's link) and a gear for **Channel settings**.
@@ -171,6 +202,15 @@ All notable changes to Horde are documented here. The format follows
 
 ### Security
 
+- **Hardening for an internet-facing sign-in.** Responses to requests that
+  really arrived over HTTPS (directly, or `X-Forwarded-Proto` with
+  `HORDE_TRUST_PROXY=1`) now carry `Strict-Transport-Security: max-age=31536000`
+  (no `includeSubDomains`, no `preload`); plain HTTP never does. A username
+  that has had 50 failed sign-ins in a day accepts one attempt per ten
+  seconds from anywhere, so guessing across many addresses is very slow
+  without a lockout an attacker could use against you. Wrong second-step
+  codes count in the same throttle as wrong passwords, and a right password
+  does not clear them.
 - A download queued with the destination "this device" is now only visible
   and fetchable by the account that queued it, by administrators, and, while
   that account shares its downloads, by other accounts. Before, any account
@@ -186,6 +226,17 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
+- Database migration `0016_two_factor` adds `users.totp_secret`,
+  `users.totp_enabled_at` and `users.totp_last_step` and the
+  `user_recovery_codes` table (plain `ADD COLUMN`s and a new table; `users` is
+  not rebuilt). Every account starts with two-step sign-in off. A two-step
+  account's secret is stored in the database like the session hashes: protect
+  `DATA_DIR` and its backups. Back up and roll back as for any migration (the
+  older version refuses a database it does not know).
+- A new Python dependency, `segno` (QR codes, pure Python, no dependencies), is
+  in `requirements.txt` and the lock file; the image build picks it up.
+- Notification targets you already have keep their events; add *Failed
+  sign-ins* to them if you want it (new targets get it by default).
 - Database migration `0015_user_watch_time` adds the `user_watch_time` table (a
   new table only; `videos` is not rebuilt). Watch time was never recorded
   before, so the History stats start counting at the upgrade. Back up and roll

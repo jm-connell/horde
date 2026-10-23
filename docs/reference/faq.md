@@ -46,7 +46,7 @@ YouTube challenged the extract. Check Settings → System → Status (POT provid
 
 ## Can I expose this to the internet?
 
-**Not recommended** without your own auth layer. Horde has a login, but no two-factor sign-in or email recovery. Prefer a VPN (Tailscale / WireGuard) or put HTTP Basic Auth / SSO on a reverse proxy in front of Horde. See [Remote access](../ops/remote-access.md) and [Security model](../design/no-auth.md).
+Prefer a VPN (Tailscale / WireGuard): nothing is published. If you do want a public name, it can be done properly with TLS, a trusted proxy, `HORDE_ALLOWED_HOSTS` and required two-step sign-in; follow the [internet exposure checklist](../ops/internet-exposure.md) and read its remaining risks. See also [Remote access](../ops/remote-access.md) and [Security model](../design/no-auth.md).
 
 ## Can I restyle the UI with custom CSS?
 

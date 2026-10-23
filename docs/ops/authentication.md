@@ -83,7 +83,33 @@ The server refuses any change that would leave **no enabled administrator** (`co
 - Signing in sets an `HttpOnly`, `SameSite=Lax` cookie `horde_session` (`Secure` over HTTPS). Only a hash of the token is stored. A session lasts 30 days from its last use.
 - Changing your own password signs out your other browsers. Signing out deletes the session.
 - **Signed-in devices.** *Account settings → Signed-in devices* lists your browsers (a device label such as "Safari on iPhone", its address, when it was last active and when it signed in; sessions that have expired are not listed). **Sign out** ends one, and **Sign out all other devices** keeps only the one you are using. Ending a session takes effect on that browser's next request, and its open event streams end within about 15 seconds, the same as after a password reset. The device label is read from the browser's `User-Agent`, so an installed app looks like its browser. Administrators see the same list for any user (*Users → Edit → Signed-in devices*) and can end one session or **Sign out everywhere**. API: `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`, `POST /api/auth/sessions/revoke-others`, and for administrators `GET /api/users/{id}/sessions`, `DELETE /api/users/{id}/sessions` and `DELETE /api/users/{id}/sessions/{session_id}`. The last-seen time is updated at most every five minutes, so "Active" can lag by that much. Signing a device out does not cancel the signed media links (`?mt=`, see below) already handed to a cast receiver: they keep working for up to 12 hours, for that one video. Change your password to end them too.
-- After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. While such an attack is actually running, the real user can still be slowed down (attacker requests take most of the one-second slots); it clears within a second of the attack stopping. Guessing the current password in *Account settings → Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
+- After 5 failed sign-ins for a username from one address, further attempts from that address wait with exponential back-off (`429` with `Retry-After`). Separately, once a username has more than 5 failures in a minute from anywhere, every further attempt on that name waits one second: guessing across many addresses is capped, but nobody can lock a user out for longer than that from a different address. While such an attack is actually running, the real user can still be slowed down (attacker requests take most of the one-second slots); it clears within a second of the attack stopping. On top of that is a **daily ceiling**: once a username has had 50 failures within 24 hours (from any addresses), it accepts one attempt per ten seconds, from anywhere, until the oldest of those failures is a day old. That makes guessing across many addresses very slow without a lockout an attacker could use against you; a successful sign-in does not clear it, and while an attack runs your own attempts compete with the attacker's for those slots (a browser that is already signed in is unaffected, and `reset-password` on the server always works). A wrong second-step code counts as a failed sign-in everywhere above. Guessing the current password in *Account settings → Change password* uses the same throttle. Behind a reverse proxy set `HORDE_TRUST_PROXY=1`, otherwise every client looks like one address and shares one back-off.
+
+## Two-step sign-in {#two-step-sign-in}
+
+An account can ask for a code from an authenticator app (1Password, Aegis, Google Authenticator, Authy, ...) in addition to the password. It is optional unless an administrator [requires it](#requiring-two-step-sign-in). Standard TOTP (RFC 6238: SHA-1, 6 digits, 30 seconds), computed with the Python standard library.
+
+**Set up** in *Account settings → Two-step sign-in*: enter your password, scan the QR code (drawn on the server, so the secret never goes to a QR service) or type the key into the app, and enter the first code. Then Horde shows **ten recovery codes**, once: copy them or download a `.txt` and keep them somewhere safe and apart from the phone. Each recovery code works once, in place of an app code; Horde keeps only a keyed hash of each. Turning it on signs out your other browsers, because they signed in without a second step.
+
+**Signing in** then takes two steps. A correct password answers `401` with `code: "totp_required"` and a ticket (`extra.pending_token`); the sign-in page asks for the code, or **Use a recovery code**, and sends `POST /api/auth/login/totp {pending_token, code}`, which starts the session. The ticket lasts five minutes, works once, is signed with the app's `secret_key` and is tied to the account's current password and second-factor state, so changing the password or turning two-step sign-in off or on voids it. Five wrong codes burn a ticket. A code is accepted for its own 30 second step and the one on either side (clock drift), and **a step that has been used is never accepted again**, so a code someone watched you type is useless. Wrong codes are counted in the [same throttle](#passwords-and-sessions) as wrong passwords, and a right password does not clear them.
+
+**Lost phone.** Use a recovery code, then set up again (*Turn off*, then *Set up*). With no code left, an administrator resets it in *Users → Edit → Reset two-step sign-in* (this signs the person out everywhere; the password alone works again). The administrator can run the same on the server:
+
+```bash
+docker exec -it horde python -m app.cli reset-2fa <username>
+```
+
+**Turning it off**, or making new recovery codes, needs your current password *and* a code (an app code or an unused recovery code), under the same throttle. Setting it up also needs your password, so a stolen session cannot attach an authenticator of its own. An administrator cannot reset their own account from *Users*; they use *Turn off*.
+
+**Forgot password** does not bypass it: after a reset with the log code the password is new, but the sign-in still asks for the code (the reset answers `401 totp_required` with a ticket, and the page continues to the code step). Having the server log proves the password may change, not who is typing.
+
+The secret is stored as it is in the database (`users.totp_secret`), like the session hashes and the signing key, because it must be readable to check a code: **protect `DATA_DIR` and its backups**. It is never returned by the API after setup.
+
+API (all need a session; `setup` and `confirm` responses are `Cache-Control: no-store`): `GET /api/auth/2fa` (status, recovery codes left), `POST /api/auth/2fa/setup {current_password}` (secret, `otpauth://` link, QR as SVG), `POST /api/auth/2fa/confirm {code}` (recovery codes), `POST /api/auth/2fa/disable {current_password, code}`, `POST /api/auth/2fa/recovery-codes {current_password, code}`; for administrators `DELETE /api/users/{id}/two-factor`. With `HORDE_AUTH_DISABLED=1` they answer `400 auth_disabled`.
+
+### Requiring two-step sign-in {#requiring-two-step-sign-in}
+
+*Settings → System → Security → Require two-step sign-in* (`require_two_factor` in `/api/settings`, administrators only) is **Optional**, **Administrators** or **Everyone**. An account that must use it but has not set it up is taken to the setup screen right after signing in and can do nothing else: the server answers every route except `GET /api/auth/state`, sign-out and the setup routes with `403` and `code: "two_factor_enrollment_required"` (including signed cast links). That applies to the administrator who changes the setting, too, at their next request. If the settings file is unreadable the requirement is treated as *Everyone* until it can be read again, so it cannot be switched off by damaging a file. With `HORDE_AUTH_DISABLED=1` nothing is required (the proxy signs people in).
 
 ## Forgot your password
 
@@ -104,7 +130,7 @@ docker exec -it horde python -m app.cli reset-password <username>
 docker exec -it horde python -m app.cli create-admin <username>
 ```
 
-`reset-password` also re-enables a disabled account and signs the user out everywhere. `create-admin` adds another administrator.
+`reset-password` also re-enables a disabled account and signs the user out everywhere. `create-admin` adds another administrator. `reset-2fa` turns off an account's [two-step sign-in](#two-step-sign-in) and signs it out everywhere; `reset-password` leaves two-step sign-in as it is.
 
 ## Public routes
 
@@ -116,10 +142,11 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 | `GET /api/ready` | Readiness probe: database, migrations and worker health (see [Monitoring](monitoring.md#ready)) |
 | `GET /api/health` | Health summary. Anonymous callers get only `status`, `setup_required` and `auth_required` |
 | `GET /api/auth/state` | The app asks who is signed in |
-| `POST /api/auth/login` | Sign in |
+| `POST /api/auth/login` | Sign in (first step) |
+| `POST /api/auth/login/totp` | Second step of a two-step sign-in: needs a signed ticket from the first |
 | `POST /api/auth/bootstrap` | Create the first admin; `409` once any account exists |
 | `POST /api/auth/forgot` | Write a one-time reset code to the server log; always `204` |
-| `POST /api/auth/reset` | New password with that code; signs in |
+| `POST /api/auth/reset` | New password with that code; signs in (or continues to the second step) |
 | the SPA files, `/wiki/*` | No data |
 | stream, subtitle and thumbnail URLs with a valid `?mt=` token | Cast and AirPlay receivers send no cookie |
 
@@ -134,7 +161,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 
 | Variable | Effect |
 |----------|--------|
-| `HORDE_TRUST_PROXY=1` | Use `X-Forwarded-For` for the client address (rate limiting) and `X-Forwarded-Proto` for the `Secure` cookie flag. Set only when a proxy you control is the only way in. The proxy must **set or append** `X-Forwarded-For` and never pass a client-supplied value through unchanged: Horde reads the entry counted from the **right**, because everything to the left is whatever the client claimed. |
+| `HORDE_TRUST_PROXY=1` | Use `X-Forwarded-For` for the client address (rate limiting) and `X-Forwarded-Proto` for the `Secure` cookie flag and the `Strict-Transport-Security` header. Set only when a proxy you control is the only way in. The proxy must **set or append** `X-Forwarded-For` and never pass a client-supplied value through unchanged: Horde reads the entry counted from the **right**, because everything to the left is whatever the client claimed. |
 | `HORDE_TRUSTED_PROXY_HOPS=1` | How many proxies append to `X-Forwarded-For` (default 1 = the last entry). Raise it for a chain such as CDN, then proxy. |
 | `HORDE_AUTH_DISABLED=1` | Turn sign-in off. Every request acts as the first administrator. That account can still manage every other user, but cannot demote or disable itself (it is the one acting); delete it if it must go. **Only** for a deployment where a reverse proxy authenticates users and is the only route to the port. A warning is logged on every start. |
 | `HORDE_TRUSTED_USER_HEADER=X-Remote-User` | With `HORDE_AUTH_DISABLED=1` **and** `HORDE_TRUST_PROXY=1`, act as the existing user named in this header (their history, permissions). A missing or unknown name is refused. Setting the header without `HORDE_TRUST_PROXY=1` is an error: Horde **refuses to start** rather than ignore the header and make everyone an administrator. |
@@ -144,8 +171,10 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 
 ## What this does not do
 
+- **Two-step sign-in guards the sign-in, not a session that already exists.** A stolen `horde_session` cookie is a signed-in user until it is ended (*Signed-in devices*, or changing the password).
+
 - **Signing out does not clear offline copies.** Videos saved for offline viewing live in the browser's cache and IndexedDB, which belong to the browser profile, not the account. Each copy records who saved it, and an account that turned off *share downloads* keeps its copies out of other accounts' lists, but that is privacy in the app, not encryption: the files are readable to anyone with full access to the browser profile, and the saved check value of the owner's password (PBKDF2-SHA256, 600 000 iterations, used to unlock their downloads with no connection) could be attacked offline. That value exists only in browsers that hold downloads saved by the account: it is created when the account saves its first download there (or at a sign-in when they are already there), kept across sign-outs, and deleted with the last download. Anyone who can see a copy can remove it; only its owner can remove a private one. For real separation use a separate browser profile.
 - **Watch progress saved offline stays with its account.** A position saved while the server was unreachable is queued in the browser together with the id of the account that was signed in. When the connection is back, Horde asks the server who is signed in now and sends only that account's positions; another account's wait in the queue until that person signs in on the device again, and anything older than 30 days is dropped. Positions queued by releases before this behaviour did not record an account and are discarded on upgrade rather than guessed. A queued position also records when it was reached, and the server keeps it only if that account has saved nothing newer since on another device.
 - **Resume points of offline copies are per account too.** The saved video belongs to the device, but each account that plays it there has its own place in it. Online, it resumes where the server says that account is (the place reached on any device), unless this device holds a newer position it could not send yet; offline, it resumes where that account last was on this device, and an account that never played it there starts from the beginning. Copies saved by releases before this kept one position for the whole device; that position is dropped on upgrade rather than given to whoever opens the video next.
 
-Horde has no email, password-reset links, single sign-on or two-factor authentication, and an account is a trust boundary for *history and preferences* more than a sandbox: members share the library and can see every video. The [security model](../design/no-auth.md) and [Security](security.md) cover the rest.
+Horde has no email, password-reset links or single sign-on (two-step sign-in is optional and covered above), and an account is a trust boundary for *history and preferences* more than a sandbox: members share the library and can see every video. The [security model](../design/no-auth.md), [Security](security.md) and, for reaching Horde from outside, the [internet exposure checklist](internet-exposure.md) cover the rest.

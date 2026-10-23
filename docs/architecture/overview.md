@@ -55,7 +55,7 @@ Shutdown signals every registered worker and joins them in reverse start order w
 | **React SPA** | Library, player, settings; providers for download/playback/search/toast |
 
 !!! warning "Trust boundary"
-    Sign-in is required, but the network is still assumed to be trusted: do not expose Horde to the internet. See [Security model](../design/no-auth.md) and [Single container](../design/single-container.md).
+    Sign-in is required, but the network is still assumed to be trusted; to expose Horde to the internet follow the [internet exposure checklist](../ops/internet-exposure.md). See [Security model](../design/no-auth.md) and [Single container](../design/single-container.md).
 
 ## Related
 

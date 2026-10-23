@@ -16,6 +16,8 @@ The Settings screen lists these from the server, so it always matches the versio
 | Update available | A new Horde release is out. Sent once per release. | no |
 | Update failed | **Update now** failed, was interrupted or was rolled back (within the last 24 hours). Sent once per attempt. | yes |
 | Followed channel went live | A channel somebody follows started a broadcast. Needs the [live check](../design/live-streams.md) to be on; a broadcast is announced once. A channel seen for the first time (after a restart, or just followed) stays quiet. | no |
+| Failed sign-ins | Ten failed sign-ins (a wrong password or a wrong second-step code) for one **existing account** within an hour: "12 failed sign-ins in the last hour from 5 addresses". At most one message per account per hour; made-up usernames never count. See the [internet exposure checklist](internet-exposure.md#alerts). | yes |
+| Sign-in from a new device | An account signed in from a browser or device label it has no live session on (the "Safari on iPhone" label of *Signed-in devices*). Every account counts, and signing out and in again on the same browser counts once its session is gone, so it can be chatty on a shared server. Carries the name, the device and the address. | no |
 
 ### Bursts
 
@@ -74,7 +76,7 @@ Horde `POST`s JSON to the URL with `Content-Type: application/json`, `User-Agent
 
 | Field | Meaning |
 |-------|---------|
-| `event` | The event name from the table (`download_failed`, `download_completed`, `queue_held`, `update_available`, `update_failed`, `channel_live`), or `test` for **Send test**. |
+| `event` | The event name from the table (`download_failed`, `download_completed`, `queue_held`, `update_available`, `update_failed`, `channel_live`, `login_failures`, `new_device_sign_in`), or `test` for **Send test**. |
 | `title`, `message` | The text a person would read. |
 | `url` | Link to the right page in Horde; `null` unless `HORDE_PUBLIC_URL` is set. |
 | `data.path` | The same page as a path (`/download`, `/watch/12`, `/settings?tab=system`), always present. |
@@ -91,6 +93,8 @@ Item fields by event:
 | `update_available` | `latest`, `current`, `html_url` |
 | `update_failed` | `state` (`failed`, `rolled_back`, `interrupted`), `exit_code`, `request_id` |
 | `channel_live` | `channel`, `channel_url`, `title`, `video_id` |
+| `login_failures` | `username`, `count` (failures in the last hour), `addresses` (how many different) |
+| `new_device_sign_in` | `username`, `device`, `address` |
 
 ## Links back to Horde
 

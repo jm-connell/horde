@@ -87,6 +87,7 @@ nav:
       - Security: ops/security.md
       - Notifications: ops/notifications.md
       - Remote access: ops/remote-access.md
+      - Internet exposure checklist: ops/internet-exposure.md
       - YouTube access: ops/youtube-access.md
       - AI setup: ops/ai-setup.md
       - Backup & restore: ops/backup-restore.md
@@ -121,6 +122,7 @@ nav:
       - 0013 Trash tombstones: adr/0013-trash-tombstones.md
       - 0014 Playlist ownership and visibility: adr/0014-playlist-ownership-and-visibility.md
       - 0015 Watch time per hour: adr/0015-watch-time-per-hour.md
+      - 0016 Two-step sign-in: adr/0016-two-step-sign-in.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

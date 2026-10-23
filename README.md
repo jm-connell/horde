@@ -15,7 +15,7 @@ Compose always starts a [bgutil POT](https://github.com/Brainicism/bgutil-ytdlp-
 sidecar for YouTube; Ollama is an optional profile. Built for TrueNAS / Dockge,
 works on any Docker host.
 
-**Accounts.** The first visit asks you to create the admin account (nothing else works until you do), and the admin adds other people, each with their own watch history, AI chats and look; members get only the permissions the admin grants. Lost the admin password: `docker exec -it horde python -m app.cli reset-password <user>`. Behind an authenticating reverse proxy see `HORDE_AUTH_DISABLED`. Built for a trusted LAN or VPN: do not port-forward it. See [Accounts and sign-in](docs/ops/authentication.md).
+**Accounts.** The first visit asks you to create the admin account (nothing else works until you do), and the admin adds other people, each with their own watch history, AI chats and look; members get only the permissions the admin grants. Lost the admin password: `docker exec -it horde python -m app.cli reset-password <user>`. Optional two-step sign-in (authenticator app and recovery codes) can be required of everyone. Behind an authenticating reverse proxy see `HORDE_AUTH_DISABLED`. To reach Horde from the internet, follow the [internet exposure checklist](docs/ops/internet-exposure.md). Built for a trusted LAN or VPN: do not port-forward it. See [Accounts and sign-in](docs/ops/authentication.md).
 
 Full docs ship in the image: **Settings → System → Documentation**, or `/wiki/`
 on the host. Interactive API docs: `/docs`.

@@ -12,6 +12,10 @@ See also [Updating](../getting-started/updating.md).
 
 Where Horde sends messages (ntfy, Discord or a webhook) and which events each target wants: a failed download, a paused queue, an update that failed. Administrators add, test, edit, switch off and delete targets here; each target has a **Send test** button and shows the result inline. The list of events comes from the server. Setup for each service, the webhook format and the delivery rules are in [Notifications](../ops/notifications.md).
 
+## Security
+
+Administrators only. **Require two-step sign-in** (*Optional*, *Administrators*, *Everyone*) decides who must use a code from an authenticator app; see [Two-step sign-in](../ops/authentication.md#two-step-sign-in). Below it is a short **checklist**, computed by the server from what it can see: whether this page came over HTTPS, a proxy forwarding without `HORDE_TRUST_PROXY`, `HORDE_ALLOWED_HOSTS=*`, the two-step requirement, administrators without it, `HORDE_AUTH_DISABLED`, `HORDE_ALLOW_PRIVATE_URLS` and a waiting update. A tick is fine, a `!` is worth a look, and *How* opens the [internet exposure checklist](../ops/internet-exposure.md). It is guidance for exposing Horde, not a scanner. API: `GET /api/system/security-checklist`.
+
 ## Documentation
 
 When the wiki is bundled (`health.wiki_available`):
