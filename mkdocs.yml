@@ -68,6 +68,7 @@ nav:
       - Playlists: guides/playlists.md
       - History & continue watching: guides/history.md
       - Offline & installed app: guides/offline.md
+      - Media servers: guides/media-servers.md
       - AI features: guides/ai-features.md
   - Settings:
       - Overview: settings/index.md

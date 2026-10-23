@@ -78,11 +78,24 @@ Temporary output for **Download to this device** jobs. Not indexed into the libr
 | Pattern | Role |
 |---------|------|
 | `*.vtt` | Subtitles (FFmpegSubtitlesConvertor post-process) |
+| `*.nfo`, `*-thumb.jpg`, `tvshow.nfo` | Optional [media-server files](#media-server-files) |
 | `*.part` | In-progress yt-dlp download |
 | `.fNNN.*` | Per-format fragments before merge (e.g. `.f401.mp4`) |
 | `.norm.*` / `*.norm.mp4` | Intermediate loudnorm output |
 | `.compat.*` / `*.compat.mp4` | Intermediate AAC/faststart remux |
 | `*.horde-h264.*` | H.264 compatibility copy and its temps ([below](#h264-sidecars)) |
+
+### Media-server files { #media-server-files }
+
+With **Media-server files** turned on (Settings → Library, off by default), Horde also writes files for Jellyfin, Kodi and Plex beside the media:
+
+| Pattern | Role |
+|---------|------|
+| `<stem>.nfo` | Kodi episode metadata of the video |
+| `<stem>-thumb.jpg` | Copy of the video's thumbnail |
+| `<channel>/tvshow.nfo` | Kodi show metadata of the channel folder |
+
+The scanner only looks at video extensions, so none of them is ever imported. Deleting a video with its file, trashing it and renaming a manual import take the first two along. Turning the setting off keeps them; **Remove sidecar files** deletes them. Contents and set-up: [Media servers](../guides/media-servers.md).
 
 ### H.264 sidecars { #h264-sidecars }
 

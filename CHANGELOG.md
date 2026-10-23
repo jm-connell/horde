@@ -9,6 +9,20 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Files for Jellyfin, Kodi and Plex.** A new, off-by-default setting
+  (Settings → Library → Metadata and catalog → Media-server files) writes a
+  Kodi `.nfo` file and a `-thumb.jpg` next to every video, and a `tvshow.nfo`
+  in each channel folder, so a media server pointed at the same folder over
+  SMB shows proper titles, descriptions, dates, tags and artwork: channel =
+  show, year = season. Turning it on fills in the whole library in the
+  background (progress under System → Background activity); after that the
+  files follow downloads, edits, thumbnail changes, metadata resyncs and
+  channel renames, and move or go with a video when it is renamed, deleted or
+  sent to the trash (and come back on restore). Turning it off leaves the
+  files; **Remove sidecar files** deletes them. Administrators only; API:
+  `media_server_sidecars` in `/api/settings` and
+  `POST /api/settings/media-sidecars/remove`. Set-up for Jellyfin, Kodi and
+  Plex (through a third-party agent): [Media servers](docs/guides/media-servers.md).
 - **Retention rules for channels.** A channel can now clean up after itself:
   keep only the newest N videos, remove videos added more than D days ago,
   and/or remove videos someone finished more than D days ago. Everything goes

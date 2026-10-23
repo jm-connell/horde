@@ -24,7 +24,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -147,6 +147,10 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 ## Notifications
 
 **Start:** `ctx.notifier.create_worker()` after channel retention (`notifications`). Emitters (`notifications.emit`, called from the download pipeline, the queue's disk hold and the live poller) only append to a bounded queue on `ctx.notifier`; the worker pops it, folds bursts per target and sends with a 10 s timeout and three attempts. Every five minutes it also looks at things nobody emits: the outcome of "Update now" and a new release (the latter only when a target wants it, through the cached update check). See [Notifications](../ops/notifications.md).
+
+## Media-server files
+
+**Start:** `ctx.sidecars.create_worker()` after the notifier (`media-sidecars`). It runs the library-wide jobs of the optional [Jellyfin / Kodi / Plex files](../guides/media-servers.md), one at a time, from a small queue on `ctx.sidecars` (`SidecarJobs` in `services/media_sidecars.py`): the backfill when the setting is turned on, a rewrite of a renamed channel's videos, and the removal of every file. It writes only when the bytes differ, pauses briefly after each video it wrote, stops when the setting is switched off mid-run, and reports done/total under System → Background activity (kind `sidecars`). Single-video changes (a download finishing, an edit, a thumbnail change, a metadata resync, AI tagging) do not use the queue: they call `media_sidecars.refresh(video_id)` in the thread that made the change, which logs and swallows its own failures.
 
 ## Nightly backup
 
