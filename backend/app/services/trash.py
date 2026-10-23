@@ -54,6 +54,7 @@ from ..database import rowcount
 from ..models import (
     Playlist,
     PlaylistItem,
+    RetentionKeep,
     TrashEntry,
     User,
     UserVideoState,
@@ -366,8 +367,16 @@ def _put_back(done: list[_Move], folder: str) -> None:
     _remove_trash_dirs(folder)
 
 
-def trash_video(session: Session, video: Video, by_user_id: int | None) -> TrashEntry:
+def trash_video(
+    session: Session,
+    video: Video,
+    by_user_id: int | None,
+    reason: str | None = None,
+) -> TrashEntry:
     """Move ``video``'s files into the trash, then delete its rows. Commits.
+
+    ``reason`` is shown in the trash list for a removal nobody asked for by hand
+    (the retention rules); ``by_user_id`` is None then.
 
     The video's media is always moved; callers that keep the file (library entry
     only) do not come here. When a file cannot be moved or the commit fails,
@@ -384,6 +393,7 @@ def trash_video(session: Session, video: Video, by_user_id: int | None) -> Trash
         relative_path=video.file_path,
         size_bytes=sum(m.size for m in moves),
         trashed_by_user_id=by_user_id,
+        reason=reason,
         files_json=json.dumps(
             [
                 {"root": m.root, "path": m.rel, "size": m.size, "media": m.media}
@@ -508,6 +518,8 @@ def restore(session: Session, entry_id: int) -> Video:
         if rowcount(res) != 1:
             raise TrashNotFound(f"Trash entry {entry_id} not found")
         video = _insert_rows(session, snapshot)
+        # Someone wants it back: the retention rules must not take it again.
+        session.merge(RetentionKeep(video_id=require_id(video)))
         skips.clear_deleted(session, video.youtube_id)
         session.commit()
     except Exception as exc:

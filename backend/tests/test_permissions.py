@@ -91,6 +91,9 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/trash/{entry_id}/thumbnail"),
             ("POST", "/api/trash/{entry_id}/restore"),
             ("DELETE", "/api/trash/{entry_id}"),
+            # A retention rule deletes videos on its own; its preview shows which.
+            ("PUT", "/api/channels/retention"),
+            ("POST", "/api/channels/retention/preview"),
         ]
     },
     # --- download ---

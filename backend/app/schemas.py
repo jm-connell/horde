@@ -325,12 +325,31 @@ class VideoRedownload(BaseModel):
     video_codec: str | None = None
 
 
+class RetentionLimits(BaseModel):
+    """The three optional limits of a retention rule (at most one of each)."""
+
+    #: Keep only the newest N videos of the channel (publish date, else added date).
+    keep_latest: int | None = Field(default=None, ge=1, le=100_000)
+    #: Remove videos added more than this many days ago.
+    max_age_days: int | None = Field(default=None, ge=1, le=3650)
+    #: Remove videos someone finished more than this many days ago.
+    remove_watched_after_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class ChannelRetentionSummary(RetentionLimits):
+    """The enabled rule, as shown on a channel's header."""
+
+    enabled: bool = True
+
+
 class ChannelStat(BaseModel):
     channel: str
     count: int
     last_download_at: datetime | None = None
     subscriber_count: int | None = None
     channel_url: str | None = None
+    #: Set while the channel has an enabled retention rule.
+    retention: ChannelRetentionSummary | None = None
 
 
 class ChannelSearchHit(BaseModel):
@@ -486,6 +505,52 @@ class ChannelAutodownloadUpdate(BaseModel):
     previous_count: int | None = None
     quality_preset: str = "1080p"
     include_completed_streams: bool = False
+
+
+class RetentionException(BaseModel):
+    #: playlist, notes, in_progress, new or restored.
+    code: str
+    label: str
+
+
+class ChannelRetentionRead(RetentionLimits):
+    channel: str
+    enabled: bool = False
+    #: False when the rule has never been saved (the limits are then all unset).
+    configured: bool = False
+    last_run_at: datetime | None = None
+    #: How many videos the latest run that removed any moved to the trash, and when.
+    last_removed_count: int = 0
+    last_removed_at: datetime | None = None
+    #: False with ``HORDE_TRASH_DAYS=0``: the rules then remove nothing.
+    trash_enabled: bool = True
+    #: Videos that stay whatever the limits say.
+    always_kept: list[RetentionException] = []
+
+
+class ChannelRetentionUpdate(RetentionLimits):
+    channel: str = Field(min_length=1)
+    enabled: bool = False
+
+
+class ChannelRetentionPreviewRequest(RetentionLimits):
+    channel: str = Field(min_length=1)
+
+
+class RetentionPreviewItem(BaseModel):
+    id: int
+    title: str
+    size_bytes: int
+    reason: str
+
+
+class ChannelRetentionPreview(BaseModel):
+    #: At most the first 200 (oldest first); ``count`` and ``total_bytes`` cover all.
+    would_remove: list[RetentionPreviewItem]
+    count: int
+    total_bytes: int
+    #: Videos a limit matched that an exception keeps.
+    kept_by_exception: int
 
 
 class TagStat(BaseModel):
@@ -879,6 +944,8 @@ class TrashItemRead(BaseModel):
     trashed_by: str | None = None
     #: Served by ``GET /api/trash/{id}/thumbnail``; None when it had none.
     thumbnail_url: str | None = None
+    #: Why it is here when nobody deleted it by hand, e.g. "Retention: keep latest 20".
+    reason: str | None = None
 
 
 class TrashPage(BaseModel):

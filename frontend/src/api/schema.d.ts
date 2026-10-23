@@ -748,6 +748,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Channel Retention
+         * @description The channel's retention rule (all limits unset when it has none).
+         */
+        get: operations["get_channel_retention_api_channels_retention_get"];
+        /**
+         * Put Channel Retention
+         * @description Save the rule and run the rules now; what they remove goes to the trash.
+         */
+        put: operations["put_channel_retention_api_channels_retention_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/retention/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Channel Retention
+         * @description What a rule would move to the trash right now. Nothing changes.
+         */
+        post: operations["preview_channel_retention_api_channels_retention_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/channels/search": {
         parameters: {
             query?: never;
@@ -4166,6 +4210,101 @@ export interface components {
             /** Updated */
             updated: number;
         };
+        /** ChannelRetentionPreview */
+        ChannelRetentionPreview: {
+            /** Count */
+            count: number;
+            /** Kept By Exception */
+            kept_by_exception: number;
+            /** Total Bytes */
+            total_bytes: number;
+            /** Would Remove */
+            would_remove: components["schemas"]["RetentionPreviewItem"][];
+        };
+        /** ChannelRetentionPreviewRequest */
+        ChannelRetentionPreviewRequest: {
+            /** Channel */
+            channel: string;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+        };
+        /** ChannelRetentionRead */
+        ChannelRetentionRead: {
+            /**
+             * Always Kept
+             * @default []
+             */
+            always_kept: components["schemas"]["RetentionException"][];
+            /** Channel */
+            channel: string;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Last Removed At */
+            last_removed_at?: string | null;
+            /**
+             * Last Removed Count
+             * @default 0
+             */
+            last_removed_count: number;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+            /**
+             * Trash Enabled
+             * @default true
+             */
+            trash_enabled: boolean;
+        };
+        /**
+         * ChannelRetentionSummary
+         * @description The enabled rule, as shown on a channel's header.
+         */
+        ChannelRetentionSummary: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+        };
+        /** ChannelRetentionUpdate */
+        ChannelRetentionUpdate: {
+            /** Channel */
+            channel: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+        };
         /** ChannelSearchHit */
         ChannelSearchHit: {
             /** Name */
@@ -4195,6 +4334,7 @@ export interface components {
             count: number;
             /** Last Download At */
             last_download_at?: string | null;
+            retention?: components["schemas"]["ChannelRetentionSummary"] | null;
             /** Subscriber Count */
             subscriber_count?: number | null;
         };
@@ -5581,6 +5721,24 @@ export interface components {
              */
             setup_completed: boolean;
         };
+        /** RetentionException */
+        RetentionException: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+        };
+        /** RetentionPreviewItem */
+        RetentionPreviewItem: {
+            /** Id */
+            id: number;
+            /** Reason */
+            reason: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Title */
+            title: string;
+        };
         /** ScanResult */
         ScanResult: {
             /** Added */
@@ -5894,6 +6052,8 @@ export interface components {
             expires_at: string;
             /** Id */
             id: number;
+            /** Reason */
+            reason?: string | null;
             /** Size Bytes */
             size_bytes: number;
             /** Thumbnail Url */
@@ -8107,6 +8267,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelFeedPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_channel_retention_api_channels_retention_get: {
+        parameters: {
+            query: {
+                channel: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_channel_retention_api_channels_retention_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelRetentionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_channel_retention_api_channels_retention_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelRetentionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionPreview"];
                 };
             };
             /** @description Validation error */

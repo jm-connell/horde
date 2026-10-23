@@ -24,6 +24,7 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    RetentionKeep,
     UserVideoState,
     Video,
     VideoAiChatMessage,
@@ -44,6 +45,7 @@ _OWNED_ROW_COLUMNS: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (PlaylistItem, col(PlaylistItem.video_id)),
     (AiJob, col(AiJob.video_id)),
     (UserVideoState, col(UserVideoState.video_id)),
+    (RetentionKeep, col(RetentionKeep.video_id)),
 )
 # History / soft pointers that survive the video with the reference cleared.
 _NULLED_REFERENCES: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (

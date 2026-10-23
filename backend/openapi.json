@@ -3071,6 +3071,303 @@
         "title": "ChannelRenameResult",
         "type": "object"
       },
+      "ChannelRetentionPreview": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kept_by_exception": {
+            "title": "Kept By Exception",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "would_remove": {
+            "items": {
+              "$ref": "#/components/schemas/RetentionPreviewItem"
+            },
+            "title": "Would Remove",
+            "type": "array"
+          }
+        },
+        "required": [
+          "would_remove",
+          "count",
+          "total_bytes",
+          "kept_by_exception"
+        ],
+        "title": "ChannelRetentionPreview",
+        "type": "object"
+      },
+      "ChannelRetentionPreviewRequest": {
+        "properties": {
+          "channel": {
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionPreviewRequest",
+        "type": "object"
+      },
+      "ChannelRetentionRead": {
+        "properties": {
+          "always_kept": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RetentionException"
+            },
+            "title": "Always Kept",
+            "type": "array"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "configured": {
+            "default": false,
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "last_removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Removed At"
+          },
+          "last_removed_count": {
+            "default": 0,
+            "title": "Last Removed Count",
+            "type": "integer"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          },
+          "trash_enabled": {
+            "default": true,
+            "title": "Trash Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionRead",
+        "type": "object"
+      },
+      "ChannelRetentionSummary": {
+        "description": "The enabled rule, as shown on a channel's header.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "title": "ChannelRetentionSummary",
+        "type": "object"
+      },
+      "ChannelRetentionUpdate": {
+        "properties": {
+          "channel": {
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionUpdate",
+        "type": "object"
+      },
       "ChannelSearchHit": {
         "properties": {
           "name": {
@@ -3157,6 +3454,16 @@
               }
             ],
             "title": "Last Download At"
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelRetentionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "subscriber_count": {
             "anyOf": [
@@ -7121,6 +7428,52 @@
         "title": "ResetResponse",
         "type": "object"
       },
+      "RetentionException": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "RetentionException",
+        "type": "object"
+      },
+      "RetentionPreviewItem": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "size_bytes",
+          "reason"
+        ],
+        "title": "RetentionPreviewItem",
+        "type": "object"
+      },
       "ScanResult": {
         "properties": {
           "added": {
@@ -7980,6 +8333,17 @@
           "id": {
             "title": "Id",
             "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "size_bytes": {
             "title": "Size Bytes",
@@ -11764,6 +12128,162 @@
           }
         },
         "summary": "Channel Feed",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/channels/retention": {
+      "get": {
+        "description": "The channel's retention rule (all limits unset when it has none).",
+        "operationId": "get_channel_retention_api_channels_retention_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Channel Retention",
+        "tags": [
+          "channels"
+        ]
+      },
+      "put": {
+        "description": "Save the rule and run the rules now; what they remove goes to the trash.",
+        "operationId": "put_channel_retention_api_channels_retention_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelRetentionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Put Channel Retention",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/channels/retention/preview": {
+      "post": {
+        "description": "What a rule would move to the trash right now. Nothing changes.",
+        "operationId": "preview_channel_retention_api_channels_retention_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelRetentionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Channel Retention",
         "tags": [
           "channels"
         ]

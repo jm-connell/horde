@@ -12,7 +12,7 @@ from sqlalchemy import select as sa_select
 from sqlalchemy.orm import Mapped
 from sqlmodel import Session, col, select
 
-from ..models import UserVideoState, Video, VideoTag, require_id
+from ..models import ChannelRetention, UserVideoState, Video, VideoTag, require_id
 from .pagination import PageRequest, random_key
 from .search_text import fts_match_expression, keyword_match_clause
 
@@ -327,7 +327,25 @@ def rename_channel(session: Session, old_name: str, new_name: str) -> int:
     for video in rows:
         video.channel = new_name
         session.add(video)
-    if rows:
+    # The retention rule follows the name; when the new name has a rule already,
+    # that one stays and the old name's is dropped.
+    rule = session.exec(
+        select(ChannelRetention).where(col(ChannelRetention.channel) == old_name)
+    ).first()
+    if rule is not None and new_name == old_name:
+        rule = None
+    if rule is not None:
+        taken = session.exec(
+            select(col(ChannelRetention.id)).where(
+                col(ChannelRetention.channel) == new_name
+            )
+        ).first()
+        if taken is None:
+            rule.channel = new_name
+            session.add(rule)
+        else:
+            session.delete(rule)
+    if rows or rule is not None:
         session.commit()
     return len(rows)
 

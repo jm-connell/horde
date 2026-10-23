@@ -631,6 +631,11 @@ class UserVideoState(SQLModel, table=True):
     )
     position_sec: float = 0.0
     last_watched_at: datetime | None = None
+    # When this user finished the video (a save of position 0 means "finished").
+    # Cleared when they watch it again. Set only by ``user_state.record_progress``:
+    # an expired half-watch also has position 0 but is never "finished", which
+    # is why the retention rules read this column and not the position.
+    finished_at: datetime | None = None
 
 
 class UserSettings(SQLModel, table=True):
@@ -679,6 +684,40 @@ class TrashEntry(SQLModel, table=True):
     # JSON list of {"root": "downloads" | "data", "path": str, "size": int}.
     files_json: str = Field(default="[]")
     snapshot_json: str = Field(default="{}")
+    # Why it was trashed when it was not by hand, e.g. "Retention: keep latest 20".
+    reason: str | None = None
+
+
+class ChannelRetention(SQLModel, table=True):
+    """A channel's rules for removing its old videos (``services/channel_retention.py``).
+
+    Keyed by the channel name the library groups videos by, the one a rename
+    changes (``library.rename_channel`` moves the row along). At most one of each
+    limit; any combination. ``last_removed_*`` describe the latest run that moved
+    something to the trash, ``last_run_at`` the latest run of all.
+    """
+
+    __tablename__ = "channel_retention"
+
+    id: int | None = Field(default=None, primary_key=True)
+    channel: str = Field(index=True, unique=True)
+    enabled: bool = Field(default=False, index=True)
+    keep_latest: int | None = None
+    max_age_days: int | None = None
+    remove_watched_after_days: int | None = None
+    updated_at: datetime = Field(default_factory=utcnow)
+    last_run_at: datetime | None = None
+    last_removed_count: int = 0
+    last_removed_at: datetime | None = None
+
+
+class RetentionKeep(SQLModel, table=True):
+    """A video the retention rules never touch: one restored from the trash."""
+
+    __tablename__ = "retention_keeps"
+
+    video_id: int = Field(foreign_key="videos.id", primary_key=True, ondelete="CASCADE")
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class DownloadRequester(SQLModel, table=True):

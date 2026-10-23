@@ -56,14 +56,19 @@ def record_progress(
     it was made and applies only when the user has saved nothing newer since:
     a phone coming back online must not rewind the place the user reached on
     another device meanwhile. A time in the future counts as now.
+
+    A position of 0 is how a finished video is saved (the player clears it from 90%
+    on), so it stamps ``finished_at``; any other position clears it again.
     """
     now = utcnow()
     stamp = now if watched_at is None else min(as_utc(watched_at), now)
+    finished_at = stamp if position_sec == 0 else None
     statement = sqlite_insert(UserVideoState).values(
         user_id=user_id,
         video_id=video_id,
         position_sec=position_sec,
         last_watched_at=stamp,
+        finished_at=finished_at,
     )
     newer_only = (
         None
@@ -76,7 +81,11 @@ def record_progress(
     session.execute(
         statement.on_conflict_do_update(
             index_elements=["user_id", "video_id"],
-            set_={"position_sec": position_sec, "last_watched_at": stamp},
+            set_={
+                "position_sec": position_sec,
+                "last_watched_at": stamp,
+                "finished_at": finished_at,
+            },
             where=newer_only,
         )
     )

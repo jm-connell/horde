@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0013_download_job_origin"
+HEAD = "0014_channel_retention"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -679,6 +679,61 @@ def test_download_job_origin_revision_marks_existing_jobs_manual(tmp_dirs):
         ]
 
 
+def test_channel_retention_revision_keeps_existing_rows_and_the_search_index(
+    tmp_dirs,
+):
+    """0013 -> 0014: only new tables and ADD COLUMNs; videos and its triggers stay."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0013_download_job_origin")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO videos (id, title, channel, file_path, tags, subtitles, "
+                "source_chapters, status, needs_review, added_at, last_position_sec, "
+                "is_hdr, subtitles_pending, subtitles_fetch_attempts, title_is_custom, "
+                "description_is_custom) VALUES (1, 'Zebrafish', 'Alpha', 'a.mp4', '[]', "
+                "'[]', '[]', 'ready', 0, '2024-01-01 00:00:00', 0, 0, 0, 0, 0, 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions) "
+                "VALUES (1, 'a', 'a', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO user_video_state (user_id, video_id, position_sec) "
+                "VALUES (1, 1, 0)"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(
+            text("SELECT finished_at FROM user_video_state")
+        ).fetchall() == [(None,)]
+        assert (
+            conn.execute(text("SELECT count(*) FROM channel_retention")).scalar() == 0
+        )
+        assert conn.execute(text("SELECT count(*) FROM retention_keeps")).scalar() == 0
+        assert conn.execute(
+            text("SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'zebrafish'")
+        ).fetchall() == [(1,)]
+        assert "reason" in {
+            row[1] for row in conn.execute(text("PRAGMA table_info(trash_entries)"))
+        }
+
+
 def test_tag_and_search_triggers_follow_every_writer(session, add_video):
     """Plain UPDATE/DELETE statements keep video_tags and videos_fts in step."""
     video = add_video(title="Original title", tags=["alpha"])
@@ -922,6 +977,9 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             """
             DROP TRIGGER trg_videos_tags_delete;
             DROP TABLE trash_entries;
+            DROP TABLE channel_retention;
+            DROP TABLE retention_keeps;
+            ALTER TABLE user_video_state DROP COLUMN finished_at;
             DROP TABLE channel_follows;
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;

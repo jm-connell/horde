@@ -50,6 +50,7 @@ def _read(entry: TrashEntry, username: str | None) -> TrashItemRead:
         trashed_at=entry.trashed_at,
         expires_at=trash.expires_at(entry),
         trashed_by=username,
+        reason=entry.reason,
         thumbnail_url=f"/api/trash/{entry_id}/thumbnail"
         if trash.has_thumbnail(entry)
         else None,

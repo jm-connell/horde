@@ -160,6 +160,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     from .services import (
         channel_autodownload,
         channel_catalog,
+        channel_retention,
         compat_rendition,
         job_metadata,
         stream_ai,
@@ -203,6 +204,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
     registry.start(trash_svc.create_worker())
+    registry.start(channel_retention.create_worker())
     registry.start(ctx.notifier.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
