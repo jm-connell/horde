@@ -60,6 +60,7 @@ import { getItem as getOfflineItem } from "./offline/db";
 import { deviceAccounts } from "./offline/accounts";
 import { deviceResume } from "./offline/resume";
 import { pendingProgress } from "./offline/pendingProgress";
+import { unlockedAccountId } from "./offline/unlock";
 
 /** One entry of a 422 response's `fields`: where the problem is and what it is. */
 export interface ApiErrorField {
@@ -577,6 +578,12 @@ export const api = {
     notifyOfflineProgress(id, positionSec);
     // Offline-only device downloads have no server record.
     if (id < 0) return;
+    // Acting as an account unlocked on this device: the session cookie may be
+    // somebody else's, so never send live. The save waits for its owner.
+    if (unlockedAccountId() !== null) {
+      await pendingProgress.add(id, positionSec).catch(() => undefined);
+      return;
+    }
     try {
       await request<void>(`/api/videos/${id}/progress`, {
         method: "PATCH",

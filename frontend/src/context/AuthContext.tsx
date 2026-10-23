@@ -24,6 +24,11 @@ import type { DeviceAccount } from "../offline/db";
 import { offlineManager } from "../offline/manager";
 import { pendingProgress } from "../offline/pendingProgress";
 import { deviceResume } from "../offline/resume";
+import {
+  clearUnlockedAccount,
+  setUnlockedAccount,
+  unlockedAccountId,
+} from "../offline/unlock";
 import { safeNextPath } from "../utils/authPaths";
 import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
@@ -31,12 +36,6 @@ import { useToast } from "./ToastContext";
 
 /** Last state that came from the server, so the installed app still opens offline. */
 const CACHE_KEY = "horde-auth-state";
-/**
- * Set while the app acts as an account unlocked with its password on this
- * device with no connection (see offline/accounts). The server's answer
- * replaces it as soon as the connection is back.
- */
-const UNLOCK_KEY = "horde-offline-unlock";
 /** Minimum gap between session re-checks triggered by the tab becoming visible. */
 const VISIBLE_REFRESH_MS = 3000;
 
@@ -54,14 +53,6 @@ function readCachedState(): AuthState | null {
 function writeCachedState(state: AuthState | null): void {
   if (state?.authenticated) setJson(CACHE_KEY, state);
   else removeItem(CACHE_KEY);
-}
-
-function unlockedId(): number | null {
-  return getJson<number | null>(
-    UNLOCK_KEY,
-    (v): v is number => typeof v === "number",
-    null
-  );
 }
 
 /** The auth state of an account unlocked on this device (no server involved). */
@@ -137,7 +128,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const next = await api.getAuthState();
       // The server answered: whoever it says is signed in wins.
-      removeItem(UNLOCK_KEY);
+      clearUnlockedAccount();
       setOfflineAs(null);
       writeCachedState(next);
       bindDeviceStateToUser(next);
@@ -152,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       const cached = readCachedState();
       const unreachable = isOfflineError(err) || err instanceof TypeError;
-      const id = unreachable ? unlockedId() : null;
+      const id = unreachable ? unlockedAccountId() : null;
       if (id !== null) await deviceAccounts.load();
       const unlocked =
         id === null ? undefined : deviceAccounts.getAccounts().get(id);
@@ -222,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const { status } = connectivity.getState();
         if (
           (status === "online" || status === "slow") &&
-          unlockedId() !== null
+          unlockedAccountId() !== null
         ) {
           void refresh();
         }
@@ -237,7 +228,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Already signed out (401) or unreachable: leave anyway.
     }
     writeCachedState(null);
-    removeItem(UNLOCK_KEY);
+    clearUnlockedAccount();
     clearLocalSettings();
     pendingProgress.setOwner(null);
     deviceResume.setOwner(null);
@@ -250,7 +241,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const account = await deviceAccounts.unlock(userId, password);
       if (!account) return false;
       const unlockedState = stateOfAccount(account);
-      setJson(UNLOCK_KEY, account.userId);
+      setUnlockedAccount(account.userId);
       bindDeviceStateToUser(unlockedState, true);
       setOfflineAs(account.username);
       setState(unlockedState);
