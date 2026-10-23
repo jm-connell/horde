@@ -253,6 +253,93 @@ def test_delete_and_unknown_ids(client):
         )
 
 
+DISCORD_URL = "https://discord.com/api/webhooks/1234567890/AbCdEfGhIjKlMnOpQrStUvWx"
+
+
+def _discord(client) -> dict[str, Any]:
+    return client.post(
+        "/api/notifications/targets",
+        json={"name": "Room", "kind": "discord", "url": DISCORD_URL},
+    ).json()
+
+
+def test_a_discord_webhook_url_is_shown_without_its_token(client):
+    made = _discord(client)
+    assert made["url"] == "https://discord.com/api/webhooks/1234567890/••••UvWx"
+    listing = client.get("/api/notifications")
+    assert "AbCdEfGhIjKl" not in listing.text
+    assert "AbCdEfGhIjKl" not in client.get("/api/settings").text
+    # The real address is stored, so deliveries can use it.
+    assert targets.get_target(made["id"])["url"] == DISCORD_URL  # type: ignore[index]
+
+
+def test_the_masked_discord_url_keeps_the_stored_one_when_sent_back(client, stub):
+    made = _discord(client)
+    url = f"/api/notifications/targets/{made['id']}"
+    renamed = client.patch(url, json={"name": "Renamed", "url": made["url"]})
+    assert renamed.status_code == 200, renamed.text
+    assert targets.get_target(made["id"])["url"] == DISCORD_URL  # type: ignore[index]
+
+    # A new, full address replaces it.
+    other = f"{stub.base}/api/webhooks/42/NewSecretToken1234"
+    assert client.patch(url, json={"url": other}).status_code == 200
+    assert targets.get_target(made["id"])["url"] == other  # type: ignore[index]
+
+
+def test_the_masked_discord_url_cannot_be_moved_to_another_host(client, stub):
+    made = _discord(client)
+    moved = made["url"].replace("discord.com", "evil.example")
+    resp = client.patch(f"/api/notifications/targets/{made['id']}", json={"url": moved})
+    assert resp.status_code == 400 and resp.json()["code"] == "token_required"
+    assert targets.get_target(made["id"])["url"] == DISCORD_URL  # type: ignore[index]
+
+    tried = client.post(
+        "/api/notifications/test",
+        json={"id": made["id"], "name": "Room", "kind": "discord", "url": moved},
+    )
+    assert tried.status_code == 400 and tried.json()["code"] == "token_required"
+    assert stub.requests == []
+
+
+def test_a_stored_token_is_not_sent_to_a_new_host_without_retyping_it(client, stub):
+    made = client.post(
+        "/api/notifications/targets",
+        json={
+            "name": "Hook",
+            "kind": "webhook",
+            "url": stub.base,
+            "token": "secret-1234",
+        },
+    ).json()
+    url = f"/api/notifications/targets/{made['id']}"
+    elsewhere = "http://localhost:9/hook"
+
+    for token in (None, "••••1234"):
+        body = (
+            {"url": elsewhere} if token is None else {"url": elsewhere, "token": token}
+        )
+        resp = client.patch(url, json=body)
+        assert resp.status_code == 400 and resp.json()["code"] == "token_required"
+        assert targets.get_target(made["id"])["url"] == stub.base  # type: ignore[index]
+
+    # The test endpoint refuses to forward the stored token too.
+    tried = client.post(
+        "/api/notifications/test",
+        json={"id": made["id"], "name": "Hook", "kind": "webhook", "url": elsewhere},
+    )
+    assert tried.status_code == 400 and tried.json()["code"] == "token_required"
+    assert stub.requests == []
+
+    # Typing a token again, or dropping it, moves the target.
+    assert (
+        client.patch(url, json={"url": elsewhere, "token": "new-5678"}).status_code
+        == 200
+    )
+    assert client.patch(url, json={"url": stub.base, "token": ""}).status_code == 200
+    # Same host, other path: nothing to confirm.
+    assert client.patch(url, json={"url": f"{stub.base}/other"}).status_code == 200
+
+
 @pytest.mark.parametrize(
     "fields",
     [

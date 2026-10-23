@@ -92,8 +92,9 @@ All notable changes to Horde are documented here. The format follows
   failed or rolled-back update, and a followed channel going live. Bursts become
   one summary a minute ("30 new videos downloaded"), a failed send is retried
   twice and then dropped with a warning in the log, and **Send test** shows the
-  result inline. Access tokens stay on the server (the screen shows only the last
-  four characters) and are kept out of the logs. Set `HORDE_PUBLIC_URL` to add a
+  result inline. Access tokens and Discord webhook secrets stay on the server (the
+  screen shows only the last four characters), are kept out of the logs and
+  are not sent to a new address unless you enter them again. Set `HORDE_PUBLIC_URL` to add a
   link back to Horde. The events are listed by `GET /api/notifications`, which,
   like the rest of `/api/notifications`, is for administrators. See
   [Notifications](docs/ops/notifications.md).

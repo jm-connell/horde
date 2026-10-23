@@ -33,7 +33,7 @@ def _read(target: dict[str, Any]) -> NotificationTargetRead:
         id=target["id"],
         name=target["name"],
         kind=target["kind"],
-        url=target["url"],
+        url=targets.mask_url(target["url"], target["kind"]),
         topic=target.get("topic"),
         token=targets.mask_token(token),
         token_set=bool(token),
@@ -119,6 +119,8 @@ def test_unsaved_target(payload: NotificationTargetTest):
     stored = targets.get_target(payload.id) if payload.id else None
     fields = payload.model_dump(exclude={"id"})
     target = targets.normalize(
-        fields, stored_token=str((stored or {}).get("token") or "")
+        fields,
+        stored_token=str((stored or {}).get("token") or ""),
+        stored_url=str((stored or {}).get("url") or ""),
     )
     return _try(target)

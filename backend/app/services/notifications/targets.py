@@ -4,9 +4,10 @@ A target is a plain dict::
 
     {id, name, kind, url, topic, token, enabled, events: [...], options: {...}}
 
-``token`` is the only secret (an ntfy access token, or the bearer token a webhook
+``token`` is the main secret (an ntfy access token, or the bearer token a webhook
 expects). It is stored here and never leaves the server: the API shows the last four
-characters, like the OpenRouter key.
+characters, like the OpenRouter key. A Discord webhook's URL carries its own secret,
+the last path segment, which the API masks the same way.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 import re
 import uuid
 from typing import Any
+from urllib.parse import urlsplit
 
 from ...errors import CodedHTTPException
 from .. import app_settings
@@ -27,6 +29,9 @@ _TOPIC = re.compile(r"[A-Za-z0-9_.-]{1,64}")
 _TOKEN = re.compile(r"[\x21-\x7e]{1,512}")
 #: What the form sends back for a token it did not change.
 _MASK_PREFIXES = ("••••", "****")
+
+#: ``/api/webhooks/<id>/<token>``: the token is what lets anyone post to the channel.
+_DISCORD_TOKEN = re.compile(r"(/api/webhooks/\d+/)([^/?#\s]+)")
 
 CODE_INVALID = "invalid_notification_target"
 
@@ -42,15 +47,46 @@ def mask_token(token: str) -> str:
     return "••••" if len(token) <= 4 else f"••••{token[-4:]}"
 
 
+def mask_url(url: str, kind: str) -> str:
+    """``url`` as the API shows it: a Discord webhook's token segment masked."""
+    if kind != KIND_DISCORD:
+        return url
+    return _DISCORD_TOKEN.sub(lambda m: m.group(1) + mask_token(m.group(2)), url)
+
+
+def _is_masked_url(url: str) -> bool:
+    match = _DISCORD_TOKEN.search(url)
+    return match is not None and match.group(2).startswith(_MASK_PREFIXES)
+
+
+def _host(url: str) -> tuple[str | None, int | None]:
+    parts = urlsplit(url)
+    return (parts.hostname or "").lower(), parts.port
+
+
+def _token_required() -> CodedHTTPException:
+    return CodedHTTPException(
+        400,
+        "This sends the saved credentials to a different address. Enter the "
+        "access token (or the Discord address) again to confirm",
+        "token_required",
+    )
+
+
 def keeps_token(value: str | None) -> bool:
     """True when ``value`` means "leave the stored token alone"."""
     return value is None or value.strip().startswith(_MASK_PREFIXES)
 
 
-def normalize(fields: dict[str, Any], *, stored_token: str = "") -> dict[str, Any]:
+def normalize(
+    fields: dict[str, Any], *, stored_token: str = "", stored_url: str = ""
+) -> dict[str, Any]:
     """A complete, validated target (without ``id``) from form ``fields``.
 
-    ``stored_token`` is kept when ``fields`` leaves the token out or sends the mask.
+    ``stored_token`` is kept when ``fields`` leaves the token out or sends the mask;
+    ``stored_url`` likewise stands in for a Discord address sent back masked. Neither
+    secret is ever combined with a different host than the one it was saved for:
+    that needs the secret typed again (``token_required``).
     """
     name = str(fields.get("name") or "").strip()
     if not name or len(name) > NAME_MAX:
@@ -64,6 +100,10 @@ def normalize(fields: dict[str, Any], *, stored_token: str = "") -> dict[str, An
         raise _invalid(str(exc)) from exc
     if len(url) > URL_MAX:
         raise _invalid("That URL is too long")
+    if kind == KIND_DISCORD and _is_masked_url(url):
+        if not stored_url or mask_url(stored_url, KIND_DISCORD) != url:
+            raise _token_required()
+        url = stored_url
 
     topic = None
     if kind == KIND_NTFY:
@@ -77,6 +117,8 @@ def normalize(fields: dict[str, Any], *, stored_token: str = "") -> dict[str, An
     if kind == KIND_DISCORD:
         token = ""  # a Discord webhook URL carries its own secret
     elif keeps_token(raw_token):
+        if stored_token and stored_url and _host(url) != _host(stored_url):
+            raise _token_required()
         token = stored_token
     else:
         token = str(raw_token).strip()
@@ -154,7 +196,9 @@ def update_target(target_id: str, patch: dict[str, Any]) -> dict[str, Any]:
                 continue
             base = {k: v for k, v in row.items() if k != "token"}
             merged = normalize(
-                {**base, **patch}, stored_token=str(row.get("token") or "")
+                {**base, **patch},
+                stored_token=str(row.get("token") or ""),
+                stored_url=str(row.get("url") or ""),
             )
             result.update({"id": target_id, **merged})
             rows[index] = result
