@@ -5,6 +5,7 @@ import UserAvatar from "../../components/auth/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
+import ShareDownloadsField from "../../components/auth/ShareDownloadsField";
 import type {
   DeviceSession,
   Permission,
@@ -92,7 +93,8 @@ export default function UsersSection() {
         </div>
         <p className="mb-4 text-sm text-muted">
           Everyone signs in with their own account and has their own watch
-          history. The library, playlists and downloads are shared.
+          history. The library and playlists are shared; each account decides
+          whether others on the same device see its offline downloads.
         </p>
         {users === null ? (
           <p className="text-sm text-muted">Loading…</p>
@@ -173,6 +175,7 @@ function CreateUser({
   const [password, setPassword] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [granted, setGranted] = useState<Permission[] | null>(null);
+  const [share, setShare] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const effective = granted ?? defaultsOf(catalog);
@@ -188,12 +191,14 @@ function CreateUser({
         password,
         is_admin: isAdmin,
         permissions: isAdmin ? undefined : effective,
+        share_downloads: share,
       });
       showToast(`Created ${created.username}`);
       setUsername("");
       setPassword("");
       setIsAdmin(false);
       setGranted(null);
+      setShare(true);
       await onCreated();
     } catch (err) {
       setError(describe(err));
@@ -237,6 +242,7 @@ function CreateUser({
           onAdminChange={setIsAdmin}
           onGrantedChange={setGranted}
         />
+        <ShareDownloadsField checked={share} onChange={setShare} />
         <FormError message={error} />
         <button type="submit" disabled={busy} className={PANEL_BTN}>
           {busy ? "Adding…" : "Add user"}
@@ -320,6 +326,25 @@ function UserEditor({
             Save account type
           </button>
         </div>
+      )}
+      {isSelf ? (
+        <p className="text-sm text-muted">
+          Whether other accounts see your downloads is set under Downloads on
+          shared devices, above.
+        </p>
+      ) : (
+        <ShareDownloadsField
+          checked={user.share_downloads}
+          disabled={busy}
+          onChange={(share) =>
+            void run(
+              { share_downloads: share },
+              share
+                ? `${user.username}’s downloads are shared`
+                : `${user.username}’s downloads are private`
+            )
+          }
+        />
       )}
       <form
         className="max-w-sm"

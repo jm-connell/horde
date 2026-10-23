@@ -10,10 +10,12 @@ import {
 import ForgotPassword from "../components/auth/ForgotPassword";
 import { safeNextPath } from "../utils/authPaths";
 import { clearLocalSettings } from "../hooks/useSettings";
+import { deviceAccounts } from "../offline/accounts";
 
 export default function LoginPage() {
   const [params] = useSearchParams();
-  const [username, setUsername] = useState("");
+  // "Switch account" links here with the name filled in.
+  const [username, setUsername] = useState(params.get("username") ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -31,7 +33,10 @@ export default function LoginPage() {
     setBusy(true);
     setError(null);
     try {
-      await api.login(username.trim(), password);
+      const { user } = await api.login(username.trim(), password);
+      // The one moment the password is at hand: keep a way to unlock this
+      // account's private downloads on this device with no connection.
+      await deviceAccounts.record(user, password);
       enterApp();
     } catch (err) {
       setBusy(false);
@@ -54,7 +59,10 @@ export default function LoginPage() {
         <ForgotPassword
           initialUsername={username}
           onBack={() => setForgot(false)}
-          onSignedIn={enterApp}
+          onSignedIn={async (user, newPassword) => {
+            await deviceAccounts.record(user, newPassword);
+            enterApp();
+          }}
         />
       </AuthCard>
     );

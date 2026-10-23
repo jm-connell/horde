@@ -18,7 +18,7 @@ export default function AccountMenu({
   variant: "dropdown" | "list";
   onNavigate?: () => void;
 }) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, offlineAs } = useAuth();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
@@ -40,6 +40,8 @@ export default function AccountMenu({
   }, [open]);
 
   if (!user) return null;
+  // Acting as an account unlocked on this device, which the server has not confirmed.
+  const shownName = offlineAs ? `${user.username} (offline)` : user.username;
 
   const close = () => {
     setOpen(false);
@@ -73,7 +75,7 @@ export default function AccountMenu({
           <p className="px-3 pb-1 text-xs text-muted">
             Signed in as{" "}
             <span data-horde="account-name" className="text-gray-300">
-              {user.username}
+              {shownName}
             </span>
           </p>
           {items}
@@ -94,7 +96,7 @@ export default function AccountMenu({
               username={user.username}
               version={user.avatar_version}
             />
-            <span className="truncate">{user.username}</span>
+            <span className="truncate">{shownName}</span>
           </button>
           {open && (
             <div

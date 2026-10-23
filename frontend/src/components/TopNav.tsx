@@ -95,7 +95,10 @@ export default function TopNav() {
   const net = useConnectivity();
   const offlineMode = net.status === "offline";
   const offlineSnap = useOfflineDownloads();
-  const hasOfflineItems = offlineSnap.items.length > 0;
+  // Private downloads of other accounts still earn the link: the page says
+  // how to get at them.
+  const hasOfflineItems =
+    offlineSnap.items.length > 0 || offlineSnap.hidden.length > 0;
   const activeOffline = offlineSnap.items.find(
     (i) => i.status === "downloading" || i.status === "queued"
   );

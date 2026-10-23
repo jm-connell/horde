@@ -1,5 +1,6 @@
 import { useAuth } from "../context/AuthContext";
 import DevicesSection from "./account/DevicesSection";
+import DownloadsSection from "./account/DownloadsSection";
 import PasswordSection from "./account/PasswordSection";
 import ProfileSection from "./account/ProfileSection";
 import UsersSection from "./account/UsersSection";
@@ -19,6 +20,9 @@ export default function Account() {
         <ProfileSection />
         <div className="border-t border-ink-700 pt-6">
           <PasswordSection />
+        </div>
+        <div className="border-t border-ink-700 pt-6">
+          <DownloadsSection />
         </div>
         <div className="border-t border-ink-700 pt-6">
           <DevicesSection />
