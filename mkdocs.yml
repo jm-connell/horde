@@ -84,6 +84,7 @@ nav:
       - Ports & networking: ops/ports-networking.md
       - Accounts & sign-in: ops/authentication.md
       - Security: ops/security.md
+      - Notifications: ops/notifications.md
       - Remote access: ops/remote-access.md
       - YouTube access: ops/youtube-access.md
       - AI setup: ops/ai-setup.md

@@ -24,7 +24,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `trash-purge`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `trash-purge`, `notifications`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -139,6 +139,10 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 ## Trash purge
 
 **Start:** `trash.create_worker()` after job metadata (`trash-purge`). Two minutes after start and then every hour it erases trash entries older than `HORDE_TRASH_DAYS` (default 7; with `0` entries still expire after 7 days), skipping entries whose trash folder cannot be seen (an unmounted share). It also looks at trash folders no entry owns that are over an hour old: it moves their files back when their video is still in the library and otherwise leaves them, never deleting them. It wakes the download queue when disk space was freed. See [ADR 0013](../adr/0013-trash-tombstones.md).
+
+## Notifications
+
+**Start:** `ctx.notifier.create_worker()` after trash purge (`notifications`). Emitters (`notifications.emit`, called from the download pipeline, the queue's disk hold and the live poller) only append to a bounded queue on `ctx.notifier`; the worker pops it, folds bursts per target and sends with a 10 s timeout and three attempts. Every five minutes it also looks at things nobody emits: the outcome of "Update now" and a new release (the latter only when a target wants it, through the cached update check). See [Notifications](../ops/notifications.md).
 
 ## Nightly backup
 

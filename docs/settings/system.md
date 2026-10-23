@@ -8,6 +8,10 @@ The first section of the tab shows this install's version and, when GitHub repor
 
 See also [Updating](../getting-started/updating.md).
 
+## Notifications
+
+Where Horde sends messages (ntfy, Discord or a webhook) and which events each target wants: a failed download, a paused queue, an update that failed. Administrators add, test, edit, switch off and delete targets here; each target has a **Send test** button and shows the result inline. The list of events comes from the server. Setup for each service, the webhook format and the delivery rules are in [Notifications](../ops/notifications.md).
+
 ## Documentation
 
 When the wiki is bundled (`health.wiki_available`):

@@ -9,6 +9,7 @@ It holds the things that used to be import-time constants and singletons:
 | `engine` | The SQLite engine (WAL, busy timeout, foreign keys) |
 | `download_queue`, `ffmpeg_queue` | The download scheduler and the postprocess queue |
 | `workers`, `shutdown_event` | The `WorkerRegistry` and the event that ends long-lived streams |
+| `notifier` | The outgoing-notification queue and its delivery worker ([Notifications](../ops/notifications.md)) |
 | `auth` | The app's `AuthRuntime` (copied from `app.state.auth`) |
 | `ai` | `AiRuntimeState`: the AI worker's wake event and "blocked" reason |
 | `caches` | Request-path caches (`search_cache`, `duplicate_groups`), built by `install_caches`; `app.state` aliases them for the routers |

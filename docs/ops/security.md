@@ -73,7 +73,7 @@ Where the check applies:
 
 - **Validated, per hop:** thumbnail fetches (connection pinned to the checked address, redirects re-checked, hosts that do not resolve are refused) and every URL the preview proxy fetches on an extractor's behalf: media, subtitles, manifests and the DASH index probe (redirects re-checked).
 - **Pre-flight only:** URLs handed to yt-dlp (downloads, link checks, playlist and channel reads) are checked before the call, and the download queue re-checks each job before it starts. yt-dlp then resolves hostnames and follows redirects **itself**; those internal requests are not validated, so a DNS server that answers differently the second time, or a redirect inside yt-dlp, can still reach an internal address.
-- **Not filtered:** the Ollama address in Settings → AI is a LAN host by design (an admin-only setting).
+- **Not filtered:** the Ollama address in Settings → AI and the [notification](notifications.md#security) targets are LAN hosts by design (admin-only settings). Notification targets must still be `http(s)` without credentials in the URL, and redirects are not followed.
 
 ## Upload limits { #upload-limits }
 

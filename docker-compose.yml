@@ -86,6 +86,7 @@ services:
       - HORDE_ALLOWED_HOSTS=${HORDE_ALLOWED_HOSTS:-}
       - HORDE_ALLOW_PRIVATE_URLS=${HORDE_ALLOW_PRIVATE_URLS:-}
       - HORDE_MAX_UPLOAD_GB=${HORDE_MAX_UPLOAD_GB:-}
+      - HORDE_PUBLIC_URL=${HORDE_PUBLIC_URL:-}
       - HORDE_MIN_FREE_GB=${HORDE_MIN_FREE_GB:-}
       # Accounts behind a reverse proxy (see docs/ops/authentication.md). All optional.
       - HORDE_TRUST_PROXY=${HORDE_TRUST_PROXY:-}

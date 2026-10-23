@@ -68,6 +68,21 @@ All notable changes to Horde are documented here. The format follows
   erase videos one by one. Settings → System → Storage shows the trash's share
   of the disk usage.
 
+- **Notifications.** Settings → System → Notifications sends a message to
+  [ntfy](https://ntfy.sh), a Discord channel or any webhook when something needs
+  you, so you do not have to keep the app open. Each target (up to ten) picks its
+  events: a failed download (on by default), a finished download (with "only
+  automatic downloads", so channel auto-downloads and subscribed playlists but
+  not the ones you watched), downloads paused for disk space, a new release, a
+  failed or rolled-back update, and a followed channel going live. Bursts become
+  one summary a minute ("30 new videos downloaded"), a failed send is retried
+  twice and then dropped with a warning in the log, and **Send test** shows the
+  result inline. Access tokens stay on the server (the screen shows only the last
+  four characters) and are kept out of the logs. Set `HORDE_PUBLIC_URL` to add a
+  link back to Horde. The events are listed by `GET /api/notifications`, which,
+  like the rest of `/api/notifications`, is for administrators. See
+  [Notifications](docs/ops/notifications.md).
+
 - **Private playlists.** Every playlist now has an owner and is either
   **App-wide** (everyone sees it) or **Private** (only its owner does, not even
   administrators). The create form on the Playlists page has an
@@ -121,6 +136,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
+- Database migration `0013_download_job_origin` adds the `download_jobs.origin`
+  column (a plain `ADD COLUMN`; existing jobs count as queued by a person).
+  Back up and roll back as for any migration (the older version refuses a
+  database it does not know).
 - Database migration `0012_share_downloads` adds the `users.share_downloads`
   column (a plain `ADD COLUMN`, default on for every account). Back up and roll
   back as for any migration (the older version refuses a database it does not
