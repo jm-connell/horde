@@ -75,13 +75,15 @@ The trash lists each video with its size, who deleted it and when it will be era
 Things to know:
 
 - **Trashed videos still use disk.** They count toward the [library size limit](../settings/system.md), and emptying the trash frees that space (held downloads then start).
-- **A restore can be refused** (409 `trash_conflict`) when its original file path is taken or the same YouTube video was downloaded again in the meantime. Delete the newer copy first, or erase the trashed one.
-- **Auto-download skips trashed videos**, so a channel with auto-download does not fetch a video you just deleted.
+- **A restore can be refused** (409 `trash_conflict`) when its original file path is taken, the same YouTube video was downloaded again in the meantime, or it is being downloaded right now. Delete the newer copy first, or erase the trashed one. A thumbnail or preview made again in the meantime is not a conflict: the newer one is kept.
+- **Auto-download does not fetch a video you deleted**, now or after the trash is emptied. The video stays in the channel feed as "not downloaded" so you can download it again by hand, which (like a restore) lets auto-download treat it normally again.
+- **The trash lives next to the videos** and must be on the same filesystem: a video moves there by renaming, never by copying. If a channel folder is a separate mount, deleting its videos fails with `trash_cross_device` (use `HORDE_TRASH_DAYS=0` for such a setup).
+- **A storage outage does not shorten the 7 days.** If the downloads share is not mounted, the purge waits.
 - Choosing to **keep the file** when removing a video from the library has nothing to trash; the video is only dropped from the library, as before.
-- `HORDE_TRASH_DAYS=0` turns the trash off: deletes are immediate and permanent. Anything already in the trash is erased the next time the hourly purge runs.
+- `HORDE_TRASH_DAYS=0` turns the trash off: new deletes are immediate and permanent. Anything already in the trash stays for its normal 7 days.
 - Videos Horde removes by itself stay permanent: a library entry whose file vanished from disk, a re-download replacing the old copy, a [factory reset](../settings/system.md) that erases media (it also empties the trash), and deleting an account.
 
-For API clients: the `204` of `DELETE /api/videos/{id}?delete_file=true` and of `POST /api/videos/bulk-delete` carries the entry id in the `X-Horde-Trash-Entry` (bulk: `X-Horde-Trash-Entries`, comma separated) header, which `POST /api/trash/{id}/restore` takes. See [Trash design](../adr/0013-trash-tombstones.md).
+For API clients: the `204` of `DELETE /api/videos/{id}?delete_file=true` and of `POST /api/videos/bulk-delete` carries the entry id in the `X-Horde-Trash-Entry` (bulk: `X-Horde-Trash-Entries`, comma separated) header, which `POST /api/trash/{id}/restore` takes. A bulk delete that moves some videos and fails on others answers `500` `trash_failed` and still sends the header for the ones that moved, so a client can offer Undo for them. See [Trash design](../adr/0013-trash-tombstones.md).
 
 ## Continue watching
 

@@ -87,7 +87,7 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 | `0006_video_tags_delete` | `AFTER DELETE ON videos` trigger that clears the video's `video_tags` rows even on a connection without `foreign_keys` |
 | `0007_channel_follows` | `channel_follows` table (per-user followed channels, with unfollow tombstones) and `download_requesters` (who queued a download job) |
 | `0008_stream_ai` | `stream_ai_state` and `stream_ai_chat_messages`: AI results of streamed videos, kept per YouTube id until downloaded or expired ([ADR 0010](../adr/0010-stream-ai-retention.md)) |
-| `0010_trash` | `trash_entries`: one tombstone per video a user deleted, with the rows a restore needs and the list of files moved to the trash ([ADR 0013](../adr/0013-trash-tombstones.md)). A new table only; `videos` is not rebuilt |
+| `0010_trash` | `trash_entries`: one tombstone per video a user deleted, with the rows a restore needs, the list of files moved to the trash and the random `folder` token they sit under ([ADR 0013](../adr/0013-trash-tombstones.md)). A new table only; `videos` is not rebuilt |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
 

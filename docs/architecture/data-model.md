@@ -20,7 +20,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `channel_catalogs` | Per-channel index status, phase, caps, completeness |
 | `channel_catalog_videos` | Flat (+ described) upload rows (`catalog_id` + `yt_id` unique) |
 | `channel_autodownloads` | Per-channel automatic download policy (enabled, how many earlier uploads, quality preset) |
-| `channel_catalog_skips` | Permanent skips (e.g. members-only) |
+| `channel_catalog_skips` | Permanent skips: unplayable videos (members-only, age-restricted; hidden from the feed) and videos a user deleted (`reason = deleted`; still listed, only auto-download skips them) |
 | `channel_catalog_embeddings` | Embeddings for catalog videos (recommend / hybrid catalog search) |
 
 ### AI
@@ -33,7 +33,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_ai_chat_messages` | User/assistant turns of one person's chat about a video (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
-| `trash_entries` | One tombstone per deleted video waiting in the [trash](../guides/library.md#trash): the original `video_id`, `youtube_id`, title, relative path, bytes, `trashed_at`, `trashed_by_user_id`, the moved files (`files_json`) and a snapshot of the rows a restore re-inserts (`snapshot_json`). Not tied to `videos` by a foreign key |
+| `trash_entries` | One tombstone per deleted video waiting in the [trash](../guides/library.md#trash): the `folder` token its files sit under, the original `video_id`, `youtube_id`, title, relative path, bytes, `trashed_at`, `trashed_by_user_id`, the moved files (`files_json`) and a snapshot of the rows a restore re-inserts (`snapshot_json`). Not tied to `videos` by a foreign key |
 | `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
 | `alembic_version` | Current Alembic revision (`version_num`) |
 | `schema_migrations` | Legacy ledger from before Alembic (adopted installs only; unused) |

@@ -28,8 +28,7 @@ All notable changes to Horde are documented here. The format follows
   trash with sizes and expiry (`/api/trash`), and the delete responses carry
   the entry id so a client can offer **Undo**. `HORDE_TRASH_DAYS` sets the
   number of days; `0` turns the trash off. Trashed videos still count toward
-  the size limit, and channel auto-download does not fetch them again. See
-  [Library](docs/guides/library.md#trash).
+  the size limit. See [Library](docs/guides/library.md#trash).
 
 ### Changed
 
@@ -38,6 +37,15 @@ All notable changes to Horde are documented here. The format follows
   queue instead of failing every following download the same way.
 - `update.sh` accepts a `warning` health status, so an update is not rolled back
   because downloads are waiting for disk space.
+
+### Fixed
+
+- Channel auto-download no longer fetches a video again after you deleted it. It
+  used to re-queue any channel upload that was not in the library, so a deleted
+  video came back with the next channel update. Deleting a downloaded video now
+  makes auto-download skip it for good; the video stays in the channel feed as
+  "not downloaded" and downloading it by hand (or restoring it from the trash)
+  lifts the skip.
 
 ### Upgrade notes
 
@@ -48,6 +56,9 @@ All notable changes to Horde are documented here. The format follows
 - Deleting a video with its file no longer frees the disk straight away: the
   files wait in `downloads/.horde-trash` (and `data/trash`) for 7 days. Set
   `HORDE_TRASH_DAYS=0` to keep the old immediate behaviour.
+- Keep `.horde-trash` on the same filesystem as the videos (it is, unless a
+  channel folder is a separate mount): a video is moved there by renaming, never
+  by copying, and a delete that would need a copy is refused with a clear error.
 
 ## [1.0.3] - 2026-10-21
 

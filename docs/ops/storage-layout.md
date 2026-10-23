@@ -56,14 +56,14 @@ Every library download (new, re-download, change quality, replace) runs in its o
 ### Trash { #trash }
 
 ```text
-downloads/.horde-trash/{entry_id}/<path the file had under downloads/>
-data/trash/{entry_id}/<path the file had under data/>        (thumbnails, seek sprites)
+downloads/.horde-trash/{folder}/<path the file had under downloads/>
+data/trash/{folder}/<path the file had under data/>          (thumbnails, seek sprites)
 ```
 
-A video the user deletes with its file is moved here (a rename on the same filesystem, so it costs nothing and needs no extra space) and kept for `HORDE_TRASH_DAYS` (default 7) before the hourly purge erases it. The database keeps one `trash_entries` row per video with what a restore needs. The scanner, the import queue, the temp sweep and orphan cleanup ignore the folder. It counts toward the library size limit.
+A video the user deletes with its file is moved here (a rename on the same filesystem, so it costs nothing and needs no extra space; if `.horde-trash` were on another filesystem the delete is refused, never copied) and kept for `HORDE_TRASH_DAYS` (default 7) before the hourly purge erases it. `{folder}` is a random token, not a number. Each folder holds a small `.horde-trash-manifest.json` that lets Horde move the files back after a crash. The database keeps one `trash_entries` row per video with what a restore needs. The scanner, the import queue, the temp sweep and orphan cleanup ignore the folder. It counts toward the library size limit.
 
 !!! note "Visible over SMB"
-    `.horde-trash` is a dot-folder, but a network share exports it like any other: someone browsing `DOWNLOADS_DIR` over SMB can see it (and the staging folder) unless the share hides dot-files. Do not move files in or out by hand; use the trash view in Horde, and delete the folder only after emptying the trash there. Folders in it that no database row owns are removed by the purge after a day.
+    `.horde-trash` is a dot-folder, but a network share exports it like any other: someone browsing `DOWNLOADS_DIR` over SMB can see it (and the staging folder) unless the share hides dot-files. Do not move files in or out by hand; use the trash view in Horde, and delete the folder only after emptying the trash there. Folders in it that no database row owns are never deleted by Horde: if their video is still in the library the files are moved back, otherwise they are left (and logged once) for you to look at.
 
 ### Device staging (ephemeral)
 

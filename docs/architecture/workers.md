@@ -138,7 +138,7 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 
 ## Trash purge
 
-**Start:** `trash.create_worker()` after job metadata (`trash-purge`). Two minutes after start and then every hour it erases trash entries older than `HORDE_TRASH_DAYS` (default 7; `0` erases all), entries whose files are no longer in the trash folder, and trash folders no entry owns that are older than a day, then wakes the download queue because disk space was freed. See [ADR 0013](../adr/0013-trash-tombstones.md).
+**Start:** `trash.create_worker()` after job metadata (`trash-purge`). Two minutes after start and then every hour it erases trash entries older than `HORDE_TRASH_DAYS` (default 7; with `0` entries still expire after 7 days), skipping entries whose trash folder cannot be seen (an unmounted share). It also looks at trash folders no entry owns that are over an hour old: it moves their files back when their video is still in the library and otherwise leaves them, never deleting them. It wakes the download queue when disk space was freed. See [ADR 0013](../adr/0013-trash-tombstones.md).
 
 ## Nightly backup
 
