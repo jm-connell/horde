@@ -42,6 +42,10 @@ import type {
   CompatState,
   CompatSummary,
   TagStat,
+  TrashEmptied,
+  TrashItem,
+  TrashRestored,
+  TrashSummary,
   UpdateCheck,
   UpdateControl,
   Video,
@@ -69,6 +73,8 @@ export class ApiError extends Error {
   status: number;
   fields?: ApiErrorField[];
   extra?: Record<string, unknown>;
+  /** Response headers, for the few errors that carry data there (a partial bulk delete). */
+  headers?: Headers;
 
   constructor(
     message: string,
@@ -77,6 +83,7 @@ export class ApiError extends Error {
       status?: number;
       fields?: ApiErrorField[];
       extra?: Record<string, unknown>;
+      headers?: Headers;
     }
   ) {
     super(message);
@@ -85,6 +92,7 @@ export class ApiError extends Error {
     this.status = extra?.status ?? 0;
     this.fields = extra?.fields;
     this.extra = extra?.extra;
+    this.headers = extra?.headers;
   }
 
   /** Stable failure kind of a link-reading error (`extra.error_kind`). */
@@ -173,10 +181,17 @@ async function apiErrorFrom(resp: Response): Promise<ApiError> {
     // non-JSON error body; keep status text
   }
   notifyAuthFailure(resp.status, code, message);
-  return new ApiError(message, { status: resp.status, code, fields, extra });
+  return new ApiError(message, {
+    status: resp.status,
+    code,
+    fields,
+    extra,
+    headers: resp.headers,
+  });
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+/** Send a request; a non-2xx reply throws its ApiError. */
+async function send(url: string, init?: RequestInit): Promise<Response> {
   // Offline mode: fail fast instead of hanging on a dead/slow connection.
   if (connectivity.offlineMode) throw offlineError();
   let resp: Response;
@@ -192,8 +207,40 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   }
   connectivity.reportRequest(performance.now() - t0, false);
   if (!resp.ok) throw await apiErrorFrom(resp);
+  return resp;
+}
+
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const resp = await send(url, init);
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
+}
+
+/** Set by the delete endpoints when the video went to the trash (bulk: comma separated). */
+const TRASH_ENTRY_HEADER = "X-Horde-Trash-Entry";
+const TRASH_ENTRIES_HEADER = "X-Horde-Trash-Entries";
+
+/** The trash entry ids in a delete reply's header; [] when it has none. */
+export function parseTrashEntryIds(value: string | null | undefined): number[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((part) => Number(part.trim()))
+    .filter((id) => Number.isInteger(id) && id > 0);
+}
+
+/** What a delete put in the trash, so the caller can offer Undo. */
+export interface DeleteResult {
+  trashEntryIds: number[];
+}
+
+/**
+ * The videos a failed bulk delete still moved to the trash (its error reply
+ * lists them), so Undo can be offered for those.
+ */
+export function trashEntryIdsOfError(err: unknown): number[] {
+  if (!(err instanceof ApiError)) return [];
+  return parseTrashEntryIds(err.headers?.get(TRASH_ENTRIES_HEADER));
 }
 
 /** Options every read accepts so React Query can cancel it. */
@@ -537,18 +584,63 @@ export const api = {
     });
   },
 
-  deleteVideo(id: number, deleteFile = false): Promise<void> {
-    return request<void>(`/api/videos/${id}?delete_file=${deleteFile}`, {
+  async deleteVideo(id: number, deleteFile = false): Promise<DeleteResult> {
+    const resp = await send(`/api/videos/${id}?delete_file=${deleteFile}`, {
       method: "DELETE",
     });
+    return {
+      trashEntryIds: parseTrashEntryIds(resp.headers.get(TRASH_ENTRY_HEADER)),
+    };
   },
 
-  bulkDeleteVideos(ids: number[], deleteFiles = false): Promise<void> {
-    return request<void>("/api/videos/bulk-delete", {
+  /** A partial failure throws; `trashEntryIdsOfError` lists the ones that moved. */
+  async bulkDeleteVideos(
+    ids: number[],
+    deleteFiles = false
+  ): Promise<DeleteResult> {
+    const resp = await send("/api/videos/bulk-delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ video_ids: ids, delete_files: deleteFiles }),
     });
+    return {
+      trashEntryIds: parseTrashEntryIds(resp.headers.get(TRASH_ENTRIES_HEADER)),
+    };
+  },
+
+  trashSummary(opts?: ReadOptions): Promise<TrashSummary> {
+    return request<TrashSummary>("/api/trash/summary", opts);
+  },
+
+  /** One page of the trash, newest first. */
+  listTrashPage(
+    params: {
+      cursor?: string | null;
+      limit?: number;
+      signal?: AbortSignal;
+    } = {}
+  ): Promise<Page<TrashItem>> {
+    const qs = new URLSearchParams();
+    if (params.cursor) qs.set("cursor", params.cursor);
+    if (params.limit) qs.set("limit", String(params.limit));
+    return request<Page<TrashItem>>(
+      `/api/trash?${qs.toString()}`,
+      params.signal ? { signal: params.signal } : undefined
+    );
+  },
+
+  restoreFromTrash(entryId: number): Promise<TrashRestored> {
+    return request<TrashRestored>(`/api/trash/${entryId}/restore`, {
+      method: "POST",
+    });
+  },
+
+  deleteFromTrash(entryId: number): Promise<void> {
+    return request<void>(`/api/trash/${entryId}`, { method: "DELETE" });
+  },
+
+  emptyTrash(): Promise<TrashEmptied> {
+    return request<TrashEmptied>("/api/trash/empty", { method: "POST" });
   },
 
   bulkUpdateNotes(ids: number[], notes: string): Promise<void> {
@@ -814,8 +906,8 @@ export const api = {
     });
   },
 
-  storageStats(): Promise<StorageStats> {
-    return request<StorageStats>("/api/stats/storage");
+  storageStats(opts?: ReadOptions): Promise<StorageStats> {
+    return request<StorageStats>("/api/stats/storage", opts);
   },
 
   getAppSettings(opts?: ReadOptions): Promise<AppSettings> {

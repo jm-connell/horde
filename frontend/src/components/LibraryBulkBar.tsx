@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useTrashRetentionDays } from "../queries/trash";
+import { deleteConfirmCopy } from "../trash";
 import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
@@ -47,11 +49,9 @@ export default function LibraryBulkBar({
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const videoWord = selectedCount === 1 ? "video" : "videos";
-  const deleteBody =
-    selectedCount === 1
-      ? "This video will be removed from your library and the file will be permanently deleted."
-      : "These videos will be removed from your library and the files will be permanently deleted.";
+  const deleteCopy = deleteConfirmCopy(useTrashRetentionDays(), {
+    count: selectedCount,
+  });
 
   const closeDeleteConfirm = () => {
     if (deleting) return;
@@ -220,12 +220,12 @@ export default function LibraryBulkBar({
       </div>
       {deleteConfirmOpen ? (
         <ConfirmDialog
-          title={`Delete ${selectedCount} ${videoWord}?`}
-          body={deleteBody}
-          confirmLabel="Delete"
+          title={deleteCopy.title}
+          body={deleteCopy.body}
+          confirmLabel={deleteCopy.confirmLabel}
           danger
           busy={deleting}
-          busyLabel="Deleting…"
+          busyLabel={deleteCopy.busyLabel}
           onCancel={closeDeleteConfirm}
           onConfirm={() => void confirmDelete()}
         />

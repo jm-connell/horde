@@ -22,6 +22,7 @@ export const queryKeys = {
     stats: ["system", "stats"] as const,
     activity: ["system", "activity"] as const,
     update: ["system", "update"] as const,
+    storage: ["system", "storage"] as const,
   },
   compat: {
     summary: ["compat", "summary"] as const,
@@ -69,5 +70,10 @@ export const queryKeys = {
   },
   history: {
     all: ["history"] as const,
+  },
+  trash: {
+    all: ["trash"] as const,
+    summary: ["trash", "summary"] as const,
+    list: ["trash", "list"] as const,
   },
 };

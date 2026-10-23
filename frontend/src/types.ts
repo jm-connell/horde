@@ -39,6 +39,14 @@ export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
 export type ChannelLive = S["ChannelLiveResponse"];
 export type StorageStats = S["StorageStats"];
+/**
+ * A deleted video in the trash. `reason` says why when a rule (not a person)
+ * deleted it; the server does not send it yet, so it is optional here.
+ */
+export type TrashItem = S["TrashItemRead"] & { reason?: string | null };
+export type TrashSummary = S["TrashSummary"];
+export type TrashRestored = S["TrashRestored"];
+export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type OpenRouterCosts = S["OpenRouterCostsRead"];

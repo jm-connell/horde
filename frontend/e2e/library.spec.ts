@@ -257,8 +257,8 @@ test("shift-click selects a range of cards and delete removes them", async ({
 
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page
-    .getByRole("dialog")
-    .getByRole("button", { name: "Delete", exact: true })
+    .getByRole("dialog", { name: "Move 2 videos to trash?" })
+    .getByRole("button", { name: "Move to trash", exact: true })
     .click();
   await expect(page.getByText("2 selected")).toHaveCount(0);
   await expect(cards).toHaveCount(titles.length - 2);

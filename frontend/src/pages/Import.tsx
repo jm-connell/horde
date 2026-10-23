@@ -10,6 +10,17 @@ import { useToast } from "../context/ToastContext";
 import type { DuplicateGroup, Video } from "../types";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../queries/keys";
+import {
+  deleteErrorMessage,
+  useAfterDelete,
+  useTrashRetentionDays,
+} from "../queries/trash";
+import {
+  deleteConfirmCopy,
+  retentionSentence,
+  trashEnabled,
+  videoCount,
+} from "../trash";
 import { formatSize } from "../utils";
 
 import { getJson, setJson } from "../storage";
@@ -75,6 +86,8 @@ export default function Import() {
   const { showToast, showError } = useToast();
   const queryClient = useQueryClient();
   const confirm = useConfirm();
+  const retentionDays = useTrashRetentionDays();
+  const afterDelete = useAfterDelete();
   const [items, setItems] = useState<Video[]>([]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(() =>
@@ -111,7 +124,10 @@ export default function Import() {
       body: (
         <>
           <p className="wrap-break-word">
-            Keep &ldquo;{keep.title}&rdquo; and permanently delete{" "}
+            Keep &ldquo;{keep.title}&rdquo; and{" "}
+            {trashEnabled(retentionDays)
+              ? "move to the trash"
+              : "permanently delete"}{" "}
             {others.length} other file{others.length === 1 ? "" : "s"}:
           </p>
           <ul className="mt-2 max-h-32 list-disc space-y-0.5 overflow-y-auto pl-5 text-gray-400">
@@ -121,39 +137,68 @@ export default function Import() {
               </li>
             ))}
           </ul>
+          {trashEnabled(retentionDays) ? (
+            <p className="mt-2">{retentionSentence(retentionDays)}</p>
+          ) : null}
         </>
       ),
-      confirmLabel:
-        others.length === 1
+      confirmLabel: trashEnabled(retentionDays)
+        ? others.length === 1
+          ? "Move other file to trash"
+          : `Move ${others.length} files to trash`
+        : others.length === 1
           ? "Delete other file"
           : `Delete ${others.length} files`,
       danger: true,
     });
     if (!ok) return;
+    const trashed: number[] = [];
     try {
       for (const v of others) {
-        await api.deleteVideo(v.id, true);
+        trashed.push(...(await api.deleteVideo(v.id, true)).trashEntryIds);
       }
-      showToast(`Kept "${keep.title}"`);
+      afterDelete(
+        trashed,
+        trashed.length
+          ? `Kept “${keep.title}”, moved ${videoCount(trashed.length)} to the trash`
+          : `Kept “${keep.title}”`,
+        () => load()
+      );
       load();
-    } catch {
-      showError("Could not delete duplicate(s)");
+    } catch (err) {
+      if (trashed.length) {
+        afterDelete(
+          trashed,
+          `Moved ${videoCount(trashed.length)} to the trash`,
+          () => load()
+        );
+        load();
+      }
+      showError(deleteErrorMessage(err, "Could not delete duplicate(s)"));
     }
   };
 
   const deleteVideoFile = async (v: Video) => {
+    const copy = deleteConfirmCopy(retentionDays, { count: 1, title: v.title });
     const ok = await confirm({
-      title: "Delete this video?",
-      body: `"${v.title}" and its file will be permanently deleted.`,
-      confirmLabel: "Delete",
+      title: copy.title,
+      body: copy.body,
+      confirmLabel: copy.confirmLabel,
       danger: true,
     });
     if (!ok) return;
     try {
-      await api.deleteVideo(v.id, true);
+      const { trashEntryIds } = await api.deleteVideo(v.id, true);
       load();
-    } catch {
-      showError("Could not delete video");
+      afterDelete(
+        trashEntryIds,
+        trashEntryIds.length
+          ? `Moved “${v.title}” to the trash`
+          : `Deleted “${v.title}”`,
+        () => load()
+      );
+    } catch (err) {
+      showError(deleteErrorMessage(err));
     }
   };
 
