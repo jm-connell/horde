@@ -10,6 +10,20 @@ Horde playlists group library videos for binge sessions, curated mixes, archived
 
 Empty local playlists are always created here — not on Download.
 
+## Who can see a playlist
+
+Every playlist is **App-wide** or **Private**, and the create form has a switch for it (it applies to new playlists and to YouTube subscriptions made on this page).
+
+| | App-wide | Private |
+|---|---|---|
+| Seen by | Everyone who signs in | Only you. Nobody else, administrators included, can see it or tell it exists |
+| Created by | Members with the **Manage playlists** permission (administrators always) | Any account |
+| Edited and deleted by | Its owner, and anyone with **Manage playlists** | Its owner |
+
+New playlists start as App-wide for accounts that may share and Private for the rest. The owner can switch a playlist with the pencil (**Edit playlist**) at any time; making a Private playlist App-wide needs **Manage playlists**. Other people's App-wide playlists show "by <name>" and, without **Manage playlists**, can be opened and played but not changed. When you have your own playlists and shared ones from others, the page lists them under **Your playlists** and **Shared with everyone**; each list is dragged into order on its own.
+
+The **+ Playlist** menus (on the watch page, the Download page and the library's bulk bar) offer only the playlists you can add to. Choosing a playlist you cannot change as the target of a download is refused. If an account is deleted, its Private playlists are deleted with it and its App-wide ones go to the administrator who deleted it. Playlists that existed before accounts could own them belong to the first administrator and stay App-wide.
+
 ## Subscribe to a YouTube playlist
 
 Use this for series that grow over time (for example “2026 PC Build Log” with later parts).
@@ -79,6 +93,7 @@ Click a playlist row on `/playlists` to expand it (or open `/playlists?open=<id>
 - The pencil beside the expand chevron turns the playlist title into an input and shows cover options (first video by default, any member's thumbnail, or an uploaded image). Uploads open a 16:9 editor so you can zoom, rotate, and position the crop before saving.
 - See source hints for YouTube-imported and subscribed lists
 - Sync or stop a YouTube subscription
+- Choose who can see it (its owner only)
 
 Drag the grip on the far left of a playlist row to change the order of lists.
 

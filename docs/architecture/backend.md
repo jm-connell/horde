@@ -14,7 +14,7 @@ Python package under `backend/app/`. FastAPI app entry: `main.py`.
 | `downloads.py` | Queue jobs, presets, progress SSE, pause/resume |
 | `preview.py` | Watch-before-download / DASH proxy (uses `stream_preview`) |
 | `review.py` | Import queue, folder scan, approve/reject, duplicate groups (on-demand AI score) |
-| `playlists.py` | User, imported, and subscribed YouTube playlists (covers, list order) |
+| `playlists.py` | User, imported, and subscribed YouTube playlists (covers, list order); who sees and edits which one is `services/playlists.py` |
 | `app_settings.py` | GET/PATCH settings |
 | `ai.py` | Status, chat stream, recommend, maintenance enqueue, OpenRouter costs |
 | `system.py` | Disk/system stats surfaces for Settings |

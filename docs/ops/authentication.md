@@ -1,6 +1,6 @@
 # Accounts and sign-in
 
-Horde asks everyone to sign in. There is one **administrator** (the first account), who adds the other people. Everyone shares the library, playlists, tags, notes and downloads; each person has their **own watch history, AI chats and look** (theme, layout, playback preferences).
+Horde asks everyone to sign in. There is one **administrator** (the first account), who adds the other people. Everyone shares the library, tags, notes and downloads, and the playlists marked *App-wide*; each person has their **own watch history, AI chats, private playlists and look** (theme, layout, playback preferences).
 
 ## First run and upgrades
 
@@ -27,7 +27,7 @@ When an administrator adds or edits an account they pick its **type** in *Accoun
 | `download` | Queue downloads, import playlists, set up channel auto-download (a channel's automatic download rule), import or upload files | on |
 | `offline_download` | Save videos to the device for offline viewing, and fetch files from the server | on |
 | `edit_metadata` | Edit titles, descriptions, notes, tags and thumbnails; rename channels | on |
-| `manage_playlists` | Create, edit and delete the shared playlists | on |
+| `manage_playlists` | Create App-wide playlists, make a playlist of their own App-wide, and edit or delete the App-wide playlists other people made. Every member can make private playlists and manage their own without it | on |
 | `use_ai` | AI chat, on-demand summaries, tags and chapters, and the embedding half of library and channel-catalog search (these can cost money with a paid provider) | on |
 
 Members do not see how the server is set up: the server settings, AI status and health endpoints answer them with readiness and feature switches only (no provider type or address, schedule, GPU details, API key tail, budget or model names), and the AI job list is for administrators. The same goes for the rest of the API: a member gets coarse status (counts, `ready`/`error` states, whether a GPU can encode) but no internal address, file path, model name, GPU name or raw error text. Where a member's screen reports a failure (a video whose AI indexing or H.264 copy failed) it gets a generic message; the administrator sees the server's own text. In detail, for a member:
@@ -54,7 +54,7 @@ Every administrator sees and can change everything below. A member sees only the
 | Settings → Library | Continue watching, progress bars, card dates, default sort, channel list order | Download count badge, normalize volume on download (`download`) | Progress expiry, playback compatibility (download codec, H.264 copy size, library copies and conversion), metadata and catalog (indexing, YouTube search switches, catalog size, refresh interval, resync) |
 | Settings → Playback | Everything: watch page, previews, subtitles, SponsorBlock, speeds, offline mode | | |
 | Settings → AI, System, Users | | | The whole tab: AI providers, keys, models, budget, schedule and jobs; storage, background activity, health, updates (checking for and starting one), factory reset; user management |
-| Elsewhere | Their own password, history and chats | Downloads, imports, channel auto-download (`download`); saving for offline (`offline_download`); notes, details, thumbnails (`edit_metadata`); playlists (`manage_playlists`); AI chat and on-demand AI (`use_ai`); deleting (`delete_videos`) | Pausing or resuming the whole download queue, the bulk metadata resync, refreshing the AI category shelves |
+| Elsewhere | Their own password, history and chats | Downloads, imports, channel auto-download (`download`); saving for offline (`offline_download`); notes, details, thumbnails (`edit_metadata`); App-wide playlists (`manage_playlists`); AI chat and on-demand AI (`use_ai`); deleting (`delete_videos`) | Pausing or resuming the whole download queue, the bulk metadata resync, refreshing the AI category shelves |
 
 Members still get the read-only values their screens need: the YouTube search switches, the progress expiry and the server's download codec (their downloads use it). `GET /api/settings` gives a member the defaults of the other server-only fields, and the library-wide compatibility totals (`GET /api/compat/summary`) and the metadata resync progress (`GET /api/videos/refresh-metadata/status`) are for administrators.
 
@@ -71,7 +71,7 @@ Click your name or picture at the top right: the menu has **Account settings** a
 
 ## Managing users (admins)
 
-For administrators, *Account settings* also lists every account under **Users**. **Add a user** opens the form for a new account (username, password, type and permissions). You can also change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats and preferences; videos and playlists stay. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
+For administrators, *Account settings* also lists every account under **Users**. **Add a user** opens the form for a new account (username, password, type and permissions). You can also change a user's type and permissions, reset their password, disable or re-enable the account, and delete it. Resetting a password or disabling an account signs that person out everywhere: open pages lose access at once, and live event streams (download progress, AI chat replies) end within about 15 seconds. Deleting removes their history, chats, preferences and private playlists; videos stay, and their App-wide playlists are handed to the administrator who deletes the account. You cannot change your own account type or disable your own account (the API answers `409` with `code: "self_lockout"`): another administrator has to do it, so a lone administrator can never lock themselves out.
 
 The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 

@@ -35,8 +35,25 @@ All notable changes to Horde are documented here. The format follows
   erase videos one by one. Settings → System → Storage shows the trash's share
   of the disk usage.
 
+- **Private playlists.** Every playlist now has an owner and is either
+  **App-wide** (everyone sees it) or **Private** (only its owner does, not even
+  administrators). The create form on the Playlists page has an
+  App-wide / Private switch, the pencil on a playlist changes it later, private
+  playlists show a lock badge, and other people's App-wide playlists show who
+  made them. Any account can make private playlists; App-wide ones still need
+  **Manage playlists**. See [Playlists](docs/guides/playlists.md).
+
 ### Changed
 
+- **Manage playlists** now means creating App-wide playlists and editing or
+  deleting the ones other people made. Members without it can still make and
+  change their own private playlists, and the **+ Playlist** buttons are shown
+  to everyone (listing only the playlists you can add to). The API answers 404
+  for another user's private playlist and 403 for an App-wide one you may not
+  change; `POST /api/playlists` and the YouTube import take an optional
+  `visibility` (App-wide for those who may share, private otherwise).
+- Deleting an account now deletes its private playlists and hands its App-wide
+  ones to the administrator who deleted it. Before, all playlists stayed.
 - A download that hits "no space left on device" now fails with its own kind
   (`disk_full`) and a clear message, stops trying other formats, and holds the
   queue instead of failing every following download the same way.
@@ -54,6 +71,10 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
+- Database migration `0011_playlist_owner` adds an owner and a visibility to
+  playlists. Every existing playlist becomes App-wide and belongs to the first
+  administrator, so what people see does not change. Back up and roll back as
+  for any migration (the older version refuses a database it does not know).
 - Database migration `0010_trash` adds the `trash_entries` table. It only adds a
   table, so no existing data is touched; Horde backs the database up first, as
   for every migration. Rolling back to 1.0.x needs `update.sh --rollback` or a
