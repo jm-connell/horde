@@ -269,6 +269,51 @@ def test_security_headers_on_every_response(client):
         assert resp.headers["x-frame-options"] == "SAMEORIGIN"
 
 
+# --- Strict-Transport-Security ---------------------------------------------------------
+
+
+def test_hsts_is_sent_over_direct_tls(app):
+    with TestClient(app, headers=CSRF, base_url="https://testserver") as c:
+        resp = c.get("/api/ping")
+    assert resp.headers["strict-transport-security"] == "max-age=31536000"
+
+
+def test_hsts_is_not_sent_over_plain_http(client):
+    for path in ("/api/ping", "/api/videos/999999"):
+        assert "strict-transport-security" not in client.get(path).headers
+
+
+def test_hsts_is_not_sent_for_a_forwarded_https_nobody_vouches_for(client):
+    # Without HORDE_TRUST_PROXY the header is client-controlled: ignore it.
+    resp = client.get("/api/ping", headers={"X-Forwarded-Proto": "https"})
+    assert "strict-transport-security" not in resp.headers
+
+
+def test_hsts_follows_the_forwarded_proto_behind_a_trusted_proxy(app):
+    from app.services.auth.runtime import AuthConfig
+
+    app.state.auth.config = AuthConfig(trust_proxy=True)
+    with TestClient(app, headers=CSRF) as c:
+        secure = c.get("/api/ping", headers={"X-Forwarded-Proto": "https"})
+        plain = c.get("/api/ping", headers={"X-Forwarded-Proto": "http"})
+        bare = c.get("/api/ping")
+        rejected = c.get(
+            "/api/ping",
+            headers={"X-Forwarded-Proto": "https", "Host": "evil.example.com"},
+        )
+    assert secure.headers["strict-transport-security"] == "max-age=31536000"
+    assert "strict-transport-security" not in plain.headers
+    assert "strict-transport-security" not in bare.headers
+    # Refusals carry it too: they are HTTPS responses as well.
+    assert rejected.status_code == 400
+    assert rejected.headers["strict-transport-security"] == "max-age=31536000"
+
+
+def test_hsts_has_no_subdomains_or_preload():
+    assert "includesubdomains" not in security.HSTS_VALUE.lower()
+    assert "preload" not in security.HSTS_VALUE.lower()
+
+
 def test_app_csp_lists_only_the_origins_the_app_loads():
     csp = security.content_security_policy("/")
 
