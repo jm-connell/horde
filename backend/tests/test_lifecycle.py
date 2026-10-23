@@ -44,6 +44,7 @@ EXPECTED_WORKERS = {
     "trash-purge",
     "channel-retention",
     "notifications",
+    "media-sidecars",
     "codec-probe-backfill",
     "nightly-backup",
 }

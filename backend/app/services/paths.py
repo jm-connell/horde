@@ -54,6 +54,30 @@ def compat_sidecar_path(original: Path) -> Path:
     return original.with_name(f"{original.stem}{COMPAT_SIDECAR_TOKEN}mp4")
 
 
+# Optional Jellyfin / Kodi / Plex files beside a video (``services/media_sidecars.py``):
+# "<stem>.nfo" and "<stem>-thumb.jpg". The dash keeps the thumbnail out of
+# ``belongs_to_stem``: it is not a dot-token suffix, and the scanner only looks at
+# video extensions, so neither file is ever taken for media.
+NFO_SUFFIX = ".nfo"
+THUMB_SIDECAR_SUFFIX = "-thumb.jpg"
+SHOW_NFO_NAME = "tvshow.nfo"
+
+
+def nfo_sidecar_path(media: Path) -> Path:
+    """The Kodi ``<episodedetails>`` file of ``media``."""
+    return media.with_name(f"{media.stem}{NFO_SUFFIX}")
+
+
+def thumb_sidecar_path(media: Path) -> Path:
+    """The thumbnail media servers pick up beside ``media``."""
+    return media.with_name(f"{media.stem}{THUMB_SIDECAR_SUFFIX}")
+
+
+def media_server_sidecar_paths(media: Path) -> list[Path]:
+    """Where the per-video media-server files of ``media`` live (they may not exist)."""
+    return [nfo_sidecar_path(media), thumb_sidecar_path(media)]
+
+
 def resolve_compat_path(video: Video) -> Path | None:
     """Absolute sidecar path when the row has one inside DOWNLOADS_DIR."""
     if not video.compat_path:
@@ -210,7 +234,7 @@ def unique_rel_path(desired: str, *, exclude: str | None = None) -> str:
 
 
 def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
-    """Move the video's file (and H.264 sidecar) and commit the new path.
+    """Move the video's file (and H.264 and media-server sidecars) and commit the new path.
 
     Files move first, then the row is committed together with whatever else the
     caller changed on ``video``. If the commit fails the files are moved back, so
@@ -244,6 +268,16 @@ def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
         if old_compat is not None and old_compat.is_file():
             journal.move(old_compat, new_compat)
             video.compat_path = new_compat.relative_to(root).as_posix()
+        # The media-server files follow the media. Whatever sits at the new name
+        # belongs to a video that is not there (the media name was free), so it goes.
+        for old_side, new_side in zip(
+            media_server_sidecar_paths(old_abs),
+            media_server_sidecar_paths(new_abs),
+            strict=True,
+        ):
+            if old_side.is_file():
+                new_side.unlink(missing_ok=True)
+                journal.move(old_side, new_side)
         video.file_path = new_rel
         session.add(video)
         session.commit()

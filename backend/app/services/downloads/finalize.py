@@ -22,11 +22,16 @@ from ...models import (
     VideoStatus,
     require_id,
 )
-from .. import activity, compat_rendition, follows, library, scanner
+from .. import activity, compat_rendition, follows, library, media_sidecars, scanner
 from ..fsutil import MoveJournal, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
 from ..metadata import probe_dimensions, probe_duration
-from ..paths import find_video_by_path, resolve_compat_path, to_rel_path
+from ..paths import (
+    find_video_by_path,
+    media_server_sidecar_paths,
+    resolve_compat_path,
+    to_rel_path,
+)
 from ..thumbnails import save_from_url
 from ..video_delete import delete_video_cascade, remove_files
 from ..ytdlp_extract import list_thumbnail_url
@@ -102,6 +107,7 @@ def finalize_in_background(
                     video.thumbnail_path = thumb
                     session.add(video)
                     session.commit()
+            media_sidecars.refresh(video_id)
             # Re-embed even if captions are still pending (hash updates later).
             try:
                 from ..ai import enqueue_for_video
@@ -472,6 +478,7 @@ def _stale_files_of(video: Video, final_path: Path) -> list[Path]:
     old_path = get_paths().downloads / video.file_path
     if old_path.resolve() != final_path.resolve():
         stale.append(old_path)
+        stale.extend(media_server_sidecar_paths(old_path))
     for track in library.parse_subtitles(video.subtitles):
         if track.get("path"):
             stale.append(get_paths().downloads / track["path"])

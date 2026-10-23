@@ -48,7 +48,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library, trash, uploads, user_state
+from ..services import library, media_sidecars, trash, uploads, user_state
 from ..services import next_part as next_part_svc
 from ..services.ai.provider import format_provider_error
 from ..services.auth import media_token as media_token_svc
@@ -602,6 +602,8 @@ def update_video(
                 exc_info=True,
             )
 
+    media_sidecars.refresh(video.id)
+
     # After leaving review, queue AI enrichment for scanner-ingested files.
     if was_review and not video.needs_review and video.id is not None:
         try:
@@ -1007,6 +1009,7 @@ def upload_thumbnail(
     session.add(video)
     session.commit()
     session.refresh(video)
+    media_sidecars.refresh(video_id)
     return _to_read(video, session, viewer=user)
 
 
@@ -1109,6 +1112,7 @@ def select_thumbnail_candidate(
     session.add(video)
     session.commit()
     session.refresh(video)
+    media_sidecars.refresh(video_id)
     return _to_read(video, session, viewer=user)
 
 

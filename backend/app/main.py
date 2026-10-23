@@ -206,6 +206,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(trash_svc.create_worker())
     registry.start(channel_retention.create_worker())
     registry.start(ctx.notifier.create_worker())
+    registry.start(ctx.sidecars.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
     backup_worker = create_backup_worker(ctx.engine)

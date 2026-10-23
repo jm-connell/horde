@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from ..auth import current_user, require_permission
-from ..context import get_session
+from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import ChannelRetention
 from ..response_schemas import ChannelRenameResult
@@ -42,6 +42,7 @@ from ..services import (
     channel_retention,
     feed_meta_cache,
     library,
+    media_sidecars,
     trash,
     ytdlp_extract,
 )
@@ -103,12 +104,19 @@ def _retention_summary(row: ChannelRetention | None) -> ChannelRetentionSummary 
     response_model=ChannelRenameResult,
     dependencies=[Depends(require_permission("edit_metadata"))],
 )
-def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):
+def rename_channel(
+    payload: ChannelRename,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+):
     old = payload.old_name.strip()
     new = payload.new_name.strip()
     if not old or not new:
         raise HTTPException(status_code=400, detail="Both names are required")
     renamed = library.rename_channel(session, old, new)
+    if media_sidecars.enabled():
+        # The files name the channel; rewrite them in the background.
+        ctx.sidecars.write_videos(renamed.video_ids)
     return {
         "updated": renamed.updated,
         "retention_disabled": renamed.retention_disabled,

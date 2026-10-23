@@ -157,6 +157,9 @@ DEFAULTS: dict[str, Any] = {
     "notification_state": {},
     # Downloads wait once the library takes this many bytes. None = no limit.
     "max_library_bytes": None,
+    # Write Jellyfin / Kodi / Plex files (.nfo, thumbnails) beside the media
+    # (services/media_sidecars.py).
+    "media_server_sidecars": False,
     "setup_completed": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),

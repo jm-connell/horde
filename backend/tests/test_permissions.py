@@ -63,6 +63,8 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/downloads/queue/pause"),
             ("POST", "/api/downloads/queue/resume"),
             ("POST", "/api/videos/refresh-metadata"),
+            # Deletes files across the whole library.
+            ("POST", "/api/settings/media-sidecars/remove"),
             # Its progress names the video being synced and the raw last error.
             ("GET", "/api/videos/refresh-metadata/status"),
             # Queue and worker internals.

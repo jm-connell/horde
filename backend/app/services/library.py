@@ -3,7 +3,7 @@ import json
 import logging
 import math
 import random as py_random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, overload
 
@@ -329,6 +329,8 @@ class ChannelRenamed:
     # A retention rule that was on was turned off because the rename merged two
     # channels (see ``rename_channel``).
     retention_disabled: bool = False
+    # The videos that now carry the new name.
+    video_ids: list[int] = field(default_factory=list)
 
 
 def rename_channel(session: Session, old_name: str, new_name: str) -> ChannelRenamed:
@@ -374,7 +376,11 @@ def rename_channel(session: Session, old_name: str, new_name: str) -> ChannelRen
                     disabled = True
     if rows or rule is not None or disabled:
         session.commit()
-    return ChannelRenamed(updated=len(rows), retention_disabled=disabled)
+    return ChannelRenamed(
+        updated=len(rows),
+        retention_disabled=disabled,
+        video_ids=[require_id(v) for v in rows],
+    )
 
 
 def channel_stats(

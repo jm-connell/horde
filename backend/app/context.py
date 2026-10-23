@@ -35,6 +35,7 @@ if TYPE_CHECKING:
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
     from .services.live.runtime import LiveRuntime
+    from .services.media_sidecars import SidecarJobs
     from .services.notifications.notifier import Notifier
     from .services.workers import WorkerRegistry
 
@@ -123,6 +124,8 @@ class AppContext:
     live: LiveRuntime = field(default_factory=lambda: _new_live_runtime())
     #: Outgoing notifications: emitters queue here, one worker delivers.
     notifier: Notifier = field(default_factory=lambda: _new_notifier())
+    #: Library-wide work on the optional Jellyfin / Kodi / Plex files.
+    sidecars: SidecarJobs = field(default_factory=lambda: _new_sidecars())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -150,6 +153,12 @@ def _new_notifier() -> Notifier:
     from .services.notifications.notifier import Notifier
 
     return Notifier()
+
+
+def _new_sidecars() -> SidecarJobs:
+    from .services.media_sidecars import SidecarJobs
+
+    return SidecarJobs()
 
 
 def _new_registry() -> WorkerRegistry:
