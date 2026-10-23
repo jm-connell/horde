@@ -199,7 +199,8 @@ def _begin(
     except Throttled as exc:
         raise CodedHTTPException(
             429,
-            f"Too many failed attempts. Try again in {exc.wait} seconds.",
+            f"Too many failed attempts. Try again in {exc.wait} "
+            f"{'second' if exc.wait == 1 else 'seconds'}.",
             "rate_limited",
             headers={"Retry-After": str(exc.wait)},
         ) from exc
