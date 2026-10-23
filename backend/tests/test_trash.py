@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import shutil
+import sqlite3
 import time
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from sqlmodel import Session, select
@@ -112,6 +115,12 @@ def _media(init_db) -> str:
     return "Alpha/2024/Zebrafish tutorial [trashvid001].mp4"
 
 
+def _folder(init_db, entry_id: int) -> str:
+    """The folder name of a trash entry (a token, not the id)."""
+    with Session(init_db["engine"]) as session:
+        return session.get(TrashEntry, entry_id).folder
+
+
 def _state(engine, video_id):
     with Session(engine) as session:
         return {
@@ -148,9 +157,10 @@ def test_delete_goes_to_trash_and_restore_brings_everything_back(
     # The files moved, not copied.
     assert not media.exists()
     assert not any(p.exists() for p in files.values())
-    trashed = downloads / TRASH_DIR_NAME / str(entry_id) / _media(init_db)
+    folder = _folder(init_db, entry_id)
+    trashed = downloads / TRASH_DIR_NAME / folder / _media(init_db)
     assert trashed.read_bytes() == b"M" * 1000
-    assert (data / "trash" / str(entry_id) / "thumbnails" / f"{video_id}.jpg").exists()
+    assert (data / "trash" / folder / "thumbnails" / f"{video_id}.jpg").exists()
 
     summary = client.get("/api/trash/summary").json()
     assert summary["count"] == 1
@@ -200,8 +210,8 @@ def test_delete_goes_to_trash_and_restore_brings_everything_back(
         }
         assert vectors == {-1: VECTOR, 0: b"\x00\xff"}
         assert session.exec(select(TrashEntry)).all() == []
-    assert not (downloads / TRASH_DIR_NAME / str(entry_id)).exists()
-    assert not (data / "trash" / str(entry_id)).exists()
+    assert not (downloads / TRASH_DIR_NAME / folder).exists()
+    assert not (data / "trash" / folder).exists()
     assert client.get("/api/trash/summary").json()["count"] == 0
 
 
@@ -212,12 +222,13 @@ def test_delete_forever_erases_the_files(
     downloads, data = init_db["downloads"], init_db["data"]
     first = client.delete(f"/api/videos/{video_id}?delete_file=true")
     entry_id = int(first.headers[ENTRY_HEADER])
-    assert (downloads / TRASH_DIR_NAME / str(entry_id)).exists()
+    folder = _folder(init_db, entry_id)
+    assert (downloads / TRASH_DIR_NAME / folder).exists()
 
     assert client.delete(f"/api/trash/{entry_id}").status_code == 204
 
-    assert not (downloads / TRASH_DIR_NAME / str(entry_id)).exists()
-    assert not (data / "trash" / str(entry_id)).exists()
+    assert not (downloads / TRASH_DIR_NAME / folder).exists()
+    assert not (data / "trash" / folder).exists()
     assert client.get("/api/trash/summary").json()["count"] == 0
     assert client.delete(f"/api/trash/{entry_id}").status_code == 404
     assert client.post(f"/api/trash/{entry_id}/restore").status_code == 404
@@ -319,6 +330,7 @@ def test_purge_removes_expired_entries_only(client, init_db, add_video):
     new_id = int(
         client.delete(f"/api/videos/{new.id}?delete_file=true").headers[ENTRY_HEADER]
     )
+    old_folder, new_folder = _folder(init_db, old_id), _folder(init_db, new_id)
     with Session(init_db["engine"]) as session:
         entry = session.get(TrashEntry, old_id)
         entry.trashed_at = utcnow() - timedelta(days=7, minutes=1)
@@ -330,8 +342,8 @@ def test_purge_removes_expired_entries_only(client, init_db, add_video):
     ids = [i["id"] for i in client.get("/api/trash").json()["items"]]
     assert ids == [new_id]
     downloads = init_db["downloads"] / TRASH_DIR_NAME
-    assert not (downloads / str(old_id)).exists()
-    assert (downloads / str(new_id)).exists()
+    assert not (downloads / old_folder).exists()
+    assert (downloads / new_folder).exists()
     # Later still: the other one goes too.
     assert trash.purge_expired(utcnow() + timedelta(days=8)) == 1
     assert client.get("/api/trash/summary").json()["count"] == 0
@@ -342,12 +354,12 @@ def test_purge_drops_an_entry_whose_files_went_missing(client, init_db, add_vide
     entry_id = int(
         client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
     )
-    shutil.rmtree(init_db["downloads"] / TRASH_DIR_NAME / str(entry_id))
+    shutil.rmtree(init_db["downloads"] / TRASH_DIR_NAME / _folder(init_db, entry_id))
     assert trash.purge_expired() == 1
     assert client.get("/api/trash/summary").json()["count"] == 0
 
 
-def test_purge_sweeps_old_folders_nobody_owns(init_db):
+def test_the_sweep_never_erases_a_folder_nobody_owns(init_db):
     root = init_db["downloads"] / TRASH_DIR_NAME
     stale = root / "41"
     fresh = root / "42"
@@ -357,8 +369,9 @@ def test_purge_sweeps_old_folders_nobody_owns(init_db):
     old = time.time() - 3 * 86400
     os.utime(stale, (old, old))
     trash.purge_expired()
-    assert not stale.exists()
-    assert fresh.exists()  # recent: could be a move that is still being committed
+    # No manifest, no video: it is not ours to delete.
+    assert (stale / "x.mp4").exists()
+    assert (fresh / "x.mp4").exists()
 
 
 def test_restore_refuses_when_the_path_is_taken(
@@ -451,11 +464,11 @@ def test_a_failed_move_leaves_the_video_untouched(
     real_move = trash._move
     calls = {"n": 0}
 
-    def flaky(src, dst):
+    def flaky(src, dst, **kw):
         calls["n"] += 1
         if calls["n"] == 3:
             raise OSError("disk went away")
-        real_move(src, dst)
+        real_move(src, dst, **kw)
 
     monkeypatch.setattr(trash, "_move", flaky)
 
@@ -467,7 +480,7 @@ def test_a_failed_move_leaves_the_video_untouched(
     assert media.read_bytes() == b"M" * 1000
     assert all(p.exists() for p in files.values())
     assert client.get("/api/trash/summary").json()["count"] == 0
-    assert not (init_db["downloads"] / TRASH_DIR_NAME / "1").exists()
+    assert _trash_folders(init_db) == []
     assert _search_ids(client, "quirkywordhere") == [video_id]
 
 
@@ -507,7 +520,10 @@ def test_a_failed_restore_puts_the_files_back_in_the_trash(
     monkeypatch.undo()
     assert not (init_db["downloads"] / _media(init_db)).exists()
     assert (
-        init_db["downloads"] / TRASH_DIR_NAME / str(entry_id) / _media(init_db)
+        init_db["downloads"]
+        / TRASH_DIR_NAME
+        / _folder(init_db, entry_id)
+        / _media(init_db)
     ).exists()
     assert client.get("/api/trash/summary").json()["count"] == 1
     # And it can still be restored once the problem is gone.
@@ -567,7 +583,8 @@ def test_the_scanner_ignores_the_trash(client, init_db, add_video):
     entry_id = int(
         client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
     )
-    trashed = init_db["downloads"] / TRASH_DIR_NAME / str(entry_id) / video.file_path
+    folder = _folder(init_db, entry_id)
+    trashed = init_db["downloads"] / TRASH_DIR_NAME / folder / video.file_path
     assert trashed.is_file()
     assert scanner._is_media(trashed) is False
     with Session(init_db["engine"]) as session:
@@ -720,3 +737,189 @@ def test_a_damaged_file_list_is_refused_not_followed(client, init_db, add_video)
     assert client.get("/api/trash").status_code == 200
     assert trash.purge_expired() == 0
     assert client.delete(f"/api/trash/{entry_id}").status_code == 204
+
+
+# --- Crash safety, outages and the write lock ---------------------------------
+
+
+class Crash(BaseException):
+    """Stands for the process dying: nothing in trash.py may catch it."""
+
+
+def _trash_folders(init_db) -> list:
+    root = init_db["downloads"] / TRASH_DIR_NAME
+    return [p for p in root.iterdir() if p.is_dir()] if root.is_dir() else []
+
+
+def _age_trash_folders(init_db, days: float = 2) -> None:
+    old = time.time() - days * 86400
+    for folder in _trash_folders(init_db):
+        os.utime(folder, (old, old))
+
+
+def _survives(init_db, live: Path) -> bool:
+    """The file exists at its library path or somewhere in the trash."""
+    if live.exists():
+        return True
+    root = init_db["downloads"] / TRASH_DIR_NAME
+    return root.is_dir() and any(p.name == live.name for p in root.rglob("*"))
+
+
+def test_a_crash_before_the_commit_does_not_lose_the_media(
+    init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    media = init_db["downloads"] / video.file_path
+    with Session(init_db["engine"]) as session:
+        row = session.get(Video, video.id)
+
+        def crash():
+            raise Crash
+
+        monkeypatch.setattr(session, "commit", crash)
+        with pytest.raises(Crash):
+            trash.trash_video(session, row, None)
+    monkeypatch.undo()
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+    with Session(init_db["engine"]) as session:
+        assert session.get(Video, video.id) is not None  # still in the library
+        assert session.exec(select(TrashEntry)).all() == []
+    assert not media.exists()  # the files are in the trash folder
+
+    _age_trash_folders(init_db)
+    trash.purge_expired()
+
+    # The sweep put the files back for the video that still has a row.
+    assert media.read_bytes() == b"M" * 100
+    assert _trash_folders(init_db) == []
+
+
+def test_a_crashed_trash_does_not_share_its_folder_with_the_next(
+    client, init_db, add_video, monkeypatch
+):
+    crashed = add_video(write_file=True, file_bytes=b"A" * 100)
+    other = add_video(write_file=True, file_bytes=b"B" * 100)
+    with Session(init_db["engine"]) as session:
+        row = session.get(Video, crashed.id)
+        monkeypatch.setattr(session, "commit", lambda: (_ for _ in ()).throw(Crash()))
+        with pytest.raises(Crash):
+            trash.trash_video(session, row, None)
+    monkeypatch.undo()
+    monkeypatch.setattr(config, "TRASH_DAYS", 7)
+
+    client.delete(f"/api/videos/{other.id}?delete_file=true")
+    assert client.post("/api/trash/empty").json()["deleted"] == 1
+
+    assert _survives(init_db, init_db["downloads"] / crashed.file_path)
+
+
+def test_a_failed_undo_keeps_the_files_it_could_not_put_back(
+    init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    sub = init_db["downloads"] / "subs" / "x.vtt"
+    sub.parent.mkdir(parents=True, exist_ok=True)
+    sub.write_text("sub")
+    with Session(init_db["engine"]) as session:
+        row = session.get(Video, video.id)
+        row.subtitles = '[{"lang":"en","path":"subs/x.vtt"}]'
+        session.add(row)
+        session.commit()
+    real = trash._move
+    calls = {"n": 0}
+
+    def flaky(src, dst, **kw):
+        calls["n"] += 1
+        if calls["n"] >= 2:  # the second forward move, then every undo
+            raise OSError("EIO")
+        real(src, dst, **kw)
+
+    monkeypatch.setattr(trash, "_move", flaky)
+    with Session(init_db["engine"]) as session, pytest.raises(trash.TrashError):
+        trash.trash_video(session, session.get(Video, video.id), None)
+
+    assert _survives(init_db, init_db["downloads"] / video.file_path)
+    assert _survives(init_db, sub)
+
+
+def test_files_are_moved_without_holding_the_database_write_lock(
+    init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True)
+    real = trash._move
+    outcomes: list[str] = []
+
+    def spy(src, dst, **kw):
+        probe = sqlite3.connect(init_db["db_path"], timeout=0)
+        try:
+            probe.execute("BEGIN IMMEDIATE")
+            outcomes.append("free")
+            probe.rollback()
+        except sqlite3.OperationalError as exc:
+            outcomes.append(str(exc))
+        finally:
+            probe.close()
+        real(src, dst, **kw)
+
+    monkeypatch.setattr(trash, "_move", spy)
+    with Session(init_db["engine"]) as session:
+        trash.trash_video(session, session.get(Video, video.id), None)
+    assert outcomes and set(outcomes) == {"free"}
+
+
+def test_a_media_folder_on_another_filesystem_is_refused_not_copied(
+    client, init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    real = os.rename
+
+    def cross_device(src, dst, *a, **kw):
+        if str(init_db["downloads"]) in str(src):
+            raise OSError(errno.EXDEV, "Invalid cross-device link")
+        return real(src, dst, *a, **kw)
+
+    monkeypatch.setattr(os, "rename", cross_device)
+
+    resp = client.delete(f"/api/videos/{video.id}?delete_file=true")
+
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "trash_cross_device"
+    assert (init_db["downloads"] / video.file_path).read_bytes() == b"M" * 100
+    assert client.get(f"/api/videos/{video.id}").status_code == 200
+    assert client.get("/api/trash/summary").json()["count"] == 0
+    assert _trash_folders(init_db) == []
+
+
+def test_deleting_twice_does_not_make_an_empty_second_entry(init_db, add_video):
+    video = add_video(write_file=False)  # no files: the moves cannot fail
+    with Session(init_db["engine"]) as first, Session(init_db["engine"]) as second:
+        stale = second.get(Video, video.id)  # both requests loaded the row
+        trash.trash_video(first, first.get(Video, video.id), None)
+        with pytest.raises(trash.TrashError):
+            trash.trash_video(second, stale, None)
+    with Session(init_db["engine"]) as session:
+        assert len(session.exec(select(TrashEntry)).all()) == 1
+
+
+def test_restoring_an_entry_that_is_already_gone_changes_nothing(
+    client, init_db, add_video, monkeypatch
+):
+    video = add_video(write_file=True, file_bytes=b"M" * 100)
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    real = trash._check_restorable
+
+    def other_request_restored_it_first(session, entry, moves):
+        real(session, entry, moves)
+        with Session(init_db["engine"]) as other:
+            other.delete(other.get(TrashEntry, entry_id))
+            other.commit()
+
+    monkeypatch.setattr(trash, "_check_restorable", other_request_restored_it_first)
+
+    resp = client.post(f"/api/trash/{entry_id}/restore")
+
+    assert resp.status_code == 404
+    with Session(init_db["engine"]) as session:
+        assert session.get(Video, video.id) is None

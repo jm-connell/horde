@@ -8,9 +8,18 @@ to remember to filter anything out. What a restore needs is written first:
 * a ``trash_entries`` row whose ``snapshot_json`` holds the video, its AI data,
   its playlist places and every user's watch state and chat, and whose
   ``files_json`` lists the files that were moved, and
-* the files themselves, moved (not copied) under ``DOWNLOADS_DIR/.horde-trash/<id>``
-  (media, subtitles, compat copy) and ``DATA_DIR/trash/<id>`` (thumbnails,
-  sprites), each keeping its path relative to its root.
+* the files themselves, moved (not copied) under ``DOWNLOADS_DIR/.horde-trash/<folder>``
+  (media, subtitles, compat copy) and ``DATA_DIR/trash/<folder>`` (thumbnails,
+  sprites), each keeping its path relative to its root. ``<folder>`` is a random
+  token stored on the entry, never a row id, so no two trashes share a folder.
+
+The order matters. The files move first, with no database transaction open (a move
+that has to copy would otherwise hold SQLite's one write lock for minutes), after a
+``manifest`` naming them was written into each folder. Then one short transaction
+inserts the entry and deletes the video. A crash in between leaves a folder without
+an entry and a video row still in the library: the sweep reads the manifest and
+moves the files back. Media is moved with ``rename`` so that it never turns into a
+copy inside a request; a trash folder on another filesystem is refused instead.
 
 Restoring moves the files back and inserts the rows again with the original video
 id; ``video_tags`` and ``videos_fts`` are refilled by the SQLite triggers on insert,
@@ -24,8 +33,10 @@ account stay permanent.
 from __future__ import annotations
 
 import base64
+import errno
 import json
 import logging
+import os
 import shutil
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -39,6 +50,7 @@ from sqlmodel import Session, SQLModel, col, func, select
 
 from .. import config
 from ..context import current, get_engine, get_paths
+from ..database import rowcount
 from ..models import (
     Playlist,
     PlaylistItem,
@@ -67,14 +79,24 @@ ROOT_DATA = "data"
 
 PURGE_INTERVAL_SEC = 3600.0
 STARTUP_DELAY_SEC = 120.0
-#: A trash folder no entry owns is only removed once it is this old (a crash between
-#: moving the files and committing leaves one, and its video row still exists).
-ORPHAN_MIN_AGE = timedelta(days=1)
+#: A trash folder no entry owns is only looked at once it is this old, so that a
+#: trash still moving its files is left alone. What it holds is put back, never erased.
+ORPHAN_MIN_AGE = timedelta(hours=1)
 SNAPSHOT_VERSION = 1
+#: Written into each trash folder before any file is moved into it.
+MANIFEST_NAME = ".horde-trash-manifest.json"
 
 
 class TrashError(Exception):
     """A video could not be moved to the trash (nothing was deleted)."""
+
+
+class TrashCrossDevice(TrashError):
+    """The media and its trash folder are on different filesystems."""
+
+
+class VideoAlreadyDeleted(TrashError):
+    """The video was deleted by someone else while this delete was running."""
 
 
 class TrashNotFound(LookupError):
@@ -110,8 +132,8 @@ def _live_root(root: str) -> Path:
     return get_paths().downloads if root == ROOT_DOWNLOADS else get_paths().data
 
 
-def _trash_dir(root: str, entry_id: int) -> Path:
-    return _trash_root(root) / str(entry_id)
+def _trash_dir(root: str, folder: str) -> Path:
+    return _trash_root(root) / folder
 
 
 # --- Moving files -------------------------------------------------------------
@@ -126,12 +148,14 @@ class _Move:
     root: str
     rel: str
     size: int
+    #: The video's own file (as opposed to a thumbnail, subtitle or other copy of it).
+    media: bool = False
 
     def live(self) -> Path:
         return _live_root(self.root) / self.rel
 
-    def trashed(self, entry_id: int) -> Path:
-        return _trash_dir(self.root, entry_id) / self.rel
+    def trashed(self, folder: str) -> Path:
+        return _trash_dir(self.root, folder) / self.rel
 
 
 def _plan_moves(video: Video) -> list[_Move]:
@@ -142,6 +166,7 @@ def _plan_moves(video: Video) -> list[_Move]:
     }
     seen: set[Path] = set()
     moves: list[_Move] = []
+    media_path = get_paths().downloads / video.file_path
     for path in collect_video_files(video, include_media=True):
         try:
             real = path.parent.resolve() / path.name
@@ -165,13 +190,33 @@ def _plan_moves(video: Video) -> list[_Move]:
         except OSError:
             logger.warning("Could not look at %s", path, exc_info=True)
             continue
-        moves.append(_Move(home[0], real.relative_to(home[1]).as_posix(), size))
+        moves.append(
+            _Move(
+                home[0],
+                real.relative_to(home[1]).as_posix(),
+                size,
+                media=path == media_path,
+            )
+        )
     return moves
 
 
-def _move(src: Path, dst: Path) -> None:
+def _move(src: Path, dst: Path, *, rename_only: bool = False) -> None:
+    """Move a file. ``rename_only`` refuses to copy across filesystems."""
     dst.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(src), str(dst))
+    if not rename_only:
+        shutil.move(str(src), str(dst))
+        return
+    try:
+        os.rename(src, dst)
+    except OSError as exc:
+        if exc.errno == errno.EXDEV:
+            raise TrashCrossDevice(
+                "The trash folder is on a different filesystem than the video, so "
+                "it cannot be moved there without copying it. Put the media folders "
+                "and .horde-trash on the same filesystem, or set HORDE_TRASH_DAYS=0."
+            ) from exc
+        raise
 
 
 def _apply_moves(
@@ -180,9 +225,13 @@ def _apply_moves(
     dst_of: Callable[[_Move], Path],
     done: list[_Move],
 ) -> None:
-    """Move each file from ``src_of(m)`` to ``dst_of(m)``, recording progress in ``done``."""
+    """Move each file from ``src_of(m)`` to ``dst_of(m)``, recording progress in ``done``.
+
+    Media-folder files are only renamed; thumbnails and sprites (``DATA_DIR``, small)
+    may be copied.
+    """
     for move in moves:
-        _move(src_of(move), dst_of(move))
+        _move(src_of(move), dst_of(move), rename_only=move.root == ROOT_DOWNLOADS)
         done.append(move)
 
 
@@ -190,18 +239,21 @@ def _undo_moves(
     moves: list[_Move],
     src_of: Callable[[_Move], Path],
     dst_of: Callable[[_Move], Path],
-) -> None:
-    """Put already-moved files back; failures are logged, never raised."""
+) -> list[_Move]:
+    """Put already-moved files back. Returns the ones that could not be; never raises."""
+    failed: list[_Move] = []
     for move in reversed(moves):
         try:
-            _move(dst_of(move), src_of(move))
+            _move(dst_of(move), src_of(move), rename_only=move.root == ROOT_DOWNLOADS)
         except OSError:
+            failed.append(move)
             logger.error(
                 "Could not move %s back to %s",
                 dst_of(move),
                 src_of(move),
                 exc_info=True,
             )
+    return failed
 
 
 def _remove_dir(path: Path) -> None:
@@ -274,16 +326,54 @@ def _snapshot(session: Session, video: Video) -> dict[str, Any]:
 # --- Trashing -----------------------------------------------------------------
 
 
+def _write_manifests(folder: str, video: Video, moves: list[_Move]) -> None:
+    """Describe the files about to move, inside each trash folder that will get some.
+
+    Only used when an entry never gets committed (a crash): see ``_recover_orphan``.
+    """
+    body = json.dumps(
+        {
+            "version": SNAPSHOT_VERSION,
+            "video_id": require_id(video),
+            "relative_path": video.file_path,
+            "files": [
+                {"root": m.root, "path": m.rel, "size": m.size, "media": m.media}
+                for m in moves
+            ],
+        }
+    )
+    for root in sorted({m.root for m in moves}):
+        target = _trash_dir(root, folder)
+        target.mkdir(parents=True, exist_ok=True)
+        (target / MANIFEST_NAME).write_text(body, encoding="utf-8")
+
+
+def _put_back(done: list[_Move], folder: str) -> None:
+    """Undo moves after a failed trash or restore; keep the folder if any file stayed."""
+    failed = _undo_moves(done, _Move.live, lambda m: m.trashed(folder))
+    if failed:
+        logger.error(
+            "%d file(s) could not be put back and stay in the trash folder %s; "
+            "the next sweep tries again",
+            len(failed),
+            folder,
+        )
+        return
+    _remove_trash_dirs(folder)
+
+
 def trash_video(session: Session, video: Video, by_user_id: int | None) -> TrashEntry:
     """Move ``video``'s files into the trash, then delete its rows. Commits.
 
     The video's media is always moved; callers that keep the file (library entry
     only) do not come here. When a file cannot be moved or the commit fails,
     everything is put back and ``TrashError`` is raised: the video stays as it was.
+    ``TrashCrossDevice`` means the media cannot be renamed into the trash.
     """
+    video_id = require_id(video)
     moves = _plan_moves(video)
     entry = TrashEntry(
-        video_id=require_id(video),
+        video_id=video_id,
         youtube_id=video.youtube_id,
         title=video.title,
         channel=video.channel,
@@ -291,26 +381,44 @@ def trash_video(session: Session, video: Video, by_user_id: int | None) -> Trash
         size_bytes=sum(m.size for m in moves),
         trashed_by_user_id=by_user_id,
         files_json=json.dumps(
-            [{"root": m.root, "path": m.rel, "size": m.size} for m in moves]
+            [
+                {"root": m.root, "path": m.rel, "size": m.size, "media": m.media}
+                for m in moves
+            ]
         ),
         snapshot_json=json.dumps(_snapshot(session, video)),
     )
-    session.add(entry)
+    folder = entry.folder
     done: list[_Move] = []
-    entry_id = 0
+    # 1. The files, with no write transaction open.
     try:
-        session.flush()
-        entry_id = require_id(entry)
-        _apply_moves(moves, _Move.live, lambda m: m.trashed(entry_id), done)
+        _write_manifests(folder, video, moves)
+        _apply_moves(moves, _Move.live, lambda m: m.trashed(folder), done)
+    except Exception as exc:
+        logger.warning("could not trash video %s", video_id, exc_info=True)
+        _put_back(done, folder)
+        if isinstance(exc, TrashError):
+            raise
+        raise TrashError(f"Could not move the video to the trash: {exc}") from exc
+    # 2. One short transaction: the entry and the delete.
+    try:
+        session.add(entry)
+        session.flush()  # the first write: the lock is taken here, not before
+        # Holding the lock now, nobody can delete the row between this check and ours.
+        if (
+            session.exec(select(col(Video.id)).where(col(Video.id) == video_id)).first()
+            is None
+        ):
+            raise VideoAlreadyDeleted("The video was already deleted.")
         delete_video_cascade(session, video, False, commit=False)
         session.commit()
     except Exception as exc:
-        # Any failure (a file that cannot move, a locked database): the video stays.
-        logger.warning("could not trash video %s", entry.video_id, exc_info=True)
+        # A locked database, a vanished row: the video stays.
+        logger.warning("could not trash video %s", video_id, exc_info=True)
         session.rollback()
-        _undo_moves(done, _Move.live, lambda m: m.trashed(entry_id))
-        if entry_id:
-            _remove_trash_dirs(entry_id)
+        _put_back(done, folder)
+        if isinstance(exc, TrashError):
+            raise
         raise TrashError(f"Could not move the video to the trash: {exc}") from exc
     return entry
 
@@ -363,8 +471,9 @@ def restore(session: Session, entry_id: int) -> Video:
     entry = session.get(TrashEntry, entry_id)
     if entry is None:
         raise TrashNotFound(f"Trash entry {entry_id} not found")
+    folder = entry.folder
     moves = _moves_of(entry)
-    missing = [m.rel for m in moves if not _exists(m.trashed(entry_id))]
+    missing = [m.rel for m in moves if not _exists(m.trashed(folder))]
     if missing:
         raise TrashError("Files of this video are no longer in the trash.")
     _check_restorable(session, entry, moves)
@@ -376,18 +485,23 @@ def restore(session: Session, entry_id: int) -> Video:
     scanner.mark_active(media_rel)
     done: list[_Move] = []
     try:
-        _apply_moves(moves, lambda m: m.trashed(entry_id), _Move.live, done)
+        # The files first, with no write transaction open; then one short one.
+        _apply_moves(moves, lambda m: m.trashed(folder), _Move.live, done)
+        res = session.execute(delete(TrashEntry).where(col(TrashEntry.id) == entry_id))
+        if rowcount(res) != 1:
+            raise TrashNotFound(f"Trash entry {entry_id} not found")
         video = _insert_rows(session, snapshot)
-        session.delete(entry)
         session.commit()
     except Exception as exc:
-        logger.warning("could not restore trash entry %s", entry_id, exc_info=True)
         session.rollback()
-        _undo_moves(done, lambda m: m.trashed(entry_id), _Move.live)
+        _undo_moves(done, lambda m: m.trashed(folder), _Move.live)
+        if isinstance(exc, TrashNotFound):
+            raise
+        logger.warning("could not restore trash entry %s", entry_id, exc_info=True)
         raise TrashError(f"Could not restore the video: {exc}") from exc
     finally:
         scanner.unmark_active(media_rel)
-    _remove_trash_dirs(entry_id)
+    _remove_trash_dirs(folder)
     return video
 
 
@@ -433,9 +547,9 @@ def _insert_rows(session: Session, snapshot: dict[str, Any]) -> Video:
 # --- Erasing ------------------------------------------------------------------
 
 
-def _remove_trash_dirs(entry_id: int) -> None:
+def _remove_trash_dirs(folder: str) -> None:
     for root in (ROOT_DOWNLOADS, ROOT_DATA):
-        _remove_dir(_trash_dir(root, entry_id))
+        _remove_dir(_trash_dir(root, folder))
 
 
 def delete_forever(session: Session, entry_id: int) -> int:
@@ -448,13 +562,14 @@ def delete_forever(session: Session, entry_id: int) -> int:
 
 def _erase(session: Session, entries: list[TrashEntry]) -> int:
     freed = sum(e.size_bytes for e in entries)
-    ids = [require_id(e) for e in entries]
+    folders = [e.folder for e in entries]
     for entry in entries:
         session.delete(entry)
     session.commit()
     # Files go after the commit: a failed commit must not leave entries without files.
-    for entry_id in ids:
-        _remove_trash_dirs(entry_id)
+    # Only folders of committed entries are ever removed here.
+    for folder in folders:
+        _remove_trash_dirs(folder)
     return freed
 
 
@@ -532,7 +647,7 @@ def thumbnail_file(entry: TrashEntry) -> Path | None:
     rel = _thumbnail_rel(entry)
     if rel is None:
         return None
-    path = _trash_dir(ROOT_DATA, require_id(entry)) / rel
+    path = _trash_dir(ROOT_DATA, entry.folder) / rel
     return path if path.is_file() else None
 
 
@@ -542,15 +657,15 @@ def thumbnail_file(entry: TrashEntry) -> Path | None:
 def _files_missing(entry: TrashEntry) -> bool:
     """True when the entry lists files but none of them is in the trash any more."""
     moves = _listed_moves(entry)
-    entry_id = require_id(entry)
-    return bool(moves) and not any(_exists(m.trashed(entry_id)) for m in moves)
+    return bool(moves) and not any(_exists(m.trashed(entry.folder)) for m in moves)
 
 
-def purge_expired(now: datetime | None = None) -> int:
+def purge_expired(now: datetime | None = None, reported: set[str] | None = None) -> int:
     """Erase entries older than the retention and entries whose files are gone.
 
-    Also removes trash folders that no entry owns (older than a day). Returns the
-    number of entries erased.
+    Also looks at trash folders that no entry owns: see ``_sweep_orphan_dirs``
+    (``reported`` collects the ones already logged, so a long-running worker says
+    it once). Returns the number of entries erased.
     """
     moment = now or utcnow()
     cutoff = moment - retention()
@@ -560,36 +675,122 @@ def purge_expired(now: datetime | None = None) -> int:
             e for e in entries if as_utc(e.trashed_at) <= cutoff or _files_missing(e)
         ]
         doomed_ids = {require_id(e) for e in doomed}
-        known = {require_id(e) for e in entries} - doomed_ids
+        known = {e.folder for e in entries if e.id not in doomed_ids}
         if doomed:
             _erase(session, doomed)
-    _sweep_orphan_dirs(known, moment)
+        _sweep_orphan_dirs(session, known, moment, reported)
     return len(doomed_ids)
 
 
-def _sweep_orphan_dirs(known: set[int], now: datetime) -> None:
+def _read_manifest(folder: Path) -> dict[str, Any] | None:
+    try:
+        data = json.loads((folder / MANIFEST_NAME).read_text(encoding="utf-8"))
+        video_id = int(data["video_id"])
+        relative_path = str(data["relative_path"])
+        files = [
+            _Move(
+                str(f["root"]),
+                str(f["path"]),
+                int(f.get("size") or 0),
+                bool(f.get("media")),
+            )
+            for f in data["files"]
+        ]
+    except OSError, ValueError, KeyError, TypeError:
+        return None
+    for move in files:
+        rel = PurePosixPath(move.rel)
+        if move.root not in (ROOT_DOWNLOADS, ROOT_DATA) or (
+            rel.is_absolute() or ".." in rel.parts
+        ):
+            return None
+    return {"video_id": video_id, "relative_path": relative_path, "files": files}
+
+
+def _has_files(folder: Path) -> bool:
+    return any(p.name != MANIFEST_NAME and not p.is_dir() for p in folder.rglob("*"))
+
+
+def _recover_orphan(session: Session, root: str, folder: Path) -> str | None:
+    """Put the files of a trash folder no entry owns back, if their video is still here.
+
+    Returns ``None`` when the folder was dealt with, else why it was left alone.
+    Nothing is ever deleted that could still be wanted: a folder is removed only after
+    every file in it was moved back or is a stale copy of a derived file the library
+    has regenerated since.
+    """
+    if not _has_files(folder):
+        _remove_dir(folder)  # nothing to lose: leftover empty directories
+        return None
+    manifest = _read_manifest(folder)
+    if manifest is None:
+        return "it has no readable manifest"
+    video = session.get(Video, manifest["video_id"])
+    if video is None or video.file_path != manifest["relative_path"]:
+        return f"video {manifest['video_id']} is not in the library"
+    pending = [
+        m for m in manifest["files"] if m.root == root and _exists(folder / m.rel)
+    ]
+    if any(m.media and _exists(m.live()) for m in pending):
+        return "its media file is also in the library"
+    for move in pending:
+        src = folder / move.rel
+        if _exists(move.live()):
+            src.unlink()  # a newer derived file (thumbnail, sprite) exists: keep that
+            continue
+        try:
+            _move(src, move.live(), rename_only=move.root == ROOT_DOWNLOADS)
+        except OSError:
+            logger.warning("could not move %s back", src, exc_info=True)
+            return "its files could not be moved back"
+    logger.warning(
+        "put the files of video %s back from an unfinished trash (%s)",
+        manifest["video_id"],
+        folder.name,
+    )
+    _remove_dir(folder)
+    return None
+
+
+def _sweep_orphan_dirs(
+    session: Session,
+    known: set[str],
+    now: datetime,
+    reported: set[str] | None = None,
+) -> None:
+    """Look at trash folders without an entry (a trash that crashed before its commit).
+
+    Media is never erased here: when the video is still in the library its files are
+    moved back, otherwise the folder is left in place (and reported) for the owner
+    to look at. Only folders of committed entries are ever removed, by the purge.
+    """
     for root in (ROOT_DOWNLOADS, ROOT_DATA):
         base = _trash_root(root)
         if not base.is_dir() or base.is_symlink():
             continue
         for child in base.iterdir():
-            if not child.name.isdigit() or int(child.name) in known:
+            if child.name in known or child.is_symlink() or not child.is_dir():
                 continue
             try:
                 age = now.timestamp() - child.stat().st_mtime
             except OSError:
                 continue
-            if age >= ORPHAN_MIN_AGE.total_seconds() and child.is_dir():
-                logger.warning("removing trash folder without an entry: %s", child)
-                _remove_dir(child)
+            if age < ORPHAN_MIN_AGE.total_seconds():
+                continue  # maybe a trash that is still moving its files
+            why = _recover_orphan(session, root, child)
+            if why is not None and (reported is None or str(child) not in reported):
+                logger.warning("leaving the trash folder %s alone: %s", child, why)
+                if reported is not None:
+                    reported.add(str(child))
 
 
 def _worker_loop(worker: BackgroundWorker) -> None:
     if worker.sleep(STARTUP_DELAY_SEC):
         return
+    reported: set[str] = set()
     while not worker.stopping:
         try:
-            if purge_expired():
+            if purge_expired(reported=reported):
                 current().download_queue.library_changed(room_made=True)
         except Exception:
             logger.warning("trash purge failed", exc_info=True)

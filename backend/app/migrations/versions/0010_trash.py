@@ -2,9 +2,10 @@
 
 ``trash_entries``: one tombstone per video a user deleted. ``snapshot_json`` holds
 the rows a restore puts back (video, AI data, playlist places, watch state),
-``files_json`` the files moved into ``DOWNLOADS_DIR/.horde-trash`` and
-``DATA_DIR/trash``. A new table only: ``videos`` is not rebuilt, so the tag and
-full-text triggers are untouched.
+``files_json`` the files moved into ``DOWNLOADS_DIR/.horde-trash/<folder>`` and
+``DATA_DIR/trash/<folder>`` (``folder`` is a random token, never reused). A new
+table only: ``videos`` is not rebuilt, so the tag and full-text triggers are
+untouched.
 
 Revision ID: 0010_trash
 Revises: 0009_user_avatars
@@ -25,6 +26,7 @@ def upgrade() -> None:
     op.create_table(
         "trash_entries",
         sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("folder", sa.String(), nullable=False),
         sa.Column("video_id", sa.Integer(), nullable=False),
         sa.Column("youtube_id", sa.String(), nullable=True),
         sa.Column("title", sa.String(), nullable=False),
@@ -46,6 +48,9 @@ def upgrade() -> None:
     )
     with op.batch_alter_table("trash_entries", schema=None) as batch_op:
         batch_op.create_index(
+            batch_op.f("ix_trash_entries_folder"), ["folder"], unique=True
+        )
+        batch_op.create_index(
             batch_op.f("ix_trash_entries_trashed_at"), ["trashed_at"], unique=False
         )
         batch_op.create_index(
@@ -57,5 +62,6 @@ def downgrade() -> None:
     with op.batch_alter_table("trash_entries", schema=None) as batch_op:
         batch_op.drop_index(batch_op.f("ix_trash_entries_youtube_id"))
         batch_op.drop_index(batch_op.f("ix_trash_entries_trashed_at"))
+        batch_op.drop_index(batch_op.f("ix_trash_entries_folder"))
 
     op.drop_table("trash_entries")

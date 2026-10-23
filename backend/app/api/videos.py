@@ -383,6 +383,8 @@ def bulk_delete_videos(
             continue
         try:
             entry_ids.append(require_id(trash.trash_video(session, video, user.id)))
+        except trash.VideoAlreadyDeleted:
+            continue  # someone else got there first
         except trash.TrashError:
             failed += 1  # already logged; the rest still go to the trash
     session.commit()
@@ -645,6 +647,10 @@ def delete_video(
     if delete_file and trash.enabled():
         try:
             entry = trash.trash_video(session, video, user.id)
+        except trash.VideoAlreadyDeleted as exc:
+            raise CodedHTTPException(404, "Video not found", "not_found") from exc
+        except trash.TrashCrossDevice as exc:
+            raise CodedHTTPException(409, str(exc), "trash_cross_device") from exc
         except trash.TrashError as exc:
             raise CodedHTTPException(500, str(exc), "trash_failed") from exc
         # Trashed bytes still use disk, so a trash move does not make room.

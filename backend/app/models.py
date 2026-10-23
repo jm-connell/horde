@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol, overload
@@ -618,13 +619,19 @@ class TrashEntry(SQLModel, table=True):
     ``snapshot_json`` holds what a restore needs to put the rows back and
     ``files_json`` lists the files moved into ``.horde-trash``. ``video_id`` is the
     id the video had (it is reused on restore) and is deliberately not a foreign
-    key. Never read the two JSON columns for a listing: they can be large.
+    key. ``folder`` names the folders holding the files (``.horde-trash/<folder>``
+    and ``DATA_DIR/trash/<folder>``): a random token, never the row id, so a trash
+    that crashed before its commit cannot share a folder with a later one. Never
+    read the two JSON columns for a listing: they can be large.
     """
 
     __tablename__ = "trash_entries"
     __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
+    folder: str = Field(
+        default_factory=lambda: uuid.uuid4().hex, index=True, unique=True
+    )
     video_id: int
     youtube_id: str | None = Field(default=None, index=True)
     title: str
