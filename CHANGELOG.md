@@ -21,6 +21,15 @@ All notable changes to Horde are documented here. The format follows
 - Waiting downloads say why on their card ("Paused: library is at its 55 GB
   limit"), the Download page shows a banner above the queue, and
   `GET /api/health` reports `status: "warning"` with `downloads.held_reason`.
+- **Trash.** Deleting a video (with its file) now moves it to a trash for 7 days
+  instead of erasing it: it leaves the library, search and playlists at once,
+  and can be restored with its tags, playlist places, watch progress and AI
+  results, or erased early (one video or **Empty trash**). The API lists the
+  trash with sizes and expiry (`/api/trash`), and the delete responses carry
+  the entry id so a client can offer **Undo**. `HORDE_TRASH_DAYS` sets the
+  number of days; `0` turns the trash off. Trashed videos still count toward
+  the size limit, and channel auto-download does not fetch them again. See
+  [Library](docs/guides/library.md#trash).
 
 ### Changed
 
@@ -29,6 +38,16 @@ All notable changes to Horde are documented here. The format follows
   queue instead of failing every following download the same way.
 - `update.sh` accepts a `warning` health status, so an update is not rolled back
   because downloads are waiting for disk space.
+
+### Upgrade notes
+
+- Database migration `0010_trash` adds the `trash_entries` table. It only adds a
+  table, so no existing data is touched; Horde backs the database up first, as
+  for every migration. Rolling back to 1.0.x needs `update.sh --rollback` or a
+  restored backup (the older version refuses a database it does not know).
+- Deleting a video with its file no longer frees the disk straight away: the
+  files wait in `downloads/.horde-trash` (and `data/trash`) for 7 days. Set
+  `HORDE_TRASH_DAYS=0` to keep the old immediate behaviour.
 
 ## [1.0.3] - 2026-10-21
 

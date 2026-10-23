@@ -116,6 +116,7 @@ nav:
       - 0010 Stream AI retention: adr/0010-stream-ai-retention.md
       - 0011 In-app updates: adr/0011-in-app-updates.md
       - 0012 Password reset codes: adr/0012-password-reset-through-the-server-log.md
+      - 0013 Trash tombstones: adr/0013-trash-tombstones.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

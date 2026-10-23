@@ -157,7 +157,7 @@ Nothing should fill the volume behind your back, least of all unattended channel
 | **Max disk usage** | Settings → System → Storage (admins), in GB | No limit |
 | **Free-space floor** | `HORDE_MIN_FREE_GB` ([environment](../ops/environment.md)) | 2 GB |
 
-The limit counts the same number Storage shows: the videos in the library, their H.264 copies and thumbnails. A job waits when the library is already at the limit, when its estimated size (known once its formats are read) would cross it, or when the downloads volume has less than the floor free. **Offline (this device)** downloads only check the floor.
+The limit counts the same number Storage shows: the videos in the library, their H.264 copies and thumbnails, and the videos waiting in the [trash](library.md#trash) (they still use disk; emptying the trash makes room). A job waits when the library is already at the limit, when its estimated size (known once its formats are read) would cross it, or when the downloads volume has less than the floor free. **Offline (this device)** downloads only check the floor.
 
 A waiting job is **held**, not failed: it stays in the queue, its card says why (for example *Paused: library is at its 55 GB limit* or *Paused: less than 2 GB free on disk*) and the Download page shows a banner above the queue. Horde looks again every 30 seconds, and straight away when a video is deleted or the limit is changed, and starts the job by itself once there is room. **Settings → System → Status** shows the same reason on the Active downloads row, and `GET /api/health` reports `status: "warning"` with `downloads.held_reason` while anything waits. Imports are not held (an import only checks that 1 GB stays free).
 

@@ -35,7 +35,7 @@ Foreign keys are enforced, and each one declares its `ON DELETE` behaviour in `b
 
 Tables whose ids are referenced elsewhere (`videos`, `playlists`, `download_jobs`, `channel_catalogs`, `channel_catalog_videos`, `ai_jobs`) use `AUTOINCREMENT`, so a deleted id is never reissued to an unrelated row. `playlist_items` has a unique `(playlist_id, video_id)`.
 
-Video deletion goes through one service, `services/video_delete.delete_video_cascade`. It deletes dependent rows explicitly (in addition to the FK cascades), commits, and only then removes thumbnails, sprites, the compat sidecar, subtitles and (when requested) the media file. File removal is restricted to paths that resolve inside `DOWNLOADS_DIR` or `DATA_DIR`.
+Video deletion goes through one service, `services/video_delete.delete_video_cascade`. It deletes dependent rows explicitly (in addition to the FK cascades), commits, and only then removes thumbnails, sprites, the compat sidecar, subtitles and (when requested) the media file. File removal is restricted to paths that resolve inside `DOWNLOADS_DIR` or `DATA_DIR`. A delete the user asks for with the file goes through `services/trash.trash_video` instead, which moves those files into the trash, writes a `trash_entries` tombstone and then runs this same cascade ([ADR 0013](../adr/0013-trash-tombstones.md)).
 
 ## Startup algorithm
 
@@ -87,6 +87,7 @@ Then review and edit `backend/app/migrations/versions/0003_widgets.py`:
 | `0006_video_tags_delete` | `AFTER DELETE ON videos` trigger that clears the video's `video_tags` rows even on a connection without `foreign_keys` |
 | `0007_channel_follows` | `channel_follows` table (per-user followed channels, with unfollow tombstones) and `download_requesters` (who queued a download job) |
 | `0008_stream_ai` | `stream_ai_state` and `stream_ai_chat_messages`: AI results of streamed videos, kept per YouTube id until downloaded or expired ([ADR 0010](../adr/0010-stream-ai-retention.md)) |
+| `0010_trash` | `trash_entries`: one tombstone per video a user deleted, with the rows a restore needs and the list of files moved to the trash ([ADR 0013](../adr/0013-trash-tombstones.md)). A new table only; `videos` is not rebuilt |
 
 The legacy `schema_migrations` ledger table is left in place on adopted installs and ignored by Alembic.
 

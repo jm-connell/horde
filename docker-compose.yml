@@ -102,6 +102,8 @@ services:
       # Boot sweep of stale partial downloads older than N hours (0 = off).
       - HORDE_TEMP_SWEEP_HOURS=${HORDE_TEMP_SWEEP_HOURS:-6}
       - HORDE_STREAM_AI_RETENTION_DAYS=${HORDE_STREAM_AI_RETENTION_DAYS:-30}
+      # Days a deleted video waits in the trash before it is erased (0 = no trash).
+      - HORDE_TRASH_DAYS=${HORDE_TRASH_DAYS:-7}
       # Opt-in: on every start, install the newest yt-dlp into the data volume.
       - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
       - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}

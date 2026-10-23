@@ -77,7 +77,20 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 | `POST /api/compat/convert-library` | Re-encode all non-H.264 originals in place. Body must carry `confirm: true` (else `400`) |
 | `POST /api/compat/cancel` | Drop queued jobs and signal running ones (body `kind`: `compat` \| `convert`, optional) |
 
-Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` in its totals.
+Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` and `trash_bytes` in its totals.
+
+### Trash
+
+Needs the `delete_videos` permission (administrators always pass). `DELETE /api/videos/{id}?delete_file=true` and `POST /api/videos/bulk-delete` (with `delete_files`) move videos to the trash unless `HORDE_TRASH_DAYS=0`; the `204` response carries the trash entry id in the `X-Horde-Trash-Entry` header (bulk: `X-Horde-Trash-Entries`, comma separated).
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/trash` | Page (`{items, next_cursor}`, `limit`, `cursor`) of trashed videos, newest first: `id`, `video_id`, `title`, `channel`, `size_bytes`, `trashed_at`, `expires_at`, `trashed_by`, `thumbnail_url` |
+| `GET /api/trash/summary` | `count`, `total_bytes`, `retention_days` |
+| `GET /api/trash/{id}/thumbnail` | The trashed video's thumbnail, when it had one |
+| `POST /api/trash/{id}/restore` | Put the video back under its old id (`{video_id, title}`). `409` `trash_conflict` when its file path or YouTube id is taken in the library now |
+| `DELETE /api/trash/{id}` | Erase one entry and its files for good (`204`) |
+| `POST /api/trash/empty` | Erase everything in the trash (`{deleted, freed_bytes}`) |
 
 ### Pagination
 
