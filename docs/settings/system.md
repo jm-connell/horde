@@ -44,7 +44,7 @@ See [Troubleshooting](../ops/troubleshooting.md) for `error_kind` values and res
 
 ## Storage
 
-Library footprint: total bytes used by videos, their H.264 copies, thumbnails and the [trash](../guides/library.md#trash), plus the video count.
+Library footprint: total bytes used by videos, their H.264 copies, thumbnails and the [trash](../guides/library.md#trash), plus the video count. When the trash holds anything, its size is shown next to the count (linking to [Library → Trash](library.md#trash)), and in the limit bar below as a lighter segment.
 
 **Max disk usage** caps that footprint (administrators only). Enter a size in GB; leave the field empty (or enter 0) for no limit, the default. While a limit is set, a bar shows the library size against it, turning amber from 90 %. Downloads wait while the library is at the limit and start again by themselves when there is room; see [Disk limits](../guides/downloads.md#disk-limits) for what is counted and how far a running download can overshoot. The limit is stored as `max_library_bytes` in the server settings.
 

@@ -72,6 +72,14 @@ Deleting a video does not erase it at once. The video disappears from the librar
 
 The trash lists each video with its size, who deleted it and when it will be erased, and shows the total size. Anyone who may delete videos (the `delete_videos` permission, and administrators) can see and use it.
 
+In the app:
+
+1. **Delete** a video (watch page **More actions → Delete**, the library's bulk **Delete**, a finished download's card, or Import & review). The confirm says **Move to trash?** and how many days the trash keeps it.
+2. A toast says the video moved to the trash, with **Undo** for about ten seconds. Undo restores it (for a bulk delete, every video that delete moved).
+3. Later, open **Settings → Library → Trash**. The summary reads like "12 videos · 8.4 GB · deleted videos are kept for 7 days". **Show videos in the trash** lists them, newest first (**Show more** loads the next page), each with its channel, size, who deleted it and the days left; **Restore** or **Delete forever** acts on one video, **Empty trash** erases them all after a confirm.
+
+With the trash turned off (`HORDE_TRASH_DAYS=0`) the delete confirm warns that the delete is permanent and there is no Undo.
+
 Things to know:
 
 - **Trashed videos still use disk.** They count toward the [library size limit](../settings/system.md), and emptying the trash frees that space (held downloads then start).

@@ -29,6 +29,11 @@ All notable changes to Horde are documented here. The format follows
   the entry id so a client can offer **Undo**. `HORDE_TRASH_DAYS` sets the
   number of days; `0` turns the trash off. Trashed videos still count toward
   the size limit. See [Library](docs/guides/library.md#trash).
+- Deleting a video in the app now asks **Move to trash?** and then shows a
+  toast with **Undo**. **Settings → Library → Trash** shows how many videos the
+  trash holds and their size, with **Empty trash** and a list to restore or
+  erase videos one by one. Settings → System → Storage shows the trash's share
+  of the disk usage.
 
 ### Changed
 

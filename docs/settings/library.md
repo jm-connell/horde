@@ -122,6 +122,12 @@ From Library → Metadata and catalog:
 
 Progress also appears under [System → Background activity](system.md#background-activity).
 
+## Trash
+
+Shown to anyone with the `delete_videos` permission (and administrators). The summary line gives the number of videos in the [trash](../guides/library.md#trash), their size and how many days the trash keeps them (`HORDE_TRASH_DAYS`; with `0` it says deletes are permanent). **Empty trash** erases everything after a confirm. **Show videos in the trash** opens the list: thumbnail, title, channel, size, who deleted it and when, and the days left, with **Restore** and **Delete forever** per video. A restore that would collide with the library (the same video downloaded again, or a download of it running) is refused with the reason.
+
+The trash is here rather than under System → Storage because members who may delete videos need it, and the System tab is for administrators. Storage still shows the trash's share of the disk.
+
 ## See also
 
 - [Settings overview](index.md)
