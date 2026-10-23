@@ -25,13 +25,24 @@ All notable changes to Horde are documented here. The format follows
   [Two-step sign-in](docs/ops/authentication.md#two-step-sign-in).
   API: `POST /api/auth/login/totp`, `/api/auth/2fa*`, `DELETE
   /api/users/{id}/two-factor`, `require_two_factor` in `/api/settings`.
+- **Confirm your password for sensitive administrator actions.** Adding a
+  user, making an account an administrator, setting another account's
+  password, deleting an account, resetting another account's two-step sign-in,
+  signing another account out everywhere and changing the two-step requirement
+  now ask the administrator for their password (and a code, with two-step
+  sign-in) again if they last did so more than ten minutes ago; a sign-in
+  counts. A *Confirm your password* dialog appears and the action goes through
+  once it is accepted. API: `POST /api/auth/reauth`; the actions answer `403`
+  `reauth_required` until then. See
+  [Confirming your password](docs/ops/authentication.md#reauth).
 - **Internet exposure checklist.** A new guide
   ([docs/ops/internet-exposure.md](docs/ops/internet-exposure.md)) for putting
   Horde behind a public name with a login: Caddy and nginx examples, the
   settings to use, and an honest list of the risks that remain. Settings →
   System → Security shows a short pass/warn checklist computed by the server
   (HTTPS on this page, proxy trust, allowed hosts, the two-step requirement,
-  administrators without it, sign-in off, private URLs allowed, updates).
+  administrators without it, accounts that have not enrolled once everyone
+  must, sign-in off, private URLs allowed, updates).
   API: `GET /api/system/security-checklist`.
 - **Sign-in alerts.** Two new [notification](docs/ops/notifications.md) events:
   *Failed sign-ins* (ten failures against one account within an hour, at most
@@ -211,6 +222,36 @@ All notable changes to Horde are documented here. The format follows
   without a lockout an attacker could use against you. Wrong second-step
   codes count in the same throttle as wrong passwords, and a right password
   does not clear them.
+- **Concurrent sign-in attempts could get past the throttle.** The sign-in
+  throttle checked its budget, then spent about 100 ms hashing the password,
+  and only then counted the failure, so a burst of simultaneous guesses all
+  passed the check (80 at once got 43 judged instead of 5), and each burst also
+  filled the server's worker threads with password hashing. A guess now
+  reserves one of the free tries before it is hashed and settles it afterwards,
+  so exactly the budget is judged and the rest are answered `429` at once;
+  password hashing is capped to the number of CPUs and a request that cannot get
+  a slot is answered `503` `busy` with `Retry-After: 1`. The same reservation
+  guards the second step, the current-password checks (change password,
+  sharing, two-step setup, turn-off and recovery codes), the forgot-password
+  reset and confirming your password. This predates two-step sign-in.
+- **Administrators can no longer set their own password without the current
+  one.** `PATCH /api/users/{id}` refused nothing for your own account, so a
+  stolen administrator cookie could choose a password, then set up its own
+  authenticator and lock the owner out. It now answers `400`
+  `use_change_password` for your own account; *Change password* in Account
+  settings asks for the current one. Users → Edit no longer shows a password
+  box for your own account.
+- **Sign-in throttle refinements for an internet-facing server.** IPv6 clients
+  are throttled per /64 (a single subscriber can rotate through one) and a
+  made-up username can no longer push a real account's counters out of the
+  table. Wrong second-step codes against an account make its code step wait
+  twice as long after every ten of them (30 seconds up to an hour), cleared by a
+  right code or a day of quiet, so slow guessing of the six digits over weeks
+  stops being worthwhile. A browser that signed in before carries a signed
+  `horde_device` cookie (a year, `HttpOnly`, `SameSite=Lax`, retired by a
+  password change) and is spared the per-name slowdown and the daily ceiling,
+  so a stranger hammering your username does not lock you out of your own
+  browser.
 - A download queued with the destination "this device" is now only visible
   and fetchable by the account that queued it, by administrators, and, while
   that account shares its downloads, by other accounts. Before, any account
@@ -233,6 +274,10 @@ All notable changes to Horde are documented here. The format follows
   account's secret is stored in the database like the session hashes: protect
   `DATA_DIR` and its backups. Back up and roll back as for any migration (the
   older version refuses a database it does not know).
+- Migration `0016_two_factor` also adds `user_sessions.reauth_at` (a plain
+  `ADD COLUMN`): when a session last proved the password. Sessions that exist
+  at the upgrade have none, so an administrator's first sensitive action after
+  it asks for the password once.
 - A new Python dependency, `segno` (QR codes, pure Python, no dependencies), is
   in `requirements.txt` and the lock file; the image build picks it up.
 - Notification targets you already have keep their events; add *Failed

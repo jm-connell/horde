@@ -8,13 +8,15 @@ Prefer **a VPN** ([Tailscale or WireGuard](remote-access.md#tailscale)) when you
 
 ## The list {#list}
 
-1. **TLS in front** ([HTTPS](#tls)). Never send passwords over plain HTTP across the internet.
-2. **Trust the proxy, and only the proxy** ([`HORDE_TRUST_PROXY=1`](#proxy)), with Horde reachable only through it.
-3. **List your public name** ([`HORDE_ALLOWED_HOSTS`](#hosts)).
-4. **Two-step sign-in required of everyone** (*Settings → System → Security → Require two-step sign-in → Everyone*, see [below](#two-step)).
-5. **Strong, unique passwords.** Horde enforces a minimum of 8 characters and nothing else: use a password manager and 16 or more.
-6. **Keep updating** ([updates](#updates)).
-7. **No `HORDE_AUTH_DISABLED`** ([why](#no-auth)) and **no `HORDE_ALLOW_PRIVATE_URLS`** ([why](#private-urls)).
+1. **Create the administrator account first.** A fresh install lets whoever reaches it first create the administrator, so make the account on your own network (or through the proxy, before you tell anyone the name) and only then publish the port.
+2. **TLS in front** ([HTTPS](#tls)). Never send passwords over plain HTTP across the internet.
+3. **Trust the proxy, and only the proxy** ([`HORDE_TRUST_PROXY=1`](#proxy)), with Horde reachable only through it.
+4. **List your public name** ([`HORDE_ALLOWED_HOSTS`](#hosts)).
+5. **Two-step sign-in set up by every account, then required of everyone** (*Settings → System → Security → Require two-step sign-in → Everyone*, see [below](#two-step)). Have each person enroll **before** you open the port.
+6. **Strong, unique passwords.** Horde enforces a minimum of 8 characters and nothing else: use a password manager and 16 or more.
+7. **Rate-limit sign-in at the proxy too** ([examples](#rate-limit)).
+8. **Keep updating** ([updates](#updates)).
+9. **No `HORDE_AUTH_DISABLED`** ([why](#no-auth)) and **no `HORDE_ALLOW_PRIVATE_URLS`** ([why](#private-urls)).
 
 ## HTTPS {#tls}
 
@@ -31,11 +33,14 @@ horde.example.com {
 }
 ```
 
-Caddy passes the original `Host`, and sets `X-Forwarded-For` and `X-Forwarded-Proto` itself. If Caddy runs in the Compose network use `reverse_proxy horde:8080`.
+Caddy passes the original `Host`, and sets `X-Forwarded-For` and `X-Forwarded-Proto` itself. If Caddy runs in the Compose network use `reverse_proxy horde:8080`. Rate limiting is covered [below](#rate-limit).
 
 ### nginx
 
 ```nginx
+# Sign-in is limited per address here as well (see "Rate-limit sign-in").
+limit_req_zone $binary_remote_addr zone=horde_auth:10m rate=10r/m;
+
 server {
     listen 443 ssl;
     http2 on;
@@ -46,6 +51,17 @@ server {
 
     # Uploads and imports can be large (HORDE_MAX_UPLOAD_GB).
     client_max_body_size 0;
+
+    # Sign-in, second step, password reset and re-authentication: 10 a minute
+    # per address, with a short burst; the rest is answered 429 before Horde sees it.
+    location /api/auth/ {
+        limit_req zone=horde_auth burst=10 nodelay;
+        limit_req_status 429;
+        proxy_pass http://127.0.0.1:8686;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:8686;
@@ -68,6 +84,31 @@ server {
 }
 ```
 
+## Rate-limit sign-in at the proxy {#rate-limit}
+
+Horde throttles failed sign-ins itself (per address, per name and per day, see [Passwords and sessions](authentication.md#passwords-and-sessions)), but that throttle lives inside the application, after the proxy has accepted the connection and Horde has spent a thread on the request. Limiting `/api/auth/` at the proxy turns most of a flood away before it reaches Horde. nginx: the `limit_req_zone` and `location /api/auth/` in the [config above](#nginx).
+
+Caddy has no rate limiter in the standard build. Either add the third-party [`caddy-ratelimit`](https://github.com/mholt/caddy-ratelimit) module (build Caddy with `xcaddy build --with github.com/mholt/caddy-ratelimit`) and limit the same paths:
+
+```caddyfile
+horde.example.com {
+        encode zstd gzip
+        rate_limit {
+                zone auth {
+                        match {
+                                path /api/auth/*
+                        }
+                        key    {remote_host}
+                        events 10
+                        window 1m
+                }
+        }
+        reverse_proxy 127.0.0.1:8686
+}
+```
+
+or run [fail2ban](https://www.fail2ban.org) on the access log and ban addresses that collect `401`/`429` answers from `/api/auth/` (Horde answers a wrong password 401 `invalid_credentials` and a throttled one 429 `rate_limited`). Either is a second layer: Horde stays safe without it, but a proxy limit also protects the server from the CPU cost of password hashing under a flood (Horde answers 503 `busy` when too many hashes are already running).
+
 ## The proxy: `HORDE_TRUST_PROXY=1` {#proxy}
 
 Without it every visitor looks like the proxy's own address, so all sign-in attempts share one throttle, and Horde cannot tell the request was HTTPS. With it, Horde takes the client address from `X-Forwarded-For` (counted from the right; `HORDE_TRUSTED_PROXY_HOPS` if there are several proxies) and HTTPS from `X-Forwarded-Proto`. Set it **only** when a proxy you control is the only way to reach the port, and that proxy sets or appends these headers. See [Behind a reverse proxy](authentication.md#behind-a-reverse-proxy).
@@ -84,8 +125,10 @@ Requests for any other `Host` get HTTP 400, which stops an attacker's name from 
 
 Passwords leak and get guessed; a code from an authenticator app on your phone makes either much less useful.
 
-1. Each person sets it up in **Account settings → Two-step sign-in** (a QR code, then a first code, then ten single-use recovery codes to keep somewhere safe). See [Two-step sign-in](authentication.md#two-step-sign-in).
+1. Each person sets it up in **Account settings → Two-step sign-in** (a QR code, then a first code, then ten single-use recovery codes to keep somewhere safe). See [Two-step sign-in](authentication.md#two-step-sign-in). **Do this for every account before you open the port.**
 2. As administrator, set **Settings → System → Security → Require two-step sign-in** to **Everyone**. Accounts without it are taken to the setup screen at their next request and can do nothing else until it is done. *Administrators* limits that to admin accounts.
+
+Why enroll first: an account that is required to enroll but has not yet is *trust on first use*. Whoever signs in with its password before its owner does gets the setup screen and attaches **their** authenticator, and the owner is the one locked out. So the requirement protects only the accounts that have already enrolled. While the requirement is on, the Security card lists the accounts that have not.
 
 Keep the recovery codes: if you lose both the phone and the codes, run `docker exec -it horde python -m app.cli reset-2fa <username>` (or another administrator resets it under *Users*).
 
@@ -103,7 +146,7 @@ Turn on [update checks and, if you can, the **Update now** button](../getting-st
 
 ## The Security card {#checklist-card}
 
-**Settings → System → Security** (administrators) lists, computed by the server from what it can see: whether *this* page came over HTTPS, whether a proxy is forwarding without `HORDE_TRUST_PROXY`, whether `HORDE_ALLOWED_HOSTS` is `*`, whether two-step sign-in is required and which administrators lack it, `HORDE_AUTH_DISABLED`, `HORDE_ALLOW_PRIVATE_URLS` and whether an update is waiting. A tick means fine, a `!` means look at it. It is guidance, not a scanner: it cannot see your firewall, your certificate or your password strength.
+**Settings → System → Security** (administrators) lists, computed by the server from what it can see: whether *this* page came over HTTPS, whether a proxy is forwarding without `HORDE_TRUST_PROXY`, whether `HORDE_ALLOWED_HOSTS` is `*`, whether two-step sign-in is required, which administrators lack it and (when it is required of everyone) which other accounts have not enrolled yet, `HORDE_AUTH_DISABLED`, `HORDE_ALLOW_PRIVATE_URLS` and whether an update is waiting. A tick means fine, a `!` means look at it. It is guidance, not a scanner: it cannot see your firewall, your certificate or your password strength.
 
 ## Hearing about attacks {#alerts}
 
@@ -118,8 +161,10 @@ Be honest with yourself about what this does **not** fix:
 - **Cast links are bearer URLs.** A signed `?mt=` media link works without a login for 12 hours for one video; anyone who gets the URL can fetch that video.
 - **The wiki is public.** `/wiki` and the interface files carry no data but are served without signing in.
 - **The secrets live in `DATA_DIR`.** Session hashes, the signing key (`secret_key`) and each account's two-step secret are in the data folder and its backups. Protect them like the library itself.
-- **A stolen session is a signed-in user.** Two-step sign-in protects the sign-in, not a cookie already issued. Use *Signed-in devices* to end sessions; changing the password ends them all.
+- **A stolen session is a signed-in user.** Two-step sign-in protects the sign-in, not a cookie already issued. Horde asks an administrator for the password (and a code) again, within the last 10 minutes, before the actions that would let a thief keep the account: adding a user, making someone an administrator, setting another account's password, resetting or deleting an account, and changing the two-step requirement. Setting your own password needs the current one. A thief with a cookie that is under ten minutes old, or one holding the administrator's password, is not stopped by this. Use *Signed-in devices* to end sessions; changing the password ends them all.
 - **Sign-in is a single-process, in-memory throttle.** A restart forgets the counters.
+- **Guessing codes slowly over weeks.** A six-digit code has a million values. Wrong codes against one account make that account's code step wait twice as long after every ten of them (from 30 seconds up to an hour, forgotten after a day without failures), and a right password does not reset that. A patient attacker holding the password can still try a few thousand codes a week, which is why the password must stay secret and why you should read the failed-sign-in alerts. While such an attack runs, the account's real owner also waits at the code step; `python -m app.cli reset-password` and `reset-2fa` always work.
+- **Hammering a name slows its owner, unless the browser is known.** After many failures against one name from anywhere, that name accepts one attempt every ten seconds. A browser that has signed in as the account before carries a signed `horde_device` cookie and is exempt from that name-wide slowdown (it keeps its own per-device and per-address limit), but a new browser or a cleared cookie waits. The cookie is retired when the password changes.
 - **No email.** Password recovery needs the server log or the CLI, by design.
 
 ## Related
