@@ -10,6 +10,7 @@ import type {
   NextPart,
   PermissionInfo,
   UserAccount,
+  DeviceSession,
   UserCreateInput,
   UserUpdateInput,
   ChannelAutodownload,
@@ -438,6 +439,23 @@ export const api = {
     );
   },
 
+  /** Your signed-in browsers, most recently active first. */
+  async listSessions(): Promise<DeviceSession[]> {
+    const res = await request<{ items: DeviceSession[] }>("/api/auth/sessions");
+    return res.items;
+  },
+
+  revokeSession(id: number): Promise<void> {
+    return request<void>(`/api/auth/sessions/${id}`, { method: "DELETE" });
+  },
+
+  /** Sign out everywhere except this browser. */
+  revokeOtherSessions(): Promise<void> {
+    return request<void>("/api/auth/sessions/revoke-others", {
+      method: "POST",
+    });
+  },
+
   /** Set your own profile picture; returns your account with the new version. */
   uploadAvatar(file: File): Promise<AuthUser> {
     const form = new FormData();
@@ -470,6 +488,26 @@ export const api = {
 
   updateUser(id: number, input: UserUpdateInput): Promise<UserAccount> {
     return request<UserAccount>(`/api/users/${id}`, jsonInit("PATCH", input));
+  },
+
+  async listUserSessions(userId: number): Promise<DeviceSession[]> {
+    const res = await request<{ items: DeviceSession[] }>(
+      `/api/users/${userId}/sessions`
+    );
+    return res.items;
+  },
+
+  revokeUserSession(userId: number, id: number): Promise<void> {
+    return request<void>(`/api/users/${userId}/sessions/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  /** Sign a user out of every browser. */
+  revokeAllUserSessions(userId: number): Promise<void> {
+    return request<void>(`/api/users/${userId}/sessions`, {
+      method: "DELETE",
+    });
   },
 
   deleteUser(id: number): Promise<void> {

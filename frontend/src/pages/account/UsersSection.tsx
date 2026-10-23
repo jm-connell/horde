@@ -5,9 +5,15 @@ import UserAvatar from "../../components/auth/UserAvatar";
 import { useAuth } from "../../context/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
-import type { Permission, PermissionInfo, UserAccount } from "../../types";
+import type {
+  DeviceSession,
+  Permission,
+  PermissionInfo,
+  UserAccount,
+} from "../../types";
 import AccountTypeFields from "../settings/AccountTypeFields";
 import { PANEL_BTN } from "../settings/constants";
+import SessionRows from "./SessionRows";
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
@@ -336,6 +342,7 @@ function UserEditor({
           Reset password
         </button>
       </form>
+      <UserDevices user={user} />
       <FormError message={error} />
       <div className="flex flex-wrap gap-2">
         {!isSelf && (
@@ -365,5 +372,79 @@ function UserEditor({
         </button>
       </div>
     </div>
+  );
+}
+
+/** One account's signed-in browsers; an administrator can end any of them. */
+function UserDevices({ user }: { user: UserAccount }) {
+  const { showToast, showError } = useToast();
+  const [sessions, setSessions] = useState<DeviceSession[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const headingId = `devices-${user.id}`;
+
+  const reload = useCallback(async () => {
+    try {
+      setSessions(await api.listUserSessions(user.id));
+    } catch (err) {
+      showError(`Could not load devices: ${describe(err)}`);
+    }
+  }, [user.id, showError]);
+
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const run = async (action: () => Promise<void>, done: string) => {
+    setBusy(true);
+    try {
+      await action();
+      showToast(done);
+      await reload();
+    } catch (err) {
+      showError(describe(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section aria-labelledby={headingId} data-horde="user-devices">
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h3 id={headingId} className="text-sm font-semibold text-gray-100">
+          {`Signed-in devices for ${user.username}`}
+        </h3>
+        {sessions !== null && sessions.length > 0 && (
+          <button
+            type="button"
+            className={`${PANEL_BTN} ml-auto`}
+            disabled={busy}
+            onClick={() =>
+              void run(
+                () => api.revokeAllUserSessions(user.id),
+                `Signed ${user.username} out everywhere`
+              )
+            }
+          >
+            Sign out everywhere
+          </button>
+        )}
+      </div>
+      {sessions === null ? (
+        <p className="text-sm text-muted">Loading…</p>
+      ) : sessions.length === 0 ? (
+        <p className="text-sm text-muted">Not signed in anywhere.</p>
+      ) : (
+        <SessionRows
+          sessions={sessions}
+          busy={busy}
+          onSignOut={(s) =>
+            void run(
+              () => api.revokeUserSession(user.id, s.id),
+              `Signed out ${s.device}`
+            )
+          }
+        />
+      )}
+    </section>
   );
 }

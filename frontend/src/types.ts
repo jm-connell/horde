@@ -101,6 +101,8 @@ export type UserUpdateInput = Omit<S["UserUpdate"], "permissions"> & {
   permissions?: Permission[];
 };
 export type MediaToken = S["MediaTokenRead"];
+/** One signed-in browser of an account. */
+export type DeviceSession = S["SessionRead"];
 
 export type CompatStatus = "none" | "queued" | "running" | "ready" | "error";
 
