@@ -12,7 +12,7 @@ Horde's sign-in was password only, throttled per address and per name. That is f
 - **Ten recovery codes**, stored as an HMAC keyed with `secret_key` (which is not in the database), deleted when used.
 - **Two requests to sign in.** A right password for a two-step account answers `401 totp_required` with a *ticket*: signed with `secret_key`, five minutes, single use (an in-memory registry), at most five tries, bound to the account's password hash and second-factor state. `POST /api/auth/login/totp` trades ticket plus code for the session. A right password does not clear the failure counters, and wrong codes count in the existing limiter, so alternating a known password with code guesses gains nothing.
 - **The reset-by-log flow does not skip it** (ADR 0012): the password changes, the second step is still due.
-- **A requirement setting** (`require_two_factor`: off, admins, everyone) enforced in `AuthMiddleware`, once, for every route: an account that must enroll can reach only the state, sign-out and enrollment routes (`403 two_factor_enrollment_required`). Unreadable settings count as "everyone".
+- **A requirement setting** (`require_two_factor`: off, admins, everyone) enforced in `AuthMiddleware`, once, for every route: an account that must enroll can reach only the state, sign-out and enrollment routes (`403 two_factor_enrollment_required`). If the settings file becomes unreadable the last value read stays in force.
 - **QR codes are drawn on the server** with `segno` (pure Python, no dependencies), so the secret never reaches a third-party service.
 - **Setting up, turning off and replacing recovery codes need the password** (and, for the last two, a code), so a stolen session cannot attach its own authenticator or strip the factor.
 

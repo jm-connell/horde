@@ -120,28 +120,34 @@ def enrollment_required_response() -> JSONResponse:
     )
 
 
-def two_factor_requirement() -> str:
-    """The ``require_two_factor`` setting; unreadable settings count as "everyone".
+def two_factor_requirement(runtime: AuthRuntime) -> str:
+    """The ``require_two_factor`` setting.
 
-    A security control must not switch itself off because its file is damaged: an
-    account that has two-step sign-in is unaffected, one that does not is held at
-    the enrollment screen until the settings can be read again.
+    If the settings file cannot be read (damaged and not restorable, or an I/O
+    error) the last value this process read stays in force, so a bad file does not
+    switch the requirement off mid-run; the stand-in defaults of a damaged file
+    are never taken for the administrator's choice. A process that never read it
+    starts from "off", which only matters if the file was already damaged at
+    start-up, when the Settings screen says so.
     """
     try:
         data = app_settings.load()
         if app_settings.is_degraded():
-            return two_factor.REQUIRE_EVERYONE
+            return runtime.two_factor_requirement
     except app_settings.SettingsError:
-        logger.debug("settings unreadable; requiring two-step sign-in", exc_info=True)
-        return two_factor.REQUIRE_EVERYONE
-    return two_factor.normalize_requirement(data.get("require_two_factor"))
+        logger.debug("settings unreadable; keeping the last requirement", exc_info=True)
+        return runtime.two_factor_requirement
+    runtime.two_factor_requirement = two_factor.normalize_requirement(
+        data.get("require_two_factor")
+    )
+    return runtime.two_factor_requirement
 
 
-def flag_enrollment(user: AuthUser) -> AuthUser:
+def flag_enrollment(runtime: AuthRuntime, user: AuthUser) -> AuthUser:
     """``user``, marked as having to set up two-step sign-in if the setting says so."""
     if user.two_factor_enabled:
         return user
-    if two_factor.required_for(two_factor_requirement(), is_admin=user.is_admin):
+    if two_factor.required_for(two_factor_requirement(runtime), is_admin=user.is_admin):
         return dataclasses.replace(user, must_enroll_two_factor=True)
     return user
 
@@ -207,7 +213,7 @@ class AuthMiddleware:
                 user = accounts.resolve_session(session, token, touch=touch)
             if user is None:
                 user = AuthMiddleware._media_token_user(runtime, request, session)
-        return flag_enrollment(user) if user is not None else None
+        return flag_enrollment(runtime, user) if user is not None else None
 
     @staticmethod
     def _media_token_user(

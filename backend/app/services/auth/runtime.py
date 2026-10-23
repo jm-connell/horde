@@ -91,6 +91,9 @@ class AuthRuntime:
     reset_codes: ResetCodes = field(default_factory=ResetCodes)
     #: Counts failed sign-ins per name to tell the administrator about an attack.
     failure_watch: FailureWatch = field(default_factory=FailureWatch)
+    #: The last ``require_two_factor`` value read, kept if the settings file goes
+    #: unreadable (see ``auth.two_factor_requirement``).
+    two_factor_requirement: str = "off"
     #: Tickets between the password step and the code step of a two-step sign-in.
     pending_logins: PendingLogins = field(default_factory=PendingLogins)
     #: How often an open event stream re-checks that its caller may still be

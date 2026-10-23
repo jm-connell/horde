@@ -651,12 +651,24 @@ def test_lowering_the_requirement_frees_the_account_at_once(client, member_clien
     assert member_client.get("/api/videos").status_code == 200
 
 
-def test_unreadable_settings_hold_back_accounts_without_it(member_client, monkeypatch):
+def test_unreadable_settings_keep_the_last_requirement_in_force(
+    client, member_client, now, monkeypatch
+):
     from app.services import app_settings
 
-    assert member_client.get("/api/videos").status_code == 200
+    _enroll(client, now)
+    assert member_client.get("/api/videos").status_code == 200  # reads "off"
+    _require(client, "everyone")
+    assert member_client.get("/api/videos").status_code == 403  # reads "everyone"
+    # A damaged settings file hands back stand-in defaults: they are not the
+    # administrator's choice, so the last value read stays.
     monkeypatch.setattr(app_settings, "is_degraded", lambda: True)
     assert member_client.get("/api/videos").status_code == 403
+    monkeypatch.setattr(app_settings, "is_degraded", lambda: False)
+    _require(client, "off")
+    assert member_client.get("/api/videos").status_code == 200  # reads "off"
+    monkeypatch.setattr(app_settings, "is_degraded", lambda: True)
+    assert member_client.get("/api/videos").status_code == 200
 
 
 def test_a_proxy_authenticated_server_never_forces_enrollment(app, admin_user, init_db):

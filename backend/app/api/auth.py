@@ -218,7 +218,7 @@ def _complete_sign_in(
     # The password was remembered after all: pending reset codes go.
     runtime.reset_codes.discard(user.username_norm)
     _open_session(session, request, response, runtime, user)
-    return AuthLoginResult(user=user_read(flag_enrollment(AuthUser.of(user))))
+    return AuthLoginResult(user=user_read(flag_enrollment(runtime, AuthUser.of(user))))
 
 
 def _totp_required(runtime: AuthRuntime, user: User) -> CodedHTTPException:
@@ -414,7 +414,7 @@ def reset_password(
         # step is still due. The password is already new; the ticket is for it.
         raise _totp_required(runtime, user)
     _open_session(session, request, response, runtime, user)
-    return AuthLoginResult(user=user_read(flag_enrollment(AuthUser.of(user))))
+    return AuthLoginResult(user=user_read(flag_enrollment(runtime, AuthUser.of(user))))
 
 
 def _verify_current_password(
@@ -558,7 +558,7 @@ def two_factor_status(
         if enabled
         else 0,
         required=two_factor.required_for(
-            two_factor_requirement(), is_admin=user.is_admin
+            two_factor_requirement(_runtime(request)), is_admin=user.is_admin
         ),
     )
 
