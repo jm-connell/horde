@@ -158,7 +158,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "system",
-    keywords: "storage disk space library",
+    keywords: "storage disk space library max disk usage limit quota full",
   },
   {
     tab: "system",

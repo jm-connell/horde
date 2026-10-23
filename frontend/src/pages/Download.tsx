@@ -81,6 +81,7 @@ export default function Download() {
     progress,
     activeCount,
     queuePaused,
+    queueHeldReason,
     submitDownload,
     submitBulkDownloads,
     pauseQueue,
@@ -991,6 +992,26 @@ export default function Download() {
               )}
             </div>
           </div>
+          {queueHeldReason && (
+            <p
+              role="status"
+              className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-300"
+            >
+              {queueHeldReason}. Waiting downloads start by themselves when
+              there is room.
+              {isAdmin && (
+                <>
+                  {" "}
+                  <Link
+                    to="/settings?tab=system"
+                    className="underline hover:text-amber-200"
+                  >
+                    Storage settings
+                  </Link>
+                </>
+              )}
+            </p>
+          )}
           <Collapse open={!activeCollapsed}>
             <div className="space-y-4">
               {activeJobs.map((job) => (

@@ -5,6 +5,7 @@ import {
   canManageCompletedLibraryVideo,
   canRedownloadRemovedJob,
   collapseOverflowKeys,
+  heldReasonFor,
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
@@ -116,5 +117,26 @@ describe("collapseOverflowKeys", () => {
       "size",
       "playlist",
     ]);
+  });
+});
+
+describe("heldReasonFor", () => {
+  it("shows the stored reason of a queued job", () => {
+    expect(heldReasonFor("queued", false, undefined, "Paused: disk full")).toBe(
+      "Paused: disk full"
+    );
+  });
+
+  it("prefers the live event, where null means the hold ended", () => {
+    expect(heldReasonFor("queued", false, "New reason", "Old")).toBe(
+      "New reason"
+    );
+    expect(heldReasonFor("queued", false, null, "Old")).toBeNull();
+  });
+
+  it("shows nothing once the job runs, or for a job the user paused", () => {
+    expect(heldReasonFor("downloading", false, "Stale", "Stale")).toBeNull();
+    expect(heldReasonFor("queued", true, "Reason", "Reason")).toBeNull();
+    expect(heldReasonFor("queued", false, undefined, null)).toBeNull();
   });
 });

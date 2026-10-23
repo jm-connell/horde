@@ -32,6 +32,7 @@ import type {
   DownloadQueueStatus,
   ProgressEvent,
 } from "../types";
+import { heldReasonFor } from "../components/downloadJobCardState";
 import { useToast } from "./ToastContext";
 
 interface SubmitOverrides {
@@ -46,6 +47,8 @@ interface DownloadContextValue {
   progress: Record<number, ProgressEvent>;
   activeCount: number;
   queuePaused: boolean;
+  /** Set while queued downloads wait for disk space: the sentence to show. */
+  queueHeldReason: string | null;
   submitDownload: (
     url: string,
     preset: string,
@@ -653,6 +656,17 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
   );
 
   const activeCount = jobs.filter((j) => isActiveJob(j, progress[j.id])).length;
+  const queueHeldReason =
+    jobs
+      .map((j) =>
+        heldReasonFor(
+          jobStatus(j, progress[j.id]),
+          j.paused,
+          progress[j.id]?.held_reason,
+          j.held_reason
+        )
+      )
+      .find((reason) => reason !== null) ?? null;
 
   // Memoized so an SSE tick for one job doesn't re-render every useDownloads() consumer.
   const value: DownloadContextValue = useMemo(
@@ -661,6 +675,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       progress,
       activeCount,
       queuePaused,
+      queueHeldReason,
       submitDownload,
       submitBulkDownloads,
       retryJob,
@@ -679,6 +694,7 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
       progress,
       activeCount,
       queuePaused,
+      queueHeldReason,
       submitDownload,
       submitBulkDownloads,
       retryJob,

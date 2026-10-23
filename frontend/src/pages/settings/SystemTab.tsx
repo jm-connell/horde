@@ -3,13 +3,13 @@ import { useSettingsPage } from "./context";
 import { useAiCore } from "./ai/useAiCore";
 import ResetHordePanel from "./system/ResetHordePanel";
 import StatusSection from "./system/StatusSection";
+import StorageSection from "./system/StorageSection";
 import UpdatesSection from "./system/UpdatesSection";
 import { useSystemState } from "./useSystemState";
 import { Section } from "./ui";
 import { PANEL_BTN } from "./constants";
 import { api } from "../../api";
 import { useConfirm } from "../../context/ConfirmContext";
-import { formatSize } from "../../utils";
 import AiQueueStatus from "./AiQueueStatus";
 import BackgroundActivity from "./BackgroundActivity";
 import SystemStatsSnippet from "./SystemStatsSnippet";
@@ -43,24 +43,7 @@ export default function SystemTab() {
     <>
       <UpdatesSection system={system} />
 
-      <Section
-        title="Storage"
-        hidden={!match("storage", "disk", "space", "library")}
-      >
-        {storage ? (
-          <div className="flex items-baseline gap-3">
-            <span className="text-2xl font-bold text-gray-100">
-              {formatSize(storage.total_bytes) || "0 B"}
-            </span>
-            <span className="text-xs text-muted">
-              {storage.video_count} video
-              {storage.video_count === 1 ? "" : "s"}
-            </span>
-          </div>
-        ) : (
-          <p className="text-sm text-muted">Calculating...</p>
-        )}
-      </Section>
+      <StorageSection storage={storage} />
 
       <Section
         title="Resources"

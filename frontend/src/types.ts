@@ -116,6 +116,8 @@ export interface ProgressEvent {
   file_size?: number;
   quality_warning?: string;
   volume_warning?: string;
+  /** Why a queued job is waiting for disk space; `null` once it is not. */
+  held_reason?: string | null;
 }
 
 export interface DownloadOverrides {

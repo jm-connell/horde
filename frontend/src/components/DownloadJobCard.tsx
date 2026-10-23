@@ -44,6 +44,7 @@ import {
   canEditDownloadJobNotes,
   canManageCompletedLibraryVideo,
   canRedownloadRemovedJob,
+  heldReasonFor,
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
@@ -388,6 +389,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     }
   };
 
+  const heldReason = heldReasonFor(
+    status,
+    job.paused,
+    live?.held_reason,
+    job.held_reason
+  );
   const statusLabel = failed
     ? downloadErrorLabel(live?.error_kind ?? job.error_kind)
     : cancelled
@@ -397,9 +404,11 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
         : status === "processing"
           ? downloadProcessingLabel(live?.stage)
           : status === "queued"
-            ? job.paused || live?.status === "queued"
-              ? "Paused"
-              : "Queued"
+            ? heldReason
+              ? "Waiting"
+              : job.paused || live?.status === "queued"
+                ? "Paused"
+                : "Queued"
             : `${percent}%`;
 
   const remoteList = youtubeListThumbnailUrl(job.url, job.thumbnail_url);
@@ -598,6 +607,10 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   style={{ width: `${percent}%` }}
                 />
               </div>
+            )}
+
+            {heldReason && (
+              <p className="mb-3 text-xs text-amber-400/90">{heldReason}</p>
             )}
 
             {failed && (errorMsg || errorHint) && (

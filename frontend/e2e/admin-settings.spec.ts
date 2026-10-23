@@ -250,3 +250,47 @@ test("a promotion or demotion reaches an open page without a reload", async ({
   await expect(member.getByLabel("Progress expiry in days")).toHaveCount(0);
   await ctx.close();
 });
+
+test("the administrator can cap the library size and sees how full it is", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=system");
+  const limit = page.getByLabel("Max disk usage");
+  await expect(limit).toBeEnabled();
+  await expect(limit).toHaveValue("");
+  try {
+    await limit.fill("5");
+    await limit.blur();
+    await expect(page.getByText("Disk usage limit saved")).toBeVisible();
+    const bar = page.getByRole("progressbar", {
+      name: "Library size against the limit",
+    });
+    await expect(bar).toBeVisible();
+    await expect(page.getByText(/ of 5 GB/)).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByLabel("Max disk usage")).toHaveValue("5");
+  } finally {
+    await page.request.patch("/api/settings", {
+      headers: CSRF_HEADERS,
+      data: { max_library_bytes: null },
+    });
+  }
+  await page.reload();
+  await expect(page.getByLabel("Max disk usage")).toHaveValue("");
+  await expect(page.getByRole("progressbar")).toHaveCount(0);
+});
+
+test("members cannot set the disk usage limit", async ({
+  browser,
+  baseURL,
+}) => {
+  const ctx = await contextAs(browser, baseURL, "member");
+  const refused = await ctx.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { max_library_bytes: 5 * 1024 ** 3 },
+  });
+  expect(refused.status()).toBe(403);
+  expect((await refused.json()).code).toBe("admin_required");
+  await ctx.close();
+});
