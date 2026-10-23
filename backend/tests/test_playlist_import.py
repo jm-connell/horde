@@ -68,6 +68,39 @@ def test_import_returns_immediately_and_tags_jobs_with_playlist(
     assert _order(init_db, playlist) == [lib.id]
 
 
+def test_jobs_record_whether_a_person_or_a_subscription_queued_them(
+    init_db, playlist, queued_only, monkeypatch
+):
+    run_playlist_entries(playlist, [_url(1)], "best")
+    run_playlist_entries(playlist, [_url(2)], "best", origin="playlist_sync")
+
+    with Session(init_db["engine"]) as s:
+        origins = {j.url: j.origin for j in s.exec(select(DownloadJob)).all()}
+    assert origins == {_url(1): "manual", _url(2): "playlist_sync"}
+
+    # A subscribed playlist's sync is the second kind.
+    from app.services import playlist_sync
+
+    seen: list[str] = []
+    monkeypatch.setattr(
+        "app.services.downloads.playlist_import.run_playlist_entries",
+        lambda *_a, **kw: seen.append(kw["origin"]),
+    )
+    monkeypatch.setattr(
+        playlist_sync,
+        "extract_playlist_entries",
+        lambda _source: {"entries": [{"url": _url(3)}]},
+    )
+    with Session(init_db["engine"]) as s:
+        pl = s.get(Playlist, playlist)
+        pl.subscribed = True
+        pl.source_url = "https://www.youtube.com/playlist?list=PLx"
+        s.add(pl)
+        s.commit()
+    playlist_sync.sync_subscribed_playlist(playlist)
+    assert seen == ["playlist_sync"]
+
+
 def test_importing_a_playlist_lifts_the_deleted_skip_of_its_videos(
     init_db, playlist, queued_only
 ):

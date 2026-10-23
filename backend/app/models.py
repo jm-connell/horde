@@ -45,6 +45,14 @@ class DownloadDestination(str, Enum):
     device = "device"
 
 
+class JobOrigin(str, Enum):
+    """What queued a download job (notifications can tell watched jobs from unattended ones)."""
+
+    manual = "manual"
+    channel_autodownload = "channel_autodownload"
+    playlist_sync = "playlist_sync"
+
+
 # Foreign keys are enforced (PRAGMA foreign_keys=ON). Every FK declares what
 # happens when the parent row goes away:
 #   CASCADE  - the child only makes sense with its parent (embeddings, chat,
@@ -202,6 +210,8 @@ class DownloadJob(SQLModel, table=True):
     destination: str = Field(default=DownloadDestination.library.value)
     # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).
     device_file_path: str | None = None
+    # Who queued it: a person (manual), a channel's auto-download or a subscribed playlist.
+    origin: str = Field(default=JobOrigin.manual.value)
     replace_video_id: int | None = Field(
         default=None, foreign_key="videos.id", ondelete="SET NULL", index=True
     )

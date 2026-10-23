@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0012_share_downloads"
+HEAD = "0013_download_job_origin"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -651,6 +651,34 @@ def test_share_downloads_revision_keeps_existing_accounts_sharing(tmp_dirs):
         ]
 
 
+def test_download_job_origin_revision_marks_existing_jobs_manual(tmp_dirs):
+    """0012 -> 0013: jobs queued before the column existed were queued by a person."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0012_share_downloads")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO download_jobs (id, url, quality_preset, status, progress, "
+                "paused, normalize_volume, video_codec, destination, created_at) "
+                "VALUES (1, 'https://example.com/v', 'best', 'completed', 100, 0, 0, "
+                "'av1', 'library', '2024-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT origin FROM download_jobs")).fetchall() == [
+            ("manual",)
+        ]
+
+
 def test_tag_and_search_triggers_follow_every_writer(session, add_video):
     """Plain UPDATE/DELETE statements keep video_tags and videos_fts in step."""
     video = add_video(title="Original title", tags=["alpha"])
@@ -900,6 +928,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             DROP TABLE stream_ai_state;
             ALTER TABLE users DROP COLUMN share_downloads;
             ALTER TABLE users DROP COLUMN avatar_version;
+            ALTER TABLE download_jobs DROP COLUMN origin;
             -- playlists as it was before the owner and visibility columns
             DROP TABLE playlists;
             CREATE TABLE playlists (

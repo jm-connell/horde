@@ -16,6 +16,7 @@ from ..models import (
     ChannelCatalogVideo,
     DownloadDestination,
     DownloadJob,
+    JobOrigin,
     JobStatus,
     utcnow,
 )
@@ -245,6 +246,7 @@ def enqueue_catalog_row(
             thumbnail_url=row.thumbnail_url,
             video_codec=default_download_video_codec(),
             destination=DownloadDestination.library.value,
+            origin=JobOrigin.channel_autodownload.value,
         )
         session.add(job)
         session.commit()

@@ -8,7 +8,13 @@ from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
 from ...context import get_engine
-from ...models import DownloadDestination, DownloadJob, JobStatus, Playlist
+from ...models import (
+    DownloadDestination,
+    DownloadJob,
+    JobOrigin,
+    JobStatus,
+    Playlist,
+)
 from .. import activity
 from ..channel_catalog import skips as catalog_skips
 from ..url_clean import clean_url, youtube_thumbnail_url, youtube_video_id
@@ -26,7 +32,10 @@ logger = logging.getLogger(__name__)
 
 
 def enqueue_playlist_entry(
-    playlist_id: int, entry_url: str, quality_preset: str
+    playlist_id: int,
+    entry_url: str,
+    quality_preset: str,
+    origin: str = JobOrigin.manual.value,
 ) -> tuple[str, int | None]:
     """Resolve one playlist entry without waiting for any download.
 
@@ -73,6 +82,7 @@ def enqueue_playlist_entry(
             destination=DownloadDestination.library.value,
             playlist_id=playlist_id,
             paused=download_queue.is_paused(),
+            origin=origin,
         )
         session.add(job)
         try:
@@ -100,6 +110,7 @@ def run_playlist_entries(
     quality_preset: str,
     *,
     activity_handle: Any = None,
+    origin: str = JobOrigin.manual.value,
 ) -> None:
     """Enqueue a playlist's entries; never blocks on a download.
 
@@ -118,7 +129,9 @@ def run_playlist_entries(
     placed: set[int] = set()
     job_ids: list[int] = []
     for index, entry_url in enumerate(entries):
-        kind, ref = enqueue_playlist_entry(playlist_id, entry_url, quality_preset)
+        kind, ref = enqueue_playlist_entry(
+            playlist_id, entry_url, quality_preset, origin
+        )
         if kind == "job" and ref is not None:
             job_ids.append(ref)
         if kind == "library" and ref is not None and ref not in placed:

@@ -290,6 +290,7 @@ def test_enqueue_catalog_row_creates_job(session, monkeypatch):
     assert job.quality_preset == "1080p"
     assert "jobvid00001" in job.url
     assert job.destination == "library"
+    assert job.origin == "channel_autodownload"
 
 
 def test_autodownload_api_get_default_and_put(client, session, monkeypatch):

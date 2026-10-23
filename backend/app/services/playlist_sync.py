@@ -8,7 +8,7 @@ import threading
 from sqlmodel import Session, select
 
 from ..context import get_engine
-from ..models import Playlist, utcnow
+from ..models import JobOrigin, Playlist, utcnow
 from . import activity
 from .auth.accounts import AuthUser
 from .playlists import visible_to
@@ -37,7 +37,9 @@ def sync_subscribed_playlist(playlist_id: int) -> None:
             for e in (preview.get("entries") or [])
             if isinstance(e, dict) and e.get("url")
         ]
-        run_playlist_entries(playlist_id, entries, quality)
+        run_playlist_entries(
+            playlist_id, entries, quality, origin=JobOrigin.playlist_sync.value
+        )
         with Session(get_engine()) as session:
             playlist = session.get(Playlist, playlist_id)
             if playlist is None:
