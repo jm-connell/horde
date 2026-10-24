@@ -210,7 +210,9 @@ test("a playlist mixes downloaded and streamed videos and can leave the server",
   await expect(entries).toHaveCount(2);
   await expect(header.getByText("2 videos · 1 downloaded")).toBeVisible();
   const streamed = entries.filter({ hasText: "Ridge walk" });
-  await expect(streamed.getByText("Not downloaded")).toBeVisible();
+  await expect(
+    streamed.getByRole("button", { name: "Download", exact: true })
+  ).toBeVisible();
   // A streamed entry opens as a stream.
   await expect(streamed.getByRole("link")).toHaveAttribute(
     "href",
@@ -229,7 +231,9 @@ test("a playlist mixes downloaded and streamed videos and can leave the server",
   await dialog.getByRole("button", { name: "Remove from server" }).click();
   await expect(header.getByText("2 videos · 0 downloaded")).toBeVisible();
   await expect(
-    entries.filter({ hasText: "Cedar Notes" }).getByText("Not downloaded")
+    entries
+      .filter({ hasText: "Cedar Notes" })
+      .getByRole("button", { name: "Download", exact: true })
   ).toBeVisible();
   await expect(
     panel.getByRole("button", { name: "Download all (2)" })

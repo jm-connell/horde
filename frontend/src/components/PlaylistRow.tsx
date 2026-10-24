@@ -762,7 +762,6 @@ export default function PlaylistRow({
                             {v.title}
                           </p>
                           <p className="flex items-center gap-1.5 text-xs text-muted">
-                            {!v.downloaded && <StreamedBadge />}
                             <span className="truncate">
                               {[
                                 v.channel,
@@ -838,22 +837,26 @@ export default function PlaylistRow({
                             {body}
                           </div>
                         )}
+                        {/* The one marker of a streamed entry: Download where the
+                            viewer may, otherwise a plain label. */}
                         {!v.downloaded &&
-                          entry.url &&
-                          canEdit &&
-                          can("download") && (
+                          (entry.url && canEdit && can("download") ? (
                             <button
                               type="button"
                               onClick={() =>
                                 downloadEntryMutation.mutate(entry.url ?? "")
                               }
                               disabled={downloadEntryMutation.isPending}
-                              className="shrink-0 rounded-sm px-2 py-1 text-xs text-gray-400 hover:text-accent disabled:opacity-50"
-                              title="Download to the server"
+                              className="shrink-0 rounded-md border border-accent/50 bg-accent/10 px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/20 disabled:opacity-50"
+                              title="Not downloaded: download it to the server"
                             >
                               Download
                             </button>
-                          )}
+                          ) : (
+                            <span className="shrink-0 px-2 text-xs text-muted">
+                              Not downloaded
+                            </span>
+                          ))}
                         {v.queueEntry && (
                           <button
                             type="button"
@@ -897,14 +900,5 @@ export default function PlaylistRow({
         </Suspense>
       ) : null}
     </div>
-  );
-}
-
-/** Marks an entry that is not on the server: it plays as a stream. */
-function StreamedBadge() {
-  return (
-    <span className="shrink-0 rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-sky-300">
-      Not downloaded
-    </span>
   );
 }
