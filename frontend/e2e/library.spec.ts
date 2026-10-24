@@ -323,6 +323,19 @@ test("the Recommended tab has no sort control", async ({ page }) => {
   await expect(sort).toBeVisible();
 });
 
+test("the Recommended tab works without AI", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  // Ranked from the watch history alone: the library's videos are listed.
+  await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
+  const streams = page.getByRole("button", { name: "Include not downloaded" });
+  await expect(streams).toHaveAttribute("aria-pressed", "false");
+  await streams.click();
+  await expect(streams).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(streams).toHaveAttribute("aria-pressed", "true");
+});
+
 test("on a phone a feed card does not reserve a second title line", async ({
   page,
 }) => {

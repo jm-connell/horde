@@ -218,7 +218,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ai Recommendations */
+        /**
+         * Ai Recommendations
+         * @description The home page's "For you" shelf, or one category's videos.
+         *
+         *     "For you" works without AI (ranked from the watch history alone); the
+         *     category shelves need it.
+         */
         get: operations["ai_recommendations_api_ai_recommendations_get"];
         put?: never;
         post?: never;
@@ -6178,8 +6184,21 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * RecommendationItemRead
+         * @description A library video (``video``) or an upload that is not downloaded (``stream``).
+         */
+        RecommendationItemRead: {
+            stream?: components["schemas"]["ChannelFeedEntry"] | null;
+            video?: components["schemas"]["VideoRead"] | null;
+        };
         /** RecommendationSectionRead */
         RecommendationSectionRead: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["RecommendationItemRead"][];
             /** Kind */
             kind?: string | null;
             /** Seed Video Id */
@@ -7572,6 +7591,8 @@ export interface operations {
                 category?: string | null;
                 limit?: number;
                 offset?: number;
+                /** @description Mix in followed channels' indexed uploads that are not downloaded. */
+                include_streams?: boolean;
             };
             header?: never;
             path?: never;

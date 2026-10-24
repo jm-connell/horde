@@ -4,19 +4,36 @@ Both score whole videos (their profile vectors: metadata plus a share of the
 captions) with one matrix product over the library
 (``vector_index.video_scores``) rather than one nearest-neighbour search per
 seed or per category.
+
+"For you" also works without AI: then it ranks by what the watch history says
+about channels and tags (``_taste``), plus followed channels and freshness. It
+can also take in uploads of followed channels that are indexed but not
+downloaded (``include_streams``); they are scored on the same scale as the
+library (embeddings when AI is on, the taste otherwise) and merged in.
 """
 
 from __future__ import annotations
 
 import heapq
-from collections import Counter
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 
 import numpy as np
 from sqlmodel import Session, col, select
 
-from ...models import AiCategory, UserVideoState, Video, require_id
+from ...models import (
+    AiCategory,
+    ChannelCatalogEmbedding,
+    ChannelCatalogVideo,
+    UserVideoState,
+    Video,
+    VideoTag,
+    as_utc,
+    require_id,
+)
 from .. import app_settings, follows
+from ..channel_catalog import query as catalog_query
 from . import embeddings, vector_index
 from .provider import get_embed_provider
 
@@ -37,6 +54,19 @@ FOR_YOU_BEST_WEIGHT = 0.75
 FOLLOWED_CHANNEL_BOOST = 0.03
 # Each pick from a channel lowers that channel's next pick by this much.
 CHANNEL_REPEAT_PENALTY = 0.04
+
+# Without AI: how much each signal counts (they are each 0..1).
+TASTE_CHANNEL_WEIGHT = 0.45
+TASTE_TAG_WEIGHT = 0.25
+TASTE_FOLLOWED_WEIGHT = 0.15
+TASTE_FRESH_WEIGHT = 0.15
+# Watches that make up the taste, newest first, each counting less.
+TASTE_HISTORY = 200
+TASTE_DECAY = 0.97
+# A video's freshness halves every this many days after it was published.
+FRESH_HALF_LIFE_DAYS = 30.0
+# Undownloaded uploads considered per followed channel (its newest ones).
+STREAMS_PER_CHANNEL = 30
 
 
 def _category_min_score() -> float:
@@ -62,9 +92,20 @@ class CategoryBrowsePage:
 
 
 @dataclass
+class ForYouItem:
+    """One "For you" pick: a library video, or a followed channel's upload."""
+
+    video: Video | None = None
+    stream: ChannelCatalogVideo | None = None
+    channel: str | None = None
+
+
+@dataclass
 class ForYouPage:
     videos: list[Video]
     has_more: bool
+    #: The page in order, library videos and uploads together.
+    items: list[ForYouItem] = field(default_factory=list)
 
 
 def _hidden_video_ids(session: Session) -> set[int]:
@@ -200,95 +241,292 @@ def _diversify(scored: dict[int, float], channels: dict[int, str]) -> list[int]:
     return out
 
 
-def _ranked_for_you_ids(session: Session, *, user_id: int) -> list[int]:
+def _fresh(when: datetime | None, now: datetime) -> float:
+    if when is None:
+        return 0.0
+    days = max(0.0, (now - as_utc(when)).total_seconds() / 86400)
+    return float(0.5 ** (days / FRESH_HALF_LIFE_DAYS))
+
+
+def _published(raw: str | None) -> datetime | None:
+    """A catalog row's publish date: ISO text, or yt-dlp's YYYYMMDD."""
+    text = (raw or "").strip()
+    if not text:
+        return None
+    try:
+        if len(text) == 8 and text.isdigit():
+            return datetime.strptime(text, "%Y%m%d").replace(tzinfo=UTC)
+        return datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+@dataclass
+class _Taste:
+    """What a watch history says, each map scaled so its strongest entry is 1."""
+
+    channels: dict[str, float]
+    tags: dict[str, float]
+
+    def channel(self, name: str) -> float:
+        return self.channels.get(name, 0.0)
+
+    def tag_match(self, tags: list[str]) -> float:
+        # The three strongest shared tags; one strong match is not the whole story.
+        best = sorted((self.tags.get(t, 0.0) for t in tags), reverse=True)[:3]
+        return sum(best) / 3
+
+
+def _scaled(weights: dict[str, float]) -> dict[str, float]:
+    top = max(weights.values(), default=0.0)
+    return {k: v / top for k, v in weights.items()} if top > 0 else {}
+
+
+def _taste(session: Session, history: list[tuple[Video, UserVideoState]]) -> _Taste:
+    channels: dict[str, float] = defaultdict(float)
+    weight_of: dict[int, float] = {}
+    for rank, (video, state) in enumerate(history[:TASTE_HISTORY]):
+        weight = TASTE_DECAY**rank * _engagement(state.position_sec, video.duration_sec)
+        name = (video.channel or "").strip()
+        if name:
+            channels[name] += weight
+        weight_of[require_id(video)] = weight
+    tags: dict[str, float] = defaultdict(float)
+    if weight_of:
+        for vid, tag in session.exec(
+            select(VideoTag.video_id, VideoTag.tag).where(
+                col(VideoTag.video_id).in_(list(weight_of))
+            )
+        ).all():
+            tags[tag.lower()] += weight_of[vid]
+    return _Taste(_scaled(channels), _scaled(tags))
+
+
+def _taste_score(
+    taste: _Taste, channel: str, tags: list[str], followed: bool, fresh: float
+) -> float | None:
+    """The no-AI score, or None when nothing in the history points at it."""
+    by_channel = taste.channel(channel)
+    by_tags = taste.tag_match(tags)
+    if by_channel == 0 and by_tags == 0 and not followed:
+        return None
+    return (
+        TASTE_CHANNEL_WEIGHT * by_channel
+        + TASTE_TAG_WEIGHT * by_tags
+        + TASTE_FOLLOWED_WEIGHT * (1.0 if followed else 0.0)
+        + TASTE_FRESH_WEIGHT * fresh
+    )
+
+
+@dataclass
+class _Upload:
+    row: ChannelCatalogVideo
+    channel: str
+
+
+def _followed_uploads(
+    session: Session, followed: set[str], downloaded: set[str]
+) -> list[_Upload]:
+    """Newest indexed, not-downloaded uploads of the channels the user follows."""
+    out: list[_Upload] = []
+    for url in sorted(followed):
+        rows, name = catalog_query.visible_channel_videos(
+            session, url, limit=STREAMS_PER_CHANNEL, exclude_yt_ids=downloaded
+        )
+        for row in rows:
+            # Live and upcoming broadcasts have their own row on the home page.
+            if row.live_status in ("is_live", "is_upcoming"):
+                continue
+            out.append(_Upload(row, (name or "").strip()))
+    return out
+
+
+def _upload_vectors(
+    session: Session, uploads: dict[int, _Upload], dim: int
+) -> tuple[list[int], np.ndarray]:
+    """(keys, L2-normalised rows) of the uploads' stored embeddings of ``dim``."""
+    by_row = {require_id(u.row): key for key, u in uploads.items()}
+    keys: list[int] = []
+    rows: list[list[float]] = []
+    if by_row:
+        for emb in session.exec(
+            select(ChannelCatalogEmbedding).where(
+                col(ChannelCatalogEmbedding.catalog_video_id).in_(list(by_row))
+            )
+        ).all():
+            vec = embeddings.unpack_vector(emb.vector, emb.dim)
+            if len(vec) == dim:
+                keys.append(by_row[emb.catalog_video_id])
+                rows.append(vec)
+    matrix = np.asarray(rows, dtype=np.float32).reshape(len(rows), dim)
+    norms = np.linalg.norm(matrix, axis=1, keepdims=True)
+    return keys, matrix / np.where(norms == 0, 1, norms)
+
+
+def _ranked_for_you_ids(
+    session: Session, *, user_id: int, include_streams: bool = False
+) -> tuple[list[int], dict[int, _Upload]]:
     """Unwatched videos scored against this user's history, then the rest.
 
-    Seeds are the most recent watches, weighted by recency and by how much of
-    each the user watched. Already-watched videos are never scored; they go last
-    so infinite scroll can still page through the whole library.
+    With AI, seeds are the most recent watches, weighted by recency and by how
+    much of each the user watched; without it, the taste (``_taste``) scores
+    instead. Already-watched videos are never scored; they go last so infinite
+    scroll can still page through the whole library.
+
+    Library videos are listed by id; with ``include_streams``, a followed
+    channel's upload by the negated id of its catalog row (the second value
+    maps those keys to the uploads).
     """
-    history = session.exec(
-        select(Video, UserVideoState)
-        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
-        .where(
-            UserVideoState.user_id == user_id,
-            col(UserVideoState.last_watched_at).is_not(None),
-            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
-        )
-        .order_by(col(UserVideoState.last_watched_at).desc())
-    ).all()
+    history = list(
+        session.exec(
+            select(Video, UserVideoState)
+            .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
+            .where(
+                UserVideoState.user_id == user_id,
+                col(UserVideoState.last_watched_at).is_not(None),
+                Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+            )
+            .order_by(col(UserVideoState.last_watched_at).desc())
+        ).all()
+    )
     watched = [video.id for video, _state in history if video.id is not None]
     watched_set = set(watched)
 
-    recent = history[:FOR_YOU_SEEDS]
-    profiles = vector_index.profile_vectors(session, watched[:FOR_YOU_SEEDS])
-    seed_vectors: list[list[float]] = []
-    weights: list[float] = []
-    for rank, (video, state) in enumerate(recent):
-        vec = profiles.get(require_id(video))
-        if vec is None or (seed_vectors and len(vec) != len(seed_vectors[0])):
-            continue
-        seed_vectors.append(vec)
-        weights.append(
-            FOR_YOU_SEED_DECAY**rank
-            * _engagement(state.position_sec, video.duration_sec)
-        )
-
     library_rows = session.exec(
-        select(Video.id, Video.channel, Video.channel_url)
+        select(Video.id, Video.channel, Video.channel_url, Video.youtube_id)
         .where(Video.needs_review == False)  # noqa: E712 - SQL column comparison, not a Python truth test
         .order_by(col(Video.added_at).desc(), col(Video.id).desc())
     ).all()
-    channels = {int(v): (c or "").strip() for v, c, _u in library_rows if v is not None}
+    channels = {
+        int(row[0]): (row[1] or "").strip()
+        for row in library_rows
+        if row[0] is not None
+    }
+    followed = follows.followed_urls(session, user_id)
+    followed_videos = {
+        int(row[0])
+        for row in library_rows
+        if row[0] is not None
+        and row[2]
+        and follows.normalize_channel_url(row[2]) in followed
+    }
+    uploads: dict[int, _Upload] = {}
+    if include_streams and followed:
+        downloaded = {row[3] for row in library_rows if row[3]}
+        for upload in _followed_uploads(session, followed, downloaded):
+            uploads[-require_id(upload.row)] = upload
+            channels[-require_id(upload.row)] = upload.channel
 
     scored: dict[int, float] = {}
-    if seed_vectors:
-        video_ids, sims = vector_index.video_scores(session, seed_vectors)
-        w = np.asarray(weights, dtype=np.float32)
-        # Old or abandoned watches still count for the best match, just less.
-        best = (sims * (0.6 + 0.4 * w)).max(axis=1)
-        breadth = sims @ w / float(w.sum())
-        score = FOR_YOU_BEST_WEIGHT * best + (1 - FOR_YOU_BEST_WEIGHT) * breadth
-        relevant = sims.max(axis=1) >= FOR_YOU_MIN_SCORE
-        followed = follows.followed_urls(session, user_id)
-        followed_videos = {
-            int(v)
-            for v, _c, url in library_rows
-            if v is not None and url and follows.normalize_channel_url(url) in followed
-        }
-        for i in np.flatnonzero(relevant):
-            vid = int(video_ids[i])
-            if vid in watched_set or vid not in channels:
+    if get_embed_provider() is not None:
+        recent = history[:FOR_YOU_SEEDS]
+        profiles = vector_index.profile_vectors(session, watched[:FOR_YOU_SEEDS])
+        seed_vectors: list[list[float]] = []
+        weights: list[float] = []
+        for rank, (video, state) in enumerate(recent):
+            vec = profiles.get(require_id(video))
+            if vec is None or (seed_vectors and len(vec) != len(seed_vectors[0])):
                 continue
-            boost = FOLLOWED_CHANNEL_BOOST if vid in followed_videos else 0.0
-            scored[vid] = float(score[i]) + boost
+            seed_vectors.append(vec)
+            weights.append(
+                FOR_YOU_SEED_DECAY**rank
+                * _engagement(state.position_sec, video.duration_sec)
+            )
+        if seed_vectors:
+            w = np.asarray(weights, dtype=np.float32)
+
+            def score_rows(keys, sims, is_followed) -> None:
+                # Old or abandoned watches still count for the best match, just less.
+                best = (sims * (0.6 + 0.4 * w)).max(axis=1)
+                breadth = sims @ w / float(w.sum())
+                score = FOR_YOU_BEST_WEIGHT * best + (1 - FOR_YOU_BEST_WEIGHT) * breadth
+                for i in np.flatnonzero(sims.max(axis=1) >= FOR_YOU_MIN_SCORE):
+                    key = int(keys[i])
+                    if key in watched_set or key not in channels:
+                        continue
+                    boost = FOLLOWED_CHANNEL_BOOST if is_followed(key) else 0.0
+                    scored[key] = float(score[i]) + boost
+
+            video_ids, sims = vector_index.video_scores(session, seed_vectors)
+            score_rows(video_ids, sims, followed_videos.__contains__)
+            if uploads:
+                seeds = np.asarray(seed_vectors, dtype=np.float32)
+                seeds /= np.where(
+                    (n := np.linalg.norm(seeds, axis=1, keepdims=True)) == 0, 1, n
+                )
+                keys, matrix = _upload_vectors(session, uploads, seeds.shape[1])
+                if keys:
+                    score_rows(keys, matrix @ seeds.T, lambda _key: True)
+    else:
+        now = datetime.now(UTC)
+        taste = _taste(session, history)
+        tags_of: dict[int, list[str]] = defaultdict(list)
+        for tagged, tag in session.exec(select(VideoTag.video_id, VideoTag.tag)).all():
+            tags_of[tagged].append(tag.lower())
+        dates = session.exec(
+            select(Video.id, Video.published_at, Video.added_at).where(
+                Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
+            )
+        ).all()
+        for row_id, published_at, added_at in dates:
+            if row_id is None or row_id in watched_set:
+                continue
+            vid = int(row_id)
+            value = _taste_score(
+                taste,
+                channels[vid],
+                tags_of.get(vid, []),
+                vid in followed_videos,
+                _fresh(published_at or added_at, now),
+            )
+            if value is not None:
+                scored[vid] = value
+        for key, upload in uploads.items():
+            value = _taste_score(
+                taste,
+                upload.channel,
+                [],
+                True,
+                _fresh(_published(upload.row.published_at), now),
+            )
+            if value is not None:
+                scored[key] = value
 
     ranked = _diversify(scored, channels)
     ranked_set = set(ranked)
     # Then the unscored, unwatched rest by recency, then what the user has seen.
     ranked.extend(
-        vid for vid in channels if vid not in ranked_set and vid not in watched_set
+        key for key in channels if key not in ranked_set and key not in watched_set
     )
     ranked.extend(vid for vid in watched if vid in channels)
-    return ranked
+    return ranked, uploads
 
 
 def homepage_recommendations_page(
-    session: Session, *, user_id: int, limit: int = 24, offset: int = 0
+    session: Session,
+    *,
+    user_id: int,
+    limit: int = 24,
+    offset: int = 0,
+    include_streams: bool = False,
 ) -> ForYouPage:
     """The "For you" shelf, seeded from this user's watch history."""
-    if get_embed_provider() is None:
-        return ForYouPage([], False)
-    ranked_ids = _ranked_for_you_ids(session, user_id=user_id)
+    ranked_ids, uploads = _ranked_for_you_ids(
+        session, user_id=user_id, include_streams=include_streams
+    )
     slice_ids = ranked_ids[offset : offset + limit + 1]
     has_more = len(slice_ids) > limit
-    videos: list[Video] = []
-    for vid in slice_ids[:limit]:
-        video = session.get(Video, vid)
+    items: list[ForYouItem] = []
+    for key in slice_ids[:limit]:
+        if key < 0:
+            upload = uploads[key]
+            items.append(ForYouItem(stream=upload.row, channel=upload.channel))
+            continue
+        video = session.get(Video, key)
         if video is None or video.needs_review:
             continue
-        videos.append(video)
-    return ForYouPage(videos, has_more)
+        items.append(ForYouItem(video=video))
+    return ForYouPage([i.video for i in items if i.video is not None], has_more, items)
 
 
 def homepage_recommendations(

@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from .schemas import TagStat, VideoRead
+from .schemas import ChannelFeedEntry, TagStat, VideoRead
 
 
 class ErrorField(BaseModel):
@@ -130,11 +130,21 @@ class AiJobAction(BaseModel):
     id: int
 
 
+class RecommendationItemRead(BaseModel):
+    """A library video (``video``) or an upload that is not downloaded (``stream``)."""
+
+    video: VideoRead | None = None
+    stream: ChannelFeedEntry | None = None
+
+
 class RecommendationSectionRead(BaseModel):
     title: str
     kind: str | None = None
     seed_video_id: int | None = None
+    #: The library videos of the section.
     videos: list[VideoRead]
+    #: The section in order, undownloaded uploads included (``include_streams``).
+    items: list[RecommendationItemRead] = []
 
 
 class RecommendationsRead(BaseModel):

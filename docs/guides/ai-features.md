@@ -25,7 +25,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
 | **Chat** | Ask questions about a video (metadata + optional subs) | Chat LLM |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
-| **Recommended tab** | Home **Library / Recommended** tabs with category shelves | Embed + categories ready |
+| **Recommended tab** | Better "For you" ranking (by content) and category shelves | Embed + categories ready |
 | **Duplicate confirmation** | Score heuristic duplicate groups on Import | Chat (+ optional embed similarity) |
 
 ## Summaries
@@ -54,14 +54,16 @@ Summaries still require downloaded captions; tag enrichment does not.
 
 ## Recommended tab
 
-When AI is ready, the library home shows:
+The library home shows:
 
 - **Library** — normal grid
-- **Recommended** — "For you", ranked from your own watch history, plus category shelves
+- **Recommended** — "For you", ranked from your own watch history, plus category shelves when AI is ready
 
-**For you** favours what you watched recently and watched through, leaves out what you have already seen (it moves to the end), boosts channels you follow, and mixes channels instead of filling the row from one.
+**For you** works with AI off too. Without AI it ranks by what your history says: channels you watch a lot (recent and finished watches count most), tags shared with what you watched, channels you follow, and how new a video is. With AI it ranks by how close each video's content is to what you watched recently and watched through, which also finds videos from channels you have never opened. Either way it leaves out what you have already seen (it moves to the end) and mixes channels instead of filling the row from one.
 
-**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed with **Refresh categories**. A video is shown only under the categories it fits best, so a shelf does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Opening Recommended without providers simply won’t appear or will show empty/loading states until indexes exist.
+**Include not downloaded** (a chip beside **For you**, remembered per account) also suggests uploads of channels you follow that are not downloaded yet, marked like any other feed card with a **Download** button. They come from the channel's index, so a followed channel takes part once it has been indexed (**Index channel** on its page); with AI they are scored on the same scale as your library, from the index's embeddings.
+
+**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed with **Refresh categories**. A video is shown only under the categories it fits best, so a shelf does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
 
 ## Duplicate confirmation
 

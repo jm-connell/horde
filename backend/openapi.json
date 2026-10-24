@@ -7833,8 +7833,43 @@
         "title": "ReauthRequest",
         "type": "object"
       },
+      "RecommendationItemRead": {
+        "description": "A library video (``video``) or an upload that is not downloaded (``stream``).",
+        "properties": {
+          "stream": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelFeedEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RecommendationItemRead",
+        "type": "object"
+      },
       "RecommendationSectionRead": {
         "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RecommendationItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
           "kind": {
             "anyOf": [
               {
@@ -11106,6 +11141,7 @@
     },
     "/api/ai/recommendations": {
       "get": {
+        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it.",
         "operationId": "ai_recommendations_api_ai_recommendations_get",
         "parameters": [
           {
@@ -11145,6 +11181,18 @@
               "minimum": 0,
               "title": "Offset",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Mix in followed channels' indexed uploads that are not downloaded.",
+            "in": "query",
+            "name": "include_streams",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Mix in followed channels' indexed uploads that are not downloaded.",
+              "title": "Include Streams",
+              "type": "boolean"
             }
           }
         ],

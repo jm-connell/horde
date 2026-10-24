@@ -11,6 +11,7 @@ from sqlmodel import Session
 
 from ..auth import current_user, require_admin
 from ..context import get_session
+from ..models import require_id
 from ..response_schemas import (
     AiApplyWorkloadResult,
     AiCategoriesRead,
@@ -22,6 +23,7 @@ from ..response_schemas import (
     PausedResponse,
     RecommendationsRead,
 )
+from ..schemas import ChannelFeedEntry
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
@@ -548,25 +550,35 @@ def ai_recommendations(
     category: str | None = Query(default=None),
     limit: int = Query(default=24, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
+    include_streams: bool = Query(
+        default=False,
+        description="Mix in followed channels' indexed uploads that are not downloaded.",
+    ),
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    status = build_status()
-    if not status.ready:
-        raise HTTPException(status_code=503, detail="AI not ready")
+    """The home page's "For you" shelf, or one category's videos.
 
+    "For you" works without AI (ranked from the watch history alone); the
+    category shelves need it.
+    """
+    ai_ready = build_status().ready
     if category:
+        if not ai_ready:
+            raise HTTPException(status_code=503, detail="AI not ready")
         result = recommend.videos_for_category(
             session, category, limit=limit, offset=offset
         )
         sections: list[dict[str, Any]] = []
         if result.videos:
+            reads = _to_read_many(result.videos, session, viewer=user)
             sections.append(
                 {
                     "title": "",
                     "kind": "category",
                     "seed_video_id": None,
-                    "videos": _to_read_many(result.videos, session, viewer=user),
+                    "videos": reads,
+                    "items": [{"video": r} for r in reads],
                 }
             )
         return {
@@ -576,19 +588,46 @@ def ai_recommendations(
         }
 
     page = recommend.homepage_recommendations_page(
-        session, user_id=user.id, limit=limit, offset=offset
+        session,
+        user_id=user.id,
+        limit=limit,
+        offset=offset,
+        include_streams=include_streams,
     )
+    reads = _to_read_many(page.videos, session, viewer=user)
+    read_by_id = {r.id: r for r in reads}
+    items: list[dict[str, Any]] = []
+    for item in page.items:
+        if item.video is not None:
+            items.append({"video": read_by_id[require_id(item.video)]})
+        elif item.stream is not None:
+            items.append(
+                {
+                    "stream": ChannelFeedEntry(
+                        id=item.stream.yt_id,
+                        url=item.stream.url,
+                        title=item.stream.title,
+                        duration=item.stream.duration,
+                        thumbnail_url=item.stream.thumbnail_url,
+                        view_count=item.stream.view_count,
+                        published_at=item.stream.published_at,
+                        channel=item.channel or None,
+                        live_status=item.stream.live_status,
+                    )
+                }
+            )
     return {
-        "categories": recommend.list_categories(session),
+        "categories": recommend.list_categories(session) if ai_ready else [],
         "sections": [
             {
                 "title": "",
                 "kind": "for_you",
                 "seed_video_id": None,
-                "videos": _to_read_many(page.videos, session, viewer=user),
+                "videos": reads,
+                "items": items,
             }
         ]
-        if page.videos
+        if items
         else [],
         "has_more": page.has_more,
     }

@@ -3,12 +3,41 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { aiStatusQuery } from "../queries/status";
 import { useAuth } from "../context/AuthContext";
+import { useDownloads } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
+import { useSettings } from "../hooks/useSettings";
+import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
-import type { Video } from "../types";
+import type {
+  ChannelFeedEntry,
+  RecommendationsResponse,
+  Video,
+} from "../types";
 
 const PAGE_SIZE = 24;
+
+/** One card: a library video, or a followed channel's upload not downloaded. */
+type RecItem =
+  | { key: string; video: Video; stream?: undefined }
+  | { key: string; video?: undefined; stream: ChannelFeedEntry };
+
+function recItems(data: RecommendationsResponse): RecItem[] {
+  return data.sections.flatMap((section) =>
+    (section.items ?? []).flatMap((item): RecItem[] =>
+      item.video
+        ? [{ key: `v${item.video.id}`, video: item.video }]
+        : item.stream
+          ? [
+              {
+                key: `s${item.stream.id ?? item.stream.url}`,
+                stream: item.stream,
+              },
+            ]
+          : []
+    )
+  );
+}
 
 export default function RecommendedHome({
   sidebarCollapsed,
@@ -19,8 +48,12 @@ export default function RecommendedHome({
   // Re-running the category job is AI worker control (administrators).
   const { isAdmin } = useAuth();
   const queryClient = useQueryClient();
+  const [settings, updateSettings] = useSettings();
+  const includeStreams = settings.recommendStreams;
+  const { submitDownload } = useDownloads();
+  const [downloading, setDownloading] = useState<Set<string>>(new Set());
   const [categories, setCategories] = useState<string[]>([]);
-  const [feedVideos, setFeedVideos] = useState<Video[]>([]);
+  const [feedVideos, setFeedVideos] = useState<RecItem[]>([]);
   const [feedOffset, setFeedOffset] = useState(0);
   const [feedHasMore, setFeedHasMore] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
@@ -76,20 +109,19 @@ export default function RecommendedHome({
       .getRecommendations(activeCategory || undefined, {
         limit: PAGE_SIZE,
         offset: 0,
+        includeStreams,
       })
       .then((data) => {
         if (!active) return;
         setCategories(data.categories);
-        const vids = data.sections.flatMap((s) => s.videos);
+        const vids = recItems(data);
         setFeedVideos(vids);
         setFeedOffset(vids.length);
         setFeedHasMore(Boolean(data.has_more));
       })
       .catch(() => {
         if (!active) return;
-        setError(
-          "Could not load recommendations. Index more videos in Settings → AI."
-        );
+        setError("Could not load recommendations.");
         setFeedVideos([]);
       })
       .finally(() => {
@@ -98,7 +130,7 @@ export default function RecommendedHome({
     return () => {
       active = false;
     };
-  }, [activeCategory, reloadKey]);
+  }, [activeCategory, reloadKey, includeStreams]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !feedHasMore) return;
@@ -107,11 +139,12 @@ export default function RecommendedHome({
       const data = await api.getRecommendations(activeCategory || undefined, {
         limit: PAGE_SIZE,
         offset: feedOffset,
+        includeStreams,
       });
-      const vids = data.sections.flatMap((s) => s.videos);
+      const vids = recItems(data);
       setFeedVideos((prev) => {
-        const seen = new Set(prev.map((v) => v.id));
-        return [...prev, ...vids.filter((v) => !seen.has(v.id))];
+        const seen = new Set(prev.map((v) => v.key));
+        return [...prev, ...vids.filter((v) => !seen.has(v.key))];
       });
       setFeedOffset((o) => o + vids.length);
       setFeedHasMore(Boolean(data.has_more && vids.length > 0));
@@ -120,7 +153,29 @@ export default function RecommendedHome({
     } finally {
       setLoadingMore(false);
     }
-  }, [activeCategory, loadingMore, feedHasMore, feedOffset]);
+  }, [activeCategory, loadingMore, feedHasMore, feedOffset, includeStreams]);
+
+  const downloadStream = (entry: ChannelFeedEntry) => {
+    if (!entry.url || downloading.has(entry.url)) return;
+    setDownloading((prev) => new Set(prev).add(entry.url));
+    void submitDownload(entry.url, "1080p", {
+      title: entry.title ?? undefined,
+      channel: entry.channel ?? "Unknown channel",
+    })
+      .then(() => showToast("Download queued"))
+      .catch((err: unknown) =>
+        showError(
+          err instanceof Error ? err.message : "Could not start download"
+        )
+      )
+      .finally(() =>
+        setDownloading((prev) => {
+          const next = new Set(prev);
+          next.delete(entry.url);
+          return next;
+        })
+      );
+  };
 
   useEffect(() => {
     if (!feedHasMore) return;
@@ -234,6 +289,19 @@ export default function RecommendedHome({
             ›
           </button>
         )}
+        {showForYou && (
+          <button
+            type="button"
+            aria-pressed={includeStreams}
+            onClick={() =>
+              updateSettings({ recommendStreams: !includeStreams })
+            }
+            title="Also suggest uploads from channels you follow that are not downloaded (channels you have indexed)"
+            className={chipClass(includeStreams)}
+          >
+            Include not downloaded
+          </button>
+        )}
         {showForYou && isAdmin && (
           <button
             type="button"
@@ -265,9 +333,22 @@ export default function RecommendedHome({
       ) : (
         <>
           <div className={gridClass}>
-            {feedVideos.map((v) => (
-              <VideoCard key={v.id} video={v} layout="feed" />
-            ))}
+            {feedVideos.map((item) =>
+              item.video ? (
+                <VideoCard key={item.key} video={item.video} layout="feed" />
+              ) : (
+                <ChannelFeedCard
+                  key={item.key}
+                  entry={item.stream}
+                  channelName={item.stream.channel || "Unknown channel"}
+                  layout="grid"
+                  inLibrary={false}
+                  onDownload={() => downloadStream(item.stream)}
+                  downloading={downloading.has(item.stream.url)}
+                  skipRemotePreview
+                />
+              )
+            )}
           </div>
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}

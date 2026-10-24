@@ -122,10 +122,11 @@ export const aiApi = {
 
   getRecommendations(
     category?: string,
-    opts?: { limit?: number; offset?: number }
+    opts?: { limit?: number; offset?: number; includeStreams?: boolean }
   ): Promise<RecommendationsResponse> {
     const params = new URLSearchParams();
     if (category) params.set("category", category);
+    if (opts?.includeStreams) params.set("include_streams", "true");
     if (opts?.limit != null) params.set("limit", String(opts.limit));
     if (opts?.offset != null) params.set("offset", String(opts.offset));
     const qs = params.toString() ? `?${params}` : "";

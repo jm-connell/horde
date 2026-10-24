@@ -686,3 +686,85 @@ def test_related_pages_are_one_ranking_when_scores_are_close(
     by_eight = [vid for offset in range(0, 48, 8) for vid in page(offset, 8)]
     assert by_eight == page(0, 24) + page(24, 24)
     assert len(set(by_eight)) == 48
+
+
+# --- "For you" without AI, and followed channels' uploads -----------------------
+
+
+def _for_you_items(client, **params) -> list[tuple[str, str]]:
+    res = client.get("/api/ai/recommendations", params={"limit": 50, **params})
+    assert res.status_code == 200, res.text
+    sections = res.json()["sections"]
+    items = sections[0]["items"] if sections else []
+    return [
+        ("video", i["video"]["title"])
+        if i["video"]
+        else ("stream", i["stream"]["title"])
+        for i in items
+    ]
+
+
+def test_for_you_without_ai_ranks_by_watched_channels_and_tags(
+    client, session, add_video, admin_user, set_watch
+):
+    now = datetime.now(UTC)
+    seen = add_video(title="Seen", channel="Loved", tags=["kiln"])
+    set_watch(admin_user, seen, 0, now)  # finished
+    add_video(title="More from Loved", channel="Loved")
+    add_video(title="Also kilns", channel="Other", tags=["kiln"])
+    add_video(title="Unrelated", channel="Nobody")
+
+    titles = [t for _kind, t in _for_you_items(client)]
+    assert titles == ["More from Loved", "Also kilns", "Unrelated", "Seen"]
+    # Categories need AI; the shelf does not.
+    assert client.get("/api/ai/recommendations").json()["categories"] == []
+
+
+def test_for_you_mixes_in_followed_channels_uploads_on_request(
+    client, session, add_video, admin_user, set_watch
+):
+    from app.models import ChannelCatalog, ChannelCatalogStatus, ChannelCatalogVideo
+    from app.services import follows
+
+    url = "https://www.youtube.com/@loved"
+    seen = add_video(
+        title="Seen", channel="Loved", channel_url=url, source_url=_yt("haveitttt01")
+    )
+    set_watch(admin_user, seen, 0, datetime.now(UTC))
+    follows.follow(session, admin_user.id, url, "Loved")
+    catalog = ChannelCatalog(
+        channel_url=url, channel_name="Loved", status=ChannelCatalogStatus.ready
+    )
+    session.add(catalog)
+    session.commit()
+    recent = datetime.now(UTC).strftime("%Y%m%d")
+    for pos, (yt_id, title, live) in enumerate(
+        [
+            ("liveeeeeee1", "Live right now", "is_live"),  # the Live row has it
+            ("haveitttt01", "Seen", None),  # downloaded: the library copy is listed
+            ("newupload01", "New upload", None),
+        ]
+    ):
+        session.add(
+            ChannelCatalogVideo(
+                catalog_id=catalog.id,
+                yt_id=yt_id,
+                url=_yt(yt_id),
+                title=title,
+                duration=600.0,
+                position=pos,
+                published_at=recent,
+                live_status=live,
+            )
+        )
+    session.commit()
+
+    assert ("stream", "New upload") not in _for_you_items(client)
+    assert _for_you_items(client, include_streams=True) == [
+        ("stream", "New upload"),
+        ("video", "Seen"),
+    ]
+
+
+def _yt(yt_id: str) -> str:
+    return f"https://www.youtube.com/watch?v={yt_id}"
