@@ -115,7 +115,7 @@ export interface PlaybackLayout {
 
 export interface PlaybackActions {
   setMode: (mode: ViewMode) => void;
-  playVideo: (video: Video, opts?: { queue?: Video[] }) => void;
+  playVideo: (video: Video, opts?: { queue?: QueueEntry[] }) => void;
   playStream: (session: StreamSession) => void;
   /** Latest stream playback position (seconds). */
   getStreamPosition: () => number;
@@ -420,7 +420,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const playVideo = useCallback(
-    (opened: Video, opts?: { queue?: Video[] }) => {
+    (opened: Video, opts?: { queue?: QueueEntry[] }) => {
       const from = startPosition(opened);
       const video =
         from === opened.last_position_sec

@@ -23,6 +23,16 @@ export function usePlaylists(enabled = true) {
   return { ...query, playlists, editable };
 }
 
+/** What Download all / Remove from server would do; read while a row is open. */
+export function usePlaylistServerCopies(id: number, enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.playlists.serverCopies(id),
+    queryFn: ({ signal }) => api.playlistServerCopies(id, { signal }),
+    enabled,
+    staleTime: 0,
+  });
+}
+
 /** One playlist with its videos; read while its row is open. */
 export function usePlaylistDetail(id: number, enabled: boolean) {
   return useQuery({
@@ -70,6 +80,8 @@ export function mergePlaylist(
             visibility: next.visibility,
             owner: next.owner,
             can_edit: next.can_edit,
+            downloaded_count: next.downloaded_count,
+            cover_youtube_id: next.cover_youtube_id,
           }
         : row
     )
@@ -77,7 +89,13 @@ export function mergePlaylist(
   if (!detail) return;
   queryClient.setQueryData<PlaylistDetail>(
     queryKeys.playlists.detail(next.id),
-    (cached) => cached && { ...cached, ...next, videos: cached.videos }
+    (cached) =>
+      cached && {
+        ...cached,
+        ...next,
+        videos: cached.videos,
+        entries: cached.entries,
+      }
   );
 }
 

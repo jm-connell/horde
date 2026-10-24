@@ -290,6 +290,8 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             channel="Northwind",
             tags=json.dumps(["ambient"]),
             file_path="Northwind/2024/Cedar Notes.mp4",
+            # A YouTube link: removed from the server, it stays in its playlist.
+            source_url="https://www.youtube.com/watch?v=e2ecedar001",
             duration_sec=200,
             height_px=1080,
         )
@@ -378,6 +380,35 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
                 playlist_id=require_id(playlist),
                 video_id=require_id(harbor),
                 position=1,
+            )
+        )
+        # One downloaded video and one that is only streamed.
+        later = Playlist(
+            name="Watch later",
+            source_type=PlaylistSource.user,
+            position=1,
+            owner_user_id=require_id(admin),
+        )
+        session.add(later)
+        session.commit()
+        session.refresh(later)
+        session.add(
+            PlaylistItem(
+                playlist_id=require_id(later),
+                video_id=require_id(cedar),
+                position=0,
+            )
+        )
+        session.add(
+            PlaylistItem(
+                playlist_id=require_id(later),
+                video_id=None,
+                position=1,
+                youtube_id="e2estream01",
+                url="https://www.youtube.com/watch?v=e2estream01",
+                title="Ridge walk",
+                channel="Northwind",
+                duration_sec=240.0,
             )
         )
         session.add(

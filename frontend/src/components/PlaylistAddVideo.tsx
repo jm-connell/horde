@@ -1,7 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { api } from "../api";
 import { clipboardEventToText, clipboardTextToUrl } from "../clipboard";
-import { useDownloads } from "../context/DownloadContext";
 import type { PlaylistDetail, Video } from "../types";
 import { formatPublishedAt, joinDotList } from "../utils";
 import Collapse from "./Collapse";
@@ -32,11 +31,7 @@ export default function PlaylistAddVideo({
   active: boolean;
   onAdded: (next: PlaylistDetail) => void;
 }) {
-  const { refreshJobs, onJobCompleted } = useDownloads();
   const inputRef = useRef<HTMLInputElement>(null);
-  const pendingDownloads = useRef(0);
-  const onAddedRef = useRef(onAdded);
-  onAddedRef.current = onAdded;
   const listId = useId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -81,18 +76,6 @@ export default function PlaylistAddVideo({
     const t = window.setTimeout(() => inputRef.current?.focus(), 160);
     return () => window.clearTimeout(t);
   }, [open]);
-
-  useEffect(() => {
-    return onJobCompleted((videoId) => {
-      if (pendingDownloads.current <= 0) return;
-      pendingDownloads.current -= 1;
-      if (!videoId) return;
-      api
-        .getPlaylist(playlistId)
-        .then((next) => onAddedRef.current(next))
-        .catch(() => undefined);
-    });
-  }, [onJobCompleted, playlistId]);
 
   const libraryUrlHit = useMemo(() => {
     if (library == null || !looksLikeDownloadUrl(query)) return null;
@@ -183,28 +166,19 @@ export default function PlaylistAddVideo({
     }
   };
 
+  // A link that is not in the library joins as a streamed entry; the
+  // playlist row offers to download it.
   const queueUrl = async (url: string) => {
     setBusy(true);
     setError(null);
     try {
       const next = await api.addUrlToPlaylist(playlistId, url);
-      const addedExisting = next.videos.some(
-        (video) => !memberIds.has(video.id)
-      );
       onAdded(next);
       setQuery("");
       setLinkPreview(null);
-      if (addedExisting) {
-        setStatus(null);
-        return;
-      }
-      pendingDownloads.current += 1;
-      refreshJobs();
-      setStatus(
-        "Download started — the video will appear here when it finishes."
-      );
+      setStatus(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not queue download");
+      setError(err instanceof Error ? err.message : "Could not add video");
     } finally {
       setBusy(false);
     }
@@ -243,8 +217,9 @@ export default function PlaylistAddVideo({
   ) => {
     const title =
       linkPreview?.title?.trim() ||
-      (linkPreviewing ? "Looking up…" : "Download and add");
+      (linkPreviewing ? "Looking up…" : "Add this link");
     const meta = joinDotList([
+      "Not downloaded",
       linkPreview?.channel,
       formatPublishedAt(
         linkPreview?.published_at,

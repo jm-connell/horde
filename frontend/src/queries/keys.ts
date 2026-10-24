@@ -71,6 +71,7 @@ export const queryKeys = {
     all: ["playlists"] as const,
     list: ["playlists", "list"] as const,
     detail: (id: number) => ["playlists", "detail", id] as const,
+    serverCopies: (id: number) => ["playlists", "server-copies", id] as const,
   },
   history: {
     all: ["history"] as const,

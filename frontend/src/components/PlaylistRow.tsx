@@ -4,7 +4,12 @@ import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { describeError } from "../apiErrors";
 import { Link, useNavigate } from "react-router-dom";
-import { api, listThumbnailUrl, playlistCoverUrl } from "../api";
+import {
+  api,
+  listThumbnailUrl,
+  playlistCoverUrl,
+  trashEntryIdsOfError,
+} from "../api";
 import Collapse from "./Collapse";
 import { ImageCropModal } from "./lazy";
 import LoadingIndicator from "./LoadingIndicator";
@@ -18,14 +23,25 @@ import {
 } from "./playlistChrome";
 import { useConfirm } from "../context/ConfirmContext";
 import { usePlaybackActions } from "../context/PlaybackContext";
+import { isQueuedStream } from "../context/playbackQueue";
 import { queryKeys } from "../queries/keys";
 import {
   mergePlaylist,
   setPlaylistDetail,
   usePlaylistDetail,
+  usePlaylistServerCopies,
 } from "../queries/playlists";
-import type { Playlist, Video } from "../types";
-import { formatDuration, formatRelative, moveItem, safeHref } from "../utils";
+import { deleteErrorMessage, useAfterDelete } from "../queries/trash";
+import { videoCount as videoCountLabel } from "../trash";
+import type { Playlist, PlaylistEntry } from "../types";
+import {
+  formatDuration,
+  formatRelative,
+  formatSize,
+  moveItem,
+  safeHref,
+} from "../utils";
+import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
 
@@ -56,7 +72,8 @@ export default function PlaylistRow({
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { showError } = useToast();
-  const { playVideo, addToQueue } = usePlaybackActions();
+  const afterDelete = useAfterDelete();
+  const { playVideo, addToQueue, clearQueue } = usePlaybackActions();
   const headerRef = useRef<HTMLDivElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
@@ -77,6 +94,13 @@ export default function PlaylistRow({
   const canEdit = playlist.can_edit;
   const isOwner = user != null && playlist.owner?.id === user.id;
   const current = detailQuery.data ?? null;
+  const entries = current?.entries ?? [];
+  const views = entries.map(playlistEntryView);
+  const copiesQuery = usePlaylistServerCopies(
+    playlist.id,
+    open && (can("download") || can("delete_videos"))
+  );
+  const copies = copiesQuery.data ?? null;
   const coverSrc = playlistCoverUrl(playlist);
   const coverSrcBusted =
     coverSrc && playlist.has_custom_cover && coverRev
@@ -84,9 +108,14 @@ export default function PlaylistRow({
       : coverSrc;
 
   const reload = () =>
-    queryClient.invalidateQueries({
-      queryKey: queryKeys.playlists.detail(playlist.id),
-    });
+    Promise.all([
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.playlists.detail(playlist.id),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.playlists.serverCopies(playlist.id),
+      }),
+    ]);
 
   // A freshly read playlist also refreshes its row in the list (video count, cover).
   const loaded = detailQuery.data;
@@ -111,21 +140,94 @@ export default function PlaylistRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when the editor opens, not on every rename
   }, [editing]);
 
+  const playable = views.flatMap((v) => (v.queueEntry ? [v.queueEntry] : []));
   const playAll = () => {
-    if (!current || current.videos.length === 0) return;
-    const [first, ...rest] = current.videos;
-    playVideo(first, { queue: rest });
-    navigate(`/watch/${first.id}`);
+    const [first, ...rest] = playable;
+    if (!first) return;
+    if (isQueuedStream(first)) {
+      // Not downloaded: its watch page plays it; the rest wait in the queue.
+      clearQueue();
+      rest.forEach(addToQueue);
+      navigate(first.href);
+    } else {
+      playVideo(first, { queue: rest });
+      navigate(`/watch/${first.id}`);
+    }
   };
 
   const removeMutation = useMutation({
-    mutationFn: (videoId: number) =>
-      api.removeFromPlaylist(playlist.id, videoId),
+    mutationFn: (entryId: number) =>
+      api.removePlaylistEntry(playlist.id, entryId),
     onError: (err) =>
       showError(`Could not remove video: ${describeError(err)}`),
     onSettled: () => reload(),
   });
-  const remove = (videoId: number) => removeMutation.mutate(videoId);
+  const remove = (entryId: number) => removeMutation.mutate(entryId);
+
+  const downloadEntryMutation = useMutation({
+    mutationFn: (url: string) =>
+      api.addUrlToPlaylist(playlist.id, url, { download: true }),
+    onSuccess: () =>
+      setSyncMessage(
+        "Download started — the video stays here and plays from the server when it finishes."
+      ),
+    onError: (err) => showError(`Could not download: ${describeError(err)}`),
+  });
+
+  const downloadAllMutation = useMutation({
+    mutationFn: () => api.downloadPlaylist(playlist.id),
+    onSuccess: ({ queued, skipped }) => {
+      setSyncMessage(
+        queued
+          ? `Downloading ${videoCountLabel(queued)} to the server${
+              skipped ? ` (${skipped} could not be queued)` : ""
+            }.`
+          : "Nothing could be queued."
+      );
+      void reload();
+    },
+    onError: (err) => showError(`Could not download: ${describeError(err)}`),
+  });
+
+  const [removingDownloads, setRemovingDownloads] = useState(false);
+  const removeDownloads = async () => {
+    if (!copies || copies.removable_video_ids.length === 0) return;
+    const ids = copies.removable_video_ids;
+    const ok = await confirm({
+      title: "Remove these videos from the server?",
+      body:
+        `${videoCountLabel(ids.length)} (${formatSize(copies.removable_bytes)}) ` +
+        "will be deleted from the server. The playlist keeps them, to stream or download again later." +
+        (copies.shared
+          ? ` ${videoCountLabel(copies.shared)} also in other playlists stay downloaded.`
+          : ""),
+      confirmLabel: "Remove from server",
+      danger: true,
+    });
+    if (!ok) return;
+    setRemovingDownloads(true);
+    try {
+      const { trashEntryIds } = await api.bulkDeleteVideos(ids, true);
+      afterDelete(
+        trashEntryIds,
+        trashEntryIds.length
+          ? `Moved ${videoCountLabel(trashEntryIds.length)} to the trash`
+          : `Deleted ${videoCountLabel(ids.length)}`
+      );
+    } catch (err) {
+      const moved = trashEntryIdsOfError(err);
+      if (moved.length) {
+        afterDelete(
+          moved,
+          `Moved ${videoCountLabel(moved.length)} to the trash`
+        );
+      }
+      showError(deleteErrorMessage(err, "Could not remove the videos"));
+    } finally {
+      setRemovingDownloads(false);
+      void reload();
+    }
+  };
 
   const deleteMutation = useMutation({
     mutationFn: () => api.deletePlaylist(playlist.id),
@@ -221,24 +323,24 @@ export default function PlaylistRow({
   };
 
   const orderMutation = useMutation({
-    mutationFn: (videos: Video[]) =>
+    mutationFn: (next: PlaylistEntry[]) =>
       api.reorderPlaylist(
         playlist.id,
-        videos.map((v) => v.id)
+        next.map((e) => e.id)
       ),
-    onMutate: (videos) => {
+    onMutate: (next) => {
       if (current) {
         queryClient.setQueryData(queryKeys.playlists.detail(playlist.id), {
           ...current,
-          videos,
+          entries: next,
         });
       }
     },
     onSuccess: (next) => setPlaylistDetail(queryClient, next),
     onError: () => void reload(),
   });
-  const commitVideoOrder = (videos: Video[]) => {
-    if (current) orderMutation.mutate(videos);
+  const commitEntryOrder = (next: PlaylistEntry[]) => {
+    if (current) orderMutation.mutate(next);
   };
 
   const actionBusy =
@@ -252,7 +354,10 @@ export default function PlaylistRow({
     : youtubeImported
       ? " · imported from YouTube"
       : "";
-  const videoCount = current?.videos.length ?? playlist.item_count;
+  const videoCount = current ? entries.length : playlist.item_count;
+  const downloadedCount = current
+    ? views.filter((v) => v.downloaded).length
+    : playlist.downloaded_count;
   const coverPinned =
     playlist.has_custom_cover || playlist.cover_video_id != null;
 
@@ -343,6 +448,9 @@ export default function PlaylistRow({
                 </span>
               )}
               {videoCount} video{videoCount === 1 ? "" : "s"}
+              {downloadedCount < videoCount
+                ? ` · ${downloadedCount} downloaded`
+                : ""}
               {sourceHint}
               {playlist.visibility === "public" && playlist.owner && !isOwner
                 ? ` · by ${playlist.owner.username}`
@@ -407,7 +515,7 @@ export default function PlaylistRow({
                   <button
                     type="button"
                     onClick={playAll}
-                    disabled={!current || current.videos.length === 0}
+                    disabled={playable.length === 0}
                     className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
                   >
                     Play all
@@ -434,6 +542,33 @@ export default function PlaylistRow({
                   )}
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                  {canEdit &&
+                    can("download") &&
+                    copies &&
+                    copies.missing > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => downloadAllMutation.mutate()}
+                        disabled={downloadAllMutation.isPending}
+                        title="Download every video that is not on the server yet"
+                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent disabled:opacity-50"
+                      >
+                        Download all ({copies.missing})
+                      </button>
+                    )}
+                  {can("delete_videos") &&
+                    copies &&
+                    copies.removable_video_ids.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void removeDownloads()}
+                        disabled={removingDownloads}
+                        title="Delete the downloaded copies; the playlist keeps its videos"
+                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50"
+                      >
+                        Remove from server
+                      </button>
+                    )}
                   {canEdit && playlist.subscribed && (
                     <button
                       type="button"
@@ -595,7 +730,7 @@ export default function PlaylistRow({
               )}
 
               <div className="mt-3 space-y-2">
-                {!current || current.videos.length === 0 ? (
+                {!current ? null : views.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."
@@ -604,13 +739,50 @@ export default function PlaylistRow({
                         : "No videos yet."}
                   </p>
                 ) : (
-                  current.videos.map((v, i) => {
-                    const thumb = v.has_thumbnail
-                      ? listThumbnailUrl(v.id)
-                      : null;
+                  views.map((v, i) => {
+                    const body = (
+                      <>
+                        <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-sm bg-ink-800">
+                          {v.thumb && (
+                            <img
+                              loading="lazy"
+                              decoding="async"
+                              width={96}
+                              height={56}
+                              src={v.thumb}
+                              alt=""
+                              className={`h-full w-full object-cover ${
+                                v.downloaded ? "" : "opacity-80"
+                              }`}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-gray-100">
+                            {v.title}
+                          </p>
+                          <p className="flex items-center gap-1.5 text-xs text-muted">
+                            {!v.downloaded && <StreamedBadge />}
+                            <span className="truncate">
+                              {[
+                                v.channel,
+                                v.durationSec != null
+                                  ? formatDuration(v.durationSec)
+                                  : null,
+                              ]
+                                .filter(Boolean)
+                                .join(" · ")}
+                            </span>
+                          </p>
+                        </div>
+                      </>
+                    );
+                    const entry = entries[i];
                     return (
                       <div
                         key={v.id}
+                        data-horde="playlist-entry"
+                        data-downloaded={v.downloaded ? "true" : "false"}
                         onDragOver={(event) => {
                           if (videoDragIndex.current == null) return;
                           event.preventDefault();
@@ -625,10 +797,11 @@ export default function PlaylistRow({
                           videoDragIndex.current = null;
                           setVideoDragOver(null);
                           if (!current) return;
-                          const next = moveItem(current.videos, from, i);
-                          commitVideoOrder(next);
+                          commitEntryOrder(moveItem(entries, from, i));
                         }}
-                        className={`flex items-center gap-1 rounded-lg bg-ink-950/70 p-2 ring-1 ${
+                        className={`flex items-center gap-1 rounded-lg p-2 ring-1 ${
+                          v.downloaded ? "bg-ink-950/70" : "bg-ink-950/40"
+                        } ${
                           videoDragOver === i
                             ? "ring-accent/60"
                             : "ring-ink-800"
@@ -653,40 +826,46 @@ export default function PlaylistRow({
                         <span className="w-6 shrink-0 text-center text-sm text-muted">
                           {i + 1}
                         </span>
-                        <Link
-                          to={`/watch/${v.id}`}
-                          className="flex min-w-0 flex-1 items-center gap-3"
-                        >
-                          <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-sm bg-ink-800">
-                            {thumb && (
-                              <img
-                                loading="lazy"
-                                decoding="async"
-                                width={96}
-                                height={56}
-                                src={thumb}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            )}
+                        {v.href ? (
+                          <Link
+                            to={v.href}
+                            className="flex min-w-0 flex-1 items-center gap-3"
+                          >
+                            {body}
+                          </Link>
+                        ) : (
+                          <div className="flex min-w-0 flex-1 items-center gap-3">
+                            {body}
                           </div>
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-gray-100">
-                              {v.title}
-                            </p>
-                            <p className="text-xs text-muted">
-                              {v.channel} · {formatDuration(v.duration_sec)}
-                            </p>
-                          </div>
-                        </Link>
-                        <button
-                          type="button"
-                          onClick={() => addToQueue(v)}
-                          className="shrink-0 rounded-sm px-2 py-1 text-xs text-gray-400 hover:text-accent"
-                          title="Add to queue"
-                        >
-                          + Queue
-                        </button>
+                        )}
+                        {!v.downloaded &&
+                          entry.url &&
+                          canEdit &&
+                          can("download") && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                downloadEntryMutation.mutate(entry.url ?? "")
+                              }
+                              disabled={downloadEntryMutation.isPending}
+                              className="shrink-0 rounded-sm px-2 py-1 text-xs text-gray-400 hover:text-accent disabled:opacity-50"
+                              title="Download to the server"
+                            >
+                              Download
+                            </button>
+                          )}
+                        {v.queueEntry && (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              v.queueEntry && addToQueue(v.queueEntry)
+                            }
+                            className="shrink-0 rounded-sm px-2 py-1 text-xs text-gray-400 hover:text-accent"
+                            title="Add to queue"
+                          >
+                            + Queue
+                          </button>
+                        )}
                         {canEdit && (
                           <button
                             type="button"
@@ -718,5 +897,14 @@ export default function PlaylistRow({
         </Suspense>
       ) : null}
     </div>
+  );
+}
+
+/** Marks an entry that is not on the server: it plays as a stream. */
+function StreamedBadge() {
+  return (
+    <span className="shrink-0 rounded-full border border-sky-500/40 bg-sky-500/10 px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-sky-300">
+      Not downloaded
+    </span>
   );
 }

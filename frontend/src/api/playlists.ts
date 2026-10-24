@@ -1,6 +1,7 @@
 import type {
   Playlist,
   PlaylistDetail,
+  PlaylistServerCopies,
   PlaylistPreviewData,
   PlaylistVisibility,
 } from "../types";
@@ -62,11 +63,16 @@ export const playlistsApi = {
     });
   },
 
-  addUrlToPlaylist(playlistId: number, url: string): Promise<PlaylistDetail> {
+  /** A link not in the library is added to be streamed unless `download` is set. */
+  addUrlToPlaylist(
+    playlistId: number,
+    url: string,
+    { download = false }: { download?: boolean } = {}
+  ): Promise<PlaylistDetail> {
     return request<PlaylistDetail>(`/api/playlists/${playlistId}/items`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url, download }),
     });
   },
 
@@ -78,20 +84,39 @@ export const playlistsApi = {
     });
   },
 
-  removeFromPlaylist(playlistId: number, videoId: number): Promise<void> {
-    return request<void>(`/api/playlists/${playlistId}/items/${videoId}`, {
+  removePlaylistEntry(playlistId: number, entryId: number): Promise<void> {
+    return request<void>(`/api/playlists/${playlistId}/entries/${entryId}`, {
       method: "DELETE",
     });
   },
 
   reorderPlaylist(
     playlistId: number,
-    videoIds: number[]
+    entryIds: number[]
   ): Promise<PlaylistDetail> {
     return request<PlaylistDetail>(`/api/playlists/${playlistId}/reorder`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ video_ids: videoIds }),
+      body: JSON.stringify({ item_ids: entryIds }),
+    });
+  },
+
+  playlistServerCopies(
+    playlistId: number,
+    opts?: ReadOptions
+  ): Promise<PlaylistServerCopies> {
+    return request<PlaylistServerCopies>(
+      `/api/playlists/${playlistId}/server-copies`,
+      opts
+    );
+  },
+
+  /** Queue every streamed entry for download into the playlist. */
+  downloadPlaylist(
+    playlistId: number
+  ): Promise<{ queued: number; skipped: number }> {
+    return request(`/api/playlists/${playlistId}/download`, {
+      method: "POST",
     });
   },
 

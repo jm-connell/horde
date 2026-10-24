@@ -10,13 +10,16 @@ import { LockIcon } from "./playlistChrome";
 const defaultButtonClass =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
 
+/** Adds a library video (`videoId`) or, from a stream's page, its link (`streamUrl`). */
 export default function AddToPlaylist({
   videoId,
+  streamUrl,
   label = "+ Playlist",
   buttonClassName = defaultButtonClass,
   onOpenChange,
 }: {
-  videoId: number;
+  videoId?: number;
+  streamUrl?: string;
   label?: string;
   buttonClassName?: string;
   onOpenChange?: (open: boolean) => void;
@@ -47,7 +50,9 @@ export default function AddToPlaylist({
 
   const add = async (playlistId: number, name: string) => {
     try {
-      await api.addToPlaylist(playlistId, videoId);
+      if (videoId != null) await api.addToPlaylist(playlistId, videoId);
+      else if (streamUrl) await api.addUrlToPlaylist(playlistId, streamUrl);
+      else return;
       void queryClient.invalidateQueries({
         queryKey: queryKeys.playlists.all,
       });
