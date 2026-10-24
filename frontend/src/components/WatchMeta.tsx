@@ -461,6 +461,17 @@ export default function WatchMeta({
                     clipRef.current?.getBoundingClientRect().height ?? 0
                   }
                   {...heightResize}
+                  onCommit={(value) => {
+                    // Dragged far enough to show all the text: that is
+                    // expanded, and collapsing goes back to the default size.
+                    const clip = clipRef.current;
+                    if (clip && value >= clip.scrollHeight - 1) {
+                      commitClipPx(null);
+                      toggleBox(true);
+                    } else {
+                      commitClipPx(value);
+                    }
+                  }}
                 />
               )}
             </>
