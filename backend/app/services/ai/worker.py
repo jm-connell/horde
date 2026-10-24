@@ -26,6 +26,7 @@ from . import embeddings, tasks
 from . import text as ai_text
 from .provider import (
     embeddings_configured,
+    finish_legacy_ollama_detect,
     get_embed_provider,
     get_llm_provider,
     llm_configured,
@@ -1128,6 +1129,8 @@ def _timer_loop(worker: BackgroundWorker) -> None:
     while not worker.stopping:
         pause = 60.0
         try:
+            # A migrated install still looking for its Ollama; a no-op otherwise.
+            finish_legacy_ollama_detect()
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
             configured = llm_configured() or embeddings_configured()

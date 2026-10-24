@@ -98,7 +98,7 @@ Profile scales invent/sample intensity and enqueue batch limits for any provider
 
 ## Costs and the weekly budget
 
-Only providers that report a cost per call (OpenRouter's `usage.cost`) have costs: Settings → AI → **Costs** then shows the totals, kept locally in `openrouter_usage` (rolling windows). Other providers show no costs.
+Only providers that report a cost per call (OpenRouter's `usage.cost`) have costs: Settings → AI → **Costs** then shows the totals, kept locally in `openrouter_usage` (rolling windows). Other providers show no costs, and the budget never blocks them.
 
 - Set a **weekly budget** (USD).
 - Enable **Stop AI calls when exceeded** to block further calls and **pause the AI queue** when spend ≥ budget.
@@ -119,10 +119,10 @@ Before this change Settings had separate Ollama and OpenRouter panes. On the fir
 
 | Before | After |
 |--------|-------|
-| OpenRouter on, Tasks *Specialized*, Ollama on | Chat: OpenRouter. Embeddings: the Ollama URL (second server) |
+| OpenRouter on, Tasks *Specialized*, Ollama on | Chat: OpenRouter. Embeddings: the Ollama URL (second server; found as above if it was left empty) |
 | OpenRouter on, Tasks *All* | Chat and embeddings: OpenRouter |
 | Ollama only | Chat and embeddings: the Ollama URL with `/v1` |
-| Ollama only, URL left empty (auto-discover) | Horde looks for Ollama at start (compose service, then the Docker host) and saves the first one that answers; if none does, Settings shows no provider until you set one |
+| Ollama only, URL left empty (auto-discover) | Horde looks for Ollama (compose service, then the Docker host) at start and then every minute, and saves the first one that answers. Until then those jobs wait; setting a provider in Settings ends the search |
 
 ## Queue visibility & recovery
 

@@ -261,17 +261,7 @@ async def _boot_production(app_: FastAPI, ctx: AppContext) -> None:
 
     ensure_plugins_loaded()
     await preview.init_preview_client()
-    _finish_ai_migration()
     _start_workers(app_, ctx)
-
-
-def _finish_ai_migration() -> None:
-    from .services.ai.provider import finish_legacy_ollama_detect
-
-    try:
-        finish_legacy_ollama_detect()
-    except Exception:
-        logger.warning("could not look for the Ollama server", exc_info=True)
 
 
 @asynccontextmanager

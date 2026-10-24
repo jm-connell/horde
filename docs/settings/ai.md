@@ -56,7 +56,7 @@ Shown when the provider reports a cost per call (OpenRouter).
 | Weekly budget (USD) | `weekly_budget_usd` | `null` | Warns over rolling 7 days; `null` = off (~$0.01–$100000) |
 | Stop AI calls when exceeded | `budget_hard_limit` | `false` | Blocks further calls and pauses the AI queue when spend ≥ budget |
 
-Backend-only: `connection_version` (settings shape, for the one-time upgrade) and `autodetect_ollama` (an upgraded install still looking for its Ollama at start).
+Backend-only: `connection_version` (settings shape, for the one-time upgrade) and `autodetect_ollama` (an upgraded install still looking for its Ollama; cleared when you set a URL).
 
 ## Features (`?pane=features`)
 

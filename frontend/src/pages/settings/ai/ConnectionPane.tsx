@@ -98,11 +98,17 @@ export default function ConnectionPane() {
             onSave={async (url, key, preset) => {
               const patch: Partial<AiSettings> = { base_url: url };
               if (key !== null) patch.api_key = key;
-              // A preset suggests models only where none is set yet.
-              if (preset?.chat && !aiDraft.chat_model)
+              // Another provider's model ids rarely exist on this one, so a
+              // preset replaces them on a switch and fills them in when empty.
+              const switched = url !== aiDraft.base_url;
+              if (preset?.chat && (switched || !aiDraft.chat_model))
                 patch.chat_model = preset.chat;
-              if (preset?.embed && !aiDraft.embed_model)
-                patch.embed_model = preset.embed;
+              if (!aiDraft.embed_base_url) {
+                if (preset?.embed && (switched || !aiDraft.embed_model))
+                  patch.embed_model = preset.embed;
+                else if (preset?.noEmbeddings && switched)
+                  patch.embed_model = "";
+              }
               await saveAi(patch);
             }}
           />
@@ -255,7 +261,10 @@ export default function ConnectionPane() {
                   onSave={async (url, key, preset) => {
                     const patch: Partial<AiSettings> = { embed_base_url: url };
                     if (key !== null) patch.embed_api_key = key;
-                    if (preset?.embed && !aiDraft.embed_model)
+                    if (
+                      preset?.embed &&
+                      (url !== aiDraft.embed_base_url || !aiDraft.embed_model)
+                    )
                       patch.embed_model = preset.embed;
                     await saveAi(patch);
                   }}

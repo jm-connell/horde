@@ -367,10 +367,19 @@ class OpenAICompatProvider:
             headers=self._headers(),
         )
 
-    def ping(self, timeout: httpx.Timeout = _PING_TIMEOUT) -> bool:
+    def ping(
+        self, timeout: httpx.Timeout = _PING_TIMEOUT, *, strict: bool = False
+    ) -> bool:
+        """True when the server answers ``GET /models``.
+
+        Any answer below 500 counts (a 401 means a wrong key, which the real
+        call reports; some servers have no ``/models``). ``strict`` wants a
+        success, for telling an AI server from any web server on a port.
+        """
         try:
             with self._client(timeout=timeout) as client:
-                return client.get("/models").is_success
+                resp = client.get("/models")
+                return resp.is_success if strict else resp.status_code < 500
         except Exception:
             logger.debug("AI provider health probe failed", exc_info=True)
             return False
@@ -459,6 +468,13 @@ class OpenAICompatProvider:
         self.last_cost = cost
         return cost
 
+    def _assert_budget(self) -> None:
+        # Only OpenRouter reports cost, so only its calls count against the budget.
+        if self.connection.is_openrouter:
+            from . import cost_ledger
+
+            cost_ledger.assert_budget_allows()
+
     def _usage_fields(self) -> dict[str, Any]:
         # OpenRouter-only request field; strict servers (OpenAI) reject unknown ones.
         return {"usage": {"include": True}} if self.connection.is_openrouter else {}
@@ -479,9 +495,8 @@ class OpenAICompatProvider:
     ) -> str:
         global _last_error
         self.last_cost = None
-        from . import cost_ledger
 
-        cost_ledger.assert_budget_allows()
+        self._assert_budget()
         payload: dict[str, Any] = {
             "model": model,
             "messages": _build_messages(prompt, system=system, messages=messages),
@@ -498,13 +513,13 @@ class OpenAICompatProvider:
         try:
             with self._client(timeout=req_timeout) as client:
                 resp = client.post("/chat/completions", json=payload)
-                if resp.status_code >= 400 and "response_format" in payload:
+                if resp.status_code in (400, 422) and "response_format" in payload:
                     # Schema/json_object unsupported: loosen, then drop format.
                     payload.pop("response_format", None)
                     if isinstance(format, dict):
                         payload["response_format"] = {"type": "json_object"}
                         resp = client.post("/chat/completions", json=payload)
-                        if resp.status_code >= 400:
+                        if resp.status_code in (400, 422):
                             payload.pop("response_format", None)
                             resp = client.post("/chat/completions", json=payload)
                     else:
@@ -541,9 +556,8 @@ class OpenAICompatProvider:
     ) -> Iterator[str]:
         global _last_error
         self.last_cost = None
-        from . import cost_ledger
 
-        cost_ledger.assert_budget_allows()
+        self._assert_budget()
         payload: dict[str, Any] = {
             "model": model,
             "messages": _build_messages(prompt, system=system, messages=messages),
@@ -626,9 +640,8 @@ class OpenAICompatProvider:
         """Batch-embed texts via ``/embeddings``."""
         global _last_error
         self.last_cost = None
-        from . import cost_ledger
 
-        cost_ledger.assert_budget_allows()
+        self._assert_budget()
         cleaned = [t for t in texts if (t or "").strip()]
         if not cleaned:
             return []
@@ -780,16 +793,27 @@ def chat_connection() -> Connection | None:
     return Connection(url, key)
 
 
-def embed_connection() -> Connection | None:
-    """The embeddings endpoint: its own when set, else the chat one."""
+def _embed_endpoint() -> Connection | None:
+    """Where embeddings go, whether or not an embedding model is set."""
     ai = app_settings.ai_settings()
-    if not ai.get("enabled", True) or not str(ai.get("embed_model") or ""):
+    if not ai.get("enabled", True):
+        return None
+    if ai.get("autodetect_ollama") == "embed":
+        # A migrated install's embeddings Ollama is not found yet; falling back
+        # to the chat endpoint would send Ollama model ids (and its key) there.
         return None
     url = str(ai.get("embed_base_url") or "")
     if not url:
         return chat_connection()
     key = env_key_for(url) or str(ai.get("embed_api_key") or "")
     return Connection(url, key)
+
+
+def embed_connection() -> Connection | None:
+    """The embeddings endpoint (its own when set, else the chat one) with a model."""
+    if not str(app_settings.ai_settings().get("embed_model") or ""):
+        return None
+    return _embed_endpoint()
 
 
 def connection_for(target: Target) -> Connection | None:
@@ -1095,9 +1119,7 @@ def test_connection(
     sent to a different host.
     """
     invalidate_resolved_url()
-    saved = connection_for(target)
-    if target == "embed" and saved is None:
-        saved = chat_connection()
+    saved = chat_connection() if target == "chat" else _embed_endpoint()
     url = normalize_base_url(base_url) if base_url is not None else ""
     if not url:
         if saved is None:
@@ -1158,7 +1180,7 @@ def detect_local_servers() -> list[dict[str, Any]]:
     def probe(item: tuple[str, str]) -> dict[str, Any] | None:
         label, root = item
         conn = Connection(normalize_base_url(root))
-        if not OpenAICompatProvider(conn).ping(timeout=_DETECT_TIMEOUT):
+        if not OpenAICompatProvider(conn).ping(timeout=_DETECT_TIMEOUT, strict=True):
             return None
         is_ollama = OllamaAdmin(root, timeout=_DETECT_TIMEOUT).ping()
         return {
@@ -1178,23 +1200,34 @@ def finish_legacy_ollama_detect() -> None:
 
     Before connection_version 2 an empty Ollama URL meant "try the compose
     service, then the host". The migration cannot probe, so it leaves
-    ``autodetect_ollama`` set and this fills the URL in at startup. Nothing
-    found leaves the flag for the next start (Settings → AI shows the gap).
+    ``autodetect_ollama`` set and this fills the URL in, at startup and then
+    from the AI timer loop until a server answers. Setting a URL in Settings
+    clears the flag, and a field that has a URL is never overwritten.
     """
     ai = app_settings.ai_settings()
     target = str(ai.get("autodetect_ollama") or "")
     if target not in ("chat", "embed"):
         return
+    field_name = "base_url" if target == "chat" else "embed_base_url"
+    key_field = "api_key" if target == "chat" else "embed_api_key"
+    if ai.get(field_name):
+        app_settings.save({"ai": {"autodetect_ollama": ""}})
+        return
     for row in detect_local_servers():
         if row["kind"] == "ollama":
-            field_name = "base_url" if target == "chat" else "embed_base_url"
             app_settings.save(
-                {"ai": {field_name: row["base_url"], "autodetect_ollama": ""}}
+                {
+                    "ai": {
+                        field_name: row["base_url"],
+                        key_field: "",
+                        "autodetect_ollama": "",
+                    }
+                }
             )
             invalidate_resolved_url()
             logger.info("Found Ollama at %s for AI %s", row["base_url"], target)
             return
-    logger.warning(
-        "Ollama was set to auto-discover but no server answered; "
+    logger.info(
+        "Ollama was set to auto-discover but no server answered yet; "
         "set its address in Settings → AI"
     )

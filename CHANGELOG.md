@@ -16,7 +16,9 @@ All notable changes to Horde are documented here. The format follows
   setup keeps its key and models, an Ollama setup keeps its URL (now with
   `/v1`) and models, and an OpenRouter-for-chat, Ollama-for-embeddings setup
   becomes a second embeddings server. Nothing is re-indexed. An Ollama URL that
-  was left empty for auto-discovery is looked up once at startup. The
+  was left empty for auto-discovery is looked up at startup and then every
+  minute until one answers. Rolling back to an earlier release after this
+  start loses the AI provider settings (the old keys are gone); set them again. The
   `/api/ai/openrouter/*` endpoints and the `ollama` / `openrouter` blocks of
   `/api/health` are replaced (see [ADR 0017](docs/adr/0017-openai-compatible-provider.md)).
 

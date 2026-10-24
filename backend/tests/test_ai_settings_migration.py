@@ -193,3 +193,52 @@ def test_startup_keeps_looking_when_no_ollama_answers(tmp_dirs, monkeypatch):
     provider.finish_legacy_ollama_detect()
 
     assert settings_svc.ai_settings()["autodetect_ollama"] == "chat"
+
+
+def test_embeddings_wait_while_their_ollama_is_not_found(tmp_dirs, monkeypatch):
+    """Not falling back to the chat endpoint: that would send Ollama model ids
+    (and the OpenRouter key) to OpenRouter."""
+    monkeypatch.setattr("app.config.OLLAMA_BASE_URL", "")
+    path = tmp_dirs["data"] / "app_settings.json"
+    path.write_text(
+        json.dumps(
+            {
+                "setup_completed": True,
+                "ai": {
+                    "openrouter_enabled": True,
+                    "openrouter_api_key": "sk-or-v1-secret",
+                    "openrouter_scope": "specialized",
+                    "base_url": "",
+                },
+            }
+        )
+    )
+    assert settings_svc.ai_settings()["autodetect_ollama"] == "embed"
+
+    assert provider.embed_connection() is None
+    assert provider.chat_connection() is not None
+
+
+def test_setting_a_url_ends_the_ollama_search(client, monkeypatch):
+    settings_svc.save({"ai": {"autodetect_ollama": "chat"}})
+
+    client.patch(
+        "/api/settings",
+        json={"ai": {"base_url": OR_URL, "api_key": "sk-or-v1-secret"}},
+    )
+    assert settings_svc.ai_settings()["autodetect_ollama"] == ""
+
+    # Even with the flag back, a URL the admin set is never overwritten.
+    settings_svc.save({"ai": {"autodetect_ollama": "chat"}})
+    monkeypatch.setattr(
+        provider,
+        "detect_local_servers",
+        lambda: [
+            {"label": "Ollama", "base_url": "http://ollama:11434/v1", "kind": "ollama"}
+        ],
+    )
+    provider.finish_legacy_ollama_detect()
+    ai = settings_svc.ai_settings()
+    assert ai["base_url"] == OR_URL
+    assert ai["api_key"] == "sk-or-v1-secret"
+    assert ai["autodetect_ollama"] == ""

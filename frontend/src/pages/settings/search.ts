@@ -143,7 +143,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "providers",
-    keywords: "models embedding chat model search index vram auto-pull download gpu",
+    keywords:
+      "models embedding chat model search index vram auto-pull download gpu",
   },
   {
     tab: "ai",

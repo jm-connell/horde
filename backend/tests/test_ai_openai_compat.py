@@ -243,3 +243,57 @@ def test_detect_finds_a_local_ollama(client, serve_ai):
         "kind": "ollama",
     } in servers
     assert all(s["base_url"] == "http://127.0.0.1:11434/v1" for s in servers)
+
+
+def test_the_budget_only_stops_openrouter(session, serve_ai, monkeypatch):
+    import pytest
+
+    from app.services.ai import cost_ledger
+
+    serve_ai(FakeServer())
+    monkeypatch.setattr(
+        cost_ledger,
+        "budget_status",
+        lambda **_: {"blocked": True, "weekly_budget_usd": 1.0, "d7": 2.0},
+    )
+
+    local = provider.OpenAICompatProvider(
+        provider.Connection("http://gpu.lan:11434/v1")
+    )
+    assert local.embed_many(["a"], "nomic-embed-text") == [[0.1, 0.2]]
+    assert local.chat("hi", "llama3.2:3b", format=None) == "hello"
+
+    hosted = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+    with pytest.raises(cost_ledger.OpenRouterBudgetExceeded):
+        hosted.chat("hi", "google/x", format=None)
+
+
+def test_embedding_models_come_from_the_embeddings_server(client, serve_ai):
+    server = FakeServer()
+    serve_ai(server)
+    _configure(
+        base_url=OR_URL,
+        api_key="sk-or-secret",
+        chat_model="google/x",
+        embed_base_url="http://gpu.lan:11434/v1",
+        embed_api_key="embed-key",
+        embed_model="",
+    )
+
+    assert client.post("/api/ai/test", json={"target": "embed"}).json()["ok"]
+
+    listed = [r for r in server.requests if r.url.path == "/v1/models"]
+    assert listed and all(r.url.host == "gpu.lan" for r in listed)
+    assert listed[0].headers["Authorization"] == "Bearer embed-key"
+
+
+def test_a_server_that_rejects_the_key_is_reachable_not_down(session, serve_ai):
+    """Its jobs then fail with "rejected credentials" instead of waiting forever."""
+    serve_ai(lambda request: httpx.Response(401))
+    _configure(base_url="http://vllm.lan:8000", api_key="wrong", chat_model="m")
+
+    assert provider.build_status().reachable is True
+    # Finding servers on this machine still wants a real AI API.
+    assert not provider.OpenAICompatProvider(
+        provider.Connection("http://vllm.lan:8000/v1")
+    ).ping(strict=True)

@@ -222,6 +222,9 @@ def _prepare_connection_update(
             ai_updates[url_field] = url
             if url != stored.get(url_field) and key_field not in ai_updates:
                 ai_updates[key_field] = ""
+    if "base_url" in ai_updates or "embed_base_url" in ai_updates:
+        # An address chosen by the admin ends a migrated install's Ollama search.
+        ai_updates["autodetect_ollama"] = ""
     for model_field in ("chat_model", "embed_model"):
         if model_field in ai_updates:
             ai_updates[model_field] = str(ai_updates[model_field] or "").strip()
