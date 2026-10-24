@@ -92,6 +92,9 @@ export default function Download() {
   const [url, setUrl] = useState("");
   const [pasteHint, setPasteHint] = useState("");
   const urlInputRef = useRef<HTMLInputElement>(null);
+  // On an http:// LAN origin the Clipboard API is missing and a Paste button
+  // could not read anything (only Ctrl+V works), so it is not shown there.
+  const canReadClipboard = clipboardReadAvailable();
   const [preset, setPreset] = useState("best");
   const [destination, setDestination] =
     useState<DownloadDestination>("library");
@@ -304,7 +307,7 @@ export default function Download() {
     }
     const approx = formatApproxSize(selectedPresetSize);
     if (toDevice) {
-      return approx ? `Download offline (${approx})` : "Download offline";
+      return approx ? `Download to client (${approx})` : "Download to client";
     }
     return approx ? `Download (${approx})` : "Download";
   }, [submitting, selectedPresetSize, toDevice, isBulkList, urlList.length]);
@@ -580,38 +583,41 @@ export default function Download() {
               placeholder="Video or playlist URL (YouTube, etc.)"
               className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-4 py-2.5 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent"
             />
-            <button
-              type="button"
-              onClick={async () => {
-                const before = urlInputRef.current?.value ?? "";
-                let filledFromField = false;
-                const text = await pasteTextFromButtonClick({
-                  clipboardReadAvailable: clipboardReadAvailable(),
-                  readClipboard: readClipboardText,
-                  execPaste: () => {
-                    const el = urlInputRef.current;
-                    const ok = execPasteInto(el);
-                    // execCommand can fill a controlled input without onChange.
-                    if (el?.value && el.value !== before) {
-                      filledFromField = applyClipboardText(el.value);
-                    }
-                    return ok;
-                  },
-                });
-                if (applyClipboardText(text) || filledFromField) {
-                  setPasteHint("");
-                  return;
-                }
-                setPasteHint(
-                  insecureClipboardHint(
-                    typeof window !== "undefined" && window.isSecureContext
-                  )
-                );
-              }}
-              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
-            >
-              Paste
-            </button>
+            {canReadClipboard && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const before = urlInputRef.current?.value ?? "";
+                  let filledFromField = false;
+                  const text = await pasteTextFromButtonClick({
+                    clipboardReadAvailable: canReadClipboard,
+                    readClipboard: readClipboardText,
+                    execPaste: () => {
+                      const el = urlInputRef.current;
+                      const ok = execPasteInto(el);
+                      // execCommand can fill a controlled input without onChange.
+                      if (el?.value && el.value !== before) {
+                        filledFromField = applyClipboardText(el.value);
+                      }
+                      return ok;
+                    },
+                  });
+                  if (applyClipboardText(text) || filledFromField) {
+                    setPasteHint("");
+                    return;
+                  }
+                  setPasteHint(
+                    insecureClipboardHint(
+                      typeof window !== "undefined" && window.isSecureContext
+                    ) ||
+                      "Couldn't read the clipboard. Paste with Ctrl+V, ⌘V, or a long-press."
+                  );
+                }}
+                className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
+              >
+                Paste
+              </button>
+            )}
           </div>
           <p className="mt-1 text-xs text-muted">
             Accepts comma-separated links.
@@ -887,13 +893,13 @@ export default function Download() {
                     : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
                 }`}
               >
-                Offline (this device)
+                Direct download to client
               </button>
             </div>
             {toDevice && (
               <p className="mt-2 text-xs text-muted">
-                Saved inside Horde on this device for offline viewing; not added
-                to the library.
+                The server fetches the file and sends it straight to this
+                device; it is not added to the library.
               </p>
             )}
           </div>

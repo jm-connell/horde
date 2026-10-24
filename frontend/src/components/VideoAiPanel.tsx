@@ -43,10 +43,6 @@ export default function VideoAiPanel({
   const isMobile = useIsMobile();
   const [summaryHeight, setSummaryHeight, commitSummaryHeight] =
     usePanelSize("aiSummary");
-  // A dragged height is fixed (not a cap), so the handle always follows the
-  // pointer, even past the end of a short summary.
-  const summaryFixed =
-    !isMobile && summaryHeight != null ? summaryHeight : null;
 
   const expanded = settings.aiExpanded;
   const showToggle = canSummarize && canChat;
@@ -71,6 +67,42 @@ export default function VideoAiPanel({
   const waitingOnSummary =
     summarizing || (target.processingSummary && !hasAiSummary);
   const { summarize } = target;
+
+  // The summary may be dragged shorter (to scroll it) but never taller than
+  // its own text, which would leave an empty box. Chat keeps a free height:
+  // a long draft needs the room. Measured from the rendered content because
+  // the text wraps differently at different widths.
+  const summaryContentRef = useRef<HTMLDivElement>(null);
+  const [summaryContentPx, setSummaryContentPx] = useState(0);
+  useEffect(() => {
+    if (!expanded || activeTab !== "summary" || !canSummarize) return;
+    const el = summaryContentRef.current;
+    if (!el) return;
+    const measure = () => setSummaryContentPx(el.offsetHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [
+    expanded,
+    activeTab,
+    canSummarize,
+    isMobile,
+    summaryText,
+    summaryError,
+    waitingOnSummary,
+  ]);
+
+  const summaryRange = panelHeightRange(MIN_SUMMARY_REM);
+  const summaryMaxPx =
+    summaryContentPx > 0
+      ? Math.min(summaryRange.valueMax, summaryContentPx)
+      : summaryRange.valueMax;
+  // A dragged height is fixed (so scrolling stays put), capped at the content.
+  const summaryFixed =
+    !isMobile && summaryHeight != null
+      ? Math.min(summaryHeight, summaryMaxPx)
+      : null;
 
   const runSummarize = useCallback(
     async (force: boolean) => {
@@ -187,6 +219,7 @@ export default function VideoAiPanel({
             <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
               <div
                 ref={summaryScrollRef}
+                data-horde="ai-summary-body"
                 className={
                   summaryFixed != null
                     ? "horde-meta-scrollbar overflow-y-auto"
@@ -196,7 +229,11 @@ export default function VideoAiPanel({
                   summaryFixed != null ? { height: summaryFixed } : undefined
                 }
               >
-                <div className="px-4 py-3">
+                <div
+                  ref={summaryContentRef}
+                  data-horde="ai-summary-content"
+                  className="px-4 py-3"
+                >
                   {summaryError && (
                     <p className="mb-2 text-xs text-amber-400/90">
                       {summaryError}
@@ -241,12 +278,17 @@ export default function VideoAiPanel({
                     0
                   }
                   toValue={(start, delta) =>
-                    clampPanelHeight(start + delta, MIN_SUMMARY_REM)
+                    // Never taller than the text: the box would be empty.
+                    Math.min(
+                      summaryMaxPx,
+                      clampPanelHeight(start + delta, MIN_SUMMARY_REM)
+                    )
                   }
                   onChange={setSummaryHeight}
                   onCommit={commitSummaryHeight}
                   onReset={() => commitSummaryHeight(null)}
-                  {...panelHeightRange(MIN_SUMMARY_REM)}
+                  valueMin={summaryRange.valueMin}
+                  valueMax={summaryMaxPx}
                 />
               )}
             </div>

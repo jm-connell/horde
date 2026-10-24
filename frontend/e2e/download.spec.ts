@@ -28,13 +28,31 @@ test("download form previews a link and switches destination", async ({
     "1080p"
   );
 
-  await page.getByRole("button", { name: "Offline (this device)" }).click();
+  await page.getByRole("button", { name: "Direct download to client" }).click();
   await expect(
-    page.getByRole("button", { name: "Download offline" })
+    page.getByRole("button", { name: /^Download to client/ })
   ).toBeVisible();
   await page.getByRole("button", { name: "Save to library" }).click();
   await expect(download).toBeVisible();
   await expect(page.getByRole("button", { name: "Paste" })).toBeVisible();
+});
+
+test("no Paste button where the Clipboard API is unavailable", async ({
+  page,
+}) => {
+  // A plain http:// origin (LAN name, Tailscale, Docker port) has no
+  // navigator.clipboard, so the button could not read anything.
+  await page.addInitScript(() => {
+    Object.defineProperty(Navigator.prototype, "clipboard", {
+      configurable: true,
+      get: () => undefined,
+    });
+  });
+  await page.goto("/download");
+  await expect(
+    page.getByText("Paste a YouTube or other supported link.")
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Paste" })).toHaveCount(0);
 });
 
 test("queue shows active, failed, and finished jobs and can pause", async ({

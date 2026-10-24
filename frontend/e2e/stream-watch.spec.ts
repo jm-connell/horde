@@ -260,11 +260,10 @@ test("related videos of a stream mark downloaded ones and link to the right page
     page.getByRole("heading", { name: "More like this" })
   ).toBeVisible();
 
-  const downloaded = page.getByRole("link", { name: /Harbor Lights/ });
+  const downloaded = page.getByRole("link", { name: /Harbor Lights/ }).first();
   await expect(downloaded).toHaveAttribute("href", `/watch/${library.id}`);
-  await expect(
-    downloaded.getByText("Downloaded", { exact: true })
-  ).toBeVisible();
+  // The item for a video already in the library says so.
+  await expect(page.getByText("Downloaded", { exact: true })).toBeVisible();
 
   const remote = page.getByRole("link", { name: /Not yet downloaded clip/ });
   const href = (await remote.getAttribute("href")) ?? "";
@@ -296,9 +295,13 @@ test("a not-downloaded related video can be queued and played from the queue", a
     },
   ]);
   await page.goto(WATCH);
-  const remote = page.getByRole("link", { name: /Not yet downloaded clip/ });
-  await remote.hover();
-  await remote.getByTitle("Add to queue").click();
+  // The sidebar row (desktop) or the card (phone) holds the queue button.
+  const item = page
+    .locator("[data-horde='related-item']")
+    .filter({ hasText: "Not yet downloaded clip" })
+    .first();
+  await item.hover();
+  await item.getByTitle("Add to queue").click();
   // Adding does not open it.
   await expect(page).toHaveURL(WATCH);
 
