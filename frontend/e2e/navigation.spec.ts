@@ -133,6 +133,28 @@ test("Home leaves a channel opened from the rail", async ({ page }) => {
   ).toHaveCount(0);
 });
 
+test("a modified click on Home leaves this tab's channel open", async ({
+  page,
+  context,
+}) => {
+  test.skip(!hasChannelRail(page), "the channel rail is desktop only");
+  await page.goto("/");
+  await openChannel(page, "Kiln");
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toBeVisible();
+
+  // Ctrl/Cmd-click opens a new tab; this tab must not be reset.
+  const opened = context.waitForEvent("page");
+  await page
+    .getByRole("link", { name: "HORDE" })
+    .click({ modifiers: ["ControlOrMeta"] });
+  await (await opened).close();
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toBeVisible();
+});
+
 test("Home clears the search and its results", async ({ page }) => {
   await page.goto("/");
   await expect(

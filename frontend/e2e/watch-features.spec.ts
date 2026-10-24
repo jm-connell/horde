@@ -207,6 +207,26 @@ test("related videos list under the player and open their watch page", async ({
   ).toBeVisible();
 });
 
+test("a related row opens its video from anywhere on the row", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  const other = await videoId(page, "Harbor Lights");
+  const related = await (await page.request.get(`/api/videos/${other}`)).json();
+  await page.route(new RegExp(`/api/videos/${id}/related`), (route) =>
+    route.fulfill({ json: [related] })
+  );
+  await page.goto(`/watch/${id}`);
+  const row = page.locator("aside [data-horde='related-item']").first();
+  await expect(row).toBeVisible();
+  // The thumbnail is not a separate link: one tab stop per video.
+  await expect(row.getByRole("link", { name: /Harbor Lights/ })).toHaveCount(1);
+  // The bottom-right corner is below the text, not on a link of its own.
+  const box = (await row.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 4, box.y + box.height - 4);
+  await expect(page).toHaveURL(new RegExp(`/watch/${other}$`));
+});
+
 test("deleting a video from the watch page removes it from the library", async ({
   page,
 }) => {

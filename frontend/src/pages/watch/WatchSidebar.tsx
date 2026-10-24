@@ -39,32 +39,30 @@ export function WatchSidebar({
             More like this
           </h3>
           <div className="space-y-2">
-            {/* The row is not one link: the small channel name under the
-                title goes to the channel page, not to the video. */}
+            {/* The title link stretches over the whole row; the channel name
+                and queue button sit above it as their own targets. */}
             {items.map((v) => (
               <div
                 key={v.key}
                 data-horde="related-item"
-                className="group flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
+                className="group relative flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
               >
                 <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
-                  <Link to={v.href} className="block h-full w-full">
-                    {v.thumb ? (
-                      <img
-                        decoding="async"
-                        width={160}
-                        height={90}
-                        src={v.thumb}
-                        alt=""
-                        loading="lazy"
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-full items-center justify-center text-muted">
-                        <span className="text-xl">▶</span>
-                      </div>
-                    )}
-                  </Link>
+                  {v.thumb ? (
+                    <img
+                      decoding="async"
+                      width={160}
+                      height={90}
+                      src={v.thumb}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full items-center justify-center text-muted">
+                      <span className="text-xl">▶</span>
+                    </div>
+                  )}
                   {v.queueEntry && (
                     <QueueButton
                       entry={v.queueEntry}
@@ -75,14 +73,14 @@ export function WatchSidebar({
                 <div className="min-w-0 flex-1 py-0.5">
                   <Link
                     to={v.href}
-                    className="line-clamp-2 block text-sm font-medium text-gray-200 group-hover:text-accent"
+                    className="line-clamp-2 block text-sm font-medium text-gray-200 after:absolute after:inset-0 after:rounded-lg group-hover:text-accent"
                   >
                     {v.title}
                   </Link>
                   {v.channel && (
                     <Link
                       to={channelHref(v.channel)}
-                      className="mt-0.5 block truncate text-xs text-muted hover:text-accent hover:underline"
+                      className="relative z-10 mt-0.5 block truncate text-xs text-muted hover:text-accent hover:underline"
                     >
                       {v.channel}
                     </Link>

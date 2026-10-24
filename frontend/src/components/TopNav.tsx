@@ -305,9 +305,13 @@ export default function TopNav() {
 
   // The logo and Home do more than link to `/`: they put the home page back
   // the way a fresh load would, dropping any channel, tag or search results.
-  // The Library/Recommended choice is saved, so it is kept.
-  const onHomeClick = () => {
+  // The Library/Recommended choice is saved, so it is kept. A modified click
+  // opens a new tab and leaves this one alone.
+  const onHomeClick = (e: React.MouseEvent) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey)
+      return;
     setMenuOpen(false);
+    setSearchOpen(false);
     resetHome();
   };
 

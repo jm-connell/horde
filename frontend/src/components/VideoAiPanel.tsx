@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   clampPanelHeight,
@@ -74,7 +80,8 @@ export default function VideoAiPanel({
   // the text wraps differently at different widths.
   const summaryContentRef = useRef<HTMLDivElement>(null);
   const [summaryContentPx, setSummaryContentPx] = useState(0);
-  useEffect(() => {
+  // Measured before paint, so a saved height taller than the text never shows.
+  useLayoutEffect(() => {
     if (!expanded || activeTab !== "summary" || !canSummarize) return;
     const el = summaryContentRef.current;
     if (!el) return;
@@ -288,7 +295,7 @@ export default function VideoAiPanel({
                   onCommit={commitSummaryHeight}
                   onReset={() => commitSummaryHeight(null)}
                   valueMin={summaryRange.valueMin}
-                  valueMax={summaryMaxPx}
+                  valueMax={Math.max(summaryRange.valueMin, summaryMaxPx)}
                 />
               )}
             </div>
