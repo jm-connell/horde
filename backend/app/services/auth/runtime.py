@@ -38,6 +38,15 @@ def _truthy(raw: str | None) -> bool:
     return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _without_port(entry: str) -> str:
+    """``ip:port`` and ``[v6]:port`` as the bare address (a bare IPv6 address is left alone)."""
+    if entry.startswith("["):
+        return entry[1:].partition("]")[0]
+    if entry.count(":") == 1:
+        return entry.partition(":")[0]
+    return entry
+
+
 @dataclass(frozen=True)
 class AuthConfig:
     """Operator switches from the environment.
@@ -130,10 +139,13 @@ class AuthRuntime:
         """The caller's IP; X-Forwarded-For only when a trusted proxy is declared."""
         if self.config.trust_proxy:
             # Our own proxy appends the address it saw; everything left of that is
-            # client-controlled and must not decide who gets rate limited.
+            # client-controlled and must not decide who gets rate limited. A proxy
+            # that adds its own header line (HAProxy ``option forwardfor``) leaves
+            # the client's line first, so every line counts, joined in order.
             chain = [
-                part.strip()
-                for part in request.headers.get("x-forwarded-for", "").split(",")
+                _without_port(part.strip())
+                for line in request.headers.getlist("x-forwarded-for")
+                for part in line.split(",")
                 if part.strip()
             ]
             if len(chain) >= self.config.proxy_hops:

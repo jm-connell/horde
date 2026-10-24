@@ -269,6 +269,13 @@ All notable changes to Horde are documented here. The format follows
   *Dismiss finished* leaves another account's private downloads alone. The
   playlist a library download feeds is no longer named to accounts that cannot
   see that playlist.
+- **A proxy that adds its own `X-Forwarded-For` line could be spoofed.**
+  With `HORDE_TRUST_PROXY=1` Horde read only the first header line, which a
+  client controls when the proxy adds a line of its own (HAProxy
+  `option forwardfor`), so a client could pick the address it is throttled
+  under. Every line is now joined in order before the entry counted from the
+  right is taken, and a `:port` (`1.2.3.4:5678`, `[2001:db8::1]:443`) is
+  dropped.
 
 ### Upgrade notes
 
