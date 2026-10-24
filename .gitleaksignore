@@ -1,3 +1,5 @@
-# False positives (fingerprint: commit:file:rule:line). Each names why.
-# A docstring, "(keys, L2-normalised rows)", read as a generic API key.
+# False positives (fingerprint: commit:file:rule:line).
+# A recommend.py docstring read as a generic API key, and the comment that
+# first described it here by quoting it.
 2ae26d459381aec15dea06aacd25d9bbe2571b32:backend/app/services/ai/recommend.py:generic-api-key:347
+a4001129f4be75cd0b7efe24396451de1513e9ae:.gitleaksignore:generic-api-key:2
