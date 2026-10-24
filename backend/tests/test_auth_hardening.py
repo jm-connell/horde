@@ -600,6 +600,24 @@ def test_reauth_needs_a_code_when_the_account_has_two_step(stale, now):
             ("PATCH", "/api/settings", {"require_two_factor": "everyone"}),
             id="two-factor-requirement",
         ),
+        pytest.param(
+            ("PATCH", "/api/users/{m}", {"disabled": True}), id="disable-user"
+        ),
+        pytest.param(
+            ("PATCH", "/api/users/{m}", {"permissions": ["download"]}),
+            id="change-permissions",
+        ),
+        pytest.param(
+            ("POST", "/api/setup/reset", {"confirm": "RESET"}), id="factory-reset"
+        ),
+        pytest.param(
+            (
+                "POST",
+                "/api/setup/reset",
+                {"erase_media": True, "confirm": "ERASE MEDIA"},
+            ),
+            id="factory-reset-erasing-media",
+        ),
     ],
 )
 def test_the_sensitive_admin_actions_need_a_recent_password_check(
@@ -616,15 +634,46 @@ def test_the_sensitive_admin_actions_need_a_recent_password_check(
     assert res.status_code < 400, res.text
 
 
+def test_a_stolen_cookie_cannot_demote_another_administrator(
+    stale, init_db, admin_user
+):
+    from tests.conftest import _make_user
+
+    other = _make_user(init_db, "second-admin", "second-admin-pw-1", is_admin=True)
+    res = stale.patch(f"/api/users/{other.id}", json={"is_admin": False})
+    assert (res.status_code, res.json()["code"]) == (403, "reauth_required")
+    assert (
+        stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD}).status_code
+        == 204
+    )
+    assert (
+        stale.patch(f"/api/users/{other.id}", json={"is_admin": False}).status_code
+        == 200
+    )
+
+
+def test_a_stolen_cookie_cannot_end_one_session_of_another_user(
+    stale, init_db, member_user
+):
+    from tests.conftest import _session_cookie
+
+    _session_cookie(init_db, member_user)
+    sid = stale.get(f"/api/users/{member_user.id}/sessions").json()["items"][0]["id"]
+    path = f"/api/users/{member_user.id}/sessions/{sid}"
+    res = stale.delete(path)
+    assert (res.status_code, res.json()["code"]) == (403, "reauth_required")
+    assert (
+        stale.post("/api/auth/reauth", json={"password": ADMIN_PASSWORD}).status_code
+        == 204
+    )
+    assert stale.delete(path).status_code == 204
+
+
 def test_everyday_admin_actions_do_not_ask_again(stale, member_user, admin_user):
     assert (
         stale.patch(
-            f"/api/users/{member_user.id}", json={"permissions": ["download"]}
+            f"/api/users/{member_user.id}", json={"share_downloads": False}
         ).status_code
-        == 200
-    )
-    assert (
-        stale.patch(f"/api/users/{member_user.id}", json={"disabled": True}).status_code
         == 200
     )
     same = stale.patch("/api/settings", json={"require_two_factor": "off"})

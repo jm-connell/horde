@@ -2701,7 +2701,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke User Session
-         * @description Sign one of a user's devices out.
+         * @description Sign one of a user's devices out. For another account this needs a recent password check.
          */
         delete: operations["revoke_user_session_api_users__user_id__sessions__session_id__delete"];
         options?: never;

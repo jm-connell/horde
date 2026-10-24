@@ -26,10 +26,11 @@ All notable changes to Horde are documented here. The format follows
   API: `POST /api/auth/login/totp`, `/api/auth/2fa*`, `DELETE
   /api/users/{id}/two-factor`, `require_two_factor` in `/api/settings`.
 - **Confirm your password for sensitive administrator actions.** Adding a
-  user, making an account an administrator, setting another account's
-  password, deleting an account, resetting another account's two-step sign-in,
-  signing another account out everywhere and changing the two-step requirement
-  now ask the administrator for their password (and a code, with two-step
+  user, making an account an administrator or taking that away, disabling an
+  account, changing permissions, setting another account's password, deleting
+  an account, resetting another account's two-step sign-in, signing another
+  account out (everywhere or one device), a factory reset and changing the
+  two-step requirement now ask the administrator for their password (and a code, with two-step
   sign-in) again if they last did so more than ten minutes ago; a sign-in
   counts. A *Confirm your password* dialog appears and the action goes through
   once it is accepted. API: `POST /api/auth/reauth`; the actions answer `403`

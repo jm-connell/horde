@@ -120,6 +120,35 @@ test("an account with two-step sign-in is asked for a code as well", async ({
   await expect(page.getByText("Created twostepkid")).toBeVisible();
 });
 
+test("a factory reset after a stale sign-in asks for the password above the reset panel", async ({
+  page,
+}) => {
+  await ageSessions(page);
+  await page.goto("/settings?tab=system");
+  await page.getByRole("button", { name: "Reset Horde…" }).click();
+  const reset = page.getByRole("dialog", { name: "Reset Horde?" });
+  await reset.getByLabel("Type RESET to confirm").fill("RESET");
+  await reset.getByRole("button", { name: "Reset", exact: true }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Confirm your password" });
+  await expect(dialog).toBeVisible();
+  // The prompt sits on top of the reset panel, so the field can be used.
+  await dialog.getByLabel("Your password").fill("not-my-password");
+  await dialog.getByRole("button", { name: "Confirm" }).click();
+  await expect(dialog.getByRole("alert")).toContainText(
+    "Current password is incorrect"
+  );
+  // Cancelling leaves Horde as it was (nothing was reset).
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toHaveCount(0);
+  await expect(
+    page.getByText("Confirm your password to continue")
+  ).toBeVisible();
+  await reset.getByRole("button", { name: "Cancel" }).click();
+  await expect(reset).toHaveCount(0);
+  await expect(page).toHaveURL(/tab=system/);
+});
+
 test("there is no way to set your own password from the users list", async ({
   page,
 }) => {

@@ -109,10 +109,15 @@ def update_user(
             "use_change_password",
         )
     target = accounts.get_user(session, user_id)
-    if (
+    if target is not None and (
         sets_password  # another account's
-        or (payload.is_admin is True and target is not None and not target.is_admin)
+        or (payload.is_admin is not None and payload.is_admin != target.is_admin)
+        or payload.disabled is True
+        or "permissions" in changes
     ):
+        # Each of these either hands a stolen cookie a way back in or takes the
+        # owner out: a new administrator, a new password, a demoted or disabled
+        # owner, widened permissions.
         ensure_recent_auth(request, session)
     # Another admin has to take away an admin's access, so nobody locks
     # themselves out (and a lone admin can never leave the server ownerless).
@@ -210,9 +215,15 @@ def revoke_user_sessions(
 
 @router.delete("/{user_id}/sessions/{session_id}", status_code=204)
 def revoke_user_session(
-    user_id: int, session_id: int, session: Session = Depends(get_session)
+    user_id: int,
+    session_id: int,
+    request: Request,
+    session: Session = Depends(get_session),
+    admin: AuthUser = Depends(require_admin),
 ):
-    """Sign one of a user's devices out."""
+    """Sign one of a user's devices out. For another account this needs a recent password check."""
     _require_user(session, user_id)
+    if user_id != admin.id:
+        ensure_recent_auth(request, session)
     sessions.revoke(session, user_id, session_id)
     return Response(status_code=204)

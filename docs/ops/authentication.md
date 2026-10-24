@@ -99,10 +99,12 @@ The server refuses any change that would leave **no enabled administrator** (`co
 A browser that signed in is trusted with your history and preferences, but a stolen session cookie must not be enough to *keep* the account. So an administrator is asked for the password again (and a code, with two-step sign-in) before:
 
 - adding a user, or making an account an administrator;
-- setting another account's password, deleting an account, resetting another account's two-step sign-in, or signing another account out everywhere;
-- changing *Require two-step sign-in*.
+- taking another account's administrator access away, disabling another account, or changing another account's permissions;
+- setting another account's password, deleting an account, resetting another account's two-step sign-in, or signing another account out (everywhere, or one device at a time);
+- changing *Require two-step sign-in*;
+- a factory reset (*Settings → System → Reset Horde*, with or without erasing the media).
 
-Signing in counts, and so does confirming: the next ten minutes need nothing more. The app shows a *Confirm your password* dialog when the server answers `403` with `code: "reauth_required"` and repeats the request once you confirm (`POST /api/auth/reauth {password, code}`, `204`, under the same throttle as the other password checks). Everything else an administrator does (permissions, disabling an account, settings other than the requirement) needs nothing extra. Sessions that existed before an upgrade ask once. With `HORDE_AUTH_DISABLED=1` nothing is asked (the proxy signs people in).
+Signing in counts, and so does confirming: the next ten minutes need nothing more. The app shows a *Confirm your password* dialog when the server answers `403` with `code: "reauth_required"` and repeats the request once you confirm (`POST /api/auth/reauth {password, code}`, `204`, under the same throttle as the other password checks). Everything else an administrator does (re-enabling an account, the other settings, anything about your own account that is not on the list) needs nothing extra. Sessions that existed before an upgrade ask once. With `HORDE_AUTH_DISABLED=1` nothing is asked (the proxy signs people in).
 
 Setting your **own** password is not an administrator action: `PATCH /api/users/{id}` refuses it for your own account (`400`, `code: "use_change_password"`), because *Change password* asks for the current password and a thief with only the cookie does not have it.
 
@@ -194,7 +196,7 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 
 ## What this does not do
 
-- **Two-step sign-in guards the sign-in, not a session that already exists.** A stolen `horde_session` cookie is a signed-in user until it is ended (*Signed-in devices*, or changing the password). The actions that would let a thief keep the account (adding or promoting a user, setting another account's password, changing the requirement, setting up an authenticator without the password) ask for the password again, see [above](#reauth); everything else a signed-in user can do, they can do.
+- **Two-step sign-in guards the sign-in, not a session that already exists.** A stolen `horde_session` cookie is a signed-in user until it is ended (*Signed-in devices*, or changing the password). The actions that would let a thief keep the account (adding, promoting, demoting or disabling a user, changing permissions, setting another account's password, signing another account out, a factory reset, changing the requirement, setting up an authenticator without the password) ask for the password again, see [above](#reauth); everything else a signed-in user can do, they can do.
 - **A required-but-not-yet-enrolled account is trust on first use.** Until its owner enrolls, whoever signs in with the password first gets the setup screen and attaches their own authenticator. Have every account enroll before you publish the port.
 
 - **Signing out does not clear offline copies.** Videos saved for offline viewing live in the browser's cache and IndexedDB, which belong to the browser profile, not the account. Each copy records who saved it, and an account that turned off *share downloads* keeps its copies out of other accounts' lists, but that is privacy in the app, not encryption: the files are readable to anyone with full access to the browser profile, and the saved check value of the owner's password (PBKDF2-SHA256, 600 000 iterations, used to unlock their downloads with no connection) could be attacked offline. That value exists only in browsers that hold downloads saved by the account: it is created when the account saves its first download there (or at a sign-in when they are already there), kept across sign-outs, and deleted with the last download. Anyone who can see a copy can remove it; only its owner can remove a private one. For real separation use a separate browser profile.
