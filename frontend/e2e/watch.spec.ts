@@ -9,7 +9,10 @@ test("watch page shows metadata, chapters, and player controls", async ({
   await expect(
     page.getByRole("heading", { name: "Aurora Drift", level: 1 })
   ).toBeVisible();
-  const channel = page.locator("a").filter({ hasText: /^Northwind$/ });
+  // The header's channel link; related videos below link their channels too.
+  const channel = page
+    .locator("a:not([data-horde='related-item'] a)")
+    .filter({ hasText: /^Northwind$/ });
   await expect(channel).toBeVisible();
   await expect(page.getByText("Aurora over the ridge line.")).toBeVisible();
   await expect(
