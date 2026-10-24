@@ -19,7 +19,7 @@ from app.models import (
     VideoAiMeta,
     utcnow,
 )
-from app.services import stream_ai, stream_preview
+from app.services import stream_ai, stream_preview, ytdlp_extract
 from app.services.ai import chat as ai_chat
 from app.services.ai import tasks
 from app.services.auth import accounts
@@ -354,6 +354,57 @@ def test_related_mixes_library_and_catalog_videos(
         ("New ride", False, None),
     ]
     assert res.json()["next_cursor"] is None
+
+
+def test_a_live_stream_lists_its_channels_other_live_streams_first(
+    member_client, stream_env, add_video, monkeypatch
+):
+    meta, _llm, _seen = stream_env
+    meta["is_live"] = True
+    add_video(title="Old ride", channel="Northwind", yt_id="libaaaaaaa1")
+    asked: list[tuple[str, str]] = []
+
+    def streams_tab(channel_url, offset=0, limit=30, *, tab="videos"):
+        asked.append((channel_url, tab))
+        return {
+            "entries": [
+                # The stream itself and a past broadcast are not "live now".
+                {
+                    "id": YT_ID,
+                    "url": URL,
+                    "title": "[A] Ridge",
+                    "live_status": "is_live",
+                },
+                {
+                    "id": "liveBBBBBB1",
+                    "url": "https://www.youtube.com/watch?v=liveBBBBBB1",
+                    "title": "[B] Ridge",
+                    "live_status": "is_live",
+                },
+                {
+                    "id": "pastCCCCCC1",
+                    "url": "https://www.youtube.com/watch?v=pastCCCCCC1",
+                    "title": "Yesterday",
+                    "live_status": "was_live",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(ytdlp_extract, "fetch_channel_feed", streams_tab)
+    res = member_client.get("/api/preview/related", params={"url": URL})
+    assert res.status_code == 200, res.text
+    items = res.json()["items"]
+    assert [(i["title"], i["live_status"]) for i in items] == [
+        ("[B] Ridge", "is_live"),
+        ("Old ride", None),
+    ]
+    assert asked == [(CHANNEL_URL, "streams")]
+
+    # A stream that is not live does not look for live siblings.
+    meta["is_live"] = False
+    asked.clear()
+    member_client.get("/api/preview/related", params={"url": URL})
+    assert asked == []
 
 
 def test_a_caption_track_that_is_gone_is_remembered(client, stream_env, monkeypatch):

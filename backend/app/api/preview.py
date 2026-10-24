@@ -527,16 +527,27 @@ async def preview_related(
         raise
     except Exception as exc:
         raise preview_extraction_error(exc, cleaned) from exc
+    channel_url = str(meta.get("channel_url") or "")
+    live_now = (
+        await _in_ytdlp_thread(request, stream_related.live_now_on_channel, channel_url)
+        if meta.get("is_live") and channel_url
+        else []
+    )
     items = await run_in_threadpool(
-        _related, youtube_id, meta, limit, user.can("use_ai")
+        _related, youtube_id, meta, limit, user.can("use_ai"), live_now
     )
     return StreamRelatedPage(items=items)
 
 
-def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool):
+def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now):
     with Session(get_engine()) as session:
         return stream_related.related_for_stream(
-            session, youtube_id, meta, limit=limit, may_embed=may_embed
+            session,
+            youtube_id,
+            meta,
+            limit=limit,
+            may_embed=may_embed,
+            live_now=live_now,
         )
 
 

@@ -152,7 +152,7 @@ function FeedMetaRow({
   );
 }
 
-function LiveNowLabel() {
+export function LiveNowLabel() {
   return (
     <span className="inline-flex items-center gap-1.5 text-xs font-semibold leading-none text-red-400">
       <span

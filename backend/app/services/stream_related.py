@@ -8,6 +8,9 @@ videos, each marked with whether it is in the library:
    channel is indexed, else its title and description embedded on the fly),
    over both library and catalog embeddings;
 2. then the same channel: library videos, then catalog videos.
+
+A live stream first lists the channel's other broadcasts that are live now, so
+a tournament's A and B streams sit side by side (``live_now_on_channel``).
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ from sqlmodel import Session, col, select
 
 from ..models import ChannelCatalogVideo, Video, as_utc, require_id
 from ..schemas import ChannelFeedEntry
-from . import app_settings, library
+from . import app_settings, library, ytdlp_extract
 from .ai import embeddings as ai_embeddings
 from .ai.provider import get_embed_provider
 from .channel_catalog import query as catalog_query
@@ -30,6 +33,8 @@ logger = logging.getLogger(__name__)
 _LIBRARY_MIN_SCORE = 0.2
 _CATALOG_MIN_SCORE = 0.35
 _QUERY_DESCRIPTION_CHARS = 1000
+# Live broadcasts sit at the top of a channel's streams tab; a few rows is enough.
+_LIVE_SCAN = 10
 
 
 def _query_vector(
@@ -133,6 +138,22 @@ class _Collector:
         self.items.append(entry)
 
 
+def live_now_on_channel(channel_url: str) -> list[ChannelFeedEntry]:
+    """The broadcasts live now on a channel, read from its streams tab (yt-dlp)."""
+    try:
+        feed = ytdlp_extract.fetch_channel_feed(
+            channel_url, limit=_LIVE_SCAN, tab="streams"
+        )
+    except Exception:
+        logger.warning("stream related: streams tab unreadable", exc_info=True)
+        return []
+    return [
+        ChannelFeedEntry.model_validate(entry)
+        for entry in feed.get("entries") or []
+        if entry.get("live_status") == "is_live"
+    ]
+
+
 def related_for_stream(
     session: Session,
     youtube_id: str,
@@ -140,15 +161,19 @@ def related_for_stream(
     *,
     limit: int = 24,
     may_embed: bool = True,
+    live_now: list[ChannelFeedEntry] | None = None,
 ) -> list[ChannelFeedEntry]:
     """Up to ``limit`` related videos for the stream ``youtube_id``.
 
     ``meta`` is the stream's preview metadata (title, channel, channel_url,
     description). ``may_embed`` allows one embedding call when the stream has no
-    stored embedding (the caller may use AI).
+    stored embedding (the caller may use AI). ``live_now`` (the channel's live
+    broadcasts, for a live stream) goes first.
     """
     out = _Collector(limit, youtube_id)
     lib_map = _LibraryIds(session)
+    for entry in live_now or []:
+        out.add(entry)
     skipped_by_catalog: dict[int, set[str]] = {}
 
     def visible(video: ChannelCatalogVideo) -> bool:

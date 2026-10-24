@@ -1,5 +1,6 @@
 import type { Ref } from "react";
 import { Link } from "react-router-dom";
+import { LiveNowLabel } from "../../components/ChannelFeedCard";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import PlaybackQueue from "../../components/PlaybackQueue";
 import QueueButton from "../../components/QueueButton";
@@ -90,6 +91,11 @@ export function WatchSidebar({
                       {formatDuration(v.durationSec)}
                     </p>
                   )}
+                  {v.live && (
+                    <p className="mt-1">
+                      <LiveNowLabel />
+                    </p>
+                  )}
                   {v.downloaded && (
                     <p className="mt-1">
                       <DownloadedBadge />
@@ -169,6 +175,7 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
                 {v.durationSec != null && (
                   <span>{formatDuration(v.durationSec)}</span>
                 )}
+                {v.live && <LiveNowLabel />}
                 {v.downloaded && <DownloadedBadge />}
               </p>
             </div>
