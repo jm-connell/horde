@@ -24,14 +24,15 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
-- **Any OpenAI-compatible AI provider.** Settings → AI is one form: a preset
-  list (OpenRouter, OpenAI, Gemini, Mistral, Groq, DeepSeek, Together,
-  Ollama, LM Studio, llama.cpp, vLLM) or any URL, an API key if needed, and the
-  chat and embedding models, listed from the server. Embeddings can use a
+- **Any OpenAI-compatible AI provider.** Settings → AI is one form: paste an
+  API key or a server URL. Keys from OpenRouter, OpenAI, Gemini and Groq are
+  recognised on their own; any other provider or server takes its URL (and a
+  key if it needs one). Connecting shows which provider it found, and the chat
+  and embedding models are listed from the server. Embeddings can use a
   second server, for providers without them. **Find a server on this machine**
-  probes the usual local ports. The setup wizard offers a cloud provider, your
-  own server, or **Run Ollama for me** (the bundled container, with models
-  sized to the GPU). Costs and the weekly budget show for providers that report
+  probes the usual local ports. The setup wizard offers the same field, or
+  **Run Ollama for me** (the bundled container, with models sized to the
+  GPU). Costs and the weekly budget show for providers that report
   cost (OpenRouter). [AI setup](docs/ops/ai-setup.md) explains which URL to
   use from inside Docker.
 

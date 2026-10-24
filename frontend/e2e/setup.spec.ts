@@ -90,12 +90,9 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: "Skip for now" })
   ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "Cloud provider", exact: true })
-  ).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "My own server" })
-  ).toBeVisible();
+  await page.getByRole("button", { name: "Connect a provider" }).click();
+  await page.getByLabel("API key or server URL").fill("AIza-e2e-placeholder");
+  await expect(page.getByText("Google Gemini key")).toBeVisible();
   await page.getByRole("button", { name: "Run Ollama for me" }).click();
   await expect(
     page.getByText("docker compose --profile ai up -d")

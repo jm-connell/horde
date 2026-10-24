@@ -15,7 +15,7 @@ import { useSettingsPage } from "../context";
 import { openRouterPriceHint } from "../openRouterModels";
 import { Section, SettingRow, Toggle } from "../ui";
 import { useAiPage } from "./aiPageContext";
-import { providerKindLabel } from "../aiProviderUsage";
+import { providerLabel } from "../aiProviders";
 import EndpointFields from "./EndpointFields";
 import ModelField from "./ModelField";
 
@@ -74,10 +74,7 @@ export default function ConnectionPane() {
             {aiStatus?.configured && aiStatus.reachable && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Connected
-                {providerKindLabel(aiStatus.provider)
-                  ? ` · ${providerKindLabel(aiStatus.provider)}`
-                  : ""}
+                Connected · {providerLabel(aiDraft.base_url, aiStatus.provider)}
               </span>
             )}
             {aiDraft.enabled && aiStatus?.configured && !aiStatus.reachable && (
@@ -95,18 +92,19 @@ export default function ConnectionPane() {
             savedUrl={aiDraft.base_url}
             keySet={aiDraft.api_key_set}
             keyMasked={aiDraft.api_key}
-            onSave={async (url, key, preset) => {
+            onSave={async (url, key, provider) => {
               const patch: Partial<AiSettings> = { base_url: url };
               if (key !== null) patch.api_key = key;
               // Another provider's model ids rarely exist on this one, so a
-              // preset replaces them on a switch and fills them in when empty.
+              // recognised provider's suggestions replace them on a switch and
+              // fill them in when empty.
               const switched = url !== aiDraft.base_url;
-              if (preset?.chat && (switched || !aiDraft.chat_model))
-                patch.chat_model = preset.chat;
+              if (provider?.chat && (switched || !aiDraft.chat_model))
+                patch.chat_model = provider.chat;
               if (!aiDraft.embed_base_url) {
-                if (preset?.embed && (switched || !aiDraft.embed_model))
-                  patch.embed_model = preset.embed;
-                else if (preset?.noEmbeddings && switched)
+                if (provider?.embed && (switched || !aiDraft.embed_model))
+                  patch.embed_model = provider.embed;
+                else if (provider?.noEmbeddings && switched)
                   patch.embed_model = "";
               }
               await saveAi(patch);
@@ -117,7 +115,8 @@ export default function ConnectionPane() {
             container itself. For a server on the Docker host use{" "}
             <code>host.docker.internal</code>; for another PC use its LAN
             address (e.g. <code>http://192.168.1.50:11434</code>). A bare{" "}
-            <code>http://host:port</code> gets <code>/v1</code> added. See{" "}
+            <code>host:port</code> gets <code>http://</code> and{" "}
+            <code>/v1</code> added. See{" "}
             <a
               className="underline underline-offset-2 hover:text-gray-300"
               href="/wiki/ops/ai-setup/"
@@ -258,14 +257,14 @@ export default function ConnectionPane() {
                   savedUrl={aiDraft.embed_base_url}
                   keySet={aiDraft.embed_api_key_set}
                   keyMasked={aiDraft.embed_api_key}
-                  onSave={async (url, key, preset) => {
+                  onSave={async (url, key, provider) => {
                     const patch: Partial<AiSettings> = { embed_base_url: url };
                     if (key !== null) patch.embed_api_key = key;
                     if (
-                      preset?.embed &&
+                      provider?.embed &&
                       (url !== aiDraft.embed_base_url || !aiDraft.embed_model)
                     )
-                      patch.embed_model = preset.embed;
+                      patch.embed_model = provider.embed;
                     await saveAi(patch);
                   }}
                 />

@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useUpdateAppSettings } from "../queries/app";
 import { dataOrNull, useSystemStats } from "../queries/status";
 import Collapse from "../components/Collapse";
+import HelpTip from "../components/HelpTip";
 import {
   flushSettingsSync,
   markSetupCompleted,
@@ -15,13 +16,14 @@ import { formatSize } from "../utils";
 import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
+import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 import {
-  AI_PROVIDER_PRESETS,
-  INPUT,
-  INPUT_KEY,
-  PANEL_BTN,
-} from "./settings/constants";
-import ThemedSelect from "../components/ThemedSelect";
+  COMPATIBLE_PROVIDERS_TIP,
+  keyProviderLabel,
+  providerFor,
+  providerLabel,
+  readEndpointInput,
+} from "./settings/aiProviders";
 
 const STEPS = [
   "welcome",
@@ -32,11 +34,10 @@ const STEPS = [
   "done",
 ] as const;
 type Step = (typeof STEPS)[number];
-type AiChoice = "skip" | "cloud" | "server" | "bundled";
+type AiChoice = "skip" | "connect" | "bundled";
 
 /** The compose service `docker compose --profile ai up -d` starts. */
 const BUNDLED_OLLAMA_URL = "http://ollama:11434/v1";
-const CLOUD_PRESETS = AI_PROVIDER_PRESETS.filter((p) => p.needsKey);
 
 const STEP_TITLE: Record<Step, string> = {
   welcome: "Welcome",
@@ -65,9 +66,8 @@ export default function Setup() {
   const systemStats = dataOrNull(useSystemStats());
   const [finishing, setFinishing] = useState(false);
   const [aiChoice, setAiChoice] = useState<AiChoice>("skip");
-  const [cloudPreset, setCloudPreset] = useState(CLOUD_PRESETS[0].id);
-  const [cloudKey, setCloudKey] = useState("");
-  const [serverUrl, setServerUrl] = useState("");
+  const [connectInput, setConnectInput] = useState("");
+  const [connectKey, setConnectKey] = useState("");
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [leaving, setLeaving] = useState<Step | null>(null);
@@ -169,6 +169,7 @@ export default function Setup() {
         setAiStatus(result.detail || "Could not reach that server.");
         return;
       }
+      const saved = result.base_url ?? url;
       const listed = result.models ?? [];
       const embeds = result.embedding_models ?? [];
       const isOllama = result.kind === "ollama";
@@ -185,7 +186,7 @@ export default function Setup() {
       await saveAppSettings({
         ai: {
           enabled: true,
-          base_url: result.base_url ?? url,
+          base_url: saved,
           api_key: key,
           chat_model: chat,
           embed_model: embed,
@@ -200,8 +201,8 @@ export default function Setup() {
       } else {
         setAiStatus(
           chat
-            ? "Connected. You can continue."
-            : "Connected. Pick a chat model later in Settings → AI."
+            ? `Connected to ${providerLabel(saved, result.kind)}. You can continue.`
+            : `Connected to ${providerLabel(saved, result.kind)}. Pick a chat model later in Settings → AI.`
         );
       }
       goNext();
@@ -214,24 +215,17 @@ export default function Setup() {
     }
   };
 
-  const saveCloud = async () => {
-    const preset = CLOUD_PRESETS.find((p) => p.id === cloudPreset);
-    const key = cloudKey.trim();
-    if (!preset) return;
-    if (!key) {
-      setAiStatus("Paste an API key first.");
+  const saveConnect = async () => {
+    const read = readEndpointInput(connectInput);
+    if ("error" in read) {
+      setAiStatus(read.error);
       return;
     }
-    await connectAi(preset.url, key, preset);
-  };
-
-  const saveServer = async () => {
-    const url = serverUrl.trim();
-    if (!url) {
-      setAiStatus("Enter the server address first.");
-      return;
-    }
-    await connectAi(url, "");
+    await connectAi(
+      read.url,
+      read.key ?? connectKey.trim(),
+      read.provider ?? providerFor(read.url)
+    );
   };
 
   const saveBundled = () => connectAi(BUNDLED_OLLAMA_URL, "");
@@ -244,20 +238,17 @@ export default function Setup() {
     finishing,
     aiChoice,
     setAiChoice,
-    cloudPreset,
-    setCloudPreset,
-    cloudKey,
-    setCloudKey,
-    serverUrl,
-    setServerUrl,
+    connectInput,
+    setConnectInput,
+    connectKey,
+    setConnectKey,
     aiStatus,
     setAiStatus,
     aiBusy,
     goNext,
     goBack,
     finish,
-    saveCloud,
-    saveServer,
+    saveConnect,
     saveBundled,
   };
 
@@ -318,20 +309,17 @@ type WizardPanelProps = {
   finishing: boolean;
   aiChoice: AiChoice;
   setAiChoice: (choice: AiChoice) => void;
-  cloudPreset: string;
-  setCloudPreset: (value: string) => void;
-  cloudKey: string;
-  setCloudKey: (value: string) => void;
-  serverUrl: string;
-  setServerUrl: (value: string) => void;
+  connectInput: string;
+  setConnectInput: (value: string) => void;
+  connectKey: string;
+  setConnectKey: (value: string) => void;
   aiStatus: string | null;
   setAiStatus: (value: string | null) => void;
   aiBusy: boolean;
   goNext: () => void;
   goBack: () => void;
   finish: () => void | Promise<void>;
-  saveCloud: () => void | Promise<void>;
-  saveServer: () => void | Promise<void>;
+  saveConnect: () => void | Promise<void>;
   saveBundled: () => void | Promise<void>;
 };
 
@@ -344,20 +332,17 @@ function WizardPanel({
   finishing,
   aiChoice,
   setAiChoice,
-  cloudPreset,
-  setCloudPreset,
-  cloudKey,
-  setCloudKey,
-  serverUrl,
-  setServerUrl,
+  connectInput,
+  setConnectInput,
+  connectKey,
+  setConnectKey,
   aiStatus,
   setAiStatus,
   aiBusy,
   goNext,
   goBack,
   finish,
-  saveCloud,
-  saveServer,
+  saveConnect,
   saveBundled,
 }: WizardPanelProps) {
   const stepIndex = STEPS.indexOf(step);
@@ -489,8 +474,7 @@ function WizardPanel({
               {(
                 [
                   { id: "skip" as const, label: "Skip for now" },
-                  { id: "cloud" as const, label: "Cloud provider" },
-                  { id: "server" as const, label: "My own server" },
+                  { id: "connect" as const, label: "Connect a provider" },
                   { id: "bundled" as const, label: "Run Ollama for me" },
                 ] as const
               ).map((opt) => (
@@ -511,73 +495,52 @@ function WizardPanel({
                 </button>
               ))}
             </div>
-            <Collapse open={aiChoice === "cloud"}>
+            <Collapse open={aiChoice === "connect"}>
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted">
-                  No GPU needed. Titles, captions and chat messages are sent to
-                  the provider. The key is stored on this Horde server.
-                  OpenRouter reaches most models with one key and reports what
-                  each call costs.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <ThemedSelect
-                    aria-label="Cloud provider"
-                    value={cloudPreset}
-                    options={CLOUD_PRESETS.map((p) => ({
-                      value: p.id,
-                      label: p.label,
-                    }))}
-                    onChange={setCloudPreset}
-                    className="w-48"
-                    buttonClassName="w-full"
-                  />
-                  <input
-                    type="password"
-                    autoComplete="off"
-                    placeholder="API key"
-                    aria-label="API key"
-                    value={cloudKey}
-                    onChange={(e) => setCloudKey(e.target.value)}
-                    className={INPUT_KEY}
-                  />
-                  <button
-                    type="button"
-                    disabled={aiBusy}
-                    onClick={() => void saveCloud()}
-                    className={PANEL_BTN}
-                  >
-                    {aiBusy ? "Testing…" : "Test and save"}
-                  </button>
-                </div>
-              </div>
-            </Collapse>
-            <Collapse open={aiChoice === "server"}>
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-muted">
-                  Ollama, LM Studio, llama.cpp, vLLM or anything else with an
-                  OpenAI-compatible API. Horde runs in Docker, so use{" "}
+                  Paste an API key from a cloud provider (no GPU needed; titles,
+                  captions and chat messages are sent to it) or the address of
+                  an AI server you run. Horde runs in Docker, so use{" "}
                   <span className="font-mono">host.docker.internal</span> for a
-                  server on this machine, or the LAN address of another PC, e.g.{" "}
-                  <span className="font-mono">http://192.168.1.50:11434</span>.
+                  server on this machine, or the LAN address of another PC.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    type="text"
-                    placeholder="http://host.docker.internal:11434"
-                    aria-label="Server address"
-                    value={serverUrl}
-                    onChange={(e) => setServerUrl(e.target.value)}
+                    type={keyProviderLabel(connectInput) ? "password" : "text"}
+                    autoComplete="off"
+                    spellCheck={false}
+                    placeholder="API key or server URL"
+                    aria-label="API key or server URL"
+                    value={connectInput}
+                    onChange={(e) => setConnectInput(e.target.value)}
                     className={INPUT}
                   />
+                  <HelpTip text={COMPATIBLE_PROVIDERS_TIP} />
+                  {!keyProviderLabel(connectInput) && (
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder="API key (if it needs one)"
+                      aria-label="API key"
+                      value={connectKey}
+                      onChange={(e) => setConnectKey(e.target.value)}
+                      className={INPUT_KEY}
+                    />
+                  )}
                   <button
                     type="button"
                     disabled={aiBusy}
-                    onClick={() => void saveServer()}
+                    onClick={() => void saveConnect()}
                     className={PANEL_BTN}
                   >
-                    {aiBusy ? "Testing…" : "Test and save"}
+                    {aiBusy ? "Connecting…" : "Connect"}
                   </button>
                 </div>
+                {keyProviderLabel(connectInput) && (
+                  <p className="text-xs text-muted">
+                    {keyProviderLabel(connectInput)} key
+                  </p>
+                )}
               </div>
             </Collapse>
             <Collapse open={aiChoice === "bundled"}>

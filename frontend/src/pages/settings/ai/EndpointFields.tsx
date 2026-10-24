@@ -1,43 +1,25 @@
 import { useEffect, useState } from "react";
 import { describeError } from "../../../apiErrors";
 import { api } from "../../../api";
-import ThemedSelect from "../../../components/ThemedSelect";
 import type { AiConnectionTest } from "../../../types";
+import { INPUT_INLINE, INPUT_KEY, PANEL_BTN } from "../constants";
+import HelpTip from "../../../components/HelpTip";
 import {
-  AI_PROVIDER_PRESETS,
-  INPUT_INLINE,
-  INPUT_KEY,
-  PANEL_BTN,
-} from "../constants";
-import { providerKindLabel } from "../aiProviderUsage";
+  COMPATIBLE_PROVIDERS_TIP,
+  keyProviderLabel,
+  providerFor,
+  providerLabel,
+  readEndpointInput,
+  type AiProvider,
+} from "../aiProviders";
 import { useSettingsPage } from "../context";
 
-type Preset = (typeof AI_PROVIDER_PRESETS)[number];
-
-function presetForUrl(url: string): Preset | undefined {
-  const clean = url.trim().replace(/\/+$/, "");
-  return AI_PROVIDER_PRESETS.find((p) => p.url === clean);
-}
-
-const PRESET_OPTIONS = [
-  ...AI_PROVIDER_PRESETS.map((p) => ({
-    value: p.id,
-    label: p.label,
-    group: p.needsKey
-      ? "Cloud providers (need an API key)"
-      : "Local servers (your machine or network)",
-  })),
-  {
-    value: "custom",
-    label: "Other (type the URL)",
-    group: "Any OpenAI-compatible URL",
-  },
-];
-
 /**
- * URL + API key for one OpenAI-compatible endpoint, with a preset dropdown,
- * a connection test and a local-server finder. Saving sends the URL and key
- * together, so the server can drop a key saved for a different URL.
+ * One OpenAI-compatible endpoint from a single field: paste an API key (its
+ * provider is recognised) or a server URL, with a key field for servers that
+ * need one. Connecting tests it and names the provider it found. Saving sends
+ * the URL and key together, so the server can drop a key saved for a
+ * different URL.
  */
 export default function EndpointFields({
   target,
@@ -50,37 +32,59 @@ export default function EndpointFields({
   savedUrl: string;
   keySet: boolean;
   keyMasked: string;
-  /** Save the endpoint; ``preset`` is set when the URL came from the dropdown. */
-  onSave: (url: string, key: string | null, preset?: Preset) => Promise<void>;
+  /** Save the endpoint; ``provider`` is set when Horde recognised it. */
+  onSave: (
+    url: string,
+    key: string | null,
+    provider?: AiProvider
+  ) => Promise<void>;
 }) {
   const { showToast, showError } = useSettingsPage();
-  const [url, setUrl] = useState(savedUrl);
+  const [input, setInput] = useState(savedUrl);
   const [key, setKey] = useState("");
   const [testing, setTesting] = useState(false);
   const [result, setResult] = useState<AiConnectionTest | null>(null);
+  const [problem, setProblem] = useState("");
   const [detecting, setDetecting] = useState(false);
   const [found, setFound] = useState<
     { label: string; base_url: string; kind: string }[] | null
   >(null);
 
-  useEffect(() => setUrl(savedUrl), [savedUrl]);
+  useEffect(() => setInput(savedUrl), [savedUrl]);
 
-  const preset = presetForUrl(url);
-  const dirty = url.trim() !== savedUrl || key.trim() !== "";
+  const keyProvider = keyProviderLabel(input);
+  const dirty = input.trim() !== savedUrl || key.trim() !== "";
   const label = target === "chat" ? "AI provider" : "Embeddings provider";
 
-  const save = async () => {
-    await onSave(url.trim(), key.trim() || null, presetForUrl(url));
+  /** The URL and key to use, or ``null`` after showing why not. */
+  const read = () => {
+    const parsed = readEndpointInput(input);
+    if ("error" in parsed) {
+      setProblem(parsed.error);
+      return null;
+    }
+    return { ...parsed, key: parsed.key ?? (key.trim() || null) };
+  };
+
+  const save = async (
+    url: string,
+    apiKey: string | null,
+    provider?: AiProvider
+  ) => {
+    await onSave(url, apiKey, provider ?? providerFor(url));
+    setInput(url);
     setKey("");
   };
 
-  const test = async () => {
+  const connect = async () => {
+    const ep = read();
+    if (!ep) return;
     setTesting(true);
     const res = await api
       .testAiConnection({
         target,
-        base_url: url.trim() || null,
-        api_key: key.trim() || null,
+        base_url: ep.url,
+        api_key: ep.key,
       })
       .catch((err) => {
         showError(`Connection test failed: ${describeError(err)}`);
@@ -93,9 +97,15 @@ export default function EndpointFields({
       showToast(res.detail || "Unreachable");
       return;
     }
-    const kind = providerKindLabel(res.kind);
-    showToast(`${res.detail || "Connected"}${kind ? ` · ${kind}` : ""}`);
-    if (dirty) await save();
+    const url = res.base_url ?? ep.url;
+    showToast(`Connected to ${providerLabel(url, res.kind)}`);
+    if (dirty)
+      await save(url, ep.key, ep.provider ?? providerFor(url, res.kind));
+  };
+
+  const saveUntested = async () => {
+    const ep = read();
+    if (ep) await save(ep.url, ep.key, ep.provider);
   };
 
   const detect = async () => {
@@ -111,79 +121,74 @@ export default function EndpointFields({
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <ThemedSelect
-          aria-label={`${label} preset`}
-          value={preset?.id ?? "custom"}
-          options={PRESET_OPTIONS}
-          onChange={(id) => {
-            const next = AI_PROVIDER_PRESETS.find((p) => p.id === id);
-            if (next) setUrl(next.url);
-            setResult(null);
-          }}
-          className="w-64 max-w-full"
-          buttonClassName="w-full"
-          listClassName="max-h-80"
-        />
         <input
-          value={url}
+          value={input}
           onChange={(e) => {
-            setUrl(e.target.value);
+            setInput(e.target.value);
             setResult(null);
+            setProblem("");
           }}
-          placeholder="https://… or http://192.168.x.x:11434"
-          aria-label={`${label} URL`}
-          className={INPUT_INLINE}
-        />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input
-          type="password"
+          type={keyProvider ? "password" : "text"}
           autoComplete="off"
-          value={key}
-          onChange={(e) => setKey(e.target.value)}
-          placeholder={
-            keySet && url.trim() === savedUrl
-              ? `Key saved (${keyMasked || "••••"})`
-              : preset?.needsKey
-                ? "API key"
-                : "API key (optional)"
-          }
-          aria-label={`${label} API key`}
-          className={INPUT_KEY}
+          spellCheck={false}
+          placeholder="Paste an API key or a server URL"
+          aria-label={`${label} URL or API key`}
+          className={`${INPUT_INLINE} sm:w-80`}
         />
+        <HelpTip text={COMPATIBLE_PROVIDERS_TIP} />
+        {!keyProvider && (
+          <input
+            type="password"
+            autoComplete="off"
+            value={key}
+            onChange={(e) => setKey(e.target.value)}
+            placeholder={
+              keySet && input.trim() === savedUrl
+                ? `Key saved (${keyMasked || "••••"})`
+                : "API key (if it needs one)"
+            }
+            aria-label={`${label} API key`}
+            className={INPUT_KEY}
+          />
+        )}
         <button
           type="button"
-          disabled={testing || !url.trim()}
-          onClick={() => void test()}
+          disabled={testing || !input.trim()}
+          onClick={() => void connect()}
           className={PANEL_BTN}
         >
-          {testing ? "Testing…" : dirty ? "Test and save" : "Test"}
+          {testing ? "Connecting…" : dirty ? "Connect" : "Test"}
         </button>
         {dirty && (
           <button
             type="button"
-            onClick={() => void save()}
+            onClick={() => void saveUntested()}
             className={PANEL_BTN}
           >
             Save without testing
           </button>
         )}
-        {result?.ok && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-            Connected
-            {providerKindLabel(result.kind)
-              ? ` · ${providerKindLabel(result.kind)}`
-              : ""}
-          </span>
-        )}
-        {result && !result.ok && (
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 ring-1 ring-amber-500/30">
-            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
-            {result.detail || "Unreachable"}
-          </span>
-        )}
       </div>
+      {(keyProvider || problem || result) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs">
+          {keyProvider && !result && (
+            <span className="text-muted">{keyProvider} key</span>
+          )}
+          {problem && <span className="text-amber-300">{problem}</span>}
+          {result?.ok && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 font-medium text-emerald-400 ring-1 ring-emerald-500/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              Connected · {providerLabel(result.base_url ?? input, result.kind)}
+            </span>
+          )}
+          {result && !result.ok && (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 font-medium text-amber-300 ring-1 ring-amber-500/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              {result.detail || "Unreachable"}
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
@@ -205,8 +210,9 @@ export default function EndpointFields({
             type="button"
             className={PANEL_BTN}
             onClick={() => {
-              setUrl(row.base_url);
+              setInput(row.base_url);
               setResult(null);
+              setProblem("");
               setFound(null);
             }}
           >
