@@ -1,4 +1,31 @@
-import { ensureNavVisible, expect, openNav, test } from "./fixtures";
+import {
+  ensureNavVisible,
+  expect,
+  hasChannelRail,
+  openChannel,
+  openNav,
+  openSearchBox,
+  test,
+  videoCard,
+} from "./fixtures";
+
+/** Report a ready AI backend, so the home page offers its Recommended tab. */
+async function withReadyAi(page: import("@playwright/test").Page) {
+  await page.route(/\/api\/ai\/status$/, async (route) => {
+    let response;
+    let status: Record<string, unknown>;
+    try {
+      response = await route.fetch();
+      status = await response.json();
+    } catch {
+      return; // the page closed while a status poll was in flight
+    }
+    await route.fulfill({
+      response,
+      json: { ...status, enabled: true, ready: true, paused: false },
+    });
+  });
+}
 
 test("nav reaches every primary page and legacy routes redirect", async ({
   page,
@@ -65,6 +92,86 @@ test("nav reaches every primary page and legacy routes redirect", async ({
   await expect(
     page.getByRole("link", { name: "Home", exact: true })
   ).toBeVisible();
+});
+
+// The logo and Home mean "start over on the home page", not just "/": a
+// channel, a tag or a search must not survive the click.
+test("the logo leaves a channel page for the base home page", async ({
+  page,
+}) => {
+  await page.goto("/?channel=Kiln");
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toBeVisible();
+
+  await page.getByRole("link", { name: "HORDE" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toHaveCount(0);
+});
+
+test("Home leaves a channel opened from the rail", async ({ page }) => {
+  test.skip(!hasChannelRail(page), "the channel rail is desktop only");
+  await page.goto("/");
+  await openChannel(page, "Kiln");
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toBeVisible();
+  // The rail opens a channel in page state, so the address still says home.
+  await expect(page).toHaveURL(/\/$/);
+
+  await openNav(page, "Home");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toHaveCount(0);
+});
+
+test("Home clears the search and its results", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  const box = await openSearchBox(page);
+  await box.fill("Aurora");
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+  const heading = page.getByRole("button", { name: /In your library/ });
+  await expect(heading).toBeVisible();
+
+  await openNav(page, "Home");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(heading).toHaveCount(0);
+  await expect(await openSearchBox(page)).toHaveValue("");
+});
+
+test("Home keeps the Recommended tab", async ({ page }) => {
+  await withReadyAi(page);
+  await page.goto("/");
+  const recommended = page.getByRole("button", {
+    name: "Recommended",
+    exact: true,
+  });
+  await recommended.click();
+  await expect(recommended).toHaveAttribute("data-liquid-active", "true");
+
+  await openChannel(page, "Kiln");
+  await expect(
+    page.getByRole("heading", { name: /^Kiln/, level: 1 })
+  ).toBeVisible();
+
+  await openNav(page, "Home");
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+  await expect(recommended).toHaveAttribute("data-liquid-active", "true");
 });
 
 test("narrow screens open the nav from the menu button", async ({ page }) => {

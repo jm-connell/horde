@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import ChannelAutodownloadModal from "../components/ChannelAutodownloadModal";
 import ChannelFeed from "../components/ChannelFeed";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
@@ -7,6 +7,7 @@ import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
 import RecommendedHome from "../components/RecommendedHome";
+import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
 import { useSettings } from "../hooks/useSettings";
@@ -97,6 +98,28 @@ function OnlineLibrary() {
     exitSelectMode: selection.exit,
     refreshLibrary,
   });
+  // The logo and Home ask for the base home page: drop the channel (from the
+  // rail it never reaches the URL), the tag, the tag drawer and select mode.
+  // The home tab is a saved choice, so Recommended stays put.
+  const { resetKey: homeResetKey } = useHomeReset();
+  const seenHomeReset = useRef(homeResetKey);
+  const { exit: exitSelection } = selection;
+  useEffect(() => {
+    if (seenHomeReset.current === homeResetKey) return;
+    seenHomeReset.current = homeResetKey;
+    setActiveChannel(null);
+    setActiveTag(null);
+    setShowTags(false);
+    setShowAllChannels(false);
+    exitSelection();
+  }, [
+    homeResetKey,
+    setActiveChannel,
+    setActiveTag,
+    setShowTags,
+    exitSelection,
+  ]);
+
   const globalSearch = useGlobalSearch({
     debouncedSearch,
     activeChannel,

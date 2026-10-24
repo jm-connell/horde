@@ -12,6 +12,7 @@ import { appSettingsQuery, useUpdateAppSettings } from "../queries/app";
 interface SearchContextValue {
   search: string;
   setSearch: (value: string) => void;
+  clearSearch: () => void;
   committedQuery: string;
   commitSearch: () => void;
   youtubeVideoSearch: boolean;
@@ -38,6 +39,12 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
   const setSearch = useCallback((value: string) => {
     searchRef.current = value;
     setSearchState(value);
+  }, []);
+  /** Drop the query and its results, as on a fresh load of the app. */
+  const clearSearch = useCallback(() => {
+    searchRef.current = "";
+    setSearchState("");
+    setCommittedQuery("");
   }, []);
   const commitSearch = useCallback(() => {
     setCommittedQuery(searchRef.current.trim());
@@ -86,6 +93,7 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
       value={{
         search,
         setSearch,
+        clearSearch,
         committedQuery,
         commitSearch,
         youtubeVideoSearch,
