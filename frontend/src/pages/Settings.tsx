@@ -26,6 +26,8 @@ import {
 } from "./settings/search";
 import type { SettingsTab } from "./settings/types";
 
+const REPORT_BUG_URL = "https://github.com/jm-connell/horde/issues/new";
+
 /**
  * The settings page shell: the tab bar, the search box and which tab is open
  * (`?tab=`, `?pane=`). Each tab owns its own state and polling.
@@ -186,6 +188,18 @@ export default function Settings() {
           </Suspense>
         </div>
       </SettingsPageProvider>
+
+      <footer className="mt-4 text-center text-xs text-muted">
+        Found a bug or have an idea?{" "}
+        <a
+          href={REPORT_BUG_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="text-accent hover:underline"
+        >
+          Report it on GitHub
+        </a>
+      </footer>
     </div>
   );
 }
