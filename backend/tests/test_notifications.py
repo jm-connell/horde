@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 import logging
 import threading
@@ -1218,10 +1219,18 @@ def test_the_module_function_without_a_context_does_not_raise(monkeypatch):
 
 @pytest.fixture
 def many_addresses(app):
-    """Sign-ins come from many addresses and the throttle is out of the way (it has its own tests)."""
+    """Sign-ins come from many addresses, and the throttle's clock runs fast.
+
+    The per-name slowdown (one second after five failures a minute) would answer
+    ``429`` to the later attempts; each limiter reading advancing the clock by five
+    seconds lets every attempt through to be judged (the throttle has its own tests).
+    """
+    from app.services.auth.limiter import LoginLimiter
+
     counter = iter(range(1, 10_000))
     app.state.auth.client_address = lambda request: f"203.0.113.{next(counter) % 250}"
-    app.state.auth.limiter.retry_after = lambda address, key: 0
+    ticks = itertools.count(1000, 5)
+    app.state.auth.limiter = LoginLimiter(clock=lambda: float(next(ticks)))
 
 
 def _fail_login(c, username="admin", times=1):
