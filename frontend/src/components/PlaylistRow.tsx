@@ -508,7 +508,7 @@ export default function PlaylistRow({
             <LoadingIndicator className="py-8" />
           ) : loadError ? (
             <p className="py-6 text-center text-sm text-muted">{loadError}</p>
-          ) : (
+          ) : !current ? null : (
             <>
               <div className="flex flex-wrap items-start gap-2">
                 <div className="flex min-w-0 flex-1 flex-nowrap items-start gap-2">
@@ -730,7 +730,7 @@ export default function PlaylistRow({
               )}
 
               <div className="mt-3 space-y-2">
-                {!current ? null : views.length === 0 ? (
+                {views.length === 0 ? (
                   <p className="py-8 text-center text-sm text-muted">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."

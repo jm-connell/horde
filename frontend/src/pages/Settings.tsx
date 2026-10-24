@@ -195,7 +195,7 @@ export default function Settings() {
           href={REPORT_BUG_URL}
           target="_blank"
           rel="noreferrer"
-          className="text-accent hover:underline"
+          className="text-accent underline underline-offset-2"
         >
           Report it on GitHub
         </a>
