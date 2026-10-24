@@ -151,10 +151,26 @@ DEFAULTS: dict[str, Any] = {
     "direct_youtube_search": True,
     "youtube_video_search": True,
     "download_queue_paused": False,
+    # Where outgoing notifications go (services/notifications/targets.py).
+    "notification_targets": [],
+    # Which update/failure notifications were already sent (services/notifications/watchers.py).
+    "notification_state": {},
+    # Downloads wait once the library takes this many bytes. None = no limit.
+    "max_library_bytes": None,
+    # Write Jellyfin / Kodi / Plex files (.nfo, thumbnails) beside the media
+    # (services/media_sidecars.py).
+    "media_server_sidecars": False,
+    # Two-step sign-in required of: "off" | "admins" | "everyone"
+    # (services/auth/two_factor.py).
+    "require_two_factor": "off",
     "setup_completed": False,
     "ui": {},
     "ai": dict(AI_DEFAULTS),
 }
+
+#: The smallest library size limit the settings accept (1 GiB), and the largest.
+MAX_LIBRARY_BYTES_MIN = 1024**3
+MAX_LIBRARY_BYTES_MAX = 1024**5
 
 CHANNEL_CATALOG_MAX_MIN = 100
 CHANNEL_CATALOG_MAX_MAX = 5000
@@ -167,6 +183,19 @@ def clamp_catalog_max_videos(value: Any) -> int:
     except TypeError, ValueError:
         n = int(DEFAULTS["channel_catalog_max_videos"])
     return max(CHANNEL_CATALOG_MAX_MIN, min(CHANNEL_CATALOG_MAX_MAX, n))
+
+
+def clamp_max_library_bytes(value: Any) -> int | None:
+    """None/empty/0 means no limit; otherwise a size between 1 GiB and 1 PiB."""
+    if value is None or value == "" or isinstance(value, bool):
+        return None
+    try:
+        size = int(value)
+    except TypeError, ValueError:
+        return None
+    if size <= 0:
+        return None
+    return max(MAX_LIBRARY_BYTES_MIN, min(MAX_LIBRARY_BYTES_MAX, size))
 
 
 def direct_youtube_search_system(data: dict[str, Any] | None = None) -> bool:
@@ -511,6 +540,17 @@ def save(updates: dict[str, Any]) -> dict[str, Any]:
         current.update(updates)
         _write(current)
         return current
+
+
+def edit(change: Callable[[dict[str, Any]], dict[str, Any]]) -> dict[str, Any]:
+    """Read, change and save under the settings lock.
+
+    ``change`` gets the current settings and returns the updates to save, so two
+    callers editing the same list (the notification targets) cannot overwrite each
+    other.
+    """
+    with _lock:
+        return save(change(load()))
 
 
 def _sanitize_settings_css(data: dict[str, Any]) -> dict[str, Any]:

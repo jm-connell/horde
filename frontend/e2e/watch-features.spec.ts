@@ -125,7 +125,9 @@ test("deleting a video from the watch page removes it from the library", async (
   await page.goto(`/watch/${id}`);
   await page.getByTitle("More actions").click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Move to trash", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/$/);
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
   await expect(videoCard(page, "Kiln fire")).toHaveCount(0);

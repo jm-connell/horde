@@ -4,8 +4,13 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { describeError } from "../../apiErrors";
 import { usePresets } from "../../queries/app";
-import { queryKeys } from "../../queries/keys";
+import {
+  deleteErrorMessage,
+  useAfterDelete,
+  useTrashRetentionDays,
+} from "../../queries/trash";
 import { videoDetailQuery } from "../../queries/videos";
+import { deleteConfirmCopy } from "../../trash";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useDownloads } from "../../context/DownloadContext";
 import { usePlaybackActions } from "../../context/PlaybackContext";
@@ -34,6 +39,8 @@ export function useWatchActions({
   const { playVideo, getCurrentPosition } = usePlaybackActions();
   const presets = usePresets();
   const [settings] = useSettings();
+  const retentionDays = useTrashRetentionDays();
+  const afterDelete = useAfterDelete();
   const [editing, setEditing] = useState(false);
   const [editFocus, setEditFocus] = useState<"notes" | undefined>(undefined);
   const [redownloadOpen, setRedownloadOpen] = useState(false);
@@ -114,18 +121,18 @@ export function useWatchActions({
   const redownloading = redownloadMutation.isPending;
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => api.deleteVideo(id, true),
-    onSuccess: () => {
-      for (const queryKey of [
-        queryKeys.videos.all,
-        queryKeys.channels.all,
-        queryKeys.tags.all,
-      ]) {
-        void queryClient.invalidateQueries({ queryKey });
-      }
+    mutationFn: (v: { id: number; title: string }) =>
+      api.deleteVideo(v.id, true),
+    onSuccess: (result, v) => {
+      afterDelete(
+        result.trashEntryIds,
+        result.trashEntryIds.length
+          ? `Moved “${v.title}” to the trash`
+          : `Deleted “${v.title}”`
+      );
       navigate("/");
     },
-    onError: (err) => showError(describeError(err) || "Could not delete video"),
+    onError: (err) => showError(deleteErrorMessage(err)),
   });
 
   const onRedownload = () => {
@@ -165,14 +172,18 @@ export function useWatchActions({
 
   const onDelete = async () => {
     if (!video) return;
+    const copy = deleteConfirmCopy(retentionDays, {
+      count: 1,
+      title: video.title,
+    });
     const ok = await confirm({
-      title: "Delete this video?",
-      body: `"${video.title}" will be removed from your library and the file will be permanently deleted.`,
-      confirmLabel: "Delete",
+      title: copy.title,
+      body: copy.body,
+      confirmLabel: copy.confirmLabel,
       danger: true,
     });
     if (!ok) return;
-    deleteMutation.mutate(video.id);
+    deleteMutation.mutate({ id: video.id, title: video.title });
   };
 
   return {

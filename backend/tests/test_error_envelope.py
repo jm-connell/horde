@@ -51,7 +51,9 @@ def test_duplicate_download_names_the_reason_in_code(client, monkeypatch):
     from app.services.downloads import jobs
 
     monkeypatch.setattr(
-        jobs, "classify_enqueue_duplicate", lambda s, u: ("already_queued", 1)
+        jobs,
+        "classify_enqueue_duplicate",
+        lambda s, u, user=None: ("already_queued", 1),
     )
     resp = client.post("/api/downloads", json={"url": "https://example.com/v"})
     assert resp.status_code == 409

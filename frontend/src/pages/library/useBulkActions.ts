@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
-import { api, downloadFileUrl } from "../../api";
+import { api, downloadFileUrl, trashEntryIdsOfError } from "../../api";
 import { describeError } from "../../apiErrors";
 import { useToast } from "../../context/ToastContext";
 import { offlineManager } from "../../offline/manager";
 import { usePlaylists } from "../../queries/playlists";
+import { deleteErrorMessage, useAfterDelete } from "../../queries/trash";
+import { videoCount } from "../../trash";
 import type { Video } from "../../types";
 
 /**
@@ -23,9 +25,11 @@ export function useBulkActions(input: {
   const [bulkNoteOpen, setBulkNoteOpen] = useState(false);
   const [playlistOpen, setPlaylistOpen] = useState(false);
   const playlistsQuery = usePlaylists(playlistOpen);
-  const playlists = playlistsQuery.playlists;
+  // Only playlists this user may add to.
+  const playlists = playlistsQuery.editable;
   const playlistsFailed = playlistsQuery.isError;
   const [metadataSyncing, setMetadataSyncing] = useState(false);
+  const afterDelete = useAfterDelete();
 
   useEffect(() => {
     if (playlistsFailed) showError("Could not load playlists");
@@ -33,14 +37,28 @@ export function useBulkActions(input: {
 
   const bulkDelete = async () => {
     if (!selectedIds.size) return;
+    let trashed: number[];
     try {
-      await api.bulkDeleteVideos([...selectedIds], true);
-    } catch {
-      showError("Could not delete selected videos");
-      throw new Error("Could not delete selected videos");
+      trashed = (await api.bulkDeleteVideos([...selectedIds], true))
+        .trashEntryIds;
+    } catch (err) {
+      // Some may have moved before the failure: those can still be undone.
+      const moved = trashEntryIdsOfError(err);
+      if (moved.length) {
+        afterDelete(moved, `Moved ${videoCount(moved.length)} to the trash`);
+        refreshLibrary();
+      }
+      showError(deleteErrorMessage(err, "Could not delete selected videos"));
+      throw err;
     }
     exitSelectMode();
     refreshLibrary();
+    afterDelete(
+      trashed,
+      trashed.length
+        ? `Moved ${videoCount(trashed.length)} to the trash`
+        : `Deleted ${videoCount(selectedIds.size)}`
+    );
   };
 
   const bulkSaveNote = async () => {

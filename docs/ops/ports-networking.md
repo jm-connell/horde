@@ -25,10 +25,10 @@ Only the video stream, subtitle and thumbnail routes send CORS headers (`Access-
 
 ## LAN-only
 
-!!! danger "Do not expose to the internet"
-    Horde has accounts ([details](authentication.md)) but no two-factor sign-in and no hardening against a determined remote attacker. Anyone who can reach the port can try passwords, and any signed-in user can read the library.
+!!! warning "LAN by default"
+    Horde has accounts ([details](authentication.md)). Anyone who can reach the port can try passwords, and any signed-in user can read the library.
 
-    Keep it on a trusted LAN, VPN, or a gateway that terminates auth. Recipes: [Remote access](remote-access.md). Design: [Security model](../design/no-auth.md).
+    Keep it on a trusted LAN or VPN. To expose it to the internet, follow the [internet exposure checklist](internet-exposure.md) (TLS, trusted proxy, allowed hosts, required two-step sign-in). Recipes: [Remote access](remote-access.md). Design: [Security model](../design/no-auth.md).
 
 ## Local development
 

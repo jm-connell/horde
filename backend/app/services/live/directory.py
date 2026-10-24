@@ -21,6 +21,7 @@ from sqlmodel import Session
 
 from ...config import LIVE_POLL_SEC, LIVE_POLL_SPACING_SEC
 from ...context import current, get_engine
+from .. import notifications
 from ..url_safety import UnsafeUrlError, UrlFetchError
 from ..workers import BackgroundWorker
 from .page import LiveBroadcast, LivePageUnreadable, fetch_live_page, parse_live_page
@@ -180,6 +181,32 @@ def check_channel(channel_url: str) -> LiveBroadcast | None:
         return _confirm_with_ytdlp(exc.video_id)
 
 
+def _announce_if_new(
+    previous: ChannelLiveState | None,
+    channel_url: str,
+    name: str | None,
+    broadcast: LiveBroadcast | None,
+) -> None:
+    """Notify when a channel that was checked before and was not live now is.
+
+    A channel seen for the first time (after a start, or a new follow) stays quiet,
+    so a restart does not announce everything that has been live for hours.
+    """
+    if broadcast is None or previous is None or previous.broadcast is not None:
+        return
+    notifications.emit(
+        notifications.events.CHANNEL_LIVE,
+        {
+            "channel": broadcast.channel_name or name or channel_url,
+            "channel_url": channel_url,
+            "title": broadcast.title,
+            "video_id": broadcast.video_id,
+        },
+        dedupe_key=f"live:{broadcast.video_id}",
+        dedupe_ttl=6 * 3600,
+    )
+
+
 def poll_due_channels(
     directory: LiveDirectory,
     sleep: Callable[[float], bool],
@@ -200,7 +227,9 @@ def poll_due_channels(
             return
         name = targets.get(channel_url)
         try:
-            directory.record(channel_url, name, check_channel(channel_url))
+            broadcast = check_channel(channel_url)
+            _announce_if_new(directory.get(channel_url), channel_url, name, broadcast)
+            directory.record(channel_url, name, broadcast)
         except UrlFetchError as exc:
             directory.record_failure(channel_url, name)
             if "429" in str(exc):

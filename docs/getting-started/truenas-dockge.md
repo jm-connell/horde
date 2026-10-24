@@ -5,7 +5,7 @@ Horde is designed to run on TrueNAS with [Dockge](https://dockge.kuma.pet/) mana
 Horde is **built from git** on the host (`build: .`). The Dockge stack folder must be a full `git clone`, not a compose snippet pasted into **Add Stack**. Without the repo, Docker has no `Dockerfile` and the image cannot build. A GitHub ZIP also skips `.git`, so later [`update.sh`](updating.md) cannot `git pull`.
 
 !!! warning "Trusted network"
-    Create the admin account on first visit ([accounts](../ops/authentication.md)). Keep the Dockge stack on your trusted network. Do not port-forward `8686` to the internet.
+    Create the admin account on first visit ([accounts](../ops/authentication.md)). Keep the Dockge stack on your trusted network by default. To expose it, follow the [internet exposure checklist](../ops/internet-exposure.md) instead of just forwarding `8686`.
 
 ## Prerequisites
 

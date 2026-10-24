@@ -35,6 +35,18 @@ Open a channel from the sidebar to see its **feed**:
 - Videos already in your library for that channel
 - Optionally **undownloaded** catalog entries (titles from the remote channel index)
 
+### Header and channel settings
+
+The header shows who the channel is (its `@handle`, how many of its videos are in your library and its subscriber count) and three actions:
+
+- **Follow** / **Following** (YouTube channels): see [Following and live streams](#following-and-live-streams).
+- **Download…** (YouTube channels, needs the `download` permission): opens the [Download](downloads.md) page with the channel's link filled in, so you can pick which of its videos to download.
+- The gear, **Channel settings**: everything that sticks to this channel, in one panel (a side sheet on wide screens, a full-height sheet on phones). Its sections are **Automatic downloads**, **Clean up old videos**, **Live & following**, **Search** (whether searching this channel also asks YouTube) and **Manage** (rename the channel, build its search index).
+
+Small chips under the name sum up what is active, for example **Auto-download on · 1080p**, **Keeps latest 20** or the search index state (**Not indexed**, **Fully indexed (1000)**). Click a chip to open the settings at that section. Sections you lack the permission for are shown read-only: automatic downloads need `download`, cleanup needs `delete_videos`, renaming and the YouTube search choice need `edit_metadata`.
+
+Above the feed, one toolbar holds the quick view controls: the channel search box, **Videos** / **Live**, **Recent** / **Popular** with the ↑/↓ direction, the **Undownloaded** switch, grid or list layout and **Tags**.
+
 ### Feed search
 
 The channel header search box looks across **indexed uploads** (titles, and descriptions for the newest ~200) and **downloaded videos** for that channel.
@@ -42,13 +54,13 @@ The channel header search box looks across **indexed uploads** (titles, and desc
 - Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
 - Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
 - While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
-- With the **YT** control in the channel search box on (default from Settings → Library **Direct YouTube search**), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
+- With the **YT** control in the channel search box on (default from Settings → Library **Direct YouTube search**; **Channel settings → Search** sets it per channel or back to the server default), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
 
 See [Search](search.md).
 
 ### Show undownloaded
 
-Toggle **Show undownloaded** on the channel page (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed. Cards show views when Horde has them. Publish time is a calendar day only when yt-dlp has a real upload date; otherwise the card keeps YouTube’s wording (`3 years ago`) or a year (`2013`) — Horde does not invent a month and day from that.
+Toggle **Undownloaded** in the channel page toolbar (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed. Cards show views when Horde has them. Publish time is a calendar day only when yt-dlp has a real upload date; otherwise the card keeps YouTube’s wording (`3 years ago`) or a year (`2013`) — Horde does not invent a month and day from that.
 
 ### Feed layout
 
@@ -60,25 +72,51 @@ From a channel page you can open the download panel to queue undownloaded items 
 
 ### Autodownload
 
-YouTube channel pages have an **Autodownload** button in the header. It opens a modal to turn automatic library downloads on or off for that channel.
+On a YouTube channel, **Channel settings → Automatic downloads** turns automatic library downloads on or off for that channel: switch on **Download new uploads automatically**, choose the options and **Save automatic downloads**.
 
 | Setting | Behavior |
 |---------|----------|
-| **Future videos only** | New uploads discovered after you enable autodownload |
-| **Last N previous + all future** | Also queue the newest **N** indexed uploads that are not already in the library (N is 1–500) |
-| **All previous indexed + all future** | Queue every indexed upload still missing from the library, then keep downloading new ones |
+| **Older videos: None, only new uploads** | New uploads discovered after you enable autodownload |
+| **Older videos: The latest N** | Also queue the newest **N** indexed uploads that are not already in the library (N is 1–500) |
+| **Older videos: All indexed videos** | Queue every indexed upload still missing from the library, then keep downloading new ones |
 | **Resolution** | Quality preset used for autodownloaded jobs (default **1080p**) |
-| **Include completed livestreams** | Off by default. Livestreams are **never** downloaded while live or upcoming. When on, finished stream recordings are included |
+| **Include finished livestreams** | Off by default. Livestreams are **never** downloaded while live or upcoming. When on, finished stream recordings are included |
 
-The modal always warns that this can use a lot of storage. **All previous** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and shows a stronger warning.
+The section always warns that this can use a lot of storage. **All indexed videos** is limited by the [catalog max videos](#max-videos-per-channel) cap (default 1000) and says so.
 
-After autodownload is on, the header button stays highlighted and reopens the same modal so you can change settings or turn it off. Turning it off does **not** cancel jobs already in the download queue.
+While autodownload is on, the header shows an **Auto-download on · 1080p** chip that opens this section. Switching it off and saving does **not** cancel jobs already in the download queue.
 
 Horde finds new uploads from the channel catalog (opening the feed, periodic catalog refresh, and a dedicated autodownload poll every 15 minutes). YouTube Shorts are not autodownloaded.
 
+## Cleaning up old videos { #retention }
+
+News and daily channels pile up. A channel can have a **retention rule** that moves its old videos to the [trash](library.md#trash) on its own, so a removal can be undone for 7 days (`HORDE_TRASH_DAYS`). Use any mix of three limits:
+
+| Limit | What it removes |
+|-------|-----------------|
+| **Keep the newest N** | Everything but the newest N videos of the channel (by publish date; a video without one, such as a local import, counts as published when it was added) |
+| **Older than D days** | Videos added to Horde more than D days ago |
+| **Finished more than D days ago** | Videos someone watched to the end more than D days ago, on any account, provided nobody has watched it since |
+
+A video that matches any limit goes. Whatever the limits say, these **stay**:
+
+- videos in any playlist;
+- videos with notes;
+- videos someone is partway through right now (watched in the last 7 days, not finished);
+- videos added in the last 24 hours;
+- videos you restored from the trash (they are never taken again, even if the rule would match).
+
+Set a rule under **Channel settings → Clean up old videos**: tick the limits you want, enter the numbers, switch on **Clean up this channel automatically** and **Save cleanup rule**. The exceptions are listed in small print under the limits. Before you save, a line under the limits says how much the rule would remove and updates as you type ("Right now this would move 12 videos (4.3 GB) to the trash.") and how many videos the exceptions keep. A channel with an enabled rule shows a chip such as **Keeps latest 20** in its header. A saved, enabled rule runs at once and then about every hour. Each removal shows in **Settings → Library → Trash** with the reason ("Retention: keep latest 20"), no name under "deleted by", and **Restore**. Retention does not free disk by itself: the trash still counts toward the [library size limit](../settings/system.md) until it is erased.
+
+A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). Renaming onto a name that already has videos merges two channels, so the rules involved are **turned off** instead of applying to videos they were not written for; review and switch them on again. With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
+
+Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Only playing a video to its end counts as finishing it: opening it, seeking back to the start or leaving at 90 % does not.
+
+Anyone may see a channel's rule; saving one needs the `delete_videos` permission. The API is `GET` / `PUT /api/channels/retention` and `POST /api/channels/retention/preview`.
+
 ## Following and live streams
 
-Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** next to the channel's name on its page, or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
+Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** in the channel's header (or **Channel settings → Live & following**), or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
 
 A YouTube channel's page has two tabs. **Videos** lists its uploads. **Live** lists its live streams, newest first: past broadcasts are ordinary videos you can watch or download, and the **Filter streams** box filters the loaded list by title. When the channel is live right now, its broadcast is the first card on either tab, with a red **LIVE** badge and **Live now** in place of the download button.
 
@@ -90,7 +128,7 @@ When followed channels are live, a small **Live** list appears at the top of the
 
 Catalog indexing is **YouTube only**. When you open a YouTube channel feed or download from a YouTube channel, Horde indexes that channel’s uploads in the background so feed search and “Available to stream” work without paging YouTube live every time. Non-YouTube sources skip catalog indexing.
 
-Progress shows in the channel header (for example **Fully indexed**). **Index channel** appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still index; the channel page shows a toast when that happens.
+Progress shows as a chip in the channel header (for example **Fully indexed (1000)**) and under **Channel settings → Manage → Search index**. **Index channel** there appears only when this catalog is missing, incomplete, or failed — a complete catalog does not need a manual re-walk. Age-restricted, members-only, and private uploads are skipped so the rest of the channel can still index; the channel page shows a toast when that happens.
 
 ### Phases
 

@@ -16,7 +16,8 @@ those two doors before a request is ever looked at by the login layer:
 5. ``AuthMiddleware``: deny by default for ``/api``; innermost of the checks, so it
    only ever sees requests that came from this app's own pages.
 6. ``SecurityHeadersMiddleware`` (outermost, so it also covers rejections): CSP,
-   ``nosniff``, referrer policy, framing policy.
+   ``nosniff``, referrer policy, framing policy, and ``Strict-Transport-Security``
+   on requests that really arrived over HTTPS.
 
 ``build_stack`` below is the single place the order is defined.
 """
@@ -32,7 +33,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from starlette.datastructures import MutableHeaders
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -183,14 +184,27 @@ def content_security_policy(path: str) -> str:
     return APP_CSP
 
 
-def security_headers(path: str) -> dict[str, str]:
-    """The response headers every reply carries (the one source of truth)."""
-    return {
+#: One year, and nothing else: no ``includeSubDomains`` (it would bind every other
+#: service under the same name) and no ``preload`` (not undoable from here).
+HSTS_VALUE = "max-age=31536000"
+
+
+def security_headers(path: str, *, https: bool = False) -> dict[str, str]:
+    """The response headers every reply carries (the one source of truth).
+
+    ``https`` is whether the request really came over TLS (see
+    ``AuthRuntime.is_https``); only then is HSTS sent, since a browser ignores it
+    over HTTP and a plain-HTTP LAN install must not be told to insist on TLS.
+    """
+    headers = {
         "Content-Security-Policy": content_security_policy(path),
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "same-origin",
         "X-Frame-Options": "SAMEORIGIN",
     }
+    if https:
+        headers["Strict-Transport-Security"] = HSTS_VALUE
+    return headers
 
 
 # --- ASGI helpers ------------------------------------------------------------
@@ -225,7 +239,8 @@ class SecurityHeadersMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        extra = security_headers(scope["path"])
+        runtime: AuthRuntime = scope["app"].state.auth
+        extra = security_headers(scope["path"], https=runtime.is_https(Request(scope)))
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":

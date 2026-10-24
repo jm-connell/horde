@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import LoadingIndicator from "../components/LoadingIndicator";
 import VideoCard from "../components/VideoCard";
 import { useVideoList } from "../queries/videos";
+import HistoryStatsBand from "./history/HistoryStatsBand";
 import type { Video } from "../types";
 
 /** Parse API datetimes as UTC when no timezone is present (legacy naive strings). */
@@ -77,6 +78,7 @@ export default function History() {
   return (
     <div>
       <h1 className="mb-5 text-2xl font-bold text-gray-100">History</h1>
+      <HistoryStatsBand />
 
       {loading ? (
         <LoadingIndicator />

@@ -25,9 +25,11 @@ from .paths import (
     COMPAT_SIDECAR_TOKEN,
     FRAGMENT_RE,
     STAGING_DIR_NAME,
+    TRASH_DIR_NAME,
     find_video_by_path,
     is_manual_import,
     is_staging_rel_path,
+    is_trash_rel_path,
     to_rel_path,
 )
 from .thumbnails import write_list_thumbnail
@@ -46,6 +48,9 @@ _FRAGMENT_RE = FRAGMENT_RE
 # Relative paths / source IDs the downloader is actively writing.
 _active_downloads: set[str] = set()
 _active_source_ids: set[str] = set()
+# Paths a trash restore is putting back, counted: two holds of one path need two
+# releases, and a download's mark/unmark above never touches them.
+_held_paths: dict[str, int] = {}
 _active_lock = threading.Lock()
 
 _SOURCE_ID_RE = re.compile(r"\[[^\]]+\]")
@@ -80,9 +85,24 @@ def unmark_active(rel_path: str) -> None:
             _active_source_ids.discard(match.group(0))
 
 
+def hold(rel_path: str) -> None:
+    """Keep the scanner from importing ``rel_path`` until ``release`` (a restore)."""
+    with _active_lock:
+        _held_paths[rel_path] = _held_paths.get(rel_path, 0) + 1
+
+
+def release(rel_path: str) -> None:
+    with _active_lock:
+        left = _held_paths.get(rel_path, 0) - 1
+        if left > 0:
+            _held_paths[rel_path] = left
+        else:
+            _held_paths.pop(rel_path, None)
+
+
 def _is_active(rel_path: str) -> bool:
     with _active_lock:
-        if rel_path in _active_downloads:
+        if rel_path in _active_downloads or rel_path in _held_paths:
             return True
         name = Path(rel_path).name
         return any(source_id in name for source_id in _active_source_ids)
@@ -91,7 +111,7 @@ def _is_active(rel_path: str) -> bool:
 def _is_media(path: Path) -> bool:
     if not path.is_file() or path.suffix.lower() not in VIDEO_EXTENSIONS:
         return False
-    if STAGING_DIR_NAME in path.parts:
+    if STAGING_DIR_NAME in path.parts or TRASH_DIR_NAME in path.parts:
         return False
     name = path.name.lower()
     # Skip yt-dlp / ffmpeg intermediates that must never become review items.
@@ -138,9 +158,11 @@ def ingest_media_file(
     if _is_active(rel_path):
         return None
 
-    # Ephemeral "download to device" staging — never library media.
-    if rel_path.replace("\\", "/").startswith("_device/") or is_staging_rel_path(
-        rel_path
+    # Ephemeral "download to device" staging and the trash are never library media.
+    if (
+        rel_path.replace("\\", "/").startswith("_device/")
+        or is_staging_rel_path(rel_path)
+        or is_trash_rel_path(rel_path)
     ):
         return None
 

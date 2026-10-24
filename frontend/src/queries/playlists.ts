@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type { Playlist, PlaylistDetail } from "../types";
@@ -5,7 +6,7 @@ import { queryKeys } from "./keys";
 
 const NO_PLAYLISTS: Playlist[] = [];
 
-/** All playlists, revalidated on every visit so other pages' changes show. */
+/** The playlists this user can see, revalidated on every visit so other pages' changes show. */
 export function usePlaylists(enabled = true) {
   const query = useQuery({
     queryKey: queryKeys.playlists.list,
@@ -13,7 +14,13 @@ export function usePlaylists(enabled = true) {
     enabled,
     staleTime: 0,
   });
-  return { ...query, playlists: query.data ?? NO_PLAYLISTS };
+  const playlists = query.data ?? NO_PLAYLISTS;
+  // Pickers offer only the playlists this user may add to.
+  const editable = useMemo(
+    () => playlists.filter((p) => p.can_edit),
+    [playlists]
+  );
+  return { ...query, playlists, editable };
 }
 
 /** One playlist with its videos; read while its row is open. */
@@ -60,6 +67,9 @@ export function mergePlaylist(
             has_custom_cover: next.has_custom_cover,
             thumbnail_video_id: next.thumbnail_video_id,
             has_thumbnail: next.has_thumbnail,
+            visibility: next.visibility,
+            owner: next.owner,
+            can_edit: next.can_edit,
           }
         : row
     )

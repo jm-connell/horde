@@ -55,6 +55,15 @@ export function useSystemStats(opts: PollOptions = {}) {
   });
 }
 
+/** Disk used by the library (and the trash); refreshed after deletes and restores. */
+export function useStorageStats() {
+  return useQuery({
+    queryKey: queryKeys.system.storage,
+    queryFn: ({ signal }) => api.storageStats({ signal }),
+    staleTime: 0,
+  });
+}
+
 export function useSystemActivity(opts: PollOptions = {}) {
   return useQuery({
     queryKey: queryKeys.system.activity,

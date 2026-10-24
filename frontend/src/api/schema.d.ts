@@ -279,6 +279,112 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/2fa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Two Factor Status
+         * @description Whether your account signs in with a second step, and how many recovery codes are left.
+         */
+        get: operations["two_factor_status_api_auth_2fa_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Confirm
+         * @description Finish setup with a current code. Turns it on and returns the recovery codes once.
+         *
+         *     Your other browsers were signed in without a second step, so they are signed out.
+         */
+        post: operations["two_factor_confirm_api_auth_2fa_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Disable
+         * @description Turn two-step sign-in off. Needs your password and a current (or recovery) code.
+         */
+        post: operations["two_factor_disable_api_auth_2fa_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor New Recovery Codes
+         * @description Replace the recovery codes; the old ones stop working. Shown once.
+         */
+        post: operations["two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/2fa/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Two Factor Setup
+         * @description Start setting up two-step sign-in: a new secret, as text and as a QR code.
+         *
+         *     Needs your current password (someone holding only a stolen session must not be
+         *     able to attach their own authenticator). Nothing changes at sign-in until
+         *     ``/2fa/confirm`` accepts a code; calling this again starts over with a new secret.
+         */
+        post: operations["two_factor_setup_api_auth_2fa_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/avatar": {
         parameters: {
             query?: never;
@@ -383,6 +489,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/login/totp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Login Totp
+         * @description Second step: trade the ticket from ``totp_required`` and a code for the session.
+         *
+         *     The code is an authenticator code or an unused recovery code. Wrong codes
+         *     count in the same throttle as wrong passwords; five wrong tries burn the ticket.
+         */
+        post: operations["login_totp_api_auth_login_totp_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/logout": {
         parameters: {
             query?: never;
@@ -400,6 +529,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update Me
+         * @description Change your own preferences (whether other accounts see your downloads).
+         *
+         *     Stopping sharing needs your password: devices keep a check value derived from
+         *     it, so the downloads can still be unlocked offline.
+         */
+        patch: operations["update_me_api_auth_me_patch"];
+        trace?: never;
+    };
     "/api/auth/password": {
         parameters: {
             query?: never;
@@ -414,6 +566,30 @@ export interface paths {
          * @description Change your own password. Your other browsers are signed out.
          */
         post: operations["change_password_api_auth_password_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/reauth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reauthenticate
+         * @description Prove your password (and a code, with two-step sign-in) to this browser again.
+         *
+         *     The sensitive administrator actions (a new account, another account's
+         *     password, ...) need this within the last 10 minutes of a sign-in; they answer
+         *     403 ``reauth_required`` otherwise. Same throttle as the other password checks.
+         */
+        post: operations["reauthenticate_api_auth_reauth_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -442,6 +618,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Sessions
+         * @description Your signed-in devices, most recently active first.
+         */
+        get: operations["list_my_sessions_api_auth_sessions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sessions/revoke-others": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Other Sessions
+         * @description Sign out everywhere except this browser.
+         */
+        post: operations["revoke_other_sessions_api_auth_sessions_revoke_others_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke My Session
+         * @description Sign one of your devices out. Ending this browser's own session signs you out.
+         */
+        delete: operations["revoke_my_session_api_auth_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/state": {
         parameters: {
             query?: never;
@@ -456,6 +692,29 @@ export interface paths {
         get: operations["auth_state_api_auth_state_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/verify-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Password
+         * @description Check your own password (204, or 400 ``wrong_password``) and change nothing.
+         *
+         *     A device asks before it keeps a check value of the password for offline
+         *     unlock, so a typo cannot lock the owner out of their own downloads.
+         */
+        post: operations["verify_password_api_auth_verify_password_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -642,6 +901,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Channel Retention
+         * @description The channel's retention rule (all limits unset when it has none).
+         */
+        get: operations["get_channel_retention_api_channels_retention_get"];
+        /**
+         * Put Channel Retention
+         * @description Save the rule and run the rules now; what they remove goes to the trash.
+         */
+        put: operations["put_channel_retention_api_channels_retention_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/retention/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Channel Retention
+         * @description What a rule would move to the trash right now. Nothing changes.
+         */
+        post: operations["preview_channel_retention_api_channels_retention_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/channels/search": {
         parameters: {
             query?: never;
@@ -800,6 +1103,8 @@ export interface paths {
         /**
          * Dismiss Finished Jobs
          * @description Remove completed, failed, and cancelled jobs from the list.
+         *
+         *     Another account's private device downloads stay.
          */
         post: operations["dismiss_finished_jobs_api_downloads_dismiss_finished_post"];
         delete?: never;
@@ -818,6 +1123,8 @@ export interface paths {
         /**
          * Queue Events
          * @description One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).
+         *
+         *     Another account's private device downloads are left out.
          */
         get: operations["queue_events_api_downloads_events_get"];
         put?: never;
@@ -979,6 +1286,8 @@ export interface paths {
         /**
          * Download Device File
          * @description Serve an ephemeral device-destination download as a browser attachment.
+         *
+         *     Another account's download is a 404 unless that account shares its downloads.
          */
         get: operations["download_device_file_api_downloads__job_id__file_get"];
         put?: never;
@@ -1099,6 +1408,26 @@ export interface paths {
          * @description The full payload for a signed-in user; the bare minimum for anyone else.
          */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * History Stats
+         * @description Watch time, streaks, top channels and tags of the signed-in user only.
+         */
+        get: operations["history_stats_api_history_stats_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1243,6 +1572,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notifications */
+        get: operations["get_notifications_api_notifications_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Target */
+        post: operations["create_target_api_notifications_targets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/targets/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Target */
+        delete: operations["delete_target_api_notifications_targets__target_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Target */
+        patch: operations["update_target_api_notifications_targets__target_id__patch"];
+        trace?: never;
+    };
+    "/api/notifications/targets/{target_id}/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Saved Target
+         * @description Send a sample notification to a saved target.
+         */
+        post: operations["test_saved_target_api_notifications_targets__target_id__test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notifications/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Test Unsaved Target
+         * @description Send a sample notification to a target that is not saved yet.
+         *
+         *     With ``id`` set and no new token, the saved target's token is used, so editing a
+         *     target can be tried without typing the secret again.
+         */
+        post: operations["test_unsaved_target_api_notifications_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ping": {
         parameters: {
             query?: never;
@@ -1272,11 +1696,16 @@ export interface paths {
         };
         /**
          * List Playlists
-         * @description Playlists in their saved order; ``limit`` caps a pathological library.
+         * @description Public playlists and your own private ones, in their saved order.
+         *
+         *     ``limit`` caps a pathological library.
          */
         get: operations["list_playlists_api_playlists_get"];
         put?: never;
-        /** Create Playlist */
+        /**
+         * Create Playlist
+         * @description Anyone may make a private playlist; an App-wide one needs manage_playlists.
+         */
         post: operations["create_playlist_api_playlists_post"];
         delete?: never;
         options?: never;
@@ -1348,7 +1777,14 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Reorder Playlists */
+        /**
+         * Reorder Playlists
+         * @description Put the playlists you can edit in the given order.
+         *
+         *     Positions are shared, so they are redistributed among the slots those
+         *     playlists already hold; everyone else's playlists keep their places. Ids you
+         *     can't edit (or can't see) are ignored.
+         */
         patch: operations["reorder_playlists_api_playlists_reorder_patch"];
         trace?: never;
     };
@@ -1821,6 +2257,26 @@ export interface paths {
         patch: operations["update_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/settings/media-sidecars/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Media Sidecars
+         * @description Delete the Jellyfin / Kodi / Plex files Horde wrote, in the background.
+         */
+        post: operations["remove_media_sidecars_api_settings_media_sidecars_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/setup/reset": {
         parameters: {
             query?: never;
@@ -1867,6 +2323,30 @@ export interface paths {
          * @description Live + recent background tasks (ffmpeg, downloads, AI, catalog, …).
          */
         get: operations["system_activity_api_system_activity_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/system/security-checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Security Checklist
+         * @description Pass/warn lines about how this server is exposed (for the Settings → System card).
+         *
+         *     Computed from what the process knows: this request, the proxy and host settings,
+         *     the two-step requirement, which administrators have it, the environment switches
+         *     and the cached update check.
+         */
+        get: operations["get_security_checklist_api_system_security_checklist_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1993,6 +2473,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/trash": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Trash
+         * @description Deleted videos, newest first.
+         */
+        get: operations["list_trash_api_trash_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/empty": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Empty Trash
+         * @description Erase everything in the trash for good.
+         */
+        post: operations["empty_trash_api_trash_empty_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trash Summary */
+        get: operations["trash_summary_api_trash_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Forever
+         * @description Erase one video from the trash for good.
+         */
+        delete: operations["delete_forever_api_trash__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore From Trash
+         * @description Put the video back in the library, with its tags, playlists and watch history.
+         */
+        post: operations["restore_from_trash_api_trash__entry_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/trash/{entry_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trash Thumbnail */
+        get: operations["trash_thumbnail_api_trash__entry_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/updates": {
         parameters: {
             query?: never;
@@ -2069,6 +2663,74 @@ export interface paths {
         head?: never;
         /** Update User */
         patch: operations["update_user_api_users__user_id__patch"];
+        trace?: never;
+    };
+    "/api/users/{user_id}/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List User Sessions
+         * @description A member's signed-in devices (for an administrator ending one).
+         */
+        get: operations["list_user_sessions_api_users__user_id__sessions_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Revoke User Sessions
+         * @description Sign a user out of every device. For another account this needs a recent password check.
+         */
+        delete: operations["revoke_user_sessions_api_users__user_id__sessions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke User Session
+         * @description Sign one of a user's devices out. For another account this needs a recent password check.
+         */
+        delete: operations["revoke_user_session_api_users__user_id__sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/{user_id}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset User Two Factor
+         * @description Take two-step sign-in off an account (a lost phone and recovery codes).
+         *
+         *     Signs the account out everywhere; their next sign-in is password only (or the
+         *     enrollment screen, if two-step sign-in is required). Not for your own account:
+         *     turn that off in Account settings, which asks for your password and a code.
+         */
+        delete: operations["reset_user_two_factor_api_users__user_id__two_factor_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/videos": {
@@ -2175,7 +2837,10 @@ export interface paths {
         get: operations["get_video_api_videos__video_id__get"];
         put?: never;
         post?: never;
-        /** Delete Video */
+        /**
+         * Delete Video
+         * @description Delete a video. With ``delete_file`` it waits in the trash (when enabled).
+         */
         delete: operations["delete_video_api_videos__video_id__delete"];
         options?: never;
         head?: never;
@@ -3260,6 +3925,13 @@ export interface components {
              * @default true
              */
             direct_youtube_search: boolean;
+            /** Max Library Bytes */
+            max_library_bytes?: number | null;
+            /**
+             * Media Server Sidecars
+             * @default false
+             */
+            media_server_sidecars: boolean;
             /**
              * Metadata Sync Interval Hours
              * @default 24
@@ -3267,6 +3939,12 @@ export interface components {
             metadata_sync_interval_hours: number;
             /** Progress Expiry Days */
             progress_expiry_days: number;
+            /**
+             * Require Two Factor
+             * @default off
+             * @enum {string}
+             */
+            require_two_factor: "off" | "admins" | "everyone";
             /**
              * Settings Degraded
              * @default false
@@ -3296,10 +3974,16 @@ export interface components {
             channel_catalog_max_videos?: number | null;
             /** Direct Youtube Search */
             direct_youtube_search?: boolean | null;
+            /** Max Library Bytes */
+            max_library_bytes?: number | null;
+            /** Media Server Sidecars */
+            media_server_sidecars?: boolean | null;
             /** Metadata Sync Interval Hours */
             metadata_sync_interval_hours?: number | null;
             /** Progress Expiry Days */
             progress_expiry_days?: number | null;
+            /** Require Two Factor */
+            require_two_factor?: ("off" | "admins" | "everyone") | null;
             /** Setup Completed */
             setup_completed?: boolean | null;
             /** Ui */
@@ -3336,6 +4020,21 @@ export interface components {
             is_admin: boolean;
             /** Permissions */
             permissions: string[];
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
+            /**
+             * Two Factor Enabled
+             * @default false
+             */
+            two_factor_enabled: boolean;
+            /**
+             * Two Factor Enrollment Required
+             * @default false
+             */
+            two_factor_enrollment_required: boolean;
             /** Username */
             username: string;
         };
@@ -3396,6 +4095,11 @@ export interface components {
         BootstrapRequest: {
             /** Password */
             password: string;
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -3769,8 +4473,109 @@ export interface components {
         };
         /** ChannelRenameResult */
         ChannelRenameResult: {
+            /**
+             * Retention Disabled
+             * @description The rename merged two channels and a retention rule that was on was turned off, so it does not apply to the other channel's videos.
+             * @default false
+             */
+            retention_disabled: boolean;
             /** Updated */
             updated: number;
+        };
+        /** ChannelRetentionPreview */
+        ChannelRetentionPreview: {
+            /** Count */
+            count: number;
+            /** Kept By Exception */
+            kept_by_exception: number;
+            /** Total Bytes */
+            total_bytes: number;
+            /** Would Remove */
+            would_remove: components["schemas"]["RetentionPreviewItem"][];
+        };
+        /** ChannelRetentionPreviewRequest */
+        ChannelRetentionPreviewRequest: {
+            /** Channel */
+            channel: string;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+        };
+        /** ChannelRetentionRead */
+        ChannelRetentionRead: {
+            /**
+             * Always Kept
+             * @default []
+             */
+            always_kept: components["schemas"]["RetentionException"][];
+            /** Channel */
+            channel: string;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Last Removed At */
+            last_removed_at?: string | null;
+            /**
+             * Last Removed Count
+             * @default 0
+             */
+            last_removed_count: number;
+            /** Last Run At */
+            last_run_at?: string | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+            /**
+             * Trash Enabled
+             * @default true
+             */
+            trash_enabled: boolean;
+        };
+        /**
+         * ChannelRetentionSummary
+         * @description The enabled rule, as shown on a channel's header.
+         */
+        ChannelRetentionSummary: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
+        };
+        /** ChannelRetentionUpdate */
+        ChannelRetentionUpdate: {
+            /** Channel */
+            channel: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            /** Keep Latest */
+            keep_latest?: number | null;
+            /** Max Age Days */
+            max_age_days?: number | null;
+            /** Remove Watched After Days */
+            remove_watched_after_days?: number | null;
         };
         /** ChannelSearchHit */
         ChannelSearchHit: {
@@ -3801,6 +4606,7 @@ export interface components {
             count: number;
             /** Last Download At */
             last_download_at?: string | null;
+            retention?: components["schemas"]["ChannelRetentionSummary"] | null;
             /** Subscriber Count */
             subscriber_count?: number | null;
         };
@@ -4011,6 +4817,8 @@ export interface components {
             file_size: number | null;
             /** Height Px */
             height_px?: number | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Id */
             id: number;
             /** Notes Pending */
@@ -4103,6 +4911,10 @@ export interface components {
         DownloadQueueStatus: {
             /** Active Count */
             active_count: number;
+            /** Held Code */
+            held_code?: string | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Paused */
             paused: boolean;
             /** Queued Count */
@@ -4273,6 +5085,10 @@ export interface components {
         HealthDownloads: {
             /** Active */
             active: number;
+            /** Held Code */
+            held_code?: string | null;
+            /** Held Reason */
+            held_reason?: string | null;
             /** Paused */
             paused: boolean;
         };
@@ -4341,6 +5157,89 @@ export interface components {
             cookies_configured: boolean;
             last_extract_failure?: components["schemas"]["ExtractFailure"] | null;
         };
+        /** HistoryStats */
+        HistoryStats: {
+            best_day: components["schemas"]["HistoryStatsDay"] | null;
+            /** Channels */
+            channels: components["schemas"]["HistoryStatsChannel"][];
+            /** Days */
+            days: components["schemas"]["HistoryStatsDay"][];
+            /** End Day */
+            end_day: string;
+            /** Hours */
+            hours: number[][] | null;
+            library: components["schemas"]["HistoryStatsLibrary"];
+            /**
+             * Range
+             * @enum {string}
+             */
+            range: "7d" | "30d" | "365d" | "all";
+            /** Start Day */
+            start_day: string;
+            /** Tags */
+            tags: components["schemas"]["HistoryStatsTag"][];
+            totals: components["schemas"]["HistoryStatsTotals"];
+            /** Tz */
+            tz: string;
+        };
+        /** HistoryStatsChannel */
+        HistoryStatsChannel: {
+            /** Name */
+            name: string;
+            /** Seconds */
+            seconds: number;
+            /** Videos */
+            videos: number;
+        };
+        /** HistoryStatsDay */
+        HistoryStatsDay: {
+            /**
+             * Day
+             * @description Local date, YYYY-MM-DD.
+             */
+            day: string;
+            /** Finished */
+            finished: number;
+            /** Seconds */
+            seconds: number;
+        };
+        /** HistoryStatsLibrary */
+        HistoryStatsLibrary: {
+            /** Added In Range */
+            added_in_range: number;
+            /** Total Size Bytes */
+            total_size_bytes: number;
+            /** Total Videos */
+            total_videos: number;
+            /** Watched Share */
+            watched_share: number;
+            /** Watched Videos */
+            watched_videos: number;
+        };
+        /** HistoryStatsTag */
+        HistoryStatsTag: {
+            /** Seconds */
+            seconds: number;
+            /** Tag */
+            tag: string;
+            /** Videos */
+            videos: number;
+        };
+        /** HistoryStatsTotals */
+        HistoryStatsTotals: {
+            /** Active Days */
+            active_days: number;
+            /** Current Streak Days */
+            current_streak_days: number;
+            /** Previous Watch Seconds */
+            previous_watch_seconds: number | null;
+            /** Videos Finished */
+            videos_finished: number;
+            /** Videos Started */
+            videos_started: number;
+            /** Watch Seconds */
+            watch_seconds: number;
+        };
         /**
          * JobStatus
          * @enum {string}
@@ -4391,6 +5290,21 @@ export interface components {
             password: string;
             /** Username */
             username: string;
+        };
+        /**
+         * MeUpdate
+         * @description Changes to your own account preferences.
+         */
+        MeUpdate: {
+            /** Current Password */
+            current_password?: string | null;
+            /** Share Downloads */
+            share_downloads: boolean;
+        };
+        /** MediaSidecarsRemoval */
+        MediaSidecarsRemoval: {
+            /** Queued */
+            queued: boolean;
         };
         /** MediaTokenRead */
         MediaTokenRead: {
@@ -4487,6 +5401,170 @@ export interface components {
             entry?: components["schemas"]["ChannelFeedEntry"] | null;
             /** Reason */
             reason?: string | null;
+        };
+        /** NotificationEventOptionRead */
+        NotificationEventOptionRead: {
+            /** Default */
+            default: boolean;
+            /** Description */
+            description: string;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+        };
+        /**
+         * NotificationEventRead
+         * @description An event a target can subscribe to (the registry in ``services/notifications/events.py``).
+         */
+        NotificationEventRead: {
+            /** Default */
+            default: boolean;
+            /** Description */
+            description: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Options */
+            options?: components["schemas"]["NotificationEventOptionRead"][];
+        };
+        /** NotificationTargetCreate */
+        NotificationTargetCreate: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Events */
+            events?: string[] | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /** NotificationTargetRead */
+        NotificationTargetRead: {
+            /** Enabled */
+            enabled: boolean;
+            /** Events */
+            events: string[];
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options: {
+                [key: string]: boolean;
+            };
+            /**
+             * Token
+             * @default
+             */
+            token: string;
+            /**
+             * Token Set
+             * @default false
+             */
+            token_set: boolean;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * NotificationTargetTest
+         * @description A target to try before saving it. ``id`` borrows the stored token of a saved one.
+         */
+        NotificationTargetTest: {
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Events */
+            events?: string[] | null;
+            /** Id */
+            id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "ntfy" | "webhook" | "discord";
+            /** Name */
+            name: string;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url: string;
+        };
+        /**
+         * NotificationTargetUpdate
+         * @description Only the fields sent change. ``token``: omit or send the mask to keep it, "" to remove it.
+         */
+        NotificationTargetUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Events */
+            events?: string[] | null;
+            /** Kind */
+            kind?: ("ntfy" | "webhook" | "discord") | null;
+            /** Name */
+            name?: string | null;
+            /** Options */
+            options?: {
+                [key: string]: boolean;
+            } | null;
+            /** Token */
+            token?: string | null;
+            /** Topic */
+            topic?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /** NotificationTestResult */
+        NotificationTestResult: {
+            /** Error */
+            error?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Status Code */
+            status_code?: number | null;
+        };
+        /** NotificationsRead */
+        NotificationsRead: {
+            /** Events */
+            events: components["schemas"]["NotificationEventRead"][];
+            /** Max Targets */
+            max_targets: number;
+            /** Public Url Set */
+            public_url_set: boolean;
+            /** Targets */
+            targets: components["schemas"]["NotificationTargetRead"][];
         };
         /** OkResponse */
         OkResponse: {
@@ -4651,6 +5729,11 @@ export interface components {
             /** Username */
             username: string;
         };
+        /** PasswordVerify */
+        PasswordVerify: {
+            /** Password */
+            password: string;
+        };
         /** PausedResponse */
         PausedResponse: {
             /** Paused */
@@ -4681,9 +5764,15 @@ export interface components {
             description?: string | null;
             /** Name */
             name: string;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
         /** PlaylistDetail */
         PlaylistDetail: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
             /**
@@ -4711,6 +5800,7 @@ export interface components {
             last_synced_at?: string | null;
             /** Name */
             name: string;
+            owner?: components["schemas"]["PlaylistOwner"] | null;
             /**
              * Position
              * @default 0
@@ -4732,6 +5822,8 @@ export interface components {
             thumbnail_video_id?: number | null;
             /** Videos */
             videos: components["schemas"]["VideoRead"][];
+            /** @default public */
+            visibility: components["schemas"]["PlaylistVisibility"];
         };
         /** PlaylistImport */
         PlaylistImport: {
@@ -4754,6 +5846,7 @@ export interface components {
             subscribe: boolean;
             /** Url */
             url: string;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
         /** PlaylistItemAdd */
         PlaylistItemAdd: {
@@ -4766,6 +5859,13 @@ export interface components {
         PlaylistListReorder: {
             /** Playlist Ids */
             playlist_ids: number[];
+        };
+        /** PlaylistOwner */
+        PlaylistOwner: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
         };
         /** PlaylistPreview */
         PlaylistPreview: {
@@ -4798,6 +5898,11 @@ export interface components {
         };
         /** PlaylistRead */
         PlaylistRead: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
             /**
@@ -4825,6 +5930,7 @@ export interface components {
             last_synced_at?: string | null;
             /** Name */
             name: string;
+            owner?: components["schemas"]["PlaylistOwner"] | null;
             /**
              * Position
              * @default 0
@@ -4844,6 +5950,8 @@ export interface components {
             sync_error?: string | null;
             /** Thumbnail Video Id */
             thumbnail_video_id?: number | null;
+            /** @default public */
+            visibility: components["schemas"]["PlaylistVisibility"];
         };
         /** PlaylistReorder */
         PlaylistReorder: {
@@ -4884,7 +5992,13 @@ export interface components {
             quality_preset?: string | null;
             /** Subscribed */
             subscribed?: boolean | null;
+            visibility?: components["schemas"]["PlaylistVisibility"] | null;
         };
+        /**
+         * PlaylistVisibility
+         * @enum {string}
+         */
+        PlaylistVisibility: "public" | "private";
         /** PotProviderStatus */
         PotProviderStatus: {
             /** Detail */
@@ -4913,6 +6027,19 @@ export interface components {
             workers: {
                 [key: string]: boolean;
             };
+        };
+        /**
+         * ReauthRequest
+         * @description Prove the password again (and a code, if the account has two-step sign-in).
+         */
+        ReauthRequest: {
+            /**
+             * Code
+             * @default
+             */
+            code: string;
+            /** Password */
+            password: string;
         };
         /** RecommendationSectionRead */
         RecommendationSectionRead: {
@@ -4967,6 +6094,24 @@ export interface components {
              */
             setup_completed: boolean;
         };
+        /** RetentionException */
+        RetentionException: {
+            /** Code */
+            code: string;
+            /** Label */
+            label: string;
+        };
+        /** RetentionPreviewItem */
+        RetentionPreviewItem: {
+            /** Id */
+            id: number;
+            /** Reason */
+            reason: string;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Title */
+            title: string;
+        };
         /** ScanResult */
         ScanResult: {
             /** Added */
@@ -4983,6 +6128,65 @@ export interface components {
              * @enum {string}
              */
             source: "title" | "description" | "tags" | "notes" | "captions" | "related" | "youtube";
+        };
+        /** SecurityCheckItem */
+        SecurityCheckItem: {
+            /** Detail */
+            detail: string;
+            /** Docs */
+            docs: string;
+            /** Id */
+            id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "warn";
+            /** Title */
+            title: string;
+        };
+        /** SecurityChecklistRead */
+        SecurityChecklistRead: {
+            /** Exposed */
+            exposed: boolean;
+            /** Items */
+            items: components["schemas"]["SecurityCheckItem"][];
+        };
+        /** SessionList */
+        SessionList: {
+            /** Items */
+            items: components["schemas"]["SessionRead"][];
+        };
+        /**
+         * SessionRead
+         * @description One signed-in browser of an account.
+         */
+        SessionRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Current */
+            current: boolean;
+            /** Device */
+            device: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: number;
+            /** Ip */
+            ip?: string | null;
+            /**
+             * Last Seen At
+             * Format: date-time
+             */
+            last_seen_at: string;
+            /** User Agent */
+            user_agent?: string | null;
         };
         /** SpriteGenerateResult */
         SpriteGenerateResult: {
@@ -5018,6 +6222,11 @@ export interface components {
             thumbnail_bytes: number;
             /** Total Bytes */
             total_bytes: number;
+            /**
+             * Trash Bytes
+             * @default 0
+             */
+            trash_bytes: number;
             /** Video Bytes */
             video_bytes: number;
             /** Video Count */
@@ -5218,6 +6427,137 @@ export interface components {
             /** Candidates */
             candidates: components["schemas"]["ThumbnailCandidate"][];
         };
+        /**
+         * TotpLoginRequest
+         * @description The second step of a two-step sign-in.
+         */
+        TotpLoginRequest: {
+            /** Code */
+            code: string;
+            /** Pending Token */
+            pending_token: string;
+        };
+        /** TrashEmptied */
+        TrashEmptied: {
+            /** Deleted */
+            deleted: number;
+            /** Freed Bytes */
+            freed_bytes: number;
+        };
+        /**
+         * TrashItemRead
+         * @description A deleted video in the trash.
+         */
+        TrashItemRead: {
+            /** Channel */
+            channel?: string | null;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: number;
+            /** Reason */
+            reason?: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title: string;
+            /**
+             * Trashed At
+             * Format: date-time
+             */
+            trashed_at: string;
+            /** Trashed By */
+            trashed_by?: string | null;
+            /** Video Id */
+            video_id: number;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
+        /** TrashPage */
+        TrashPage: {
+            /** Items */
+            items: components["schemas"]["TrashItemRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** TrashRestored */
+        TrashRestored: {
+            /** Title */
+            title: string;
+            /** Video Id */
+            video_id: number;
+        };
+        /** TrashSummary */
+        TrashSummary: {
+            /** Count */
+            count: number;
+            /** Retention Days */
+            retention_days: number;
+            /** Total Bytes */
+            total_bytes: number;
+        };
+        /** TwoFactorConfirm */
+        TwoFactorConfirm: {
+            /** Code */
+            code: string;
+        };
+        /**
+         * TwoFactorProof
+         * @description Turning two-step sign-in off, or replacing its recovery codes.
+         */
+        TwoFactorProof: {
+            /** Code */
+            code: string;
+            /** Current Password */
+            current_password: string;
+        };
+        /**
+         * TwoFactorRecoveryCodes
+         * @description Shown once: the server keeps only a keyed hash of each.
+         */
+        TwoFactorRecoveryCodes: {
+            /** Recovery Codes */
+            recovery_codes: string[];
+        };
+        /**
+         * TwoFactorSetup
+         * @description What the person adds to their authenticator app (shown once, never stored in the client).
+         */
+        TwoFactorSetup: {
+            /** Otpauth Uri */
+            otpauth_uri: string;
+            /** Qr Svg */
+            qr_svg: string;
+            /** Secret */
+            secret: string;
+        };
+        /** TwoFactorSetupRequest */
+        TwoFactorSetupRequest: {
+            /** Current Password */
+            current_password: string;
+        };
+        /** TwoFactorStatus */
+        TwoFactorStatus: {
+            /** Enabled */
+            enabled: boolean;
+            /** Enabled At */
+            enabled_at?: string | null;
+            /**
+             * Recovery Codes Left
+             * @default 0
+             */
+            recovery_codes_left: number;
+            /**
+             * Required
+             * @default false
+             */
+            required: boolean;
+        };
         /** UnfollowResult */
         UnfollowResult: {
             /** Channel Url */
@@ -5295,6 +6635,11 @@ export interface components {
             password: string;
             /** Permissions */
             permissions?: string[] | null;
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
             /** Username */
             username: string;
         };
@@ -5317,6 +6662,16 @@ export interface components {
             last_login_at?: string | null;
             /** Permissions */
             permissions: string[];
+            /**
+             * Share Downloads
+             * @default true
+             */
+            share_downloads: boolean;
+            /**
+             * Two Factor Enabled
+             * @default false
+             */
+            two_factor_enabled: boolean;
             /** Username */
             username: string;
         };
@@ -5330,6 +6685,8 @@ export interface components {
             password?: string | null;
             /** Permissions */
             permissions?: string[] | null;
+            /** Share Downloads */
+            share_downloads?: boolean | null;
         };
         /** VideoAiChatHistory */
         VideoAiChatHistory: {
@@ -5572,6 +6929,12 @@ export interface components {
         };
         /** WatchProgressUpdate */
         WatchProgressUpdate: {
+            /**
+             * Finished
+             * @description The video played to its end. The position is then saved as 0 and the finish is recorded (channel retention's watched rule reads it). A plain save of 0 is not a finish.
+             * @default false
+             */
+            finished: boolean;
             /** Position Sec */
             position_sec: number;
             /**
@@ -6226,6 +7589,210 @@ export interface operations {
             };
         };
     };
+    two_factor_status_api_auth_2fa_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorStatus"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_confirm_api_auth_2fa_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorConfirm"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_disable_api_auth_2fa_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorProof"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorProof"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    two_factor_setup_api_auth_2fa_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TwoFactorSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TwoFactorSetup"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     upload_avatar_api_auth_avatar_post: {
         parameters: {
             query?: never;
@@ -6470,6 +8037,48 @@ export interface operations {
             };
         };
     };
+    login_totp_api_auth_login_totp_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TotpLoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLoginResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     logout_api_auth_logout_post: {
         parameters: {
             query?: never;
@@ -6506,6 +8115,48 @@ export interface operations {
             };
         };
     };
+    update_me_api_auth_me_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthUserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     change_password_api_auth_password_post: {
         parameters: {
             query?: never;
@@ -6516,6 +8167,46 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["PasswordChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reauthenticate_api_auth_reauth_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReauthRequest"];
             };
         };
         responses: {
@@ -6588,6 +8279,118 @@ export interface operations {
             };
         };
     };
+    list_my_sessions_api_auth_sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_other_sessions_api_auth_sessions_revoke_others_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_my_session_api_auth_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     auth_state_api_auth_state_get: {
         parameters: {
             query?: never;
@@ -6605,6 +8408,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthState"];
                 };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_password_api_auth_verify_password_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation error */
             422: {
@@ -7184,6 +9027,130 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelFeedPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_channel_retention_api_channels_retention_get: {
+        parameters: {
+            query: {
+                channel: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_channel_retention_api_channels_retention_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelRetentionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_channel_retention_api_channels_retention_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChannelRetentionPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelRetentionPreview"];
                 };
             };
             /** @description Validation error */
@@ -8488,6 +10455,48 @@ export interface operations {
             };
         };
     };
+    history_stats_api_history_stats_get: {
+        parameters: {
+            query?: {
+                range?: "7d" | "30d" | "365d" | "all";
+                /** @description IANA time zone the days and hours are counted in (the browser's). Omitted: the server's. */
+                tz?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryStats"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     live_now_api_live_get: {
         parameters: {
             query?: never;
@@ -8766,6 +10775,252 @@ export interface operations {
                 };
                 content: {
                     "text/plain": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_notifications_api_notifications_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_target_api_notifications_targets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_target_api_notifications_targets__target_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_target_api_notifications_targets__target_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTargetRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_saved_target_api_notifications_targets__target_id__test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    test_unsaved_target_api_notifications_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotificationTargetTest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificationTestResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -10326,6 +12581,44 @@ export interface operations {
             };
         };
     };
+    remove_media_sidecars_api_settings_media_sidecars_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaSidecarsRemoval"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     reset_app_api_setup_reset_post: {
         parameters: {
             query?: never;
@@ -10422,6 +12715,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemActivityRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_security_checklist_api_system_security_checklist_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecurityChecklistRead"];
                 };
             };
             /** @description Validation error */
@@ -10721,6 +13052,248 @@ export interface operations {
             };
         };
     };
+    list_trash_api_trash_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    empty_trash_api_trash_empty_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashEmptied"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trash_summary_api_trash_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashSummary"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_forever_api_trash__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_from_trash_api_trash__entry_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrashRestored"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    trash_thumbnail_api_trash__entry_id__thumbnail_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description JPEG image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description No thumbnail */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     updates_api_updates_get: {
         parameters: {
             query?: {
@@ -10961,6 +13534,161 @@ export interface operations {
             };
         };
     };
+    list_user_sessions_api_users__user_id__sessions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionList"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_user_sessions_api_users__user_id__sessions_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_user_session_api_users__user_id__sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    reset_user_two_factor_api_users__user_id__two_factor_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_videos_api_videos_get: {
         parameters: {
             query?: {
@@ -11024,9 +13752,11 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Successful Response */
+            /** @description Deleted. Videos moved to the trash are listed by entry id. */
             204: {
                 headers: {
+                    /** @description Comma-separated trash entry ids. */
+                    "X-Horde-Trash-Entries"?: string;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -11039,6 +13769,15 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
+            };
+            /** @description Some videos could not be moved to the trash (code `trash_failed`). The ones that were moved are still listed by entry id. */
+            500: {
+                headers: {
+                    /** @description Comma-separated trash entry ids of the videos that moved. */
+                    "X-Horde-Trash-Entries"?: string;
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Error */
             default: {
@@ -11224,9 +13963,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Successful Response */
+            /** @description Deleted. A video moved to the trash carries its entry id. */
             204: {
                 headers: {
+                    /** @description Trash entry id, when the video went to the trash. */
+                    "X-Horde-Trash-Entry"?: number;
                     [name: string]: unknown;
                 };
                 content?: never;

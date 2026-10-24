@@ -1,13 +1,13 @@
 # Remote access
 
-Horde has its own [sign-in](authentication.md), but no two-factor and no email recovery. Anyone who can reach the URL can try passwords, and an administrator can use any configured OpenRouter key. Keep the app on a trusted LAN, or put **your own** access control in front — do not publish host port **8686** raw to the public internet.
+Horde is for a LAN by default. Its own [sign-in](authentication.md) has throttled passwords and optional [two-step sign-in](authentication.md#two-step-sign-in), but no email recovery, and an administrator can use any configured OpenRouter key. Do not publish host port **8686** raw: to reach Horde from outside either use a VPN (below) or follow the [internet exposure checklist](internet-exposure.md).
 
 See [Security model](../design/no-auth.md) and [Ports & networking](ports-networking.md).
 
 ```text
 Preferred:  Client ──► Tailscale/VPN ──► Horde on LAN :8686
 
-Optional:   Internet ──► Caddy (TLS + Basic Auth) ──► 127.0.0.1:8686
+Optional:   Internet ──► Caddy/nginx (TLS) ──► 127.0.0.1:8686   (follow the checklist)
 ```
 
 ## Preferred: Tailscale / WireGuard {#tailscale}
@@ -27,9 +27,13 @@ Chromecast and similar receivers usually live on the home LAN, not on Tailscale.
 
 WireGuard works the same way: join the LAN (or route to it), then use the Horde LAN URL. Horde does not need WireGuard-specific config.
 
-## Public HTTPS: Caddy + HTTP Basic Auth {#caddy-basic-auth}
+## Public HTTPS {#public}
 
-Use this only when you need a public hostname. Auth lives on **Caddy**, not inside Horde.
+To publish Horde under a public name with its own login, TLS, `HORDE_TRUST_PROXY`, `HORDE_ALLOWED_HOSTS` and required two-step sign-in, follow the [internet exposure checklist](internet-exposure.md). It has Caddy and nginx examples and the risks that remain.
+
+## Public HTTPS with an extra gate: Caddy + HTTP Basic Auth {#caddy-basic-auth}
+
+An optional second gate in front of Horde's own login, handled by **Caddy** and not by Horde.
 
 1. Bind Horde so the internet cannot hit it directly — e.g. publish `127.0.0.1:8686:8080` (see below) and put Caddy on the same host.
 2. Generate a bcrypt hash for Basic Auth (`caddy hash-password`).
@@ -84,10 +88,11 @@ To bind a LAN interface only, use that host IP instead of `127.0.0.1`. See [Port
 | **bgutil-pot** | Internal POT helper for yt-dlp; no public role |
 | **OpenRouter API key** | Lives in Horde settings / env — anyone who reaches Horde can use or change it |
 
-Horde’s threat model is “trusted network or trusted gateway.” Auth belongs outside the app.
+Horde’s default threat model is “trusted network or trusted gateway.” To go beyond that, follow the [internet exposure checklist](internet-exposure.md).
 
 ## Related
 
+- [Internet exposure checklist](internet-exposure.md)
 - [Security model](../design/no-auth.md)
 - [Accounts and sign-in](authentication.md) (including `HORDE_AUTH_DISABLED` for an authenticating proxy)
 - [Ports & networking](ports-networking.md)

@@ -22,14 +22,19 @@ from .api import (
     downloads,
     follows,
     fonts,
+    history,
     live,
     member_view,
+    notifications,
     playlists,
     preview,
     review,
     setup,
     system,
+    trash,
     users,
+    video_ai,
+    video_media,
     videos,
 )
 from .api import (
@@ -158,10 +163,14 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     from .services import (
         channel_autodownload,
         channel_catalog,
+        channel_retention,
         compat_rendition,
         job_metadata,
         stream_ai,
         subtitle_retry,
+    )
+    from .services import (
+        trash as trash_svc,
     )
     from .services.ai import worker as ai_worker
     from .services.live import directory as live_directory
@@ -197,6 +206,10 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     registry.start(subtitle_retry.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(job_metadata.create_worker())
+    registry.start(trash_svc.create_worker())
+    registry.start(channel_retention.create_worker())
+    registry.start(ctx.notifier.create_worker())
+    registry.start(ctx.sidecars.create_worker())
     job_metadata.rehydrate_pending()
     registry.start(compat_rendition.create_probe_backfill_worker())
     backup_worker = create_backup_worker(ctx.engine)
@@ -433,6 +446,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
     sha = cache.git_sha
 
     downloads_paused = False
+    downloads_hold = ctx.download_queue.space_hold()
     cookies_ok = False
     last_extract = None
     ai_queue_depth = 0
@@ -473,7 +487,8 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         logger.debug("worker status unavailable for health", exc_info=True)
 
     return {
-        "status": "ok",
+        # "warning" while downloads wait for disk space; the rest of the payload says why.
+        "status": "warning" if downloads_hold else "ok",
         "horde_sha": sha,
         "horde_version": short_git_sha(sha),
         "yt_dlp_version": cache.ytdlp_version,
@@ -490,6 +505,8 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         "downloads": {
             "active": active_downloads,
             "paused": downloads_paused,
+            "held_code": downloads_hold.code if downloads_hold else None,
+            "held_reason": downloads_hold.reason if downloads_hold else None,
         },
         "workers": {
             "ai_queue_depth": ai_queue_depth,
@@ -562,6 +579,8 @@ def include_api(target: FastAPI) -> None:
     """
     for module in (
         videos,
+        video_ai,
+        video_media,
         compat,
         channels,
         downloads,
@@ -571,6 +590,9 @@ def include_api(target: FastAPI) -> None:
         live,
         review,
         playlists,
+        trash,
+        history,
+        notifications,
         app_settings,
         ai,
         system,
@@ -615,6 +637,14 @@ if E2E:
     def e2e_reset(request: Request):
         """Restore browser-test data. Not mounted unless HORDE_E2E=1."""
         _boot_e2e(request.app, ctx_for_app(request.app))
+        return {"ok": True}
+
+    @app.post("/api/e2e/age-sessions", response_model=OkResponse)
+    def e2e_age_sessions(request: Request):
+        """Make every session look long since confirmed (the reauth dialog's trigger)."""
+        from .e2e_seed import age_sessions
+
+        age_sessions(ctx_for_app(request.app).engine)
         return {"ok": True}
 
     @app.post("/api/e2e/bulk-videos", response_model=OkResponse)

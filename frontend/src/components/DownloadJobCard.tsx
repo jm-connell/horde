@@ -19,6 +19,12 @@ import { offlineManager } from "../offline/manager";
 import { useOfflineItem } from "../offline/hooks";
 import { useDownloads, jobStatus } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
+import {
+  deleteErrorMessage,
+  useAfterDelete,
+  useTrashRetentionDays,
+} from "../queries/trash";
+import { deleteConfirmCopy } from "../trash";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import type { ChannelStat, DownloadJob, ProgressEvent } from "../types";
 import {
@@ -44,6 +50,7 @@ import {
   canEditDownloadJobNotes,
   canManageCompletedLibraryVideo,
   canRedownloadRemovedJob,
+  heldReasonFor,
   isLibraryVideoGone,
 } from "./downloadJobCardState";
 
@@ -80,6 +87,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     refreshJobs,
   } = useDownloads();
   const { showError } = useToast();
+  const afterDelete = useAfterDelete();
+  const deleteCopy = deleteConfirmCopy(useTrashRetentionDays(), { count: 1 });
   const status = jobStatus(job, live);
   const maxBytesRef = useRef(0);
   if (status === "downloading" || status === "processing") {
@@ -332,11 +341,15 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     if (!videoId || deleting) return;
     setDeleting(true);
     try {
-      await api.deleteVideo(videoId, true);
+      const { trashEntryIds } = await api.deleteVideo(videoId, true);
       setDeleteConfirm(false);
       refreshJobs();
+      afterDelete(
+        trashEntryIds,
+        trashEntryIds.length ? "Moved to the trash" : "Deleted from library"
+      );
     } catch (err) {
-      showError(err instanceof Error ? err.message : "Could not delete video");
+      showError(deleteErrorMessage(err));
     } finally {
       setDeleting(false);
     }
@@ -388,6 +401,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     }
   };
 
+  const heldReason = heldReasonFor(
+    status,
+    job.paused,
+    live?.held_reason,
+    job.held_reason
+  );
   const statusLabel = failed
     ? downloadErrorLabel(live?.error_kind ?? job.error_kind)
     : cancelled
@@ -397,9 +416,11 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
         : status === "processing"
           ? downloadProcessingLabel(live?.stage)
           : status === "queued"
-            ? job.paused || live?.status === "queued"
-              ? "Paused"
-              : "Queued"
+            ? heldReason
+              ? "Waiting"
+              : job.paused || live?.status === "queued"
+                ? "Paused"
+                : "Queued"
             : `${percent}%`;
 
   const remoteList = youtubeListThumbnailUrl(job.url, job.thumbnail_url);
@@ -600,6 +621,10 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               </div>
             )}
 
+            {heldReason && (
+              <p className="mb-3 text-xs text-amber-400/90">{heldReason}</p>
+            )}
+
             {failed && (errorMsg || errorHint) && (
               <div className="mb-3 space-y-1 text-sm text-red-400">
                 {errorMsg && <p>{errorMsg}</p>}
@@ -701,13 +726,11 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                     </button>
                   )}
                   <div data-collapse="playlist" className="shrink-0">
-                    {can("manage_playlists") && (
-                      <AddToPlaylist
-                        videoId={videoId}
-                        buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
-                        onOpenChange={setPlaylistOpen}
-                      />
-                    )}
+                    <AddToPlaylist
+                      videoId={videoId}
+                      buttonClassName="shrink-0 whitespace-nowrap rounded-lg bg-ink-800 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm text-gray-200 hover:bg-ink-700"
+                      onOpenChange={setPlaylistOpen}
+                    />
                   </div>
                 </>
               )}
@@ -843,12 +866,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
       ) : null}
       {deleteConfirm ? (
         <ConfirmDialog
-          title="Delete this video?"
-          body="The file will be removed from your library. This card stays so you can redownload. Use × if you only want to hide the card."
-          confirmLabel="Delete from library"
+          title={deleteCopy.title}
+          body={`${deleteCopy.body} This card stays so you can redownload. Use × if you only want to hide the card.`}
+          confirmLabel={deleteCopy.confirmLabel}
           danger
           busy={deleting}
-          busyLabel="Deleting…"
+          busyLabel={deleteCopy.busyLabel}
           onCancel={() => {
             if (!deleting) setDeleteConfirm(false);
           }}

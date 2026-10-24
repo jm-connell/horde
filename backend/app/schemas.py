@@ -4,7 +4,13 @@ from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
-from .models import DownloadDestination, JobStatus, PlaylistSource, VideoStatus
+from .models import (
+    DownloadDestination,
+    JobStatus,
+    PlaylistSource,
+    PlaylistVisibility,
+    VideoStatus,
+)
 
 #: Largest list a bulk endpoint accepts (video ids, pasted URLs).
 MAX_BULK_ITEMS = 1000
@@ -148,6 +154,80 @@ class WatchProgressUpdate(BaseModel):
             "Omitted: the position is current."
         ),
     )
+    finished: bool = Field(
+        default=False,
+        description=(
+            "The video played to its end. The position is then saved as 0 and "
+            "the finish is recorded (channel retention's watched rule reads "
+            "it). A plain save of 0 is not a finish."
+        ),
+    )
+
+
+HistoryStatsRange = Literal["7d", "30d", "365d", "all"]
+
+
+class HistoryStatsTotals(BaseModel):
+    watch_seconds: float
+    #: The same number of days just before the range (``None`` for ``all``).
+    previous_watch_seconds: float | None
+    #: Distinct videos watched in the range (including history from before watch
+    #: time was recorded).
+    videos_started: int
+    videos_finished: int
+    #: Days in the range with any watch time.
+    active_days: int
+    #: Consecutive days with watch time, ending today (or yesterday when nothing
+    #: has been watched yet today). Not limited to the range.
+    current_streak_days: int
+
+
+class HistoryStatsDay(BaseModel):
+    day: str = Field(description="Local date, YYYY-MM-DD.")
+    seconds: float
+    finished: int
+
+
+class HistoryStatsChannel(BaseModel):
+    name: str
+    seconds: float
+    videos: int
+
+
+class HistoryStatsTag(BaseModel):
+    tag: str
+    seconds: float
+    videos: int
+
+
+class HistoryStatsLibrary(BaseModel):
+    total_videos: int
+    total_size_bytes: int
+    added_in_range: int
+    #: Library videos this user has opened at least once (their History).
+    watched_videos: int
+    #: ``watched_videos / total_videos`` (0 for an empty library).
+    watched_share: float
+
+
+class HistoryStats(BaseModel):
+    range: HistoryStatsRange
+    tz: str
+    #: First and last local day of the range (``all`` starts at the first day
+    #: with watch time, or today).
+    start_day: str
+    end_day: str
+    totals: HistoryStatsTotals
+    #: One entry per day of the range, oldest first.
+    days: list[HistoryStatsDay]
+    #: The day in the range with the most watch time.
+    best_day: HistoryStatsDay | None
+    channels: list[HistoryStatsChannel]
+    tags: list[HistoryStatsTag]
+    #: Watch seconds by local weekday (0 = Monday) and hour; ``None`` when the
+    #: range has no watch time.
+    hours: list[list[float]] | None
+    library: HistoryStatsLibrary
 
 
 class DownloadCreate(BaseModel):
@@ -266,6 +346,8 @@ class DownloadJobRead(BaseModel):
     video_missing: bool = False
     superseded: bool = False
     playlist_id: int | None = None
+    #: Why a queued job is not starting: it is waiting for disk space.
+    held_reason: str | None = None
 
     @field_validator("destination", mode="before")
     @classmethod
@@ -305,6 +387,10 @@ class DownloadQueueStatus(BaseModel):
     paused: bool
     active_count: int
     queued_count: int
+    #: Set while queued jobs wait for disk space: ``library_full``, ``would_exceed``,
+    #: ``low_disk`` or ``disk_full``, with the sentence to show.
+    held_code: str | None = None
+    held_reason: str | None = None
 
 
 class VideoRedownload(BaseModel):
@@ -313,12 +399,31 @@ class VideoRedownload(BaseModel):
     video_codec: str | None = None
 
 
+class RetentionLimits(BaseModel):
+    """The three optional limits of a retention rule (at most one of each)."""
+
+    #: Keep only the newest N videos of the channel (publish date, else added date).
+    keep_latest: int | None = Field(default=None, ge=1, le=100_000)
+    #: Remove videos added more than this many days ago.
+    max_age_days: int | None = Field(default=None, ge=1, le=3650)
+    #: Remove videos someone finished more than this many days ago.
+    remove_watched_after_days: int | None = Field(default=None, ge=1, le=3650)
+
+
+class ChannelRetentionSummary(RetentionLimits):
+    """The enabled rule, as shown on a channel's header."""
+
+    enabled: bool = True
+
+
 class ChannelStat(BaseModel):
     channel: str
     count: int
     last_download_at: datetime | None = None
     subscriber_count: int | None = None
     channel_url: str | None = None
+    #: Set while the channel has an enabled retention rule.
+    retention: ChannelRetentionSummary | None = None
 
 
 class ChannelSearchHit(BaseModel):
@@ -476,6 +581,52 @@ class ChannelAutodownloadUpdate(BaseModel):
     include_completed_streams: bool = False
 
 
+class RetentionException(BaseModel):
+    #: playlist, notes, in_progress, new or restored.
+    code: str
+    label: str
+
+
+class ChannelRetentionRead(RetentionLimits):
+    channel: str
+    enabled: bool = False
+    #: False when the rule has never been saved (the limits are then all unset).
+    configured: bool = False
+    last_run_at: datetime | None = None
+    #: How many videos the latest run that removed any moved to the trash, and when.
+    last_removed_count: int = 0
+    last_removed_at: datetime | None = None
+    #: False with ``HORDE_TRASH_DAYS=0``: the rules then remove nothing.
+    trash_enabled: bool = True
+    #: Videos that stay whatever the limits say.
+    always_kept: list[RetentionException] = []
+
+
+class ChannelRetentionUpdate(RetentionLimits):
+    channel: str = Field(min_length=1)
+    enabled: bool = False
+
+
+class ChannelRetentionPreviewRequest(RetentionLimits):
+    channel: str = Field(min_length=1)
+
+
+class RetentionPreviewItem(BaseModel):
+    id: int
+    title: str
+    size_bytes: int
+    reason: str
+
+
+class ChannelRetentionPreview(BaseModel):
+    #: At most the first 200 (oldest first); ``count`` and ``total_bytes`` cover all.
+    would_remove: list[RetentionPreviewItem]
+    count: int
+    total_bytes: int
+    #: Videos a limit matched that an exception keeps.
+    kept_by_exception: int
+
+
 class TagStat(BaseModel):
     tag: str
     count: int
@@ -488,6 +639,8 @@ class StorageStats(BaseModel):
     video_count: int
     # H.264 sidecars (counted in total_bytes, not video_bytes).
     compat_bytes: int = 0
+    # Deleted videos waiting in the trash (counted in total_bytes: they still use disk).
+    trash_bytes: int = 0
 
 
 class ChannelRename(BaseModel):
@@ -498,6 +651,8 @@ class ChannelRename(BaseModel):
 class PlaylistCreate(BaseModel):
     name: str
     description: str | None = None
+    #: Omitted: public for holders of manage_playlists, private for everyone else.
+    visibility: PlaylistVisibility | None = None
 
 
 class PlaylistUpdate(BaseModel):
@@ -506,6 +661,13 @@ class PlaylistUpdate(BaseModel):
     subscribed: bool | None = None
     quality_preset: str | None = None
     cover_video_id: int | None = None
+    #: Owner only; making a playlist public takes manage_playlists.
+    visibility: PlaylistVisibility | None = None
+
+
+class PlaylistOwner(BaseModel):
+    id: int
+    username: str
 
 
 class PlaylistRead(BaseModel):
@@ -525,6 +687,11 @@ class PlaylistRead(BaseModel):
     has_custom_cover: bool = False
     thumbnail_video_id: int | None = None
     has_thumbnail: bool = False
+    visibility: PlaylistVisibility = PlaylistVisibility.public
+    #: None for a playlist that predates accounts and has no owner yet.
+    owner: PlaylistOwner | None = None
+    #: Whether the requesting user may rename, change or delete it.
+    can_edit: bool = False
 
 
 class PlaylistDetail(PlaylistRead):
@@ -550,6 +717,8 @@ class PlaylistImport(BaseModel):
     name: str | None = None
     entries: list[str] = Field(default=[], max_length=MAX_PLAYLIST_ITEMS)
     subscribe: bool = False
+    #: Omitted: public for holders of manage_playlists, private for everyone else.
+    visibility: PlaylistVisibility | None = None
 
 
 class PlaylistPreviewEntry(BaseModel):
@@ -663,6 +832,13 @@ class AuthUserRead(BaseModel):
     permissions: list[str]
     #: Profile picture cache key; None when there is none.
     avatar_version: int | None = None
+    #: Other accounts on a device may see this account's offline downloads there.
+    share_downloads: bool = True
+    #: Signs in with a code from an authenticator app (or a recovery code) as well.
+    two_factor_enabled: bool = False
+    #: An administrator requires two-step sign-in and this account has not set it up:
+    #: until it does, the server answers everything but the setup routes with 403.
+    two_factor_enrollment_required: bool = False
 
 
 class AuthState(BaseModel):
@@ -677,9 +853,82 @@ class LoginRequest(BaseModel):
     password: str = Field(max_length=2000)
 
 
+class SecurityCheckItem(BaseModel):
+    id: str
+    status: Literal["ok", "warn"]
+    title: str
+    detail: str
+    #: Path under the wiki (`/wiki/<docs>`) that explains it.
+    docs: str
+
+
+class SecurityChecklistRead(BaseModel):
+    #: A public host name is allowed, so Horde is (or is about to be) reachable from outside.
+    exposed: bool
+    items: list[SecurityCheckItem]
+
+
+class TotpLoginRequest(BaseModel):
+    """The second step of a two-step sign-in."""
+
+    #: The ``extra.pending_token`` of the ``totp_required`` answer.
+    pending_token: str = Field(max_length=400)
+    #: A code from the authenticator app, or a recovery code.
+    code: str = Field(max_length=64)
+
+
+class TwoFactorStatus(BaseModel):
+    enabled: bool
+    enabled_at: datetime | None = None
+    recovery_codes_left: int = 0
+    #: An administrator requires two-step sign-in of this account.
+    required: bool = False
+
+
+class TwoFactorSetupRequest(BaseModel):
+    current_password: str = Field(max_length=2000)
+
+
+class TwoFactorSetup(BaseModel):
+    """What the person adds to their authenticator app (shown once, never stored in the client)."""
+
+    #: The key in groups of four, for typing it in by hand.
+    secret: str
+    otpauth_uri: str
+    #: The ``otpauth_uri`` as a QR code (SVG markup, drawn on the server).
+    qr_svg: str
+
+
+class TwoFactorConfirm(BaseModel):
+    code: str = Field(max_length=64)
+
+
+class TwoFactorProof(BaseModel):
+    """Turning two-step sign-in off, or replacing its recovery codes."""
+
+    current_password: str = Field(max_length=2000)
+    #: A code from the authenticator app (or an unused recovery code).
+    code: str = Field(max_length=64)
+
+
+class TwoFactorRecoveryCodes(BaseModel):
+    """Shown once: the server keeps only a keyed hash of each."""
+
+    recovery_codes: list[str]
+
+
 class BootstrapRequest(BaseModel):
     username: str = Field(max_length=200)
     password: str = Field(max_length=2000)
+    share_downloads: bool = True
+
+
+class MeUpdate(BaseModel):
+    """Changes to your own account preferences."""
+
+    share_downloads: bool
+    #: Required to stop sharing: that password also unlocks your downloads offline.
+    current_password: str | None = Field(default=None, max_length=2000)
 
 
 class AuthLoginResult(BaseModel):
@@ -700,6 +949,37 @@ class PasswordResetRequest(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str = Field(max_length=2000)
     new_password: str = Field(max_length=2000)
+
+
+class PasswordVerify(BaseModel):
+    password: str = Field(max_length=2000)
+
+
+class ReauthRequest(BaseModel):
+    """Prove the password again (and a code, if the account has two-step sign-in)."""
+
+    password: str = Field(max_length=2000)
+    #: An authenticator code or recovery code; needed when two-step sign-in is on.
+    code: str = Field(default="", max_length=64)
+
+
+class SessionRead(BaseModel):
+    """One signed-in browser of an account."""
+
+    id: int
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    ip: str | None = None
+    user_agent: str | None = None
+    #: "Safari on iPhone", parsed from ``user_agent``.
+    device: str
+    #: The browser making this request.
+    current: bool
+
+
+class SessionList(BaseModel):
+    items: list[SessionRead]
 
 
 class MediaTokenRead(BaseModel):
@@ -725,6 +1005,8 @@ class UserRead(BaseModel):
     last_login_at: datetime | None = None
     #: Profile picture cache key; None when there is none.
     avatar_version: int | None = None
+    share_downloads: bool = True
+    two_factor_enabled: bool = False
 
 
 class UserCreate(BaseModel):
@@ -733,6 +1015,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
     #: Members only. Omitted = the default grants (see /api/users/permissions).
     permissions: list[str] | None = None
+    share_downloads: bool = True
 
 
 class UserUpdate(BaseModel):
@@ -740,6 +1023,7 @@ class UserUpdate(BaseModel):
     disabled: bool | None = None
     password: str | None = Field(default=None, max_length=2000)
     permissions: list[str] | None = None
+    share_downloads: bool | None = None
 
 
 class FollowedChannelRead(BaseModel):
@@ -794,3 +1078,131 @@ class LiveListResponse(BaseModel):
     next_cursor: str | None = None
     #: False when the server's live checks are turned off (``HORDE_LIVE_POLL_SEC=0``).
     enabled: bool = True
+
+
+class TrashItemRead(BaseModel):
+    """A deleted video in the trash."""
+
+    id: int
+    video_id: int
+    youtube_id: str | None = None
+    title: str
+    channel: str | None = None
+    size_bytes: int
+    trashed_at: datetime
+    #: When it is erased for good (``trashed_at`` plus ``HORDE_TRASH_DAYS``).
+    expires_at: datetime
+    #: Username of who deleted it (None when that account is gone).
+    trashed_by: str | None = None
+    #: Served by ``GET /api/trash/{id}/thumbnail``; None when it had none.
+    thumbnail_url: str | None = None
+    #: Why it is here when nobody deleted it by hand, e.g. "Retention: keep latest 20".
+    reason: str | None = None
+
+
+class TrashPage(BaseModel):
+    items: list[TrashItemRead]
+    next_cursor: str | None = None
+
+
+class TrashSummary(BaseModel):
+    count: int
+    total_bytes: int
+    #: ``HORDE_TRASH_DAYS``: 0 means new deletes are immediate (entries already in the
+    #: trash still expire after the default 7 days).
+    retention_days: int
+
+
+class TrashRestored(BaseModel):
+    video_id: int
+    title: str
+
+
+class TrashEmptied(BaseModel):
+    deleted: int
+    freed_bytes: int
+
+
+# --- Notifications (ntfy, webhook, Discord) ----------------------------------
+
+NotificationKind = Literal["ntfy", "webhook", "discord"]
+
+
+class NotificationEventOptionRead(BaseModel):
+    key: str
+    label: str
+    description: str
+    default: bool
+
+
+class NotificationEventRead(BaseModel):
+    """An event a target can subscribe to (the registry in ``services/notifications/events.py``)."""
+
+    name: str
+    label: str
+    description: str
+    #: On for a newly added target.
+    default: bool
+    options: list[NotificationEventOptionRead] = Field(default_factory=list)
+
+
+class NotificationTargetRead(BaseModel):
+    id: str
+    name: str
+    kind: NotificationKind
+    url: str
+    #: ntfy only.
+    topic: str | None = None
+    #: The last four characters of the access token (``••••abcd``); the token itself never leaves the server.
+    token: str = ""
+    token_set: bool = False
+    enabled: bool
+    events: list[str]
+    options: dict[str, bool]
+
+
+class NotificationsRead(BaseModel):
+    targets: list[NotificationTargetRead]
+    events: list[NotificationEventRead]
+    max_targets: int
+    #: Whether ``HORDE_PUBLIC_URL`` is set, so messages can link back to Horde.
+    public_url_set: bool
+
+
+class NotificationTargetCreate(BaseModel):
+    name: str = Field(max_length=200)
+    kind: NotificationKind
+    url: str = Field(max_length=4096)
+    topic: str | None = Field(default=None, max_length=200)
+    #: An ntfy access token, or the bearer token a webhook expects.
+    token: str | None = Field(default=None, max_length=1024)
+    enabled: bool = True
+    #: Event names; omitted means the registry's defaults.
+    events: list[str] | None = Field(default=None, max_length=50)
+    options: dict[str, bool] | None = None
+
+
+class NotificationTargetUpdate(BaseModel):
+    """Only the fields sent change. ``token``: omit or send the mask to keep it, "" to remove it."""
+
+    name: str | None = Field(default=None, max_length=200)
+    kind: NotificationKind | None = None
+    url: str | None = Field(default=None, max_length=4096)
+    topic: str | None = Field(default=None, max_length=200)
+    token: str | None = Field(default=None, max_length=1024)
+    enabled: bool | None = None
+    events: list[str] | None = Field(default=None, max_length=50)
+    options: dict[str, bool] | None = None
+
+
+class NotificationTargetTest(NotificationTargetCreate):
+    """A target to try before saving it. ``id`` borrows the stored token of a saved one."""
+
+    id: str | None = Field(default=None, max_length=64)
+
+
+class NotificationTestResult(BaseModel):
+    ok: bool
+    status_code: int | None = None
+    #: A short fixed sentence, never the raw exception.
+    error: str | None = None

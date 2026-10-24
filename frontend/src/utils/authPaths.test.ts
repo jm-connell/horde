@@ -7,6 +7,17 @@ describe("safeNextPath", () => {
     expect(safeNextPath("/settings?tab=ai#x")).toBe("/settings?tab=ai#x");
   });
 
+  it("keeps a shared link through the sign-in round trip", () => {
+    // AuthGate sends /download?url=... to /login?next=<encoded>; the login
+    // page decodes `next` back through safeNextPath.
+    const here =
+      "/download?url=https%3A%2F%2Fyoutu.be%2Fxyz%3Ft%3D5&text=a%20b";
+    const next = new URLSearchParams(`next=${encodeURIComponent(here)}`).get(
+      "next"
+    );
+    expect(safeNextPath(next)).toBe(here);
+  });
+
   it("refuses anything that could leave the site or loop", () => {
     for (const bad of [
       null,

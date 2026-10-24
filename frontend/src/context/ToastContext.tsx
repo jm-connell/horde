@@ -46,6 +46,8 @@ const Ctx = createContext<ToastContextValue | null>(null);
 const INFO_MS = 4000;
 // Errors are rarely glanceable: give them time and a dismiss button.
 const ERROR_MS = 10000;
+// A toast with an action (Undo) stays long enough to reach the button.
+const ACTION_MS = 10000;
 
 let nextId = 0;
 
@@ -98,7 +100,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           id,
           window.setTimeout(
             () => dismissToast(id),
-            variant === "error" ? ERROR_MS : INFO_MS
+            variant === "error"
+              ? ERROR_MS
+              : options.action
+                ? ACTION_MS
+                : INFO_MS
           )
         );
       }

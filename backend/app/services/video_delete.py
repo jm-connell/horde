@@ -2,7 +2,8 @@
 
 ``delete_video_cascade`` removes dependent rows, then (only after the commit
 succeeded) the files derived from the video: thumbnails, seek sprites, the
-compat sidecar and subtitle files, plus the media file itself when asked.
+compat sidecar and subtitle files, plus the media file itself (and the
+media-server ``.nfo`` / ``-thumb.jpg`` beside it) when asked.
 Foreign keys cascade as well; the explicit deletes keep the behaviour correct
 if a database is ever opened without ``PRAGMA foreign_keys=ON``.
 """
@@ -24,7 +25,9 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    RetentionKeep,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
@@ -32,7 +35,7 @@ from ..models import (
 )
 from . import library, thumbnails
 from .metadata import sprite_image_path, sprite_meta_path
-from .paths import resolve_compat_path
+from .paths import media_server_sidecar_paths, resolve_compat_path
 
 logger = logging.getLogger(__name__)
 
@@ -44,12 +47,14 @@ _OWNED_ROW_COLUMNS: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (PlaylistItem, col(PlaylistItem.video_id)),
     (AiJob, col(AiJob.video_id)),
     (UserVideoState, col(UserVideoState.video_id)),
+    (RetentionKeep, col(RetentionKeep.video_id)),
 )
 # History / soft pointers that survive the video with the reference cleared.
 _NULLED_REFERENCES: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (DownloadJob, col(DownloadJob.video_id)),
     (DownloadJob, col(DownloadJob.replace_video_id)),
     (OpenRouterUsage, col(OpenRouterUsage.video_id)),
+    (UserWatchTime, col(UserWatchTime.video_id)),
     (Playlist, col(Playlist.cover_video_id)),
 )
 
@@ -74,7 +79,10 @@ def collect_video_files(video: Video, *, include_media: bool) -> list[Path]:
         if sub:
             paths.append(get_paths().downloads / sub)
     if include_media and video.file_path:
-        paths.append(get_paths().downloads / video.file_path)
+        media = get_paths().downloads / video.file_path
+        paths.append(media)
+        # Written when media-server files are on; cleaned up with the media either way.
+        paths.extend(media_server_sidecar_paths(media))
     return paths
 
 

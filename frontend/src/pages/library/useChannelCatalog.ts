@@ -42,16 +42,11 @@ export function useChannelCatalog(
     useState<CatalogProgress | null>(null);
   const toastedCatalogErrorRef = useRef<string | null>(null);
   const catalogErrorSeededRef = useRef(false);
-  const [autodownloadOpen, setAutodownloadOpen] = useState(false);
   const [autodownload, setAutodownload] = useState<ChannelAutodownload | null>(
     null
   );
   const [autodownloadSaving, setAutodownloadSaving] = useState(false);
   const [youtubePrefSaving, setYoutubePrefSaving] = useState(false);
-
-  useEffect(() => {
-    setAutodownloadOpen(false);
-  }, [activeChannel]);
 
   useEffect(() => {
     if (
@@ -221,9 +216,10 @@ export function useChannelCatalog(
         ...payload,
       });
       setAutodownload(row);
-      setAutodownloadOpen(false);
       showToast(
-        payload.enabled ? "Autodownload saved" : "Autodownload turned off"
+        payload.enabled
+          ? "Automatic downloads saved"
+          : "Automatic downloads turned off"
       );
     } catch (err) {
       showToast(
@@ -270,8 +266,6 @@ export function useChannelCatalog(
     indexingChannel,
     triggerChannelIndex,
     autodownload,
-    autodownloadOpen,
-    setAutodownloadOpen,
     autodownloadSaving,
     saveAutodownload,
     youtubePrefSaving,

@@ -21,10 +21,10 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | Worker (registry name) | Notes |
 |------------------------|-------|
 | `ffmpeg-children` | Terminates ffmpeg processes still running at shutdown. |
-| `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper. |
+| `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -44,6 +44,7 @@ Discovers importable video extensions, ignores intermediate `.part` / `.fNNN` / 
 **Recover:** `download_queue.recover()` on startup — jobs left `downloading` become `queued`. Jobs interrupted by a clean shutdown are requeued the same way before the process exits. Global pause is restored from app settings key `download_queue_paused` so Pause survives process restart.
 
 - FIFO queue with `MAX_DOWNLOAD_CONCURRENCY` **download** workers (default **2**) plus a separate ffmpeg pool (`MAX_FFMPEG_CONCURRENCY`, default 1 or 2 with GPU).
+- **Disk limits:** before dispatching a library job the queue asks `SpaceGate` (`services/downloads/space.py`) whether the library is under `max_library_bytes` (the number from `services/library_usage.py`, cached for 5 s) and the volume has at least `HORDE_MIN_FREE_GB` free. A job that does not fit stays `queued` and is remembered in memory with a reason (`library_full`, `would_exceed`, `low_disk`, `disk_full`); later jobs that fit may still start. `GET /api/downloads/queue/status`, the job list and the progress snapshots carry `held_reason`. The reaper tick re-checks held jobs every 30 s, and deletes and settings changes call `library_changed()`. After the metadata fetch the runner compares the preset's estimated size with the limit and returns the job to the queue (`DownloadHeld`) when it would not fit. An out-of-space write is classified as `disk_full` and makes the queue hold for five minutes.
 - One multiplex SSE stream (`GET /api/downloads/events`); per-job streams remain for Watch.
 - Per-job cancel/pause events; pause does not kill an in-flight encode. Progress snapshots for SSE (includes typed `error_kind` on failure and `stage` during post-download work).
 - Metadata extracts share the yt-dlp extract gate with preview/feed (1 + 1.25s spacing; interactive preview jumps background fills).
@@ -134,6 +135,22 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 ## Stream AI
 
 **Start:** `stream_ai.create_worker()` after subtitle retry. Once an hour it moves the saved AI results of streamed videos (`stream_ai_state`) onto library videos with the same YouTube id (download finalize does this immediately; the sweep covers imports) and deletes results nobody opened for `HORDE_STREAM_AI_RETENTION_DAYS` (default 30). See [ADR 0010](../adr/0010-stream-ai-retention.md).
+
+## Trash purge
+
+**Start:** `trash.create_worker()` after job metadata (`trash-purge`). Two minutes after start and then every hour it erases trash entries older than `HORDE_TRASH_DAYS` (default 7; with `0` entries still expire after 7 days), skipping entries whose trash folder cannot be seen (an unmounted share). It also looks at trash folders no entry owns that are over an hour old: it moves their files back when their video is still in the library and otherwise leaves them, never deleting them. It wakes the download queue when disk space was freed. See [ADR 0013](../adr/0013-trash-tombstones.md).
+
+## Channel retention
+
+**Start:** `channel_retention.create_worker()` after trash purge (`channel-retention`). Two minutes after start, then every hour (and at once when a rule is saved), it applies every enabled `channel_retention` rule: the videos a rule selects (and that no exception keeps) go through `trash.trash_video` with no user and a reason such as "Retention: keep latest 20". A video that cannot be moved is logged and skipped; the rest still go. It does nothing while the trash is off, and it does not wake the download queue: trashed bytes still count against the disk cap. See [Cleaning up old videos](../guides/channels.md#retention).
+
+## Notifications
+
+**Start:** `ctx.notifier.create_worker()` after channel retention (`notifications`). Emitters (`notifications.emit`, called from the download pipeline, the queue's disk hold and the live poller) only append to a bounded queue on `ctx.notifier`; the worker pops it, folds bursts per target and sends with a 10 s timeout and three attempts. Every five minutes it also looks at things nobody emits: the outcome of "Update now" and a new release (the latter only when a target wants it, through the cached update check). See [Notifications](../ops/notifications.md).
+
+## Media-server files
+
+**Start:** `ctx.sidecars.create_worker()` after the notifier (`media-sidecars`). It runs the library-wide jobs of the optional [Jellyfin / Kodi / Plex files](../guides/media-servers.md), one at a time, from a small queue on `ctx.sidecars` (`SidecarJobs` in `services/media_sidecars.py`): the backfill when the setting is turned on, a rewrite of a renamed channel's videos, and the removal of every file. It writes only when the bytes differ, pauses briefly after each video it wrote, stops when the setting is switched off mid-run, and reports done/total under System → Background activity (kind `sidecars`). Single-video changes (a download finishing, an edit, a thumbnail change, a metadata resync, AI tagging) do not use the queue: they call `media_sidecars.refresh(video_id)` in the thread that made the change, which logs and swallows its own failures.
 
 ## Nightly backup
 

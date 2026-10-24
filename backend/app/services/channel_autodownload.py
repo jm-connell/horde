@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Collection
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -16,6 +16,7 @@ from ..models import (
     ChannelCatalogVideo,
     DownloadDestination,
     DownloadJob,
+    JobOrigin,
     JobStatus,
     utcnow,
 )
@@ -180,6 +181,7 @@ def candidate_skip_reason(
     include_completed_streams: bool,
     library_ids: set[str],
     queued_ids: set[str],
+    deleted_ids: Collection[str] = (),
 ) -> str | None:
     if catalog_row_is_short(row):
         return "short"
@@ -194,6 +196,8 @@ def candidate_skip_reason(
         return "library"
     if row.yt_id in queued_ids:
         return "queued"
+    if row.yt_id in deleted_ids:
+        return "deleted"
     return None
 
 
@@ -217,6 +221,7 @@ def enqueue_catalog_row(
     row: ChannelCatalogVideo,
     policy: ChannelAutodownload,
 ) -> int | None:
+    from .channel_catalog.skips import deleted_yt_ids
     from .downloads import jobs
 
     yt_id = row.yt_id
@@ -230,6 +235,8 @@ def enqueue_catalog_row(
             return None
         if library.find_video_by_youtube_id(session, yt_id) is not None:
             return None
+        if yt_id in deleted_yt_ids(session, [row.catalog_id]):
+            return None  # a user deleted it: only a manual download brings it back
         job = DownloadJob(
             url=url,
             quality_preset=policy.quality_preset or DEFAULT_PRESET,
@@ -239,6 +246,7 @@ def enqueue_catalog_row(
             thumbnail_url=row.thumbnail_url,
             video_codec=default_download_video_codec(),
             destination=DownloadDestination.library.value,
+            origin=JobOrigin.channel_autodownload.value,
         )
         session.add(job)
         session.commit()
@@ -256,7 +264,11 @@ def _eligible_rows(
     *,
     queued_ids: set[str],
 ) -> list[ChannelCatalogVideo]:
+    from .channel_catalog.skips import deleted_yt_ids
+
     lib_ids = set(library.youtube_library_map(session).keys())
+    # Videos a user deleted (in the trash or for good) are not fetched again.
+    deleted = deleted_yt_ids(session, {r.catalog_id for r in rows})
     out: list[ChannelCatalogVideo] = []
     for row in rows:
         if candidate_skip_reason(
@@ -264,6 +276,7 @@ def _eligible_rows(
             include_completed_streams=policy.include_completed_streams,
             library_ids=lib_ids,
             queued_ids=queued_ids,
+            deleted_ids=deleted,
         ):
             continue
         out.append(row)

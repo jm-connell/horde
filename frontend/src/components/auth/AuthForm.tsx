@@ -38,6 +38,7 @@ export function Field({
   focusOnMount,
   hint,
   required = true,
+  inputMode,
 }: {
   label: string;
   value: string;
@@ -48,6 +49,8 @@ export function Field({
   focusOnMount?: boolean;
   hint?: string;
   required?: boolean;
+  /** `numeric` brings up the number pad for one-time codes. */
+  inputMode?: "numeric" | "text";
 }) {
   const id = useId();
   const ref = useRef<HTMLInputElement>(null);
@@ -66,6 +69,7 @@ export function Field({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
+        inputMode={inputMode}
         required={required}
         aria-describedby={hint ? `${id}-hint` : undefined}
         className={AUTH_INPUT}

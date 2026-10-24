@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import PrivateDownloadsNotice from "../components/PrivateDownloadsNotice";
+import { useAuth } from "../context/AuthContext";
 import { useConfirm } from "../context/ConfirmContext";
+import { deviceAccounts, type AccountRegistry } from "../offline/accounts";
 import { connectivity } from "../offline/connectivity";
 import type { OfflineItem } from "../offline/db";
 import {
   itemProgress,
   useConnectivity,
+  useDeviceAccounts,
   useOfflineDownloads,
   useOfflineResumePositions,
 } from "../offline/hooks";
@@ -37,6 +41,16 @@ function Thumb({ item, className }: { item: OfflineItem; className: string }) {
   );
 }
 
+/** "Saved by jon" for a download another account saved; null for your own. */
+function savedBy(
+  item: OfflineItem,
+  viewer: number | undefined,
+  accounts: AccountRegistry
+): string | null {
+  if (item.owner === undefined || item.owner === viewer) return null;
+  return `Saved by ${accounts.get(item.owner)?.username ?? item.ownerName ?? "another account"}`;
+}
+
 function useRemove() {
   const confirm = useConfirm();
   return async (item: OfflineItem) => {
@@ -56,10 +70,12 @@ const btn =
 function DownloadingRow({
   item,
   liveBytes,
+  savedByLabel,
   onRemove,
 }: {
   item: OfflineItem;
   liveBytes: ReadonlyMap<number, number>;
+  savedByLabel: string | null;
   onRemove: (item: OfflineItem) => void;
 }) {
   const { progress, bytes } = itemProgress(item, liveBytes);
@@ -84,6 +100,9 @@ function DownloadingRow({
         </p>
         {item.video.channel ? (
           <p className="truncate text-xs text-muted">{item.video.channel}</p>
+        ) : null}
+        {savedByLabel ? (
+          <p className="truncate text-xs text-muted">{savedByLabel}</p>
         ) : null}
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-ink-700">
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
@@ -136,11 +155,13 @@ function DownloadingRow({
 function DownloadedCard({
   item,
   positionSec,
+  savedByLabel,
   onRemove,
 }: {
   item: OfflineItem;
   /** The signed-in account's place in it, on this device. */
   positionSec: number;
+  savedByLabel: string | null;
   onRemove: (item: OfflineItem) => void;
 }) {
   const v = item.video;
@@ -171,6 +192,9 @@ function DownloadedCard({
         </p>
         {v.channel ? (
           <p className="truncate text-xs text-muted">{v.channel}</p>
+        ) : null}
+        {savedByLabel ? (
+          <p className="truncate text-xs text-muted">{savedByLabel}</p>
         ) : null}
       </Link>
       <button
@@ -205,6 +229,8 @@ export default function OfflinePage({
   const snap = useOfflineDownloads();
   const positions = useOfflineResumePositions();
   const conn = useConnectivity();
+  const accounts = useDeviceAccounts();
+  const viewer = useAuth().user?.id;
   const remove = useRemove();
   const [quota, setQuota] = useState<{ usage?: number; quota?: number } | null>(
     null
@@ -234,6 +260,13 @@ export default function OfflinePage({
       totalBytes: done.reduce((n, i) => n + i.totalBytes, 0),
     };
   }, [snap.items]);
+
+  const me = viewer === undefined ? undefined : accounts.get(viewer);
+  const needsUnlockSetup =
+    !!me &&
+    !me.shareDownloads &&
+    !me.verifier &&
+    snap.items.some((i) => i.owner === viewer);
 
   const summary = [
     `${formatSize(totalBytes) || "0 B"} used by downloads`,
@@ -271,6 +304,30 @@ export default function OfflinePage({
       )}
       <p className="mb-5 text-xs text-muted">{summary}</p>
 
+      <PrivateDownloadsNotice groups={snap.hidden} />
+
+      {needsUnlockSetup ? (
+        <div
+          data-horde="offline-unlock-hint"
+          className="ui-panel mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-4 py-3"
+        >
+          <p className="min-w-0 flex-1 text-sm text-gray-200">
+            Offline unlock isn’t set up for your private downloads. If someone
+            else is signed in on this device and you have no connection, you
+            won’t be able to open them.
+          </p>
+          {conn.status !== "offline" && viewer !== undefined ? (
+            <button
+              type="button"
+              className={btn}
+              onClick={() => deviceAccounts.requestSetup(viewer)}
+            >
+              Set up offline unlock
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+
       {snap.unsupported ? (
         <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
           <p className="mb-2 font-medium text-gray-100">
@@ -282,7 +339,11 @@ export default function OfflinePage({
 
       {!snap.unsupported && snap.ready && snap.items.length === 0 ? (
         <div className="py-16 text-center">
-          <p className="text-lg text-gray-200">No downloads yet</p>
+          <p className="text-lg text-gray-200">
+            {snap.hidden.length > 0
+              ? "No downloads for this account yet"
+              : "No downloads yet"}
+          </p>
           <p className="mt-1 text-sm text-muted">
             Tap Download on any video to save it for offline viewing.
           </p>
@@ -300,6 +361,7 @@ export default function OfflinePage({
                 key={item.videoId}
                 item={item}
                 liveBytes={snap.liveBytes}
+                savedByLabel={savedBy(item, viewer, accounts)}
                 onRemove={remove}
               />
             ))}
@@ -318,6 +380,7 @@ export default function OfflinePage({
                 key={item.videoId}
                 item={item}
                 positionSec={positions.get(item.videoId) ?? 0}
+                savedByLabel={savedBy(item, viewer, accounts)}
                 onRemove={remove}
               />
             ))}

@@ -20,6 +20,13 @@ export type NextPart = S["NextPartRead"];
 export type ChannelFeedPage = S["ChannelFeedPage"];
 export type ChannelCatalogStatusItem = S["ChannelCatalogStatusItem"];
 export type ChannelAutodownload = S["ChannelAutodownloadRead"];
+export type ChannelRetention = S["ChannelRetentionRead"];
+export type ChannelRetentionPreview = S["ChannelRetentionPreview"];
+/** The three optional limits of a retention rule. */
+export type RetentionLimits = Pick<
+  S["ChannelRetentionRead"],
+  "keep_latest" | "max_age_days" | "remove_watched_after_days"
+>;
 export type ChannelCatalogStatus = S["ChannelCatalogStatusResponse"];
 export type JobStatus = S["JobStatus"];
 export type DownloadDestination = S["DownloadDestination"];
@@ -39,6 +46,14 @@ export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
 export type ChannelLive = S["ChannelLiveResponse"];
 export type StorageStats = S["StorageStats"];
+/** A deleted video in the trash. `reason` says why when a rule (not a person) deleted it. */
+export type TrashItem = S["TrashItemRead"];
+export type TrashSummary = S["TrashSummary"];
+export type HistoryStats = S["HistoryStats"];
+export type HistoryStatsRange = HistoryStats["range"];
+export type HistoryStatsDay = S["HistoryStatsDay"];
+export type TrashRestored = S["TrashRestored"];
+export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type OpenRouterCosts = S["OpenRouterCostsRead"];
@@ -62,9 +77,18 @@ export type DuplicateGroup = S["DuplicateGroupRead"];
 export type ImportScanResult = S["ScanResult"];
 export type HealthStats = S["HealthFull"];
 export type UpdateCheck = S["UpdateCheckRead"];
+export type NotificationsConfig = S["NotificationsRead"];
+export type NotificationTarget = S["NotificationTargetRead"];
+export type NotificationEvent = S["NotificationEventRead"];
+export type NotificationKind = S["NotificationTargetRead"]["kind"];
+export type NotificationTargetCreate = S["NotificationTargetCreate"];
+export type NotificationTargetUpdate = S["NotificationTargetUpdate"];
+export type NotificationTargetDraft = S["NotificationTargetTest"];
+export type NotificationTestResult = S["NotificationTestResult"];
 export type UpdateControl = S["UpdateControlRead"];
 export type UpdateState = UpdateControl["state"];
 export type PlaylistSource = S["PlaylistSource"];
+export type PlaylistVisibility = S["PlaylistVisibility"];
 export type Playlist = S["PlaylistRead"];
 export type PlaylistDetail = S["PlaylistDetail"];
 export type PlaylistPreviewEntry = S["PlaylistPreviewEntry"];
@@ -83,15 +107,23 @@ export type PermissionInfo = Omit<S["PermissionInfo"], "name"> & {
 };
 export type UserCreateInput = Omit<
   S["UserCreate"],
-  "permissions" | "is_admin"
+  "permissions" | "is_admin" | "share_downloads"
 > & {
   is_admin?: boolean;
   permissions?: Permission[];
+  share_downloads?: boolean;
 };
 export type UserUpdateInput = Omit<S["UserUpdate"], "permissions"> & {
   permissions?: Permission[];
 };
 export type MediaToken = S["MediaTokenRead"];
+export type TwoFactorStatus = S["TwoFactorStatus"];
+export type TwoFactorSetup = S["TwoFactorSetup"];
+export type SecurityChecklist = S["SecurityChecklistRead"];
+export type SecurityCheckItem = S["SecurityCheckItem"];
+export type TwoFactorRequirement = AppSettings["require_two_factor"];
+/** One signed-in browser of an account. */
+export type DeviceSession = S["SessionRead"];
 
 export type CompatStatus = "none" | "queued" | "running" | "ready" | "error";
 
@@ -116,6 +148,8 @@ export interface ProgressEvent {
   file_size?: number;
   quality_warning?: string;
   volume_warning?: string;
+  /** Why a queued job is waiting for disk space; `null` once it is not. */
+  held_reason?: string | null;
 }
 
 export interface DownloadOverrides {

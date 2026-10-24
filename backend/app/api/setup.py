@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from ..auth import require_admin
+from ..auth import require_admin, require_recent_auth
 from ..services import factory_reset
 
 router = APIRouter(prefix="/api/setup", tags=["setup"])
@@ -24,7 +24,9 @@ class ResetResponse(BaseModel):
 
 
 @router.post(
-    "/reset", response_model=ResetResponse, dependencies=[Depends(require_admin)]
+    "/reset",
+    response_model=ResetResponse,
+    dependencies=[Depends(require_admin), Depends(require_recent_auth)],
 )
 def reset_app(payload: ResetRequest) -> ResetResponse:
     expected = CONFIRM_ERASE_MEDIA if payload.erase_media else CONFIRM_RESET

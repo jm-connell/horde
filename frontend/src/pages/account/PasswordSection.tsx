@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { api } from "../../api";
 import { Field, FormError } from "../../components/auth/AuthForm";
+import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { deviceAccounts } from "../../offline/accounts";
 import { PANEL_BTN } from "../settings/constants";
 
 /** Change your own password. Your other browsers are signed out. */
 export default function PasswordSection() {
   const { showToast } = useToast();
+  const { user } = useAuth();
   const [current, setCurrent] = useState("");
   const [next, setNext] = useState("");
   const [repeat, setRepeat] = useState("");
@@ -24,6 +27,9 @@ export default function PasswordSection() {
     setError(null);
     try {
       await api.changePassword(current, next);
+      // Downloads kept private unlock with the password: use the new one.
+      if (user && !user.share_downloads)
+        await deviceAccounts.record(user, next);
       showToast("Password changed. Your other browsers were signed out.");
       setCurrent("");
       setNext("");

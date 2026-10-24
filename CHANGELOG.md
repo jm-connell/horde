@@ -7,6 +7,189 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-23
+
+Deleted videos now wait in a trash, channels can clean up after themselves,
+playlists and offline downloads can be private, History shows your watch stats,
+and Horde can send notifications. Sign-in gains two-step codes and the hardening
+needed to put Horde on the internet behind a reverse proxy, if you choose to.
+
+### Upgrade notes
+
+- **Seven database migrations** (`0010_trash` to `0016_two_factor`) run on their
+  own at startup. They only add tables and columns; no existing table is
+  rebuilt. Horde backs the database up first, as for every migration. Rolling
+  back to 1.0.x needs `update.sh --rollback` or a restored backup (the older
+  version refuses a database it does not know).
+- **Deleting a video no longer frees the disk straight away.** Its files wait
+  in `downloads/.horde-trash` (and `data/trash`) for 7 days. Set
+  `HORDE_TRASH_DAYS=0` to keep the old immediate delete. Keep `.horde-trash` on
+  the same filesystem as the videos (it is, unless a channel folder is a
+  separate mount): videos are moved there by renaming, never copied.
+- Existing playlists become **App-wide** and belong to the first
+  administrator, so nobody sees anything change.
+- Videos already saved for offline viewing have no owner and stay visible to
+  everyone on the device. The browser's offline database moves to a new
+  version on first open; nothing is deleted.
+- Watch time was never recorded before, so the History stats start counting at
+  this upgrade, and retention's "finished more than D days ago" counts only
+  videos played to the end from now on.
+- Every account starts with two-step sign-in off. A two-step account's secret is
+  stored in the database like the session hashes: protect `DATA_DIR` and its
+  backups. An administrator's first sensitive action after the upgrade asks for
+  the password once.
+- Notification targets are new; existing installs have none. New targets get
+  *Failed sign-ins* by default.
+- New Python dependency: `segno` (QR codes, pure Python). The image build picks
+  it up.
+- New environment variables, all optional: `HORDE_TRASH_DAYS` (default 7),
+  `HORDE_MIN_FREE_GB` (default 2), `HORDE_PUBLIC_URL` (links in notifications).
+  See [Environment](docs/ops/environment.md).
+- An installed app picks up the new **Share to Horde** option on Android after
+  it is reinstalled once.
+
+### Added
+
+- **Trash.** Deleting a video asks **Move to trash?** and shows a toast with
+  **Undo**. Trashed videos leave the library, search and playlists at once and
+  can be restored for 7 days with their tags, playlist places, watch progress
+  and AI results. **Settings → Library → Trash** shows how many videos and how
+  much space the trash holds, lists them to restore or erase one by one, and
+  has **Empty trash**; Settings → System → Storage shows the trash's share of
+  the disk. A crash or an unmounted share mid-delete never loses media. API:
+  `/api/trash`. See [Library](docs/guides/library.md#trash).
+- **Max disk usage.** Settings → System → Storage takes an optional limit (in
+  GB) on the library's size, with a usage bar that turns amber from 90 %.
+  Downloads, channel auto-downloads and playlist syncs wait while the library
+  is at the limit, a video would not fit, or the disk has less than
+  `HORDE_MIN_FREE_GB` free, and start again by themselves when space is freed.
+  Waiting downloads say why on their card and in a banner, and `/api/health`
+  reports a warning. A download that hits "no space left on device" now stops
+  with its own `disk_full` error instead of failing every following download.
+- **Retention rules for channels.** Keep only the newest N videos, remove
+  videos added more than D days ago, and/or remove videos finished more than D
+  days ago that nobody has watched since. A preview says what a rule would remove before you save it;
+  rules run right after saving and then hourly, and everything goes to the
+  trash with its reason ("Retention: keep latest 20"). Videos in a playlist,
+  with notes, partway through for someone this week, added in the last day or
+  restored from the trash are never removed. Renaming a channel onto an
+  existing one turns the rules involved off. See
+  [Channels](docs/guides/channels.md#retention).
+- **Private playlists.** Every playlist has an owner and is **App-wide** or
+  **Private** (only its owner sees it, not even administrators). Any account can
+  make private playlists; App-wide ones still need **Manage playlists**, and
+  subscribing to or syncing a YouTube playlist needs **Download**. See
+  [Playlists](docs/guides/playlists.md).
+- **Sharing offline downloads between accounts.** Saved videos remember which
+  account saved them, and each account can keep its downloads private from the
+  other accounts on a shared device (Account settings, or when an administrator
+  adds the user). The default is to share. The Offline page shows what others
+  shared ("Saved by jon") and how many private videos there are, with **Switch
+  account**; with no connection, **Unlock** takes the owner's password so nobody
+  is locked out of their own downloads. The device keeps a check value of that
+  password (never the password) only while it holds that account's downloads.
+  See [Offline](docs/guides/offline.md#sharing).
+- **Signed-in devices** in Account settings: every browser signed in to your
+  account ("Safari on iPhone"), with its address and last activity. Sign one
+  out, or all your other devices; administrators can do the same for a member
+  from Users.
+- **Two-step sign-in.** Any account can add codes from an authenticator app
+  (Account settings → Two-step sign-in), with ten single-use recovery codes. A
+  lost phone is fixed with a recovery code, by an administrator, or with
+  `python -m app.cli reset-2fa <username>`; the password reset from the server
+  log still asks for the second step. Administrators can require it of
+  administrators or of everyone (Settings → System → Security). See
+  [Two-step sign-in](docs/ops/authentication.md#two-step-sign-in).
+- **Confirm your password for sensitive administrator actions.** Adding a user,
+  changing an account's type, permissions, password or two-step sign-in,
+  disabling or deleting an account, signing someone else out, changing the
+  two-step requirement and a factory reset ask for the password again (and a
+  code, with two-step sign-in) if it was last entered more than ten minutes
+  ago. See [Confirming your password](docs/ops/authentication.md#reauth).
+- **Internet exposure checklist.** A new guide,
+  [docs/ops/internet-exposure.md](docs/ops/internet-exposure.md), for putting
+  Horde behind a public name with a login: Caddy and nginx examples with
+  sign-in rate limits, the settings to use, and an honest list of the risks
+  that remain. Settings → System → Security shows a pass/warn checklist computed
+  by the server. The docs now say "LAN or VPN by default" instead of "never
+  expose Horde".
+- **Notifications.** Settings → System → Notifications sends messages to
+  [ntfy](https://ntfy.sh), a Discord channel or any webhook: failed downloads,
+  finished downloads (optionally only automatic ones), downloads paused for
+  disk space, a new release, a failed update, a followed channel going live,
+  repeated failed sign-ins and (opt-in) a sign-in from a new device. Bursts
+  become one summary a minute, and **Send test** shows the result inline.
+  Tokens and Discord webhook secrets stay on the server and out of the logs.
+  Set `HORDE_PUBLIC_URL` to add links back to Horde. See
+  [Notifications](docs/ops/notifications.md).
+- **Watch stats on History.** A band at the top of History shows your watch
+  time this week, videos finished, your streak, your top channel and the last
+  30 days at a glance; expand it for watch time per day, top channels and tags,
+  a weekday × hour chart and how much of the library you have watched, over 7
+  days, 30 days, a year or all time. Seeking does not count, and only your own
+  watching is shown. See [History](docs/guides/history.md#stats).
+- **Send links to Horde in one tap.** The installed app appears in Android's
+  share sheet, `/download?url=<link>` fills in the Download page (nothing is
+  queued until you press Download), and the Download page has a bookmarklet.
+  The downloads guide describes an iPhone Shortcut.
+- **Files for Jellyfin, Kodi and Plex.** An off-by-default setting (Settings →
+  Library → Metadata and catalog) writes a Kodi `.nfo` and a `-thumb.jpg` next to
+  every video and a `tvshow.nfo` in each channel folder, so a media server
+  pointed at the same folder shows proper titles, dates, tags and artwork
+  (channel = show, year = season). See
+  [Media servers](docs/guides/media-servers.md).
+
+### Changed
+
+- **A tidier channel page.** The header has just **Follow**, **Download…** and a
+  gear for **Channel settings**, a side sheet (full height on phones) holding
+  automatic downloads, the new cleanup rules, following, the YouTube search
+  choice, and rename and indexing. Chips under the name show what is on and
+  open the matching section; search, Videos/Live, sort, the undownloaded switch
+  and layout share one toolbar.
+- **Manage playlists** now means creating App-wide playlists and editing other
+  people's. Deleting an account deletes its private playlists and hands its
+  App-wide ones to the administrator who deleted it.
+- `update.sh` accepts a `warning` health status, so an update is not rolled back
+  because downloads are waiting for disk space.
+- Developers: the temporary `app.services.downloader` facade is gone (import
+  from `app.services.downloads`), `frontend/src/api.ts` is split into
+  `frontend/src/api/*.ts` behind the same entry point, and the videos router is
+  split into `videos.py`, `video_ai.py` and `video_media.py`. The OpenAPI schema
+  is unchanged by the split.
+
+### Fixed
+
+- Channel auto-download no longer downloads a video again after you deleted
+  it. The video stays in the channel feed as "not downloaded", and downloading
+  it by hand or restoring it from the trash lifts the skip.
+
+### Security
+
+- **Concurrent sign-in attempts could get past the throttle.** A burst of
+  simultaneous guesses all passed the budget check before any failure was
+  counted (80 at once got 43 judged instead of 5), and the burst filled the
+  server with password hashing. A guess now reserves a try before it is hashed,
+  hashing is capped to the number of CPUs (`503 busy` beyond that), and one slot
+  is kept for a browser that has signed in before. This predates 1.1.0.
+- **Sign-in hardening for an internet-facing server.** HSTS on real HTTPS
+  responses; a per-account daily ceiling that slows guessing across many
+  addresses without a lockout an attacker could use (a browser that signed in
+  before, holding a signed `horde_device` cookie, is spared it); IPv6 clients
+  throttled per /64; wrong second-step codes escalate the wait per account; a
+  right password of a two-step account still uses up a try until its code is
+  entered; and `X-Forwarded-For` is read across every header line, so a proxy
+  that adds its own line cannot be spoofed.
+- **Administrators can no longer set their own password without the current
+  one.** `PATCH /api/users/{id}` let a stolen administrator cookie choose a new
+  password and then lock the owner out; it now answers `400`
+  `use_change_password` for your own account.
+- **Device downloads are private to their account.** A download queued for
+  "this device" is visible and fetchable only by the account that queued it,
+  administrators, and, while that account shares its downloads, other accounts.
+  Before, any account with the offline-download permission could fetch it (ids
+  are sequential) or see it in the queue and its progress stream.
+
 ## [1.0.3] - 2026-10-21
 
 ### Changed
@@ -390,7 +573,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.0.3...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.1.0...main
+[1.1.0]: https://github.com/jm-connell/horde/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/jm-connell/horde/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/jm-connell/horde/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/jm-connell/horde/compare/v1.0.0...v1.0.1

@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { contextAs, CSRF_HEADERS, expect, test } from "./fixtures";
 
 test("a playlist is built, reordered, trimmed and deleted", async ({
   page,
@@ -108,4 +108,85 @@ test("playlists can be renamed from the row", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "Night set", level: 3 })
   ).toBeVisible();
+});
+
+test("a private playlist is seen and edited only by its owner", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  // The administrator makes one private playlist; the shared seed stays App-wide.
+  await page.goto("/playlists");
+  // The radio itself is visually hidden; the segmented control is its label.
+  await page
+    .locator("label")
+    .filter({ hasText: /^Private$/ })
+    .click();
+  await expect(page.getByRole("radio", { name: "Private" })).toBeChecked();
+  await page.getByPlaceholder("Playlist name").fill("Secret mix");
+  await page.getByRole("button", { name: "Create" }).click();
+  const secret = page.getByRole("heading", { name: "Secret mix", level: 3 });
+  await expect(secret).toBeVisible();
+  const secretRow = page
+    .locator("[id^='playlist-row-']")
+    .filter({ has: secret });
+  await expect(secretRow.getByText("Private", { exact: true })).toBeVisible();
+  const secretId = Number(
+    (await secretRow.getAttribute("id"))!.replace("playlist-row-", "")
+  );
+  // Another account sees the shared playlist, "by admin", and nothing of the private one.
+  const memberCtx = await contextAs(browser, baseURL, "member");
+  const member = await memberCtx.newPage();
+  await member.goto("/playlists");
+  const evening = member
+    .locator("[id^='playlist-row-']")
+    .filter({ has: member.getByRole("heading", { name: "Evening set" }) });
+  await expect(evening).toContainText("by admin");
+  await expect(member.getByText("Secret mix")).toHaveCount(0);
+  const hidden = await memberCtx.request.get(`/api/playlists/${secretId}`);
+  expect(hidden.status()).toBe(404);
+  const refused = await memberCtx.request.post(
+    `/api/playlists/${secretId}/items`,
+    { headers: CSRF_HEADERS, data: { video_id: 1 } }
+  );
+  expect(refused.status()).toBe(404);
+  await memberCtx.close();
+
+  // A viewer (no Manage playlists) may make a private playlist only, and can
+  // look at, but not change, the shared one.
+  const viewerCtx = await contextAs(browser, baseURL, "viewer");
+  const viewer = await viewerCtx.newPage();
+  await viewer.goto("/playlists");
+  await expect(viewer.getByRole("radio", { name: "App-wide" })).toBeDisabled();
+  await viewer.getByPlaceholder("Playlist name").fill("Viewer's own");
+  await viewer.getByRole("button", { name: "Create" }).click();
+  await expect(
+    viewer.getByRole("heading", { name: "Viewer's own", level: 3 })
+  ).toBeVisible();
+  // Your own and the shared playlists are listed apart.
+  await expect(
+    viewer.getByRole("heading", { name: "Your playlists", level: 2 })
+  ).toBeVisible();
+  await expect(
+    viewer.getByRole("heading", { name: "Shared with everyone", level: 2 })
+  ).toBeVisible();
+  const sharedRow = viewer
+    .locator("[id^='playlist-row-']")
+    .filter({ has: viewer.getByRole("heading", { name: "Evening set" }) });
+  await sharedRow.getByRole("button", { name: "Expand playlist" }).click();
+  await expect(
+    viewer.getByRole("link", { name: /Aurora Drift/ })
+  ).toBeVisible();
+  await expect(sharedRow.getByRole("button", { name: "Delete" })).toHaveCount(
+    0
+  );
+  await expect(sharedRow.getByTitle("Remove from playlist")).toHaveCount(0);
+  await expect(
+    sharedRow.getByRole("button", { name: "Edit playlist" })
+  ).toHaveCount(0);
+  await viewerCtx.close();
+
+  // The administrator never sees the viewer's private playlist.
+  await page.reload();
+  await expect(page.getByText("Viewer's own")).toHaveCount(0);
 });

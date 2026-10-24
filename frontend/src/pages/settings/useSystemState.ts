@@ -4,14 +4,15 @@ import {
   dataOrNull,
   useChannelCatalogStatus,
   useMetadataSyncStatus,
+  useStorageStats,
   useSystemActivity,
 } from "../../queries/status";
-import type { HealthStats, StorageStats, UpdateCheck } from "../../types";
+import type { HealthStats, UpdateCheck } from "../../types";
 import { useUpdateRun } from "./system/useUpdateRun";
 
 /** State and polling of the System tab: versions, storage, catalog and job activity. */
 export function useSystemState() {
-  const [storage, setStorage] = useState<StorageStats | null>(null);
+  const storage = useStorageStats().data ?? null;
   const [health, setHealth] = useState<HealthStats | null>(null);
   const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
   const [updateChecking, setUpdateChecking] = useState(false);
@@ -19,10 +20,6 @@ export function useSystemState() {
   const updateRun = useUpdateRun();
 
   useEffect(() => {
-    api
-      .storageStats()
-      .then(setStorage)
-      .catch(() => undefined);
     fetch("/api/health")
       .then((r) => r.json())
       .then(setHealth)

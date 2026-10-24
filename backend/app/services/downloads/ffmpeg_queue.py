@@ -140,6 +140,8 @@ class FfmpegQueue:
                 self._running.discard(task.job_id)
                 self._threads.discard(threading.current_thread())
             self._downloads.release_ffmpeg(task.job_id)
+            # A finished video changes the library size the next job is checked against.
+            self._downloads.space.invalidate()
             self._dispatch()
 
 

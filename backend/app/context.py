@@ -35,6 +35,9 @@ if TYPE_CHECKING:
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
     from .services.live.runtime import LiveRuntime
+    from .services.media_sidecars import SidecarJobs
+    from .services.notifications.notifier import Notifier
+    from .services.watch_stats import WatchRefs
     from .services.workers import WorkerRegistry
 
 logger = logging.getLogger(__name__)
@@ -120,6 +123,12 @@ class AppContext:
     ai: AiRuntimeState = field(default_factory=lambda: _new_ai_state())
     #: Who is live and the open live HLS sessions (services/live).
     live: LiveRuntime = field(default_factory=lambda: _new_live_runtime())
+    #: Outgoing notifications: emitters queue here, one worker delivers.
+    notifier: Notifier = field(default_factory=lambda: _new_notifier())
+    #: Library-wide work on the optional Jellyfin / Kodi / Plex files.
+    sidecars: SidecarJobs = field(default_factory=lambda: _new_sidecars())
+    #: The previous progress save of recently watched videos (services/watch_stats).
+    watch_refs: WatchRefs = field(default_factory=lambda: _new_watch_refs())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -141,6 +150,24 @@ def _new_live_runtime() -> LiveRuntime:
     from .services.live.runtime import LiveRuntime
 
     return LiveRuntime()
+
+
+def _new_notifier() -> Notifier:
+    from .services.notifications.notifier import Notifier
+
+    return Notifier()
+
+
+def _new_sidecars() -> SidecarJobs:
+    from .services.media_sidecars import SidecarJobs
+
+    return SidecarJobs()
+
+
+def _new_watch_refs() -> WatchRefs:
+    from .services.watch_stats import WatchRefs
+
+    return WatchRefs()
 
 
 def _new_registry() -> WorkerRegistry:

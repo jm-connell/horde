@@ -2,8 +2,8 @@
 
 Horde has [accounts](authentication.md) ([model](../design/no-auth.md)) and is meant for a network you trust. This page describes what Horde enforces so that a web page you visit, or a hostile DNS name, cannot use your signed-in browser to reach into that network. Sign-in is checked after these protections.
 
-!!! danger "Still LAN only"
-    None of this replaces access control. Do not publish the port to the internet. See [Remote access](remote-access.md).
+!!! warning "LAN by default"
+    None of this replaces access control, and Horde is meant for a network you trust. To expose it to the internet, follow the [internet exposure checklist](internet-exposure.md); otherwise see [Remote access](remote-access.md).
 
 ## What Horde enforces
 
@@ -16,6 +16,8 @@ Horde has [accounts](authentication.md) ([model](../design/no-auth.md)) and is m
 | Stored XSS through links, custom CSS | Only `http(s)` links are stored and rendered; custom CSS cannot load remote resources (it is sanitised when saved, again at startup for anything stored before the sanitiser existed, including the `app_settings.json.bak` a corrupt settings file is restored from, and when the first administrator adopts the settings kept from before accounts); a Content-Security-Policy is sent. |
 | Oversized or fake uploads | [Upload limits](#upload-limits). |
 | A member's browser reads internal addresses, model names or error texts (which can quote a URL) | Responses are trimmed for anyone but an administrator: members get statuses and counts, and a generic message where their screen reports a failure. See [what members see](authentication.md#account-types-and-permissions). |
+| A downgrade from HTTPS to plain HTTP on a public name | `Strict-Transport-Security: max-age=31536000` on every response to a request that really arrived over HTTPS (directly, or `X-Forwarded-Proto: https` with `HORDE_TRUST_PROXY=1`). Never sent over plain HTTP; no `includeSubDomains`, no `preload`. |
+| Guessing passwords, or a stolen password | Per-address back-off, a per-name slowdown and a daily ceiling ([sign-in throttle](authentication.md#passwords-and-sessions)); optional [two-step sign-in](authentication.md#two-step-sign-in), which an administrator can require. Failed-sign-in and new-device [notifications](notifications.md). |
 | Factory reset triggered by accident | The request must contain the typed phrase `RESET` (or `ERASE MEDIA` when erasing media). The UI asks for it. |
 
 If you script the API yourself, send `X-Horde-Request: 1` on every `POST`, `PUT`, `PATCH` and `DELETE`.
@@ -73,7 +75,7 @@ Where the check applies:
 
 - **Validated, per hop:** thumbnail fetches (connection pinned to the checked address, redirects re-checked, hosts that do not resolve are refused) and every URL the preview proxy fetches on an extractor's behalf: media, subtitles, manifests and the DASH index probe (redirects re-checked).
 - **Pre-flight only:** URLs handed to yt-dlp (downloads, link checks, playlist and channel reads) are checked before the call, and the download queue re-checks each job before it starts. yt-dlp then resolves hostnames and follows redirects **itself**; those internal requests are not validated, so a DNS server that answers differently the second time, or a redirect inside yt-dlp, can still reach an internal address.
-- **Not filtered:** the Ollama address in Settings → AI is a LAN host by design (an admin-only setting).
+- **Not filtered:** the Ollama address in Settings → AI and the [notification](notifications.md#security) targets are LAN hosts by design (admin-only settings). Notification targets must still be `http(s)` without credentials in the URL, and redirects are not followed.
 
 ## Upload limits { #upload-limits }
 

@@ -13,6 +13,10 @@ _YT_ID_IN_PATH = re.compile(r"\[([A-Za-z0-9_-]{11})\]")
 # Hidden per-job download staging under DOWNLOADS_DIR (never scanned or served).
 STAGING_DIR_NAME = ".horde-staging"
 
+# Hidden folder under DOWNLOADS_DIR where deleted videos wait (``services/trash.py``).
+# The scanner, the import queue and the temp sweep never look inside.
+TRASH_DIR_NAME = ".horde-trash"
+
 # yt-dlp appends ``.f<format_id>`` before the container extension of every
 # per-format download that still has to be merged (``Title [id].f137.mp4``,
 # ``Title [id].f251-drc.webm``, ``Title [id].fhls-1080p.mp4``).
@@ -48,6 +52,30 @@ COMPAT_SIDECAR_TOKEN = ".horde-h264."  # noqa: S105 - filename marker, not a sec
 def compat_sidecar_path(original: Path) -> Path:
     """Where the ≤1080p H.264 compatibility copy of ``original`` lives."""
     return original.with_name(f"{original.stem}{COMPAT_SIDECAR_TOKEN}mp4")
+
+
+# Optional Jellyfin / Kodi / Plex files beside a video (``services/media_sidecars.py``):
+# "<stem>.nfo" and "<stem>-thumb.jpg". The dash keeps the thumbnail out of
+# ``belongs_to_stem``: it is not a dot-token suffix, and the scanner only looks at
+# video extensions, so neither file is ever taken for media.
+NFO_SUFFIX = ".nfo"
+THUMB_SIDECAR_SUFFIX = "-thumb.jpg"
+SHOW_NFO_NAME = "tvshow.nfo"
+
+
+def nfo_sidecar_path(media: Path) -> Path:
+    """The Kodi ``<episodedetails>`` file of ``media``."""
+    return media.with_name(f"{media.stem}{NFO_SUFFIX}")
+
+
+def thumb_sidecar_path(media: Path) -> Path:
+    """The thumbnail media servers pick up beside ``media``."""
+    return media.with_name(f"{media.stem}{THUMB_SIDECAR_SUFFIX}")
+
+
+def media_server_sidecar_paths(media: Path) -> list[Path]:
+    """Where the per-video media-server files of ``media`` live (they may not exist)."""
+    return [nfo_sidecar_path(media), thumb_sidecar_path(media)]
 
 
 def resolve_compat_path(video: Video) -> Path | None:
@@ -96,6 +124,11 @@ def staging_dir(job_id: int) -> Path:
 def is_staging_rel_path(rel_path: str) -> bool:
     posix = (rel_path or "").replace("\\", "/").lstrip("/")
     return posix == STAGING_DIR_NAME or posix.startswith(f"{STAGING_DIR_NAME}/")
+
+
+def is_trash_rel_path(rel_path: str) -> bool:
+    posix = (rel_path or "").replace("\\", "/").lstrip("/")
+    return posix == TRASH_DIR_NAME or posix.startswith(f"{TRASH_DIR_NAME}/")
 
 
 def to_rel_path(path: Path) -> str:
@@ -201,7 +234,7 @@ def unique_rel_path(desired: str, *, exclude: str | None = None) -> str:
 
 
 def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
-    """Move the video's file (and H.264 sidecar) and commit the new path.
+    """Move the video's file (and H.264 and media-server sidecars) and commit the new path.
 
     Files move first, then the row is committed together with whatever else the
     caller changed on ``video``. If the commit fails the files are moved back, so
@@ -235,6 +268,16 @@ def rename_video_file(session: Session, video: Video, new_rel: str) -> None:
         if old_compat is not None and old_compat.is_file():
             journal.move(old_compat, new_compat)
             video.compat_path = new_compat.relative_to(root).as_posix()
+        # The media-server files follow the media. Whatever sits at the new name
+        # belongs to a video that is not there (the media name was free), so it goes.
+        for old_side, new_side in zip(
+            media_server_sidecar_paths(old_abs),
+            media_server_sidecar_paths(new_abs),
+            strict=True,
+        ):
+            if old_side.is_file():
+                new_side.unlink(missing_ok=True)
+                journal.move(old_side, new_side)
         video.file_path = new_rel
         session.add(video)
         session.commit()

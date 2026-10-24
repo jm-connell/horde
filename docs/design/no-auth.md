@@ -6,10 +6,10 @@ Horde is a self-hosted archive for one household or small group. Its security mo
 2. **One administrator, optional members.** The first account is the admin. Members share the library and get only the permissions the admin grants; server-wide settings, AI provider keys and user management are admin-only.
 3. **Per-user history.** Watch progress, "continue watching", the history page, AI chats and the look of the app belong to the signed-in user. Library data (videos, tags, notes, playlists, AI summaries, downloads) is shared.
 4. **Request-level hardening** that holds regardless of accounts: a Host allowlist (DNS rebinding), CSRF header, media-only CORS, size limits and URL validation. See [Security](../ops/security.md).
-5. **A trusted network is still assumed.** Accounts keep housemates apart and stop casual access; they are not a reason to publish Horde to the internet. Prefer a VPN, or an authenticating reverse proxy ([Remote access](../ops/remote-access.md)).
+5. **A trusted network is the default.** Accounts keep housemates apart and stop casual access. Prefer a VPN ([Remote access](../ops/remote-access.md)). To publish Horde, follow the [internet exposure checklist](../ops/internet-exposure.md): TLS, a trusted proxy, an allowed host name, required two-step sign-in, strong passwords and updates, and read its list of remaining risks.
 
-!!! danger "Do not publish Horde to the public internet"
-    There is no email recovery, no two-factor sign-in and no hardening against a determined remote attacker beyond rate-limited password sign-in. Treat the port like a file share.
+!!! danger "HORDE_AUTH_DISABLED is never for the internet"
+    With sign-in disabled, anyone who can reach the port is an administrator. Do not combine it with a public port unless a proxy that you have tested authenticates everyone. There is also no email recovery.
 
 ## Why accounts
 

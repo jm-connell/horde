@@ -13,6 +13,7 @@ import shutil
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import update
 from sqlalchemy.engine import Engine
 from sqlmodel import SQLModel
 
@@ -51,6 +52,7 @@ def prepare(ctx: AppContext, mode: str) -> None:
         paths.backgrounds,
         paths.fonts,
         paths.avatars,
+        paths.data / "trash",
     ):
         _empty_dir(extra)
 
@@ -138,7 +140,7 @@ def _seed_accounts(engine) -> None:
     """
     from sqlmodel import Session, select
 
-    from .models import User
+    from .models import User, UserSession, utcnow
     from .services.auth import accounts, passwords, permissions
 
     seeded = {name for name, *_ in E2E_ACCOUNTS}
@@ -161,7 +163,27 @@ def _seed_accounts(engine) -> None:
             account.disabled = False
             account.permissions = permissions.dump(wanted)
             account.avatar_version = None
+            account.share_downloads = True
+            account.totp_secret = None
+            account.totp_enabled_at = None
+            account.totp_last_step = None
             session.add(account)
+        # A long run outlives the ten minutes after which the sensitive admin
+        # actions ask for the password again: every test starts "just signed in".
+        session.execute(update(UserSession).values(reauth_at=utcnow()))
+        session.commit()
+
+
+def age_sessions(engine) -> None:
+    """Make every session look last confirmed an hour ago (to test the reauth dialog)."""
+    from sqlmodel import Session
+
+    from .models import UserSession, utcnow
+
+    with Session(engine) as session:
+        session.execute(
+            update(UserSession).values(reauth_at=utcnow() - timedelta(hours=1))
+        )
         session.commit()
 
 
@@ -328,11 +350,18 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             )
         )
         session.commit()
+        _seed_watch_time(
+            session,
+            require_id(admin),
+            {v.title: v for v in (aurora, harbor, cedar, paper, kiln)},
+            now,
+        )
 
         playlist = Playlist(
             name="Evening set",
             source_type=PlaylistSource.user,
             position=0,
+            owner_user_id=require_id(admin),
         )
         session.add(playlist)
         session.commit()
@@ -385,6 +414,60 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             )
         )
         session.commit()
+
+
+#: The admin's watching for the History stats: (days ago, video, UTC hour,
+#: minutes, finished). Today and the three days before make a four-day streak;
+#: the last seven days hold 119 minutes; Kiln narrowly leads the last 30 days.
+WATCH_TIME_SEED: tuple[tuple[int, str, int, int, bool], ...] = (
+    (0, "Aurora Drift", 19, 12, False),
+    (0, "Harbor Lights", 20, 6, True),
+    (1, "Kiln fire", 21, 25, True),
+    (2, "Cedar Notes", 18, 9, False),
+    (2, "Aurora Drift", 22, 14, False),
+    (3, "Paper Kites", 7, 4, True),
+    (5, "Kiln fire", 20, 31, False),
+    (6, "Aurora Drift", 13, 18, True),
+    (8, "Harbor Lights", 19, 11, False),
+    (8, "Cedar Notes", 20, 16, True),
+    (9, "Kiln fire", 21, 20, False),
+    (11, "Paper Kites", 8, 3, False),
+    (12, "Aurora Drift", 20, 22, False),
+    (13, "Kiln fire", 19, 27, True),
+    (13, "Harbor Lights", 21, 8, False),
+    (15, "Cedar Notes", 12, 13, False),
+    (16, "Kiln fire", 20, 35, False),
+    (18, "Aurora Drift", 19, 9, False),
+    (19, "Harbor Lights", 22, 15, True),
+    (20, "Kiln fire", 18, 44, True),
+    (22, "Paper Kites", 9, 5, False),
+    (23, "Cedar Notes", 21, 19, False),
+    (25, "Aurora Drift", 20, 26, False),
+    (26, "Kiln fire", 19, 33, False),
+    (41, "Cedar Notes", 20, 21, True),
+    (58, "Aurora Drift", 21, 40, True),
+    (96, "Kiln fire", 19, 52, True),
+    (150, "Harbor Lights", 20, 17, False),
+)
+
+
+def _seed_watch_time(session, admin_id: int, videos: dict, now: datetime) -> None:
+    from .models import UserWatchTime
+
+    today = now.replace(hour=0, minute=0)
+    for days_ago, title, hour, minutes, finished in WATCH_TIME_SEED:
+        video = videos[title]
+        session.add(
+            UserWatchTime(
+                user_id=admin_id,
+                video_id=video.id,
+                channel=video.channel,
+                hour_start=today - timedelta(days=days_ago) + timedelta(hours=hour),
+                seconds=minutes * 60.0,
+                finished=1 if finished else 0,
+            )
+        )
+    session.commit()
 
 
 #: Channel of the filler videos ``add_bulk_videos`` creates.

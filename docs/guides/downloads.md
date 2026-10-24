@@ -148,6 +148,23 @@ On the Download page:
 
 Pause-all stops claiming new yt-dlp downloads; an encode that already started keeps running. Nothing new starts until you resume. The pause flag is stored as `download_queue_paused` in app settings, so it **survives a container restart**.
 
+### Disk limits { #disk-limits }
+
+Nothing should fill the volume behind your back, least of all unattended channel auto-downloads and playlist subscriptions. Two checks run before a **library** download starts:
+
+| Check | Set with | Default |
+|-------|----------|---------|
+| **Max disk usage** | Settings → System → Storage (admins), in GB | No limit |
+| **Free-space floor** | `HORDE_MIN_FREE_GB` ([environment](../ops/environment.md)) | 2 GB |
+
+The limit counts the same number Storage shows: the videos in the library, their H.264 copies and thumbnails, and the videos waiting in the [trash](library.md#trash) (they still use disk; emptying the trash makes room). A job waits when the library is already at the limit, when its estimated size (known once its formats are read) would cross it, or when the downloads volume has less than the floor free. **Offline (this device)** downloads only check the floor.
+
+A waiting job is **held**, not failed: it stays in the queue, its card says why (for example *Paused: library is at its 55 GB limit* or *Paused: less than 2 GB free on disk*) and the Download page shows a banner above the queue. Horde looks again every 30 seconds, and straight away when a video is deleted or the limit is changed, and starts the job by itself once there is room. **Settings → System → Status** shows the same reason on the Active downloads row, and `GET /api/health` reports `status: "warning"` with `downloads.held_reason` while anything waits. Imports are not held (an import only checks that 1 GB stays free).
+
+A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot ([`MAX_DOWNLOAD_CONCURRENCY`](../ops/environment.md)). Set the limit with that margin in mind.
+
+If the disk runs out **while** a download writes (`No space left on device`), the job fails with the kind `disk_full` and the message *The disk is full*, and the queue holds for five minutes (or until you delete a video or change the limit) instead of failing every following job. Free up space and press **Retry**.
+
 ## Single video
 
 1. Paste one video URL, or several separated by commas.
@@ -167,6 +184,14 @@ Playlist URLs are library-only (device destination is hidden). When Horde detect
 | **Import playlist** (default) | One-time download of the videos, saved as a playlist in Horde |
 | **Subscribe** | Sync with the YouTube playlist and download new videos as they appear |
 | **Download videos** | Download like regular videos, without organizing into a playlist |
+
+## Sending links to Horde { #sending-links }
+
+Instead of copying a link and pasting it on the Download page, send it from where you found it. Each route opens `/download?url=<link>`, which fills the URL field and reads the link (title, channel, qualities) exactly as if you had pasted it. **Nothing is queued until you press Download**, and the link is then removed from the address bar so a reload does not repeat the lookup. A member without the download permission sees the usual "Not available for your account" page. When you are signed out, you sign in first and come back to the same link.
+
+- **Android share sheet.** Install Horde as an app (see [Offline & installed app](offline.md#install-the-app)); **Horde** then appears in the share sheet of the YouTube app and of Chrome. Sharing a video opens the Download page with the link filled in. This needs the installed app (Chrome only offers it for installed web apps, over HTTPS), and an installed app from before this release must be reinstalled once to pick up the share option.
+- **Bookmarklet (any desktop browser, and phones without the share sheet).** Open the Download page, expand **Send links from your browser** and drag **Send to Horde** to your bookmarks bar. Click it on any video page and that page opens in a new tab on Horde. On a phone, use **Copy bookmarklet**, create any bookmark, and paste the copied text into its address. A few sites (GitHub, for example) forbid bookmarklets with their security policy; use the share sheet or copy the link instead there.
+- **iPhone and iPad.** Safari does not support share targets, so make a Shortcut. In the Shortcuts app, create one named **Send to Horde**, open its settings and turn on **Show in Share Sheet** (accept **URLs** and **Safari web pages**), then add these actions in order: **URL Encode** the **Shortcut Input**; **Text** containing `https://<your-horde>/download?url=` followed by the **URL Encoded Text** variable; **Open URLs** with that text. Replace `<your-horde>` with the address you use for Horde. Sharing a link and picking **Send to Horde** opens the Download page with it filled in. The bookmarklet also works in Safari.
 
 ## Playlist import
 
@@ -216,7 +241,7 @@ See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_k
 - [Watching](watching.md) — stream preview → download handoff
 - [Playlists](playlists.md) — after YouTube import
 - [Download pipeline](../architecture/downloads-pipeline.md)
-- [Environment variables](../ops/environment.md) — `MAX_DOWNLOAD_CONCURRENCY`
+- [Environment variables](../ops/environment.md) — `MAX_DOWNLOAD_CONCURRENCY`, `HORDE_MIN_FREE_GB`
 
 ## Upgrading: file and folder names
 

@@ -54,7 +54,8 @@ PERMISSION_TABLE: tuple[Permission, ...] = (
     Permission(
         "manage_playlists",
         "Manage playlists",
-        "Create, edit and delete the shared playlists.",
+        "Create App-wide playlists and edit or delete the ones other people share. "
+        "Everyone can make private playlists and manage their own.",
         True,
     ),
     Permission(

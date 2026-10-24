@@ -24,6 +24,12 @@ import {
 import { SPONSOR_BLOCK_CATEGORIES } from "../sponsorBlock";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import type { DownloadJob, Video } from "../types";
+import {
+  deviceAccounts,
+  hiddenGroups,
+  isVisible,
+  type HiddenGroup,
+} from "./accounts";
 import { connectivity } from "./connectivity";
 import {
   CHUNK_SIZE,
@@ -51,8 +57,11 @@ import {
 } from "./quota";
 
 export interface OfflineSnapshot {
+  /** The saved videos the signed-in account may see (see `offline/accounts`). */
   items: OfflineItem[];
   byId: ReadonlyMap<number, OfflineItem>;
+  /** The private downloads of other accounts, counted per owner. */
+  hidden: HiddenGroup[];
   /** Live byte counts for the active download (finer than chunk progress). */
   liveBytes: ReadonlyMap<number, number>;
   ready: boolean;
@@ -130,6 +139,7 @@ class OfflineManager {
   private snapshot: OfflineSnapshot = {
     items: [],
     byId: new Map(),
+    hidden: [],
     liveBytes: new Map(),
     ready: false,
     unsupported: !offlineSupported(),
@@ -168,6 +178,10 @@ class OfflineManager {
         this.snapshot = { ...this.snapshot, unsupported: true };
       }
       this.emit(true);
+      // Who sees what changes with the signed-in account and with each
+      // account's sharing choice.
+      deviceAccounts.subscribe(() => this.emit(true));
+      void deviceAccounts.load();
       connectivity.subscribe(() => this.onConnectivity());
       window.addEventListener(OFFLINE_PROGRESS_EVENT, (e) => {
         const d = (e as CustomEvent<{ videoId: number; positionSec: number }>)
@@ -184,6 +198,7 @@ class OfflineManager {
     await this.init();
     if (this.snapshot.unsupported) throw new Error(UNSUPPORTED_MESSAGE);
     const existing = this.items.get(video.id);
+    this.refuseIfPrivate(existing);
     if (existing && existing.status !== "error") {
       if (existing.status === "paused") this.resume(video.id);
       return;
@@ -210,6 +225,7 @@ class OfflineManager {
     if (this.snapshot.unsupported) throw new Error(UNSUPPORTED_MESSAGE);
     const videoId = -job.id;
     const existing = this.items.get(videoId);
+    this.refuseIfPrivate(existing);
     if (existing && existing.status !== "error") {
       if (existing.status === "paused") this.resume(videoId);
       return;
@@ -223,7 +239,7 @@ class OfflineManager {
   }
 
   pause(videoId: number): void {
-    const item = this.items.get(videoId);
+    const item = this.visible(videoId);
     if (!item || item.status === "complete") return;
     if (this.active?.videoId === videoId) {
       this.active.ctrl.abort(new AbortReason("pause"));
@@ -232,15 +248,19 @@ class OfflineManager {
   }
 
   resume(videoId: number): void {
-    const item = this.items.get(videoId);
+    const item = this.visible(videoId);
     if (!item || item.status === "complete") return;
     void this.save({ ...item, status: "queued", error: null }).then(() =>
       this.pump()
     );
   }
 
+  /**
+   * Remove a saved video. Anyone may remove one they can see (the device is
+   * shared); another account's private download only its owner can.
+   */
   async remove(videoId: number): Promise<void> {
-    const item = this.items.get(videoId);
+    const item = this.visible(videoId);
     if (!item) return;
     if (this.active?.videoId === videoId) {
       this.active.ctrl.abort(new AbortReason("remove"));
@@ -248,6 +268,7 @@ class OfflineManager {
     this.items.delete(videoId);
     this.live.delete(videoId);
     this.emit(true);
+    this.dropUnlockIfLast(item.owner);
     await deleteItem(videoId).catch(() => undefined);
     await deviceResume.forget(videoId).catch((err) => {
       console.warn("Could not forget the offline resume positions", err);
@@ -262,6 +283,30 @@ class OfflineManager {
     void this.save({ ...item, video: { ...item.video, ...video } });
   }
 
+  /** The saved video, if the signed-in account may see it. */
+  private visible(videoId: number): OfflineItem | undefined {
+    const item = this.items.get(videoId);
+    return item && this.canSee(item) ? item : undefined;
+  }
+
+  private canSee(item: OfflineItem): boolean {
+    return isVisible(
+      item,
+      deviceAccounts.getViewer()?.id ?? null,
+      deviceAccounts.getAccounts()
+    );
+  }
+
+  /** One copy of a video exists per device: it cannot be saved over a private one. */
+  private refuseIfPrivate(existing: OfflineItem | undefined): void {
+    if (existing && !this.canSee(existing)) {
+      const owner = deviceAccounts.getAccounts().get(existing.owner ?? -1);
+      throw new Error(
+        `This video is already saved on this device by ${owner?.username ?? existing.ownerName ?? "another account"}, who keeps their downloads private.`
+      );
+    }
+  }
+
   private async enqueue(seed: {
     videoId: number;
     video: Video;
@@ -270,8 +315,13 @@ class OfflineManager {
   }): Promise<void> {
     const old = this.items.get(seed.videoId);
     if (old) await this.deleteStoredData(old);
+    const viewer = deviceAccounts.getViewer();
+    const firstOfViewer =
+      viewer !== null &&
+      ![...this.items.values()].some((i) => i.owner === viewer.id);
     const item: OfflineItem = {
       ...seed,
+      ...(viewer ? { owner: viewer.id, ownerName: viewer.username } : {}),
       status: "queued",
       contentType: "video/mp4",
       totalBytes: 0,
@@ -283,8 +333,33 @@ class OfflineManager {
       error: null,
     };
     await this.save(item);
+    // Someone else's copy was replaced by this account's.
+    if (old?.owner !== viewer?.id) this.dropUnlockIfLast(old?.owner);
+    if (firstOfViewer) void this.offerUnlockSetup(viewer.id);
     this.requestPersistence();
     this.pump();
+  }
+
+  /**
+   * The password check value (see offline/accounts) lives only while the device
+   * holds downloads of the account: delete it with the last one.
+   */
+  private dropUnlockIfLast(owner: number | undefined): void {
+    if (owner === undefined) return;
+    if ([...this.items.values()].some((i) => i.owner === owner)) return;
+    void deviceAccounts.clearVerifier(owner);
+  }
+
+  /**
+   * The account just saved its first download here: if it keeps them private
+   * and the device cannot yet check its password, ask for it (once).
+   */
+  private async offerUnlockSetup(userId: number): Promise<void> {
+    await deviceAccounts.load();
+    const account = deviceAccounts.getAccounts().get(userId);
+    if (account && !account.shareDownloads && !account.verifier) {
+      deviceAccounts.requestSetup(userId);
+    }
   }
 
   private onConnectivity(): void {
@@ -317,8 +392,8 @@ class OfflineManager {
         const state = await api.getAuthState();
         return state.authenticated && state.user ? state.user.id : null;
       },
-      send: (videoId, positionSec, at) =>
-        api.syncProgress(videoId, positionSec, at),
+      send: (videoId, positionSec, at, finished) =>
+        api.syncProgress(videoId, positionSec, at, finished),
       classify: (err) =>
         classifySendFailure(err instanceof ApiError ? err.status : null),
     });
@@ -669,13 +744,17 @@ class OfflineManager {
   }
 
   private publish(): void {
-    const items = [...this.items.values()].sort(
-      (a, b) => b.createdAt - a.createdAt
-    );
+    const viewer = deviceAccounts.getViewer()?.id ?? null;
+    const accounts = deviceAccounts.getAccounts();
+    const all = [...this.items.values()];
+    const items = all
+      .filter((i) => isVisible(i, viewer, accounts))
+      .sort((a, b) => b.createdAt - a.createdAt);
     this.snapshot = {
       ...this.snapshot,
       items,
-      byId: new Map(this.items),
+      byId: new Map(items.map((i) => [i.videoId, i])),
+      hidden: hiddenGroups(all, viewer, accounts),
       liveBytes: new Map(this.live),
       ready: this.initPromise !== null,
     };

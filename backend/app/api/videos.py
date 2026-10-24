@@ -1,33 +1,21 @@
 import bisect
 import logging
 import re
+from dataclasses import asdict
 from pathlib import Path
 from typing import TypedDict
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, Response, StreamingResponse
-from pydantic import BaseModel, Field
-from sqlmodel import Session, col, func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
+from sqlmodel import Session, col, select
 
-from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..context import get_paths, get_session
-from ..models import DownloadJob, JobStatus, User, Video, require_id
-from ..openapi_responses import (
-    EVENT_STREAM,
-    FILE_DOWNLOAD,
-    IMAGE_JPEG,
-    RAW,
-    SUBTITLES,
-    VIDEO_STREAM,
-)
+from ..auth import current_user, require_admin, require_permission
+from ..context import AppContext, get_ctx, get_session
+from ..errors import CodedHTTPException
+from ..models import DownloadJob, JobStatus, Video, require_id
 from ..response_schemas import (
-    OkResponse,
-    SpriteGenerateResult,
-    SpriteMetaRead,
     TagPage,
     TagStatPage,
-    ThumbnailCandidates,
-    VideoAiChatHistory,
     VideoPage,
 )
 from ..schemas import (
@@ -35,7 +23,6 @@ from ..schemas import (
     BulkVideoDelete,
     BulkVideoNotes,
     ChannelFeedEntry,
-    MediaTokenRead,
     MetadataRefreshResult,
     MetadataSyncStatus,
     NextPartRead,
@@ -46,18 +33,12 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library, uploads, user_state
+from ..services import library, media_sidecars, trash, user_state
 from ..services import next_part as next_part_svc
-from ..services.ai.provider import format_provider_error
-from ..services.auth import media_token as media_token_svc
 from ..services.auth.accounts import AuthUser
+from ..services.channel_catalog import skips
 from ..services.downloads import jobs as download_jobs
-from ..services.limits import ConcurrencyLimit, thumbnail_grab_limit
-from ..services.metadata import (
-    load_sprite_meta,
-    sprite_image_path,
-    sprites_exist,
-)
+from ..services.library_usage import library_usage
 from ..services.pagination import (
     InvalidCursor,
     PageRequest,
@@ -69,27 +50,16 @@ from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
     rename_video_file,
-    resolve_compat_path,
 )
 from ..services.search_cache import library_fingerprint
-from ..services.sprites import enqueue_sprite_generation
 from ..services.thumbnails import (
-    copy_full,
-    ensure_list_thumbnail,
-    resolve_thumbnail_file,
     save_from_url,
-    write_full_bytes,
 )
 from ..services.url_safety import validate_public_url
 from ..services.video_delete import delete_video_cascade, remove_files
+from ..services.watch_stats import record_save as record_watch_time
 from ..services.ytdlp_formats import default_download_video_codec, normalize_video_codec
 from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
-from .video_serialize import (
-    resolve_media as _resolve_media,
-)
-from .video_serialize import (
-    safe_filename as _safe_filename,
-)
 from .video_serialize import (
     to_read as _to_read,
 )
@@ -100,6 +70,45 @@ from .video_serialize import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api", tags=["videos"])
+
+#: Set on the 204 of a delete that moved the video to the trash, so the client can
+#: offer Undo (``POST /api/trash/{id}/restore``). The bulk form lists the ids.
+TRASH_ENTRY_HEADER = "X-Horde-Trash-Entry"
+TRASH_ENTRIES_HEADER = "X-Horde-Trash-Entries"
+_DELETE_RESPONSES: dict[int | str, dict] = {
+    204: {
+        "description": "Deleted. A video moved to the trash carries its entry id.",
+        "headers": {
+            TRASH_ENTRY_HEADER: {
+                "description": "Trash entry id, when the video went to the trash.",
+                "schema": {"type": "integer"},
+            }
+        },
+    }
+}
+_BULK_DELETE_RESPONSES: dict[int | str, dict] = {
+    204: {
+        "description": "Deleted. Videos moved to the trash are listed by entry id.",
+        "headers": {
+            TRASH_ENTRIES_HEADER: {
+                "description": "Comma-separated trash entry ids.",
+                "schema": {"type": "string"},
+            }
+        },
+    },
+    500: {
+        "description": (
+            "Some videos could not be moved to the trash (code `trash_failed`). "
+            "The ones that were moved are still listed by entry id."
+        ),
+        "headers": {
+            TRASH_ENTRIES_HEADER: {
+                "description": "Comma-separated trash entry ids of the videos that moved.",
+                "schema": {"type": "string"},
+            }
+        },
+    },
+}
 
 
 class _Paging(TypedDict):
@@ -126,15 +135,6 @@ class _Filters(TypedDict):
     watched_only: bool
     seed: int | None
     user_id: int
-
-
-CHUNK_SIZE = 1024 * 1024
-
-CONTENT_TYPES = {
-    ".mp4": "video/mp4",
-    ".webm": "video/webm",
-    ".mkv": "video/x-matroska",
-}
 
 
 @router.get("/videos", response_model=VideoPage)
@@ -321,32 +321,7 @@ def _tag_page_request(cursor: str | None, limit: int, *, sort: str, kind):
 
 @router.get("/stats/storage", response_model=StorageStats)
 def storage_stats(session: Session = Depends(get_session)):
-    video_bytes = session.exec(
-        select(func.coalesce(func.sum(col(Video.file_size)), 0)).where(
-            Video.needs_review == False  # noqa: E712 - SQL column comparison, not a Python truth test
-        )
-    ).one()
-    video_count = session.exec(
-        select(func.count(col(Video.id))).where(col(Video.needs_review) == False)  # noqa: E712 - SQL column comparison, not a Python truth test
-    ).one()
-    compat_bytes = session.exec(
-        select(func.coalesce(func.sum(Video.compat_size), 0)).where(
-            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
-            Video.compat_path != None,  # noqa: E711 - SQL column comparison, not a Python truth test
-        )
-    ).one()
-    thumbnail_bytes = 0
-    if get_paths().thumbnails.exists():
-        thumbnail_bytes = sum(
-            f.stat().st_size for f in get_paths().thumbnails.glob("*") if f.is_file()
-        )
-    return StorageStats(
-        total_bytes=int(video_bytes or 0) + int(compat_bytes or 0) + thumbnail_bytes,
-        video_bytes=int(video_bytes or 0),
-        compat_bytes=int(compat_bytes or 0),
-        thumbnail_bytes=thumbnail_bytes,
-        video_count=int(video_count or 0),
-    )
+    return StorageStats(**asdict(library_usage(session)))
 
 
 # Static /videos/... paths must be registered before /videos/{video_id}
@@ -355,22 +330,52 @@ def storage_stats(session: Session = Depends(get_session)):
     "/videos/bulk-delete",
     status_code=204,
     dependencies=[Depends(require_permission("delete_videos"))],
+    responses=_BULK_DELETE_RESPONSES,
 )
 def bulk_delete_videos(
     payload: BulkVideoDelete,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
 ):
+    use_trash = payload.delete_files and trash.enabled()
     doomed: list[Path] = []
+    entry_ids: list[int] = []
+    failed = 0
     for vid_id in payload.video_ids:
         video = session.get(Video, vid_id)
         if video is None:
             continue
-        doomed += delete_video_cascade(
-            session, video, payload.delete_files, commit=False
-        )
+        if not use_trash:
+            if payload.delete_files:
+                skips.record_deleted_video(session, video)
+            doomed += delete_video_cascade(
+                session, video, payload.delete_files, commit=False
+            )
+            continue
+        try:
+            entry_ids.append(require_id(trash.trash_video(session, video, user.id)))
+        except trash.VideoAlreadyDeleted:
+            continue  # someone else got there first
+        except trash.TrashError:
+            failed += 1  # already logged; the rest still go to the trash
     session.commit()
     remove_files(doomed)
-    return Response(status_code=204)
+    # Trashed bytes still use disk, so a trash move does not make room.
+    ctx.download_queue.library_changed(room_made=not use_trash)
+    headers = (
+        {TRASH_ENTRIES_HEADER: ",".join(map(str, entry_ids))} if entry_ids else None
+    )
+    if failed:
+        # The ones that did move are in the trash: say so, so the client can offer Undo.
+        raise CodedHTTPException(
+            500,
+            f"Could not move {failed} video(s) to the trash; "
+            f"{len(entry_ids)} were moved.",
+            "trash_failed",
+            headers=headers,
+        )
+    return Response(status_code=204, headers=headers)
 
 
 @router.patch(
@@ -554,6 +559,8 @@ def update_video(
                 exc_info=True,
             )
 
+    media_sidecars.refresh(video.id)
+
     # After leaving review, queue AI enrichment for scanner-ingested files.
     if was_review and not video.needs_review and video.id is not None:
         try:
@@ -576,20 +583,36 @@ def update_progress(
     payload: WatchProgressUpdate,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
 ):
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    record_watch_time(
+        session,
+        ctx.watch_refs,
+        user.id,
+        video,
+        payload.position_sec,
+        payload.watched_at,
+        finished=payload.finished,
+    )
     # Treat the first few seconds as "not started" so brief opens don't clutter
-    # the Continue watching row. A reset to 0 (on finish) is always honored.
-    # Near-complete watches (>=90%) are treated as finished — clear progress.
+    # the Continue watching row. A reset to 0 is always honored, but only an
+    # explicit ``finished`` counts as having watched the video.
+    # Near-complete watches (>=90%) clear progress so it leaves Continue watching.
     position = max(0.0, payload.position_sec)
     duration = video.duration_sec
     if duration and duration > 0 and position > 0 and position >= duration * 0.9:
         position = 0.0
-    if position >= 5 or position == 0:
+    if position >= 5 or position == 0 or payload.finished:
         user_state.record_progress(
-            session, user.id, video_id, position, payload.watched_at
+            session,
+            user.id,
+            video_id,
+            position,
+            payload.watched_at,
+            finished=payload.finished,
         )
     return Response(status_code=204)
 
@@ -598,16 +621,37 @@ def update_progress(
     "/videos/{video_id}",
     status_code=204,
     dependencies=[Depends(require_permission("delete_videos"))],
+    responses=_DELETE_RESPONSES,
 )
 def delete_video(
     video_id: int,
     delete_file: bool = False,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
 ):
+    """Delete a video. With ``delete_file`` it waits in the trash (when enabled)."""
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    if delete_file and trash.enabled():
+        try:
+            entry = trash.trash_video(session, video, user.id)
+        except trash.VideoAlreadyDeleted as exc:
+            raise CodedHTTPException(404, "Video not found", "not_found") from exc
+        except trash.TrashCrossDevice as exc:
+            raise CodedHTTPException(409, str(exc), "trash_cross_device") from exc
+        except trash.TrashError as exc:
+            raise CodedHTTPException(500, str(exc), "trash_failed") from exc
+        # Trashed bytes still use disk, so a trash move does not make room.
+        ctx.download_queue.library_changed()
+        return Response(
+            status_code=204, headers={TRASH_ENTRY_HEADER: str(require_id(entry))}
+        )
+    if delete_file:
+        skips.record_deleted_video(session, video)
     delete_video_cascade(session, video, delete_file)
+    ctx.download_queue.library_changed(room_made=True)
     return Response(status_code=204)
 
 
@@ -740,501 +784,3 @@ def refresh_metadata(
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
     return _to_read(video, session, viewer=user)
-
-
-@router.post(
-    "/videos/{video_id}/ai/refresh-tags",
-    response_model=VideoRead,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def refresh_video_tags(
-    video_id: int,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    try:
-        from ..services.ai.worker import enqueue_video_tag_refresh
-
-        ok = enqueue_video_tag_refresh(video_id)
-        if not ok:
-            raise HTTPException(status_code=400, detail="Could not queue tag refresh")
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.warning("tag refresh failed video_id=%s", video_id, exc_info=True)
-        raise HTTPException(status_code=400, detail=format_provider_error(exc)) from exc
-    return _to_read(video, session, viewer=user)
-
-
-@router.post(
-    "/videos/{video_id}/ai/summarize",
-    response_model=VideoRead,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def summarize_video(
-    video_id: int,
-    force: bool = Query(False),
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    try:
-        from ..services.ai.tasks import SummarizeError, run_summarize
-
-        run_summarize(session, video_id, force=force)
-    except SummarizeError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:
-        # Not str(exc): an httpx error quotes the provider URL.
-        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
-        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
-    session.expire_all()
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, viewer=user, include_processing=True)
-
-
-@router.post(
-    "/videos/{video_id}/ai/chapters",
-    response_model=VideoRead,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def generate_video_chapters(
-    video_id: int,
-    force: bool = Query(False),
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    try:
-        from ..services.ai.tasks import ChaptersError, run_chapters
-
-        run_chapters(session, video_id, force=force)
-    except ChaptersError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:
-        # Not str(exc): an httpx error quotes the provider URL.
-        logger.warning("AI request failed video_id=%s", video_id, exc_info=True)
-        raise HTTPException(status_code=502, detail=format_provider_error(exc)) from exc
-    session.expire_all()
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    return _to_read(video, session, viewer=user, include_processing=True)
-
-
-class VideoAiChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=4000)
-
-
-@router.get(
-    "/videos/{video_id}/ai/chat",
-    response_model=VideoAiChatHistory,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def get_video_ai_chat(
-    video_id: int,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    from ..services.ai import chat as ai_chat
-
-    return {"messages": ai_chat.list_messages(session, video_id, user.id)}
-
-
-@router.delete(
-    "/videos/{video_id}/ai/chat",
-    response_model=OkResponse,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def delete_video_ai_chat(
-    video_id: int,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    from ..services.ai import chat as ai_chat
-
-    ai_chat.clear_messages(session, video_id, user.id)
-    return {"ok": True}
-
-
-@router.post(
-    "/videos/{video_id}/ai/chat",
-    response_class=RAW,
-    responses=EVENT_STREAM,
-    dependencies=[Depends(require_permission("use_ai"))],
-)
-def post_video_ai_chat(
-    request: Request,
-    video_id: int,
-    payload: VideoAiChatRequest,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    from ..services.ai import chat as ai_chat
-
-    # Own session: request-scoped session closes before SSE finishes.
-    return StreamingResponse(
-        ai_chat.stream_chat_events(
-            video_id,
-            payload.message,
-            user.id,
-            StreamAuthGuard.of(request).still_valid,
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
-
-
-@router.post(
-    "/videos/{video_id}/thumbnail",
-    response_model=VideoRead,
-    dependencies=[Depends(require_permission("edit_metadata"))],
-)
-def upload_thumbnail(
-    video_id: int,
-    file: UploadFile,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    data = uploads.read_upload_bytes(file, uploads.IMAGE_MAX_BYTES)
-    if not data:
-        raise HTTPException(status_code=400, detail="Empty file")
-    try:
-        dest = write_full_bytes(video_id, data)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail="Could not read image") from exc
-    video.thumbnail_path = dest
-    session.add(video)
-    session.commit()
-    session.refresh(video)
-    return _to_read(video, session, viewer=user)
-
-
-@router.post(
-    "/videos/{video_id}/thumbnail/candidates",
-    response_model=ThumbnailCandidates,
-    dependencies=[Depends(require_permission("edit_metadata"))],
-)
-def generate_thumbnail_candidates(
-    video_id: int,
-    count: int = Query(8, ge=1, le=16),
-    session: Session = Depends(get_session),
-    grab_limit: ConcurrencyLimit = Depends(thumbnail_grab_limit),
-):
-    """Extract several frames from the video for the user to pick as thumbnail."""
-    from ..services import activity
-    from ..services.metadata import generate_thumbnail_candidates as _gen
-
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    media = _resolve_media(video)
-    get_paths().thumbnails.mkdir(parents=True, exist_ok=True)
-    with (
-        grab_limit.slot(),
-        activity.track(
-            "thumbnail",
-            "Generating thumbnail candidates",
-            reason="You asked to pick a new thumbnail",
-            engine="ffmpeg",
-            detail=video.title,
-            video_id=video_id,
-            total=count,
-        ),
-    ):
-        candidates = _gen(
-            media,
-            get_paths().thumbnails,
-            video_id,
-            count=count,
-            duration=video.duration_sec,
-        )
-    if not candidates:
-        raise HTTPException(status_code=400, detail="Could not generate thumbnails")
-    return {
-        "candidates": [
-            {
-                "index": c["index"],
-                "at_seconds": c["at_seconds"],
-                "url": f"/api/videos/{video_id}/thumbnail/candidates/{c['index']}",
-            }
-            for c in candidates
-        ]
-    }
-
-
-@router.get(
-    "/videos/{video_id}/thumbnail/candidates/{index}",
-    response_class=RAW,
-    responses=IMAGE_JPEG,
-)
-def get_thumbnail_candidate(
-    video_id: int,
-    index: int,
-    session: Session = Depends(get_session),
-):
-    from ..services.metadata import candidate_thumb_path
-
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    path = candidate_thumb_path(get_paths().thumbnails, video_id, index)
-    if not path.exists():
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    return FileResponse(path, media_type="image/jpeg")
-
-
-@router.post(
-    "/videos/{video_id}/thumbnail/candidates/{index}",
-    response_model=VideoRead,
-    dependencies=[Depends(require_permission("edit_metadata"))],
-)
-def select_thumbnail_candidate(
-    video_id: int,
-    index: int,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    """Promote a generated candidate frame to the video's thumbnail."""
-    from ..services.metadata import candidate_thumb_path
-
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    src = candidate_thumb_path(get_paths().thumbnails, video_id, index)
-    if not src.exists():
-        raise HTTPException(status_code=404, detail="Candidate not found")
-    dest = copy_full(src, video_id)
-    video.thumbnail_path = dest
-    session.add(video)
-    session.commit()
-    session.refresh(video)
-    return _to_read(video, session, viewer=user)
-
-
-@router.get("/thumbnails/{video_id}", response_class=RAW, responses=IMAGE_JPEG)
-def get_thumbnail(
-    video_id: int,
-    size: str | None = Query(None),
-    session: Session = Depends(get_session),
-):
-    video = session.get(Video, video_id)
-    if video is None or not video.thumbnail_path:
-        raise HTTPException(status_code=404, detail="No thumbnail")
-    path = resolve_thumbnail_file(video.thumbnail_path)
-    if path is None:
-        raise HTTPException(status_code=404, detail="No thumbnail")
-    if size == "sm":
-        sm = ensure_list_thumbnail(video_id, path)
-        if sm is not None:
-            path = sm
-    elif size not in (None, ""):
-        raise HTTPException(status_code=400, detail="Unknown thumbnail size")
-    return FileResponse(path, media_type="image/jpeg")
-
-
-@router.get("/videos/{video_id}/sprites/meta", response_model=SpriteMetaRead)
-def get_sprite_meta(video_id: int, session: Session = Depends(get_session)):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    meta = load_sprite_meta(get_paths().sprites, video_id)
-    if meta is None or not sprites_exist(get_paths().sprites, video_id):
-        raise HTTPException(status_code=404, detail="Sprites not ready")
-    return meta
-
-
-@router.get("/videos/{video_id}/sprites", response_class=RAW, responses=IMAGE_JPEG)
-def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    path = sprite_image_path(get_paths().sprites, video_id)
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Sprites not ready")
-    return FileResponse(path, media_type="image/jpeg")
-
-
-@router.post("/videos/{video_id}/sprites/generate", response_model=SpriteGenerateResult)
-def generate_sprites(video_id: int, session: Session = Depends(get_session)):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    status = enqueue_sprite_generation(
-        video_id,
-        reason="You opened this video in the player",
-    )
-    return {"status": status}
-
-
-@router.get(
-    "/videos/{video_id}/subtitles/{lang}", response_class=RAW, responses=SUBTITLES
-)
-def get_subtitle(video_id: int, lang: str, session: Session = Depends(get_session)):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    track = next(
-        (t for t in library.parse_subtitles(video.subtitles) if t.get("lang") == lang),
-        None,
-    )
-    if track is None:
-        raise HTTPException(status_code=404, detail="Subtitle not found")
-    path = (get_paths().downloads / track["path"]).resolve()
-    if get_paths().downloads not in path.parents or not path.exists():
-        raise HTTPException(status_code=404, detail="Subtitle file missing")
-    return FileResponse(path, media_type="text/vtt")
-
-
-_RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
-
-
-def _resolve_rendition(video: Video, rendition: str | None) -> Path | None:
-    """Sidecar path for ``rendition=compat``; None means serve the original."""
-    if rendition in (None, "", "original"):
-        return None
-    if rendition != "compat":
-        raise HTTPException(status_code=400, detail="Unknown rendition")
-    path = resolve_compat_path(video)
-    if path is None or not path.is_file():
-        raise HTTPException(status_code=404, detail="compat_unavailable")
-    return path
-
-
-@router.get("/videos/{video_id}/stream", response_class=RAW, responses=VIDEO_STREAM)
-def stream_video(
-    video_id: int,
-    request: Request,
-    rendition: str | None = None,
-    session: Session = Depends(get_session),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    compat = _resolve_rendition(video, rendition)
-    path = compat or _resolve_media(video)
-    file_size = path.stat().st_size
-
-    suffix = path.suffix.lower()
-    content_type = CONTENT_TYPES.get(suffix, "application/octet-stream")
-
-    range_header = request.headers.get("range")
-    if range_header is None:
-        return FileResponse(
-            path,
-            media_type=content_type,
-            headers={"Accept-Ranges": "bytes"},
-        )
-
-    match = _RANGE_RE.fullmatch(range_header.strip())
-    if match is None:
-        raise HTTPException(status_code=416, detail="Invalid range")
-
-    first, last = match.group(1), match.group(2)
-    if not first and not last:
-        raise HTTPException(status_code=416, detail="Invalid range")
-    if not first:
-        # Suffix range "-N": the last N bytes (all of them when N > size).
-        suffix_len = int(last)
-        if suffix_len == 0 or file_size == 0:
-            raise HTTPException(status_code=416, detail="Range not satisfiable")
-        start = max(0, file_size - suffix_len)
-        end = file_size - 1
-    else:
-        start = int(first)
-        end = min(int(last), file_size - 1) if last else file_size - 1
-    if start > end:
-        raise HTTPException(status_code=416, detail="Range not satisfiable")
-
-    length = end - start + 1
-
-    def iter_file():
-        with open(path, "rb") as f:
-            f.seek(start)
-            remaining = length
-            while remaining > 0:
-                chunk = f.read(min(CHUNK_SIZE, remaining))
-                if not chunk:
-                    break
-                remaining -= len(chunk)
-                yield chunk
-
-    headers = {
-        "Content-Range": f"bytes {start}-{end}/{file_size}",
-        "Accept-Ranges": "bytes",
-        "Content-Length": str(length),
-        "Content-Type": content_type,
-    }
-    return StreamingResponse(iter_file(), status_code=206, headers=headers)
-
-
-@router.get("/videos/{video_id}/media-token", response_model=MediaTokenRead)
-def media_token(
-    video_id: int,
-    request: Request,
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    """A 12 hour signed token for ``?mt=`` on the stream, subtitle and thumbnail URLs.
-
-    Cast and AirPlay receivers fetch media themselves and send no cookie.
-    """
-    if session.get(Video, video_id) is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    row = session.get(User, user.id)
-    if row is None:
-        raise HTTPException(status_code=401, detail="Sign in to continue")
-    token, expires_at = media_token_svc.sign(
-        request.app.state.auth.secret(),
-        video_id,
-        user.id,
-        media_token_svc.token_epoch(row.password_hash),
-    )
-    return MediaTokenRead(token=token, expires_at=expires_at)
-
-
-@router.get(
-    "/videos/{video_id}/file",
-    response_class=RAW,
-    responses=FILE_DOWNLOAD,
-    dependencies=[Depends(require_permission("offline_download"))],
-)
-def download_video_file(
-    video_id: int,
-    rendition: str | None = None,
-    session: Session = Depends(get_session),
-):
-    video = session.get(Video, video_id)
-    if video is None:
-        raise HTTPException(status_code=404, detail="Video not found")
-    compat = _resolve_rendition(video, rendition)
-    path = compat or _resolve_media(video)
-    content_type = CONTENT_TYPES.get(path.suffix.lower(), "application/octet-stream")
-    tag = " (H.264)" if compat is not None else ""
-    filename = f"{_safe_filename(video.title)}{tag}{path.suffix.lower()}"
-    return FileResponse(path, media_type=content_type, filename=filename)

@@ -50,9 +50,7 @@ export default function WatchActions({
           {/* Phones: icon only, so the Download button fits the row. */}
           {isMobile ? "←" : "← Back to library"}
         </Link>
-        {video.id > 0 && can("manage_playlists") && (
-          <AddToPlaylist videoId={video.id} />
-        )}
+        {video.id > 0 && <AddToPlaylist videoId={video.id} />}
         {/* Phones get a dedicated button; desktop uses the ••• menu. */}
         {isMobile && can("offline_download") && (
           <OfflineDownloadButton video={video} />

@@ -11,7 +11,7 @@ from sqlmodel import Session, col, select
 
 from ..context import get_engine, get_paths
 from ..models import Video, require_id
-from . import activity
+from . import activity, media_sidecars
 from .thumbnails import save_from_url
 from .workers import BackgroundWorker
 from .ytdlp_common import (
@@ -171,6 +171,8 @@ def refresh_video_metadata(
         video.metadata_synced_at = datetime.now(UTC)
         session.add(video)
         session.commit()
+
+    media_sidecars.refresh(video_id)
 
     if "captions" in want:
         try:
