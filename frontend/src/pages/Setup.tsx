@@ -583,9 +583,11 @@ function WizardPanel({
             <Collapse open={aiChoice === "bundled"}>
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted">
-                  Horde&apos;s compose file includes an optional Ollama
-                  container. Start it from the folder holding{" "}
-                  <span className="font-mono">docker-compose.yml</span>:
+                  Horde&apos;s compose file defines an optional Ollama
+                  container, but it is not installed or started by default. This
+                  command downloads the Ollama image the first time (a large
+                  download) and starts it next to Horde; run it from the folder
+                  holding <span className="font-mono">docker-compose.yml</span>:
                 </p>
                 <pre className="ui-panel overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-xs text-gray-200">
                   docker compose --profile ai up -d
