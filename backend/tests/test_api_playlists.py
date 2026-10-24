@@ -574,6 +574,38 @@ def test_a_streamed_entry_links_when_the_video_arrives_any_other_way(
     assert (copies["removable_video_ids"], copies["shared"]) == ([], 1)
 
 
+def test_two_streamed_entries_for_one_video_do_not_block_its_download(
+    client, add_video, session
+):
+    from sqlmodel import select
+
+    from app.models import PlaylistItem
+
+    # Two library copies of one YouTube video, both in the playlist, both deleted:
+    # the playlist is left with two streamed entries for the same id.
+    copies = [
+        add_video(title=title, yt_id="twiceeeee01", source_url=_yt("twiceeeee01"))
+        for title in ("Twice A", "Twice B")
+    ]
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    client.post(
+        f"/api/playlists/{pid}/items/bulk",
+        json={"video_ids": [v.id for v in copies]},
+    )
+    for video in copies:
+        assert client.delete(f"/api/videos/{video.id}").status_code == 204
+
+    # Downloading it again links one entry; the other stays streamed.
+    again = add_video(title="Twice", yt_id="twiceeeee01", source_url=_yt("twiceeeee01"))
+    session.expire_all()
+    rows = session.exec(
+        select(PlaylistItem)
+        .where(PlaylistItem.playlist_id == pid)
+        .order_by(PlaylistItem.position)
+    ).all()
+    assert [r.video_id for r in rows] == [again.id, None]
+
+
 def test_remove_from_server_never_offers_videos_with_nothing_to_stream(
     client, add_video
 ):

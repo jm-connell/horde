@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, delete, event, update
+from sqlalchemy import and_, delete, event, func, update
 from sqlalchemy.engine import Connection
 from sqlmodel import Session, col, select
 
@@ -108,9 +108,16 @@ def _link_new_video(_mapper: Any, connection: Connection, target: Video) -> None
         )
     else:
         return
+    # One entry per playlist: a playlist can hold the same video only once, so
+    # any further streamed entries for it stay streamed.
+    first = (
+        select(func.min(PlaylistItem.id))
+        .where(col(PlaylistItem.video_id).is_(None), same)
+        .group_by(col(PlaylistItem.playlist_id))
+    )
     connection.execute(
         update(PlaylistItem)
-        .where(col(PlaylistItem.video_id).is_(None), same)
+        .where(col(PlaylistItem.id).in_(first))
         .values(video_id=target.id)
     )
 
