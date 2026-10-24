@@ -217,11 +217,13 @@ def _known_device(
 def _remember_device(
     response: Response, request: Request, runtime: AuthRuntime, user: User
 ) -> None:
-    """Hand the browser (or renew) its known-device cookie for ``user``."""
-    device_id = _known_device(request, runtime, user) or device_cookie.new_device_id()
+    """Hand the browser a fresh known-device cookie for ``user``.
+
+    A new device id every time: nothing read from the request goes into the cookie.
+    """
     response.set_cookie(
         device_cookie.COOKIE,
-        device_cookie.sign(runtime.secret(), user, device_id),
+        device_cookie.sign(runtime.secret(), user, device_cookie.new_device_id()),
         max_age=device_cookie.MAX_AGE_SEC,
         httponly=True,
         samesite="lax",

@@ -575,9 +575,12 @@ def test_sign_in_sets_a_signed_long_lived_device_cookie(app, anon_client, admin_
     assert f"Max-Age={device_cookie.MAX_AGE_SEC}" in header
     value = anon_client.cookies[device_cookie.COOKIE]
     assert device_cookie.verify(app.state.auth.secret(), value, admin_user)
-    # Signing in again from the same browser keeps its device id.
+    # Signing in again hands out a fresh cookie (nothing from the request is
+    # copied into it) that is just as valid.
     _login(anon_client)
-    assert anon_client.cookies[device_cookie.COOKIE] == value
+    renewed = anon_client.cookies[device_cookie.COOKIE]
+    assert renewed != value
+    assert device_cookie.verify(app.state.auth.secret(), renewed, admin_user)
 
 
 def test_a_known_device_signs_in_while_the_name_is_in_its_daily_slow_lane(
