@@ -29,7 +29,8 @@ or code is hashed and checked, and settles it afterwards (``Attempt.failure`` /
 recorded, so concurrent guesses cannot all slip past a check made before any of
 them finished: with 5 free tries, 80 simultaneous requests judge exactly 5 and
 the other 75 are refused at once, without hashing anything. At most
-``INFLIGHT_PER_NAME`` tries on one name are in flight at once, from any address.
+``INFLIGHT_PER_NAME`` tries on one name are in flight at once, from any address,
+and ``INFLIGHT_PER_ADDRESS`` from one address, whatever the names.
 
 Client addresses are keyed by network, not host (``throttle_address``): an IPv6
 address by its /64, since one subscriber is routinely handed a whole /64 and can
@@ -79,6 +80,8 @@ DAILY_WINDOW_SEC = 24 * 60 * 60.0
 DAILY_SLOWDOWN_SEC = 10.0
 #: Tries on one name that may be judged at the same time, from every address together.
 INFLIGHT_PER_NAME = 5
+#: Tries from one address (whatever the names) that may be judged at the same time.
+INFLIGHT_PER_ADDRESS = 2
 #: Wrong second-step codes against one name before its code step starts to wait,
 #: and again after each further ``CODE_LOCK_EVERY``: 30 s, 60 s, 2 min ... 1 h.
 CODE_LOCK_EVERY = 10
@@ -242,6 +245,9 @@ class LoginLimiter:
                 # the free tries are used up (and the lockout has run out) one try
                 # at a time is let through.
                 room = max(1, free - (entry.failures if entry else 0))
+                if key[1] is None:
+                    # The address lane: one client hashes a couple at a time.
+                    room = min(room, INFLIGHT_PER_ADDRESS)
                 if self._inflight.get(key, 0) >= room:
                     raise Throttled(1)
             name_key: _Key = (None, name)

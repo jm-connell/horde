@@ -229,9 +229,13 @@ All notable changes to Horde are documented here. The format follows
   passed the check (80 at once got 43 judged instead of 5), and each burst also
   filled the server's worker threads with password hashing. A guess now
   reserves one of the free tries before it is hashed and settles it afterwards,
-  so exactly the budget is judged and the rest are answered `429` at once;
+  so no more than the budget is judged (and one address has at most two tries
+  in flight) and the rest are answered `429` at once;
   password hashing is capped to the number of CPUs and a request that cannot get
-  a slot is answered `503` `busy` with `Retry-After: 1`. The same reservation
+  a slot is answered `503` `busy` with `Retry-After: 1`. One hashing slot is
+  kept for a browser with a `horde_device` cookie, and made-up usernames may
+  hold only about half of them, so a flood of junk names cannot keep the owner
+  out. The same reservation
   guards the second step, the current-password checks (change password,
   sharing, two-step setup, turn-off and recovery codes), the forgot-password
   reset and confirming your password. This predates two-step sign-in.

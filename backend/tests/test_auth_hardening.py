@@ -64,7 +64,7 @@ async def _burst(app, address: str, requests):
 # --- 1. the throttle reserves before it hashes -------------------------------
 
 
-def test_concurrent_wrong_passwords_are_judged_exactly_the_budget(
+def test_concurrent_wrong_passwords_are_judged_within_the_budget(
     app, init_db, monkeypatch
 ):
     monkeypatch.setattr(passwords, "CURRENT_PARAMS", passwords.ScryptParams())
@@ -83,13 +83,14 @@ def test_concurrent_wrong_passwords_are_judged_exactly_the_budget(
             ],
         )
     )
-    assert Counter(codes) == {
-        "invalid_credentials": FREE_ATTEMPTS,
-        "rate_limited": 80 - FREE_ATTEMPTS,
-    }
+    counts = Counter(codes)
+    # At most the budget is judged (the address lane lets two in at a time, so
+    # how many of the 80 get in before the lockout depends on timing).
+    assert 1 <= counts["invalid_credentials"] <= FREE_ATTEMPTS
+    assert counts["invalid_credentials"] + counts["rate_limited"] == 80
 
 
-def test_concurrent_wrong_codes_are_judged_exactly_the_budget(
+def test_concurrent_wrong_codes_are_judged_within_the_budget(
     app, init_db, admin_user, client, now
 ):
     _enroll(client, now)
@@ -123,11 +124,11 @@ def test_concurrent_wrong_codes_are_judged_exactly_the_budget(
             return [r.json().get("code") for r in results]
 
     codes = Counter(asyncio.run(run()))
-    assert codes["invalid_totp"] == FREE_ATTEMPTS
+    assert 1 <= codes["invalid_totp"] <= FREE_ATTEMPTS
     assert codes["invalid_totp"] + codes["rate_limited"] == 60
 
 
-def test_concurrent_current_password_checks_are_judged_exactly_the_budget(
+def test_concurrent_current_password_checks_are_judged_within_the_budget(
     app, init_db, admin_user, client, monkeypatch
 ):
     """The same reservation guards ``verify-password`` (and so change-password, ``PATCH /me``)."""
@@ -153,12 +154,14 @@ def test_concurrent_current_password_checks_are_judged_exactly_the_budget(
             results.extend(r.status_code for r in res)
 
     asyncio.run(run())
-    assert Counter(results) == {400: FREE_ATTEMPTS, 429: 40 - FREE_ATTEMPTS}
+    counts = Counter(results)
+    assert 1 <= counts[400] <= FREE_ATTEMPTS
+    assert counts[400] + counts[429] == 40
 
 
 def test_a_refused_try_is_not_a_failure():
     limiter = LoginLimiter(clock=lambda: 0.0)
-    held = [limiter.begin("1.2.3.4", "alice") for _ in range(FREE_ATTEMPTS)]
+    held = [limiter.begin("1.2.3.4", "alice") for _ in range(2)]
     with pytest.raises(Throttled):
         limiter.begin("1.2.3.4", "alice")
     for attempt in held:
@@ -219,6 +222,102 @@ def test_sign_in_is_busy_when_hashing_is_saturated(
     assert res.headers["Retry-After"] == "1"
     # A busy server judged nothing: it is not a failed sign-in.
     assert app.state.auth.limiter.retry_after("testclient", username) == 0
+
+
+# --- 1b. a flood cannot take every hashing slot ----------------------------------
+
+
+def test_the_gate_keeps_a_slot_for_known_devices():
+    gate = hash_gate.HashGate(size=3, wait=0)
+    with gate.slot(), gate.slot():  # two ordinary hashes: the third slot is spare
+        with pytest.raises(hash_gate.CodedHTTPException), gate.slot():
+            pass
+        with gate.slot(known_device=True):  # the reserved one
+            pass
+    with (
+        gate.slot(known_device=True),
+        gate.slot(known_device=True),
+        gate.slot(known_device=True),
+    ):  # known devices may use every slot
+        pass
+
+
+def test_made_up_names_may_use_about_half_the_gate():
+    gate = hash_gate.HashGate(size=4, wait=0)
+    with gate.slot(made_up=True), gate.slot(made_up=True):
+        with (
+            pytest.raises(hash_gate.CodedHTTPException) as busy,
+            gate.slot(made_up=True),
+        ):
+            pass
+        assert busy.value.code == "busy"
+        with gate.slot():  # a real name still gets one
+            pass
+
+
+def test_one_address_has_two_tries_in_flight():
+    limiter = LoginLimiter(clock=lambda: 0.0)
+    held = [limiter.begin("198.51.100.1", f"name{i}") for i in range(2)]
+    with pytest.raises(Throttled):
+        limiter.begin("198.51.100.1", "name2")
+    limiter.begin("198.51.100.2", "name2").release()  # another address is unaffected
+    for attempt in held:
+        attempt.release()
+    limiter.begin("198.51.100.1", "name2").release()
+
+
+def test_a_flood_of_made_up_names_does_not_lock_the_owner_out(
+    app, anon_client, admin_user, monkeypatch
+):
+    """Many /64s each sending junk names keep hashing busy; the owner's own browser is judged."""
+    monkeypatch.setattr(passwords, "CURRENT_PARAMS", passwords.ScryptParams())
+    assert _login(anon_client).status_code == 200  # the owner's browser gets its cookie
+    cookies = dict(anon_client.cookies)
+    app.state.auth.hashing = hash_gate.HashGate(2)
+
+    async def run():
+        flood_clients = [
+            httpx.AsyncClient(
+                transport=httpx.ASGITransport(
+                    app=app, client=(f"2001:db8:{n:x}::1", 1234)
+                ),
+                base_url="http://localhost",
+                headers=CSRF,
+            )
+            for n in range(64)
+        ]
+        owner = httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, client=("198.51.100.1", 1)),
+            base_url="http://localhost",
+            headers=CSRF,
+            cookies=cookies,
+        )
+        flood = asyncio.gather(
+            *[
+                flood_clients[k].post(
+                    "/api/auth/login",
+                    json={"username": f"junk{k}-{j}", "password": "x"},
+                )
+                for k in range(64)
+                for j in range(4)
+            ]
+        )
+        await asyncio.sleep(0.3)
+        mine = []
+        for _ in range(3):
+            res = await owner.post(
+                "/api/auth/login",
+                json={"username": "admin", "password": ADMIN_PASSWORD},
+            )
+            mine.append(res.status_code)
+        results = await flood
+        for c in (*flood_clients, owner):
+            await c.aclose()
+        return mine, Counter(r.json().get("code") for r in results)
+
+    mine, flood_codes = asyncio.run(run())
+    assert mine == [200, 200, 200]
+    assert flood_codes["busy"] > 0
 
 
 # --- 4. IPv6 clients are throttled per /64 ---------------------------------------

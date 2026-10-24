@@ -296,7 +296,7 @@ def login(
     row = accounts.get_by_username(session, norm)
     device = _known_device(request, runtime, row)
     with _begin(request, norm, known=row is not None, device=device) as attempt:
-        with runtime.hashing.slot():
+        with runtime.hashing.slot(known_device=device is not None, made_up=row is None):
             user = accounts.authenticate(
                 session,
                 payload.username,
@@ -458,7 +458,7 @@ def reset_password(
         # for every name, known or not, so the answer does not reveal accounts.
         accounts.check_password_policy(payload.new_password, payload.username.strip())
         # Take the hashing slot first: a busy server must not burn the code.
-        with runtime.hashing.slot():
+        with runtime.hashing.slot(made_up=user is None):
             # One step under a lock: a code works for exactly one request.
             if (
                 user is None
