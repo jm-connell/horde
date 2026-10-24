@@ -66,7 +66,7 @@ MAX_GENRES = 5
 BACKFILL_PAUSE_SEC = 0.01
 _XML_HEADER = b'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
 # Characters XML 1.0 cannot carry at all (ElementTree would write them out unescaped).
-_XML_ILLEGAL_RE = re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f￾￿]")
+_XML_ILLEGAL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ufffe\uffff]")
 
 
 def enabled() -> bool:

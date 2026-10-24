@@ -66,7 +66,7 @@ describe("sharedUrlFromParams", () => {
 describe("bookmarkletHref", () => {
   it("opens this origin's download page with the current address", () => {
     const href = bookmarkletHref("https://horde.lan:8686");
-    expect(href.startsWith("javascript:")).toBe(true);
+    expect(new URL(href).protocol).toBe("javascript:");
     expect(href).toContain('"https://horde.lan:8686/download?url="');
     expect(href).toContain("encodeURIComponent(location.href)");
   });

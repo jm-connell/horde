@@ -148,7 +148,10 @@ def test_https_proxy_hosts_and_the_environment_show_up(
     assert body["exposed"] is True
     assert items["https"]["status"] == "ok"
     assert items["proxy"]["status"] == "ok"
-    assert "horde.example.com" in items["hosts"]["detail"]
+    assert items["hosts"]["detail"] == (
+        "Only the names in HORDE_ALLOWED_HOSTS (and local names) are accepted: "
+        "horde.example.com"
+    )
     assert items["private_urls"]["status"] == "warn"
 
 
