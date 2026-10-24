@@ -1,0 +1,3 @@
+# False positives (fingerprint: commit:file:rule:line). Each names why.
+# A docstring, "(keys, L2-normalised rows)", read as a generic API key.
+2ae26d459381aec15dea06aacd25d9bbe2571b32:backend/app/services/ai/recommend.py:generic-api-key:347

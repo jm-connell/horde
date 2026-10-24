@@ -344,7 +344,7 @@ def _followed_uploads(
 def _upload_vectors(
     session: Session, uploads: dict[int, _Upload], dim: int
 ) -> tuple[list[int], np.ndarray]:
-    """(keys, L2-normalised rows) of the uploads' stored embeddings of ``dim``."""
+    """The uploads' stored embeddings of length ``dim``, as unit rows, with their keys."""
     by_row = {require_id(u.row): key for key, u in uploads.items()}
     keys: list[int] = []
     rows: list[list[float]] = []
