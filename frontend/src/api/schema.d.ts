@@ -1807,6 +1807,46 @@ export interface paths {
         patch: operations["update_playlist_api_playlists__playlist_id__patch"];
         trace?: never;
     };
+    "/api/playlists/{playlist_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download All
+         * @description Download every streamed entry; each joins the playlist in its place.
+         */
+        post: operations["download_all_api_playlists__playlist_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/playlists/{playlist_id}/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Entry
+         * @description Remove one entry, downloaded or streamed. The video stays in the library.
+         */
+        delete: operations["remove_entry_api_playlists__playlist_id__entries__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/playlists/{playlist_id}/items": {
         parameters: {
             query?: never;
@@ -1873,6 +1913,29 @@ export interface paths {
         head?: never;
         /** Reorder Items */
         patch: operations["reorder_items_api_playlists__playlist_id__reorder_patch"];
+        trace?: never;
+    };
+    "/api/playlists/{playlist_id}/server-copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server Copies
+         * @description What "Download all" and "Remove from server" would do to this playlist.
+         *
+         *     Removing skips videos that any other playlist (anyone's) also holds, so it
+         *     never takes a video out from under another playlist.
+         */
+        get: operations["server_copies_api_playlists__playlist_id__server_copies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/playlists/{playlist_id}/sync": {
@@ -5775,6 +5838,8 @@ export interface components {
             can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
+            /** Cover Youtube Id */
+            cover_youtube_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5782,6 +5847,16 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /**
+             * Downloaded Count
+             * @default 0
+             */
+            downloaded_count: number;
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["PlaylistEntry"][];
             /**
              * Has Custom Cover
              * @default false
@@ -5825,6 +5900,34 @@ export interface components {
             /** @default public */
             visibility: components["schemas"]["PlaylistVisibility"];
         };
+        /** PlaylistDownloadResult */
+        PlaylistDownloadResult: {
+            /** Queued */
+            queued: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /**
+         * PlaylistEntry
+         * @description One playlist entry: a library video, or a video that is streamed.
+         */
+        PlaylistEntry: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Duration Sec */
+            duration_sec?: number | null;
+            /** Id */
+            id: number;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            video?: components["schemas"]["VideoRead"] | null;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
         /** PlaylistImport */
         PlaylistImport: {
             /**
@@ -5850,6 +5953,11 @@ export interface components {
         };
         /** PlaylistItemAdd */
         PlaylistItemAdd: {
+            /**
+             * Download
+             * @default false
+             */
+            download: boolean;
             /** Url */
             url?: string | null;
             /** Video Id */
@@ -5905,6 +6013,8 @@ export interface components {
             can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
+            /** Cover Youtube Id */
+            cover_youtube_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5912,6 +6022,11 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /**
+             * Downloaded Count
+             * @default 0
+             */
+            downloaded_count: number;
             /**
              * Has Custom Cover
              * @default false
@@ -5955,8 +6070,30 @@ export interface components {
         };
         /** PlaylistReorder */
         PlaylistReorder: {
-            /** Video Ids */
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: number[];
+            /**
+             * Video Ids
+             * @default []
+             */
             video_ids: number[];
+        };
+        /**
+         * PlaylistServerCopies
+         * @description What the bulk download and remove actions would do to a playlist.
+         */
+        PlaylistServerCopies: {
+            /** Missing */
+            missing: number;
+            /** Removable Bytes */
+            removable_bytes: number;
+            /** Removable Video Ids */
+            removable_video_ids: number[];
+            /** Shared */
+            shared: number;
         };
         /** PlaylistSizeEstimate */
         PlaylistSizeEstimate: {
@@ -11434,6 +11571,85 @@ export interface operations {
             };
         };
     };
+    download_all_api_playlists__playlist_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistDownloadResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_entry_api_playlists__playlist_id__entries__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     add_item_api_playlists__playlist_id__items_post: {
         parameters: {
             query?: never;
@@ -11581,6 +11797,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaylistDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    server_copies_api_playlists__playlist_id__server_copies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistServerCopies"];
                 };
             };
             /** @description Validation error */

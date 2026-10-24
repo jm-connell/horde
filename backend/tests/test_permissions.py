@@ -117,6 +117,8 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/playlists/preview"),
             # Also manage_playlists for an App-wide playlist, decided in the handler.
             ("POST", "/api/playlists/import"),
+            # Also edit rights on the playlist, decided in the handler.
+            ("POST", "/api/playlists/{playlist_id}/download"),
             ("POST", "/api/review/scan"),
             ("POST", "/api/review/upload"),
         ]
@@ -179,6 +181,7 @@ CONDITIONAL = {
     ("POST", "/api/playlists/{playlist_id}/items"),
     ("POST", "/api/playlists/{playlist_id}/items/bulk"),
     ("DELETE", "/api/playlists/{playlist_id}/items/{video_id}"),
+    ("DELETE", "/api/playlists/{playlist_id}/entries/{entry_id}"),
     ("PATCH", "/api/playlists/{playlist_id}/reorder"),
     ("POST", "/api/playlists/{playlist_id}/thumbnail"),
     ("POST", "/api/playlists/{playlist_id}/sync"),

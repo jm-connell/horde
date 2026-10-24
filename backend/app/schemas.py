@@ -692,19 +692,68 @@ class PlaylistRead(BaseModel):
     owner: PlaylistOwner | None = None
     #: Whether the requesting user may rename, change or delete it.
     can_edit: bool = False
+    #: Entries whose video is in the library; the other entries are streamed.
+    downloaded_count: int = 0
+    #: When no library video gives a cover: the YouTube id of the first streamed
+    #: entry, whose YouTube thumbnail stands in.
+    cover_youtube_id: str | None = None
+
+
+class PlaylistEntry(BaseModel):
+    """One playlist entry: a library video, or a video that is streamed."""
+
+    #: The entry's own id (for removing and reordering it).
+    id: int
+    #: The library video; None when the entry is streamed.
+    video: VideoRead | None = None
+    youtube_id: str | None = None
+    url: str | None = None
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    duration_sec: float | None = None
 
 
 class PlaylistDetail(PlaylistRead):
+    #: The downloaded entries' videos, in playlist order.
     videos: list[VideoRead]
+    #: Every entry in playlist order, downloaded or streamed.
+    entries: list[PlaylistEntry] = []
 
 
 class PlaylistItemAdd(BaseModel):
     video_id: int | None = None
     url: str | None = None
+    #: For a ``url`` not in the library: download it into the playlist (needs the
+    #: download permission) instead of adding it to be streamed.
+    download: bool = False
 
 
 class PlaylistReorder(BaseModel):
-    video_ids: list[int] = Field(max_length=MAX_PLAYLIST_ITEMS)
+    #: Entry ids in their new order (``item_ids``), or, from older clients,
+    #: library video ids (``video_ids``).
+    item_ids: list[int] = Field(default=[], max_length=MAX_PLAYLIST_ITEMS)
+    video_ids: list[int] = Field(default=[], max_length=MAX_PLAYLIST_ITEMS)
+
+
+class PlaylistServerCopies(BaseModel):
+    """What the bulk download and remove actions would do to a playlist."""
+
+    #: Streamed entries that "Download all" would queue.
+    missing: int
+    #: Library videos that "Remove from server" deletes (with
+    #: ``POST /api/videos/bulk-delete``): those no other playlist has.
+    removable_video_ids: list[int]
+    #: Library videos it keeps because another playlist has them too.
+    shared: int
+    #: Disk space the removable videos use.
+    removable_bytes: int
+
+
+class PlaylistDownloadResult(BaseModel):
+    queued: int
+    #: Entries that could not be queued (already downloading, a bad link, ...).
+    skipped: int
 
 
 class PlaylistListReorder(BaseModel):

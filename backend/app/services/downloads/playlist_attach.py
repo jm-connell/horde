@@ -9,6 +9,7 @@ from sqlmodel import Session, col, select
 
 from ...context import get_engine
 from ...models import DownloadJob, JobStatus, Playlist, PlaylistItem, Video
+from .. import playlist_entries
 from . import dbwrite
 
 logger = logging.getLogger(__name__)
@@ -86,7 +87,8 @@ def _attach_once(job_id: int, video_id: int) -> None:
             return
         if session.get(Playlist, job.playlist_id) is None:
             return
-        if session.get(Video, video_id) is None:
+        video = session.get(Video, video_id)
+        if video is None:
             return
         if (
             session.exec(
@@ -99,13 +101,13 @@ def _attach_once(job_id: int, video_id: int) -> None:
         ):
             return
         playlist_id = job.playlist_id
-        session.add(
-            PlaylistItem(
-                playlist_id=playlist_id,
-                video_id=video_id,
-                position=attach_slot(session, playlist_id, job_id),
+        # Downloading a streamed entry keeps its place in the playlist.
+        if playlist_entries.link_video(session, playlist_id, video) is None:
+            session.add(
+                playlist_entries.new_item(
+                    playlist_id, video, attach_slot(session, playlist_id, job_id)
+                )
             )
-        )
         try:
             session.commit()
         except IntegrityError:
@@ -130,16 +132,14 @@ def upsert_playlist_item(
         )
     ).first()
     if existing is None:
-        session.add(
-            PlaylistItem(
-                playlist_id=playlist_id,
-                video_id=video_id,
-                position=position,
-            )
-        )
-    else:
-        existing.position = position
-        session.add(existing)
+        video = session.get(Video, video_id)
+        if video is None:
+            return
+        existing = playlist_entries.link_video(session, playlist_id, video)
+        if existing is None:
+            existing = playlist_entries.new_item(playlist_id, video, position)
+    existing.position = position
+    session.add(existing)
     try:
         session.commit()
     except IntegrityError:

@@ -6871,6 +6871,17 @@
             ],
             "title": "Cover Video Id"
           },
+          "cover_youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Youtube Id"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -6886,6 +6897,19 @@
               }
             ],
             "title": "Description"
+          },
+          "downloaded_count": {
+            "default": 0,
+            "title": "Downloaded Count",
+            "type": "integer"
+          },
+          "entries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PlaylistEntry"
+            },
+            "title": "Entries",
+            "type": "array"
           },
           "has_custom_cover": {
             "default": false,
@@ -7013,6 +7037,114 @@
         "title": "PlaylistDetail",
         "type": "object"
       },
+      "PlaylistDownloadResult": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "skipped": {
+            "title": "Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queued",
+          "skipped"
+        ],
+        "title": "PlaylistDownloadResult",
+        "type": "object"
+      },
+      "PlaylistEntry": {
+        "description": "One playlist entry: a library video, or a video that is streamed.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "duration_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Sec"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "PlaylistEntry",
+        "type": "object"
+      },
       "PlaylistImport": {
         "properties": {
           "entries": {
@@ -7068,6 +7200,11 @@
       },
       "PlaylistItemAdd": {
         "properties": {
+          "download": {
+            "default": false,
+            "title": "Download",
+            "type": "boolean"
+          },
           "url": {
             "anyOf": [
               {
@@ -7262,6 +7399,17 @@
             ],
             "title": "Cover Video Id"
           },
+          "cover_youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cover Youtube Id"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -7277,6 +7425,11 @@
               }
             ],
             "title": "Description"
+          },
+          "downloaded_count": {
+            "default": 0,
+            "title": "Downloaded Count",
+            "type": "integer"
           },
           "has_custom_cover": {
             "default": false,
@@ -7398,7 +7551,17 @@
       },
       "PlaylistReorder": {
         "properties": {
+          "item_ids": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 5000,
+            "title": "Item Ids",
+            "type": "array"
+          },
           "video_ids": {
+            "default": [],
             "items": {
               "type": "integer"
             },
@@ -7407,10 +7570,39 @@
             "type": "array"
           }
         },
-        "required": [
-          "video_ids"
-        ],
         "title": "PlaylistReorder",
+        "type": "object"
+      },
+      "PlaylistServerCopies": {
+        "description": "What the bulk download and remove actions would do to a playlist.",
+        "properties": {
+          "missing": {
+            "title": "Missing",
+            "type": "integer"
+          },
+          "removable_bytes": {
+            "title": "Removable Bytes",
+            "type": "integer"
+          },
+          "removable_video_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Removable Video Ids",
+            "type": "array"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "missing",
+          "removable_video_ids",
+          "shared",
+          "removable_bytes"
+        ],
+        "title": "PlaylistServerCopies",
         "type": "object"
       },
       "PlaylistSizeEstimate": {
@@ -16139,6 +16331,114 @@
         ]
       }
     },
+    "/api/playlists/{playlist_id}/download": {
+      "post": {
+        "description": "Download every streamed entry; each joins the playlist in its place.",
+        "operationId": "download_all_api_playlists__playlist_id__download_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistDownloadResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Download All",
+        "tags": [
+          "playlists"
+        ]
+      }
+    },
+    "/api/playlists/{playlist_id}/entries/{entry_id}": {
+      "delete": {
+        "description": "Remove one entry, downloaded or streamed. The video stays in the library.",
+        "operationId": "remove_entry_api_playlists__playlist_id__entries__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Entry",
+        "tags": [
+          "playlists"
+        ]
+      }
+    },
     "/api/playlists/{playlist_id}/items": {
       "post": {
         "operationId": "add_item_api_playlists__playlist_id__items_post",
@@ -16367,6 +16667,59 @@
           }
         },
         "summary": "Reorder Items",
+        "tags": [
+          "playlists"
+        ]
+      }
+    },
+    "/api/playlists/{playlist_id}/server-copies": {
+      "get": {
+        "description": "What \"Download all\" and \"Remove from server\" would do to this playlist.\n\nRemoving skips videos that any other playlist (anyone's) also holds, so it\nnever takes a video out from under another playlist.",
+        "operationId": "server_copies_api_playlists__playlist_id__server_copies_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "playlist_id",
+            "required": true,
+            "schema": {
+              "title": "Playlist Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistServerCopies"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Server Copies",
         "tags": [
           "playlists"
         ]

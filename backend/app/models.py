@@ -272,6 +272,14 @@ class Playlist(SQLModel, table=True):
 
 
 class PlaylistItem(SQLModel, table=True):
+    """One entry of a playlist: a library video, or a video that is only streamed.
+
+    ``video_id`` is None for a streamed entry; ``youtube_id`` and ``url`` say what
+    to stream and the snapshot fields (title ... duration) what to show. Deleting
+    a library video turns its entries into streamed ones
+    (``services/playlist_entries.py``); downloading one links them again.
+    """
+
     __tablename__ = "playlist_items"
     __table_args__ = (
         UniqueConstraint("playlist_id", "video_id", name="uq_playlist_items_pair"),
@@ -279,8 +287,16 @@ class PlaylistItem(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     playlist_id: int = Field(foreign_key="playlists.id", index=True, ondelete="CASCADE")
-    video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", index=True, ondelete="SET NULL"
+    )
     position: int = 0
+    youtube_id: str | None = Field(default=None, index=True)
+    url: str | None = None
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    duration_sec: float | None = None
 
 
 class AiJobStatus(str, Enum):

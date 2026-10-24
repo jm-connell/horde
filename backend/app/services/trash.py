@@ -67,7 +67,7 @@ from ..models import (
     require_id,
     utcnow,
 )
-from . import library, scanner
+from . import library, playlist_entries, scanner
 from .channel_autodownload import active_youtube_ids
 from .channel_catalog import skips
 from .paths import TRASH_DIR_NAME, find_video_by_path
@@ -563,12 +563,17 @@ def _insert_rows(session: Session, snapshot: dict[str, Any]) -> Video:
         if data.get("user_id") in existing_users:
             session.add(UserVideoState.model_validate(_decode(data)))
     for item in snapshot.get("playlist_items", []):
-        if session.get(Playlist, item["playlist_id"]) is not None:
+        playlist_id = item["playlist_id"]
+        if session.get(Playlist, playlist_id) is None:
+            continue
+        # Trashing left a streamable video's entry behind as a streamed one:
+        # link it again (if it is gone, somebody removed it meanwhile).
+        if playlist_entries.streamable_url(video.source_url):
+            playlist_entries.link_video(session, playlist_id, video)
+        else:
             session.add(
-                PlaylistItem(
-                    playlist_id=item["playlist_id"],
-                    video_id=video_id,
-                    position=int(item.get("position") or 0),
+                playlist_entries.new_item(
+                    playlist_id, video, int(item.get("position") or 0)
                 )
             )
     watch_time_ids = snapshot.get("watch_time_ids", [])
