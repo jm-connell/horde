@@ -157,9 +157,7 @@ test("AI panes and system status render without calling providers", async ({
 }) => {
   await page.goto("/settings?tab=ai");
   await expect(page.getByRole("button", { name: "Providers" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "OpenRouter", exact: true })
-  ).toBeVisible();
+  await expect(page.getByLabel("AI provider URL")).toBeVisible();
   await page.getByRole("button", { name: "Features" }).click();
   await expect(page.getByText("AI video summaries")).toBeVisible();
   await expect(page.getByText("AI video chapters")).toBeVisible();

@@ -1,4 +1,5 @@
 import type {
+  AiConnectionTest,
   AiJobRow,
   AiProcessResult,
   AiStatus,
@@ -54,34 +55,29 @@ export const aiApi = {
     });
   },
 
+  /** Probe an endpoint and list its models; blank fields fall back to the saved connection. */
   testAiConnection(
-    base_url?: string
-  ): Promise<ApiResponse<"/api/ai/test", "post">> {
-    return request("/api/ai/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ base_url: base_url || null }),
-    });
-  },
-
-  testOpenRouterConnection(
-    api_key?: string
-  ): Promise<ApiResponse<"/api/ai/openrouter/test", "post">> {
-    return request("/api/ai/openrouter/test", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ api_key: api_key || null }),
-    });
-  },
-
-  getOpenRouterModels(
+    body: {
+      target?: "chat" | "embed";
+      base_url?: string | null;
+      api_key?: string | null;
+    },
     opts?: ReadOptions
-  ): Promise<ApiResponse<"/api/ai/openrouter/models", "get">> {
-    return request("/api/ai/openrouter/models", opts);
+  ): Promise<AiConnectionTest> {
+    return request<AiConnectionTest>("/api/ai/test", {
+      ...opts,
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
   },
 
-  getOpenRouterCosts(opts?: ReadOptions): Promise<OpenRouterCosts> {
-    return request<OpenRouterCosts>("/api/ai/openrouter/costs", opts);
+  detectAiServers(): Promise<ApiResponse<"/api/ai/detect", "post">> {
+    return request("/api/ai/detect", { method: "POST" });
+  },
+
+  getAiCosts(opts?: ReadOptions): Promise<OpenRouterCosts> {
+    return request<OpenRouterCosts>("/api/ai/costs", opts);
   },
 
   applyAiWorkload(

@@ -1,49 +1,38 @@
 import type { OpenRouterCosts } from "../../types";
 import { formatUsdCost } from "../../utils";
 
-type ProviderHints = {
-  enabled?: boolean;
-  embed_backend?: string | null;
-  llm_backend?: string | null;
-  openrouter_enabled?: boolean;
-  openrouter_api_key_set?: boolean;
-  openrouter_scope?: string | null;
-  openrouter_model?: string | null;
-  ollama_prefer_embeddings?: boolean;
+const KIND_LABELS: Record<string, string> = {
+  openrouter: "OpenRouter",
+  ollama: "Ollama",
+  openai_compatible: "OpenAI-compatible",
 };
 
-/** Whether Horde is actually sending work to Ollama (vs OpenRouter-only). */
+/** Display name of a provider kind from the status / connection test. */
+export function providerKindLabel(kind?: string | null): string {
+  return (kind && KIND_LABELS[kind]) || "";
+}
+
+type ProviderHints = {
+  provider?: string | null;
+  embed_provider?: string | null;
+  chat_model?: string | null;
+  reports_cost?: boolean;
+};
+
+/** Whether Horde sends work to an Ollama server (GPU sizing applies). */
 export function ollamaIsUsed(s: ProviderHints): boolean {
-  if (s.embed_backend === "ollama" || s.llm_backend === "ollama") {
-    return true;
-  }
-  const openRouterOwnsAll =
-    Boolean(s.openrouter_enabled) &&
-    Boolean(s.openrouter_api_key_set) &&
-    s.openrouter_scope === "all" &&
-    !s.ollama_prefer_embeddings;
-  if (openRouterOwnsAll) return false;
-  if (s.ollama_prefer_embeddings) return true;
-  return s.enabled === true;
+  return s.provider === "ollama" || s.embed_provider === "ollama";
 }
 
-/** Whether OpenRouter is the active LLM and/or embed backend. */
-export function openrouterIsUsed(s: ProviderHints): boolean {
-  if (s.llm_backend === "openrouter" || s.embed_backend === "openrouter") {
-    return true;
-  }
-  return Boolean(s.openrouter_enabled && s.openrouter_api_key_set);
-}
-
-/** Model + task scope for the compact System AI OpenRouter row. */
-export function formatOpenRouterModelLine(s: ProviderHints): string {
-  const model = (s.openrouter_model || "").trim();
-  const scope = s.openrouter_scope === "all" ? "all tasks" : "LLM";
-  return [model || null, scope].filter(Boolean).join(" · ");
+/** Provider kind and chat model for the compact System AI row. */
+export function formatProviderLine(s: ProviderHints): string {
+  const kind = providerKindLabel(s.provider);
+  const model = (s.chat_model || "").trim();
+  return [kind || null, model || null].filter(Boolean).join(" · ");
 }
 
 /** Spend snapshot: 24h, 7d (or weekly budget), and recent call count. */
-export function formatOpenRouterSpendLine(
+export function formatSpendLine(
   costs: (Pick<OpenRouterCosts, "h24" | "d7"> & Partial<OpenRouterCosts>) | null
 ): string {
   if (!costs) return "";

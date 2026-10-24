@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { useSettingsPage } from "../context";
 import { Section } from "../ui";
+import { providerKindLabel } from "../aiProviderUsage";
 import { STATUS_TIPS } from "../constants";
 import {
   downloadErrorLabel,
@@ -122,30 +123,27 @@ export default function StatusSection({ system }: { system: SystemState }) {
               )}
             </StatusRow>
           )}
-          {health.ollama && (
-            <StatusRow label="Ollama" tip={STATUS_TIPS.ollama}>
-              {!health.ollama.enabled
+          {health.ai && (
+            <StatusRow label="AI provider" tip={STATUS_TIPS.ai}>
+              {!health.ai.enabled
                 ? "Disabled"
-                : health.ollama.ready
-                  ? "Ready"
-                  : health.ollama.reachable
-                    ? "Connected"
-                    : "Offline"}
-              {!health.ollama.enabled || health.ollama.ready ? null : health
-                  .ollama.last_error ? (
+                : !health.ai.configured
+                  ? "Not set up"
+                  : health.ai.reachable
+                    ? `Connected${
+                        providerKindLabel(health.ai.provider)
+                          ? ` · ${providerKindLabel(health.ai.provider)}`
+                          : ""
+                      }`
+                    : "Not reachable"}
+              {health.ai.enabled &&
+              health.ai.configured &&
+              !health.ai.reachable &&
+              health.ai.last_error ? (
                 <div className="mt-0.5 max-w-xs text-xs text-red-400">
-                  {health.ollama.last_error}
+                  {health.ai.last_error}
                 </div>
               ) : null}
-            </StatusRow>
-          )}
-          {health.openrouter && (
-            <StatusRow label="OpenRouter" tip={STATUS_TIPS.openrouter}>
-              {!health.openrouter.enabled
-                ? "Disabled"
-                : health.openrouter.configured || health.openrouter.reachable
-                  ? "Configured"
-                  : "No API key"}
             </StatusRow>
           )}
           <StatusRow label="Cookies" tip={STATUS_TIPS.cookies}>

@@ -56,8 +56,17 @@ export type TrashRestored = S["TrashRestored"];
 export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
-export type OpenRouterCosts = S["OpenRouterCostsRead"];
-export type OpenRouterModel = S["OpenRouterModelRow"];
+export type OpenRouterCosts = S["AiCostsRead"];
+export type OpenRouterModel = S["AiModelRow"];
+/** `models` / `embedding_models` / `presets` are always sent (defaults in the schema). */
+export type AiConnectionTest = Omit<
+  S["AiConnectionTest"],
+  "models" | "embedding_models" | "presets"
+> & {
+  models?: OpenRouterModel[];
+  embedding_models?: OpenRouterModel[];
+  presets?: S["AiModelPreset"][];
+};
 /** `ai` is always sent (the schema only marks it optional because it has a default). */
 export type AppSettings = Omit<S["AppSettingsRead"], "ai"> & { ai: AiSettings };
 /** `pulling` is always sent (the schema marks it optional because it has a default). */
@@ -169,7 +178,6 @@ export type AiSummaryLength = "short" | "medium" | "long";
 export type AiChaptersMode = "on_download" | "on_watch";
 export type AiGpuSource = "override" | "ollama" | "local" | "unknown";
 
-/** OpenRouter catalog row from GET /api/ai/openrouter/models. */
 /** Stable permission names (see docs/ops/authentication.md). */
 export type Permission =
   | "delete_videos"

@@ -57,10 +57,7 @@ export function useWatchAi(
       };
     }
     const ai = appSettings.ai;
-    const openRouterConnected =
-      !!aiStatus.openrouter_enabled && !!aiStatus.openrouter_api_key_set;
-    const localConnected = !!aiStatus.enabled && !!aiStatus.reachable;
-    const llmConnected = openRouterConnected || localConnected;
+    const llmConnected = !!aiStatus.enabled && !!aiStatus.reachable;
     return {
       summaries: llmConnected && !!ai.ai_summaries,
       chapters: llmConnected && !!ai.ai_chapters,
@@ -68,7 +65,7 @@ export function useWatchAi(
         ? "on_watch"
         : "on_download") as AiChaptersMode,
       chat: llmConnected && !!ai.ai_chat,
-      costs: openRouterConnected && ai.openrouter_show_costs === true,
+      costs: !!aiStatus.reports_cost && ai.show_costs === true,
     };
   }, [appSettings, aiStatus]);
   const aiSummariesEnabled = aiFeatures.summaries;

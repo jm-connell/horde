@@ -1,36 +1,28 @@
-import { useState } from "react";
-import LocalProviderPane from "./LocalProviderPane";
-import OpenRouterProviderPane from "./OpenRouterProviderPane";
 import HelpTip from "../../../components/HelpTip";
+import ConnectionPane from "./ConnectionPane";
+import CostsPane from "./CostsPane";
 import { useSettingsPage } from "../context";
 import { useAiPage } from "./aiPageContext";
 import { Section } from "../ui";
 import { PANEL_BTN, WORKLOAD_OPTIONS, WORKLOAD_TIP } from "../constants";
-import { setItem } from "../../../storage";
 
 export default function ProvidersPane() {
   const { q, match } = useSettingsPage();
   const {
     aiDraft,
     aiStatus,
-    aiProviderPane,
-    setAiProviderPane,
     reindexPrompt,
     setReindexPrompt,
     runAiProcess,
     applyWorkload,
   } = useAiPage();
 
-  const [openRouterTestStatus, setOpenRouterTestStatus] = useState<
-    "ok" | "fail" | null
-  >(null);
-
   return (
     <>
       <Section
         first
         title="General"
-        description="Settings that apply whether you use Local AI, OpenRouter, or both."
+        description="How much work AI jobs do, whatever the provider."
         hidden={
           !!q &&
           !match("workload", "light", "normal", "heavy", "gpu", "general")
@@ -99,48 +91,15 @@ export default function ProvidersPane() {
           )}
           {aiStatus && aiStatus.models_match_profile === false && (
             <p className="text-xs text-muted">
-              Local AI models customized in Advanced — re-apply a workload to
-              reset them for the Ollama GPU.
+              Ollama models differ from the workload&apos;s picks — re-apply a
+              workload to reset them for the Ollama GPU.
             </p>
           )}
         </div>
       </Section>
 
-      <div className="mt-6 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
-        {(
-          [
-            { id: "local" as const, label: "Local AI" },
-            { id: "openrouter" as const, label: "OpenRouter" },
-          ] as const
-        ).map((pane) => {
-          const active = aiProviderPane === pane.id;
-          return (
-            <button
-              key={pane.id}
-              type="button"
-              onClick={() => {
-                setAiProviderPane(pane.id);
-                setItem("horde.aiProviderPane", pane.id);
-              }}
-              className={
-                active
-                  ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-accent"
-                  : "flex-1 rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 hover:text-gray-200"
-              }
-            >
-              {pane.label}
-            </button>
-          );
-        })}
-      </div>
-
-      {aiProviderPane === "local" && <LocalProviderPane />}
-      {aiProviderPane === "openrouter" && (
-        <OpenRouterProviderPane
-          openRouterTestStatus={openRouterTestStatus}
-          setOpenRouterTestStatus={setOpenRouterTestStatus}
-        />
-      )}
+      <ConnectionPane />
+      <CostsPane />
     </>
   );
 }

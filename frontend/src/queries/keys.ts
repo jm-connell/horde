@@ -16,7 +16,8 @@ export const queryKeys = {
   ai: {
     status: ["ai", "status"] as const,
     costs: ["ai", "costs"] as const,
-    models: ["ai", "openrouter-models"] as const,
+    models: (target: "chat" | "embed", baseUrl: string) =>
+      ["ai", "models", target, baseUrl] as const,
   },
   system: {
     stats: ["system", "stats"] as const,

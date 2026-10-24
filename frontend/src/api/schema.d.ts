@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Ai Apply Workload
-         * @description Apply a workload profile: resolve models for the Ollama GPU, save, optional pull.
+         * @description Apply a workload profile; on Ollama also pick and download GPU-sized models.
          */
         post: operations["ai_apply_workload_api_ai_apply_workload_post"];
         delete?: never;
@@ -35,6 +35,46 @@ export interface paths {
         get: operations["ai_categories_api_ai_categories_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ai Costs
+         * @description Spend reported by the provider (only OpenRouter reports a cost per call).
+         */
+        get: operations["ai_costs_api_ai_costs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ai Detect
+         * @description Look for a local AI server at the usual addresses (Ollama, LM Studio, ...).
+         */
+        post: operations["ai_detect_api_ai_detect_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -120,57 +160,6 @@ export interface paths {
         put?: never;
         /** Ai Retry Job */
         post: operations["ai_retry_job_api_ai_jobs__job_id__retry_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/openrouter/costs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ai Openrouter Costs */
-        get: operations["ai_openrouter_costs_api_ai_openrouter_costs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/openrouter/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ai Openrouter Models */
-        get: operations["ai_openrouter_models_api_ai_openrouter_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/openrouter/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ai Openrouter Test */
-        post: operations["ai_openrouter_test_api_ai_openrouter_test_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -277,7 +266,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ai Test */
+        /**
+         * Ai Test
+         * @description Probe an endpoint (or the saved one) and list the models it offers.
+         */
         post: operations["ai_test_api_ai_test_post"];
         delete?: never;
         options?: never;
@@ -3399,17 +3391,93 @@ export interface components {
         };
         /**
          * AiConnectionTest
-         * @description Result of probing an Ollama base URL (``POST /api/ai/test``).
+         * @description Result of probing an OpenAI-compatible endpoint (``POST /api/ai/test``).
          */
         AiConnectionTest: {
             /** Base Url */
             base_url?: string | null;
             /** Detail */
             detail?: string | null;
+            /** Embedding Models */
+            embedding_models?: components["schemas"]["AiModelRow"][];
+            /** Kind */
+            kind?: string | null;
             /** Models */
-            models?: string[] | null;
+            models?: components["schemas"]["AiModelRow"][];
             /** Ok */
             ok: boolean;
+            /** Presets */
+            presets?: components["schemas"]["AiModelPreset"][];
+        };
+        /** AiCostsRead */
+        AiCostsRead: {
+            /**
+             * All
+             * @default 0
+             */
+            all: number;
+            /**
+             * All Calls
+             * @default 0
+             */
+            all_calls: number;
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /**
+             * D30
+             * @default 0
+             */
+            d30: number;
+            /**
+             * D30 Calls
+             * @default 0
+             */
+            d30_calls: number;
+            /**
+             * D7
+             * @default 0
+             */
+            d7: number;
+            /**
+             * D7 Calls
+             * @default 0
+             */
+            d7_calls: number;
+            /**
+             * H24
+             * @default 0
+             */
+            h24: number;
+            /**
+             * H24 Calls
+             * @default 0
+             */
+            h24_calls: number;
+            /**
+             * Hard Limit
+             * @default false
+             */
+            hard_limit: boolean;
+            /**
+             * Over Budget
+             * @default false
+             */
+            over_budget: boolean;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
+            /**
+             * Y1
+             * @default 0
+             */
+            y1: number;
+            /**
+             * Y1 Calls
+             * @default 0
+             */
+            y1_calls: number;
         };
         /** AiCurrentJob */
         AiCurrentJob: {
@@ -3439,6 +3507,43 @@ export interface components {
             title?: string | null;
             /** Video Id */
             video_id?: number | null;
+        };
+        /**
+         * AiDetectResult
+         * @description Local AI servers found at the usual addresses (``POST /api/ai/detect``).
+         */
+        AiDetectResult: {
+            /** Servers */
+            servers?: components["schemas"]["AiDetectedServer"][];
+        };
+        /** AiDetectedServer */
+        AiDetectedServer: {
+            /** Base Url */
+            base_url: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /** AiHealth */
+        AiHealth: {
+            /** Base Url */
+            base_url?: string | null;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Last Error */
+            last_error?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Pulling */
+            pulling?: string[] | null;
+            /** Reachable */
+            reachable: boolean;
         };
         /** AiJobAction */
         AiJobAction: {
@@ -3499,6 +3604,32 @@ export interface components {
             updated_at?: string | null;
             /** Video Id */
             video_id?: number | null;
+        };
+        /** AiModelPreset */
+        AiModelPreset: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+        };
+        /**
+         * AiModelRow
+         * @description A model an endpoint offers; prices only come from OpenRouter.
+         */
+        AiModelRow: {
+            /** Completion Per Million */
+            completion_per_million?: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Prompt Per Million */
+            prompt_per_million?: number | null;
         };
         /** AiProcessRequest */
         AiProcessRequest: {
@@ -3607,6 +3738,16 @@ export interface components {
              */
             ai_summaries: boolean;
             /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Api Key Set
+             * @default false
+             */
+            api_key_set: boolean;
+            /**
              * Auto Pull Models
              * @default true
              */
@@ -3617,18 +3758,38 @@ export interface components {
              */
             base_url: string;
             /**
+             * Budget Hard Limit
+             * @default false
+             */
+            budget_hard_limit: boolean;
+            /**
              * Category Min Score
              * @default 0.55
              */
             category_min_score: number;
             /**
              * Chat Model
-             * @default llama3.2:3b
+             * @default
              */
             chat_model: string;
             /**
+             * Embed Api Key
+             * @default
+             */
+            embed_api_key: string;
+            /**
+             * Embed Api Key Set
+             * @default false
+             */
+            embed_api_key_set: boolean;
+            /**
+             * Embed Base Url
+             * @default
+             */
+            embed_base_url: string;
+            /**
              * Embed Model
-             * @default nomic-embed-text
+             * @default
              */
             embed_model: string;
             /**
@@ -3642,63 +3803,10 @@ export interface components {
              */
             enrich_tags: boolean;
             /**
-             * Ollama Prefer Embeddings
-             * @default false
-             */
-            ollama_prefer_embeddings: boolean;
-            /**
-             * Openrouter Api Key
-             * @default
-             */
-            openrouter_api_key: string;
-            /**
-             * Openrouter Api Key Set
-             * @default false
-             */
-            openrouter_api_key_set: boolean;
-            /**
-             * Openrouter Budget Hard Limit
-             * @default false
-             */
-            openrouter_budget_hard_limit: boolean;
-            /**
-             * Openrouter Embed Model
-             * @default openai/text-embedding-3-small
-             */
-            openrouter_embed_model: string;
-            /**
-             * Openrouter Enabled
-             * @default false
-             */
-            openrouter_enabled: boolean;
-            /**
-             * Openrouter Model
-             * @default google/gemini-2.5-flash-lite
-             */
-            openrouter_model: string;
-            /**
-             * Openrouter Scope
-             * @default specialized
-             * @enum {string}
-             */
-            openrouter_scope: "specialized" | "all";
-            /**
-             * Openrouter Show Costs
-             * @default false
-             */
-            openrouter_show_costs: boolean;
-            /** Openrouter Weekly Budget Usd */
-            openrouter_weekly_budget_usd?: number | null;
-            /**
              * Paused
              * @default false
              */
             paused: boolean;
-            /**
-             * Provider
-             * @default ollama
-             */
-            provider: string;
             /**
              * Schedule
              * @default on_download
@@ -3710,6 +3818,11 @@ export interface components {
              * @default 03:00
              */
             schedule_time: string;
+            /**
+             * Show Costs
+             * @default false
+             */
+            show_costs: boolean;
             /**
              * Summary Length
              * @default short
@@ -3733,6 +3846,8 @@ export interface components {
             use_subtitles: boolean;
             /** Vram Gb */
             vram_gb?: number | null;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
             /**
              * Workload Profile
              * @default normal
@@ -3752,46 +3867,36 @@ export interface components {
             ai_duplicates?: boolean | null;
             /** Ai Summaries */
             ai_summaries?: boolean | null;
+            /** Api Key */
+            api_key?: string | null;
             /** Auto Pull Models */
             auto_pull_models?: boolean | null;
             /** Base Url */
             base_url?: string | null;
+            /** Budget Hard Limit */
+            budget_hard_limit?: boolean | null;
             /** Category Min Score */
             category_min_score?: number | null;
             /** Chat Model */
             chat_model?: string | null;
+            /** Embed Api Key */
+            embed_api_key?: string | null;
+            /** Embed Base Url */
+            embed_base_url?: string | null;
             /** Embed Model */
             embed_model?: string | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Enrich Tags */
             enrich_tags?: boolean | null;
-            /** Ollama Prefer Embeddings */
-            ollama_prefer_embeddings?: boolean | null;
-            /** Openrouter Api Key */
-            openrouter_api_key?: string | null;
-            /** Openrouter Budget Hard Limit */
-            openrouter_budget_hard_limit?: boolean | null;
-            /** Openrouter Embed Model */
-            openrouter_embed_model?: string | null;
-            /** Openrouter Enabled */
-            openrouter_enabled?: boolean | null;
-            /** Openrouter Model */
-            openrouter_model?: string | null;
-            /** Openrouter Scope */
-            openrouter_scope?: ("specialized" | "all") | null;
-            /** Openrouter Show Costs */
-            openrouter_show_costs?: boolean | null;
-            /** Openrouter Weekly Budget Usd */
-            openrouter_weekly_budget_usd?: number | null;
             /** Paused */
             paused?: boolean | null;
-            /** Provider */
-            provider?: string | null;
             /** Schedule */
             schedule?: ("on_download" | "on_request" | "timer" | "set_time") | null;
             /** Schedule Time */
             schedule_time?: string | null;
+            /** Show Costs */
+            show_costs?: boolean | null;
             /** Summary Length */
             summary_length?: ("short" | "medium" | "long") | null;
             /** Tag Rescan Days */
@@ -3802,6 +3907,8 @@ export interface components {
             use_subtitles?: boolean | null;
             /** Vram Gb */
             vram_gb?: number | null;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
             /** Workload Profile */
             workload_profile?: ("light" | "normal" | "heavy") | null;
         };
@@ -3815,18 +3922,33 @@ export interface components {
             chat_model: string;
             /** Chat Model Present */
             chat_model_present: boolean;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
             current_job?: components["schemas"]["AiCurrentJob"] | null;
             /**
              * Deferred Count
              * @default 0
              */
             deferred_count: number;
-            /** Embed Backend */
-            embed_backend?: string | null;
+            /** Embed Base Url */
+            embed_base_url?: string | null;
             /** Embed Model */
             embed_model: string;
             /** Embed Model Present */
             embed_model_present: boolean;
+            /**
+             * Embed Provider
+             * @default
+             */
+            embed_provider: string;
+            /**
+             * Embed Reachable
+             * @default false
+             */
+            embed_reachable: boolean;
             /** Enabled */
             enabled: boolean;
             /**
@@ -3858,8 +3980,6 @@ export interface components {
             invent_sample_size: number;
             /** Last Error */
             last_error?: string | null;
-            /** Llm Backend */
-            llm_backend?: string | null;
             /** Lock Reason */
             lock_reason?: string | null;
             /**
@@ -3867,41 +3987,6 @@ export interface components {
              * @default true
              */
             models_match_profile: boolean;
-            /**
-             * Ollama Prefer Embeddings
-             * @default false
-             */
-            ollama_prefer_embeddings: boolean;
-            /**
-             * Openrouter Api Key Set
-             * @default false
-             */
-            openrouter_api_key_set: boolean;
-            /**
-             * Openrouter Embed Model
-             * @default openai/text-embedding-3-small
-             */
-            openrouter_embed_model: string;
-            /**
-             * Openrouter Enabled
-             * @default false
-             */
-            openrouter_enabled: boolean;
-            /**
-             * Openrouter Model
-             * @default google/gemini-2.5-flash-lite
-             */
-            openrouter_model: string;
-            /**
-             * Openrouter Reachable
-             * @default false
-             */
-            openrouter_reachable: boolean;
-            /**
-             * Openrouter Scope
-             * @default specialized
-             */
-            openrouter_scope: string;
             /**
              * Paused
              * @default false
@@ -3936,6 +4021,11 @@ export interface components {
              * @default normal
              */
             recommended_profile: string;
+            /**
+             * Reports Cost
+             * @default false
+             */
+            reports_cost: boolean;
             /**
              * Runnable Count
              * @default 0
@@ -3973,8 +4063,16 @@ export interface components {
         };
         /** AiTestRequest */
         AiTestRequest: {
+            /** Api Key */
+            api_key?: string | null;
             /** Base Url */
             base_url?: string | null;
+            /**
+             * Target
+             * @default chat
+             * @enum {string}
+             */
+            target: "chat" | "embed";
         };
         /** AppSettingsRead */
         AppSettingsRead: {
@@ -5168,6 +5266,7 @@ export interface components {
         HealthFull: {
             /** Active Downloads */
             active_downloads: number;
+            ai?: components["schemas"]["AiHealth"] | null;
             disk?: components["schemas"]["DiskUsage"] | null;
             downloads: components["schemas"]["HealthDownloads"];
             ffmpeg?: components["schemas"]["FfmpegInfo"] | null;
@@ -5177,8 +5276,6 @@ export interface components {
             horde_version?: string | null;
             /** Library Video Count */
             library_video_count: number;
-            ollama?: components["schemas"]["OllamaHealth"] | null;
-            openrouter?: components["schemas"]["OpenRouterHealth"] | null;
             pot_provider?: components["schemas"]["PotProviderStatus"] | null;
             /** Review Pending Count */
             review_pending_count: number;
@@ -5642,145 +5739,6 @@ export interface components {
              * @default true
              */
             ok: boolean;
-        };
-        /** OllamaHealth */
-        OllamaHealth: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Enabled */
-            enabled: boolean;
-            /** Last Error */
-            last_error?: string | null;
-            /** Pulling */
-            pulling?: string[] | null;
-            /** Reachable */
-            reachable: boolean;
-            /** Ready */
-            ready: boolean;
-        };
-        /** OpenRouterConnectionTest */
-        OpenRouterConnectionTest: {
-            /** Detail */
-            detail?: string | null;
-            /** Model Count */
-            model_count?: number | null;
-            /** Ok */
-            ok: boolean;
-        };
-        /** OpenRouterCostsRead */
-        OpenRouterCostsRead: {
-            /**
-             * All
-             * @default 0
-             */
-            all: number;
-            /**
-             * All Calls
-             * @default 0
-             */
-            all_calls: number;
-            /**
-             * Blocked
-             * @default false
-             */
-            blocked: boolean;
-            /**
-             * D30
-             * @default 0
-             */
-            d30: number;
-            /**
-             * D30 Calls
-             * @default 0
-             */
-            d30_calls: number;
-            /**
-             * D7
-             * @default 0
-             */
-            d7: number;
-            /**
-             * D7 Calls
-             * @default 0
-             */
-            d7_calls: number;
-            /**
-             * H24
-             * @default 0
-             */
-            h24: number;
-            /**
-             * H24 Calls
-             * @default 0
-             */
-            h24_calls: number;
-            /**
-             * Hard Limit
-             * @default false
-             */
-            hard_limit: boolean;
-            /**
-             * Over Budget
-             * @default false
-             */
-            over_budget: boolean;
-            /** Weekly Budget Usd */
-            weekly_budget_usd?: number | null;
-            /**
-             * Y1
-             * @default 0
-             */
-            y1: number;
-            /**
-             * Y1 Calls
-             * @default 0
-             */
-            y1_calls: number;
-        };
-        /** OpenRouterHealth */
-        OpenRouterHealth: {
-            /** Api Key Set */
-            api_key_set?: boolean | null;
-            /** Configured */
-            configured?: boolean | null;
-            /** Enabled */
-            enabled: boolean;
-            /** Model */
-            model?: string | null;
-            /** Reachable */
-            reachable?: boolean | null;
-            /** Scope */
-            scope?: string | null;
-        };
-        /** OpenRouterModelRow */
-        OpenRouterModelRow: {
-            /** Completion Per Million */
-            completion_per_million?: number | null;
-            /** Id */
-            id: string;
-            /**
-             * Name
-             * @default
-             */
-            name: string;
-            /** Prompt Per Million */
-            prompt_per_million?: number | null;
-        };
-        /** OpenRouterModelsResponse */
-        OpenRouterModelsResponse: {
-            /** Embedding Models */
-            embedding_models?: components["schemas"]["OpenRouterModelRow"][];
-            /** Models */
-            models?: components["schemas"]["OpenRouterModelRow"][];
-            /** Presets */
-            presets?: {
-                [key: string]: string;
-            }[];
-        };
-        /** OpenRouterTestRequest */
-        OpenRouterTestRequest: {
-            /** Api Key */
-            api_key?: string | null;
         };
         /** PasswordChange */
         PasswordChange: {
@@ -7188,6 +7146,82 @@ export interface operations {
             };
         };
     };
+    ai_costs_api_ai_costs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiCostsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ai_detect_api_ai_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiDetectResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ai_list_jobs_api_ai_jobs_get: {
         parameters: {
             query?: {
@@ -7365,124 +7399,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiJobAction"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_openrouter_costs_api_ai_openrouter_costs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterCostsRead"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_openrouter_models_api_ai_openrouter_models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterModelsResponse"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_openrouter_test_api_ai_openrouter_test_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["OpenRouterTestRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterConnectionTest"];
                 };
             };
             /** @description Validation error */
@@ -7712,7 +7628,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["AiTestRequest"];
             };

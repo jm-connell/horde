@@ -11,43 +11,26 @@ import {
 import { getItem, setItem } from "../../../storage";
 import { formatUsdCost } from "../../../utils";
 import type { AiSettings } from "../../../types";
-import {
-  CHAT_MODEL_OPTIONS,
-  DEFAULT_AI,
-  EMBED_MODEL_OPTIONS,
-} from "../constants";
+import { DEFAULT_AI } from "../constants";
 import { useSettingsPage } from "../context";
 import type { AiProcessAction } from "../types";
 import { useLoadedAppSettings } from "../useLoadedAppSettings";
 
 /**
  * What the AI tab and the System tab both read: the AI settings draft and its
- * save, the live AI status, the library jobs and OpenRouter spend. Each tab
+ * save, the live AI status, the library jobs and reported AI spend. Each tab
  * calls it for itself, so its polling stops with the tab.
  */
 export function useAiCore() {
   const { showToast, showError } = useSettingsPage();
   const saveAppSettings = useUpdateAppSettings();
   const [aiDraft, setAiDraft] = useState<AiSettings>(DEFAULT_AI);
-  const [embedCustom, setEmbedCustom] = useState(false);
-  const [chatCustom, setChatCustom] = useState(false);
   const [aiProcessingAction, setAiProcessingAction] = useState<string | null>(
     null
   );
   const [appSettings, setAppSettings] = useLoadedAppSettings((s) => {
     if (!s.ai) return;
-    const merged = { ...DEFAULT_AI, ...s.ai };
-    setAiDraft(merged);
-    setEmbedCustom(
-      !EMBED_MODEL_OPTIONS.some(
-        (o) => o.value !== "__custom__" && o.value === merged.embed_model
-      )
-    );
-    setChatCustom(
-      !CHAT_MODEL_OPTIONS.some(
-        (o) => o.value !== "__custom__" && o.value === merged.chat_model
-      )
-    );
+    setAiDraft({ ...DEFAULT_AI, ...s.ai });
   });
 
   const aiStatusQuery = useAiStatus({ interval: 5000 });
@@ -70,10 +53,10 @@ export function useAiCore() {
     const limit = formatUsdCost(budget) || `$${budget}`;
     if (openRouterCosts.blocked) {
       showToast(
-        `OpenRouter weekly budget exceeded (${spent} / ${limit}). Calls blocked.`
+        `AI weekly budget exceeded (${spent} / ${limit}). Calls blocked.`
       );
     } else {
-      showToast(`OpenRouter weekly spend is ${spent} (limit ${limit}).`);
+      showToast(`AI weekly spend is ${spent} (limit ${limit}).`);
     }
   }, [openRouterCosts, showToast]);
 
@@ -119,10 +102,6 @@ export function useAiCore() {
     systemStats,
     refreshAiStatus,
     openRouterCosts,
-    embedCustom,
-    setEmbedCustom,
-    chatCustom,
-    setChatCustom,
     aiProcessingAction,
     runAiProcess,
   };

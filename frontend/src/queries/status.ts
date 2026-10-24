@@ -119,17 +119,20 @@ export function useMetadataSyncStatus(opts: PollOptions = {}) {
 export function useOpenRouterCosts(opts: PollOptions = {}) {
   return useQuery({
     queryKey: queryKeys.ai.costs,
-    queryFn: ({ signal }) => api.getOpenRouterCosts({ signal }),
+    queryFn: ({ signal }) => api.getAiCosts({ signal }),
     ...statusOptions(opts),
   });
 }
 
-/** The OpenRouter model catalog; changes rarely, so it stays fresh for minutes. */
-export function useOpenRouterModels(enabled: boolean) {
+/**
+ * Models the saved connection for ``target`` offers (OpenRouter rows carry
+ * prices). The list changes rarely, so it stays fresh for minutes.
+ */
+export function useAiModels(target: "chat" | "embed", baseUrl: string) {
   return useQuery({
-    queryKey: queryKeys.ai.models,
-    queryFn: ({ signal }) => api.getOpenRouterModels({ signal }),
-    enabled,
+    queryKey: queryKeys.ai.models(target, baseUrl),
+    queryFn: ({ signal }) => api.testAiConnection({ target }, { signal }),
+    enabled: Boolean(baseUrl),
     staleTime: 5 * 60_000,
   });
 }

@@ -64,17 +64,32 @@ test("a theme saved on the appearance tab can be applied and deleted", async ({
   await expect(row).toHaveCount(0);
 });
 
-test("the AI provider sub-pane is still selected after visiting another tab", async ({
+test("a provider preset fills the URL and saves it with the key", async ({
   page,
 }) => {
   await page.goto("/settings?tab=ai");
-  await page.getByRole("button", { name: "OpenRouter", exact: true }).click();
-  const costs = page.getByRole("heading", { name: "OpenRouter costs" });
-  await expect(costs).toBeVisible();
-  await page.getByRole("tab", { name: "Library" }).click();
-  await expect(page.getByText("Progress expiry")).toBeVisible();
-  await page.getByRole("tab", { name: "AI" }).click();
-  await expect(costs).toBeVisible();
+  await page.getByRole("button", { name: "AI provider preset" }).click();
+  await page
+    .getByRole("option", { name: "Ollama (on the Docker host)" })
+    .click();
+  const url = page.getByLabel("AI provider URL");
+  await expect(url).toHaveValue("http://host.docker.internal:11434/v1");
+
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith("/api/settings") && r.request().method() === "PATCH"
+  );
+  await page.getByRole("button", { name: "Save without testing" }).click();
+  const body = (await (await saved).json()) as {
+    ai: { base_url: string; chat_model: string; embed_model: string };
+  };
+  expect(body.ai.base_url).toBe("http://host.docker.internal:11434/v1");
+  // The preset suggests models while none are set.
+  expect(body.ai.chat_model).toBe("llama3.2:3b");
+  expect(body.ai.embed_model).toBe("nomic-embed-text");
+
+  // Embeddings can move to a second server.
+  await page.getByText("Use a different server for embeddings").click();
+  await expect(page.getByLabel("Embeddings provider URL")).toBeVisible();
 });
 
 test("a closed settings tab stops polling its status", async ({ page }) => {
