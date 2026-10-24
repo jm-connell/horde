@@ -150,6 +150,14 @@ needed to put Horde on the internet behind a reverse proxy, if you choose to.
 - **Manage playlists** now means creating App-wide playlists and editing other
   people's. Deleting an account deletes its private playlists and hands its
   App-wide ones to the administrator who deleted it.
+- **Home and the HORDE logo start the home page over**: they close a channel
+  opened from the sidebar, clear the tag, select mode and search, and keep your
+  Library/Recommended choice.
+- Watch page: a related video's channel name opens that channel, and the AI
+  summary can no longer be dragged taller than its text.
+- Download page: the **Offline (this device)** destination is now **Direct
+  download to client**, and **Paste** only shows where the browser lets Horde
+  read the clipboard (HTTPS); on plain HTTP paste with Ctrl+V or ⌘V.
 - `update.sh` accepts a `warning` health status, so an update is not rolled back
   because downloads are waiting for disk space.
 - Developers: the temporary `app.services.downloader` facade is gone (import
