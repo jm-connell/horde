@@ -514,6 +514,8 @@ def _check_own_password(
         )
     if row is None or not matched:
         attempt.failure()
+        # Guessing the password with a stolen cookie is guessing like any other.
+        _note_failed_sign_in(request, session, runtime, user.username)
         raise CodedHTTPException(400, "Current password is incorrect", "wrong_password")
     return row
 
@@ -644,6 +646,7 @@ def _prove_second_factor(
         row = _check_own_password(request, session, user, password, attempt)
         if two_factor.check_code(session, row, code, key=runtime.secret()) is None:
             attempt.failure(code_step=True)
+            _note_failed_sign_in(request, session, runtime, user.username)
             raise CodedHTTPException(
                 400, "That code is wrong or has already been used", "invalid_totp"
             )

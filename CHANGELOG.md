@@ -46,7 +46,8 @@ All notable changes to Horde are documented here. The format follows
   must, sign-in off, private URLs allowed, updates).
   API: `GET /api/system/security-checklist`.
 - **Sign-in alerts.** Two new [notification](docs/ops/notifications.md) events:
-  *Failed sign-ins* (ten failures against one account within an hour, at most
+  *Failed sign-ins* (ten failures against one account within an hour, at the
+  sign-in page or when confirming your password later, at most
   one message per account per hour; on for new targets) and *Sign-in from a
   new device* (off by default).
 - **Watch stats on History.** A band at the top of History shows your time

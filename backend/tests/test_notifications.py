@@ -1306,6 +1306,56 @@ def test_wrong_second_step_codes_count_towards_the_alert(
     assert [m.title for _t, m in sent.sent] == ["Failed sign-ins for admin"]
 
 
+@pytest.mark.parametrize(
+    ("path", "body"),
+    [
+        ("/api/auth/reauth", {"password": "wrong-wrong"}),
+        ("/api/auth/verify-password", {"password": "wrong-wrong"}),
+        (
+            "/api/auth/password",
+            {"current_password": "wrong-wrong", "new_password": "another-password-1"},
+        ),
+        ("/api/auth/2fa/setup", {"current_password": "wrong-wrong"}),
+    ],
+)
+def test_wrong_passwords_after_sign_in_count_towards_the_alert(
+    anon_client, admin_user, notifier, many_addresses, client, path, body
+):
+    """A thief with only the cookie guessing the password is a guess like any other."""
+    from app.services.auth import alerts
+
+    n, sent, _clock = notifier()
+    _add_target(events=["login_failures"])
+    for _ in range(alerts.THRESHOLD):
+        assert client.post(path, json=body).status_code == 400
+    n.pump()
+    assert [m.title for _t, m in sent.sent] == ["Failed sign-ins for admin"]
+
+
+def test_wrong_codes_when_turning_two_step_off_count_towards_the_alert(
+    anon_client, admin_user, notifier, many_addresses, client
+):
+    from app.services.auth import alerts, totp, two_factor
+
+    n, sent, _clock = notifier()
+    _add_target(events=["login_failures"])
+    secret = client.post(
+        "/api/auth/2fa/setup", json={"current_password": "admin-password"}
+    ).json()["secret"]
+    client.post(
+        "/api/auth/2fa/confirm",
+        json={"code": totp.code_at(secret, two_factor.time.time())},
+    )
+    for i in range(alerts.THRESHOLD):
+        res = client.post(
+            "/api/auth/2fa/disable",
+            json={"current_password": "admin-password", "code": f"00000{i % 10}"},
+        )
+        assert res.status_code == 400
+    n.pump()
+    assert [m.title for _t, m in sent.sent] == ["Failed sign-ins for admin"]
+
+
 def test_failure_watch_forgets_old_failures_and_alerts_again_after_the_cooldown():
     from app.services.auth import alerts
 

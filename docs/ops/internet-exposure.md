@@ -150,7 +150,7 @@ Turn on [update checks and, if you can, the **Update now** button](../getting-st
 
 ## Hearing about attacks {#alerts}
 
-Add a [notification](notifications.md) target. **Failed sign-ins** (on for new targets) tells you when ten wrong passwords or codes hit one account within an hour ("12 failed sign-ins in the last hour from 5 addresses"), at most once an hour per account. **Sign-in from a new device** (off by default) tells you every time an account signs in from a browser it has no session on. The sign-in throttle itself is described in [Passwords and sessions](authentication.md#passwords-and-sessions): back-off per address, a per-name slowdown, and after 50 failures against one name in a day, one attempt per ten seconds from anywhere.
+Add a [notification](notifications.md) target. **Failed sign-ins** (on for new targets) tells you when ten wrong passwords or codes hit one account within an hour, at the sign-in page or later when someone with a stolen session guesses the password in *Account settings* ("12 failed sign-ins in the last hour from 5 addresses"), at most once an hour per account. **Sign-in from a new device** (off by default) tells you every time an account signs in from a browser it has no session on. The sign-in throttle itself is described in [Passwords and sessions](authentication.md#passwords-and-sessions): back-off per address, a per-name slowdown, and after 50 failures against one name in a day, one attempt per ten seconds from anywhere.
 
 ## Remaining risks {#risks}
 
