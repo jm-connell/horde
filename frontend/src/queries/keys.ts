@@ -22,6 +22,8 @@ export const queryKeys = {
     stats: ["system", "stats"] as const,
     activity: ["system", "activity"] as const,
     update: ["system", "update"] as const,
+    storage: ["system", "storage"] as const,
+    securityChecklist: ["system", "security-checklist"] as const,
   },
   compat: {
     summary: ["compat", "summary"] as const,
@@ -31,6 +33,9 @@ export const queryKeys = {
     list: (sort: string | undefined, order: string | undefined) =>
       ["channels", "list", sort ?? "", order ?? ""] as const,
     catalogStatus: ["channels", "catalog-status"] as const,
+    retention: (channel: string) => ["channels", "retention", channel] as const,
+    retentionPreview: (channel: string, limits: unknown) =>
+      ["channels", "retention-preview", channel, limits] as const,
   },
   metadata: {
     syncStatus: ["metadata", "sync-status"] as const,
@@ -69,5 +74,12 @@ export const queryKeys = {
   },
   history: {
     all: ["history"] as const,
+    stats: (range: string) => ["history", "stats", range] as const,
+  },
+  notifications: ["notifications"] as const,
+  trash: {
+    all: ["trash"] as const,
+    summary: ["trash", "summary"] as const,
+    list: ["trash", "list"] as const,
   },
 };

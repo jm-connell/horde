@@ -1,5 +1,5 @@
 import { CSRF_HEADERS, expect, test, videoCard } from "./fixtures";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 /** The seeded id of the library video called `title`. */
 async function videoId(page: Page, title: string): Promise<number> {
@@ -95,6 +95,95 @@ test("AI summary is generated from the watch page and chat answers a question", 
   await expect(page.getByText("It is about auroras.")).toBeVisible();
 });
 
+/** Put the resize handle just below the fixed nav, then drag it by `dy`. */
+async function dragSummaryHandle(page: Page, handle: Locator, dy: number) {
+  await handle.evaluate((el) => {
+    el.scrollIntoView({ block: "start" });
+    window.scrollBy(0, -120);
+  });
+  const box = (await handle.boundingBox())!;
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + dy, { steps: 10 });
+  await page.mouse.up();
+}
+
+test("the AI summary cannot be dragged taller than its text", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  await enableAi(page);
+  await patchVideoDetail(page, id, {
+    subtitles: [{ lang: "en", auto: false }],
+  });
+  const summary = Array.from(
+    { length: 6 },
+    (_, i) =>
+      `Paragraph ${i + 1}: ` + "the ridge glows green all night. ".repeat(8)
+  ).join("\n\n");
+  const detail = await (await page.request.get(`/api/videos/${id}`)).json();
+  await page.route(new RegExp(`/api/videos/${id}/ai/summarize`), (route) =>
+    route.fulfill({
+      json: {
+        ...detail,
+        subtitles: [{ lang: "en", auto: false }],
+        ai_summary: summary,
+      },
+    })
+  );
+
+  await page.goto(`/watch/${id}`);
+  await page.getByRole("button", { name: "Generate summary" }).click();
+  const content = page.locator("[data-horde='ai-summary-content']");
+  const body = page.locator("[data-horde='ai-summary-body']");
+  await expect(content).toBeVisible();
+  const contentHeight = (await content.boundingBox())!.height;
+  expect(contentHeight).toBeGreaterThan(160);
+
+  // Shrink it first, so the next drag has room to grow again.
+  const handle = page.getByRole("separator", { name: "Resize summary" });
+  await dragSummaryHandle(page, handle, -(contentHeight - 80));
+  const shrunk = (await body.boundingBox())!.height;
+  expect(shrunk).toBeLessThan(contentHeight - 60);
+
+  // Dragging far past the end of the text stops at the text.
+  await dragSummaryHandle(page, handle, contentHeight);
+  const grown = (await body.boundingBox())!.height;
+  expect(grown).toBeGreaterThan(shrunk);
+  expect(grown).toBeLessThanOrEqual(contentHeight + 2);
+});
+
+test("a related video's channel name opens the channel page", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  const other = await videoId(page, "Harbor Lights");
+  const related = await (await page.request.get(`/api/videos/${other}`)).json();
+  await page.route(new RegExp(`/api/videos/${id}/related`), (route) =>
+    route.fulfill({ json: [related] })
+  );
+
+  await page.goto(`/watch/${id}`);
+  const channelLink = page
+    .locator("aside")
+    .getByRole("link", { name: related.channel });
+  await expect(channelLink).toBeVisible();
+  await expect(channelLink).toHaveAttribute(
+    "href",
+    `/?channel=${encodeURIComponent(related.channel)}`
+  );
+
+  await channelLink.click();
+  await expect(page).toHaveURL(
+    new RegExp(`/\\?channel=${encodeURIComponent(related.channel)}$`)
+  );
+  await expect(
+    page.getByRole("heading", { name: related.channel, level: 1 })
+  ).toBeVisible();
+});
+
 test("related videos list under the player and open their watch page", async ({
   page,
 }) => {
@@ -118,6 +207,26 @@ test("related videos list under the player and open their watch page", async ({
   ).toBeVisible();
 });
 
+test("a related row opens its video from anywhere on the row", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  const other = await videoId(page, "Harbor Lights");
+  const related = await (await page.request.get(`/api/videos/${other}`)).json();
+  await page.route(new RegExp(`/api/videos/${id}/related`), (route) =>
+    route.fulfill({ json: [related] })
+  );
+  await page.goto(`/watch/${id}`);
+  const row = page.locator("aside [data-horde='related-item']").first();
+  await expect(row).toBeVisible();
+  // The thumbnail is not a separate link: one tab stop per video.
+  await expect(row.getByRole("link", { name: /Harbor Lights/ })).toHaveCount(1);
+  // The bottom-right corner is below the text, not on a link of its own.
+  const box = (await row.boundingBox())!;
+  await page.mouse.click(box.x + box.width - 4, box.y + box.height - 4);
+  await expect(page).toHaveURL(new RegExp(`/watch/${other}$`));
+});
+
 test("deleting a video from the watch page removes it from the library", async ({
   page,
 }) => {
@@ -125,7 +234,9 @@ test("deleting a video from the watch page removes it from the library", async (
   await page.goto(`/watch/${id}`);
   await page.getByTitle("More actions").click();
   await page.getByRole("menuitem", { name: "Delete" }).click();
-  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page
+    .getByRole("button", { name: "Move to trash", exact: true })
+    .click();
   await expect(page).toHaveURL(/\/$/);
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
   await expect(videoCard(page, "Kiln fire")).toHaveCount(0);

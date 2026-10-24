@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { deviceAccounts, type AccountRegistry } from "./accounts";
 import { connectivity, type ConnectivityState } from "./connectivity";
 import { bytesDone, type OfflineItem } from "./db";
 import { offlineManager, type OfflineSnapshot } from "./manager";
@@ -53,4 +54,12 @@ export function useOfflineItem(
 /** The signed-in account's place (seconds) in each video saved on this device. */
 export function useOfflineResumePositions(): ReadonlyMap<number, number> {
   return useSyncExternalStore(deviceResume.subscribe, deviceResume.getSnapshot);
+}
+
+/** The accounts that have signed in on this device (who shares their downloads). */
+export function useDeviceAccounts(): AccountRegistry {
+  return useSyncExternalStore(
+    deviceAccounts.subscribe,
+    deviceAccounts.getAccounts
+  );
 }

@@ -43,7 +43,11 @@ export class ProgressSaver {
   private timer: number | null = null;
 
   constructor(
-    private save: (videoId: number, positionSec: number) => void,
+    private save: (
+      videoId: number,
+      positionSec: number,
+      finished?: boolean
+    ) => void,
     private timers: SaverTimers = windowTimers,
     private intervalMs = PROGRESS_SAVE_INTERVAL_MS
   ) {}
@@ -67,7 +71,7 @@ export class ProgressSaver {
   /** The video ended: drop its unsaved position and record it as finished. */
   finish(videoId: number): void {
     if (this.pending?.videoId === videoId) this.pending = null;
-    this.save(videoId, 0);
+    this.save(videoId, 0, true);
   }
 
   /** Stop the interval timer, saving what is left. */
@@ -103,11 +107,11 @@ export function useProgressSaver(
   onSavedRef.current = onSaved;
   const [saver] = useState(
     () =>
-      new ProgressSaver((videoId, positionSec) => {
+      new ProgressSaver((videoId, positionSec, finished) => {
         // Resuming watch (≥30s) brings the video back to Continue watching.
         if (positionSec >= 30) undismissContinueWatching(videoId);
         api
-          .saveProgress(videoId, positionSec)
+          .saveProgress(videoId, positionSec, finished)
           .then(() => onSavedRef.current?.(videoId, positionSec))
           .catch(() => undefined);
       })

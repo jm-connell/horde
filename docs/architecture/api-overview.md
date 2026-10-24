@@ -77,7 +77,20 @@ Library (and preview) media endpoints support HTTP **Range** requests so the bro
 | `POST /api/compat/convert-library` | Re-encode all non-H.264 originals in place. Body must carry `confirm: true` (else `400`) |
 | `POST /api/compat/cancel` | Drop queued jobs and signal running ones (body `kind`: `compat` \| `convert`, optional) |
 
-Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` in its totals.
+Video payloads carry the probed codec fields, `has_compat` on lists, and `compat` (state) on detail. `GET /api/stats/storage` includes `compat_bytes` and `trash_bytes` in its totals.
+
+### Trash
+
+Needs the `delete_videos` permission (administrators always pass). `DELETE /api/videos/{id}?delete_file=true` and `POST /api/videos/bulk-delete` (with `delete_files`) move videos to the trash unless `HORDE_TRASH_DAYS=0`; the `204` response carries the trash entry id in the `X-Horde-Trash-Entry` header (bulk: `X-Horde-Trash-Entries`, comma separated; a bulk delete that fails for some videos sends it with the `500` `trash_failed` too). A media folder on another filesystem answers `409` `trash_cross_device`.
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/trash` | Page (`{items, next_cursor}`, `limit`, `cursor`) of trashed videos, newest first: `id`, `video_id`, `title`, `channel`, `size_bytes`, `trashed_at`, `expires_at`, `trashed_by`, `thumbnail_url` |
+| `GET /api/trash/summary` | `count`, `total_bytes`, `retention_days` |
+| `GET /api/trash/{id}/thumbnail` | The trashed video's thumbnail, when it had one |
+| `POST /api/trash/{id}/restore` | Put the video back under its old id (`{video_id, title}`). `409` `trash_conflict` when its file path or YouTube id is taken in the library now, or the video is being downloaded |
+| `DELETE /api/trash/{id}` | Erase one entry and its files for good (`204`) |
+| `POST /api/trash/empty` | Erase everything in the trash (`{deleted, freed_bytes}`) |
 
 ### Pagination
 
@@ -95,7 +108,7 @@ Video payloads carry the probed codec fields, `has_compat` on lists, and `compat
 
 Follow `next_cursor` until it is `null`. Library cursors are keyset cursors (the sort value and id of the last row), so a video added or removed between two requests never repeats or skips a row. `sort=random` is a keyset walk too: each video's place in the shuffle is a keyed hash of its id and the seed (the cursor carries the seed), so it does not move when other videos come or go. Text search (`q`) ranks hits in Python, so its cursor is a position in that ranking. A cursor only works with the `sort` and `order` it was issued for and with the kind of listing that issued it; anything else, and any cursor whose contents do not fit (wrong type, out of range), is a `400`. The *Continue watching* shelf (`continue_watching=true`) is at most 12 rows and is never paged.
 
-`GET /api/review/groups` pages the same way (`limit` 1 to 100 groups, default 25; only the groups on the page are checked by AI). `GET /api/tags` (alphabetical, `limit` up to 5000, default 1000) and `GET /api/tags/stats` (most used first, `limit` up to 2000, default 500) page with `next_cursor` too and return `{items, next_cursor}`; the web UI follows the cursors, so every tag is listed. `GET /api/playlists` is capped (`limit` up to 1000 with `offset`), since a library has dozens.
+`GET /api/review/groups` pages the same way (`limit` 1 to 100 groups, default 25; only the groups on the page are checked by AI). `GET /api/tags` (alphabetical, `limit` up to 5000, default 1000) and `GET /api/tags/stats` (most used first, `limit` up to 2000, default 500) page with `next_cursor` too and return `{items, next_cursor}`; the web UI follows the cursors, so every tag is listed. `GET /api/playlists` is capped (`limit` up to 1000 with `offset`), since a library has dozens. It lists the App-wide playlists and the caller's own private ones; each carries `visibility`, `owner` (`{id, username}`) and `can_edit`, and another user's private playlist answers 404 on every route ([ADR 0014](../adr/0014-playlist-ownership-and-visibility.md)).
 
 The web UI asks for 500 rows at a time and keeps following the cursor, painting the first page as soon as it arrives. A library under 500 videos therefore takes one request, exactly as before.
 
@@ -119,7 +132,7 @@ The web UI asks for 500 rows at a time and keeps following the cursor, painting 
 | `disk`                                                            | Free/used/total on `DOWNLOADS_DIR`                                                                                              |
 | `library_video_count`, `review_pending_count`, `active_downloads` | Library snapshot                                                                                                                |
 | `wiki_available`                                                  | MkDocs static tree present                                                                                                      |
-| `downloads`                                                       | `{ active, paused }` — pause from in-memory queue + `download_queue_paused`                                                     |
+| `downloads`                                                       | `{ active, paused, held_code, held_reason }` — pause from in-memory queue + `download_queue_paused`; the hold is set while jobs wait for disk space, and `status` is then `warning` |
 | `workers`                                                         | `{ ai_queue_depth, ai_running, catalog_queue_depth, catalog_indexing }`                                                         |
 | `youtube`                                                         | `{ cookies_configured, last_extract_failure }` — last classified extract error (kind, message, optional video/channel `target`) |
 

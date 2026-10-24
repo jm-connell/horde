@@ -168,6 +168,11 @@ export default function StatusSection({ system }: { system: SystemState }) {
           <StatusRow label="Active downloads" tip={STATUS_TIPS.downloads}>
             {health.downloads?.active ?? health.active_downloads}
             {health.downloads?.paused ? " · paused" : ""}
+            {health.downloads?.held_reason ? (
+              <span className="mt-0.5 block text-xs text-amber-400/90">
+                {health.downloads.held_reason}
+              </span>
+            ) : null}
           </StatusRow>
           {health.workers && (
             <>

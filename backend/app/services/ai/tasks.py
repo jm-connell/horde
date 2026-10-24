@@ -22,7 +22,7 @@ from ...models import (
     require_id,
     utcnow,
 )
-from .. import app_settings, library
+from .. import app_settings, library, media_sidecars
 from .. import chapters as chapters_svc
 from . import embeddings, vector_index
 from . import text as ai_text
@@ -368,6 +368,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
     meta.updated_at = utcnow()
     session.add(meta)
     session.commit()
+    media_sidecars.refresh(video_id)
     return None
 
 

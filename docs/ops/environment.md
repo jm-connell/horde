@@ -14,6 +14,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `SCAN_INTERVAL_SEC` | `60` | Fallback poll interval (seconds) for the downloads-tree scanner when the watchdog misses an event. |
 | `HORDE_TEMP_SWEEP_HOURS` | `6` | At boot, delete leftover files that Horde itself generates (`<stem>.norm.<n>.mp4`, `.compat.<n>.mp4`, `.xcode.<n>.mp4`, `.horde-h264.dl.*`, `.horde-h264.enc.mp4`) older than this many hours that no library row references. Your own files are never swept, whatever their name (`x.temp.mkv`, `notes.part`, `Show.compat.mkv`). `0` disables the sweep. Staging dirs of finished or missing jobs are always removed at boot. |
 | `HORDE_STREAM_AI_RETENTION_DAYS` | `30` | How long the AI summary, chapters and chat of a streamed (not downloaded) video are kept after it was last opened. Downloading the video moves them onto it instead. Minimum 1. |
+| `HORDE_TRASH_DAYS` | `7` | How many days a video the user deleted waits in the [trash](../guides/library.md#trash) before it is erased for good. `0` turns the trash off: new deletes are immediate and permanent (entries already in it still expire after 7 days). |
 | `HORDE_LOG_LEVEL` | `INFO` | Log level for Horde and uvicorn (`DEBUG`, `INFO`, `WARNING`, `ERROR`). See [Logging](logging.md). |
 | `HORDE_LOG_FORMAT` | `text` | `json` writes one JSON object per log line (for Loki, Vector and similar). See [Logging](logging.md). |
 | `HORDE_YTDLP_REQUEST_THREADS` | `8` | How many requests may be inside yt-dlp work (link checks, previews, feeds, searches) at once. Extra requests wait up to 15 s without using a worker thread, then get HTTP 429, so slow YouTube calls can never freeze the rest of the API. |
@@ -28,6 +29,7 @@ Horde is configured primarily through environment variables. Most values have se
 | `HOST` | `0.0.0.0` | Bind address for uvicorn. |
 | `PORT` | `8080` | Listen port **inside** the process/container. |
 | `MAX_DOWNLOAD_CONCURRENCY` | `2` | Max simultaneous yt-dlp download workers (FIFO queue). |
+| `HORDE_MIN_FREE_GB` | `2` | Downloads wait while the downloads volume has less than this much free space (GB). `0` turns the check off. The library size limit is a setting, not an environment variable: see [Disk limits](../guides/downloads.md#disk-limits). |
 | `MAX_FFMPEG_CONCURRENCY` | *(empty)* → **2** if a GPU encoder is available, else **1** | Max simultaneous remux/transcode/loudnorm/H.264-copy workers. |
 
 In Compose, Horde maps host **8686** → container **8080**. See [Ports & networking](ports-networking.md).
@@ -60,6 +62,7 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 | `HORDE_TRUSTED_USER_HEADER` | *(empty)* | With the two above: the header naming the existing Horde user to act as. Requires `HORDE_TRUST_PROXY=1`, otherwise Horde refuses to start. |
 | `HORDE_ALLOW_PRIVATE_URLS` | *(empty)* | `1` lets server-side fetches and link checks target private / loopback addresses (LAN download sources). See [Security](security.md#private-urls). |
 | `HORDE_MAX_UPLOAD_GB` | `50` | Largest video accepted by Import → upload. |
+| `HORDE_PUBLIC_URL` | *(empty)* | The address you open Horde at (`https://horde.example.com`, no trailing path). [Notifications](notifications.md) use it to link back to Horde; without it they carry no link. It must be an `http(s)://` URL with a host and no user name or password; an invalid value is ignored with a warning in the log at startup. |
 
 ## Deploy identity
 

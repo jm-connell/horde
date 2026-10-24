@@ -70,7 +70,12 @@ export interface FlushDeps {
   /** Ask the server who is signed in (null: nobody). Throws when unreachable. */
   whoAmI(): Promise<number | null>;
   /** Send one position, saved at `at`, to the server for the signed-in account. */
-  send(videoId: number, positionSec: number, at: number): Promise<void>;
+  send(
+    videoId: number,
+    positionSec: number,
+    at: number,
+    finished: boolean
+  ): Promise<void>;
   /** What a failed send means for the rest of the flush. */
   classify(err: unknown): SendFailure;
 }
@@ -98,13 +103,18 @@ export class PendingProgressQueue {
   }
 
   /** Queue a save for the signed-in account (dropped when nobody is). */
-  async add(videoId: number, positionSec: number): Promise<void> {
+  async add(
+    videoId: number,
+    positionSec: number,
+    finished = false
+  ): Promise<void> {
     if (this.owner === null) return;
     await this.store.put({
       owner: this.owner,
       videoId,
       positionSec,
       at: this.now(),
+      ...(finished ? { finished } : {}),
     });
   }
 
@@ -148,7 +158,7 @@ export class PendingProgressQueue {
           return;
         }
         try {
-          await deps.send(p.videoId, p.positionSec, p.at);
+          await deps.send(p.videoId, p.positionSec, p.at, p.finished === true);
         } catch (err) {
           const failure = deps.classify(err);
           if (failure === "stop") throw err;

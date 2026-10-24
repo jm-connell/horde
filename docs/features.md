@@ -3,7 +3,7 @@
 A closer look at what Horde actually does. Each section is a product tour, not a settings dump — follow the guide links when you need every control.
 
 !!! warning "Trusted network"
-    Everyone signs in, but Horde is built for a LAN or VPN. Do not port-forward it.
+    Everyone signs in, but Horde is built for a LAN or VPN. To expose it, follow the [internet exposure checklist](ops/internet-exposure.md); do not just port-forward it.
 
 ## Downloads
 

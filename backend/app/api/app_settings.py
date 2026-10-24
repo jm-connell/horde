@@ -1,23 +1,33 @@
 import json
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..auth import current_user, ensure_admin
-from ..context import get_session
-from ..services import app_settings, user_settings
+from ..auth import (
+    current_user,
+    ensure_admin,
+    ensure_recent_auth,
+    require_admin,
+    two_factor_requirement,
+)
+from ..context import AppContext, get_ctx, get_session
+from ..errors import CodedHTTPException
+from ..services import app_settings, media_sidecars, user_settings
 from ..services.ai.provider import (
     invalidate_resolved_url,
     mask_openrouter_api_key,
     normalize_openrouter_model,
     openrouter_api_key_set,
 )
+from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
 from ..services.css_sanitize import sanitize_ui_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+TwoFactorRequirement = Literal["off", "admins", "everyone"]
 
 #: Largest the stored ``ui`` blob may grow to (all keys together, as JSON).
 UI_MAX_BYTES = 256 * 1024
@@ -116,6 +126,12 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
+    # Downloads wait once the library takes this many bytes; null = no limit.
+    max_library_bytes: int | None = None
+    # Write Jellyfin / Kodi / Plex files (.nfo, -thumb.jpg) beside the media.
+    media_server_sidecars: bool = False
+    # Who must sign in with a second step (administrators only see this).
+    require_two_factor: TwoFactorRequirement = "off"
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
     settings_degraded: bool = False
     setup_completed: bool = False
@@ -134,6 +150,12 @@ class AppSettingsUpdate(BaseModel):
     )
     direct_youtube_search: bool | None = None
     youtube_video_search: bool | None = None
+    # null (or 0) removes the limit.
+    max_library_bytes: int | None = Field(
+        default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
+    )
+    media_server_sidecars: bool | None = None
+    require_two_factor: TwoFactorRequirement | None = None
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
     ai: AiSettingsUpdate | None = None
@@ -159,12 +181,15 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 
 #: Top-level fields only the administrator's settings screens read: how often
 #: metadata and catalogs refresh, how large catalogs grow, whether indexing is on,
-#: and whether the settings file is damaged. A member gets the defaults. (The
+#: the library size limit, the media-server files switch, and whether the settings file is damaged. A member gets the defaults. (The
 #: YouTube search switches and the progress expiry stay: member screens use them.)
 MEMBER_HIDDEN_FIELDS = (
     "metadata_sync_interval_hours",
     "channel_catalog_enabled",
     "channel_catalog_max_videos",
+    "max_library_bytes",
+    "media_server_sidecars",
+    "require_two_factor",
     "settings_degraded",
 )
 
@@ -248,6 +273,14 @@ def _settings_read(
         ),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
+        max_library_bytes=app_settings.clamp_max_library_bytes(
+            data.get("max_library_bytes")
+        ),
+        media_server_sidecars=bool(data.get(media_sidecars.SETTING)),
+        require_two_factor=cast(
+            TwoFactorRequirement,
+            two_factor.normalize_requirement(data.get("require_two_factor")),
+        ),
         setup_completed=bool(data.get("setup_completed")),
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
@@ -277,14 +310,23 @@ def get_settings(
 @router.patch("", response_model=AppSettingsRead)
 def update_settings(
     payload: AppSettingsUpdate,
+    request: Request,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
+    ctx: AppContext = Depends(get_ctx),
 ):
     """Anyone may change their own ``ui`` preferences; every other field is
     server-wide and needs an administrator."""
     server_fields = payload.model_fields_set - {"ui"}
     if server_fields:
         ensure_admin(user)
+    if (
+        payload.require_two_factor is not None
+        and payload.require_two_factor != two_factor_requirement(request.app.state.auth)
+    ):
+        # Dropping the requirement (or raising it) is as sensitive as the sign-in
+        # it protects: a stolen session cookie must not be able to do it.
+        ensure_recent_auth(request, session)
     updates: dict = {}
     ui_patch: dict[str, Any] | None = None
     if payload.progress_expiry_days is not None:
@@ -301,6 +343,14 @@ def update_settings(
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
     if payload.youtube_video_search is not None:
         updates["youtube_video_search"] = bool(payload.youtube_video_search)
+    if "max_library_bytes" in payload.model_fields_set:
+        updates["max_library_bytes"] = app_settings.clamp_max_library_bytes(
+            payload.max_library_bytes
+        )
+    if payload.media_server_sidecars is not None:
+        updates[media_sidecars.SETTING] = payload.media_server_sidecars
+    if payload.require_two_factor is not None:
+        updates["require_two_factor"] = payload.require_two_factor
     if payload.setup_completed is False:
         raise HTTPException(
             status_code=400,
@@ -391,9 +441,39 @@ def update_settings(
             from ..services.ai import worker as ai_worker
 
             ai_worker.wake_worker()
+    turned_on = (
+        updates.get(media_sidecars.SETTING) is True and not media_sidecars.enabled()
+    )
     data = app_settings.save(updates) if updates else app_settings.load()
+    if turned_on:
+        ctx.sidecars.write_all()
+    if "max_library_bytes" in updates:
+        # Held downloads may fit under the new limit now.
+        ctx.download_queue.library_changed(room_made=True)
     if ui_patch is not None:
         ui = user_settings.save_ui(session, user.id, ui_patch)
     else:
         ui = user_settings.effective_ui(session, user.id)
     return _settings_read(data, ui, admin=user.is_admin)
+
+
+class MediaSidecarsRemoval(BaseModel):
+    queued: bool
+
+
+@router.post(
+    "/media-sidecars/remove",
+    response_model=MediaSidecarsRemoval,
+    status_code=202,
+    dependencies=[Depends(require_admin)],
+)
+def remove_media_sidecars(ctx: AppContext = Depends(get_ctx)):
+    """Delete the Jellyfin / Kodi / Plex files Horde wrote, in the background."""
+    if media_sidecars.enabled():
+        raise CodedHTTPException(
+            409,
+            "Turn the media-server files off first, or they would be written again.",
+            "media_sidecars_enabled",
+        )
+    ctx.sidecars.remove_all()
+    return MediaSidecarsRemoval(queued=True)

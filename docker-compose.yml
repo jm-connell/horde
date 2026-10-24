@@ -86,6 +86,8 @@ services:
       - HORDE_ALLOWED_HOSTS=${HORDE_ALLOWED_HOSTS:-}
       - HORDE_ALLOW_PRIVATE_URLS=${HORDE_ALLOW_PRIVATE_URLS:-}
       - HORDE_MAX_UPLOAD_GB=${HORDE_MAX_UPLOAD_GB:-}
+      - HORDE_PUBLIC_URL=${HORDE_PUBLIC_URL:-}
+      - HORDE_MIN_FREE_GB=${HORDE_MIN_FREE_GB:-}
       # Accounts behind a reverse proxy (see docs/ops/authentication.md). All optional.
       - HORDE_TRUST_PROXY=${HORDE_TRUST_PROXY:-}
       - HORDE_TRUSTED_PROXY_HOPS=${HORDE_TRUSTED_PROXY_HOPS:-1}
@@ -101,6 +103,8 @@ services:
       # Boot sweep of stale partial downloads older than N hours (0 = off).
       - HORDE_TEMP_SWEEP_HOURS=${HORDE_TEMP_SWEEP_HOURS:-6}
       - HORDE_STREAM_AI_RETENTION_DAYS=${HORDE_STREAM_AI_RETENTION_DAYS:-30}
+      # Days a deleted video waits in the trash before it is erased (0 = no trash).
+      - HORDE_TRASH_DAYS=${HORDE_TRASH_DAYS:-7}
       # Opt-in: on every start, install the newest yt-dlp into the data volume.
       - YTDLP_AUTO_UPDATE=${YTDLP_AUTO_UPDATE:-0}
       - HORDE_ALLOW_ROOT=${HORDE_ALLOW_ROOT:-0}

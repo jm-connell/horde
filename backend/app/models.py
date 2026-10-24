@@ -1,3 +1,4 @@
+import uuid
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Protocol, overload
@@ -42,6 +43,14 @@ class JobStatus(str, Enum):
 class DownloadDestination(str, Enum):
     library = "library"
     device = "device"
+
+
+class JobOrigin(str, Enum):
+    """What queued a download job (notifications can tell watched jobs from unattended ones)."""
+
+    manual = "manual"
+    channel_autodownload = "channel_autodownload"
+    playlist_sync = "playlist_sync"
 
 
 # Foreign keys are enforced (PRAGMA foreign_keys=ON). Every FK declares what
@@ -201,6 +210,8 @@ class DownloadJob(SQLModel, table=True):
     destination: str = Field(default=DownloadDestination.library.value)
     # Relative path under DOWNLOADS_DIR for device jobs (serve + cleanup).
     device_file_path: str | None = None
+    # Who queued it: a person (manual), a channel's auto-download or a subscribed playlist.
+    origin: str = Field(default=JobOrigin.manual.value)
     replace_video_id: int | None = Field(
         default=None, foreign_key="videos.id", ondelete="SET NULL", index=True
     )
@@ -223,12 +234,26 @@ class PlaylistSource(str, Enum):
     youtube = "youtube"
 
 
+class PlaylistVisibility(str, Enum):
+    #: Everyone signed in sees it (the owner and holders of manage_playlists edit it).
+    public = "public"
+    #: Only its owner sees it; to everyone else it does not exist.
+    private = "private"
+
+
 class Playlist(SQLModel, table=True):
     __tablename__ = "playlists"
     __table_args__ = _AUTOINCREMENT
 
     id: int | None = Field(default=None, primary_key=True)
     name: str
+    # Who made it. NULL only for a public playlist that predates accounts (the
+    # first administrator adopts it). A deleted owner's public playlists are
+    # handed on first (services/playlists.py); the cascade only reaches private ones.
+    owner_user_id: int | None = Field(
+        default=None, foreign_key="users.id", index=True, ondelete="CASCADE"
+    )
+    visibility: PlaylistVisibility = Field(default=PlaylistVisibility.public)
     description: str | None = None
     source_type: PlaylistSource = Field(default=PlaylistSource.user)
     source_url: str | None = None
@@ -350,7 +375,12 @@ class ChannelAutodownload(SQLModel, table=True):
 
 
 class ChannelCatalogSkip(SQLModel, table=True):
-    """IDs permanently excluded from a channel catalog (e.g. members-only)."""
+    """IDs excluded from a channel catalog.
+
+    ``members_only`` / ``cookies``: unplayable, hidden everywhere. ``deleted``: a user
+    deleted the downloaded copy; the video stays listed and only automatic download
+    skips it (``services/channel_catalog/skips.py``).
+    """
 
     __tablename__ = "channel_catalog_skips"
     __table_args__ = (UniqueConstraint("catalog_id", "yt_id"),)
@@ -566,6 +596,28 @@ class User(SQLModel, table=True):
     # Profile picture version (the client's cache key); None when the account
     # has none. The image is DATA_DIR/avatars/{id}_{version}.jpg.
     avatar_version: int | None = None
+    # Whether other accounts on a device may see this account's offline downloads
+    # there, and fetch its device-destination downloads from the server.
+    share_downloads: bool = Field(default=True)
+    # Two-step sign-in (services/auth/two_factor.py). ``totp_secret`` is the base32
+    # secret, stored as is like the other keys in DATA_DIR; with ``totp_enabled_at``
+    # still empty it is an enrollment waiting for its first code and is not used to
+    # sign in. ``totp_last_step`` is the newest 30 second step accepted (no replays).
+    totp_secret: str | None = None
+    totp_enabled_at: datetime | None = None
+    totp_last_step: int | None = None
+
+
+class UserRecoveryCode(SQLModel, table=True):
+    """One unused recovery code of an account (keyed hash only; deleted when used)."""
+
+    __tablename__ = "user_recovery_codes"
+    __table_args__ = (UniqueConstraint("user_id", "code_hash"), _AUTOINCREMENT)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    code_hash: str
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class UserSession(SQLModel, table=True):
@@ -582,6 +634,9 @@ class UserSession(SQLModel, table=True):
     expires_at: datetime = Field(index=True)
     user_agent: str | None = None
     ip: str | None = None
+    #: When this session last proved the password (sign-in or ``/api/auth/reauth``);
+    #: the sensitive administrator actions need it recently. None: never.
+    reauth_at: datetime | None = None
 
 
 class UserVideoState(SQLModel, table=True):
@@ -598,6 +653,48 @@ class UserVideoState(SQLModel, table=True):
     )
     position_sec: float = 0.0
     last_watched_at: datetime | None = None
+    # When this user finished the video (a save of position 0 means "finished").
+    # Cleared when they watch it again. Set only by ``user_state.record_progress``:
+    # an expired half-watch also has position 0 but is never "finished", which
+    # is why the retention rules read this column and not the position.
+    finished_at: datetime | None = None
+
+
+class UserWatchTime(SQLModel, table=True):
+    """Seconds one user spent watching one video within one UTC hour.
+
+    Written only by ``services/watch_stats.py`` from progress saves; the History
+    stats read it. Hours rather than days so the viewer's own time zone decides
+    where a day starts (and the weekday × hour chart has something to show). The
+    rows are history that outlives the video: deleting it clears ``video_id``
+    (the channel name stays, so top channels still add up), a restore from the
+    trash links them again. Deleting the account deletes them.
+    """
+
+    __tablename__ = "user_watch_time"
+    __table_args__ = (
+        Index(
+            "ux_user_watch_time_bucket",
+            "user_id",
+            "hour_start",
+            "video_id",
+            unique=True,
+        ),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    video_id: int | None = Field(
+        default=None, foreign_key="videos.id", index=True, ondelete="SET NULL"
+    )
+    #: The video's channel when the time was recorded (read when the video is gone).
+    channel: str | None = None
+    #: Start of the UTC hour the watching happened in.
+    hour_start: datetime
+    seconds: float = 0.0
+    #: How many times the video was played to its end in this hour.
+    finished: int = 0
 
 
 class UserSettings(SQLModel, table=True):
@@ -608,6 +705,78 @@ class UserSettings(SQLModel, table=True):
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
     ui_json: str = Field(default="{}")
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class TrashEntry(SQLModel, table=True):
+    """A deleted video waiting in the trash (``services/trash.py``).
+
+    A tombstone, not a soft-delete flag: the ``videos`` row and everything that
+    hangs off it are really deleted, so no query has to remember to filter them.
+    ``snapshot_json`` holds what a restore needs to put the rows back and
+    ``files_json`` lists the files moved into ``.horde-trash``. ``video_id`` is the
+    id the video had (it is reused on restore) and is deliberately not a foreign
+    key. ``folder`` names the folders holding the files (``.horde-trash/<folder>``
+    and ``DATA_DIR/trash/<folder>``): a random token, never the row id, so a trash
+    that crashed before its commit cannot share a folder with a later one. Never
+    read the two JSON columns for a listing: they can be large.
+    """
+
+    __tablename__ = "trash_entries"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    folder: str = Field(
+        default_factory=lambda: uuid.uuid4().hex, index=True, unique=True
+    )
+    video_id: int
+    youtube_id: str | None = Field(default=None, index=True)
+    title: str
+    channel: str | None = None
+    # The media file's path relative to DOWNLOADS_DIR before it was trashed.
+    relative_path: str
+    # Bytes of the files moved into the trash (media and sidecars).
+    size_bytes: int = 0
+    trashed_at: datetime = Field(default_factory=utcnow, index=True)
+    trashed_by_user_id: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    # JSON list of {"root": "downloads" | "data", "path": str, "size": int}.
+    files_json: str = Field(default="[]")
+    snapshot_json: str = Field(default="{}")
+    # Why it was trashed when it was not by hand, e.g. "Retention: keep latest 20".
+    reason: str | None = None
+
+
+class ChannelRetention(SQLModel, table=True):
+    """A channel's rules for removing its old videos (``services/channel_retention.py``).
+
+    Keyed by the channel name the library groups videos by, the one a rename
+    changes (``library.rename_channel`` moves the row along). At most one of each
+    limit; any combination. ``last_removed_*`` describe the latest run that moved
+    something to the trash, ``last_run_at`` the latest run of all.
+    """
+
+    __tablename__ = "channel_retention"
+
+    id: int | None = Field(default=None, primary_key=True)
+    channel: str = Field(index=True, unique=True)
+    enabled: bool = Field(default=False, index=True)
+    keep_latest: int | None = None
+    max_age_days: int | None = None
+    remove_watched_after_days: int | None = None
+    updated_at: datetime = Field(default_factory=utcnow)
+    last_run_at: datetime | None = None
+    last_removed_count: int = 0
+    last_removed_at: datetime | None = None
+
+
+class RetentionKeep(SQLModel, table=True):
+    """A video the retention rules never touch: one restored from the trash."""
+
+    __tablename__ = "retention_keeps"
+
+    video_id: int = Field(foreign_key="videos.id", primary_key=True, ondelete="CASCADE")
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class DownloadRequester(SQLModel, table=True):

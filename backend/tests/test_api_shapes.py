@@ -166,7 +166,7 @@ def test_backgrounds_and_fonts_lists(client):
 def test_rename_channel(client, add_video):
     add_video(channel="Old")
     resp = client.patch("/api/channels", json={"old_name": "Old", "new_name": "New"})
-    assert resp.json() == {"updated": 1}
+    assert resp.json() == {"updated": 1, "retention_disabled": False}
 
 
 def test_video_ai_chat_history(client, session, add_video, admin_user):
@@ -187,7 +187,7 @@ def test_video_ai_chat_history(client, session, add_video, admin_user):
 def test_sprite_generate_status(client, add_video, monkeypatch):
     video = add_video()
     monkeypatch.setattr(
-        "app.api.videos.enqueue_sprite_generation", lambda *a, **k: "generating"
+        "app.api.video_media.enqueue_sprite_generation", lambda *a, **k: "generating"
     )
     resp = client.post(f"/api/videos/{video.id}/sprites/generate")
     assert resp.json() == {"status": "generating"}

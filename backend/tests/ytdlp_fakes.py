@@ -66,6 +66,9 @@ class FakeYtdlp:
         # Raised after the merged file is on disk, like a yt-dlp postprocessor
         # that fails once the media already exists.
         self.fail_after_merge: Exception | None = None
+        # Reported to the logger the runner passed in, the way yt-dlp reports a
+        # failure it was told to ignore (``ignoreerrors``).
+        self.log_error: str | None = None
 
     def add(self, url: str, info: dict[str, Any]) -> dict[str, Any]:
         self.infos[url] = info
@@ -152,6 +155,8 @@ class FakeYtdlp:
                 audio_frag.unlink()
                 if fake.fail_after_merge is not None:
                     raise fake.fail_after_merge
+                if fake.log_error is not None and self.opts.get("logger") is not None:
+                    self.opts["logger"].error(fake.log_error)
                 for hook in hooks:
                     hook(
                         {

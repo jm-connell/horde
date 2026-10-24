@@ -1,5 +1,7 @@
 import { useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useTrashRetentionDays } from "../queries/trash";
+import { deleteConfirmCopy } from "../trash";
 import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
@@ -47,11 +49,9 @@ export default function LibraryBulkBar({
   const noteTriggerRef = useRef<HTMLButtonElement>(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const videoWord = selectedCount === 1 ? "video" : "videos";
-  const deleteBody =
-    selectedCount === 1
-      ? "This video will be removed from your library and the file will be permanently deleted."
-      : "These videos will be removed from your library and the files will be permanently deleted.";
+  const deleteCopy = deleteConfirmCopy(useTrashRetentionDays(), {
+    count: selectedCount,
+  });
 
   const closeDeleteConfirm = () => {
     if (deleting) return;
@@ -77,49 +77,48 @@ export default function LibraryBulkBar({
             {selectedCount} selected
           </span>
 
-          {can("manage_playlists") && (
-            <div className="relative">
-              <button
-                ref={playlistTriggerRef}
-                onClick={() =>
-                  playlistOpen ? onTogglePlaylist() : onOpenPlaylistPicker()
-                }
-                aria-haspopup="menu"
-                aria-expanded={playlistOpen}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-              >
-                + Playlist
-              </button>
-              <MenuFlyout
-                open={playlistOpen}
-                className="absolute bottom-10 left-0 z-50 w-56"
-                menu={{
-                  label: "Add to playlist",
-                  onClose: onTogglePlaylist,
-                  triggerRef: playlistTriggerRef,
-                }}
-              >
-                <MenuScroll className="max-h-56" revision={playlists.length}>
-                  {playlists.length === 0 ? (
-                    <p className="px-3 py-2 text-xs text-muted">
-                      No playlists yet.
-                    </p>
-                  ) : (
-                    playlists.map((p) => (
-                      <button
-                        key={p.id}
-                        role="menuitem"
-                        onClick={() => onAddToPlaylist(p.id)}
-                        className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
-                      >
-                        {p.name}
-                      </button>
-                    ))
-                  )}
-                </MenuScroll>
-              </MenuFlyout>
-            </div>
-          )}
+          {/* Everyone can keep private playlists; only editable ones are offered. */}
+          <div className="relative">
+            <button
+              ref={playlistTriggerRef}
+              onClick={() =>
+                playlistOpen ? onTogglePlaylist() : onOpenPlaylistPicker()
+              }
+              aria-haspopup="menu"
+              aria-expanded={playlistOpen}
+              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+            >
+              + Playlist
+            </button>
+            <MenuFlyout
+              open={playlistOpen}
+              className="absolute bottom-10 left-0 z-50 w-56"
+              menu={{
+                label: "Add to playlist",
+                onClose: onTogglePlaylist,
+                triggerRef: playlistTriggerRef,
+              }}
+            >
+              <MenuScroll className="max-h-56" revision={playlists.length}>
+                {playlists.length === 0 ? (
+                  <p className="px-3 py-2 text-xs text-muted">
+                    No playlists yet.
+                  </p>
+                ) : (
+                  playlists.map((p) => (
+                    <button
+                      key={p.id}
+                      role="menuitem"
+                      onClick={() => onAddToPlaylist(p.id)}
+                      className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                    >
+                      {p.name}
+                    </button>
+                  ))
+                )}
+              </MenuScroll>
+            </MenuFlyout>
+          </div>
 
           {can("edit_metadata") && (
             <div className="relative">
@@ -220,12 +219,12 @@ export default function LibraryBulkBar({
       </div>
       {deleteConfirmOpen ? (
         <ConfirmDialog
-          title={`Delete ${selectedCount} ${videoWord}?`}
-          body={deleteBody}
-          confirmLabel="Delete"
+          title={deleteCopy.title}
+          body={deleteCopy.body}
+          confirmLabel={deleteCopy.confirmLabel}
           danger
           busy={deleting}
-          busyLabel="Deleting…"
+          busyLabel={deleteCopy.busyLabel}
           onCancel={closeDeleteConfirm}
           onConfirm={() => void confirmDelete()}
         />

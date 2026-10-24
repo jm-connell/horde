@@ -163,3 +163,46 @@ def test_metadata_edits_are_shared(client, member_client, add_video):
     )
     seen = client.get(f"/api/videos/{video.id}").json()
     assert (seen["title"], seen["notes"]) == ("After", "hi")
+
+
+def test_opening_a_video_and_leaving_is_not_finishing_it(client, add_video, session):
+    """The player reports 0 at the start and after seeks; that is not a finish."""
+    video = add_video(duration_sec=600.0)
+    _progress(client, video.id, 0)
+    _progress(client, video.id, 3)
+    state = session.exec(select(UserVideoState)).one()
+    assert state.finished_at is None
+
+
+def test_only_an_explicit_finish_stamps_finished_at(client, add_video, session):
+    video = add_video(duration_sec=600.0)
+    _progress(client, video.id, 40)
+    resp = client.patch(
+        f"/api/videos/{video.id}/progress",
+        json={"position_sec": 0, "finished": True},
+    )
+    assert resp.status_code == 204
+    state = session.exec(select(UserVideoState)).one()
+    session.refresh(state)
+    assert state.position_sec == 0 and state.finished_at is not None
+    stamped = state.finished_at
+
+    # Opening it again reports 0 without a finish: the earlier finish stands.
+    _progress(client, video.id, 0)
+    session.refresh(state)
+    assert state.finished_at == stamped
+
+    # Watching on from a real position clears it.
+    _progress(client, video.id, 30)
+    session.refresh(state)
+    assert state.finished_at is None
+
+
+def test_a_finish_saves_position_zero_whatever_was_sent(client, add_video, session):
+    video = add_video(duration_sec=600.0)
+    client.patch(
+        f"/api/videos/{video.id}/progress",
+        json={"position_sec": 590, "finished": True},
+    )
+    state = session.exec(select(UserVideoState)).one()
+    assert state.position_sec == 0 and state.finished_at is not None

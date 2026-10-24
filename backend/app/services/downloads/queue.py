@@ -17,12 +17,14 @@ from ...config import MAX_DOWNLOAD_CONCURRENCY
 from ...context import get_engine
 from ...logging_config import FailureLog, job_context
 from ...models import DownloadDestination, DownloadJob, JobStatus
+from .. import notifications
 from ..url_safety import UnsafeUrlError, validate_public_url
 from ..workers import BackgroundWorker
 from ..ytdlp_common import ERROR_KIND_CANCELLED
 from . import dbwrite, lifecycle
 from .errors import DownloadCancelled
 from .progress import progress_store
+from .space import Hold, SpaceGate
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,10 @@ STUCK_JOB_GRACE_SECONDS = 180.0
 
 
 REAPER_INTERVAL_SECONDS = 60.0
+
+# Held downloads are looked at again this often, so a freed disk or a raised
+# limit starts them without anyone touching the queue.
+HOLD_RECHECK_SECONDS = 30.0
 
 
 class DownloadQueue:
@@ -58,6 +64,12 @@ class DownloadQueue:
         # ``lifecycle.mark_job_cancelled``) so the next boot resumes it.
         self._shutting_down = False
         self._threads: set[threading.Thread] = set()
+        #: The library size limit and the free-space floor (see ``space``).
+        self.space = SpaceGate()
+        #: Queued jobs waiting for room, with why; rebuilt on every dispatch pass.
+        self._space_holds: dict[int, Hold] = {}
+        #: Expected size of a job, once its metadata showed it is too big to start.
+        self._size_hints: dict[int, int] = {}
 
     # -- ManagedWorker protocol (registered by lifespan) -----------------------
 
@@ -204,6 +216,8 @@ class DownloadQueue:
     def cancel_job(self, job_id: int) -> bool:
         with self._lock:
             event = self._cancel_events.get(job_id)
+            self._space_holds.pop(job_id, None)
+            self._size_hints.pop(job_id, None)
         if event is not None:
             event.set()
         with Session(get_engine()) as session:
@@ -305,9 +319,13 @@ class DownloadQueue:
             self._running.clear()
             self._held.clear()
             self._restart_ids.clear()
+            self._space_holds.clear()
+            self._size_hints.clear()
             for event in self._cancel_events.values():
                 event.set()
             self._cancel_events.clear()
+        self.space.invalidate()
+        self.space.clear_disk_full()
         progress_store.clear()
 
     def queued_count(self) -> int:
@@ -357,21 +375,124 @@ class DownloadQueue:
             thread.start()
 
     def _next_job_id(self) -> int | None:
-        """Oldest queued, unpaused job that is neither running nor held."""
+        """Oldest queued, unpaused job that is neither running nor held and has room.
+
+        A job that must wait for disk space is left queued and remembered in
+        ``_space_holds``; later jobs that fit (a device download, a smaller video)
+        may still go ahead of it.
+        """
         with self._lock:
             excluded = list(self._running | self._held)
+            hints = dict(self._size_hints)
         with Session(get_engine()) as session:
-            query = select(DownloadJob.id).where(
+            query = select(DownloadJob.id, DownloadJob.destination).where(
                 DownloadJob.status == JobStatus.queued,
                 DownloadJob.paused == False,  # noqa: E712 - SQL column comparison, not a Python truth test
             )
             if excluded:
                 query = query.where(col(DownloadJob.id).notin_(excluded))
-            return session.exec(
-                query.order_by(
-                    col(DownloadJob.created_at).asc(), col(DownloadJob.id).asc()
-                ).limit(1)
-            ).first()
+            candidates = [
+                (job_id, destination)
+                for job_id, destination in session.exec(
+                    query.order_by(
+                        col(DownloadJob.created_at).asc(), col(DownloadJob.id).asc()
+                    )
+                ).all()
+                if job_id is not None
+            ]
+        holds: dict[int, Hold] = {}
+        chosen: int | None = None
+        for job_id, destination in candidates:
+            hold = self.space.check(
+                destination or DownloadDestination.library.value, hints.get(job_id)
+            )
+            if hold is None:
+                chosen = job_id
+                break
+            holds[job_id] = hold
+        evaluated = set(holds) if chosen is None else {*holds, chosen}
+        self._update_space_holds(
+            [job_id for job_id, _dest in candidates], evaluated, holds
+        )
+        return chosen
+
+    # -- disk space -------------------------------------------------------
+
+    def _update_space_holds(
+        self, queued: list[int], evaluated: set[int], holds: dict[int, Hold]
+    ) -> None:
+        """Record which queued jobs wait for room, and tell their cards what changed.
+
+        ``queued`` are the waiting jobs in FIFO order, ``evaluated`` the ones this
+        pass looked at (it stops at the first job that may start) and ``holds`` the
+        evaluated ones that must wait. Jobs after the stopping point keep their
+        previous state.
+        """
+        with self._lock:
+            before = self._space_holds
+            kept = {
+                j: h for j, h in before.items() if j in queued and j not in evaluated
+            }
+            kept.update(holds)
+            self._space_holds = after = {j: kept[j] for j in queued if j in kept}
+            live = set(queued) | self._running | self._held
+            self._size_hints = {j: n for j, n in self._size_hints.items() if j in live}
+        if after and not before:
+            # The queue went from running freely to waiting for room. Disk space
+            # that hovers around the floor must not send one a minute.
+            first = next(iter(after.values()))
+            notifications.emit(
+                notifications.events.QUEUE_HELD,
+                {"code": first.code, "reason": first.reason},
+                dedupe_key="queue-held",
+                dedupe_ttl=1800,
+            )
+        for job_id, hold in after.items():
+            if before.get(job_id) != hold:
+                progress_store.merge(
+                    job_id, {"status": "queued", "held_reason": hold.reason}
+                )
+        for job_id in before.keys() - after.keys():
+            if job_id in progress_store:
+                progress_store.merge(job_id, {"held_reason": None})
+
+    def held_reason(self, job_id: int) -> str | None:
+        """Why a queued job is waiting for disk space, if it is."""
+        with self._lock:
+            hold = self._space_holds.get(job_id)
+        return hold.reason if hold else None
+
+    def space_hold(self) -> Hold | None:
+        """The reason the queue is waiting for disk space, if any job is."""
+        with self._lock:
+            return next(iter(self._space_holds.values()), None)
+
+    def hold_for_size(self, job_id: int, estimate: int) -> Hold | None:
+        """Remember a job's expected size; returns why it cannot start with that size."""
+        with self._lock:
+            self._size_hints[job_id] = estimate
+        return self.space.check(DownloadDestination.library.value, estimate)
+
+    def note_disk_full(self) -> None:
+        """A write failed with "no space left on device": start nothing for a while."""
+        self.space.note_disk_full()
+
+    def library_changed(self, *, room_made: bool = False) -> None:
+        """The library grew or shrank, or a limit changed: look at held jobs again.
+
+        ``room_made`` (a deletion, a raised limit) also lifts the hold that an
+        out-of-space write put on the queue.
+        """
+        self.space.invalidate()
+        if room_made:
+            self.space.clear_disk_full()
+        self._dispatch()
+
+    def recheck_holds(self) -> None:
+        """The periodic look at held jobs (a disk freed outside Horde, say)."""
+        if self.space_hold() is not None:
+            self.space.invalidate()
+            self._dispatch()
 
     # -- stuck-job reaper ------------------------------------------------
 
@@ -423,14 +544,19 @@ class DownloadQueue:
     def create_reaper(
         self, interval: float = REAPER_INTERVAL_SECONDS
     ) -> BackgroundWorker:
-        """The worker that requeues orphaned jobs and prunes finished progress."""
+        """The worker that requeues orphaned jobs, prunes finished progress and rechecks held jobs."""
 
         def loop(worker: BackgroundWorker) -> None:
             failures = FailureLog(logger, "stuck-job reaper pass failed")
-            while not worker.sleep(interval):
+            tick = min(interval, HOLD_RECHECK_SECONDS)
+            last_reap = time.monotonic()
+            while not worker.sleep(tick):
                 try:
-                    self.reap_stuck_jobs()
-                    progress_store.prune()
+                    self.recheck_holds()
+                    if time.monotonic() - last_reap >= interval:
+                        last_reap = time.monotonic()
+                        self.reap_stuck_jobs()
+                        progress_store.prune()
                     failures.ok()
                 except Exception:  # noqa: BLE001 - FailureLog logs the traceback
                     failures.failed()

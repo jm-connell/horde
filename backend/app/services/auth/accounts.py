@@ -25,16 +25,19 @@ from sqlmodel import Session, col
 
 from ...database import rowcount
 from ...models import (
+    TrashEntry,
     User,
+    UserRecoveryCode,
     UserSession,
     UserSettings,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     as_utc,
     utcnow,
 )
-from .. import app_settings
+from .. import app_settings, playlist_owners
 from ..css_sanitize import sanitize_ui_css
 from . import passwords, permissions
 
@@ -111,6 +114,13 @@ class AuthUser:
     permissions: frozenset[str] = frozenset()
     #: Profile picture cache key; None without one (see services/auth/avatars).
     avatar_version: int | None = None
+    #: Other accounts on a device may see this account's downloads there.
+    share_downloads: bool = True
+    #: Signs in with a second step (services/auth/two_factor.py).
+    two_factor_enabled: bool = False
+    #: The administrator requires two-step sign-in and this account has not set it
+    #: up: set by ``AuthMiddleware``, which then refuses everything but enrollment.
+    must_enroll_two_factor: bool = False
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -120,6 +130,9 @@ class AuthUser:
             is_admin=user.is_admin,
             permissions=effective_permissions(user),
             avatar_version=user.avatar_version,
+            share_downloads=user.share_downloads,
+            two_factor_enabled=user.totp_enabled_at is not None
+            and bool(user.totp_secret),
         )
 
     def can(self, permission: str) -> bool:
@@ -206,6 +219,7 @@ def create_user(
     *,
     is_admin: bool = False,
     granted: list[str] | set[str] | frozenset[str] | None = None,
+    share_downloads: bool = True,
 ) -> User:
     """Add a user. The very first user is always an administrator.
 
@@ -229,6 +243,7 @@ def create_user(
         username_norm=norm,
         password_hash=passwords.hash_password(password),
         is_admin=is_admin or first,
+        share_downloads=share_downloads,
     )
     session.add(user)
     try:
@@ -277,6 +292,7 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
             ui_json=json.dumps(sanitize_ui_css(ui) if isinstance(ui, dict) else {}),
         )
     )
+    playlist_owners.adopt_unowned(session, _uid(user))
     logger.info(
         "Moved %s watch history rows to the first administrator", rowcount(moved)
     )
@@ -289,7 +305,8 @@ def authenticate(
 
     An unknown name still pays for a full hash check (against ``dummy_hash``) so
     response time does not reveal which names exist. Disabled accounts fail
-    exactly like a wrong password.
+    exactly like a wrong password. An account with two-step sign-in is not signed
+    in by this alone: its ``last_login_at`` waits for the second step (``mark_login``).
     """
     user = get_by_username(session, username)
     stored = user.password_hash if user is not None else dummy_hash
@@ -298,11 +315,20 @@ def authenticate(
         return None
     if passwords.needs_rehash(user.password_hash):
         user.password_hash = passwords.hash_password(password)
-    user.last_login_at = utcnow()
+    if user.totp_enabled_at is None:
+        user.last_login_at = utcnow()
     session.add(user)
     session.commit()
     session.refresh(user)
     return user
+
+
+def mark_login(session: Session, user: User) -> None:
+    """Record a completed sign-in (the second step of a two-step one)."""
+    user.last_login_at = utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
 
 
 def set_password(
@@ -319,6 +345,19 @@ def set_password(
     session.add(user)
     _delete_sessions(session, _uid(user), keep_token_hash=keep_token_hash)
     session.commit()
+
+
+def set_share_downloads(session: Session, user_id: int, share: bool) -> User:
+    """Change whether other accounts may see this account's downloads."""
+    user = session.get(User, user_id)
+    if user is None:
+        raise UserNotFound("User not found")
+    user.share_downloads = share
+    user.updated_at = utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user
 
 
 def _enabled_admin_count(session: Session) -> int:
@@ -345,6 +384,7 @@ def update_user(
     disabled: bool | None = None,
     password: str | None = None,
     granted: list[str] | set[str] | frozenset[str] | None = None,
+    share_downloads: bool | None = None,
     keep_token_hash: str | None = None,
 ) -> User:
     """Admin edit of another (or the same) account.
@@ -372,6 +412,8 @@ def update_user(
         )
     if granted is not None:
         user.permissions = _checked_permissions(granted)
+    if share_downloads is not None:
+        user.share_downloads = share_downloads
     revoke = disabled is True
     if password is not None:
         _check_password(password, user.username)
@@ -386,20 +428,49 @@ def update_user(
     return user
 
 
-def delete_user(session: Session, user_id: int) -> None:
-    """Remove an account, its sessions, history and UI preferences."""
+def delete_user(
+    session: Session, user_id: int, *, successor_id: int | None = None
+) -> None:
+    """Remove an account, its sessions, history and UI preferences.
+
+    Its private playlists go with it; its public ones are handed to
+    ``successor_id`` (the administrator deleting it) or, without one, to the
+    first other administrator, so shared lists survive.
+    """
     user = session.get(User, user_id)
     if user is None:
         raise UserNotFound("User not found")
     was_active_admin = _is_active_admin(user)
+    if successor_id is None or successor_id == user_id:
+        heir = session.scalar(
+            select(col(User.id))
+            .where(
+                col(User.is_admin) == True,  # noqa: E712 - SQL column comparison, not a Python truth test
+                col(User.disabled) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+                col(User.id) != user_id,
+            )
+            .order_by(col(User.id))
+            .limit(1)
+        )
+        successor_id = heir
+    covers = playlist_owners.hand_over(session, user_id, successor_id)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
     session.execute(
+        delete(UserRecoveryCode).where(col(UserRecoveryCode.user_id) == user_id)
+    )
+    session.execute(
         delete(UserVideoState).where(col(UserVideoState.user_id) == user_id)
     )
+    session.execute(delete(UserWatchTime).where(col(UserWatchTime.user_id) == user_id))
     session.execute(delete(UserSettings).where(col(UserSettings.user_id) == user_id))
     session.execute(
         delete(VideoAiChatMessage).where(col(VideoAiChatMessage.user_id) == user_id)
+    )
+    session.execute(
+        update(TrashEntry)
+        .where(col(TrashEntry.trashed_by_user_id) == user_id)
+        .values(trashed_by_user_id=None)
     )
     session.delete(user)
     if was_active_admin:
@@ -411,6 +482,7 @@ def delete_user(session: Session, user_id: int) -> None:
             session.rollback()
             raise LastAdmin("This is the last administrator and cannot be deleted")
     session.commit()
+    playlist_owners.remove_covers(covers)
 
 
 # --- Sessions ----------------------------------------------------------------
@@ -441,10 +513,45 @@ def start_session(
             expires_at=now + SESSION_TTL,
             user_agent=(user_agent or "")[:USER_AGENT_MAX] or None,
             ip=(ip or "")[:IP_MAX] or None,
+            # Signing in just proved the password (and the second step, if any).
+            reauth_at=now,
         )
     )
     session.commit()
     return token
+
+
+#: How long after a sign-in or ``/api/auth/reauth`` the sensitive administrator
+#: actions are still allowed without asking for the password again.
+REAUTH_WINDOW = timedelta(minutes=10)
+
+
+def recently_authenticated(
+    session: Session, token: str | None, *, now: datetime | None = None
+) -> bool:
+    """Whether the session behind ``token`` proved the password within ``REAUTH_WINDOW``."""
+    if not token:
+        return False
+    reauth_at = session.scalar(
+        select(col(UserSession.reauth_at)).where(
+            col(UserSession.token_hash) == hash_token(token)
+        )
+    )
+    return (
+        reauth_at is not None and (now or utcnow()) - as_utc(reauth_at) <= REAUTH_WINDOW
+    )
+
+
+def mark_reauthenticated(
+    session: Session, token: str, *, now: datetime | None = None
+) -> None:
+    """Stamp the session behind ``token`` as having just proved the password."""
+    session.execute(
+        update(UserSession)
+        .where(col(UserSession.token_hash) == hash_token(token))
+        .values(reauth_at=now or utcnow())
+    )
+    session.commit()
 
 
 def resolve_session(

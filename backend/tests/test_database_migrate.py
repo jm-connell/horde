@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0009_user_avatars"
+HEAD = "0016_two_factor"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -546,6 +546,194 @@ def test_tags_search_revision_backfills_a_populated_database(tmp_dirs):
         assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
 
 
+def _playlist_rows(engine):
+    with engine.connect() as conn:
+        return conn.execute(
+            text("SELECT id, owner_user_id, visibility FROM playlists ORDER BY id")
+        ).fetchall()
+
+
+@pytest.mark.parametrize("with_admin", [True, False])
+def test_playlist_owner_revision_gives_existing_playlists_to_the_first_admin(
+    tmp_dirs, with_admin
+):
+    """0010 -> 0011: every existing playlist becomes public and the first admin's."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0010_trash")
+    with engine.begin() as conn:
+        if with_admin:
+            for uid, name, admin, disabled in (
+                (1, "gone", 1, 1),  # a disabled admin is not the identity
+                (2, "boss", 1, 0),
+                (3, "guest", 0, 0),
+                (4, "second", 1, 0),
+            ):
+                conn.execute(
+                    text(
+                        "INSERT INTO users (id, username, username_norm, password_hash, "
+                        "is_admin, created_at, updated_at, disabled, permissions) "
+                        "VALUES (:i, :n, :n, 'x', :a, '2024-01-01 00:00:00', "
+                        "'2024-01-01 00:00:00', :d, '[]')"
+                    ),
+                    {"i": uid, "n": name, "a": admin, "d": disabled},
+                )
+        _insert_video(conn, 1, "One", "[]", "x/one.mp4")
+        for pid, name in ((1, "Mix"), (2, "Other")):
+            conn.execute(
+                text(
+                    "INSERT INTO playlists (id, name, source_type, subscribed, "
+                    "position, created_at) VALUES (:i, :n, 'user', 0, :i, "
+                    "'2024-01-01 00:00:00')"
+                ),
+                {"i": pid, "n": name},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO playlist_items (playlist_id, video_id, position) "
+                "VALUES (1, 1, 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO download_jobs (id, url, quality_preset, status, "
+                "progress, paused, normalize_volume, video_codec, destination, "
+                "playlist_id, created_at) VALUES (1, 'u', 'best', 'queued', 0, 0, "
+                "0, 'av1', 'library', 2, '2024-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    owner = 2 if with_admin else None
+    assert _playlist_rows(engine) == [(1, owner, "public"), (2, owner, "public")]
+    with engine.connect() as conn:
+        # The rebuild keeps what points at playlists.
+        assert conn.execute(
+            text("SELECT playlist_id, video_id FROM playlist_items")
+        ).fetchall() == [(1, 1)]
+        assert conn.execute(
+            text("SELECT playlist_id FROM download_jobs")
+        ).fetchall() == [(2,)]
+        assert conn.execute(text("PRAGMA foreign_key_check")).fetchall() == []
+
+
+def test_share_downloads_revision_keeps_existing_accounts_sharing(tmp_dirs):
+    """0011 -> 0012: every existing account keeps sharing its downloads."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0011_playlist_owner")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions) "
+                "VALUES (1, 'boss', 'boss', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT share_downloads FROM users")).fetchall() == [
+            (1,)
+        ]
+
+
+def test_download_job_origin_revision_marks_existing_jobs_manual(tmp_dirs):
+    """0012 -> 0013: jobs queued before the column existed were queued by a person."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0012_share_downloads")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO download_jobs (id, url, quality_preset, status, progress, "
+                "paused, normalize_volume, video_codec, destination, created_at) "
+                "VALUES (1, 'https://example.com/v', 'best', 'completed', 100, 0, 0, "
+                "'av1', 'library', '2024-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT origin FROM download_jobs")).fetchall() == [
+            ("manual",)
+        ]
+
+
+def test_channel_retention_revision_keeps_existing_rows_and_the_search_index(
+    tmp_dirs,
+):
+    """0013 -> 0014: only new tables and ADD COLUMNs; videos and its triggers stay."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0013_download_job_origin")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO videos (id, title, channel, file_path, tags, subtitles, "
+                "source_chapters, status, needs_review, added_at, last_position_sec, "
+                "is_hdr, subtitles_pending, subtitles_fetch_attempts, title_is_custom, "
+                "description_is_custom) VALUES (1, 'Zebrafish', 'Alpha', 'a.mp4', '[]', "
+                "'[]', '[]', 'ready', 0, '2024-01-01 00:00:00', 0, 0, 0, 0, 0, 0)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions) "
+                "VALUES (1, 'a', 'a', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO user_video_state (user_id, video_id, position_sec) "
+                "VALUES (1, 1, 0)"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(
+            text("SELECT finished_at FROM user_video_state")
+        ).fetchall() == [(None,)]
+        assert (
+            conn.execute(text("SELECT count(*) FROM channel_retention")).scalar() == 0
+        )
+        assert conn.execute(text("SELECT count(*) FROM retention_keeps")).scalar() == 0
+        assert conn.execute(
+            text("SELECT rowid FROM videos_fts WHERE videos_fts MATCH 'zebrafish'")
+        ).fetchall() == [(1,)]
+        assert "reason" in {
+            row[1] for row in conn.execute(text("PRAGMA table_info(trash_entries)"))
+        }
+
+
 def test_tag_and_search_triggers_follow_every_writer(session, add_video):
     """Plain UPDATE/DELETE statements keep video_tags and videos_fts in step."""
     video = add_video(title="Original title", tags=["alpha"])
@@ -788,11 +976,43 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            ALTER TABLE user_sessions DROP COLUMN reauth_at;
+            DROP TABLE user_recovery_codes;
+            ALTER TABLE users DROP COLUMN totp_last_step;
+            ALTER TABLE users DROP COLUMN totp_enabled_at;
+            ALTER TABLE users DROP COLUMN totp_secret;
+            DROP TABLE user_watch_time;
+            DROP TABLE trash_entries;
+            DROP TABLE channel_retention;
+            DROP TABLE retention_keeps;
+            ALTER TABLE user_video_state DROP COLUMN finished_at;
             DROP TABLE channel_follows;
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;
             DROP TABLE stream_ai_state;
+            ALTER TABLE users DROP COLUMN share_downloads;
             ALTER TABLE users DROP COLUMN avatar_version;
+            ALTER TABLE download_jobs DROP COLUMN origin;
+            -- playlists as it was before the owner and visibility columns
+            DROP TABLE playlists;
+            CREATE TABLE playlists (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                name VARCHAR NOT NULL,
+                description VARCHAR,
+                source_type VARCHAR(7) NOT NULL,
+                source_url VARCHAR,
+                subscribed BOOLEAN NOT NULL,
+                quality_preset VARCHAR,
+                last_synced_at DATETIME,
+                sync_error VARCHAR,
+                position INTEGER NOT NULL,
+                cover_video_id INTEGER,
+                cover_path VARCHAR,
+                created_at DATETIME NOT NULL,
+                CONSTRAINT fk_playlists_cover_video_id_videos
+                    FOREIGN KEY(cover_video_id) REFERENCES videos (id)
+                    ON DELETE SET NULL
+            );
             UPDATE alembic_version SET version_num = '0005_tags_search';
             INSERT INTO playlists (name, source_type, subscribed, position,
                 created_at, cover_video_id)
@@ -843,3 +1063,42 @@ def test_a_violation_the_repair_cannot_fix_does_not_rotate_the_backups(init_db):
 
     assert all(path.exists() for path in real)
     assert _repair_backups(init_db["data"]) == []
+
+
+def test_two_factor_revision_leaves_existing_accounts_without_it(tmp_dirs):
+    """0015 -> 0016: accounts and their sessions survive; two-step sign-in starts off."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0015_user_watch_time")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions, share_downloads) "
+                "VALUES (1, 'boss', 'boss', 'x', 1, '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', 0, '[]', 1)"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO user_sessions (user_id, token_hash, created_at, "
+                "last_seen_at, expires_at) VALUES (1, 'h', '2024-01-01 00:00:00', "
+                "'2024-01-01 00:00:00', '2099-01-01 00:00:00')"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        assert conn.execute(
+            text("SELECT totp_secret, totp_enabled_at, totp_last_step FROM users")
+        ).fetchall() == [(None, None, None)]
+        assert conn.execute(text("SELECT count(*) FROM user_sessions")).scalar() == 1
+        assert (
+            conn.execute(text("SELECT count(*) FROM user_recovery_codes")).scalar() == 0
+        )

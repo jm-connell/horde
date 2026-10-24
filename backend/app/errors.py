@@ -211,7 +211,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
 
     # This response is sent by Starlette's ServerErrorMiddleware, outside the
     # security-headers middleware, so it has to carry the headers itself.
-    headers = security_headers(request.url.path)
+    runtime = getattr(request.app.state, "auth", None)
+    headers = security_headers(
+        request.url.path, https=runtime is not None and runtime.is_https(request)
+    )
     if request_id:
         headers[REQUEST_ID_HEADER] = request_id
     return error_response(

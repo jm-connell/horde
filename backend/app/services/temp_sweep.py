@@ -22,7 +22,7 @@ from ..context import get_engine, get_paths
 from ..models import DownloadJob, JobStatus, Video
 from .downloads.staging import remove_staging_dir
 from .fsutil import is_within, restore_displaced, safe_unlink
-from .paths import COMPAT_SIDECAR_TOKEN, STAGING_DIR_NAME
+from .paths import COMPAT_SIDECAR_TOKEN, STAGING_DIR_NAME, TRASH_DIR_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +111,9 @@ def sweep_temp_artifacts(
                 dirnames.clear()
                 continue
             dirnames[:] = [d for d in dirnames if not (here / d).is_symlink()]
+            if not rel_parts:
+                # The trash keeps files exactly as they were deleted.
+                dirnames[:] = [d for d in dirnames if d != TRASH_DIR_NAME]
             for name in filenames:
                 if not is_temp_artifact(name):
                     continue

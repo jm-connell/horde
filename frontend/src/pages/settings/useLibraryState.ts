@@ -95,6 +95,40 @@ export function useLibraryState() {
     }
   };
 
+  const saveMediaSidecars = async (on: boolean) => {
+    const updated = await saveAppSettings({ media_server_sidecars: on }).catch(
+      (err) => {
+        showError(`Could not save setting: ${describeError(err)}`);
+        return null;
+      }
+    );
+    if (!updated) return;
+    setAppSettings(updated);
+    if (on) {
+      showToast(
+        "Writing media-server files in the background. Progress is under System, Background activity."
+      );
+    }
+  };
+
+  const removeMediaSidecars = async () => {
+    const ok = await confirm({
+      title: "Remove media-server files?",
+      body: "Delete every .nfo file and -thumb.jpg Horde wrote next to your videos. The videos themselves are not touched.",
+      confirmLabel: "Remove files",
+      danger: true,
+    });
+    if (!ok) return;
+    try {
+      await api.removeMediaSidecars();
+      showToast(
+        "Removing media-server files in the background. Progress is under System, Background activity."
+      );
+    } catch (err) {
+      showError(`Could not remove the files: ${describeError(err)}`);
+    }
+  };
+
   const resyncAllMetadata = async () => {
     if (metadataSyncing) return;
     const fields =
@@ -169,6 +203,8 @@ export function useLibraryState() {
     syncIntervalInput,
     setSyncIntervalInput,
     saveCatalogSettings,
+    saveMediaSidecars,
+    removeMediaSidecars,
     metadataSyncFields,
     toggleSyncField,
     resyncAllMetadata,

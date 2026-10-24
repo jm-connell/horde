@@ -36,6 +36,8 @@ export const INPUT_KEY =
 
 export const CATALOG_INDEX_TIP =
   "YouTube channels only. When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";
+export const STORAGE_LIMIT_TIP =
+  "Downloads wait, and start again by themselves, while the library is at this size. A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot. Imports are not held. Downloads also wait when the disk is nearly full (less than HORDE_MIN_FREE_GB free, 2 GB by default).";
 export const CATALOG_MAX_TIP =
   "Maximum YouTube uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
 export const DIRECT_YOUTUBE_SEARCH_TIP =
@@ -398,3 +400,14 @@ export const NAV_INDICATOR_OPTIONS: {
 ];
 
 export const TAB_STORAGE_KEY = "horde.settings.tab";
+
+/** Search words that find the media-server files setting. */
+export const MEDIA_SERVER_TERMS = [
+  "media server",
+  "jellyfin",
+  "kodi",
+  "plex",
+  "nfo",
+  "sidecar",
+  "artwork",
+];

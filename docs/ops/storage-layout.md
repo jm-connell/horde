@@ -53,6 +53,18 @@ downloads/.horde-staging/{job_id}/
 
 Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. If restoring a replaced file ever fails, its previous copy is kept under `.horde-staging/<job>/.displaced/` (mirroring its library path) and logged at ERROR; boot restores it when its place is empty and never deletes it. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed, and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
 
+### Trash { #trash }
+
+```text
+downloads/.horde-trash/{folder}/<path the file had under downloads/>
+data/trash/{folder}/<path the file had under data/>          (thumbnails, seek sprites)
+```
+
+A video the user deletes with its file is moved here (a rename on the same filesystem, so it costs nothing and needs no extra space; if `.horde-trash` were on another filesystem the delete is refused, never copied) and kept for `HORDE_TRASH_DAYS` (default 7) before the hourly purge erases it. `{folder}` is a random token, not a number. Each folder holds a small `.horde-trash-manifest.json` that lets Horde move the files back after a crash. The database keeps one `trash_entries` row per video with what a restore needs. The scanner, the import queue, the temp sweep and orphan cleanup ignore the folder. It counts toward the library size limit.
+
+!!! note "Visible over SMB"
+    `.horde-trash` is a dot-folder, but a network share exports it like any other: someone browsing `DOWNLOADS_DIR` over SMB can see it (and the staging folder) unless the share hides dot-files. Do not move files in or out by hand; use the trash view in Horde, and delete the folder only after emptying the trash there. Folders in it that no database row owns are never deleted by Horde: if their video is still in the library the files are moved back, otherwise they are left (and logged once) for you to look at.
+
 ### Device staging (ephemeral)
 
 ```text
@@ -66,11 +78,24 @@ Temporary output for **Download to this device** jobs. Not indexed into the libr
 | Pattern | Role |
 |---------|------|
 | `*.vtt` | Subtitles (FFmpegSubtitlesConvertor post-process) |
+| `*.nfo`, `*-thumb.jpg`, `tvshow.nfo` | Optional [media-server files](#media-server-files) |
 | `*.part` | In-progress yt-dlp download |
 | `.fNNN.*` | Per-format fragments before merge (e.g. `.f401.mp4`) |
 | `.norm.*` / `*.norm.mp4` | Intermediate loudnorm output |
 | `.compat.*` / `*.compat.mp4` | Intermediate AAC/faststart remux |
 | `*.horde-h264.*` | H.264 compatibility copy and its temps ([below](#h264-sidecars)) |
+
+### Media-server files { #media-server-files }
+
+With **Media-server files** turned on (Settings → Library, off by default), Horde also writes files for Jellyfin, Kodi and Plex beside the media:
+
+| Pattern | Role |
+|---------|------|
+| `<stem>.nfo` | Kodi episode metadata of the video |
+| `<stem>-thumb.jpg` | Copy of the video's thumbnail |
+| `<channel>/tvshow.nfo` | Kodi show metadata of the channel folder |
+
+The scanner only looks at video extensions, so none of them is ever imported. Deleting a video with its file, trashing it and renaming a manual import take the first two along. Turning the setting off keeps them; **Remove sidecar files** deletes them. Contents and set-up: [Media servers](../guides/media-servers.md).
 
 ### H.264 sidecars { #h264-sidecars }
 

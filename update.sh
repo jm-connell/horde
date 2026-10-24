@@ -169,13 +169,13 @@ wait_for_health() {
     attempts=$((attempts - 1))
     if body="$(curl -sf -m 5 "$HEALTH_URL" 2>/dev/null)"; then
       if command -v python3 >/dev/null 2>&1; then
-        if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("status")=="ok" else 1)' <<<"$body"; then
+        if python3 -c 'import json,sys; d=json.load(sys.stdin); raise SystemExit(0 if d.get("status") in ("ok","warning") else 1)' <<<"$body"; then
           print_health_summary "$body"
           return 0
         fi
       else
         case "$body" in
-          *'"status":"ok"'*|*'\"status\": \"ok\"'*)
+          *'"status":"ok"'*|*'\"status\": \"ok\"'*|*'"status":"warning"'*|*'\"status\": \"warning\"'*)
             print_health_summary "$body"
             return 0
             ;;

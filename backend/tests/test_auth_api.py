@@ -483,17 +483,46 @@ def test_a_spoofed_leftmost_forwarded_for_does_not_dodge_the_throttle(app, admin
     assert statuses[-1] == 429
 
 
-def test_proxy_hops_picks_the_entry_counted_from_the_right(app):
+def _forwarded_for(app, *lines: str, hops: int = 1) -> str:
+    """``client_address`` for a request carrying one X-Forwarded-For header line per argument."""
+    from starlette.requests import Request
+
     from app.services.auth.runtime import AuthConfig
 
     runtime = app.state.auth
-    runtime.config = AuthConfig(trust_proxy=True, proxy_hops=2)
+    runtime.config = AuthConfig(trust_proxy=True, proxy_hops=hops)
+    scope = {
+        "type": "http",
+        "headers": [(b"x-forwarded-for", line.encode()) for line in lines],
+        "client": ("127.0.0.1", 1),
+    }
+    return runtime.client_address(Request(scope))
 
-    class Req:
-        headers = {"x-forwarded-for": "1.1.1.1, 2.2.2.2, 3.3.3.3"}
-        client = None
 
-    assert runtime.client_address(Req()) == "2.2.2.2"
+def test_proxy_hops_picks_the_entry_counted_from_the_right(app):
+    assert _forwarded_for(app, "1.1.1.1, 2.2.2.2, 3.3.3.3", hops=2) == "2.2.2.2"
+
+
+def test_a_proxy_that_adds_its_own_header_line_cannot_be_spoofed(app):
+    """HAProxy ``option forwardfor`` adds a line; the client controls the first one."""
+    assert _forwarded_for(app, "6.6.6.6", "203.0.113.50") == "203.0.113.50"
+    assert _forwarded_for(app, "6.6.6.6, 7.7.7.7", "203.0.113.50", hops=2) == "7.7.7.7"
+    # Lines are joined in order: the last entry of the last line is the nearest hop.
+    assert _forwarded_for(app, "6.6.6.6", "7.7.7.7, 203.0.113.50") == "203.0.113.50"
+
+
+@pytest.mark.parametrize(
+    ("entry", "address"),
+    [
+        ("203.0.113.9:51234", "203.0.113.9"),
+        ("[2001:db8::7]:443", "2001:db8::7"),
+        ("[2001:db8::7]", "2001:db8::7"),
+        ("2001:db8::7", "2001:db8::7"),
+        ("203.0.113.9", "203.0.113.9"),
+    ],
+)
+def test_ports_are_stripped_from_forwarded_addresses(app, entry, address):
+    assert _forwarded_for(app, f"6.6.6.6, {entry}") == address
 
 
 def test_non_ascii_token_is_a_401_not_a_500(anon_client, media):
@@ -542,13 +571,40 @@ def test_current_password_guesses_are_throttled(client):
         assert _login(other).status_code == 200
 
 
-def test_an_admin_resetting_their_own_password_stays_signed_in(app, client, admin_user):
+def test_verify_password_confirms_the_signed_in_accounts_password(client):
+    ok = client.post("/api/auth/verify-password", json={"password": "admin-password"})
+    assert ok.status_code == 204
+    bad = client.post("/api/auth/verify-password", json={"password": "nope"})
+    assert (bad.status_code, bad.json()["code"]) == (400, "wrong_password")
+    # Nothing changed: the same password still works to sign in.
+    with TestClient(client.app, headers=CSRF) as other:
+        assert _login(other).status_code == 200
+
+
+def test_verify_password_guesses_share_the_password_throttle(client):
+    for _ in range(FREE_ATTEMPTS):
+        client.post("/api/auth/verify-password", json={"password": "x"})
+    blocked = client.post(
+        "/api/auth/verify-password", json={"password": "admin-password"}
+    )
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+    body = {"current_password": "admin-password", "new_password": "brand-new-pass"}
+    assert client.post("/api/auth/password", json=body).status_code == 429
+
+
+def test_verify_password_needs_a_session(anon_client):
+    resp = anon_client.post("/api/auth/verify-password", json={"password": "x"})
+    assert resp.status_code == 401
+
+
+def test_an_admin_changing_their_own_password_stays_signed_in(app, client, admin_user):
     other = TestClient(app, headers=CSRF)
     _login(other)
-    resp = client.patch(
-        f"/api/users/{admin_user.id}", json={"password": "my-new-password"}
+    resp = client.post(
+        "/api/auth/password",
+        json={"current_password": "admin-password", "new_password": "my-new-password"},
     )
-    assert resp.status_code == 200
+    assert resp.status_code == 204
     assert client.get("/api/videos").status_code == 200  # this browser stays in
     assert other.get("/api/videos").status_code == 401  # the others do not
     other.close()

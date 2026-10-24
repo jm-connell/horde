@@ -19,10 +19,17 @@ Three ways to be a user:
   receivers, which send no cookies; see ``services/auth/media_token.py``);
 * ``HORDE_AUTH_DISABLED=1``: a reverse proxy in front authenticates, Horde runs as
   the first administrator (or the account named in the trusted header).
+
+When the administrator requires two-step sign-in (``require_two_factor``), an
+account that has not set it up is identified like anyone else but marked
+``must_enroll_two_factor``; the middleware then refuses every route except the
+exact ``ENROLLMENT_ROUTES`` (and the public ones) with 403
+``two_factor_enrollment_required``. That is enforced here, once, not per route.
 """
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import re
 import time
@@ -34,9 +41,10 @@ from fastapi.responses import JSONResponse
 from sqlmodel import Session
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from .context import get_ctx
+from .context import get_ctx, get_session
 from .errors import CodedHTTPException, error_response
-from .services.auth import accounts, media_token
+from .services import app_settings
+from .services.auth import accounts, media_token, two_factor
 from .services.auth.accounts import AuthUser
 from .services.auth.permissions import ALL_PERMISSIONS, PERMISSION_TABLE
 from .services.auth.runtime import AuthRuntime
@@ -51,14 +59,28 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("GET", "/api/health"),
         ("GET", "/api/auth/state"),
         ("POST", "/api/auth/login"),
+        ("POST", "/api/auth/login/totp"),
         ("POST", "/api/auth/bootstrap"),
         ("POST", "/api/auth/forgot"),
         ("POST", "/api/auth/reset"),
     }
 )
+#: All that an account which must set up two-step sign-in may do until it has:
+#: read its state, sign out, and enroll.
+ENROLLMENT_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/api/auth/state"),
+        ("POST", "/api/auth/logout"),
+        ("GET", "/api/auth/2fa"),
+        ("POST", "/api/auth/2fa/setup"),
+        ("POST", "/api/auth/2fa/confirm"),
+    }
+)
 #: Only mounted (and only public) when the Playwright suite runs the app: ``main``
 #: passes it to ``install_security(extra_public_routes=...)`` when ``HORDE_E2E`` is set.
-E2E_PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset({("POST", "/api/e2e/reset")})
+E2E_PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {("POST", "/api/e2e/reset"), ("POST", "/api/e2e/age-sessions")}
+)
 
 _PROTECTED_DOCS = frozenset({"/docs", "/redoc", "/openapi.json"})
 
@@ -92,6 +114,46 @@ def auth_required_response() -> JSONResponse:
     return error_response(401, "Sign in to continue", "auth_required")
 
 
+def enrollment_required_response() -> JSONResponse:
+    return error_response(
+        403,
+        "Set up two-step sign-in to continue. An administrator requires it.",
+        "two_factor_enrollment_required",
+    )
+
+
+def two_factor_requirement(runtime: AuthRuntime) -> str:
+    """The ``require_two_factor`` setting.
+
+    If the settings file cannot be read (damaged and not restorable, or an I/O
+    error) the last value this process read stays in force, so a bad file does not
+    switch the requirement off mid-run; the stand-in defaults of a damaged file
+    are never taken for the administrator's choice. A process that never read it
+    starts from "off", which only matters if the file was already damaged at
+    start-up, when the Settings screen says so.
+    """
+    try:
+        data = app_settings.load()
+        if app_settings.is_degraded():
+            return runtime.two_factor_requirement
+    except app_settings.SettingsError:
+        logger.debug("settings unreadable; keeping the last requirement", exc_info=True)
+        return runtime.two_factor_requirement
+    runtime.two_factor_requirement = two_factor.normalize_requirement(
+        data.get("require_two_factor")
+    )
+    return runtime.two_factor_requirement
+
+
+def flag_enrollment(runtime: AuthRuntime, user: AuthUser) -> AuthUser:
+    """``user``, marked as having to set up two-step sign-in if the setting says so."""
+    if user.two_factor_enabled:
+        return user
+    if two_factor.required_for(two_factor_requirement(runtime), is_admin=user.is_admin):
+        return dataclasses.replace(user, must_enroll_two_factor=True)
+    return user
+
+
 class AuthMiddleware:
     """401 for anonymous callers on protected paths; sets ``request.state.user``."""
 
@@ -113,14 +175,29 @@ class AuthMiddleware:
         runtime: AuthRuntime = scope["app"].state.auth
         request = Request(scope)
         user = await anyio.to_thread.run_sync(self.identify, runtime, request)
+        method, path = scope["method"], scope["path"]
         if user is not None:
             scope.setdefault("state", {})["user"] = user
-        elif (scope["method"], scope["path"]) not in self.public and not (
-            scope["method"] == "HEAD" and ("GET", scope["path"]) in self.public
-        ):
+            if user.must_enroll_two_factor and not self._open_to_enrollment(
+                method, path
+            ):
+                await enrollment_required_response()(scope, receive, send)
+                return
+        elif not self._is_public(method, path):
             await auth_required_response()(scope, receive, send)
             return
         await self.app(scope, receive, send)
+
+    def _is_public(self, method: str, path: str) -> bool:
+        return (method, path) in self.public or (
+            method == "HEAD" and ("GET", path) in self.public
+        )
+
+    def _open_to_enrollment(self, method: str, path: str) -> bool:
+        if self._is_public(method, path):
+            return True
+        read = "GET" if method == "HEAD" else method
+        return (read, path) in ENROLLMENT_ROUTES
 
     # --- Identification (runs in a worker thread: it touches SQLite) -------
 
@@ -132,12 +209,13 @@ class AuthMiddleware:
         with get_ctx(request).session() as session:
             if runtime.config.disabled:
                 return AuthMiddleware._proxy_user(runtime, request, session)
+            user: AuthUser | None = None
             token = request.cookies.get(accounts.SESSION_COOKIE)
             if token:
                 user = accounts.resolve_session(session, token, touch=touch)
-                if user is not None:
-                    return user
-            return AuthMiddleware._media_token_user(runtime, request, session)
+            if user is None:
+                user = AuthMiddleware._media_token_user(runtime, request, session)
+        return flag_enrollment(runtime, user) if user is not None else None
 
     @staticmethod
     def _media_token_user(
@@ -267,6 +345,37 @@ def require_admin(user: AuthUser = Depends(current_user)) -> AuthUser:
 
 
 require_admin.admin_only = True  # type: ignore[attr-defined]  # marker read by tests
+
+
+def ensure_recent_auth(request: Request, session: Session) -> None:
+    """403 ``reauth_required`` unless this session proved the password in the last 10 minutes.
+
+    The step-up for the actions that would let a stolen session cookie outlive
+    its theft (a new administrator, another account's password, the two-step
+    requirement ...). A sign-in counts, and so does ``POST /api/auth/reauth``.
+    Nothing to prove when sign-in is disabled (a proxy vouches for the caller
+    and there is no session).
+    """
+    runtime: AuthRuntime = request.app.state.auth
+    if runtime.config.disabled:
+        return
+    if not accounts.recently_authenticated(
+        session, request.cookies.get(accounts.SESSION_COOKIE)
+    ):
+        raise CodedHTTPException(
+            403,
+            "Confirm your password to continue",
+            "reauth_required",
+        )
+
+
+def require_recent_auth(
+    request: Request,
+    _user: AuthUser = Depends(current_user),
+    session: Session = Depends(get_session),
+) -> None:
+    """Dependency form of ``ensure_recent_auth`` for routes that always need it."""
+    ensure_recent_auth(request, session)
 
 
 def ensure_permission(user: AuthUser, permission: str) -> None:

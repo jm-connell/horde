@@ -17,7 +17,7 @@ I strongly recommend using Tailscale (or something similar) if you aren't alread
 The majority of this wiki beyond this point is AI-generated, but accurate. It provides a good overview of features and how-to's regarding Horde. If you have more advanced questions then I recommend you clone the repo, open in your IDE of choice, and ask your favorite model.
 
 !!! warning "Trusted network"
-    Horde asks everyone to sign in ([accounts](ops/authentication.md)), but it is built for a trusted LAN or VPN. Do not expose it to the public internet.
+    Horde asks everyone to sign in ([accounts](ops/authentication.md)), but it is built for a trusted LAN or VPN. To reach it from the internet, follow the [internet exposure checklist](ops/internet-exposure.md).
 
 ##  Feature highlights
 

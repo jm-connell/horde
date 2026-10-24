@@ -55,7 +55,10 @@ test("the admin turns permissions off and the member's screens follow after a re
   await expect(
     member.getByRole("heading", { name: "Playlists", level: 1 })
   ).toBeVisible();
-  await expect(member.getByPlaceholder("Playlist name")).toHaveCount(0);
+  // Private playlists need no grant; sharing one with everyone does.
+  await expect(member.getByPlaceholder("Playlist name")).toBeVisible();
+  await expect(member.getByRole("radio", { name: "App-wide" })).toBeDisabled();
+  await expect(member.getByRole("radio", { name: "Private" })).toBeChecked();
   await expect(member.getByRole("link", { name: /^Download\b/ })).toHaveCount(
     0
   );
@@ -82,7 +85,7 @@ test("the admin turns permissions off and the member's screens follow after a re
   // The server enforces the same rules, with a sentence a person can act on.
   const refused = await ctx.request.post("/api/playlists", {
     headers: CSRF_HEADERS,
-    data: { name: "Sneaky" },
+    data: { name: "Sneaky", visibility: "public" },
   });
   expect(refused.status()).toBe(403);
   const body = await refused.json();

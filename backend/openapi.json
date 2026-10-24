@@ -1681,6 +1681,22 @@
             "title": "Direct Youtube Search",
             "type": "boolean"
           },
+          "max_library_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Library Bytes"
+          },
+          "media_server_sidecars": {
+            "default": false,
+            "title": "Media Server Sidecars",
+            "type": "boolean"
+          },
           "metadata_sync_interval_hours": {
             "default": 24,
             "title": "Metadata Sync Interval Hours",
@@ -1689,6 +1705,16 @@
           "progress_expiry_days": {
             "title": "Progress Expiry Days",
             "type": "integer"
+          },
+          "require_two_factor": {
+            "default": "off",
+            "enum": [
+              "off",
+              "admins",
+              "everyone"
+            ],
+            "title": "Require Two Factor",
+            "type": "string"
           },
           "settings_degraded": {
             "default": false,
@@ -1764,6 +1790,30 @@
             ],
             "title": "Direct Youtube Search"
           },
+          "max_library_bytes": {
+            "anyOf": [
+              {
+                "maximum": 1125899906842624.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Library Bytes"
+          },
+          "media_server_sidecars": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Server Sidecars"
+          },
           "metadata_sync_interval_hours": {
             "anyOf": [
               {
@@ -1789,6 +1839,22 @@
               }
             ],
             "title": "Progress Expiry Days"
+          },
+          "require_two_factor": {
+            "anyOf": [
+              {
+                "enum": [
+                  "off",
+                  "admins",
+                  "everyone"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Two Factor"
           },
           "setup_completed": {
             "anyOf": [
@@ -1901,6 +1967,21 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
+          },
+          "two_factor_enabled": {
+            "default": false,
+            "title": "Two Factor Enabled",
+            "type": "boolean"
+          },
+          "two_factor_enrollment_required": {
+            "default": false,
+            "title": "Two Factor Enrollment Required",
+            "type": "boolean"
           },
           "username": {
             "title": "Username",
@@ -2077,6 +2158,11 @@
             "maxLength": 2000,
             "title": "Password",
             "type": "string"
+          },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
           },
           "username": {
             "maxLength": 200,
@@ -3026,6 +3112,12 @@
       },
       "ChannelRenameResult": {
         "properties": {
+          "retention_disabled": {
+            "default": false,
+            "description": "The rename merged two channels and a retention rule that was on was turned off, so it does not apply to the other channel's videos.",
+            "title": "Retention Disabled",
+            "type": "boolean"
+          },
           "updated": {
             "title": "Updated",
             "type": "integer"
@@ -3035,6 +3127,303 @@
           "updated"
         ],
         "title": "ChannelRenameResult",
+        "type": "object"
+      },
+      "ChannelRetentionPreview": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kept_by_exception": {
+            "title": "Kept By Exception",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "would_remove": {
+            "items": {
+              "$ref": "#/components/schemas/RetentionPreviewItem"
+            },
+            "title": "Would Remove",
+            "type": "array"
+          }
+        },
+        "required": [
+          "would_remove",
+          "count",
+          "total_bytes",
+          "kept_by_exception"
+        ],
+        "title": "ChannelRetentionPreview",
+        "type": "object"
+      },
+      "ChannelRetentionPreviewRequest": {
+        "properties": {
+          "channel": {
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionPreviewRequest",
+        "type": "object"
+      },
+      "ChannelRetentionRead": {
+        "properties": {
+          "always_kept": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RetentionException"
+            },
+            "title": "Always Kept",
+            "type": "array"
+          },
+          "channel": {
+            "title": "Channel",
+            "type": "string"
+          },
+          "configured": {
+            "default": false,
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "last_removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Removed At"
+          },
+          "last_removed_count": {
+            "default": 0,
+            "title": "Last Removed Count",
+            "type": "integer"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          },
+          "trash_enabled": {
+            "default": true,
+            "title": "Trash Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionRead",
+        "type": "object"
+      },
+      "ChannelRetentionSummary": {
+        "description": "The enabled rule, as shown on a channel's header.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "title": "ChannelRetentionSummary",
+        "type": "object"
+      },
+      "ChannelRetentionUpdate": {
+        "properties": {
+          "channel": {
+            "minLength": 1,
+            "title": "Channel",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "keep_latest": {
+            "anyOf": [
+              {
+                "maximum": 100000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keep Latest"
+          },
+          "max_age_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Age Days"
+          },
+          "remove_watched_after_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remove Watched After Days"
+          }
+        },
+        "required": [
+          "channel"
+        ],
+        "title": "ChannelRetentionUpdate",
         "type": "object"
       },
       "ChannelSearchHit": {
@@ -3123,6 +3512,16 @@
               }
             ],
             "title": "Last Download At"
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelRetentionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "subscriber_count": {
             "anyOf": [
@@ -3664,6 +4063,17 @@
             ],
             "title": "Height Px"
           },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
+          },
           "id": {
             "title": "Id",
             "type": "integer"
@@ -3979,6 +4389,28 @@
           "active_count": {
             "title": "Active Count",
             "type": "integer"
+          },
+          "held_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Code"
+          },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
           },
           "paused": {
             "title": "Paused",
@@ -4566,6 +4998,28 @@
             "title": "Active",
             "type": "integer"
           },
+          "held_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Code"
+          },
+          "held_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Held Reason"
+          },
           "paused": {
             "title": "Paused",
             "type": "boolean"
@@ -4809,6 +5263,249 @@
         "title": "HealthYoutube",
         "type": "object"
       },
+      "HistoryStats": {
+        "properties": {
+          "best_day": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HistoryStatsDay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsChannel"
+            },
+            "title": "Channels",
+            "type": "array"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsDay"
+            },
+            "title": "Days",
+            "type": "array"
+          },
+          "end_day": {
+            "title": "End Day",
+            "type": "string"
+          },
+          "hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hours"
+          },
+          "library": {
+            "$ref": "#/components/schemas/HistoryStatsLibrary"
+          },
+          "range": {
+            "enum": [
+              "7d",
+              "30d",
+              "365d",
+              "all"
+            ],
+            "title": "Range",
+            "type": "string"
+          },
+          "start_day": {
+            "title": "Start Day",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryStatsTag"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/HistoryStatsTotals"
+          },
+          "tz": {
+            "title": "Tz",
+            "type": "string"
+          }
+        },
+        "required": [
+          "range",
+          "tz",
+          "start_day",
+          "end_day",
+          "totals",
+          "days",
+          "best_day",
+          "channels",
+          "tags",
+          "hours",
+          "library"
+        ],
+        "title": "HistoryStats",
+        "type": "object"
+      },
+      "HistoryStatsChannel": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "seconds",
+          "videos"
+        ],
+        "title": "HistoryStatsChannel",
+        "type": "object"
+      },
+      "HistoryStatsDay": {
+        "properties": {
+          "day": {
+            "description": "Local date, YYYY-MM-DD.",
+            "title": "Day",
+            "type": "string"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "integer"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "day",
+          "seconds",
+          "finished"
+        ],
+        "title": "HistoryStatsDay",
+        "type": "object"
+      },
+      "HistoryStatsLibrary": {
+        "properties": {
+          "added_in_range": {
+            "title": "Added In Range",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "title": "Total Size Bytes",
+            "type": "integer"
+          },
+          "total_videos": {
+            "title": "Total Videos",
+            "type": "integer"
+          },
+          "watched_share": {
+            "title": "Watched Share",
+            "type": "number"
+          },
+          "watched_videos": {
+            "title": "Watched Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_videos",
+          "total_size_bytes",
+          "added_in_range",
+          "watched_videos",
+          "watched_share"
+        ],
+        "title": "HistoryStatsLibrary",
+        "type": "object"
+      },
+      "HistoryStatsTag": {
+        "properties": {
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "tag": {
+            "title": "Tag",
+            "type": "string"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tag",
+          "seconds",
+          "videos"
+        ],
+        "title": "HistoryStatsTag",
+        "type": "object"
+      },
+      "HistoryStatsTotals": {
+        "properties": {
+          "active_days": {
+            "title": "Active Days",
+            "type": "integer"
+          },
+          "current_streak_days": {
+            "title": "Current Streak Days",
+            "type": "integer"
+          },
+          "previous_watch_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Watch Seconds"
+          },
+          "videos_finished": {
+            "title": "Videos Finished",
+            "type": "integer"
+          },
+          "videos_started": {
+            "title": "Videos Started",
+            "type": "integer"
+          },
+          "watch_seconds": {
+            "title": "Watch Seconds",
+            "type": "number"
+          }
+        },
+        "required": [
+          "watch_seconds",
+          "previous_watch_seconds",
+          "videos_started",
+          "videos_finished",
+          "active_days",
+          "current_streak_days"
+        ],
+        "title": "HistoryStatsTotals",
+        "type": "object"
+      },
       "JobStatus": {
         "enum": [
           "queued",
@@ -4953,6 +5650,45 @@
           "password"
         ],
         "title": "LoginRequest",
+        "type": "object"
+      },
+      "MeUpdate": {
+        "description": "Changes to your own account preferences.",
+        "properties": {
+          "current_password": {
+            "anyOf": [
+              {
+                "maxLength": 2000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Password"
+          },
+          "share_downloads": {
+            "title": "Share Downloads",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "share_downloads"
+        ],
+        "title": "MeUpdate",
+        "type": "object"
+      },
+      "MediaSidecarsRemoval": {
+        "properties": {
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued"
+        ],
+        "title": "MediaSidecarsRemoval",
         "type": "object"
       },
       "MediaTokenRead": {
@@ -5119,6 +5855,514 @@
           }
         },
         "title": "NextPartRead",
+        "type": "object"
+      },
+      "NotificationEventOptionRead": {
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "description",
+          "default"
+        ],
+        "title": "NotificationEventOptionRead",
+        "type": "object"
+      },
+      "NotificationEventRead": {
+        "description": "An event a target can subscribe to (the registry in ``services/notifications/events.py``).",
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationEventOptionRead"
+            },
+            "title": "Options",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "label",
+          "description",
+          "default"
+        ],
+        "title": "NotificationEventRead",
+        "type": "object"
+      },
+      "NotificationTargetCreate": {
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "kind": {
+            "enum": [
+              "ntfy",
+              "webhook",
+              "discord"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "url": {
+            "maxLength": 4096,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "url"
+        ],
+        "title": "NotificationTargetCreate",
+        "type": "object"
+      },
+      "NotificationTargetRead": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "events": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "ntfy",
+              "webhook",
+              "discord"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": {
+              "type": "boolean"
+            },
+            "title": "Options",
+            "type": "object"
+          },
+          "token": {
+            "default": "",
+            "title": "Token",
+            "type": "string"
+          },
+          "token_set": {
+            "default": false,
+            "title": "Token Set",
+            "type": "boolean"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "url",
+          "enabled",
+          "events",
+          "options"
+        ],
+        "title": "NotificationTargetRead",
+        "type": "object"
+      },
+      "NotificationTargetTest": {
+        "description": "A target to try before saving it. ``id`` borrows the stored token of a saved one.",
+        "properties": {
+          "enabled": {
+            "default": true,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "kind": {
+            "enum": [
+              "ntfy",
+              "webhook",
+              "discord"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 200,
+            "title": "Name",
+            "type": "string"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "url": {
+            "maxLength": 4096,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "url"
+        ],
+        "title": "NotificationTargetTest",
+        "type": "object"
+      },
+      "NotificationTargetUpdate": {
+        "description": "Only the fields sent change. ``token``: omit or send the mask to keep it, \"\" to remove it.",
+        "properties": {
+          "enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled"
+          },
+          "events": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Events"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ntfy",
+                  "webhook",
+                  "discord"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "boolean"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          },
+          "topic": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Topic"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "NotificationTargetUpdate",
+        "type": "object"
+      },
+      "NotificationTestResult": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "status_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Code"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "NotificationTestResult",
+        "type": "object"
+      },
+      "NotificationsRead": {
+        "properties": {
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationEventRead"
+            },
+            "title": "Events",
+            "type": "array"
+          },
+          "max_targets": {
+            "title": "Max Targets",
+            "type": "integer"
+          },
+          "public_url_set": {
+            "title": "Public Url Set",
+            "type": "boolean"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationTargetRead"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "targets",
+          "events",
+          "max_targets",
+          "public_url_set"
+        ],
+        "title": "NotificationsRead",
         "type": "object"
       },
       "OkResponse": {
@@ -5509,6 +6753,20 @@
         "title": "PasswordResetRequest",
         "type": "object"
       },
+      "PasswordVerify": {
+        "properties": {
+          "password": {
+            "maxLength": 2000,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "PasswordVerify",
+        "type": "object"
+      },
       "PausedResponse": {
         "properties": {
           "paused": {
@@ -5577,6 +6835,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5587,6 +6855,11 @@
       },
       "PlaylistDetail": {
         "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "cover_video_id": {
             "anyOf": [
               {
@@ -5647,6 +6920,16 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "position": {
             "default": 0,
@@ -5711,6 +6994,10 @@
             },
             "title": "Videos",
             "type": "array"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PlaylistVisibility",
+            "default": "public"
           }
         },
         "required": [
@@ -5761,6 +7048,16 @@
           "url": {
             "title": "Url",
             "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5812,6 +7109,24 @@
           "playlist_ids"
         ],
         "title": "PlaylistListReorder",
+        "type": "object"
+      },
+      "PlaylistOwner": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username"
+        ],
+        "title": "PlaylistOwner",
         "type": "object"
       },
       "PlaylistPreview": {
@@ -5931,6 +7246,11 @@
       },
       "PlaylistRead": {
         "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
           "cover_video_id": {
             "anyOf": [
               {
@@ -5992,6 +7312,16 @@
             "title": "Name",
             "type": "string"
           },
+          "owner": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistOwner"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "position": {
             "default": 0,
             "title": "Position",
@@ -6048,6 +7378,10 @@
               }
             ],
             "title": "Thumbnail Video Id"
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/PlaylistVisibility",
+            "default": "public"
           }
         },
         "required": [
@@ -6177,10 +7511,28 @@
               }
             ],
             "title": "Subscribed"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlaylistVisibility"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "PlaylistUpdate",
         "type": "object"
+      },
+      "PlaylistVisibility": {
+        "enum": [
+          "public",
+          "private"
+        ],
+        "title": "PlaylistVisibility",
+        "type": "string"
       },
       "PotProviderStatus": {
         "properties": {
@@ -6266,6 +7618,27 @@
           "problems"
         ],
         "title": "ReadyResponse",
+        "type": "object"
+      },
+      "ReauthRequest": {
+        "description": "Prove the password again (and a code, if the account has two-step sign-in).",
+        "properties": {
+          "code": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 2000,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "title": "ReauthRequest",
         "type": "object"
       },
       "RecommendationSectionRead": {
@@ -6390,6 +7763,52 @@
         "title": "ResetResponse",
         "type": "object"
       },
+      "RetentionException": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "label"
+        ],
+        "title": "RetentionException",
+        "type": "object"
+      },
+      "RetentionPreviewItem": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "size_bytes",
+          "reason"
+        ],
+        "title": "RetentionPreviewItem",
+        "type": "object"
+      },
       "ScanResult": {
         "properties": {
           "added": {
@@ -6439,6 +7858,144 @@
           "source"
         ],
         "title": "SearchMatchReason",
+        "type": "object"
+      },
+      "SecurityCheckItem": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "docs": {
+            "title": "Docs",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "warn"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "title",
+          "detail",
+          "docs"
+        ],
+        "title": "SecurityCheckItem",
+        "type": "object"
+      },
+      "SecurityChecklistRead": {
+        "properties": {
+          "exposed": {
+            "title": "Exposed",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SecurityCheckItem"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "exposed",
+          "items"
+        ],
+        "title": "SecurityChecklistRead",
+        "type": "object"
+      },
+      "SessionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SessionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SessionList",
+        "type": "object"
+      },
+      "SessionRead": {
+        "description": "One signed-in browser of an account.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "title": "Current",
+            "type": "boolean"
+          },
+          "device": {
+            "title": "Device",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ip"
+          },
+          "last_seen_at": {
+            "format": "date-time",
+            "title": "Last Seen At",
+            "type": "string"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "last_seen_at",
+          "expires_at",
+          "device",
+          "current"
+        ],
+        "title": "SessionRead",
         "type": "object"
       },
       "SpriteGenerateResult": {
@@ -6509,6 +8066,11 @@
           },
           "total_bytes": {
             "title": "Total Bytes",
+            "type": "integer"
+          },
+          "trash_bytes": {
+            "default": 0,
+            "title": "Trash Bytes",
             "type": "integer"
           },
           "video_bytes": {
@@ -7124,6 +8686,334 @@
         "title": "ThumbnailCandidates",
         "type": "object"
       },
+      "TotpLoginRequest": {
+        "description": "The second step of a two-step sign-in.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "pending_token": {
+            "maxLength": 400,
+            "title": "Pending Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "pending_token",
+          "code"
+        ],
+        "title": "TotpLoginRequest",
+        "type": "object"
+      },
+      "TrashEmptied": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "integer"
+          },
+          "freed_bytes": {
+            "title": "Freed Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "deleted",
+          "freed_bytes"
+        ],
+        "title": "TrashEmptied",
+        "type": "object"
+      },
+      "TrashItemRead": {
+        "description": "A deleted video in the trash.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "trashed_at": {
+            "format": "date-time",
+            "title": "Trashed At",
+            "type": "string"
+          },
+          "trashed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trashed By"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "integer"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          }
+        },
+        "required": [
+          "id",
+          "video_id",
+          "title",
+          "size_bytes",
+          "trashed_at",
+          "expires_at"
+        ],
+        "title": "TrashItemRead",
+        "type": "object"
+      },
+      "TrashPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TrashItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "TrashPage",
+        "type": "object"
+      },
+      "TrashRestored": {
+        "properties": {
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_id": {
+            "title": "Video Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "video_id",
+          "title"
+        ],
+        "title": "TrashRestored",
+        "type": "object"
+      },
+      "TrashSummary": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "retention_days": {
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "count",
+          "total_bytes",
+          "retention_days"
+        ],
+        "title": "TrashSummary",
+        "type": "object"
+      },
+      "TwoFactorConfirm": {
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "TwoFactorConfirm",
+        "type": "object"
+      },
+      "TwoFactorProof": {
+        "description": "Turning two-step sign-in off, or replacing its recovery codes.",
+        "properties": {
+          "code": {
+            "maxLength": 64,
+            "title": "Code",
+            "type": "string"
+          },
+          "current_password": {
+            "maxLength": 2000,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "code"
+        ],
+        "title": "TwoFactorProof",
+        "type": "object"
+      },
+      "TwoFactorRecoveryCodes": {
+        "description": "Shown once: the server keeps only a keyed hash of each.",
+        "properties": {
+          "recovery_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recovery Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recovery_codes"
+        ],
+        "title": "TwoFactorRecoveryCodes",
+        "type": "object"
+      },
+      "TwoFactorSetup": {
+        "description": "What the person adds to their authenticator app (shown once, never stored in the client).",
+        "properties": {
+          "otpauth_uri": {
+            "title": "Otpauth Uri",
+            "type": "string"
+          },
+          "qr_svg": {
+            "title": "Qr Svg",
+            "type": "string"
+          },
+          "secret": {
+            "title": "Secret",
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "otpauth_uri",
+          "qr_svg"
+        ],
+        "title": "TwoFactorSetup",
+        "type": "object"
+      },
+      "TwoFactorSetupRequest": {
+        "properties": {
+          "current_password": {
+            "maxLength": 2000,
+            "title": "Current Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password"
+        ],
+        "title": "TwoFactorSetupRequest",
+        "type": "object"
+      },
+      "TwoFactorStatus": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "enabled_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Enabled At"
+          },
+          "recovery_codes_left": {
+            "default": 0,
+            "title": "Recovery Codes Left",
+            "type": "integer"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "TwoFactorStatus",
+        "type": "object"
+      },
       "UnfollowResult": {
         "properties": {
           "channel_url": {
@@ -7391,6 +9281,11 @@
             ],
             "title": "Permissions"
           },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
+          },
           "username": {
             "maxLength": 200,
             "title": "Username",
@@ -7452,6 +9347,16 @@
             },
             "title": "Permissions",
             "type": "array"
+          },
+          "share_downloads": {
+            "default": true,
+            "title": "Share Downloads",
+            "type": "boolean"
+          },
+          "two_factor_enabled": {
+            "default": false,
+            "title": "Two Factor Enabled",
+            "type": "boolean"
           },
           "username": {
             "title": "Username",
@@ -7518,6 +9423,17 @@
               }
             ],
             "title": "Permissions"
+          },
+          "share_downloads": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Downloads"
           }
         },
         "title": "UserUpdate",
@@ -8361,6 +10277,12 @@
       },
       "WatchProgressUpdate": {
         "properties": {
+          "finished": {
+            "default": false,
+            "description": "The video played to its end. The position is then saved as 0 and the finish is recorded (channel retention's watched rule reads it). A plain save of 0 is not a finish.",
+            "title": "Finished",
+            "type": "boolean"
+          },
           "position_sec": {
             "maximum": 10000000.0,
             "minimum": 0.0,
@@ -9205,6 +11127,249 @@
         ]
       }
     },
+    "/api/auth/2fa": {
+      "get": {
+        "description": "Whether your account signs in with a second step, and how many recovery codes are left.",
+        "operationId": "two_factor_status_api_auth_2fa_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Status",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/confirm": {
+      "post": {
+        "description": "Finish setup with a current code. Turns it on and returns the recovery codes once.\n\nYour other browsers were signed in without a second step, so they are signed out.",
+        "operationId": "two_factor_confirm_api_auth_2fa_confirm_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorConfirm"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorRecoveryCodes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Confirm",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/disable": {
+      "post": {
+        "description": "Turn two-step sign-in off. Needs your password and a current (or recovery) code.",
+        "operationId": "two_factor_disable_api_auth_2fa_disable_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorProof"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Disable",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/recovery-codes": {
+      "post": {
+        "description": "Replace the recovery codes; the old ones stop working. Shown once.",
+        "operationId": "two_factor_new_recovery_codes_api_auth_2fa_recovery_codes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorProof"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorRecoveryCodes"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor New Recovery Codes",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/2fa/setup": {
+      "post": {
+        "description": "Start setting up two-step sign-in: a new secret, as text and as a QR code.\n\nNeeds your current password (someone holding only a stolen session must not be\nable to attach their own authenticator). Nothing changes at sign-in until\n``/2fa/confirm`` accepts a code; calling this again starts over with a new secret.",
+        "operationId": "two_factor_setup_api_auth_2fa_setup_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwoFactorSetupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwoFactorSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Two Factor Setup",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/avatar": {
       "delete": {
         "description": "Remove your own profile picture.",
@@ -9499,6 +11664,58 @@
         ]
       }
     },
+    "/api/auth/login/totp": {
+      "post": {
+        "description": "Second step: trade the ticket from ``totp_required`` and a code for the session.\n\nThe code is an authenticator code or an unused recovery code. Wrong codes\ncount in the same throttle as wrong passwords; five wrong tries burn the ticket.",
+        "operationId": "login_totp_api_auth_login_totp_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TotpLoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Login Totp",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/logout": {
       "post": {
         "operationId": "logout_api_auth_logout_post",
@@ -9528,6 +11745,58 @@
           }
         },
         "summary": "Logout",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/me": {
+      "patch": {
+        "description": "Change your own preferences (whether other accounts see your downloads).\n\nStopping sharing needs your password: devices keep a check value derived from\nit, so the downloads can still be unlocked offline.",
+        "operationId": "update_me_api_auth_me_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthUserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Me",
         "tags": [
           "auth"
         ]
@@ -9573,6 +11842,51 @@
           }
         },
         "summary": "Change Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/reauth": {
+      "post": {
+        "description": "Prove your password (and a code, with two-step sign-in) to this browser again.\n\nThe sensitive administrator actions (a new account, another account's\npassword, ...) need this within the last 10 minutes of a sign-in; they answer\n403 ``reauth_required`` otherwise. Same throttle as the other password checks.",
+        "operationId": "reauthenticate_api_auth_reauth_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReauthRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reauthenticate",
         "tags": [
           "auth"
         ]
@@ -9630,6 +11944,129 @@
         ]
       }
     },
+    "/api/auth/sessions": {
+      "get": {
+        "description": "Your signed-in devices, most recently active first.",
+        "operationId": "list_my_sessions_api_auth_sessions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List My Sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/sessions/revoke-others": {
+      "post": {
+        "description": "Sign out everywhere except this browser.",
+        "operationId": "revoke_other_sessions_api_auth_sessions_revoke_others_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke Other Sessions",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/sessions/{session_id}": {
+      "delete": {
+        "description": "Sign one of your devices out. Ending this browser's own session signs you out.",
+        "operationId": "revoke_my_session_api_auth_sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke My Session",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/auth/state": {
       "get": {
         "description": "What the SPA needs to decide between setup, sign-in and the app.",
@@ -9667,6 +12104,51 @@
           }
         },
         "summary": "Auth State",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/verify-password": {
+      "post": {
+        "description": "Check your own password (204, or 400 ``wrong_password``) and change nothing.\n\nA device asks before it keeps a check value of the password for offline\nunlock, so a typo cannot lock the owner out of their own downloads.",
+        "operationId": "verify_password_api_auth_verify_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Verify Password",
         "tags": [
           "auth"
         ]
@@ -10541,6 +13023,162 @@
         ]
       }
     },
+    "/api/channels/retention": {
+      "get": {
+        "description": "The channel's retention rule (all limits unset when it has none).",
+        "operationId": "get_channel_retention_api_channels_retention_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Channel Retention",
+        "tags": [
+          "channels"
+        ]
+      },
+      "put": {
+        "description": "Save the rule and run the rules now; what they remove goes to the trash.",
+        "operationId": "put_channel_retention_api_channels_retention_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelRetentionUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Put Channel Retention",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/channels/retention/preview": {
+      "post": {
+        "description": "What a rule would move to the trash right now. Nothing changes.",
+        "operationId": "preview_channel_retention_api_channels_retention_preview_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelRetentionPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelRetentionPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Channel Retention",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/api/channels/search": {
       "get": {
         "operationId": "search_channels_api_channels_search_get",
@@ -11044,7 +13682,7 @@
     },
     "/api/downloads/dismiss-finished": {
       "post": {
-        "description": "Remove completed, failed, and cancelled jobs from the list.",
+        "description": "Remove completed, failed, and cancelled jobs from the list.\n\nAnother account's private device downloads stay.",
         "operationId": "dismiss_finished_jobs_api_downloads_dismiss_finished_post",
         "responses": {
           "204": {
@@ -11079,7 +13717,7 @@
     },
     "/api/downloads/events": {
       "get": {
-        "description": "One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).",
+        "description": "One EventSource for the whole download queue (avoids HTTP/1.1 socket cap).\n\nAnother account's private device downloads are left out.",
         "operationId": "queue_events_api_downloads_events_get",
         "responses": {
           "200": {
@@ -11603,7 +14241,7 @@
     },
     "/api/downloads/{job_id}/file": {
       "get": {
-        "description": "Serve an ephemeral device-destination download as a browser attachment.",
+        "description": "Serve an ephemeral device-destination download as a browser attachment.\n\nAnother account's download is a 404 unless that account shares its downloads.",
         "operationId": "download_device_file_api_downloads__job_id__file_get",
         "parameters": [
           {
@@ -12183,6 +14821,85 @@
         "summary": "Health"
       }
     },
+    "/api/history/stats": {
+      "get": {
+        "description": "Watch time, streaks, top channels and tags of the signed-in user only.",
+        "operationId": "history_stats_api_history_stats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "range",
+            "required": false,
+            "schema": {
+              "default": "30d",
+              "enum": [
+                "7d",
+                "30d",
+                "365d",
+                "all"
+              ],
+              "title": "Range",
+              "type": "string"
+            }
+          },
+          {
+            "description": "IANA time zone the days and hours are counted in (the browser's). Omitted: the server's.",
+            "in": "query",
+            "name": "tz",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "IANA time zone the days and hours are counted in (the browser's). Omitted: the server's.",
+              "title": "Tz"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryStats"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "History Stats",
+        "tags": [
+          "history"
+        ]
+      }
+    },
     "/api/live": {
       "get": {
         "description": "Followed channels that are live right now (from the background checks).",
@@ -12588,6 +15305,315 @@
         "summary": "Metrics"
       }
     },
+    "/api/notifications": {
+      "get": {
+        "operationId": "get_notifications_api_notifications_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/targets": {
+      "post": {
+        "operationId": "create_target_api_notifications_targets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTargetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTargetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create Target",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/targets/{target_id}": {
+      "delete": {
+        "operationId": "delete_target_api_notifications_targets__target_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Target",
+        "tags": [
+          "notifications"
+        ]
+      },
+      "patch": {
+        "operationId": "update_target_api_notifications_targets__target_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTargetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTargetRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Target",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/targets/{target_id}/test": {
+      "post": {
+        "description": "Send a sample notification to a saved target.",
+        "operationId": "test_saved_target_api_notifications_targets__target_id__test_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target_id",
+            "required": true,
+            "schema": {
+              "title": "Target Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test Saved Target",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/notifications/test": {
+      "post": {
+        "description": "Send a sample notification to a target that is not saved yet.\n\nWith ``id`` set and no new token, the saved target's token is used, so editing a\ntarget can be tried without typing the secret again.",
+        "operationId": "test_unsaved_target_api_notifications_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationTargetTest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotificationTestResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Test Unsaved Target",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
     "/api/ping": {
       "get": {
         "description": "Liveness probe for the PWA: no DB or disk work, never cached.",
@@ -12629,7 +15655,7 @@
     },
     "/api/playlists": {
       "get": {
-        "description": "Playlists in their saved order; ``limit`` caps a pathological library.",
+        "description": "Public playlists and your own private ones, in their saved order.\n\n``limit`` caps a pathological library.",
         "operationId": "list_playlists_api_playlists_get",
         "parameters": [
           {
@@ -12698,6 +15724,7 @@
         ]
       },
       "post": {
+        "description": "Anyone may make a private playlist; an App-wide one needs manage_playlists.",
         "operationId": "create_playlist_api_playlists_post",
         "requestBody": {
           "content": {
@@ -12903,6 +15930,7 @@
     },
     "/api/playlists/reorder": {
       "patch": {
+        "description": "Put the playlists you can edit in the given order.\n\nPositions are shared, so they are redistributed among the slots those\nplaylists already hold; everyone else's playlists keep their places. Ids you\ncan't edit (or can't see) are ignored.",
         "operationId": "reorder_playlists_api_playlists_reorder_patch",
         "requestBody": {
           "content": {
@@ -14682,6 +17710,48 @@
         ]
       }
     },
+    "/api/settings/media-sidecars/remove": {
+      "post": {
+        "description": "Delete the Jellyfin / Kodi / Plex files Horde wrote, in the background.",
+        "operationId": "remove_media_sidecars_api_settings_media_sidecars_remove_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaSidecarsRemoval"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Media Sidecars",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
     "/api/setup/reset": {
       "post": {
         "operationId": "reset_app_api_setup_reset_post",
@@ -14811,6 +17881,48 @@
           }
         },
         "summary": "System Activity",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/system/security-checklist": {
+      "get": {
+        "description": "Pass/warn lines about how this server is exposed (for the Settings → System card).\n\nComputed from what the process knows: this request, the proxy and host settings,\nthe two-step requirement, which administrators have it, the environment switches\nand the cached update check.",
+        "operationId": "get_security_checklist_api_system_security_checklist_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecurityChecklistRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Security Checklist",
         "tags": [
           "system"
         ]
@@ -15210,6 +18322,316 @@
         ]
       }
     },
+    "/api/trash": {
+      "get": {
+        "description": "Deleted videos, newest first.",
+        "operationId": "list_trash_api_trash_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/empty": {
+      "post": {
+        "description": "Erase everything in the trash for good.",
+        "operationId": "empty_trash_api_trash_empty_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashEmptied"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Empty Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/summary": {
+      "get": {
+        "operationId": "trash_summary_api_trash_summary_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashSummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Trash Summary",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}": {
+      "delete": {
+        "description": "Erase one video from the trash for good.",
+        "operationId": "delete_forever_api_trash__entry_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Forever",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}/restore": {
+      "post": {
+        "description": "Put the video back in the library, with its tags, playlists and watch history.",
+        "operationId": "restore_from_trash_api_trash__entry_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrashRestored"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Restore From Trash",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
+    "/api/trash/{entry_id}/thumbnail": {
+      "get": {
+        "operationId": "trash_thumbnail_api_trash__entry_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "entry_id",
+            "required": true,
+            "schema": {
+              "title": "Entry Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/jpeg": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "JPEG image"
+          },
+          "404": {
+            "description": "No thumbnail"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Trash Thumbnail",
+        "tags": [
+          "trash"
+        ]
+      }
+    },
     "/api/updates": {
       "get": {
         "description": "Compare baked-in git SHA to GitHub main (24h cache). Soft-fails offline.\n\nForcing a fresh check (``refresh``) is for administrators.",
@@ -15506,6 +18928,204 @@
         ]
       }
     },
+    "/api/users/{user_id}/sessions": {
+      "delete": {
+        "description": "Sign a user out of every device. For another account this needs a recent password check.",
+        "operationId": "revoke_user_sessions_api_users__user_id__sessions_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke User Sessions",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "A member's signed-in devices (for an administrator ending one).",
+        "operationId": "list_user_sessions_api_users__user_id__sessions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List User Sessions",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/sessions/{session_id}": {
+      "delete": {
+        "description": "Sign one of a user's devices out. For another account this needs a recent password check.",
+        "operationId": "revoke_user_session_api_users__user_id__sessions__session_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "title": "Session Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke User Session",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/{user_id}/two-factor": {
+      "delete": {
+        "description": "Take two-step sign-in off an account (a lost phone and recovery codes).\n\nSigns the account out everywhere; their next sign-in is password only (or the\nenrollment screen, if two-step sign-in is required). Not for your own account:\nturn that off in Account settings, which asks for your password and a code.",
+        "operationId": "reset_user_two_factor_api_users__user_id__two_factor_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Reset User Two Factor",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/api/videos": {
       "get": {
         "description": "One page of the library. Follow ``next_cursor`` until it is null.\n\n``continue_watching`` is a fixed short shelf and is never paged.",
@@ -15707,7 +19327,15 @@
         },
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Deleted. Videos moved to the trash are listed by entry id.",
+            "headers": {
+              "X-Horde-Trash-Entries": {
+                "description": "Comma-separated trash entry ids.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "422": {
             "content": {
@@ -15718,6 +19346,17 @@
               }
             },
             "description": "Validation error"
+          },
+          "500": {
+            "description": "Some videos could not be moved to the trash (code `trash_failed`). The ones that were moved are still listed by entry id.",
+            "headers": {
+              "X-Horde-Trash-Entries": {
+                "description": "Comma-separated trash entry ids of the videos that moved.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "default": {
             "content": {
@@ -15875,6 +19514,7 @@
     },
     "/api/videos/{video_id}": {
       "delete": {
+        "description": "Delete a video. With ``delete_file`` it waits in the trash (when enabled).",
         "operationId": "delete_video_api_videos__video_id__delete",
         "parameters": [
           {
@@ -15899,7 +19539,15 @@
         ],
         "responses": {
           "204": {
-            "description": "Successful Response"
+            "description": "Deleted. A video moved to the trash carries its entry id.",
+            "headers": {
+              "X-Horde-Trash-Entry": {
+                "description": "Trash entry id, when the video went to the trash.",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            }
           },
           "422": {
             "content": {

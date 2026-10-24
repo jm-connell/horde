@@ -11,7 +11,7 @@ from sqlmodel import Session
 
 from app.auth import STREAM_KEEPALIVE
 from app.models import DownloadJob, JobStatus
-from app.services.auth import accounts
+from app.services.auth import accounts, sessions
 from tests.conftest import _client, _session_cookie
 
 # Short enough that the suite stays fast, long enough to read some keepalives.
@@ -82,7 +82,9 @@ def test_keepalive_constant_is_an_sse_comment():
 
 
 @pytest.mark.parametrize("which", ["queue", "job"])
-@pytest.mark.parametrize("change", ["disable", "password", "delete", "logout"])
+@pytest.mark.parametrize(
+    "change", ["disable", "password", "delete", "logout", "revoked"]
+)
 def test_download_streams_end_when_access_is_revoked(
     which, change, fast_recheck, member_client, member_user, init_db, running_job
 ):
@@ -100,6 +102,17 @@ def test_download_streams_end_when_access_is_revoked(
         def revoke() -> None:
             with Session(init_db["engine"]) as s:
                 accounts.delete_user(s, member_user.id)
+
+    elif change == "revoked":
+        # "Sign out" on the Signed-in devices list, from another browser or an admin.
+        def revoke() -> None:
+            with Session(init_db["engine"]) as s:
+                (mine,) = sessions.list_sessions(
+                    s,
+                    member_user.id,
+                    current_token=member_client.cookies[accounts.SESSION_COOKIE],
+                )
+                sessions.revoke(s, member_user.id, mine.id)
 
     else:
 

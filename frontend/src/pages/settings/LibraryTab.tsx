@@ -9,6 +9,7 @@ import {
   DIRECT_YOUTUBE_SEARCH_TIP,
   YOUTUBE_VIDEO_SEARCH_TIP,
   INPUT_COMPACT,
+  MEDIA_SERVER_TERMS,
   METADATA_INTERVAL_TIP,
   PANEL_BTN,
 } from "./constants";
@@ -18,7 +19,9 @@ import {
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
 import FollowedChannelsSection from "./FollowedChannelsSection";
+import MediaServerFiles from "./MediaServerFiles";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
+import TrashSection from "./TrashSection";
 
 const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
 
@@ -58,6 +61,8 @@ export default function LibraryTab() {
     syncIntervalInput,
     setSyncIntervalInput,
     saveCatalogSettings,
+    saveMediaSidecars,
+    removeMediaSidecars,
     metadataSyncFields,
     toggleSyncField,
     resyncAllMetadata,
@@ -338,7 +343,8 @@ export default function LibraryTab() {
             "youtube only",
             "youtube",
             "direct youtube search",
-            "youtube video search"
+            "youtube video search",
+            ...MEDIA_SERVER_TERMS
           )
         }
       >
@@ -535,7 +541,16 @@ export default function LibraryTab() {
             )}
           </div>
         )}
+        <div hidden={!!q && !match(...MEDIA_SERVER_TERMS)}>
+          <MediaServerFiles
+            enabled={appSettings?.media_server_sidecars ?? false}
+            onToggle={(on) => void saveMediaSidecars(on)}
+            onRemove={() => void removeMediaSidecars()}
+          />
+        </div>
       </Section>
+
+      <TrashSection />
     </>
   );
 }

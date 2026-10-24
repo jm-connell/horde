@@ -71,6 +71,12 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     keywords: "channel list order sidebar ascending descending",
   },
+  {
+    tab: "library",
+    access: "delete_videos",
+    keywords:
+      "trash bin recycle deleted videos restore undo empty trash delete forever",
+  },
   // Playback
   {
     tab: "playback",
@@ -158,7 +164,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "system",
-    keywords: "storage disk space library",
+    keywords: "storage disk space library max disk usage limit quota full",
   },
   {
     tab: "system",
@@ -169,6 +175,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "system",
     keywords:
       "health yt-dlp ollama disk import review downloads gpu system status horde version po token cookies openrouter catalog queue ai queue",
+  },
+  {
+    tab: "system",
+    keywords:
+      "notifications notify alerts push ntfy discord webhook message failed download disk full update live channel send test",
   },
   {
     tab: "system",

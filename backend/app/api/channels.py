@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session
 
 from ..auth import current_user, require_permission
-from ..context import get_session
+from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
+from ..models import ChannelRetention
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
@@ -23,16 +24,26 @@ from ..schemas import (
     ChannelFeedEntry,
     ChannelFeedPage,
     ChannelRename,
+    ChannelRetentionPreview,
+    ChannelRetentionPreviewRequest,
+    ChannelRetentionRead,
+    ChannelRetentionSummary,
+    ChannelRetentionUpdate,
     ChannelSearchHit,
     ChannelSearchResponse,
     ChannelStat,
+    RetentionException,
+    RetentionPreviewItem,
 )
 from ..services import app_settings as app_settings_svc
 from ..services import (
     channel_autodownload,
     channel_catalog,
+    channel_retention,
     feed_meta_cache,
     library,
+    media_sidecars,
+    trash,
     ytdlp_extract,
 )
 from ..services.auth.accounts import AuthUser
@@ -64,6 +75,7 @@ def list_channels(
     order: str = Query("desc"),
     session: Session = Depends(get_session),
 ):
+    rules = {r.channel: r for r in channel_retention.enabled_rows(session)}
     return [
         ChannelStat(
             channel=row.channel,
@@ -71,9 +83,20 @@ def list_channels(
             last_download_at=row.last_download_at,
             subscriber_count=row.subscriber_count,
             channel_url=row.channel_url,
+            retention=_retention_summary(rules.get(row.channel)),
         )
         for row in library.channel_stats(session, sort=sort, order=order)
     ]
+
+
+def _retention_summary(row: ChannelRetention | None) -> ChannelRetentionSummary | None:
+    if row is None or not channel_retention.rule_of(row).active:
+        return None
+    return ChannelRetentionSummary(
+        keep_latest=row.keep_latest,
+        max_age_days=row.max_age_days,
+        remove_watched_after_days=row.remove_watched_after_days,
+    )
 
 
 @router.patch(
@@ -81,13 +104,23 @@ def list_channels(
     response_model=ChannelRenameResult,
     dependencies=[Depends(require_permission("edit_metadata"))],
 )
-def rename_channel(payload: ChannelRename, session: Session = Depends(get_session)):
+def rename_channel(
+    payload: ChannelRename,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+):
     old = payload.old_name.strip()
     new = payload.new_name.strip()
     if not old or not new:
         raise HTTPException(status_code=400, detail="Both names are required")
-    updated = library.rename_channel(session, old, new)
-    return {"updated": updated}
+    renamed = library.rename_channel(session, old, new)
+    if media_sidecars.enabled():
+        # The files name the channel; rewrite them in the background.
+        ctx.sidecars.write_videos(renamed.video_ids)
+    return {
+        "updated": renamed.updated,
+        "retention_disabled": renamed.retention_disabled,
+    }
 
 
 @router.get(
@@ -240,6 +273,97 @@ def put_channel_autodownload(
             channel_url=channel_url,
             channel_name=channel_name,
         )
+    )
+
+
+PREVIEW_LIST_LIMIT = 200
+
+
+def _retention_read(channel: str, row: ChannelRetention | None) -> ChannelRetentionRead:
+    always_kept = [
+        RetentionException(code=code, label=label)
+        for code, label in channel_retention.ALWAYS_KEPT
+    ]
+    if row is None:
+        return ChannelRetentionRead(
+            channel=channel, trash_enabled=trash.enabled(), always_kept=always_kept
+        )
+    return ChannelRetentionRead(
+        channel=channel,
+        enabled=row.enabled,
+        configured=True,
+        keep_latest=row.keep_latest,
+        max_age_days=row.max_age_days,
+        remove_watched_after_days=row.remove_watched_after_days,
+        last_run_at=row.last_run_at,
+        last_removed_count=row.last_removed_count,
+        last_removed_at=row.last_removed_at,
+        trash_enabled=trash.enabled(),
+        always_kept=always_kept,
+    )
+
+
+@router.get("/channels/retention", response_model=ChannelRetentionRead)
+def get_channel_retention(
+    channel: str = Query(..., min_length=1),
+    session: Session = Depends(get_session),
+):
+    """The channel's retention rule (all limits unset when it has none)."""
+    return _retention_read(channel, channel_retention.get(session, channel))
+
+
+@router.put(
+    "/channels/retention",
+    response_model=ChannelRetentionRead,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
+def put_channel_retention(
+    payload: ChannelRetentionUpdate, session: Session = Depends(get_session)
+):
+    """Save the rule and run the rules now; what they remove goes to the trash."""
+    rule = channel_retention.Rule(
+        payload.keep_latest, payload.max_age_days, payload.remove_watched_after_days
+    )
+    if payload.enabled and not rule.active:
+        raise CodedHTTPException(
+            400, "Set at least one limit before turning the rule on.", "no_limit"
+        )
+    if not channel_retention.channel_exists(session, payload.channel):
+        raise CodedHTTPException(404, "Channel not found", "channel_not_found")
+    row = channel_retention.save(
+        session, payload.channel, enabled=payload.enabled, rule=rule
+    )
+    if row.enabled:
+        channel_retention.wake_worker()
+    return _retention_read(payload.channel, row)
+
+
+@router.post(
+    "/channels/retention/preview",
+    response_model=ChannelRetentionPreview,
+    dependencies=[Depends(require_permission("delete_videos"))],
+)
+def preview_channel_retention(
+    payload: ChannelRetentionPreviewRequest, session: Session = Depends(get_session)
+):
+    """What a rule would move to the trash right now. Nothing changes."""
+    result = channel_retention.plan(
+        session,
+        payload.channel,
+        channel_retention.Rule(
+            payload.keep_latest, payload.max_age_days, payload.remove_watched_after_days
+        ),
+    )
+    return ChannelRetentionPreview(
+        would_remove=[
+            RetentionPreviewItem(
+                id=r.video_id, title=r.title, size_bytes=r.size_bytes, reason=r.reason
+            )
+            for r in result.removals[:PREVIEW_LIST_LIMIT]
+        ],
+        count=len(result.removals),
+        total_bytes=sum(r.size_bytes for r in result.removals),
+        kept_by_exception=result.kept_by_exception,
     )
 
 

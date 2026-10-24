@@ -24,8 +24,10 @@ from ..models import (
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
+    TrashEntry,
     UserSettings,
     UserVideoState,
+    UserWatchTime,
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
@@ -53,7 +55,9 @@ _ERASE_MEDIA_MODELS = (
     Playlist,
     AiCategory,
     UserVideoState,
+    UserWatchTime,
     Video,
+    TrashEntry,
 )
 
 
@@ -173,6 +177,8 @@ def _wipe_library_caches() -> None:
 
     _wipe_dir_contents(get_paths().thumbnails)
     _wipe_dir_contents(get_paths().sprites)
+    # Trashed videos' thumbnails; their media went with the downloads folder.
+    _wipe_dir_contents(get_paths().data / "trash")
     cache = get_paths().data / "feed_meta_cache.json"
     cache.unlink(missing_ok=True)
     get_paths().ensure()

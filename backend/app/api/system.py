@@ -9,14 +9,23 @@ import shutil
 import subprocess
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
+from sqlmodel import Session
 
 from ..auth import current_user, require_admin
-from ..context import get_paths
+from ..context import get_ctx, get_paths, get_session
 from ..response_schemas import SystemStatsRead, UpdateControlRead
-from ..schemas import SystemActivityRead
-from ..services import update_control
+from ..schemas import SecurityChecklistRead, SystemActivityRead
+from ..services import (
+    app_settings,
+    security_checklist,
+    update_control,
+    updates,
+    url_safety,
+)
+from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
+from ..services.auth.runtime import AuthRuntime
 from . import member_view
 
 logger = logging.getLogger(__name__)
@@ -250,3 +259,51 @@ def start_update(user: AuthUser = Depends(current_user)):
 def cancel_update():
     """Withdraw an update request the host has not started yet."""
     return update_control.cancel_request(get_paths().data)
+
+
+# --- Security checklist ------------------------------------------------------------
+
+
+@router.get(
+    "/security-checklist",
+    response_model=SecurityChecklistRead,
+    dependencies=[Depends(require_admin)],
+)
+def get_security_checklist(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    """Pass/warn lines about how this server is exposed (for the Settings → System card).
+
+    Computed from what the process knows: this request, the proxy and host settings,
+    the two-step requirement, which administrators have it, the environment switches
+    and the cached update check.
+    """
+    from ..security import HostPolicy
+
+    runtime: AuthRuntime = request.app.state.auth
+    policy: HostPolicy = request.app.state.host_policy
+    lan_only = HostPolicy()
+    forwarded = ("x-forwarded-for", "x-forwarded-proto", "x-forwarded-host")
+    update_info = updates.check_for_updates(offline=get_ctx(request).e2e)
+    update_available: bool | None = None
+    if update_info.get("update_available"):
+        update_available = True
+    elif update_info.get("latest_sha"):
+        update_available = False
+    facts = security_checklist.Facts(
+        https=runtime.is_https(request),
+        trust_proxy=runtime.config.trust_proxy,
+        proxied=any(name in request.headers for name in forwarded),
+        public_hosts=tuple(h for h in policy.extra if not lan_only.allows(h)),
+        any_host=policy.allow_any,
+        require_two_factor=two_factor.normalize_requirement(
+            app_settings.load().get("require_two_factor")
+        ),
+        admins_without_two_factor=tuple(two_factor.admins_without(session)),
+        members_without_two_factor=tuple(two_factor.members_without(session)),
+        auth_disabled=runtime.config.disabled,
+        allow_private_urls=url_safety.allow_private_urls(),
+        update_available=update_available,
+    )
+    return security_checklist.evaluate(facts)

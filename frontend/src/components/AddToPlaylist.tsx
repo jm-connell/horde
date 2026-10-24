@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
+import { LockIcon } from "./playlistChrome";
 
 const defaultButtonClass =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
@@ -22,7 +23,7 @@ export default function AddToPlaylist({
 }) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
-  const { playlists } = usePlaylists(open);
+  const { editable: playlists } = usePlaylists(open);
   const [status, setStatus] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const { flip, anchorRef } = useFlipMenu(open, 320);
@@ -106,9 +107,15 @@ export default function AddToPlaylist({
               <button
                 key={p.id}
                 onClick={() => add(p.id, p.name)}
-                className="block w-full truncate px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
+                className="flex w-full items-center gap-1.5 px-3 py-1.5 text-left text-sm text-gray-200 hover:bg-ink-700"
               >
-                {p.name}
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                {p.visibility === "private" && (
+                  <span title="Private" className="shrink-0 text-muted">
+                    <LockIcon />
+                    <span className="sr-only">Private</span>
+                  </span>
+                )}
               </button>
             ))
           )}

@@ -44,7 +44,7 @@ Horde is **one OS process**: a uvicorn server running one FastAPI app. There is 
 | `metadata-sync` | Refresh stale source metadata and subscribed playlists |
 | `horde-ai-worker`, `horde-ai-timer` | Single-flight AI job runner and its scheduler |
 | `horde-channel-catalog` | One channel index at a time |
-| `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `codec-probe-backfill`, `nightly-backup` | The remaining loops |
+| `autodownload-poller`, `subtitle-retry`, `stream-ai`, `job-metadata`, `channel-retention`, `codec-probe-backfill`, `nightly-backup` | The remaining loops |
 
 Details per worker: [Background workers](../architecture/workers.md).
 
@@ -149,7 +149,7 @@ URL --> url_clean --> enqueue DownloadJob (cheap; no yt-dlp call)
 - **Staging**: a job writes under `DOWNLOADS_DIR/.horde-staging/<job id>/` (device downloads under `_device/<job id>`, never reaching the library) and is promoted only after postprocessing, so the scanner never sees half-built files.
 - **Crash safety**: the runner body is total (any failure ends the job in `error` with a typed `error_kind`), database writes retry "database is locked", the reaper requeues stuck `downloading` jobs, and boot recovery requeues the rest.
 - **Progress** is an in-memory store (`progress_store`) read by one multiplexed SSE stream (`GET /api/downloads/events`) plus per-job streams for Watch.
-- **Code layout** (see ADR 0006): the `services/downloads/` package (`queue`, `runner`, `ffmpeg_queue`, `postprocess`, `finalize`, `jobs`, `playlist_import`, `playlist_attach`, `progress`, `staging`, `artifacts`, `lifecycle`, `errors`, `dbwrite`, `spec`, `infodict`, `subtitles`). `services/downloader.py` stays as a re-exporting facade for one release. New code imports the package modules ([ADR 0006](../adr/0006-downloader-package-split.md)). yt-dlp helpers live in `ytdlp_extract.py`, `ytdlp_formats.py` and `ytdlp_common.py`.
+- **Code layout** (see ADR 0006): the `services/downloads/` package (`queue`, `runner`, `ffmpeg_queue`, `postprocess`, `finalize`, `jobs`, `playlist_import`, `playlist_attach`, `progress`, `staging`, `artifacts`, `lifecycle`, `errors`, `dbwrite`, `spec`, `infodict`, `subtitles`). The former `services/downloader.py` facade was removed in 1.1.0; import the package modules ([ADR 0006](../adr/0006-downloader-package-split.md)). yt-dlp helpers live in `ytdlp_extract.py`, `ytdlp_formats.py` and `ytdlp_common.py`.
 
 Detail: [Download pipeline](../architecture/downloads-pipeline.md).
 
@@ -198,7 +198,7 @@ React 18 + TypeScript + Vite + Tailwind under `frontend/src/`, built into `backe
 | `components/` | Reusable UI; `components/auth/` for account UI and `RequirePermission` |
 | `context/` | Cross-cutting state providers: Toast, Confirm, Auth, Download, Search, Playback |
 | `hooks/` | Data and behaviour hooks (settings hydrate, casting, card preview, ...) |
-| `api.ts`, `apiErrors.ts` | The only HTTP client. Adds `X-Horde-Request` to every request (`withCsrf`), parses the error envelope into `ApiError`, follows cursors |
+| `api.ts` (entry point), `api/` (`client.ts` core, one module per area), `apiErrors.ts` | The only HTTP client. Adds `X-Horde-Request` to every request (`withCsrf`), parses the error envelope into `ApiError`, follows cursors |
 | `types.ts`, `api/schema.d.ts` | Wire types. `api/schema.d.ts` is generated from the committed `backend/openapi.json` (`npm run gen:api`); `types.ts` aliases its schemas under app-facing names (narrowing a few fields) and adds the few client-only types. `types/` holds only `cast.d.ts` |
 | `utils/`, `utils.ts` | Pure helpers (`safeHref` for any link rendered from stored data) |
 | `offline/` | Service worker, IndexedDB, offline downloads |
@@ -211,7 +211,7 @@ Provider nesting in `App.tsx`, outer to inner: `ErrorBoundary`, `ToastProvider`,
 **Where to put new code**
 
 - A new screen: a `pages/` component, a lazy entry in `pages/lazy.ts`, a route in `App.tsx` (with `RequirePermission` if a grant is needed).
-- A new API call: a typed function in `api.ts` (never a bare `fetch`; a mutating `fetch` or `XMLHttpRequest` outside it must use `withCsrf()` / `CSRF_HEADER`), request and response types from the regenerated `api/schema.d.ts`, aliased in `types.ts` when the app names them.
+- A new API call: a typed function in the matching `api/` module (never a bare `fetch`; a mutating `fetch` or `XMLHttpRequest` outside it must use `withCsrf()` / `CSRF_HEADER`), request and response types from the regenerated `api/schema.d.ts`, aliased in `types.ts` when the app names them.
 - Shared state used by several pages: a context; state used by one page: a hook beside it.
 - A link built from stored data: `safeHref()`.
 - Offline behaviour: `offline/`, and bump the cache version names in `offline/db.ts` if a stored shape changes.

@@ -30,9 +30,12 @@ import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
 import { DownloadProvider } from "./context/DownloadContext";
+import OfflineUnlockSetup from "./components/OfflineUnlockSetup";
 import { ConfirmProvider } from "./context/ConfirmContext";
+import { ReauthProvider } from "./context/ReauthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
+import { HomeResetProvider } from "./context/HomeResetContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
@@ -235,18 +238,23 @@ export default function App() {
       <ToastProvider>
         <ConfirmProvider>
           <AuthProvider>
-            <AuthGate>
-              <UserScope>
-                <DownloadProvider>
-                  <SearchProvider>
-                    <PlaybackProvider>
-                      <AppShell />
-                      <OverlayScrollThumb viewport />
-                    </PlaybackProvider>
-                  </SearchProvider>
-                </DownloadProvider>
-              </UserScope>
-            </AuthGate>
+            <ReauthProvider>
+              <AuthGate>
+                <UserScope>
+                  <DownloadProvider>
+                    <SearchProvider>
+                      <HomeResetProvider>
+                        <PlaybackProvider>
+                          <AppShell />
+                          <OfflineUnlockSetup />
+                          <OverlayScrollThumb viewport />
+                        </PlaybackProvider>
+                      </HomeResetProvider>
+                    </SearchProvider>
+                  </DownloadProvider>
+                </UserScope>
+              </AuthGate>
+            </ReauthProvider>
           </AuthProvider>
         </ConfirmProvider>
       </ToastProvider>

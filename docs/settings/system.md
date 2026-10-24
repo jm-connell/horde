@@ -8,6 +8,14 @@ The first section of the tab shows this install's version and, when GitHub repor
 
 See also [Updating](../getting-started/updating.md).
 
+## Notifications
+
+Where Horde sends messages (ntfy, Discord or a webhook) and which events each target wants: a failed download, a paused queue, an update that failed. Administrators add, test, edit, switch off and delete targets here; each target has a **Send test** button and shows the result inline. The list of events comes from the server. Setup for each service, the webhook format and the delivery rules are in [Notifications](../ops/notifications.md).
+
+## Security
+
+Administrators only. **Require two-step sign-in** (*Optional*, *Administrators*, *Everyone*) decides who must use a code from an authenticator app; see [Two-step sign-in](../ops/authentication.md#two-step-sign-in). Below it is a short **checklist**, computed by the server from what it can see: whether this page came over HTTPS, a proxy forwarding without `HORDE_TRUST_PROXY`, `HORDE_ALLOWED_HOSTS=*`, the two-step requirement, administrators without it, `HORDE_AUTH_DISABLED`, `HORDE_ALLOW_PRIVATE_URLS` and a waiting update. A tick is fine, a `!` is worth a look, and *How* opens the [internet exposure checklist](../ops/internet-exposure.md). It is guidance for exposing Horde, not a scanner. API: `GET /api/system/security-checklist`.
+
 ## Documentation
 
 When the wiki is bundled (`health.wiki_available`):
@@ -34,7 +42,7 @@ Health snapshot from `GET /api/health`:
 | Cookies | Configured / Not configured (`youtube.cookies_configured`) |
 | Library | Video count and library size (same figures as Storage above) |
 | Pending import | Review queue depth |
-| Active downloads | Count + **paused** when the download queue is paused |
+| Active downloads | Count + **paused** when the download queue is paused, and the reason while downloads wait for disk space |
 | AI queue | Depth (+ running / failed counts, blocked reason) from `workers` |
 | Catalog queue | Depth (+ indexing) from `workers` |
 | Last extract failure | Kind + video/channel + message from `youtube.last_extract_failure` (when set) |
@@ -44,7 +52,9 @@ See [Troubleshooting](../ops/troubleshooting.md) for `error_kind` values and res
 
 ## Storage
 
-Library footprint: total bytes used by videos + video count.
+Library footprint: total bytes used by videos, their H.264 copies, thumbnails and the [trash](../guides/library.md#trash), plus the video count. When the trash holds anything, its size is shown next to the count (linking to [Library → Trash](library.md#trash)), and in the limit bar below as a lighter segment.
+
+**Max disk usage** caps that footprint (administrators only). Enter a size in GB; leave the field empty (or enter 0) for no limit, the default. While a limit is set, a bar shows the library size against it, turning amber from 90 %. Downloads wait while the library is at the limit and start again by themselves when there is room; see [Disk limits](../guides/downloads.md#disk-limits) for what is counted and how far a running download can overshoot. The limit is stored as `max_library_bytes` in the server settings.
 
 ## Backup
 

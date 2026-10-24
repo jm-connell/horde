@@ -16,7 +16,10 @@ from fastapi import Request
 
 from ...context import get_paths
 from . import media_token, passwords
+from .alerts import FailureWatch
+from .hash_gate import HashGate
 from .limiter import LoginLimiter
+from .login_tickets import PendingLogins
 from .reset_codes import ResetCodes
 
 logger = logging.getLogger(__name__)
@@ -33,6 +36,15 @@ class ConfigError(RuntimeError):
 
 def _truthy(raw: str | None) -> bool:
     return (raw or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _without_port(entry: str) -> str:
+    """``ip:port`` and ``[v6]:port`` as the bare address (a bare IPv6 address is left alone)."""
+    if entry.startswith("["):
+        return entry[1:].partition("]")[0]
+    if entry.count(":") == 1:
+        return entry.partition(":")[0]
+    return entry
 
 
 @dataclass(frozen=True)
@@ -85,8 +97,17 @@ class AuthConfig:
 class AuthRuntime:
     config: AuthConfig = field(default_factory=AuthConfig)
     limiter: LoginLimiter = field(default_factory=LoginLimiter)
+    #: Caps password hashes running at once (503 ``busy`` beyond it).
+    hashing: HashGate = field(default_factory=HashGate)
     #: "Forgot password?" codes written to the server log.
     reset_codes: ResetCodes = field(default_factory=ResetCodes)
+    #: Counts failed sign-ins per name to tell the administrator about an attack.
+    failure_watch: FailureWatch = field(default_factory=FailureWatch)
+    #: The last ``require_two_factor`` value read, kept if the settings file goes
+    #: unreadable (see ``auth.two_factor_requirement``).
+    two_factor_requirement: str = "off"
+    #: Tickets between the password step and the code step of a two-step sign-in.
+    pending_logins: PendingLogins = field(default_factory=PendingLogins)
     #: How often an open event stream re-checks that its caller may still be
     #: there (also its keepalive cadence). Tests shorten it.
     stream_recheck_seconds: float = 15.0
@@ -118,10 +139,13 @@ class AuthRuntime:
         """The caller's IP; X-Forwarded-For only when a trusted proxy is declared."""
         if self.config.trust_proxy:
             # Our own proxy appends the address it saw; everything left of that is
-            # client-controlled and must not decide who gets rate limited.
+            # client-controlled and must not decide who gets rate limited. A proxy
+            # that adds its own header line (HAProxy ``option forwardfor``) leaves
+            # the client's line first, so every line counts, joined in order.
             chain = [
-                part.strip()
-                for part in request.headers.get("x-forwarded-for", "").split(",")
+                _without_port(part.strip())
+                for line in request.headers.getlist("x-forwarded-for")
+                for part in line.split(",")
                 if part.strip()
             ]
             if len(chain) >= self.config.proxy_hops:

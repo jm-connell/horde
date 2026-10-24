@@ -12,6 +12,7 @@ import {
   CoverEditIcon,
   DragHandle,
   ExpandChevron,
+  LockIcon,
   PlaylistThumb,
   beginReorderDrag,
 } from "./playlistChrome";
@@ -26,6 +27,7 @@ import {
 import type { Playlist, Video } from "../types";
 import { formatDuration, formatRelative, moveItem, safeHref } from "../utils";
 import PlaylistAddVideo from "./PlaylistAddVideo";
+import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
 
 export default function PlaylistRow({
   playlist,
@@ -50,7 +52,7 @@ export default function PlaylistRow({
   onPlaylistDrop: (id: number) => void;
   onPlaylistDragEnd: () => void;
 }) {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const navigate = useNavigate();
   const confirm = useConfirm();
   const { showError } = useToast();
@@ -71,6 +73,9 @@ export default function PlaylistRow({
   const videoDragIndex = useRef<number | null>(null);
   const [videoDragOver, setVideoDragOver] = useState<number | null>(null);
 
+  // What this user may do with the playlist is the server's call (can_edit).
+  const canEdit = playlist.can_edit;
+  const isOwner = user != null && playlist.owner?.id === user.id;
   const current = detailQuery.data ?? null;
   const coverSrc = playlistCoverUrl(playlist);
   const coverSrcBusted =
@@ -279,14 +284,18 @@ export default function PlaylistRow({
         role="presentation"
         onClick={onToggle}
       >
-        <DragHandle
-          label="Drag to reorder playlists"
-          onDragStart={(event) => {
-            beginReorderDrag(event, String(playlist.id), headerRef.current);
-            onPlaylistDragStart(playlist.id);
-          }}
-          onDragEnd={onPlaylistDragEnd}
-        />
+        {canEdit ? (
+          <DragHandle
+            label="Drag to reorder playlists"
+            onDragStart={(event) => {
+              beginReorderDrag(event, String(playlist.id), headerRef.current);
+              onPlaylistDragStart(playlist.id);
+            }}
+            onDragEnd={onPlaylistDragEnd}
+          />
+        ) : (
+          <span className="w-2" aria-hidden />
+        )}
         <div className="flex min-w-0 flex-1 items-center gap-3 py-2.5 pr-2">
           <PlaylistThumb
             src={coverSrcBusted}
@@ -327,8 +336,17 @@ export default function PlaylistRow({
               )}
             </h3>
             <p className="text-xs text-muted">
+              {playlist.visibility === "private" && (
+                <span className="mr-1.5 inline-flex items-center gap-1 rounded-full bg-ink-800 px-2 py-0.5 text-[11px] font-medium text-gray-300">
+                  <LockIcon />
+                  Private
+                </span>
+              )}
               {videoCount} video{videoCount === 1 ? "" : "s"}
               {sourceHint}
+              {playlist.visibility === "public" && playlist.owner && !isOwner
+                ? ` · by ${playlist.owner.username}`
+                : ""}
               {playlist.subscribed && playlist.last_synced_at
                 ? ` · synced ${formatRelative(playlist.last_synced_at)}`
                 : ""}
@@ -340,21 +358,23 @@ export default function PlaylistRow({
             )}
           </div>
         </div>
-        <button
-          type="button"
-          title="Edit playlist"
-          aria-label="Edit playlist"
-          aria-pressed={editing}
-          onClick={(event) => {
-            event.stopPropagation();
-            if (editing) void saveName();
-            if (!editing && !open) onToggle();
-            setEditing((on) => !on);
-          }}
-          className="ui-interactive self-center"
-        >
-          <CoverEditIcon active={editing} />
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            title="Edit playlist"
+            aria-label="Edit playlist"
+            aria-pressed={editing}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (editing) void saveName();
+              if (!editing && !open) onToggle();
+              setEditing((on) => !on);
+            }}
+            className="ui-interactive self-center"
+          >
+            <CoverEditIcon active={editing} />
+          </button>
+        )}
         <button
           type="button"
           aria-expanded={open}
@@ -392,7 +412,7 @@ export default function PlaylistRow({
                   >
                     Play all
                   </button>
-                  {playlist.subscribed && (
+                  {canEdit && playlist.subscribed && (
                     <button
                       type="button"
                       onClick={onSync}
@@ -402,17 +422,19 @@ export default function PlaylistRow({
                       Sync now
                     </button>
                   )}
-                  <PlaylistAddVideo
-                    playlistId={playlist.id}
-                    memberIds={
-                      new Set((current?.videos ?? []).map((v) => v.id))
-                    }
-                    active={open}
-                    onAdded={(next) => setPlaylistDetail(queryClient, next)}
-                  />
+                  {canEdit && (
+                    <PlaylistAddVideo
+                      playlistId={playlist.id}
+                      memberIds={
+                        new Set((current?.videos ?? []).map((v) => v.id))
+                      }
+                      active={open}
+                      onAdded={(next) => setPlaylistDetail(queryClient, next)}
+                    />
+                  )}
                 </div>
                 <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-                  {playlist.subscribed && (
+                  {canEdit && playlist.subscribed && (
                     <button
                       type="button"
                       onClick={onStopSubscribing}
@@ -422,7 +444,7 @@ export default function PlaylistRow({
                       Stop subscription
                     </button>
                   )}
-                  {youtubeImported && !playlist.subscribed && (
+                  {canEdit && youtubeImported && !playlist.subscribed && (
                     <button
                       type="button"
                       onClick={onSubscribeUpdates}
@@ -432,7 +454,7 @@ export default function PlaylistRow({
                       Subscribe to updates
                     </button>
                   )}
-                  {can("manage_playlists") && (
+                  {canEdit && (
                     <button
                       type="button"
                       onClick={onDelete}
@@ -462,7 +484,24 @@ export default function PlaylistRow({
                 <p className="mt-2 text-sm text-accent">{syncMessage}</p>
               )}
 
-              {editing && (
+              {canEdit && editing && isOwner && (
+                <div className="mt-4">
+                  <PlaylistVisibilityPicker
+                    legend="Who can see this playlist"
+                    value={playlist.visibility}
+                    canShare={can("manage_playlists")}
+                    disabled={actionBusy}
+                    onChange={(visibility) =>
+                      updateMutation.mutate({
+                        patch: { visibility },
+                        failure: "Could not change who can see the playlist",
+                      })
+                    }
+                  />
+                </div>
+              )}
+
+              {canEdit && editing && (
                 <div className="mt-4">
                   <div className="mb-2 flex items-baseline justify-between gap-2">
                     <p className="text-xs font-medium uppercase tracking-wide text-muted">
@@ -560,7 +599,9 @@ export default function PlaylistRow({
                   <p className="py-8 text-center text-sm text-muted">
                     {youtubeImported
                       ? "Videos will appear here as they finish downloading."
-                      : "No videos yet. Search your library or paste a download link."}
+                      : canEdit
+                        ? "No videos yet. Search your library or paste a download link."
+                        : "No videos yet."}
                   </p>
                 ) : (
                   current.videos.map((v, i) => {
@@ -593,18 +634,22 @@ export default function PlaylistRow({
                             : "ring-ink-800"
                         }`}
                       >
-                        <DragHandle
-                          label="Drag to reorder videos"
-                          onDragStart={(event) => {
-                            event.stopPropagation();
-                            beginReorderDrag(event, String(v.id));
-                            videoDragIndex.current = i;
-                          }}
-                          onDragEnd={() => {
-                            videoDragIndex.current = null;
-                            setVideoDragOver(null);
-                          }}
-                        />
+                        {canEdit ? (
+                          <DragHandle
+                            label="Drag to reorder videos"
+                            onDragStart={(event) => {
+                              event.stopPropagation();
+                              beginReorderDrag(event, String(v.id));
+                              videoDragIndex.current = i;
+                            }}
+                            onDragEnd={() => {
+                              videoDragIndex.current = null;
+                              setVideoDragOver(null);
+                            }}
+                          />
+                        ) : (
+                          <span className="w-2" aria-hidden />
+                        )}
                         <span className="w-6 shrink-0 text-center text-sm text-muted">
                           {i + 1}
                         </span>
@@ -642,14 +687,16 @@ export default function PlaylistRow({
                         >
                           + Queue
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => remove(v.id)}
-                          className="shrink-0 px-2 text-muted hover:text-accent"
-                          title="Remove from playlist"
-                        >
-                          ✕
-                        </button>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => remove(v.id)}
+                            className="shrink-0 px-2 text-muted hover:text-accent"
+                            title="Remove from playlist"
+                          >
+                            ✕
+                          </button>
+                        )}
                       </div>
                     );
                   })

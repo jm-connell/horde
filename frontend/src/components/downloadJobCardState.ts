@@ -99,3 +99,19 @@ export function applyActionRowCollapse(row: HTMLElement): void {
     if (el) el.hidden = true;
   }
 }
+
+/**
+ * Why a queued job is not starting because the disk is full or the library is at
+ * its limit. The live event wins over the stored value (`null` there means the
+ * hold just ended); a paused job is waiting for the user, not for space.
+ */
+export function heldReasonFor(
+  status: string,
+  paused: boolean,
+  liveReason: string | null | undefined,
+  storedReason: string | null | undefined
+): string | null {
+  if (status !== "queued" || paused) return null;
+  const reason = liveReason !== undefined ? liveReason : storedReason;
+  return reason || null;
+}

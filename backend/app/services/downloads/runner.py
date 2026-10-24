@@ -7,6 +7,7 @@ method so the control flow (what is retried, what ends the job) stays readable.
 """
 
 import enum
+import errno
 import logging
 import threading
 from pathlib import Path
@@ -21,6 +22,7 @@ from ..fsutil import safe_rel
 from ..outtmpl import windows_filenames_ok
 from ..paths import staging_dir
 from ..ytdlp_common import (
+    ERROR_KIND_DISK_FULL,
     ERROR_KIND_MEMBERS,
     ERROR_KIND_UNKNOWN,
     EXTRACT_PRIORITY_DOWNLOAD,
@@ -31,6 +33,7 @@ from ..ytdlp_common import (
     extract_has_media,
     extract_info_gated,
     extract_used_cookies,
+    is_disk_full_error,
     is_members_only_entry,
     is_members_only_error,
     record_extract_failure,
@@ -39,7 +42,7 @@ from ..ytdlp_common import (
     url_cookie_required,
     youtube_extractor_args,
 )
-from ..ytdlp_extract import is_youtube_short_entry
+from ..ytdlp_extract import estimate_download_bytes, is_youtube_short_entry
 from ..ytdlp_formats import (
     apply_audio_format_id,
     format_chain,
@@ -50,6 +53,7 @@ from . import dbwrite, lifecycle
 from .artifacts import cleanup_partial_files, reject_unplayable, resolve_merged_video
 from .errors import (
     DownloadCancelled,
+    DownloadHeld,
     YtdlpLogger,
     is_recoverable_download_error,
     purge_members_only_url,
@@ -155,6 +159,8 @@ class DownloadRun:
             self._download_and_hand_off()
         except DownloadCancelled:
             self._on_cancelled()
+        except DownloadHeld as held:
+            self._on_held(str(held))
         except Exception as exc:  # noqa: BLE001 - _on_error logs it and ends the job
             self._on_error(exc)
         finally:
@@ -218,6 +224,10 @@ class DownloadRun:
         if self.ytdlp_logger.members_only:
             raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED)
 
+    def _disk_full_check(self) -> None:
+        if self.ytdlp_logger.disk_full:
+            raise OSError(errno.ENOSPC, "No space left on device")
+
     def _settled_final_path(self) -> Path:
         """Pick the finished file after the attempts, or fail with the last error."""
         path = self.final_path
@@ -236,9 +246,13 @@ class DownloadRun:
             self.attempt_paths = set()
             try:
                 outcome = self._attempt(fmt)
-            except MembersOnlyError:
+            except MembersOnlyError, DownloadHeld:
                 raise
-            except Exception as exc:  # noqa: BLE001 - kept as last_exc, raised if nothing is recovered
+            except Exception as exc:
+                if is_disk_full_error(exc):
+                    # Another format needs the same space: end the job now.
+                    self.last_exc = exc
+                    raise
                 if self._recovered_after_failure(exc):
                     break
                 continue
@@ -277,10 +291,22 @@ class DownloadRun:
             return _Outcome.SKIPPED
         self.metadata_info = merge_info(self.metadata_info, fetched)
         self.info = self.metadata_info
+        self._hold_if_too_big()
         ydl_opts = self._download_opts(ydl_opts, fmt)
         self._download(ydl_opts)
         found = self.final_path is not None and self.final_path.exists()
         return _Outcome.FOUND if found else _Outcome.EMPTY
+
+    def _hold_if_too_big(self) -> None:
+        """With a library size limit set, wait if this video would not fit under it."""
+        if self.spec.is_device or self.queue.space.limit_bytes() is None:
+            return
+        estimate = estimate_download_bytes(self.metadata_info, self.spec.quality_preset)
+        if not estimate:
+            return
+        hold = self.queue.hold_for_size(self.spec.job_id, estimate)
+        if hold is not None:
+            raise DownloadHeld(hold.reason)
 
     def _opts_for(self, fmt: str) -> dict[str, Any]:
         opts = {**self.base_opts, "format": fmt}
@@ -387,6 +413,7 @@ class DownloadRun:
     def _extract(self, ydl: Any) -> None:
         downloaded = ydl.extract_info(self.spec.url, download=True)
         self._members_only_check()
+        self._disk_full_check()
         self._absorb(downloaded)
 
     def _absorb(self, downloaded: Any) -> None:
@@ -477,6 +504,24 @@ class DownloadRun:
         else:
             self.act.finish(status="cancelled")
 
+    def _on_held(self, reason: str) -> None:
+        """Back to the queue: the queue starts it again when there is room."""
+        spec = self.spec
+        dbwrite.update_job(
+            spec.job_id, status=JobStatus.queued, progress=0.0, error=None
+        )
+        prev = progress_store.get(spec.job_id, {})
+        progress_store[spec.job_id] = {
+            "status": "queued",
+            "progress": 0.0,
+            "title": prev.get("title") or self.metadata_info.get("title"),
+            "channel": prev.get("channel"),
+            "destination": spec.destination,
+            "held_reason": reason,
+        }
+        self.act.discard()
+        logger.info("download job %s held: %s", spec.job_id, reason)
+
     def _on_error(self, exc: Exception) -> None:
         if self.cancel.is_set():
             if not self.queue.is_shutting_down():
@@ -547,9 +592,12 @@ class DownloadRun:
                 channel=channel,
             )[1]
             purge_members_only_url(spec.url)
-        record_extract_failure(
-            kind, message, url=spec.url, title=title, channel=channel
-        )
+        if kind == ERROR_KIND_DISK_FULL:
+            self.queue.note_disk_full()
+        else:
+            record_extract_failure(
+                kind, message, url=spec.url, title=title, channel=channel
+            )
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download job %s failed unexpectedly", spec.job_id)
         else:

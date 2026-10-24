@@ -24,6 +24,7 @@
 | `rate_limit` | HTTP 429 / temporary block. Caption (timedtext) 429s are retried automatically with backoff; the video file is still kept. |
 | `unavailable` | Removed, geo, no formats |
 | `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
+| `disk_full` | The disk ran out of space while writing. The queue holds for a while instead of failing every following job; free space, then retry. See [Disk limits](../guides/downloads.md#disk-limits) |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
 

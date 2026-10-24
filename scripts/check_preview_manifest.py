@@ -26,7 +26,7 @@ sys.path.insert(0, str(ROOT / "backend"))
 
 import httpx  # noqa: E402
 
-from app.services import downloader  # noqa: E402
+from app.services import stream_preview  # noqa: E402
 
 NS = {"d": "urn:mpeg:dash:schema:mpd:2011"}
 
@@ -61,8 +61,8 @@ def main() -> int:
     args = parser.parse_args()
 
     print(f"Resolving manifest for {args.url} …")
-    session = downloader.resolve_preview_manifest(args.url, force=True)
-    xml = downloader.build_dash_manifest(session)
+    session = stream_preview.resolve_preview_manifest(args.url, force=True)
+    xml = stream_preview.build_dash_manifest(session)
     root = ET.fromstring(xml)
 
     mpd_dur = _parse_duration(root.attrib.get("mediaPresentationDuration", ""))
@@ -107,7 +107,7 @@ def main() -> int:
             for i in itags
             if i in session["formats"]
         ]
-        actually = downloader._boundaries_aligned(family_reps)
+        actually = stream_preview._boundaries_aligned(family_reps)
         if claimed and not actually:
             raise SystemExit(
                 f"FAIL: AdaptationSet {aset.attrib.get('id')} claims alignment "
@@ -135,7 +135,7 @@ def main() -> int:
                     ("init", fmt["init_range"]),
                     ("index", fmt["index_range"]),
                 ):
-                    resolved = downloader.lookup_preview_media(token, itag)
+                    resolved = stream_preview.lookup_preview_media(token, itag)
                     headers = dict(resolved.get("http_headers") or {})
                     headers["Range"] = f"bytes={rng}"
                     resp = client.get(resolved["direct_url"], headers=headers)
