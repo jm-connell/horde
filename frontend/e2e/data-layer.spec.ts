@@ -196,6 +196,8 @@ test("an AI setting saved in Settings shows on the Watch page without another re
   await videoCard(page, "Aurora Drift").first().click();
   await expect(page.getByPlaceholder("Ask this video…")).toBeVisible();
   expect(reads).toBe(0);
+  // An AI status poll may still be inside the route when the test ends.
+  await page.unrouteAll({ behavior: "ignoreErrors" });
 });
 
 test("the progress expiry saved in Settings is still there when Settings reopens", async ({
