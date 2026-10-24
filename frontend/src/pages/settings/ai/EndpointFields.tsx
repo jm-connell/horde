@@ -20,8 +20,18 @@ function presetForUrl(url: string): Preset | undefined {
 }
 
 const PRESET_OPTIONS = [
-  { value: "custom", label: "Other (type the URL)" },
-  ...AI_PROVIDER_PRESETS.map((p) => ({ value: p.id, label: p.label })),
+  ...AI_PROVIDER_PRESETS.map((p) => ({
+    value: p.id,
+    label: p.label,
+    group: p.needsKey
+      ? "Cloud providers (need an API key)"
+      : "Local servers (your machine or network)",
+  })),
+  {
+    value: "custom",
+    label: "Other (type the URL)",
+    group: "Any OpenAI-compatible URL",
+  },
 ];
 
 /**
