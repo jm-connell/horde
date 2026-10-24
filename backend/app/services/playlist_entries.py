@@ -7,17 +7,21 @@ Three moments keep the two in step:
 * deleting a library video (``detach_video``, from ``delete_video_cascade``)
   turns its entries into streamed ones, or drops them when the video has no
   link to stream from;
-* a download finishing for a playlist, or a trashed video coming back,
-  links the streamed entry again (``link_video``) instead of adding a second;
-* reads resolve a streamed entry whose video is in the library anyway (for
-  example downloaded from the watch page) by its YouTube id (``resolve``).
+* a video joining the library by any path (a download, the scanner, a trash
+  restore) links every streamed entry for it, in every playlist
+  (``_link_new_video``, a mapper hook), so ``video_id`` is what other code
+  (retention, "Remove from server") can rely on;
+* a download for a playlist that has no entry for it yet adds one
+  (``playlist_attach``); ``resolve`` also matches by YouTube id at read time,
+  which only matters for rows written while that hook could not run.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import delete, update
+from sqlalchemy import and_, delete, event, update
+from sqlalchemy.engine import Connection
 from sqlmodel import Session, col, select
 
 from ..models import PlaylistItem, Video, require_id
@@ -89,6 +93,26 @@ def link_video(session: Session, playlist_id: int, video: Video) -> PlaylistItem
         item.video_id = require_id(video)
         session.add(item)
     return item
+
+
+@event.listens_for(Video, "after_insert")
+def _link_new_video(_mapper: Any, connection: Connection, target: Video) -> None:
+    if target.id is None:
+        return
+    if target.youtube_id:
+        same = col(PlaylistItem.youtube_id) == target.youtube_id
+    elif streamable_url(target.source_url):
+        same = and_(
+            col(PlaylistItem.youtube_id).is_(None),
+            col(PlaylistItem.url) == target.source_url,
+        )
+    else:
+        return
+    connection.execute(
+        update(PlaylistItem)
+        .where(col(PlaylistItem.video_id).is_(None), same)
+        .values(video_id=target.id)
+    )
 
 
 def resolve(session: Session, items: list[PlaylistItem]) -> dict[int, Video]:

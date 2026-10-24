@@ -543,3 +543,56 @@ def test_reorder_by_entry_ids_moves_streamed_entries_too(
         f"/api/playlists/{pid}/reorder", json={"item_ids": list(reversed(ids))}
     )
     assert [e["title"] for e in moved.json()["entries"]] == ["Streamed", "Here"]
+
+
+def test_a_streamed_entry_links_when_the_video_arrives_any_other_way(
+    client, add_video, session, monkeypatch
+):
+    from sqlmodel import select
+
+    from app.models import PlaylistItem
+    from app.services import stream_preview
+
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda url: {"id": url[-11:], "title": "Later"},
+    )
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    other = client.post("/api/playlists", json={"name": "Other"}).json()["id"]
+    for playlist in (pid, other):
+        client.post(
+            f"/api/playlists/{playlist}/items", json={"url": _yt("arrivesss01")}
+        )
+
+    # Downloaded from its watch page, not for a playlist.
+    video = add_video(title="Later", yt_id="arrivesss01", source_url=_yt("arrivesss01"))
+    session.expire_all()
+    assert {i.video_id for i in session.exec(select(PlaylistItem)).all()} == {video.id}
+    # In two playlists now, so removing either keeps it on the server.
+    copies = client.get(f"/api/playlists/{pid}/server-copies").json()
+    assert (copies["removable_video_ids"], copies["shared"]) == ([], 1)
+
+
+def test_remove_from_server_never_offers_videos_with_nothing_to_stream(
+    client, add_video
+):
+    local = add_video(title="Uploaded file")  # no source link
+    linked = add_video(
+        title="Linked", yt_id="linkedddd01", source_url=_yt("linkedddd01")
+    )
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    client.post(
+        f"/api/playlists/{pid}/items/bulk", json={"video_ids": [local.id, linked.id]}
+    )
+    copies = client.get(f"/api/playlists/{pid}/server-copies").json()
+    assert copies["removable_video_ids"] == [linked.id]
+
+
+def test_a_playlist_link_is_not_added_as_one_video(client):
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    res = client.post(
+        f"/api/playlists/{pid}/items",
+        json={"url": "https://www.youtube.com/playlist?list=PLabc"},
+    )
+    assert (res.status_code, res.json()["code"]) == (400, "not_a_video")

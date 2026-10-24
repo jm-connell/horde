@@ -58,8 +58,9 @@ from ..services.thumbnails import (
     unlink_playlist_cover,
     write_playlist_cover,
 )
-from ..services.url_clean import clean_url, youtube_video_id
+from ..services.url_clean import clean_url, is_playlist_only_url, youtube_video_id
 from ..services.url_safety import UnsafeUrlError, validate_public_url
+from .preview import preview_extraction_error
 from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
@@ -522,6 +523,7 @@ def add_item(
     payload: PlaylistItemAdd,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
+    gate: ExtractionGate = Depends(extraction_gate),
 ):
     playlist = access.get_editable(session, user, playlist_id)
 
@@ -535,7 +537,7 @@ def add_item(
             if payload.download:
                 _download_into(session, user, playlist, raw_url)
             else:
-                _add_streamed(session, playlist_id, raw_url)
+                _add_streamed(session, playlist_id, raw_url, gate)
             return get_playlist(playlist_id, session, user)
         video_id = found
 
@@ -580,20 +582,26 @@ def _add_library_video(session: Session, playlist_id: int, video: Video) -> bool
     return True
 
 
-def _add_streamed(session: Session, playlist_id: int, raw_url: str) -> None:
+def _add_streamed(
+    session: Session, playlist_id: int, raw_url: str, gate: ExtractionGate
+) -> None:
     """Add a video that is not in the library, to be streamed."""
+    if is_playlist_only_url(raw_url):
+        raise CodedHTTPException(
+            400, "Add a single video, not a playlist", "not_a_video"
+        )
     url = clean_url(raw_url, keep_playlist=False) or raw_url
     validate_public_url(url)
     yt_id = youtube_video_id(url)
     if playlist_entries.streamed_entry(session, playlist_id, yt_id, url):
         return
     try:
-        meta = stream_preview.extract_stream_preview_meta(url)
+        meta = gate.run(stream_preview.extract_stream_preview_meta, url)
+    except HTTPException:
+        raise  # 429 / 504 from the gate
     except Exception as exc:
         logger.warning("could not read %s for a playlist", url, exc_info=True)
-        raise CodedHTTPException(
-            400, f"Could not read that video: {exc}", "extraction_failed"
-        ) from exc
+        raise preview_extraction_error(exc, url) from exc
     session.add(
         PlaylistItem(
             playlist_id=playlist_id,
@@ -703,7 +711,15 @@ def server_copies(
     items = _playlist_items(session, playlist_id)
     found = playlist_entries.resolve(session, items)
     missing = sum(1 for item in items if require_id(item) not in found and item.url)
-    video_ids = list(dict.fromkeys(require_id(v) for v in found.values()))
+    # A video with no link to stream from (an upload, a scanned file) would
+    # leave the playlist when deleted, so removing never touches those.
+    video_ids = list(
+        dict.fromkeys(
+            require_id(v)
+            for v in found.values()
+            if playlist_entries.streamable_url(v.source_url)
+        )
+    )
     elsewhere = (
         set(
             session.exec(

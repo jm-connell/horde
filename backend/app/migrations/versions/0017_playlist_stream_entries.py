@@ -6,8 +6,9 @@ stream (``youtube_id``, ``url``) and what to show (``title``, ``channel``,
 ``channel_url``, ``duration_sec``). Existing entries get that snapshot from their
 video now, so they keep it if the video is later deleted from the server.
 
-Only ``playlist_items`` is rebuilt (to change the foreign key); nothing depends
-on it, so the ``videos`` triggers are untouched.
+Only ``playlist_items`` is rebuilt (to change the foreign key, and with
+AUTOINCREMENT, because entry ids are now handed to clients and must not be
+reused); nothing depends on it, so the ``videos`` triggers are untouched.
 
 Revision ID: 0017_playlist_stream_entries
 Revises: 0016_two_factor
@@ -28,7 +29,11 @@ _SNAPSHOT = ("youtube_id", "url", "title", "channel", "channel_url", "duration_s
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("playlist_items", recreate="always") as batch:
+    with op.batch_alter_table(
+        "playlist_items",
+        recreate="always",
+        table_kwargs={"sqlite_autoincrement": True},
+    ) as batch:
         for column in _SNAPSHOT:
             kind = sa.Float() if column == "duration_sec" else sa.String()
             batch.add_column(sa.Column(column, kind, nullable=True))

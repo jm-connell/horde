@@ -283,6 +283,8 @@ class PlaylistItem(SQLModel, table=True):
     __tablename__ = "playlist_items"
     __table_args__ = (
         UniqueConstraint("playlist_id", "video_id", name="uq_playlist_items_pair"),
+        # Entry ids are handed to clients (remove, reorder): never reuse one.
+        _AUTOINCREMENT,
     )
 
     id: int | None = Field(default=None, primary_key=True)

@@ -1099,3 +1099,30 @@ def test_a_trashed_youtube_video_stays_in_its_playlist_and_restores_in_place(
     assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
     entries = client.get(f"/api/playlists/{pid}").json()["entries"]
     assert [e["video"] and e["video"]["id"] for e in entries] == [first.id, video.id]
+
+
+def test_restoring_a_video_trashed_before_streamed_entries_puts_it_back(
+    client, init_db, add_video
+):
+    """A version 1 snapshot: trashing deleted the playlist entry outright."""
+    url = "https://www.youtube.com/watch?v=oldsnapsh01"
+    video = add_video(write_file=True, yt_id="oldsnapsh01", source_url=url)
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    client.post(f"/api/playlists/{pid}/items", json={"video_id": video.id})
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    with Session(init_db["engine"]) as session:
+        # What the old code left: no entry, and a version 1 snapshot.
+        for item in session.exec(select(PlaylistItem)).all():
+            session.delete(item)
+        entry = session.get(TrashEntry, entry_id)
+        snapshot = json.loads(entry.snapshot_json)
+        snapshot["version"] = 1
+        entry.snapshot_json = json.dumps(snapshot)
+        session.add(entry)
+        session.commit()
+
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
+    entries = client.get(f"/api/playlists/{pid}").json()["entries"]
+    assert [e["video"] and e["video"]["id"] for e in entries] == [video.id]

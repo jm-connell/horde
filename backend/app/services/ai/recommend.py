@@ -418,11 +418,12 @@ def _ranked_for_you_ids(
             channels[-require_id(upload.row)] = upload.channel
 
     scored: dict[int, float] = {}
+    # Without AI, or before any watch has vectors, the taste ranks instead.
+    seed_vectors: list[list[float]] = []
+    weights: list[float] = []
     if get_embed_provider() is not None:
         recent = history[:FOR_YOU_SEEDS]
         profiles = vector_index.profile_vectors(session, watched[:FOR_YOU_SEEDS])
-        seed_vectors: list[list[float]] = []
-        weights: list[float] = []
         for rank, (video, state) in enumerate(recent):
             vec = profiles.get(require_id(video))
             if vec is None or (seed_vectors and len(vec) != len(seed_vectors[0])):
@@ -432,31 +433,31 @@ def _ranked_for_you_ids(
                 FOR_YOU_SEED_DECAY**rank
                 * _engagement(state.position_sec, video.duration_sec)
             )
-        if seed_vectors:
-            w = np.asarray(weights, dtype=np.float32)
+    if seed_vectors:
+        w = np.asarray(weights, dtype=np.float32)
 
-            def score_rows(keys, sims, is_followed) -> None:
-                # Old or abandoned watches still count for the best match, just less.
-                best = (sims * (0.6 + 0.4 * w)).max(axis=1)
-                breadth = sims @ w / float(w.sum())
-                score = FOR_YOU_BEST_WEIGHT * best + (1 - FOR_YOU_BEST_WEIGHT) * breadth
-                for i in np.flatnonzero(sims.max(axis=1) >= FOR_YOU_MIN_SCORE):
-                    key = int(keys[i])
-                    if key in watched_set or key not in channels:
-                        continue
-                    boost = FOLLOWED_CHANNEL_BOOST if is_followed(key) else 0.0
-                    scored[key] = float(score[i]) + boost
+        def score_rows(keys, sims, is_followed) -> None:
+            # Old or abandoned watches still count for the best match, just less.
+            best = (sims * (0.6 + 0.4 * w)).max(axis=1)
+            breadth = sims @ w / float(w.sum())
+            score = FOR_YOU_BEST_WEIGHT * best + (1 - FOR_YOU_BEST_WEIGHT) * breadth
+            for i in np.flatnonzero(sims.max(axis=1) >= FOR_YOU_MIN_SCORE):
+                key = int(keys[i])
+                if key in watched_set or key not in channels:
+                    continue
+                boost = FOLLOWED_CHANNEL_BOOST if is_followed(key) else 0.0
+                scored[key] = float(score[i]) + boost
 
-            video_ids, sims = vector_index.video_scores(session, seed_vectors)
-            score_rows(video_ids, sims, followed_videos.__contains__)
-            if uploads:
-                seeds = np.asarray(seed_vectors, dtype=np.float32)
-                seeds /= np.where(
-                    (n := np.linalg.norm(seeds, axis=1, keepdims=True)) == 0, 1, n
-                )
-                keys, matrix = _upload_vectors(session, uploads, seeds.shape[1])
-                if keys:
-                    score_rows(keys, matrix @ seeds.T, lambda _key: True)
+        video_ids, sims = vector_index.video_scores(session, seed_vectors)
+        score_rows(video_ids, sims, followed_videos.__contains__)
+        if uploads:
+            seeds = np.asarray(seed_vectors, dtype=np.float32)
+            seeds /= np.where(
+                (n := np.linalg.norm(seeds, axis=1, keepdims=True)) == 0, 1, n
+            )
+            keys, matrix = _upload_vectors(session, uploads, seeds.shape[1])
+            if keys:
+                score_rows(keys, matrix @ seeds.T, lambda _key: True)
     else:
         now = datetime.now(UTC)
         taste = _taste(session, history)
@@ -474,7 +475,7 @@ def _ranked_for_you_ids(
             vid = int(row_id)
             value = _taste_score(
                 taste,
-                channels[vid],
+                channels.get(vid, ""),
                 tags_of.get(vid, []),
                 vid in followed_videos,
                 _fresh(published_at or added_at, now),
