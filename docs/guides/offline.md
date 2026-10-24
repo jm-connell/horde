@@ -38,7 +38,7 @@ the old service worker has no update prompt.
 | Watch page (phone) | The **Download** button next to *Add to playlist* |
 | Watch page (desktop) | **•••** → **Download for offline** |
 | Library select mode | Select videos → **Download** |
-| Download page | Destination **Offline (this device)** — Horde fetches the URL with yt-dlp, then the app saves it offline (not added to the library) |
+| Download page | Destination **Direct download to client** — Horde fetches the URL with yt-dlp, then the app saves it offline (not added to the library) |
 
 Horde saves the file this device can actually play: the original when the device decodes it smoothly, otherwise the ≤1080p H.264 copy. If neither exists yet (an AV1 video on a device without AV1 decode), Horde starts creating the copy and asks you to save it again once it finishes. See [Playback compatibility](downloads.md#compatibility-codecs).
 

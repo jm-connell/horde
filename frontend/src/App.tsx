@@ -35,6 +35,7 @@ import { ConfirmProvider } from "./context/ConfirmContext";
 import { ReauthProvider } from "./context/ReauthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
+import { HomeResetProvider } from "./context/HomeResetContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
@@ -242,11 +243,13 @@ export default function App() {
                 <UserScope>
                   <DownloadProvider>
                     <SearchProvider>
-                      <PlaybackProvider>
-                        <AppShell />
-                        <OfflineUnlockSetup />
-                        <OverlayScrollThumb viewport />
-                      </PlaybackProvider>
+                      <HomeResetProvider>
+                        <PlaybackProvider>
+                          <AppShell />
+                          <OfflineUnlockSetup />
+                          <OverlayScrollThumb viewport />
+                        </PlaybackProvider>
+                      </HomeResetProvider>
                     </SearchProvider>
                   </DownloadProvider>
                 </UserScope>

@@ -16,6 +16,8 @@ function DownloadedBadge() {
   );
 }
 
+const channelHref = (name: string) => `/?channel=${encodeURIComponent(name)}`;
+
 /** The right-hand column beside the player: the playback queue and "More like this". */
 export function WatchSidebar({
   items,
@@ -37,43 +39,53 @@ export function WatchSidebar({
             More like this
           </h3>
           <div className="space-y-2">
+            {/* The row is not one link: the small channel name under the
+                title goes to the channel page, not to the video. */}
             {items.map((v) => (
-              <Link
+              <div
                 key={v.key}
-                to={v.href}
+                data-horde="related-item"
                 className="group flex gap-2 rounded-lg p-1 transition-colors hover:bg-ink-800"
               >
                 <div className="relative aspect-video w-40 shrink-0 overflow-hidden rounded-lg bg-ink-800">
+                  <Link to={v.href} className="block h-full w-full">
+                    {v.thumb ? (
+                      <img
+                        decoding="async"
+                        width={160}
+                        height={90}
+                        src={v.thumb}
+                        alt=""
+                        loading="lazy"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-muted">
+                        <span className="text-xl">▶</span>
+                      </div>
+                    )}
+                  </Link>
                   {v.queueEntry && (
                     <QueueButton
                       entry={v.queueEntry}
                       className="right-1 top-1 px-1.5 py-0.5 text-[11px]"
                     />
                   )}
-                  {v.thumb ? (
-                    <img
-                      decoding="async"
-                      width={160}
-                      height={90}
-                      src={v.thumb}
-                      alt=""
-                      loading="lazy"
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-muted">
-                      <span className="text-xl">▶</span>
-                    </div>
-                  )}
                 </div>
                 <div className="min-w-0 flex-1 py-0.5">
-                  <p className="line-clamp-2 text-sm font-medium text-gray-200 group-hover:text-accent">
+                  <Link
+                    to={v.href}
+                    className="line-clamp-2 block text-sm font-medium text-gray-200 group-hover:text-accent"
+                  >
                     {v.title}
-                  </p>
+                  </Link>
                   {v.channel && (
-                    <p className="mt-0.5 truncate text-xs text-muted">
+                    <Link
+                      to={channelHref(v.channel)}
+                      className="mt-0.5 block truncate text-xs text-muted hover:text-accent hover:underline"
+                    >
                       {v.channel}
-                    </p>
+                    </Link>
                   )}
                   {v.durationSec != null && (
                     <p className="mt-0.5 text-xs text-muted">
@@ -86,7 +98,7 @@ export function WatchSidebar({
                     </p>
                   )}
                 </div>
-              </Link>
+              </div>
             ))}
           </div>
           {sentinelRef && <div ref={sentinelRef} className="h-2" />}
@@ -127,6 +139,7 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
           <Link
             key={v.key}
             to={v.href}
+            data-horde="related-item"
             className="group block min-w-0 rounded-lg transition-colors hover:bg-ink-800"
           >
             <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-ink-800">

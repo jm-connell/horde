@@ -8,6 +8,7 @@ import {
   usePlaybackSession,
 } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
+import { useHomeReset } from "../context/HomeResetContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
@@ -85,6 +86,7 @@ export default function TopNav() {
   const [navH, setNavH] = useState(56);
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
+  const { resetHome } = useHomeReset();
   const [settings] = useSettings();
   const { can } = useAuth();
   const location = useLocation();
@@ -301,6 +303,14 @@ export default function TopNav() {
     searchInputRef.current?.blur();
   };
 
+  // The logo and Home do more than link to `/`: they put the home page back
+  // the way a fresh load would, dropping any channel, tag or search results.
+  // The Library/Recommended choice is saved, so it is kept.
+  const onHomeClick = () => {
+    setMenuOpen(false);
+    resetHome();
+  };
+
   const toggleMenu = () => {
     setSearchOpen(false);
     setNavHidden(false);
@@ -351,6 +361,7 @@ export default function TopNav() {
         key={link.to}
         to={link.to}
         end={link.end}
+        onClick={link.to === "/" ? onHomeClick : undefined}
         className={linkClass}
         data-liquid-active={active ? "true" : undefined}
       >
@@ -394,6 +405,7 @@ export default function TopNav() {
           <NavLink
             ref={brandRef}
             to="/"
+            onClick={onHomeClick}
             className="ui-interactive mr-2 flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-0.5 sm:mr-4 sm:px-2 sm:py-1"
           >
             <span className="text-xl font-bold tracking-tight text-accent">
@@ -631,6 +643,7 @@ export default function TopNav() {
                         key={link.to}
                         to={link.to}
                         end={link.end}
+                        onClick={link.to === "/" ? onHomeClick : undefined}
                         className={mobileLinkClass}
                         data-liquid-active={active ? "true" : undefined}
                       >
