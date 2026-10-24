@@ -39,11 +39,12 @@ Caddy passes the original `Host`, and sets `X-Forwarded-For` and `X-Forwarded-Pr
 
 ```nginx
 # Sign-in is limited per address here as well (see "Rate-limit sign-in").
+# $binary_remote_addr keys an IPv6 client by its whole address, not its /64.
 limit_req_zone $binary_remote_addr zone=horde_auth:10m rate=10r/m;
 
 server {
     listen 443 ssl;
-    http2 on;
+    http2 on;   # nginx 1.25.1 or newer; before that write "listen 443 ssl http2;" instead
     server_name horde.example.com;
 
     ssl_certificate     /etc/letsencrypt/live/horde.example.com/fullchain.pem;
@@ -52,9 +53,11 @@ server {
     # Uploads and imports can be large (HORDE_MAX_UPLOAD_GB).
     client_max_body_size 0;
 
-    # Sign-in, second step, password reset and re-authentication: 10 a minute
-    # per address, with a short burst; the rest is answered 429 before Horde sees it.
-    location /api/auth/ {
+    # Only the routes that take a password or a code: 10 a minute per address,
+    # with a short burst; the rest is answered 429 before Horde sees it. Not the
+    # rest of /api/auth/ (GET /api/auth/state is fetched all the time, so a
+    # household behind one address would be turned away).
+    location ~ ^/api/auth/(login|login/totp|forgot|reset|reauth)$ {
         limit_req zone=horde_auth burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:8686;
@@ -86,26 +89,32 @@ server {
 
 ## Rate-limit sign-in at the proxy {#rate-limit}
 
-Horde throttles failed sign-ins itself (per address, per name and per day, see [Passwords and sessions](authentication.md#passwords-and-sessions)), but that throttle lives inside the application, after the proxy has accepted the connection and Horde has spent a thread on the request. Limiting `/api/auth/` at the proxy turns most of a flood away before it reaches Horde. nginx: the `limit_req_zone` and `location /api/auth/` in the [config above](#nginx).
+Horde throttles failed sign-ins itself (per address, per name and per day, see [Passwords and sessions](authentication.md#passwords-and-sessions)), but that throttle lives inside the application, after the proxy has accepted the connection and Horde has spent a thread on the request. Limiting the sign-in routes at the proxy turns most of a flood away before it reaches Horde. Limit only the `POST`s that take a password or a code, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/forgot`, `/api/auth/reset` and `/api/auth/reauth`, and not all of `/api/auth/`: `GET /api/auth/state` is fetched constantly, and a household behind one address would hit the limit. nginx: the `limit_req_zone` and the `location ~ ^/api/auth/...` in the [config above](#nginx).
 
-Caddy has no rate limiter in the standard build. Either add the third-party [`caddy-ratelimit`](https://github.com/mholt/caddy-ratelimit) module (build Caddy with `xcaddy build --with github.com/mholt/caddy-ratelimit`) and limit the same paths:
+Caddy has no rate limiter in the standard build. Either add the third-party [`caddy-ratelimit`](https://github.com/mholt/caddy-ratelimit) module, which has to be **built into Caddy** (`xcaddy build --with github.com/mholt/caddy-ratelimit`; the stock binary and the distribution packages do not have it and stop with "unrecognized directive"), and limit the same paths. `rate_limit` is not one of Caddy's standard directives, so it either goes in a `route` block, as below, or needs `order rate_limit before basic_auth` in the global options block at the top of the Caddyfile:
 
 ```caddyfile
 horde.example.com {
         encode zstd gzip
-        rate_limit {
-                zone auth {
-                        match {
-                                path /api/auth/*
+        route {
+                rate_limit {
+                        zone auth {
+                                match {
+                                        method POST
+                                        path /api/auth/login /api/auth/login/totp /api/auth/forgot /api/auth/reset /api/auth/reauth
+                                }
+                                key         {remote_host}
+                                ipv6_prefix 64
+                                events      10
+                                window      1m
                         }
-                        key    {remote_host}
-                        events 10
-                        window 1m
                 }
+                reverse_proxy 127.0.0.1:8686
         }
-        reverse_proxy 127.0.0.1:8686
 }
 ```
+
+(`ipv6_prefix 64` counts an IPv6 client by its /64, like Horde does; drop that line if your plugin version does not know it.)
 
 or run [fail2ban](https://www.fail2ban.org) on the access log and ban addresses that collect `401`/`429` answers from `/api/auth/` (Horde answers a wrong password 401 `invalid_credentials` and a throttled one 429 `rate_limited`). Either is a second layer: Horde stays safe without it, but a proxy limit also protects the server from the CPU cost of password hashing under a flood (Horde answers 503 `busy` when too many hashes are already running).
 
@@ -163,8 +172,9 @@ Be honest with yourself about what this does **not** fix:
 - **The secrets live in `DATA_DIR`.** Session hashes, the signing key (`secret_key`) and each account's two-step secret are in the data folder and its backups. Protect them like the library itself.
 - **A stolen session is a signed-in user.** Two-step sign-in protects the sign-in, not a cookie already issued. Horde asks an administrator for the password (and a code) again, within the last 10 minutes, before the actions that would let a thief keep the account: adding a user, making someone an administrator or taking that away, disabling an account, changing permissions, setting another account's password, signing another account out, resetting or deleting an account, a factory reset, and changing the two-step requirement. Setting your own password needs the current one. A thief with a cookie that is under ten minutes old, or one holding the administrator's password, is not stopped by this. Use *Signed-in devices* to end sessions; changing the password ends them all.
 - **A big flood can still keep a new browser out.** Hashing is capped to protect the server, and a flood from many addresses (a /64 each is enough) can fill what is left of it. One slot is reserved for a browser that holds the `horde_device` cookie, and made-up names can use only about half, so the owner on their usual browser is still judged. A browser without the cookie (a new device, cleared cookies) can be answered `503` `busy` for as long as the flood runs. While it is busy a real name and a made-up one can answer differently, which tells an attacker who is flooding which names exist. The mitigation is a rate limit at the reverse proxy on the sign-in routes ([above](#rate-limit)); `python -m app.cli reset-password` and a session that is already signed in are unaffected.
+- **Demoting, disabling and factory reset are behind the password check, not out of reach.** Demoting or disabling another administrator, changing permissions, signing another account out and a factory reset (even erasing the media) ask for the password again, but a cookie stolen within ten minutes of the owner's last password check can still do them. End sessions in *Signed-in devices* quickly if you suspect a theft, and keep backups.
 - **Sign-in is a single-process, in-memory throttle.** A restart forgets the counters.
-- **Guessing codes slowly over weeks.** A six-digit code has a million values. Wrong codes against one account make that account's code step wait twice as long after every ten of them (from 30 seconds up to an hour, forgotten after a day without failures), and a right password does not reset that. A patient attacker holding the password can still try a few thousand codes a week, which is why the password must stay secret and why you should read the failed-sign-in alerts. While such an attack runs, the account's real owner also waits at the code step; `python -m app.cli reset-password` and `reset-2fa` always work.
+- **Guessing codes slowly over weeks.** A six-digit code has a million values. Wrong codes against one account make that account's code step wait twice as long after every ten of them (from 30 seconds up to an hour, forgotten after a day without failures), and a right password does not reset that. A patient attacker holding the password can still make about 1.7 thousand guesses a week; since the app accepts the code for its own 30 seconds and the ones either side, three codes are valid at any moment, so that is roughly a 1 in 4 chance of getting in per year. The failed-sign-in alerts will tell you long before, which is why the password must stay secret and why you should read them. While such an attack runs, the account's real owner also waits at the code step; `python -m app.cli reset-password` and `reset-2fa` always work.
 - **Hammering a name slows its owner, unless the browser is known.** After many failures against one name from anywhere, that name accepts one attempt every ten seconds. A browser that has signed in as the account before carries a signed `horde_device` cookie and is exempt from that name-wide slowdown (it keeps its own per-device and per-address limit), but a new browser or a cleared cookie waits. The cookie is retired when the password changes.
 - **No email.** Password recovery needs the server log or the CLI, by design.
 
