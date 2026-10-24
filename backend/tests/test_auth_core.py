@@ -11,12 +11,14 @@ from sqlmodel import select
 from app.models import UserSession, UserSettings, UserVideoState
 from app.services.auth import accounts, media_token, passwords
 from app.services.auth.limiter import (
+    ADDRESS_FREE_ATTEMPTS,
     DAILY_CEILING,
     DAILY_SLOWDOWN_SEC,
     DAILY_WINDOW_SEC,
     FREE_ATTEMPTS,
     LoginLimiter,
 )
+from tests.limiter_probe import record_failure, record_success, retry_after
 
 # --- passwords ---------------------------------------------------------------
 
@@ -70,26 +72,28 @@ def test_limiter_backs_off_exponentially_then_forgets():
     now = [1000.0]
     limiter = LoginLimiter(clock=lambda: now[0])
     for _ in range(FREE_ATTEMPTS - 1):
-        limiter.record_failure("1.2.3.4", "alice")
-    assert limiter.retry_after("1.2.3.4", "alice") == 0
-    limiter.record_failure("1.2.3.4", "alice")
-    first = limiter.retry_after("1.2.3.4", "alice")
+        record_failure(limiter, "1.2.3.4", "alice")
+    assert retry_after(limiter, "1.2.3.4", "alice") == 0
+    record_failure(limiter, "1.2.3.4", "alice")
+    first = retry_after(limiter, "1.2.3.4", "alice")
     assert first > 0
-    assert limiter.retry_after("1.2.3.4", "bob") == 0
+    assert retry_after(limiter, "1.2.3.4", "bob") == 0
     now[0] += first
-    assert limiter.retry_after("1.2.3.4", "alice") == 0
-    limiter.record_failure("1.2.3.4", "alice")
-    assert limiter.retry_after("1.2.3.4", "alice") > first
-    limiter.record_success("1.2.3.4", "alice")
-    assert limiter.retry_after("1.2.3.4", "alice") == 0
+    assert retry_after(limiter, "1.2.3.4", "alice") == 0
+    record_failure(limiter, "1.2.3.4", "alice")
+    second = retry_after(limiter, "1.2.3.4", "alice")
+    assert second > first
+    now[0] += second  # a success can only come once the wait is over
+    record_success(limiter, "1.2.3.4", "alice")
+    assert retry_after(limiter, "1.2.3.4", "alice") == 0
 
 
 def test_limiter_locks_an_address_that_walks_through_usernames():
     limiter = LoginLimiter(clock=lambda: 0.0)
-    for i in range(25):
-        limiter.record_failure("9.9.9.9", f"user{i}")
-    assert limiter.retry_after("9.9.9.9", "someone-new") > 0
-    assert limiter.retry_after("8.8.8.8", "someone-new") == 0
+    for i in range(ADDRESS_FREE_ATTEMPTS):
+        record_failure(limiter, "9.9.9.9", f"user{i}")
+    assert retry_after(limiter, "9.9.9.9", "someone-new") > 0
+    assert retry_after(limiter, "8.8.8.8", "someone-new") == 0
 
 
 # --- media tokens ------------------------------------------------------------
@@ -400,26 +404,26 @@ def test_failures_slow_a_username_across_addresses_without_locking_it():
     now = [0.0]
     limiter = LoginLimiter(clock=lambda: now[0])
     for i in range(FREE_ATTEMPTS):
-        limiter.record_failure(f"9.9.9.{i}", "admin")
-    assert limiter.retry_after("2.2.2.2", "admin") == 0  # a burst is allowed
-    limiter.record_failure("1.1.1.1", "admin")
+        record_failure(limiter, f"9.9.9.{i}", "admin")
+    assert retry_after(limiter, "2.2.2.2", "admin") == 0  # a burst is allowed
+    record_failure(limiter, "1.1.1.1", "admin")
     # Past the burst another address must wait about a second, not for minutes.
-    assert limiter.retry_after("2.2.2.2", "admin") == 2  # 1 s window, rounded up
+    assert retry_after(limiter, "2.2.2.2", "admin") == 2  # 1 s window, rounded up
     now[0] += 1.1
-    assert limiter.retry_after("2.2.2.2", "admin") == 0
+    assert retry_after(limiter, "2.2.2.2", "admin") == 0
     # Dozens of guesses from as many addresses never build a lockout for a
     # fresh address: the escalating lockouts are per address. (Past the daily
     # ceiling a name is slower still; see the tests below.)
     for i in range(DAILY_CEILING - FREE_ATTEMPTS - 5):
-        limiter.record_failure(f"10.0.{i}.1", "admin")
+        record_failure(limiter, f"10.0.{i}.1", "admin")
         now[0] += 1.1
-    assert limiter.retry_after("203.0.113.9", "admin") == 0
+    assert retry_after(limiter, "203.0.113.9", "admin") == 0
 
 
 def _spread_failures(limiter, now, count, *, name="admin", gap=61.0):
     """``count`` failures from different addresses, a minute apart (so the per-minute slowdown never fires)."""
     for i in range(count):
-        limiter.record_failure(f"10.1.{i // 250}.{i % 250}", name)
+        record_failure(limiter, f"10.1.{i // 250}.{i % 250}", name)
         now[0] += gap
 
 
@@ -427,21 +431,21 @@ def test_daily_ceiling_slows_a_name_for_every_address_without_locking_it():
     now = [0.0]
     limiter = LoginLimiter(clock=lambda: now[0])
     _spread_failures(limiter, now, DAILY_CEILING - 1)
-    assert limiter.retry_after("203.0.113.1", "admin") == 0
+    assert retry_after(limiter, "203.0.113.1", "admin") == 0
 
     now[0] -= 61.0
-    limiter.record_failure("198.51.100.7", "admin")  # the ceiling-th failure
-    wait = limiter.retry_after("203.0.113.2", "admin")
+    record_failure(limiter, "198.51.100.7", "admin")  # the ceiling-th failure
+    wait = retry_after(limiter, "203.0.113.2", "admin")
     assert 0 < wait <= DAILY_SLOWDOWN_SEC + 1
     # Other names and addresses are unaffected.
-    assert limiter.retry_after("203.0.113.2", "someone-else") == 0
+    assert retry_after(limiter, "203.0.113.2", "someone-else") == 0
     # It is a pause, not a lockout: one attempt per slot, from anywhere.
     now[0] += DAILY_SLOWDOWN_SEC + 0.1
-    assert limiter.retry_after("203.0.113.2", "admin") == 0
-    limiter.record_failure("203.0.113.2", "admin")
-    assert limiter.retry_after("203.0.113.3", "admin") > 0
+    assert retry_after(limiter, "203.0.113.2", "admin") == 0
+    record_failure(limiter, "203.0.113.2", "admin")
+    assert retry_after(limiter, "203.0.113.3", "admin") > 0
     now[0] += DAILY_SLOWDOWN_SEC + 0.1
-    assert limiter.retry_after("203.0.113.3", "admin") == 0
+    assert retry_after(limiter, "203.0.113.3", "admin") == 0
 
 
 def test_daily_ceiling_is_not_cleared_by_a_success_and_ages_out():
@@ -449,15 +453,15 @@ def test_daily_ceiling_is_not_cleared_by_a_success_and_ages_out():
     limiter = LoginLimiter(clock=lambda: now[0])
     _spread_failures(limiter, now, DAILY_CEILING)
     now[0] += DAILY_SLOWDOWN_SEC + 0.1
-    limiter.record_success("203.0.113.9", "admin")
-    limiter.record_failure("203.0.113.9", "admin")
-    assert limiter.retry_after("203.0.113.10", "admin") > 0
+    record_success(limiter, "203.0.113.9", "admin")
+    record_failure(limiter, "203.0.113.9", "admin")
+    assert retry_after(limiter, "203.0.113.10", "admin") > 0
 
     # Once the failures are more than a day old the name is back to normal.
     now[0] += DAILY_WINDOW_SEC + 1
-    assert limiter.retry_after("203.0.113.10", "admin") == 0
-    limiter.record_failure("203.0.113.10", "admin")
-    assert limiter.retry_after("203.0.113.11", "admin") == 0
+    assert retry_after(limiter, "203.0.113.10", "admin") == 0
+    record_failure(limiter, "203.0.113.10", "admin")
+    assert retry_after(limiter, "203.0.113.11", "admin") == 0
 
 
 def test_failures_spread_over_more_than_a_day_never_reach_the_ceiling():
@@ -465,7 +469,7 @@ def test_failures_spread_over_more_than_a_day_never_reach_the_ceiling():
     limiter = LoginLimiter(clock=lambda: now[0])
     # 60 failures, but 30 minutes apart: never 50 inside one day.
     _spread_failures(limiter, now, 60, gap=1800.0)
-    assert limiter.retry_after("203.0.113.12", "admin") == 0
+    assert retry_after(limiter, "203.0.113.12", "admin") == 0
 
 
 EVIL_CSS = "@import url(http://evil.example/x.css); body{color:red}"

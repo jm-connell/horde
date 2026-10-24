@@ -300,53 +300,6 @@ class LoginLimiter:
             elif failed is False:
                 self._ok(attempt.address, attempt.name, attempt.device, code)
 
-    # --- Counting, without a reservation ------------------------------------
-
-    def retry_after(
-        self,
-        address: str,
-        username_norm: str,
-        *,
-        device: str | None = None,
-        code_name: str | None = None,
-    ) -> int:
-        """Seconds the caller must wait before trying again (0 = go ahead)."""
-        with self._lock:
-            wait = self._wait(
-                self._clock(),
-                throttle_address(address),
-                username_norm,
-                device,
-                code_name,
-            )
-        return int(wait) + 1 if wait > 0 else 0
-
-    def record_failure(
-        self,
-        address: str,
-        username_norm: str,
-        *,
-        known: bool = True,
-        device: str | None = None,
-        code_name: str | None = None,
-    ) -> None:
-        now = self._clock()
-        with self._lock:
-            self._fail(
-                now, throttle_address(address), username_norm, device, known, code_name
-            )
-
-    def record_success(
-        self,
-        address: str,
-        username_norm: str,
-        *,
-        device: str | None = None,
-        code_name: str | None = None,
-    ) -> None:
-        with self._lock:
-            self._ok(throttle_address(address), username_norm, device, code_name)
-
     # --- Internals (call with the lock held) ----------------------------------
 
     def _wait(
