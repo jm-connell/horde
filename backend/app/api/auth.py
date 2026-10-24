@@ -315,10 +315,12 @@ def login(
                 401, "Invalid username or password", "invalid_credentials"
             )
         if two_factor.is_enabled(user):
-            # A right password proves nothing about the second factor: the failure
-            # counters stay as they are until the code step succeeds, so alternating
-            # right passwords with wrong codes cannot reset the throttle (leaving
-            # the block gives the try back without settling it).
+            # A right password proves nothing about the second factor. It uses up
+            # a try like a wrong guess (a phished password cannot be hashed at
+            # will); a right code forgives it, and the failure counters are not
+            # cleared until then, so alternating right passwords with wrong codes
+            # cannot reset the throttle.
+            attempt.password_accepted()
             raise _totp_required(runtime, user)
         attempt.success()
     return _complete_sign_in(session, request, response, runtime, user)

@@ -178,6 +178,16 @@ class Attempt:
             self, failed=True, code=self.code_name if code_step else None
         )
 
+    def password_accepted(self) -> None:
+        """A right password whose second step is still due.
+
+        Counted against the tries like a wrong guess (on the address+name and
+        device lanes and the name-wide slowdown, not the address-only lane or the
+        daily ceiling), so a phished password cannot be hashed at will. A right
+        code (``success``) forgives it.
+        """
+        self._limiter._settle(self, failed=True, code=None, password_ok=True)
+
     def success(self, *, code_step: bool = False) -> None:
         """A right guess: forget the failures (and the code counter if ``code_step``)."""
         self._limiter._settle(
@@ -259,7 +269,12 @@ class LoginLimiter:
         return Attempt(self, keys, address, name, device, known, code_name)
 
     def _settle(
-        self, attempt: Attempt, *, failed: bool | None, code: str | None
+        self,
+        attempt: Attempt,
+        *,
+        failed: bool | None,
+        code: str | None,
+        password_ok: bool = False,
     ) -> None:
         now = self._clock()
         with self._lock:
@@ -280,6 +295,7 @@ class LoginLimiter:
                     attempt.device,
                     attempt.known,
                     code,
+                    password_ok=password_ok,
                 )
             elif failed is False:
                 self._ok(attempt.address, attempt.name, attempt.device, code)
@@ -367,6 +383,8 @@ class LoginLimiter:
         device: str | None,
         known: bool,
         code_name: str | None,
+        *,
+        password_ok: bool = False,
     ) -> None:
         self._prune(now)
         slow = self._entries.setdefault((None, name), _Entry(known=known))
@@ -376,14 +394,17 @@ class LoginLimiter:
         slow.last_failure = now
         if slow.failures > FREE_ATTEMPTS:
             slow.locked_until = now + USERNAME_SLOWDOWN_SEC
-        daily = self._daily.setdefault(name, _Daily(known=known))
-        daily.times.append(now)
-        if (
-            len(daily.times) == DAILY_CEILING
-            and now - daily.times[0] <= DAILY_WINDOW_SEC
-        ):
-            daily.locked_until = now + DAILY_SLOWDOWN_SEC
+        if not password_ok:
+            daily = self._daily.setdefault(name, _Daily(known=known))
+            daily.times.append(now)
+            if (
+                len(daily.times) == DAILY_CEILING
+                and now - daily.times[0] <= DAILY_WINDOW_SEC
+            ):
+                daily.locked_until = now + DAILY_SLOWDOWN_SEC
         for key, free in self._lanes(address, name, device):
+            if password_ok and key[1] is None:
+                continue  # a right password is no sign of walking through names
             entry = self._entries.setdefault(key, _Entry(known=known))
             entry.failures += 1
             entry.last_failure = now

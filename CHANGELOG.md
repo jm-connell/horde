@@ -223,7 +223,9 @@ All notable changes to Horde are documented here. The format follows
   seconds from anywhere, so guessing across many addresses is very slow
   without a lockout an attacker could use against you. Wrong second-step
   codes count in the same throttle as wrong passwords, and a right password
-  does not clear them.
+  does not clear them; a right password of an account with two-step sign-in
+  uses up a free try until its code is entered, so a phished password cannot
+  be tried at will.
 - **Concurrent sign-in attempts could get past the throttle.** The sign-in
   throttle checked its budget, then spent about 100 ms hashing the password,
   and only then counted the failure, so a burst of simultaneous guesses all

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import itertools
 import time
 import types
 
@@ -222,13 +223,14 @@ def test_a_ticket_works_once(anon_client, enrolled, now):
 
 
 def test_five_wrong_codes_burn_the_ticket(anon_client, enrolled, now, app):
+    # The throttle's clock runs fast, so only the ticket's own limit is in play.
+    ticks = itertools.count(1000, 10)
+    app.state.auth.limiter = LoginLimiter(clock=lambda: float(next(ticks)))
     ticket = _ticket(anon_client)
     for i in range(login_tickets.MAX_ATTEMPTS):
         res = _second_step(anon_client, ticket, f"00000{i}")
         assert res.json()["code"] == "invalid_totp"
-    # Lift the address throttle (it would answer 429 first): the ticket is spent
-    # on its own account, even for the right code.
-    app.state.auth.limiter = LoginLimiter()
+    # The ticket is spent on its own account, even for the right code.
     good = _second_step(anon_client, ticket, _code(enrolled.secret, now, 1))
     assert good.status_code == 401 and good.json()["code"] == "totp_ticket_invalid"
     assert not _signed_in(anon_client)
@@ -332,33 +334,40 @@ def test_last_login_waits_for_the_second_step(anon_client, enrolled, now, init_d
 def test_wrong_codes_count_in_the_same_throttle_as_wrong_passwords(
     anon_client, enrolled
 ):
-    ticket = _ticket(anon_client)
+    ticket = _ticket(anon_client)  # the right password used up the first try
     statuses = []
-    for i in range(FREE_ATTEMPTS):
+    for i in range(FREE_ATTEMPTS - 1):
         res = _second_step(anon_client, ticket, f"00000{i}")
         statuses.append(res.status_code)
-    assert statuses == [401] * FREE_ATTEMPTS
+    assert statuses == [401] * (FREE_ATTEMPTS - 1)
     # Now both steps wait: the password step and the code step.
     assert _password_step(anon_client).status_code == 429
     assert _second_step(anon_client, ticket, "999999").status_code == 429
 
 
 def test_failures_before_the_password_step_count_too(anon_client, enrolled):
-    for _ in range(FREE_ATTEMPTS - 1):
+    for _ in range(FREE_ATTEMPTS - 2):
         _password_step(anon_client, password="wrong-wrong-wrong")
     ticket = _ticket(anon_client)
     assert _second_step(anon_client, ticket, "000000").status_code == 401
     assert _second_step(anon_client, ticket, "000001").status_code == 429
 
 
-def test_a_right_password_does_not_reset_the_code_failures(anon_client, enrolled, now):
-    for round_ in range(FREE_ATTEMPTS - 1):
+def test_a_right_password_does_not_reset_the_code_failures(anon_client, enrolled, app):
+    """Ten wrong codes make the code step wait, however many right passwords came between."""
+    from app.services.auth.limiter import CODE_LOCK_EVERY
+
+    clock = [1000.0]
+    app.state.auth.limiter = LoginLimiter(clock=lambda: clock[0])
+    addresses = itertools.count(1)
+    app.state.auth.client_address = lambda request: f"203.0.113.{next(addresses)}"
+    for round_ in range(CODE_LOCK_EVERY):
+        clock[0] += 61.0  # past the per-minute slowdown, a new address each time
         ticket = _ticket(anon_client)
-        assert _second_step(anon_client, ticket, f"00000{round_}").status_code == 401
-    # Four wrong codes so far. Alternating right passwords must not wipe them.
-    ticket = _ticket(anon_client)
-    assert _second_step(anon_client, ticket, "000009").status_code == 401
-    assert _password_step(anon_client).status_code == 429
+        res = _second_step(anon_client, ticket, f"00000{round_ % 10}")
+        assert res.json()["code"] == "invalid_totp"
+    ticket = _ticket(anon_client)  # the password step is not held up
+    assert _second_step(anon_client, ticket, "000099").status_code == 429
 
 
 def test_a_successful_second_step_clears_the_failures(anon_client, enrolled, now):

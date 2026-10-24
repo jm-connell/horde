@@ -101,11 +101,15 @@ def test_concurrent_wrong_codes_are_judged_within_the_budget(
             transport=transport, base_url="http://localhost", headers=CSRF
         ) as c:
             tickets = []
-            for _ in range(12):
-                r = await c.post(
-                    "/api/auth/login",
-                    json={"username": "admin", "password": ADMIN_PASSWORD},
-                )
+            for k in range(FREE_ATTEMPTS):  # a right password uses up a try, too
+                other = httpx.ASGITransport(app=app, client=(f"198.51.100.{k + 1}", 1))
+                async with httpx.AsyncClient(
+                    transport=other, base_url="http://localhost", headers=CSRF
+                ) as elsewhere:
+                    r = await elsewhere.post(
+                        "/api/auth/login",
+                        json={"username": "admin", "password": ADMIN_PASSWORD},
+                    )
                 assert r.status_code == 401, r.text
                 tickets.append(r.json()["extra"]["pending_token"])
             results = await asyncio.gather(
@@ -125,7 +129,7 @@ def test_concurrent_wrong_codes_are_judged_within_the_budget(
 
     codes = Counter(asyncio.run(run()))
     assert 1 <= codes["invalid_totp"] <= FREE_ATTEMPTS
-    assert codes["invalid_totp"] + codes["rate_limited"] == 60
+    assert codes["invalid_totp"] + codes["rate_limited"] == 5 * FREE_ATTEMPTS
 
 
 def test_concurrent_current_password_checks_are_judged_within_the_budget(
@@ -318,6 +322,73 @@ def test_a_flood_of_made_up_names_does_not_lock_the_owner_out(
     mine, flood_codes = asyncio.run(run())
     assert mine == [200, 200, 200]
     assert flood_codes["busy"] > 0
+
+
+# --- 1c. a phished password of a two-step account is not free to hash --------------
+
+
+def test_a_right_password_with_a_code_still_due_uses_up_a_try():
+    limiter = LoginLimiter(clock=lambda: 0.0)
+    for _ in range(FREE_ATTEMPTS):
+        with limiter.begin("198.51.100.1", "alice") as attempt:
+            attempt.password_accepted()
+    with pytest.raises(Throttled) as locked:
+        limiter.begin("198.51.100.1", "alice")
+    assert locked.value.wait > 1
+    # It is not a wrong guess about anyone else: the address may still try other names.
+    limiter.begin("198.51.100.1", "bob").release()
+
+
+def test_a_right_code_forgives_the_password_steps_before_it():
+    limiter = LoginLimiter(clock=lambda: 0.0)
+    for _ in range(FREE_ATTEMPTS - 1):
+        limiter.begin("198.51.100.1", "alice").password_accepted()
+    limiter.begin("198.51.100.1", "alice", code_name="alice").success(code_step=True)
+    for _ in range(FREE_ATTEMPTS):
+        limiter.begin("198.51.100.1", "alice").password_accepted()
+
+
+def test_a_phished_password_cannot_be_hashed_without_limit(
+    app, anon_client, admin_user, client, now
+):
+    _enroll(client, now)
+    app.state.auth.limiter = LoginLimiter(clock=lambda: 1000.0)
+    codes = [_login(anon_client).json()["code"] for _ in range(FREE_ATTEMPTS)]
+    assert codes == ["totp_required"] * FREE_ATTEMPTS
+    blocked = _login(anon_client)
+    assert (blocked.status_code, blocked.json()["code"]) == (429, "rate_limited")
+
+
+def test_rotating_addresses_does_not_dodge_the_limit_on_a_phished_password(
+    app, init_db, admin_user, client, now
+):
+    _enroll(client, now)
+    limiter = LoginLimiter(clock=lambda: 1000.0)
+    app.state.auth.limiter = limiter
+    seen = []
+    for i in range(FREE_ATTEMPTS + 2):
+        app.state.auth.client_address = lambda request, i=i: f"203.0.113.{i + 1}"
+        seen.append(_login(TestClient(app, headers=CSRF)).status_code)
+    assert seen[-1] == 429  # the name-wide slowdown, whoever asks
+
+
+def test_the_owner_on_a_known_device_is_never_throttled_by_their_own_sign_ins(
+    app, anon_client, admin_user, client, now
+):
+    secret = _enroll(client, now)
+    app.state.auth.limiter = LoginLimiter(clock=lambda: 1000.0)
+    for _ in range(FREE_ATTEMPTS + 3):
+        now[0] += totp.STEP_SECONDS  # a code works once
+        ticket = _login(anon_client)
+        assert ticket.json()["code"] == "totp_required", ticket.text
+        done = anon_client.post(
+            "/api/auth/login/totp",
+            json={
+                "pending_token": ticket.json()["extra"]["pending_token"],
+                "code": totp.code_at(secret, now[0]),
+            },
+        )
+        assert done.status_code == 200, done.text
 
 
 # --- 4. IPv6 clients are throttled per /64 ---------------------------------------
