@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   usePlaybackLayout,
@@ -10,6 +10,7 @@ import {
   PRESET_ORDER,
   presetOptionLabel,
 } from "../presets";
+import { useAnimatedLayout } from "../hooks/useAnimatedLayout";
 import { avoidMiniPlayerStyle } from "../utils/miniPlayerLayout";
 import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
@@ -77,6 +78,14 @@ export default function ChannelDownloadPanel({
     }
   );
 
+  // Glide when the panel changes anchor (mini player opened, closed or moved
+  // to the other side), not on every pixel of a mini player drag.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useAnimatedLayout(
+    panelRef,
+    ["left", "right", "top", "bottom"].filter((k) => k in positionStyle).join()
+  );
+
   const editingItem = pending.find((p) => p.tempId === editingId) ?? null;
   const presetOptions = allPresets.length > 0 ? allPresets : [...PRESET_ORDER];
 
@@ -97,7 +106,7 @@ export default function ChannelDownloadPanel({
 
   if (pending.length === 0) {
     return createPortal(
-      <div style={positionStyle}>
+      <div ref={panelRef} style={positionStyle}>
         <div className={`${panelShell} relative p-4 pr-8`}>
           {dismissBtn}
           <span className="mb-1 block text-xs font-medium text-gray-400">
@@ -126,7 +135,7 @@ export default function ChannelDownloadPanel({
 
   return createPortal(
     <>
-      <div style={positionStyle} className="flex flex-col gap-2">
+      <div ref={panelRef} style={positionStyle} className="flex flex-col gap-2">
         <div className={`${panelShell} relative pr-8`}>
           {dismissBtn}
           <span className="mb-1 block text-xs font-medium text-gray-400">

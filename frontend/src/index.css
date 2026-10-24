@@ -82,6 +82,19 @@
     cursor: pointer;
   }
 
+  /* Hover and selection colours fade instead of snapping. A transition
+     utility on the element replaces this (utilities beat the base layer). */
+  a,
+  button,
+  [role="button"],
+  [role="option"],
+  [role="menuitem"],
+  li {
+    transition-property: color, background-color, border-color;
+    transition-duration: 150ms;
+    transition-timing-function: ease-out;
+  }
+
   input::placeholder,
   textarea::placeholder {
     color: var(--color-gray-400);

@@ -1,8 +1,10 @@
+import { useRef } from "react";
 import PlaybackQueue from "../../components/PlaybackQueue";
 import {
   usePlaybackLayout,
   usePlaybackSession,
 } from "../../context/PlaybackContext";
+import { useAnimatedLayout } from "../../hooks/useAnimatedLayout";
 import {
   queueDockAlignClass,
   queueDockStyle,
@@ -24,9 +26,14 @@ export function QueueBottomDock({ viewportWidth }: { viewportWidth: number }) {
   const { miniPlayerActive } = usePlaybackSession();
   const { miniPlayerRect } = usePlaybackLayout();
   const rect = miniPlayerActive ? miniPlayerRect : null;
+  const style = queueDockStyle(rect, { viewportWidth });
+  // Glide across when the mini player opens or closes instead of jumping.
+  const panelRef = useRef<HTMLDivElement>(null);
+  useAnimatedLayout(panelRef, "left" in style ? "left" : "right");
   return (
-    <div style={queueDockStyle(rect, { viewportWidth })}>
+    <div style={style}>
       <div
+        ref={panelRef}
         className={`pointer-events-auto w-96 ${queueDockAlignClass(rect, {
           viewportWidth,
         })}`}
