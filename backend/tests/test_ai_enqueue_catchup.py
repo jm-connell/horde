@@ -23,6 +23,9 @@ def _ai(**overrides):
     settings = {
         "paused": False,
         "enabled": True,
+        "base_url": "http://ai.test/v1",
+        "chat_model": "chat-model",
+        "embed_model": "embed-model",
         "schedule": "on_download",
         "enrich_tags": True,
         "ai_summaries": False,

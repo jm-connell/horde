@@ -69,19 +69,44 @@ class PausedResponse(BaseModel):
 # --- AI ----------------------------------------------------------------------
 
 
+class AiModelRow(BaseModel):
+    """A model an endpoint offers; prices only come from OpenRouter."""
+
+    id: str
+    name: str = ""
+    prompt_per_million: float | None = None
+    completion_per_million: float | None = None
+
+
+class AiModelPreset(BaseModel):
+    id: str
+    label: str
+    model: str
+
+
 class AiConnectionTest(BaseModel):
-    """Result of probing an Ollama base URL (``POST /api/ai/test``)."""
+    """Result of probing an OpenAI-compatible endpoint (``POST /api/ai/test``)."""
 
     ok: bool
     base_url: str | None = None
     detail: str | None = None
-    models: list[str] | None = None
+    #: ``openrouter`` | ``ollama`` | ``openai_compatible``
+    kind: str | None = None
+    models: list[AiModelRow] = Field(default_factory=list)
+    embedding_models: list[AiModelRow] = Field(default_factory=list)
+    presets: list[AiModelPreset] = Field(default_factory=list)
 
 
-class OpenRouterConnectionTest(BaseModel):
-    ok: bool
-    detail: str | None = None
-    model_count: int | None = None
+class AiDetectedServer(BaseModel):
+    label: str
+    base_url: str
+    kind: str
+
+
+class AiDetectResult(BaseModel):
+    """Local AI servers found at the usual addresses (``POST /api/ai/detect``)."""
+
+    servers: list[AiDetectedServer] = Field(default_factory=list)
 
 
 class AiRuntimeRead(BaseModel):
@@ -344,22 +369,15 @@ class PotProviderStatus(BaseModel):
     detail: str | None = None
 
 
-class OllamaHealth(BaseModel):
+class AiHealth(BaseModel):
     enabled: bool
-    ready: bool
+    configured: bool = False
+    #: ``openrouter`` | ``ollama`` | ``openai_compatible`` (from the last probe).
+    provider: str | None = None
     reachable: bool
     base_url: str | None = None
     pulling: list[str] | None = None
     last_error: str | None = None
-
-
-class OpenRouterHealth(BaseModel):
-    enabled: bool
-    configured: bool | None = None
-    api_key_set: bool | None = None
-    model: str | None = None
-    scope: str | None = None
-    reachable: bool | None = None
 
 
 class HealthDownloads(BaseModel):
@@ -402,8 +420,7 @@ class HealthFull(BaseModel):
     yt_dlp_version: str | None = None
     ffmpeg: FfmpegInfo | None = None
     pot_provider: PotProviderStatus | None = None
-    ollama: OllamaHealth | None = None
-    openrouter: OpenRouterHealth | None = None
+    ai: AiHealth | None = None
     disk: DiskUsage | None = None
     storage_warning: str | None = None
     library_video_count: int

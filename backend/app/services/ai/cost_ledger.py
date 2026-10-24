@@ -1,4 +1,4 @@
-"""Persist OpenRouter usage costs for Settings totals and per-response tags."""
+"""Persist reported AI usage costs (OpenRouter) for Settings totals and per-response tags."""
 
 from __future__ import annotations
 
@@ -192,10 +192,8 @@ def budget_status(
 ) -> dict[str, Any]:
     """Return weekly budget config vs rolling 7-day spend."""
     ai = app_settings.ai_settings()
-    budget = app_settings.clamp_weekly_budget_usd(
-        ai.get("openrouter_weekly_budget_usd")
-    )
-    hard = bool(ai.get("openrouter_budget_hard_limit"))
+    budget = app_settings.clamp_weekly_budget_usd(ai.get("weekly_budget_usd"))
+    hard = bool(ai.get("budget_hard_limit"))
     if window_totals is None:
         d7 = sum_since(utcnow() - timedelta(days=7))
     else:
@@ -218,7 +216,7 @@ def assert_budget_allows() -> None:
     budget = float(status["weekly_budget_usd"] or 0.0)
     spent = float(status["d7"] or 0.0)
     raise OpenRouterBudgetExceeded(
-        f"OpenRouter weekly budget of ${budget:g} exceeded "
+        f"AI weekly budget of ${budget:g} exceeded "
         f"(${spent:.4f} in the last 7 days). "
         "Raise the limit in Settings → AI, or turn off 'Stop when exceeded'."
     )

@@ -25,8 +25,9 @@ Two entry points:
   by hand with a fresh check per hop, and the connection is pinned to the
   address that was validated.
 
-The Ollama ``base_url`` is deliberately not routed through this module: it is a
-LAN host by design and is an administrator-only setting.
+The AI provider URLs (``base_url``, ``embed_base_url``) are deliberately not
+routed through this module: they are often LAN hosts by design and are
+administrator-only settings.
 """
 
 from __future__ import annotations

@@ -27,7 +27,6 @@ from .. import chapters as chapters_svc
 from . import embeddings, vector_index
 from . import text as ai_text
 from .provider import (
-    OpenRouterProvider,
     get_embed_provider,
     get_llm_provider,
     llm_features_allowed,
@@ -168,9 +167,7 @@ def run_embed_video(session: Session, video_id: int | None) -> SkipReason | None
     if video.needs_review:
         return "needs_review"
     if get_embed_provider() is None:
-        raise RuntimeError(
-            "No embed provider available (enable Ollama or OpenRouter All)"
-        )
+        raise RuntimeError("No embedding provider is reachable (Settings → AI)")
     return "embed_skipped"
 
 
@@ -184,9 +181,7 @@ def run_embed_catalog_video(
         return "catalog_video_missing"
     provider = get_embed_provider()
     if provider is None:
-        raise RuntimeError(
-            "No embed provider available (enable Ollama or OpenRouter All)"
-        )
+        raise RuntimeError("No embedding provider is reachable (Settings → AI)")
     model = resolve_embed_model(provider)
     from .. import channel_catalog
 
@@ -202,7 +197,7 @@ def run_embed_catalog_video(
     if not doc.strip():
         return "empty_document"
     existing_id = existing.id if existing is not None else None
-    # Release the job Session before OpenRouter usage is written on another connection.
+    # Release the job Session before AI usage is written on another connection.
     session.commit()
     vec = provider.embed(doc, model, usage_kind="embed")
     if existing_id is None:
@@ -283,11 +278,8 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
 
     provider = get_llm_provider()
     if provider is None:
-        raise RuntimeError("No LLM available (enable OpenRouter or Ollama)")
-    if isinstance(provider, OpenRouterProvider):
-        chat_model = resolve_llm_model(provider)
-    else:
-        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+        raise RuntimeError("No AI chat provider is reachable (Settings → AI)")
+    chat_model = resolve_llm_model(provider)
     missing = require_llm_chat_model(provider, chat_model)
     if missing:
         raise RuntimeError(missing)
@@ -396,12 +388,9 @@ def generate_summary(
     provider = get_llm_provider()
     if provider is None:
         raise SummarizeError(
-            "No LLM available (enable OpenRouter or Ollama)", status_code=503
+            "No AI chat provider is reachable (Settings → AI)", status_code=503
         )
-    if isinstance(provider, OpenRouterProvider):
-        chat_model = resolve_llm_model(provider)
-    else:
-        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    chat_model = resolve_llm_model(provider)
     missing = require_llm_chat_model(provider, chat_model)
     if missing:
         raise SummarizeError(missing, status_code=503)
@@ -610,12 +599,9 @@ def generate_chapters(
     provider = get_llm_provider()
     if provider is None:
         raise ChaptersError(
-            "No LLM available (enable OpenRouter or Ollama)", status_code=503
+            "No AI chat provider is reachable (Settings → AI)", status_code=503
         )
-    if isinstance(provider, OpenRouterProvider):
-        chat_model = resolve_llm_model(provider)
-    else:
-        chat_model = str(ai.get("chat_model") or "llama3.2:3b")
+    chat_model = resolve_llm_model(provider)
     missing = require_llm_chat_model(provider, chat_model)
     if missing:
         raise ChaptersError(missing, status_code=503)
@@ -901,12 +887,10 @@ _CATEGORY_MAX_EXAMPLES = 8
 def run_refresh_categories(session: Session, _video_id: int | None = None) -> None:
     embed_provider = get_embed_provider()
     if embed_provider is None:
-        raise RuntimeError(
-            "No embed provider available (enable Ollama or OpenRouter All)"
-        )
+        raise RuntimeError("No embedding provider is reachable (Settings → AI)")
     llm = get_llm_provider()
     if llm is None:
-        raise RuntimeError("No LLM available (enable OpenRouter or Ollama)")
+        raise RuntimeError("No AI chat provider is reachable (Settings → AI)")
     ai = app_settings.ai_settings()
     chat_model = resolve_llm_model(llm)
     embed_model = resolve_embed_model(embed_provider)
@@ -915,13 +899,10 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
     missing = require_llm_chat_model(llm, chat_model)
     if missing:
         raise RuntimeError(missing)
-    if isinstance(embed_provider, OpenRouterProvider):
-        if not embed_provider.has_model(embed_model):
-            raise RuntimeError("OpenRouter embed model is not set")
-    elif not embed_provider.has_model(embed_model):
+    if not embed_provider.has_model(embed_model):
         if ai.get("auto_pull_models", True):
-            ensure_models(embed_provider)
-        raise RuntimeError("Embed model not available (pull may be in progress)")
+            ensure_models()
+        raise RuntimeError("Embed model not available (download may be in progress)")
 
     from . import workload as ai_workload
 

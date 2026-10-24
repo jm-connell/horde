@@ -11,8 +11,8 @@ def test_settings_get_defaults_and_patch_roundtrip(client):
     assert body["setup_completed"] is False
     assert "ui" in body
     assert "ai" in body
-    assert body["ai"]["openrouter_api_key_set"] is False
-    assert body["ai"]["openrouter_show_costs"] is False
+    assert body["ai"]["api_key_set"] is False
+    assert body["ai"]["show_costs"] is False
 
     patched = client.patch(
         "/api/settings",
@@ -54,24 +54,57 @@ def test_settings_youtube_video_search_roundtrip(client):
     assert again["youtube_video_search"] is False
 
 
-def test_settings_masks_openrouter_key(client):
+def test_settings_masks_the_api_key(client):
     patched = client.patch(
         "/api/settings",
-        json={"ai": {"openrouter_api_key": "sk-or-v1-abcdefghijklmnop"}},
+        json={
+            "ai": {
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "sk-or-v1-abcdefghijklmnop",
+            }
+        },
     )
     assert patched.status_code == 200
     body = patched.json()
-    assert body["ai"]["openrouter_api_key_set"] is True
-    assert body["ai"]["openrouter_api_key"].startswith("••••")
-    assert "abcdefghijklmnop" not in body["ai"]["openrouter_api_key"]
+    assert body["ai"]["api_key_set"] is True
+    assert body["ai"]["api_key"].startswith("••••")
+    assert "abcdefghijklmnop" not in body["ai"]["api_key"]
 
     # Masked placeholder must not overwrite the stored key.
+    client.patch("/api/settings", json={"ai": {"api_key": "••••nop"}})
+    still = client.get("/api/settings").json()
+    assert still["ai"]["api_key_set"] is True
+
+
+def test_changing_the_url_drops_a_key_saved_for_the_old_one(client):
+    """A key saved for one provider must never be sent to another host."""
+    from app.services import app_settings
+
     client.patch(
         "/api/settings",
-        json={"ai": {"openrouter_api_key": "••••nop"}},
+        json={
+            "ai": {
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "sk-or-v1-secret",
+            }
+        },
     )
-    still = client.get("/api/settings").json()
-    assert still["ai"]["openrouter_api_key_set"] is True
+    # The form sends the masked key back with the new URL.
+    out = client.patch(
+        "/api/settings",
+        json={"ai": {"base_url": "http://192.168.1.50:11434", "api_key": "••••cret"}},
+    ).json()["ai"]
+
+    assert out["base_url"] == "http://192.168.1.50:11434/v1"
+    assert out["api_key_set"] is False
+    assert app_settings.ai_settings()["api_key"] == ""
+
+    # A new key typed with the new URL is kept.
+    out = client.patch(
+        "/api/settings",
+        json={"ai": {"base_url": "https://api.groq.com/openai/v1", "api_key": "gsk"}},
+    ).json()["ai"]
+    assert out["api_key_set"] is True
 
 
 def test_settings_persists_custom_css(client):
@@ -211,14 +244,15 @@ def _configure_ai_provider() -> None:
     app_settings.save(
         {
             "ai": {
-                "openrouter_enabled": True,
-                "openrouter_api_key": "sk-or-v1-secret-tail-9f3a",
-                "openrouter_model": "vendor/private-model",
-                "openrouter_weekly_budget_usd": 7.5,
-                "base_url": "http://gpu-box.internal:11434",
+                "base_url": "https://openrouter.ai/api/v1",
+                "api_key": "sk-or-v1-secret-tail-9f3a",
+                "chat_model": "vendor/private-model",
+                "weekly_budget_usd": 7.5,
+                "embed_base_url": "http://gpu-box.internal:11434/v1",
+                "embed_model": "nomic-embed-text",
                 "ai_chat": False,
                 "ai_chapters_mode": "on_watch",
-                "openrouter_show_costs": True,
+                "show_costs": True,
                 "schedule": "timer",
                 "workload_profile": "light",
             }
@@ -233,21 +267,21 @@ def test_a_member_gets_the_ai_switches_but_not_the_provider_setup(
 
     seen = member_client.get("/api/settings").json()["ai"]
 
-    assert seen["openrouter_enabled"] is True
-    assert seen["openrouter_api_key_set"] is True
+    assert seen["enabled"] is True
     assert seen["ai_chat"] is False
     assert seen["ai_chapters_mode"] == "on_watch"
-    assert seen["openrouter_show_costs"] is True
-    assert seen["openrouter_api_key"] == ""
-    assert seen["base_url"] == ""
-    assert seen["openrouter_model"] != "vendor/private-model"
-    assert seen["openrouter_weekly_budget_usd"] is None
+    assert seen["show_costs"] is True
+    assert seen["api_key"] == "" and seen["api_key_set"] is False
+    assert seen["base_url"] == "" and seen["embed_base_url"] == ""
+    assert seen["chat_model"] != "vendor/private-model"
+    assert seen["weekly_budget_usd"] is None
     # An administrator still sees everything the Settings page edits.
     admin = client.get("/api/settings").json()["ai"]
-    assert admin["openrouter_api_key"].endswith("9f3a")
-    assert admin["base_url"] == "http://gpu-box.internal:11434"
-    assert admin["openrouter_model"] == "vendor/private-model"
-    assert admin["openrouter_weekly_budget_usd"] == 7.5
+    assert admin["api_key"].endswith("9f3a")
+    assert admin["base_url"] == "https://openrouter.ai/api/v1"
+    assert admin["embed_base_url"] == "http://gpu-box.internal:11434/v1"
+    assert admin["chat_model"] == "vendor/private-model"
+    assert admin["weekly_budget_usd"] == 7.5
 
 
 def test_a_members_settings_patch_does_not_echo_the_provider_setup(member_client):
@@ -255,7 +289,7 @@ def test_a_members_settings_patch_does_not_echo_the_provider_setup(member_client
 
     out = member_client.patch("/api/settings", json={"ui": {"theme": "oled"}}).json()
 
-    assert out["ai"]["openrouter_api_key"] == ""
+    assert out["ai"]["api_key"] == ""
     assert out["ai"]["base_url"] == ""
 
 
@@ -268,23 +302,24 @@ def test_ai_status_hides_provider_internals_from_a_member(client, member_client)
     assert seen.status_code == full.status_code == 200
     member, admin = seen.json(), full.json()
     # Everything the library and player read stays.
-    assert member["openrouter_enabled"] is True
-    assert member["openrouter_api_key_set"] is True
-    assert {"ready", "enabled", "paused", "queue_depth"} <= member.keys()
-    assert member["openrouter_model"] == ""
+    assert member["enabled"] is True
+    assert member["reports_cost"] is True
+    assert {"ready", "reachable", "paused", "queue_depth"} <= member.keys()
+    assert member["chat_model"] == "" and member["embed_model"] == ""
     assert member["base_url"] is None and member["last_error"] is None
+    assert member["embed_base_url"] is None
     assert member["recent_failures"] == []
     assert member["pulling"] == [] and member["blocked_reason"] is None
-    assert member["llm_backend"] is None and member["embed_backend"] is None
     # How the provider is set up, and the GPU, are the administrator's business.
-    assert member["provider"] == ""
+    assert member["provider"] == "" and member["embed_provider"] == ""
     assert member["schedule"] == "on_download"
     assert member["workload_profile"] == member["recommended_profile"] == "normal"
     assert member["profile_locked"] is False
     assert member["vram_tier"] == member["gpu_source"] == "unknown"
-    assert member["openrouter_reachable"] is False
-    assert admin["openrouter_model"] == "vendor/private-model"
-    assert admin["provider"] != ""
+    assert member["configured"] is False
+    assert admin["chat_model"] == "vendor/private-model"
+    assert admin["provider"] == "openrouter"
+    assert admin["embed_base_url"] == "http://gpu-box.internal:11434/v1"
     assert admin["schedule"] == "timer"
     assert admin["workload_profile"] == "light"
 
@@ -295,14 +330,14 @@ def test_health_hides_provider_internals_from_a_member(client, member_client):
     seen = member_client.get("/api/health").json()
     full = client.get("/api/health").json()
 
-    # No member screen shows the OpenRouter status; it is set up by the admin.
-    assert seen["openrouter"] is None
-    assert seen["ollama"]["base_url"] is None
-    assert seen["ollama"]["last_error"] is None
-    assert not seen["ollama"]["pulling"]
-    assert full["openrouter"]["model"] == "vendor/private-model"
-    assert full["openrouter"]["enabled"] is True
-    assert full["openrouter"]["configured"] is True
+    assert seen["ai"]["enabled"] is True
+    assert seen["ai"]["base_url"] is None
+    assert seen["ai"]["provider"] is None
+    assert seen["ai"]["last_error"] is None
+    assert not seen["ai"]["pulling"]
+    assert full["ai"]["base_url"] == "https://openrouter.ai/api/v1"
+    assert full["ai"]["provider"] == "openrouter"
+    assert full["ai"]["configured"] is True
 
 
 def test_the_ai_job_list_is_for_administrators(client, member_client):

@@ -216,7 +216,7 @@
         "type": "object"
       },
       "AiConnectionTest": {
-        "description": "Result of probing an Ollama base URL (``POST /api/ai/test``).",
+        "description": "Result of probing an OpenAI-compatible endpoint (``POST /api/ai/test``).",
         "properties": {
           "base_url": {
             "anyOf": [
@@ -240,29 +240,129 @@
             ],
             "title": "Detail"
           },
-          "models": {
+          "embedding_models": {
+            "items": {
+              "$ref": "#/components/schemas/AiModelRow"
+            },
+            "title": "Embedding Models",
+            "type": "array"
+          },
+          "kind": {
             "anyOf": [
               {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Models"
+            "title": "Kind"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/AiModelRow"
+            },
+            "title": "Models",
+            "type": "array"
           },
           "ok": {
             "title": "Ok",
             "type": "boolean"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/AiModelPreset"
+            },
+            "title": "Presets",
+            "type": "array"
           }
         },
         "required": [
           "ok"
         ],
         "title": "AiConnectionTest",
+        "type": "object"
+      },
+      "AiCostsRead": {
+        "properties": {
+          "all": {
+            "default": 0.0,
+            "title": "All",
+            "type": "number"
+          },
+          "all_calls": {
+            "default": 0,
+            "title": "All Calls",
+            "type": "integer"
+          },
+          "blocked": {
+            "default": false,
+            "title": "Blocked",
+            "type": "boolean"
+          },
+          "d30": {
+            "default": 0.0,
+            "title": "D30",
+            "type": "number"
+          },
+          "d30_calls": {
+            "default": 0,
+            "title": "D30 Calls",
+            "type": "integer"
+          },
+          "d7": {
+            "default": 0.0,
+            "title": "D7",
+            "type": "number"
+          },
+          "d7_calls": {
+            "default": 0,
+            "title": "D7 Calls",
+            "type": "integer"
+          },
+          "h24": {
+            "default": 0.0,
+            "title": "H24",
+            "type": "number"
+          },
+          "h24_calls": {
+            "default": 0,
+            "title": "H24 Calls",
+            "type": "integer"
+          },
+          "hard_limit": {
+            "default": false,
+            "title": "Hard Limit",
+            "type": "boolean"
+          },
+          "over_budget": {
+            "default": false,
+            "title": "Over Budget",
+            "type": "boolean"
+          },
+          "weekly_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Budget Usd"
+          },
+          "y1": {
+            "default": 0.0,
+            "title": "Y1",
+            "type": "number"
+          },
+          "y1_calls": {
+            "default": 0,
+            "title": "Y1 Calls",
+            "type": "integer"
+          }
+        },
+        "title": "AiCostsRead",
         "type": "object"
       },
       "AiCurrentJob": {
@@ -363,6 +463,113 @@
           "kind"
         ],
         "title": "AiCurrentJob",
+        "type": "object"
+      },
+      "AiDetectResult": {
+        "description": "Local AI servers found at the usual addresses (``POST /api/ai/detect``).",
+        "properties": {
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/AiDetectedServer"
+            },
+            "title": "Servers",
+            "type": "array"
+          }
+        },
+        "title": "AiDetectResult",
+        "type": "object"
+      },
+      "AiDetectedServer": {
+        "properties": {
+          "base_url": {
+            "title": "Base Url",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "base_url",
+          "kind"
+        ],
+        "title": "AiDetectedServer",
+        "type": "object"
+      },
+      "AiHealth": {
+        "properties": {
+          "base_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Url"
+          },
+          "configured": {
+            "default": false,
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "pulling": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pulling"
+          },
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "reachable"
+        ],
+        "title": "AiHealth",
         "type": "object"
       },
       "AiJobAction": {
@@ -576,6 +783,70 @@
           "status"
         ],
         "title": "AiJobRow",
+        "type": "object"
+      },
+      "AiModelPreset": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "model"
+        ],
+        "title": "AiModelPreset",
+        "type": "object"
+      },
+      "AiModelRow": {
+        "description": "A model an endpoint offers; prices only come from OpenRouter.",
+        "properties": {
+          "completion_per_million": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completion Per Million"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "default": "",
+            "title": "Name",
+            "type": "string"
+          },
+          "prompt_per_million": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Per Million"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "AiModelRow",
         "type": "object"
       },
       "AiProcessRequest": {
@@ -796,6 +1067,16 @@
             "title": "Ai Summaries",
             "type": "boolean"
           },
+          "api_key": {
+            "default": "",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "api_key_set": {
+            "default": false,
+            "title": "Api Key Set",
+            "type": "boolean"
+          },
           "auto_pull_models": {
             "default": true,
             "title": "Auto Pull Models",
@@ -806,18 +1087,38 @@
             "title": "Base Url",
             "type": "string"
           },
+          "budget_hard_limit": {
+            "default": false,
+            "title": "Budget Hard Limit",
+            "type": "boolean"
+          },
           "category_min_score": {
             "default": 0.55,
             "title": "Category Min Score",
             "type": "number"
           },
           "chat_model": {
-            "default": "llama3.2:3b",
+            "default": "",
             "title": "Chat Model",
             "type": "string"
           },
+          "embed_api_key": {
+            "default": "",
+            "title": "Embed Api Key",
+            "type": "string"
+          },
+          "embed_api_key_set": {
+            "default": false,
+            "title": "Embed Api Key Set",
+            "type": "boolean"
+          },
+          "embed_base_url": {
+            "default": "",
+            "title": "Embed Base Url",
+            "type": "string"
+          },
           "embed_model": {
-            "default": "nomic-embed-text",
+            "default": "",
             "title": "Embed Model",
             "type": "string"
           },
@@ -831,75 +1132,10 @@
             "title": "Enrich Tags",
             "type": "boolean"
           },
-          "ollama_prefer_embeddings": {
-            "default": false,
-            "title": "Ollama Prefer Embeddings",
-            "type": "boolean"
-          },
-          "openrouter_api_key": {
-            "default": "",
-            "title": "Openrouter Api Key",
-            "type": "string"
-          },
-          "openrouter_api_key_set": {
-            "default": false,
-            "title": "Openrouter Api Key Set",
-            "type": "boolean"
-          },
-          "openrouter_budget_hard_limit": {
-            "default": false,
-            "title": "Openrouter Budget Hard Limit",
-            "type": "boolean"
-          },
-          "openrouter_embed_model": {
-            "default": "openai/text-embedding-3-small",
-            "title": "Openrouter Embed Model",
-            "type": "string"
-          },
-          "openrouter_enabled": {
-            "default": false,
-            "title": "Openrouter Enabled",
-            "type": "boolean"
-          },
-          "openrouter_model": {
-            "default": "google/gemini-2.5-flash-lite",
-            "title": "Openrouter Model",
-            "type": "string"
-          },
-          "openrouter_scope": {
-            "default": "specialized",
-            "enum": [
-              "specialized",
-              "all"
-            ],
-            "title": "Openrouter Scope",
-            "type": "string"
-          },
-          "openrouter_show_costs": {
-            "default": false,
-            "title": "Openrouter Show Costs",
-            "type": "boolean"
-          },
-          "openrouter_weekly_budget_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Weekly Budget Usd"
-          },
           "paused": {
             "default": false,
             "title": "Paused",
             "type": "boolean"
-          },
-          "provider": {
-            "default": "ollama",
-            "title": "Provider",
-            "type": "string"
           },
           "schedule": {
             "default": "on_download",
@@ -916,6 +1152,11 @@
             "default": "03:00",
             "title": "Schedule Time",
             "type": "string"
+          },
+          "show_costs": {
+            "default": false,
+            "title": "Show Costs",
+            "type": "boolean"
           },
           "summary_length": {
             "default": "short",
@@ -952,6 +1193,17 @@
               }
             ],
             "title": "Vram Gb"
+          },
+          "weekly_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Budget Usd"
           },
           "workload_profile": {
             "default": "normal",
@@ -1028,6 +1280,18 @@
             ],
             "title": "Ai Summaries"
           },
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
           "auto_pull_models": {
             "anyOf": [
               {
@@ -1042,6 +1306,7 @@
           "base_url": {
             "anyOf": [
               {
+                "maxLength": 2048,
                 "type": "string"
               },
               {
@@ -1049,6 +1314,17 @@
               }
             ],
             "title": "Base Url"
+          },
+          "budget_hard_limit": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Budget Hard Limit"
           },
           "category_min_score": {
             "anyOf": [
@@ -1066,6 +1342,7 @@
           "chat_model": {
             "anyOf": [
               {
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1074,9 +1351,34 @@
             ],
             "title": "Chat Model"
           },
+          "embed_api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Api Key"
+          },
+          "embed_base_url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Base Url"
+          },
           "embed_model": {
             "anyOf": [
               {
+                "maxLength": 200,
                 "type": "string"
               },
               {
@@ -1107,109 +1409,6 @@
             ],
             "title": "Enrich Tags"
           },
-          "ollama_prefer_embeddings": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ollama Prefer Embeddings"
-          },
-          "openrouter_api_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Api Key"
-          },
-          "openrouter_budget_hard_limit": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Budget Hard Limit"
-          },
-          "openrouter_embed_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Embed Model"
-          },
-          "openrouter_enabled": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Enabled"
-          },
-          "openrouter_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Model"
-          },
-          "openrouter_scope": {
-            "anyOf": [
-              {
-                "enum": [
-                  "specialized",
-                  "all"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Scope"
-          },
-          "openrouter_show_costs": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Show Costs"
-          },
-          "openrouter_weekly_budget_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Openrouter Weekly Budget Usd"
-          },
           "paused": {
             "anyOf": [
               {
@@ -1220,17 +1419,6 @@
               }
             ],
             "title": "Paused"
-          },
-          "provider": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Provider"
           },
           "schedule": {
             "anyOf": [
@@ -1259,6 +1447,17 @@
               }
             ],
             "title": "Schedule Time"
+          },
+          "show_costs": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Show Costs"
           },
           "summary_length": {
             "anyOf": [
@@ -1326,6 +1525,17 @@
             ],
             "title": "Vram Gb"
           },
+          "weekly_budget_usd": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weekly Budget Usd"
+          },
           "workload_profile": {
             "anyOf": [
               {
@@ -1378,6 +1588,11 @@
             "title": "Chat Model Present",
             "type": "boolean"
           },
+          "configured": {
+            "default": false,
+            "title": "Configured",
+            "type": "boolean"
+          },
           "current_job": {
             "anyOf": [
               {
@@ -1393,7 +1608,7 @@
             "title": "Deferred Count",
             "type": "integer"
           },
-          "embed_backend": {
+          "embed_base_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -1402,7 +1617,7 @@
                 "type": "null"
               }
             ],
-            "title": "Embed Backend"
+            "title": "Embed Base Url"
           },
           "embed_model": {
             "title": "Embed Model",
@@ -1410,6 +1625,16 @@
           },
           "embed_model_present": {
             "title": "Embed Model Present",
+            "type": "boolean"
+          },
+          "embed_provider": {
+            "default": "",
+            "title": "Embed Provider",
+            "type": "string"
+          },
+          "embed_reachable": {
+            "default": false,
+            "title": "Embed Reachable",
             "type": "boolean"
           },
           "enabled": {
@@ -1463,17 +1688,6 @@
             ],
             "title": "Last Error"
           },
-          "llm_backend": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Llm Backend"
-          },
           "lock_reason": {
             "anyOf": [
               {
@@ -1489,41 +1703,6 @@
             "default": true,
             "title": "Models Match Profile",
             "type": "boolean"
-          },
-          "ollama_prefer_embeddings": {
-            "default": false,
-            "title": "Ollama Prefer Embeddings",
-            "type": "boolean"
-          },
-          "openrouter_api_key_set": {
-            "default": false,
-            "title": "Openrouter Api Key Set",
-            "type": "boolean"
-          },
-          "openrouter_embed_model": {
-            "default": "openai/text-embedding-3-small",
-            "title": "Openrouter Embed Model",
-            "type": "string"
-          },
-          "openrouter_enabled": {
-            "default": false,
-            "title": "Openrouter Enabled",
-            "type": "boolean"
-          },
-          "openrouter_model": {
-            "default": "google/gemini-2.5-flash-lite",
-            "title": "Openrouter Model",
-            "type": "string"
-          },
-          "openrouter_reachable": {
-            "default": false,
-            "title": "Openrouter Reachable",
-            "type": "boolean"
-          },
-          "openrouter_scope": {
-            "default": "specialized",
-            "title": "Openrouter Scope",
-            "type": "string"
           },
           "paused": {
             "default": false,
@@ -1577,6 +1756,11 @@
             "default": "normal",
             "title": "Recommended Profile",
             "type": "string"
+          },
+          "reports_cost": {
+            "default": false,
+            "title": "Reports Cost",
+            "type": "boolean"
           },
           "runnable_count": {
             "default": 0,
@@ -1646,9 +1830,22 @@
       },
       "AiTestRequest": {
         "properties": {
+          "api_key": {
+            "anyOf": [
+              {
+                "maxLength": 4096,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Key"
+          },
           "base_url": {
             "anyOf": [
               {
+                "maxLength": 2048,
                 "type": "string"
               },
               {
@@ -1656,6 +1853,15 @@
               }
             ],
             "title": "Base Url"
+          },
+          "target": {
+            "default": "chat",
+            "enum": [
+              "chat",
+              "embed"
+            ],
+            "title": "Target",
+            "type": "string"
           }
         },
         "title": "AiTestRequest",
@@ -5039,6 +5245,16 @@
             "title": "Active Downloads",
             "type": "integer"
           },
+          "ai": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AiHealth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "disk": {
             "anyOf": [
               {
@@ -5087,26 +5303,6 @@
           "library_video_count": {
             "title": "Library Video Count",
             "type": "integer"
-          },
-          "ollama": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OllamaHealth"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "openrouter": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/OpenRouterHealth"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "pot_provider": {
             "anyOf": [
@@ -6374,337 +6570,6 @@
           }
         },
         "title": "OkResponse",
-        "type": "object"
-      },
-      "OllamaHealth": {
-        "properties": {
-          "base_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Base Url"
-          },
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "last_error": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Error"
-          },
-          "pulling": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pulling"
-          },
-          "reachable": {
-            "title": "Reachable",
-            "type": "boolean"
-          },
-          "ready": {
-            "title": "Ready",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "enabled",
-          "ready",
-          "reachable"
-        ],
-        "title": "OllamaHealth",
-        "type": "object"
-      },
-      "OpenRouterConnectionTest": {
-        "properties": {
-          "detail": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Detail"
-          },
-          "model_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model Count"
-          },
-          "ok": {
-            "title": "Ok",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "ok"
-        ],
-        "title": "OpenRouterConnectionTest",
-        "type": "object"
-      },
-      "OpenRouterCostsRead": {
-        "properties": {
-          "all": {
-            "default": 0.0,
-            "title": "All",
-            "type": "number"
-          },
-          "all_calls": {
-            "default": 0,
-            "title": "All Calls",
-            "type": "integer"
-          },
-          "blocked": {
-            "default": false,
-            "title": "Blocked",
-            "type": "boolean"
-          },
-          "d30": {
-            "default": 0.0,
-            "title": "D30",
-            "type": "number"
-          },
-          "d30_calls": {
-            "default": 0,
-            "title": "D30 Calls",
-            "type": "integer"
-          },
-          "d7": {
-            "default": 0.0,
-            "title": "D7",
-            "type": "number"
-          },
-          "d7_calls": {
-            "default": 0,
-            "title": "D7 Calls",
-            "type": "integer"
-          },
-          "h24": {
-            "default": 0.0,
-            "title": "H24",
-            "type": "number"
-          },
-          "h24_calls": {
-            "default": 0,
-            "title": "H24 Calls",
-            "type": "integer"
-          },
-          "hard_limit": {
-            "default": false,
-            "title": "Hard Limit",
-            "type": "boolean"
-          },
-          "over_budget": {
-            "default": false,
-            "title": "Over Budget",
-            "type": "boolean"
-          },
-          "weekly_budget_usd": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Weekly Budget Usd"
-          },
-          "y1": {
-            "default": 0.0,
-            "title": "Y1",
-            "type": "number"
-          },
-          "y1_calls": {
-            "default": 0,
-            "title": "Y1 Calls",
-            "type": "integer"
-          }
-        },
-        "title": "OpenRouterCostsRead",
-        "type": "object"
-      },
-      "OpenRouterHealth": {
-        "properties": {
-          "api_key_set": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Key Set"
-          },
-          "configured": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Configured"
-          },
-          "enabled": {
-            "title": "Enabled",
-            "type": "boolean"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "reachable": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reachable"
-          },
-          "scope": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Scope"
-          }
-        },
-        "required": [
-          "enabled"
-        ],
-        "title": "OpenRouterHealth",
-        "type": "object"
-      },
-      "OpenRouterModelRow": {
-        "properties": {
-          "completion_per_million": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Completion Per Million"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "default": "",
-            "title": "Name",
-            "type": "string"
-          },
-          "prompt_per_million": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Prompt Per Million"
-          }
-        },
-        "required": [
-          "id"
-        ],
-        "title": "OpenRouterModelRow",
-        "type": "object"
-      },
-      "OpenRouterModelsResponse": {
-        "properties": {
-          "embedding_models": {
-            "items": {
-              "$ref": "#/components/schemas/OpenRouterModelRow"
-            },
-            "title": "Embedding Models",
-            "type": "array"
-          },
-          "models": {
-            "items": {
-              "$ref": "#/components/schemas/OpenRouterModelRow"
-            },
-            "title": "Models",
-            "type": "array"
-          },
-          "presets": {
-            "items": {
-              "additionalProperties": {
-                "type": "string"
-              },
-              "type": "object"
-            },
-            "title": "Presets",
-            "type": "array"
-          }
-        },
-        "title": "OpenRouterModelsResponse",
-        "type": "object"
-      },
-      "OpenRouterTestRequest": {
-        "properties": {
-          "api_key": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Api Key"
-          }
-        },
-        "title": "OpenRouterTestRequest",
         "type": "object"
       },
       "PasswordChange": {
@@ -10546,7 +10411,7 @@
   "paths": {
     "/api/ai/apply-workload": {
       "post": {
-        "description": "Apply a workload profile: resolve models for the Ollama GPU, save, optional pull.",
+        "description": "Apply a workload profile; on Ollama also pick and download GPU-sized models.",
         "operationId": "ai_apply_workload_api_ai_apply_workload_post",
         "requestBody": {
           "content": {
@@ -10632,6 +10497,90 @@
           }
         },
         "summary": "Ai Categories",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/costs": {
+      "get": {
+        "description": "Spend reported by the provider (only OpenRouter reports a cost per call).",
+        "operationId": "ai_costs_api_ai_costs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiCostsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Ai Costs",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/detect": {
+      "post": {
+        "description": "Look for a local AI server at the usual addresses (Ollama, LM Studio, ...).",
+        "operationId": "ai_detect_api_ai_detect_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiDetectResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Ai Detect",
         "tags": [
           "ai"
         ]
@@ -10912,139 +10861,6 @@
         ]
       }
     },
-    "/api/ai/openrouter/costs": {
-      "get": {
-        "operationId": "ai_openrouter_costs_api_ai_openrouter_costs_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenRouterCostsRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Ai Openrouter Costs",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
-    "/api/ai/openrouter/models": {
-      "get": {
-        "operationId": "ai_openrouter_models_api_ai_openrouter_models_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenRouterModelsResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Ai Openrouter Models",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
-    "/api/ai/openrouter/test": {
-      "post": {
-        "operationId": "ai_openrouter_test_api_ai_openrouter_test_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/OpenRouterTestRequest",
-                "default": {}
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OpenRouterConnectionTest"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Ai Openrouter Test",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
     "/api/ai/pause": {
       "post": {
         "operationId": "ai_pause_api_ai_pause_post",
@@ -11318,16 +11134,19 @@
     },
     "/api/ai/test": {
       "post": {
+        "description": "Probe an endpoint (or the saved one) and list the models it offers.",
         "operationId": "ai_test_api_ai_test_post",
         "requestBody": {
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/AiTestRequest"
+                "$ref": "#/components/schemas/AiTestRequest",
+                "default": {
+                  "target": "chat"
+                }
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {

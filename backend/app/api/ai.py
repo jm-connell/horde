@@ -17,9 +17,9 @@ from ..response_schemas import (
     AiCategoriesRead,
     AiClearFailedResult,
     AiConnectionTest,
+    AiDetectResult,
     AiJobAction,
     AiRetryFailedResult,
-    OpenRouterConnectionTest,
     PausedResponse,
     RecommendationsRead,
 )
@@ -27,12 +27,9 @@ from ..schemas import ChannelFeedEntry
 from ..services.ai import embeddings, recommend, worker
 from ..services.ai.provider import (
     build_status,
+    detect_local_servers,
     invalidate_resolved_url,
-    list_openrouter_embedding_models,
-    list_openrouter_models,
-    openrouter_preset_list,
     test_connection,
-    test_openrouter_connection,
 )
 from ..services.auth.accounts import AuthUser
 from .video_serialize import to_read_many as _to_read_many
@@ -82,14 +79,25 @@ class AiJobRow(BaseModel):
 
 class AiStatusRead(BaseModel):
     enabled: bool
+    #: A chat endpoint URL is set.
+    configured: bool = False
+    #: Chat endpoint kind: ``openrouter`` | ``ollama`` | ``openai_compatible`` | "".
     provider: str
+    #: Semantic search works: the embedding endpoint answers and has the model.
     ready: bool
+    #: The chat endpoint answers.
     reachable: bool
     base_url: str | None = None
     embed_model: str
     chat_model: str
     embed_model_present: bool
     chat_model_present: bool
+    embed_provider: str = ""
+    #: Set only when embeddings use their own endpoint.
+    embed_base_url: str | None = None
+    embed_reachable: bool = False
+    #: The provider reports a cost per call (OpenRouter), so costs can show.
+    reports_cost: bool = False
     pulling: list[str] = Field(default_factory=list)
     last_error: str | None = None
     paused: bool = False
@@ -117,40 +125,13 @@ class AiStatusRead(BaseModel):
     invent_sample_size: int = 100
     invent_budget_chars: int = 28000
     models_match_profile: bool = True
-    openrouter_enabled: bool = False
-    openrouter_reachable: bool = False
-    openrouter_model: str = "google/gemini-2.5-flash-lite"
-    openrouter_api_key_set: bool = False
-    openrouter_scope: str = "specialized"
-    openrouter_embed_model: str = "openai/text-embedding-3-small"
-    ollama_prefer_embeddings: bool = False
-    llm_backend: str | None = None
-    embed_backend: str | None = None
 
 
 class AiTestRequest(BaseModel):
-    base_url: str | None = None
-
-
-class OpenRouterTestRequest(BaseModel):
-    api_key: str | None = None
-
-
-class OpenRouterModelRow(BaseModel):
-    id: str
-    name: str = ""
-    prompt_per_million: float | None = None
-    completion_per_million: float | None = None
-
-
-def _openrouter_model_row(row: dict[str, Any]) -> OpenRouterModelRow:
-    return OpenRouterModelRow.model_validate(row)
-
-
-class OpenRouterModelsResponse(BaseModel):
-    presets: list[dict[str, str]] = Field(default_factory=list)
-    models: list[OpenRouterModelRow] = Field(default_factory=list)
-    embedding_models: list[OpenRouterModelRow] = Field(default_factory=list)
+    #: Which saved connection a blank URL or key falls back to.
+    target: Literal["chat", "embed"] = "chat"
+    base_url: str | None = Field(default=None, max_length=2048)
+    api_key: str | None = Field(default=None, max_length=4096)
 
 
 class AiApplyWorkloadRequest(BaseModel):
@@ -177,9 +158,9 @@ class AiProcessResult(BaseModel):
 
 
 #: Setup details a member's screens never read, reset to their declared defaults.
-#: Members keep ``enabled`` / ``ready`` / ``reachable`` / ``paused`` and the queue
-#: counts (the library's AI shelf) and ``openrouter_enabled`` /
-#: ``openrouter_api_key_set`` (the player decides which AI features to offer).
+#: Members keep ``enabled`` / ``ready`` / ``reachable`` / ``paused``, the queue
+#: counts (the library's AI shelf) and ``reports_cost`` (the player decides which
+#: AI features to offer).
 _MEMBER_HIDDEN_DEFAULTS = (
     "schedule",
     "workload_profile",
@@ -190,8 +171,8 @@ _MEMBER_HIDDEN_DEFAULTS = (
     "invent_sample_size",
     "invent_budget_chars",
     "models_match_profile",
-    "openrouter_reachable",
-    "ollama_prefer_embeddings",
+    "configured",
+    "embed_reachable",
 )
 
 
@@ -214,15 +195,12 @@ def _member_view(status: AiStatusRead) -> AiStatusRead:
             "last_error": None,
             "embed_model": "",
             "chat_model": "",
-            "openrouter_model": "",
-            "openrouter_embed_model": "",
+            "embed_base_url": None,
+            "embed_provider": "",
             "current_job": current,
             "recent_failures": [],
             "pulling": [],
             "blocked_reason": None,
-            "openrouter_scope": "specialized",
-            "llm_backend": None,
-            "embed_backend": None,
             "workload_warning": None,
             "lock_reason": None,
             "gpu_name": None,
@@ -252,9 +230,11 @@ def ai_status(
     stats = worker.queue_stats()
     ai = app_settings.ai_settings()
     runtime = ai_workload.resolve_runtime(ai.get("workload_profile"))
-    models_match = (
-        str(ai.get("embed_model") or "") == runtime.embed_model
-        and str(ai.get("chat_model") or "") == runtime.chat_model
+    # Only Ollama models are sized to the GPU; a hosted model always "matches".
+    models_match = all(
+        str(ai.get(field) or "") == wanted
+        for field, wanted in ai_workload.settings_patch_for_runtime(runtime).items()
+        if field in ("chat_model", "embed_model")
     )
     current_job = None
     if current:
@@ -304,10 +284,10 @@ def ai_status(
     dependencies=[Depends(require_admin)],
 )
 def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()):
-    """Apply a workload profile: resolve models for the Ollama GPU, save, optional pull."""
+    """Apply a workload profile; on Ollama also pick and download GPU-sized models."""
     from ..services import app_settings
     from ..services.ai import workload as ai_workload
-    from ..services.ai.provider import ensure_models, get_provider
+    from ..services.ai.provider import ensure_models
 
     ai = app_settings.ai_settings()
     profile = payload.profile or ai.get("workload_profile") or "normal"
@@ -318,19 +298,19 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
     invalidate_resolved_url()
 
     pulled = False
-    if bool(ai.get("auto_pull_models", True)):
-        provider = get_provider()
-        if provider is not None:
-            try:
-                ensure_models(provider)
-                pulled = True
-            except Exception:
-                logger.warning(
-                    "could not pull the recommended AI models",
-                    exc_info=True,
-                )
+    if bool(ai.get("auto_pull_models", True)) and (
+        "chat_model" in patch or "embed_model" in patch
+    ):
+        try:
+            ensure_models()
+            pulled = True
+        except Exception:
+            logger.warning(
+                "could not pull the recommended AI models",
+                exc_info=True,
+            )
 
-    embed_changed = prev_embed != runtime.embed_model
+    embed_changed = prev_embed != patch.get("embed_model", prev_embed)
     return {
         "ok": True,
         "runtime": runtime.to_dict(),
@@ -349,46 +329,22 @@ def ai_apply_workload(payload: AiApplyWorkloadRequest = AiApplyWorkloadRequest()
     response_model_exclude_unset=True,
     dependencies=[Depends(require_admin)],
 )
-def ai_test(payload: AiTestRequest):
-    return test_connection(payload.base_url)
+def ai_test(payload: AiTestRequest = AiTestRequest()):
+    """Probe an endpoint (or the saved one) and list the models it offers."""
+    return test_connection(payload.target, payload.base_url, payload.api_key)
 
 
 @router.post(
-    "/openrouter/test",
-    response_model=OpenRouterConnectionTest,
-    response_model_exclude_unset=True,
+    "/detect",
+    response_model=AiDetectResult,
     dependencies=[Depends(require_admin)],
 )
-def ai_openrouter_test(payload: OpenRouterTestRequest = OpenRouterTestRequest()):
-    return test_openrouter_connection(payload.api_key)
+def ai_detect():
+    """Look for a local AI server at the usual addresses (Ollama, LM Studio, ...)."""
+    return AiDetectResult.model_validate({"servers": detect_local_servers()})
 
 
-@router.get(
-    "/openrouter/models",
-    response_model=OpenRouterModelsResponse,
-    dependencies=[Depends(require_admin)],
-)
-def ai_openrouter_models():
-    try:
-        models = list_openrouter_models()
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400, detail=str(exc) or "Could not list models"
-        ) from exc
-    embed_models: list[dict[str, Any]] = []
-    try:
-        embed_models = list_openrouter_embedding_models()
-    except Exception:
-        logger.debug("OpenRouter embedding model list unavailable", exc_info=True)
-        embed_models = []
-    return OpenRouterModelsResponse(
-        presets=openrouter_preset_list(),
-        models=[_openrouter_model_row(m) for m in models],
-        embedding_models=[_openrouter_model_row(m) for m in embed_models],
-    )
-
-
-class OpenRouterCostsRead(BaseModel):
+class AiCostsRead(BaseModel):
     h24: float = 0.0
     d7: float = 0.0
     d30: float = 0.0
@@ -406,17 +362,18 @@ class OpenRouterCostsRead(BaseModel):
 
 
 @router.get(
-    "/openrouter/costs",
-    response_model=OpenRouterCostsRead,
+    "/costs",
+    response_model=AiCostsRead,
     dependencies=[Depends(require_admin)],
 )
-def ai_openrouter_costs():
+def ai_costs():
+    """Spend reported by the provider (only OpenRouter reports a cost per call)."""
     from ..services.ai.cost_ledger import budget_status, window_analytics
 
     stats = window_analytics()
     costs = {k: float(v["cost"]) for k, v in stats.items()}
     budget = budget_status(window_totals=costs)
-    return OpenRouterCostsRead(
+    return AiCostsRead(
         h24=float(costs.get("h24") or 0.0),
         d7=float(costs.get("d7") or 0.0),
         d30=float(costs.get("d30") or 0.0),

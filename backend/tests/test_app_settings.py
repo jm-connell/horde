@@ -6,7 +6,7 @@ import threading
 import pytest
 
 from app.services import app_settings as settings_svc
-from app.services.ai.provider import mask_openrouter_api_key
+from app.services.ai.provider import mask_api_key
 
 
 def test_clamp_category_min_score():
@@ -67,11 +67,13 @@ def test_normalize_helpers():
     assert settings_svc.normalize_summary_length("nope") == "short"
     assert settings_svc.normalize_ai_chapters_mode("on_watch") == "on_watch"
     assert settings_svc.normalize_ai_chapters_mode("nope") == "on_download"
-    assert settings_svc.normalize_openrouter_scope("all") == "all"
-    assert settings_svc.normalize_openrouter_scope("weird") == "specialized"
+
+    normalize = settings_svc.normalize_base_url
+    assert normalize("") == ""
+    assert normalize("  http://192.168.1.50:11434/ ") == "http://192.168.1.50:11434/v1"
+    assert normalize("https://openrouter.ai/api/v1/") == "https://openrouter.ai/api/v1"
     assert (
-        settings_svc.normalize_openrouter_embed_model("")
-        == (settings_svc.AI_DEFAULTS["openrouter_embed_model"])
+        normalize("https://api.groq.com/openai/v1") == "https://api.groq.com/openai/v1"
     )
 
 
@@ -113,7 +115,7 @@ def test_reset_to_defaults_empties_ui_and_ai(tmp_dirs):
     settings_svc.save(
         {
             "ui": {"theme": "oled", "fontSize": "large"},
-            "ai": {"enabled": False, "openrouter_api_key": "sk-or-secret"},
+            "ai": {"enabled": False, "api_key": "sk-or-secret"},
             "setup_completed": True,
         }
     )
@@ -121,7 +123,7 @@ def test_reset_to_defaults_empties_ui_and_ai(tmp_dirs):
     assert out["setup_completed"] is False
     assert out["ui"] == {}
     assert out["ai"]["enabled"] is True
-    assert out["ai"]["openrouter_api_key"] == ""
+    assert out["ai"]["api_key"] == ""
     raw = json.loads((tmp_dirs["data"] / "app_settings.json").read_text())
     assert raw["ui"] == {}
     assert "theme" not in raw["ui"]
@@ -149,7 +151,7 @@ def test_load_corrupt_file_without_backup_keeps_setup_completed(tmp_dirs, caplog
 
 def test_save_refuses_to_overwrite_unparseable_file(tmp_dirs):
     path = tmp_dirs["data"] / "app_settings.json"
-    path.write_text('{"ai": {"openrouter_api_key": "sk-or-secret"')  # truncated
+    path.write_text('{"ai": {"api_key": "sk-or-secret"')  # truncated
     before = path.read_bytes()
     with pytest.raises(settings_svc.SettingsCorruptError, match="refusing"):
         settings_svc.save({"ui": {"theme": "oled"}})
@@ -158,16 +160,16 @@ def test_save_refuses_to_overwrite_unparseable_file(tmp_dirs):
 
 def test_corrupt_file_is_recovered_from_backup(tmp_dirs, caplog):
     path = tmp_dirs["data"] / "app_settings.json"
-    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": "k1"}})
+    settings_svc.save({"setup_completed": True, "ai": {"api_key": "k1"}})
     settings_svc.save({"progress_expiry_days": 30})  # first good file -> .bak
     bak = path.with_name("app_settings.json.bak")
-    assert json.loads(bak.read_text())["ai"]["openrouter_api_key"] == "k1"
+    assert json.loads(bak.read_text())["ai"]["api_key"] == "k1"
     path.write_text("\x00\x00 garbage")
     with caplog.at_level("ERROR"):
         data = settings_svc.load()
-    assert data["ai"]["openrouter_api_key"] == "k1"
+    assert data["ai"]["api_key"] == "k1"
     assert data["setup_completed"] is True
-    assert json.loads(path.read_text())["ai"]["openrouter_api_key"] == "k1"
+    assert json.loads(path.read_text())["ai"]["api_key"] == "k1"
     corrupt = list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
     assert len(corrupt) == 1
     assert corrupt[0].read_text() == "\x00\x00 garbage"
@@ -176,15 +178,15 @@ def test_corrupt_file_is_recovered_from_backup(tmp_dirs, caplog):
 
 def test_save_after_corruption_with_backup_keeps_data(tmp_dirs):
     path = tmp_dirs["data"] / "app_settings.json"
-    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": "k1"}})
+    settings_svc.save({"setup_completed": True, "ai": {"api_key": "k1"}})
     settings_svc.save({"ui": {"theme": "oled"}})
     settings_svc.save({"progress_expiry_days": 19})  # .bak now holds the theme
     path.write_text("{")
     out = settings_svc.save({"progress_expiry_days": 20})
-    assert out["ai"]["openrouter_api_key"] == "k1"
+    assert out["ai"]["api_key"] == "k1"
     assert out["ui"]["theme"] == "oled"
     on_disk = json.loads(path.read_text())
-    assert on_disk["ai"]["openrouter_api_key"] == "k1"
+    assert on_disk["ai"]["api_key"] == "k1"
     assert on_disk["progress_expiry_days"] == 20
 
 
@@ -292,9 +294,7 @@ def test_load_returns_independent_copies(tmp_dirs):
 
 def test_concurrent_readers_and_writers_never_see_defaults(tmp_dirs):
     """Hammer save/load from many threads: no reader may observe defaults."""
-    settings_svc.save(
-        {"setup_completed": True, "ai": {"openrouter_api_key": "sk-or-secret"}}
-    )
+    settings_svc.save({"setup_completed": True, "ai": {"api_key": "sk-or-secret"}})
     stop = threading.Event()
     failures: list[str] = []
 
@@ -307,7 +307,7 @@ def test_concurrent_readers_and_writers_never_see_defaults(tmp_dirs):
                 return
             if data["setup_completed"] is not True:
                 failures.append("setup_completed flipped to False")
-            if data["ai"]["openrouter_api_key"] != "sk-or-secret":
+            if data["ai"]["api_key"] != "sk-or-secret":
                 failures.append("api key lost")
 
     def writer(n):
@@ -325,7 +325,7 @@ def test_concurrent_readers_and_writers_never_see_defaults(tmp_dirs):
         t.join(timeout=10)
     assert not failures, failures[:3]
     final = settings_svc.load()
-    assert final["ai"]["openrouter_api_key"] == "sk-or-secret"
+    assert final["ai"]["api_key"] == "sk-or-secret"
     assert {f"k{n}" for n in range(3)} <= set(final["ui"])
     assert not list(tmp_dirs["data"].glob("app_settings.json.corrupt-*"))
 
@@ -341,11 +341,11 @@ def test_save_merges_ui_and_ai(tmp_dirs):
     assert raw["ui"]["theme"] == "oled"
 
 
-def test_openrouter_show_costs_defaults_false():
+def test_show_costs_defaults_false():
     merged = settings_svc._merge_ai({})
-    assert merged["openrouter_show_costs"] is False
-    on = settings_svc._merge_ai({"openrouter_show_costs": True})
-    assert on["openrouter_show_costs"] is True
+    assert merged["show_costs"] is False
+    on = settings_svc._merge_ai({"show_costs": True, "connection_version": 2})
+    assert on["show_costs"] is True
 
 
 def test_ai_chapters_mode_defaults_on_download():
@@ -355,16 +355,16 @@ def test_ai_chapters_mode_defaults_on_download():
     assert watch["ai_chapters_mode"] == "on_watch"
 
 
-def test_mask_openrouter_api_key():
-    assert mask_openrouter_api_key("") == ""
-    assert mask_openrouter_api_key("abcd") == "••••"
-    assert mask_openrouter_api_key("sk-or-v1-abcdefgh") == "••••efgh"
+def test_mask_api_key():
+    assert mask_api_key("") == ""
+    assert mask_api_key("abcd") == "••••"
+    assert mask_api_key("sk-or-v1-abcdefgh") == "••••efgh"
 
 
 def test_reset_leaves_no_copy_of_the_secrets(tmp_dirs):
     secret = "sk-or-very-secret-key"
     path = tmp_dirs["data"] / "app_settings.json"
-    settings_svc.save({"setup_completed": True, "ai": {"openrouter_api_key": secret}})
+    settings_svc.save({"setup_completed": True, "ai": {"api_key": secret}})
     settings_svc.save({"progress_expiry_days": 20})  # creates the .bak
     path.with_name(path.name + ".corrupt-20200101T000000").write_text(secret)
     assert path.with_name(path.name + ".bak").exists()

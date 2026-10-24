@@ -1,8 +1,8 @@
 """Reset the database to a fixed library for browser tests.
 
 Imported only when ``HORDE_E2E`` is set. The seeded library has no YouTube URLs,
-AI is off, and download dispatch is a no-op, so the suite never calls YouTube,
-OpenRouter, or Ollama.
+AI is off, and download dispatch is a no-op, so the suite never calls YouTube
+or an AI provider.
 """
 
 from __future__ import annotations
@@ -203,11 +203,7 @@ def _write_settings(data_dir: Path, *, setup_completed: bool) -> None:
         "direct_youtube_search": False,
         "youtube_video_search": False,
         "channel_catalog_enabled": False,
-        "ai": {
-            "enabled": False,
-            "openrouter_enabled": False,
-            "openrouter_api_key": "",
-        },
+        "ai": {"enabled": False, "base_url": "", "connection_version": 2},
         # Non-empty ui skips the client's first-visit settings migration, which
         # would otherwise PATCH defaults over whatever a test just saved.
         "ui": {

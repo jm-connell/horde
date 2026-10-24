@@ -45,27 +45,6 @@ def test_parse_openrouter_catalog_row_skips_empty():
     assert parse_openrouter_catalog_row("x") is None
 
 
-def test_openrouter_models_api_includes_prices(client, monkeypatch):
-    monkeypatch.setattr(
-        "app.api.ai.list_openrouter_models",
-        lambda: [
-            {
-                "id": "google/gemini-2.5-flash-lite",
-                "name": "Google: Gemini 2.5 Flash Lite",
-                "prompt_per_million": 0.1,
-                "completion_per_million": 0.4,
-            }
-        ],
-    )
-    monkeypatch.setattr("app.api.ai.list_openrouter_embedding_models", list)
-    res = client.get("/api/ai/openrouter/models")
-    assert res.status_code == 200
-    row = res.json()["models"][0]
-    assert row["id"] == "google/gemini-2.5-flash-lite"
-    assert row["prompt_per_million"] == 0.1
-    assert row["completion_per_million"] == 0.4
-
-
 def test_is_openrouter_text_llm_keeps_text_and_vision_chat():
     assert is_openrouter_text_llm({"id": "openai/gpt-4.1-nano"})
     assert is_openrouter_text_llm(

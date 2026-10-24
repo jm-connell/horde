@@ -37,6 +37,9 @@ def _ai(**overrides):
     settings = {
         "paused": False,
         "enabled": True,
+        "base_url": "http://ai.test/v1",
+        "chat_model": "chat-model",
+        "embed_model": "embed-model",
         "schedule": "on_download",
         "enrich_tags": False,
         "ai_summaries": False,
@@ -67,8 +70,8 @@ def test_enqueue_chapters_when_eligible(add_video, session, tmp_dirs, monkeypatc
         worker, "enqueue_job", lambda kind, vid, **k: captured.append(kind) or 1
     )
     monkeypatch.setattr(worker.app_settings, "ai_settings", lambda: _ai())
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters in captured
@@ -83,8 +86,8 @@ def test_enqueue_skips_chapters_when_too_short(
         worker, "enqueue_job", lambda kind, vid, **k: captured.append(kind) or 1
     )
     monkeypatch.setattr(worker.app_settings, "ai_settings", lambda: _ai())
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters not in captured
@@ -99,8 +102,8 @@ def test_enqueue_chapters_when_over_three_minutes(
         worker, "enqueue_job", lambda kind, vid, **k: captured.append(kind) or 1
     )
     monkeypatch.setattr(worker.app_settings, "ai_settings", lambda: _ai())
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters in captured
@@ -119,8 +122,8 @@ def test_enqueue_skips_chapters_when_watch_only(
         "ai_settings",
         lambda: _ai(ai_chapters_mode="on_watch"),
     )
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters not in captured
@@ -140,8 +143,8 @@ def test_enqueue_skips_chapters_when_description_has_them(
         worker, "enqueue_job", lambda kind, vid, **k: captured.append(kind) or 1
     )
     monkeypatch.setattr(worker.app_settings, "ai_settings", lambda: _ai())
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters not in captured
@@ -158,8 +161,8 @@ def test_enqueue_skips_chapters_when_feature_off(
     monkeypatch.setattr(
         worker.app_settings, "ai_settings", lambda: _ai(ai_chapters=False)
     )
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters not in captured
@@ -183,14 +186,15 @@ def test_enqueue_skips_when_already_generated(
         worker, "enqueue_job", lambda kind, vid, **k: captured.append(kind) or 1
     )
     monkeypatch.setattr(worker.app_settings, "ai_settings", lambda: _ai())
-    monkeypatch.setattr(worker, "openrouter_configured", lambda: False)
-    monkeypatch.setattr(worker, "openrouter_owns_embeddings", lambda: False)
+    monkeypatch.setattr(worker, "llm_configured", lambda: True)
+    monkeypatch.setattr(worker, "embeddings_configured", lambda: True)
 
     worker.enqueue_for_video(video.id, include_tags=False, force=False)
     assert AiJobKind.chapters not in captured
 
 
-def test_dispatch_chapters_skips_without_captions(add_video, session):
+def test_dispatch_chapters_skips_without_captions(add_video, session, monkeypatch):
+    monkeypatch.setattr(tasks.app_settings, "ai_settings", lambda: _ai())
     video = add_video(duration_sec=1200)
     reason = tasks.dispatch(session, AiJobKind.chapters, video.id)
     assert reason

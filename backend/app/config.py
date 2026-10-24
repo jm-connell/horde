@@ -156,10 +156,12 @@ YTDLP_COOKIES_FROM_BROWSER: str = os.environ.get(
     "YTDLP_COOKIES_FROM_BROWSER", ""
 ).strip()
 
-# Ollama base URL. Empty = auto-discover (compose service, then host.docker.internal).
+# Legacy Ollama URL: the AI provider URL is a setting now (Settings → AI). Used
+# when that is empty, and to convert settings from before connection_version 2.
 OLLAMA_BASE_URL: str = os.environ.get("OLLAMA_BASE_URL", "").strip()
 
-# Optional OpenRouter API key (overrides Settings → AI when set).
+# Optional OpenRouter API key: overrides the saved key while the provider URL is
+# OpenRouter, and is never sent to another host.
 OPENROUTER_API_KEY: str = os.environ.get("OPENROUTER_API_KEY", "").strip()
 
 # Update checks — baked at Docker build time; falls back to local git in dev.

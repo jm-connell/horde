@@ -81,6 +81,53 @@ def _join_background_workers():
     assert sprite_pool.stop(timeout=30), "sprite threads still running after test"
 
 
+def _serve_ai(monkeypatch, handler) -> None:
+    """Point every AI provider HTTP client at ``handler`` (an httpx MockTransport)."""
+    import httpx
+
+    from app.services.ai import provider
+
+    def client(self, timeout=None):
+        headers = self._headers() if hasattr(self, "_headers") else None
+        return httpx.Client(
+            base_url=self.base_url,
+            headers=headers,
+            transport=httpx.MockTransport(handler),
+        )
+
+    monkeypatch.setattr(provider.OpenAICompatProvider, "_client", client)
+    monkeypatch.setattr(provider.OllamaAdmin, "_client", client)
+
+
+@pytest.fixture(autouse=True)
+def _ai_probes_offline(monkeypatch):
+    """Start each test with empty AI provider caches and no network.
+
+    Reachability and "is this Ollama?" answers are cached in the provider module;
+    clear them so one test's answer never leaks into the next. Every provider
+    request fails as unreachable; a test that needs an endpoint calls
+    the ``serve_ai`` fixture with a handler of its own.
+    """
+    import httpx
+
+    from app.services.ai import provider
+
+    def offline(request):
+        raise httpx.ConnectError("no network in tests", request=request)
+
+    provider.invalidate_resolved_url()
+    monkeypatch.setattr(provider, "_last_error", None)
+    _serve_ai(monkeypatch, offline)
+    yield
+    provider.invalidate_resolved_url()
+
+
+@pytest.fixture
+def serve_ai(monkeypatch):
+    """``serve_ai(handler)``: answer AI provider requests with ``handler(request)``."""
+    return lambda handler: _serve_ai(monkeypatch, handler)
+
+
 @pytest.fixture(autouse=True)
 def _no_free_space_floor(monkeypatch):
     """The machine running the tests may be short of disk; tests that care set their own floor."""
