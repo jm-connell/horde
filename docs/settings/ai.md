@@ -9,37 +9,54 @@ All AI preferences live in the top-level **`ai`** object in `app_settings.json` 
 
 ## Providers (`?pane=providers`)
 
-### Local Ollama
+One connection to any OpenAI-compatible endpoint serves chat, and embeddings unless they get their own. See [AI setup](../ops/ai-setup.md#which-url-do-i-type-docker-networking) for which URL to type.
+
+### General
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
-| Enable AI / Ollama | `enabled` | `true` | Master switch for local AI |
-| Provider | `provider` | `"ollama"` | Stored provider id |
-| Base URL | `base_url` | `""` | Empty = default discovery / same-host; set for remote Ollama |
-| Test connection | — | — | UI action against the configured base URL |
-| Workload | `workload_profile` | `"normal"` | `light` \| `normal` \| `heavy` — how hard Horde works (sample sizes, batches), not which GPU |
-| VRAM override (GiB) | `vram_gb` | `null` | Optional; clamp ~0.5–256. Blank = autodetect on Ollama host. Hidden when Local AI is unused (disabled, or OpenRouter Tasks = All without an embeddings override) |
-| Auto-pull models | `auto_pull_models` | `true` | Pull missing embed/chat models when needed |
-| Embed model | `embed_model` | `"nomic-embed-text"` | Semantic search, related, categories |
-| Chat model | `chat_model` | `"llama3.2:3b"` | Used when OpenRouter is off (tags, categories, local fallback) |
-| Prefer Ollama embeddings | `ollama_prefer_embeddings` | `false` | When OpenRouter scope is `all`, still use Ollama for embeddings if available |
+| Workload | `workload_profile` | `"normal"` | `light` \| `normal` \| `heavy` — how hard Horde works (sample sizes, batches); on Ollama it also picks GPU-sized models |
 
-**Workload tip:** Light keeps invent samples and indexing queues small. Normal is balanced. Heavy uses larger invent samples, deeper subtitle context, and bigger index batches. Model picks follow the **Ollama machine’s** VRAM, not the Horde host CPU/GPU shown under System → Resources.
-
-Common embed presets: `nomic-embed-text`, `mxbai-embed-large`, `all-minilm`, or custom. Chat presets include `llama3.2:3b` / `1b`, `qwen2.5:3b`–`14b`, `llama3.1:8b`, `phi3:mini`, or custom.
-
-### OpenRouter
+### Provider
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
-| Enable OpenRouter | `openrouter_enabled` | `false` | Cloud LLM backend |
-| Scope | `openrouter_scope` | `"specialized"` | `specialized` = LLM tasks only; `all` = also embeddings |
-| API key | `openrouter_api_key` | `""` | Stored server-side; UI shows set/cleared, not the raw secret after save |
-| Chat model | `openrouter_model` | `"google/gemini-2.5-flash-lite"` | Presets: Budget (recommended) / Best. The picker pins a short recommended list, then all models, with live OpenRouter USD per 1M input / output tokens. |
-| Embed model | `openrouter_embed_model` | `"openai/text-embedding-3-small"` | When scope is `all` |
-| Show costs | `openrouter_show_costs` | `false` | Per-response cost chips on Watch (Settings totals always show) |
-| Weekly budget (USD) | `openrouter_weekly_budget_usd` | `null` | Soft limit over rolling 7 days; `null` = off (~$0.01–$100000) |
-| Hard limit | `openrouter_budget_hard_limit` | `false` | When true and spend ≥ budget, block further OpenRouter calls |
+| Enable AI | `enabled` | `true` | Master switch; AI also needs a URL |
+| Provider preset | — | — | Fills the URL only (OpenRouter, OpenAI, Gemini, Mistral, Groq, DeepSeek, Together, Ollama, LM Studio, llama.cpp, vLLM) |
+| URL | `base_url` | `""` | OpenAI-compatible base URL; a bare `http://host:port` gets `/v1` |
+| API key | `api_key` | `""` | Stored server-side; read back masked (`api_key_set`). Dropped when the URL changes without a new key, so it never goes to another host |
+| Test / Test and save | — | — | Lists the server's models and saves the URL and key |
+| Find a server on this machine | — | — | Probes the bundled Ollama and ports 11434 / 1234 / 8080 on the Docker host |
+
+### Models
+
+| Setting | Key | Default | Notes |
+|---------|-----|---------|--------|
+| Chat model | `chat_model` | `""` | Summaries, chapters, chat, tags, categories, duplicates. A list when the server lists its models (OpenRouter rows show USD per 1M tokens and Budget / Best presets), otherwise typed |
+| Embedding model | `embed_model` | `""` | Semantic search, related videos, category shelves. Empty = those stay off. Changing it offers to rebuild the indexes |
+| Use a different server for embeddings | `embed_base_url`, `embed_api_key` | `""` | Empty = embeddings use the chat connection. For providers without `/v1/embeddings` (Groq, DeepSeek, Anthropic) |
+| Show costs in Watch | `show_costs` | `false` | Only shown when the provider reports cost (OpenRouter) |
+
+### Ollama
+
+Shown when the chat or embeddings URL is an Ollama server.
+
+| Setting | Key | Default | Notes |
+|---------|-----|---------|--------|
+| Download recommended models | — | — | Applies the workload: picks models for the GPU and downloads them |
+| Download missing models | `auto_pull_models` | `true` | Download configured models Ollama does not have |
+| Ollama VRAM (GB) | `vram_gb` | `null` | Optional; clamp ~0.5–256. Blank = autodetect on the Ollama host |
+
+### Costs
+
+Shown when the provider reports a cost per call (OpenRouter).
+
+| Setting | Key | Default | Notes |
+|---------|-----|---------|--------|
+| Weekly budget (USD) | `weekly_budget_usd` | `null` | Warns over rolling 7 days; `null` = off (~$0.01–$100000) |
+| Stop AI calls when exceeded | `budget_hard_limit` | `false` | Blocks further calls and pauses the AI queue when spend ≥ budget |
+
+Backend-only: `connection_version` (settings shape, for the one-time upgrade) and `autodetect_ollama` (an upgraded install still looking for its Ollama at start).
 
 ## Features (`?pane=features`)
 
@@ -72,7 +89,7 @@ Live queue status appears here and on System:
 - **Blocked** state + reason when jobs cannot run (provider down, paused, budget hard limit)
 - Current job (with attempt number when retrying)
 - **Failed jobs** list with Retry, Retry all, Clear failed
-- When OpenRouter is active: **OpenRouter** model/scope and **Spend** (24h / 7-day totals from the local usage ledger, weekly budget if set, 24h call count)
+- **Provider** kind and chat model, and, when the provider reports cost, **Spend** (24h / 7-day totals from the local usage ledger, weekly budget if set, 24h call count)
 
 ### Automatic schedule
 
@@ -110,7 +127,7 @@ Duplicate LLM scoring is **on-demand** during Import when `ai_duplicates` is ena
 ## See also
 
 - [Settings overview](index.md) — `?tab` / `?pane` deep links
-- [System](system.md) — Ollama/OpenRouter status, AI queue in background activity
+- [System](system.md) — AI provider status, AI queue in background activity
 - [AI features (guide)](../guides/ai-features.md)
 - [Workload profiles](../design/workload-profiles.md)
 - [All settings](all-settings.md#ai_defaults)

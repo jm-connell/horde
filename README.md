@@ -2,7 +2,7 @@
 
 This entire project was vibecoded ~~in a relatively short amount of time~~. I've used Plex for a long time, but I really don't like how it handles "Other" videos that aren't Movies and TV. There are lots of YouTube and other videos that I want to archive and "horde" (hoard) but still be able to find and watch them in an organized way. I looked a bit at TubeArchivist and it looks decent, but I wanted to make something exactly the way I envisioned it, and since I had a lot of credit left for the month on my Cursor subscription I figured I'd let it rip. Horde gives a clean frontend to browse and search your videos on your server, and it also has a GUI for yt-dlp to download videos directly from any supported website (though I haven't tested much outside of YouTube). You can also drop in any video file from your computer, upload it directly to Horde's storage directory, and adjust metadata in the Horde UI.
 
-I also made some AI features like auto tagging, video summary and chat, and enhanced search. This can be used with Ollama or an OpenRouter API key. If you want to use Ollama you'll need some kind of GPU on your host machine. I have a 1660 Super but use OpenRouter anyway because it's lower maintenance, faster, and it costs virtually nothing for this app.
+I also made some AI features like auto tagging, video summary and chat, and enhanced search. This works with any OpenAI-compatible provider: OpenRouter, OpenAI, Gemini, Groq, or your own Ollama / LM Studio / llama.cpp server. If you want to use Ollama you'll need some kind of GPU on your host machine. I have a 1660 Super but use OpenRouter anyway because it's lower maintenance, faster, and it costs virtually nothing for this app.
 
 There is also the ability to stream videos directly from YouTube, though it is somewhat fragile and quality can vary from video to video. It's mostly functional, but streaming is not the primary focus of Horde. The idea is more that you can stream the video to preview, then choose to download or not. 
 
@@ -37,7 +37,7 @@ on the host. Interactive API docs: `/docs`.
 - **Live streams** — follow channels and see, quietly in the sidebar, which are
   live; watch through a server-side HLS proxy with scrub-back (DVR).
 - **Playlists** — your own lists or imported YouTube playlists.
-- **AI** (optional) — Ollama and/or OpenRouter for embeddings, tags, summaries,
+- **AI** (optional) — any OpenAI-compatible provider (OpenRouter, OpenAI, Ollama, LM Studio, …) for embeddings, tags, summaries,
   chat, recommendations, and duplicate help.
 
 ## Screenshots
@@ -128,9 +128,11 @@ and wiki and can take several minutes.
 Open `http://<server-ip>:8686` (host **8686** → container **8080**) and create the
 admin account. `curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
 
-Optional local Ollama: `docker compose --profile ai up -d`. Or set
-`OLLAMA_BASE_URL` / `OPENROUTER_API_KEY` in `.env` and enable the provider
-under Settings → AI.
+AI is optional: pick a provider in the setup wizard or Settings → AI (any
+OpenAI-compatible URL plus an API key if it needs one). To run models on this
+machine without setting up a server, start the bundled Ollama with
+`docker compose --profile ai up -d` and choose "Run Ollama for me". See the
+[AI setup](docs/ops/ai-setup.md) page for Docker networking.
 
 ### Update
 
@@ -195,8 +197,8 @@ push — see [`docs/getting-started/testing.md`](docs/getting-started/testing.md
 | `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
 | `YTDLP_POT_BASE_URL` | Compose: `http://bgutil-pot:4416` |
 | `YTDLP_COOKIE_FILE` | Optional Netscape cookies (age gates / hard blocks) |
-| `OLLAMA_BASE_URL` | Empty = auto-discover compose service, then host |
-| `OPENROUTER_API_KEY` | Optional; overrides the key in Settings → AI |
+| `OLLAMA_BASE_URL` | Legacy fallback when Settings → AI has no provider URL |
+| `OPENROUTER_API_KEY` | Optional; overrides the saved key while the provider is OpenRouter |
 | `HORDE_GITHUB_REPO` | Repo for in-app update checks |
 | `HORDE_UPDATE_CHANNEL` | `update.sh` only: `release` (default), `prerelease` or `main` |
 | `HORDE_ALLOWED_HOSTS` | Extra `Host` names to accept (public names behind a reverse proxy) |

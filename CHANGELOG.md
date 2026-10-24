@@ -12,8 +12,26 @@ All notable changes to Horde are documented here. The format follows
 - One database migration (`0017_playlist_stream_entries`) runs at startup. It
   rebuilds only `playlist_items` (to let an entry outlive its video) and copies
   each entry's title, channel, link and duration from its video.
+- **AI settings are converted once** to the new single provider: an OpenRouter
+  setup keeps its key and models, an Ollama setup keeps its URL (now with
+  `/v1`) and models, and an OpenRouter-for-chat, Ollama-for-embeddings setup
+  becomes a second embeddings server. Nothing is re-indexed. An Ollama URL that
+  was left empty for auto-discovery is looked up once at startup. The
+  `/api/ai/openrouter/*` endpoints and the `ollama` / `openrouter` blocks of
+  `/api/health` are replaced (see [ADR 0017](docs/adr/0017-openai-compatible-provider.md)).
 
 ### Added
+
+- **Any OpenAI-compatible AI provider.** Settings → AI is one form: a preset
+  list (OpenRouter, OpenAI, Gemini, Mistral, Groq, DeepSeek, Together,
+  Ollama, LM Studio, llama.cpp, vLLM) or any URL, an API key if needed, and the
+  chat and embedding models, listed from the server. Embeddings can use a
+  second server, for providers without them. **Find a server on this machine**
+  probes the usual local ports. The setup wizard offers a cloud provider, your
+  own server, or **Run Ollama for me** (the bundled container, with models
+  sized to the GPU). Costs and the weekly budget show for providers that report
+  cost (OpenRouter). [AI setup](docs/ops/ai-setup.md) explains which URL to
+  use from inside Docker.
 
 - **Playlists with videos that are not downloaded.** Pasting a link into a
   playlist, or **+ Playlist** on a stream's page, adds the video without

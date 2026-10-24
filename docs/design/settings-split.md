@@ -25,7 +25,7 @@ The frontend maps camelCase React state ↔ snake_case JSON via a fixed `SERVER_
 
 ## 3. Server `ai` / app settings (keys and models)
 
-OpenRouter API keys, Ollama base URL, model names, workload profile, budgets, schedules, and related flags live in the **`ai`** section of app settings (still on the server, still **not** protected by login).
+AI provider URLs and API keys, model names, workload profile, budgets, schedules, and related flags live in the **`ai`** section of app settings (still on the server, still **not** protected by login).
 
 These are never meant for `localStorage`:
 

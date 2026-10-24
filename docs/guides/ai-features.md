@@ -6,8 +6,8 @@ Optional AI turns Horde from a downloader into a smarter archive: semantic searc
 
 AI features need **providers ready**:
 
-- **Embeddings** — Ollama and/or OpenRouter (for search indexes, related, catalog embeds, categories)
-- **Chat / LLM** — Ollama and/or OpenRouter (summaries, chapters, chat, enrich tags, category invention, duplicate confirmation)
+- **Embeddings** — the provider's embedding model, or a second server's (for search indexes, related, catalog embeds, categories)
+- **Chat / LLM** — the provider's chat model (summaries, chapters, chat, enrich tags, category invention, duplicate confirmation)
 
 Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../ops/ai-setup.md). Until embed/chat models are present and healthy, Library stays on a single home tab (no Recommended), hybrid search degrades to keyword-only, and LLM actions stay unavailable.
 
@@ -81,7 +81,7 @@ On [Import & review](import-review.md), possible duplicate groups can be scored 
 AI work is queued and rate-limited (single-flight patterns, workload profiles). Watch [Settings → AI → Jobs](../settings/ai.md) for:
 
 - **Runnable / deferred / waiting / failed** counts (not one opaque “N queued”)
-- **Blocked** state when jobs sit waiting on Ollama/OpenRouter
+- **Blocked** state when jobs sit waiting on the AI provider
 - **Failed jobs** list with Retry / Retry all / Clear failed
 
 See [Single-flight AI](../design/single-flight-ai.md) and [AI pipeline](../architecture/ai-pipeline.md).

@@ -31,7 +31,7 @@ Beyond readiness and `queue_depth`, status exposes:
 
 | Field | Purpose |
 |-------|---------|
-| `blocked_reason` | Why nothing is running (paused, provider unreachable, OpenRouter budget hard limit) |
+| `blocked_reason` | Why nothing is running (paused, provider unreachable, weekly budget hard limit) |
 | `runnable_count` | Queued jobs due now with a provider available |
 | `deferred_count` | Queued with future `run_after` (retry backoff) |
 | `waiting_count` | Queued but provider missing for that kind |
@@ -59,17 +59,19 @@ Health (`GET /api/health`) mirrors `workers.ai_error_count` and `workers.ai_bloc
 
 ## Provider routing
 
-Resolved from Settings + env (`OLLAMA_BASE_URL`, `OPENROUTER_API_KEY`):
+One OpenAI-compatible client (`services/ai/provider.py`, [ADR 0017](../adr/0017-openai-compatible-provider.md)) resolved from Settings (`base_url`, `api_key`, `chat_model`, `embed_base_url`, `embed_api_key`, `embed_model`) and env (`OPENROUTER_API_KEY`; `OLLAMA_BASE_URL` as a legacy fallback):
 
-| Concern | Typical routing |
-|---------|-----------------|
-| Embeddings | Ollama embed model, or OpenRouter when scope is **all** (unless `ollama_prefer_embeddings`) |
-| Chat / summary / tags / chapters | OpenRouter when enabled + specialized/all; else Ollama chat model |
-| Workload models | VRAM tier defaults from [AI setup](../ops/ai-setup.md) |
+| Concern | Routing |
+|---------|---------|
+| Chat / summary / tags / chapters | `/chat/completions` on the chat connection |
+| Embeddings | `/embeddings` on `embed_base_url` when set, else on the chat connection; none when `embed_model` is empty |
+| Cost | Recorded when the response carries `usage.cost` (OpenRouter) |
+| Model downloads, VRAM sizing | Only when the endpoint's host answers Ollama's `/api/version` |
+| Workload models | VRAM tier defaults from [AI setup](../ops/ai-setup.md) (Ollama only) |
 
-When Ollama HTTP calls fail, the resolved URL cache is invalidated so a dead cache cannot keep claiming jobs. Queued jobs that cannot run yet stay `queued` (attempts unchanged) and may show a `waiting: …` note after ~2 minutes.
+Reachability (`GET /models`) is cached per URL; a failed call drops the cache so a dead endpoint cannot keep claiming jobs, and a failure is retried after 30 s. Queued jobs that cannot run yet stay `queued` (attempts unchanged) and may show a `waiting: …` note after ~2 minutes.
 
-Embeds are only enqueued when Ollama is **enabled** or OpenRouter owns embeddings (`scope=all`) — not when neither backend can ever serve them.
+Embeds are only enqueued when an embedding model and endpoint are set; tags, summaries and chapters only when a chat model and endpoint are set.
 
 ## Vector search
 
@@ -95,7 +97,7 @@ Changing the embed model invalidates compatibility — reindex so all rows share
 | **Hybrid search** | Keyword + embedding similarity over library (and catalog) vectors |
 | **Recommend** | Category chips + "For you" + related videos ([below](#recommendations)) |
 | **Chat RAG** | Retrieve relevant chunks, stream assistant reply (SSE) |
-| **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#weekly-budget)) |
+| **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#costs-and-the-weekly-budget)) |
 
 ## Recommendations
 

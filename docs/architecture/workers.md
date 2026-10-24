@@ -88,7 +88,7 @@ The loop itself ticks about hourly; playlist membership is cheap compared to per
 |----------|--------|
 | Kinds | `embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters` |
 | Retries | Up to **3** attempts; backoff `run_after` ≈ **2 × attempts** minutes |
-| Pause | Settings `ai.paused` or OpenRouter hard budget stop |
+| Pause | Settings `ai.paused` or the AI weekly budget hard stop |
 | Schedule | `on_download` enqueue (plus idle catch-up of missing search indexes) vs timed sweeps |
 
 Design note: [Single-flight AI](../design/single-flight-ai.md).

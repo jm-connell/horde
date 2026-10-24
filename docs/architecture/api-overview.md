@@ -128,7 +128,7 @@ The web UI asks for 500 rows at a time and keeps following the cursor, painting 
 | `ffmpeg`                                                          | `{ flavor, version }` from the image's `/app/BUILD_INFO`; `null` outside the image                                              |
 | `pot_provider`                                                    | bgutil POT status (`ok` / `error` / `pending` before the first probe), cached up to 30 s                                        |
 | `storage_warning`                                                 | Message when `DATA_DIR` is on a network filesystem (SQLite WAL is unsafe there), else `null`                                    |
-| `ollama` / `openrouter`                                           | Enabled/ready summaries; Ollama may include `last_error`                                                                        |
+| `ai`                                                              | `{ enabled, configured, provider, reachable, base_url, pulling, last_error }` from the provider caches (no live probe)            |
 | `disk`                                                            | Free/used/total on `DOWNLOADS_DIR`                                                                                              |
 | `library_video_count`, `review_pending_count`, `active_downloads` | Library snapshot                                                                                                                |
 | `wiki_available`                                                  | MkDocs static tree present                                                                                                      |
