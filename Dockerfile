@@ -81,6 +81,10 @@ RUN set -eux; \
     ffprobe -version | head -n 1; \
     rm -rf /var/lib/apt/lists/*
 
+# pip itself is pinned too: it vendors a CA bundle used by YTDLP_AUTO_UPDATE.
+COPY docker/pip.lock ./
+RUN pip install --no-cache-dir --require-hashes -r pip.lock
+
 # Hash-checked, fully pinned Python deps (regenerate: docs/development/dependencies.md).
 COPY backend/requirements.lock ./
 RUN pip install --no-cache-dir --require-hashes -r requirements.lock

@@ -262,6 +262,12 @@ address.
   administrators, and, while that account shares its downloads, other accounts.
   Before, any account with the offline-download permission could fetch it (ids
   are sequential) or see it in the queue and its progress stream.
+- **pip in the image no longer trusts the compromised emSign root CAs.** The
+  base image's pip 26.2.1 vendors certifi 2026.6.17 (GHSA-6q48-6c7w-9gw2) and
+  uses it when `YTDLP_AUTO_UPDATE=1` fetches yt-dlp from PyPI. The image now
+  installs pip 26.2.2, hash-pinned in `docker/pip.lock`, which vendors certifi
+  2026.10.19. Horde's own certifi was already patched. This predates 1.1.0:
+  1.0.3 shipped with it.
 
 ## [1.0.3] - 2026-10-21
 
