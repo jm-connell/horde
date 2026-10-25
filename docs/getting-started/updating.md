@@ -203,6 +203,8 @@ If a migration ran (or the revision cannot be read), `--rollback` **refuses befo
 
 Keep host paths in `.env` and other tweaks in `docker-compose.override.yml` (gitignored). If you edited `docker-compose.yml` directly, `update.sh` saves a copy to `.local/update-backups/<timestamp>/docker-compose.yml.local-edit` and stops without changing anything, rather than stashing and merging (which can leave conflict markers in the file). Then either `git checkout -- docker-compose.yml` and re-run, or run `HORDE_DISCARD_COMPOSE_EDITS=1 bash update.sh` to do both steps at once. Edits to other tracked files are kept as long as the incoming change does not touch the same files.
 
+Uncommented the GPU lines in `docker-compose.yml` (older instructions said to)? Move them: create `docker-compose.override.yml` with the block for your GPU from [GPU](../ops/environment.md#pass-the-gpu-into-horde), run `git checkout -- docker-compose.yml`, then update again. The override file survives every update.
+
 ## Use the published image
 
 Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, the commit SHA and `latest`. Building from source remains the default. To skip the build instead, put this in `.env`:

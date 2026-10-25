@@ -55,7 +55,21 @@ That starts the optional `ollama` service with its models under `OLLAMA_DATA_PAT
 
 ### GPU templates
 
-The compose file has commented passthrough snippets for NVIDIA (`deploy.resources`), AMD ROCm (`/dev/kfd`, `/dev/dri`), and Intel (`/dev/dri`) on the `ollama` service. Uncomment the one that matches your host. Without one, Ollama runs on the CPU, which works but is slow.
+Without a GPU, Ollama runs on the CPU, which works but is slow. Give the `ollama` service a GPU in `docker-compose.override.yml` (next to `docker-compose.yml`; Compose reads it automatically and updates leave it alone), then run `docker compose --profile ai up -d`. For NVIDIA (needs the NVIDIA Container Toolkit on the host):
+
+```yaml
+services:
+  ollama:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+```
+
+For AMD (ROCm) use the `ollama/ollama:<version>-rocm` image with `/dev/kfd` and `/dev/dri`; the commented examples in `docker-compose.yml` show the lines. Copy them into the override file rather than uncommenting them in place, because `update.sh` stops when `docker-compose.yml` has local edits.
 
 Horde's **H.264 encode** GPU (for playback compatibility copies) is a separate pass-through on the `horde` service. Settings → System → **GPU** / **None detected** is that container, not Ollama. See [GPU](environment.md#gpu).
 

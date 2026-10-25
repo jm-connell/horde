@@ -20,7 +20,10 @@ services:
       - no-new-privileges:true
     volumes:
       - ${OLLAMA_DATA_PATH:-./ollama}:/root/.ollama
-    # GPU passthrough when Ollama runs on this host (pick one):
+    # GPU passthrough when Ollama runs on this host (pick one). Do not uncomment
+    # here: copy the block into docker-compose.override.yml under
+    # `services: ollama:` (update.sh stops when this file has local edits).
+    # See docs/ops/ai-setup.md.
     #
     # NVIDIA:
     # deploy:
@@ -67,10 +70,12 @@ services:
     init: true
     depends_on:
       - bgutil-pot
+    # Open Horde at http://<server-ip>:8686. To use another host port, see
+    # docs/ops/ports-networking.md (override file; keep :8080 on the right).
     ports:
       - "8686:8080"
     environment:
-      # UID/GID that owns the TrueNAS dataset (see README).
+      # UID/GID that owns the media folder (`id -u` / `id -g`; set in .env).
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - DOWNLOADS_DIR=/downloads
@@ -122,10 +127,13 @@ services:
       - HORDE_BACKUP_ENABLED=${HORDE_BACKUP_ENABLED:-1}
       - HORDE_BACKUP_HOUR=${HORDE_BACKUP_HOUR:-4}
       - HORDE_BACKUP_KEEP=${HORDE_BACKUP_KEEP:-7}
+    # Set DOWNLOADS_PATH and DATA_PATH in .env, never here. The fallbacks after
+    # `:-` are TrueNAS examples; on any other machine Docker would create them as
+    # root-owned folders that Horde cannot write to.
     volumes:
-      # Media library on your ZFS dataset.
+      # Media library (videos, Channel/Year/...).
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads
-      # Persistent SQLite DB + cached thumbnails.
+      # Persistent SQLite DB + cached thumbnails. Must be a local disk, not SMB/NFS.
       - ${DATA_PATH:-/opt/dockge/horde/data}:/app/data
     restart: unless-stopped
     # Uvicorn drains for up to 10 s, then workers stop within 20 s (ffmpeg gets
@@ -146,8 +154,11 @@ services:
     pids_limit: ${HORDE_PIDS_LIMIT:-1024}
     # Empty/0 means unlimited (the default). Example: HORDE_MEM_LIMIT=4g
     mem_limit: ${HORDE_MEM_LIMIT:-0}
-    # GPU for archive transcode (H.264/H.265). Uncomment the block that matches
-    # the host. This is separate from Ollama passthrough above.
+    # GPU for archive transcode (H.264/H.265), separate from Ollama's above.
+    # Do not uncomment here: copy the block that matches the host into
+    # docker-compose.override.yml under `services: horde:` (update.sh stops
+    # when this file has local edits). For group_add, use the host's numeric
+    # GIDs from `getent group video render`. See docs/ops/environment.md#gpu.
     #
     # NVIDIA (requires nvidia-container-toolkit):
     # deploy:
