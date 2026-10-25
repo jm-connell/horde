@@ -145,6 +145,8 @@ Create the file with `nano docker-compose.override.yml`, paste the block for you
 ```yaml
 services:
   horde:
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     deploy:
       resources:
         reservations:
@@ -153,6 +155,8 @@ services:
               count: 1
               capabilities: [gpu]
 ```
+
+The `NVIDIA_DRIVER_CAPABILITIES` line asks the toolkit for the video encode libraries (NVENC); without it the card can show up in Settings while encoding still falls back to the CPU.
 
 **Intel Quick Sync / AMD VAAPI** (`/dev/dri`): first look up the host's group numbers for the device, because group names inside the container differ from the host's:
 
@@ -174,9 +178,12 @@ services:
 
 **AMD ROCm extra** (AMF via `/dev/kfd`): add `- /dev/kfd:/dev/kfd` under `devices`.
 
+!!! warning "`/dev/dri` passthrough is not yet confirmed to work"
+    Horde starts as root and then switches to `PUID`:`PGID`, and that switch may drop the extra groups that `group_add` gives the container. If Settings → Library still reports a CPU encoder after this, run `docker logs horde` and look for *permission denied* on `/dev/dri`. A **GPU** entry in Settings only means the device file is visible, not that ffmpeg can open it. NVIDIA does not depend on these groups.
+
 On TrueNAS: install the NVIDIA driver in the TrueNAS UI if you have an NVIDIA card, and do **not** isolate the GPU to another app (Plex, Jellyfin, official Apps). An isolated GPU is invisible to Dockge stacks.
 
-Check the result in Settings → System → Resources (**GPU** shows the card) and Settings → Library (the encoder says **GPU**). `docker compose config` prints the merged configuration if you want to confirm Compose picked the file up.
+Check the result in Settings → System → Resources (**GPU** shows the card) and Settings → Library (the encoder says **GPU**). The real test is making a compatibility copy of a 1080p video: on the GPU it takes well under the video's running time. `docker compose config` prints the merged configuration if you want to confirm Compose picked the file up.
 
 The `ollama` service's GPU is separate: add an `ollama:` entry with the same `deploy` block (NVIDIA) or `devices` (AMD/Intel) to the same override file. See [AI setup](ai-setup.md#gpu-templates).
 

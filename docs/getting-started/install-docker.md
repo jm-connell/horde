@@ -67,13 +67,14 @@ Horde keeps two kinds of files outside its container:
 | Media | The videos, sorted as `Channel/Year/Title [id].mp4` | `DOWNLOADS_PATH` |
 | Data | The database, settings, thumbnails and backups | `DATA_PATH` |
 
-Put them **outside** the `horde` folder, on the disk with the most space. For example, for a user named `alex`:
+Put them **outside** the `horde` folder, on the disk with the most space. In your home folder, for example:
 
 ```bash
-mkdir -p /home/alex/horde-media /home/alex/horde-data
+mkdir -p ~/horde-media ~/horde-data
+echo $HOME   # prints your home folder, e.g. /home/alex
 ```
 
-Write down both full paths; you need them in the next step. Paths must start with `/`.
+Write down both full paths (here `/home/alex/horde-media` and `/home/alex/horde-data`, with your own home folder); you need them in the next step. In `.env` they must be written out in full, starting with `/` (no `~`).
 
 !!! danger "The data folder must be on a local disk"
     `DATA_PATH` holds a SQLite database, which can be corrupted on a network share (SMB/NFS). Keep it on a disk inside the host. The media folder may be a network share.
@@ -106,12 +107,12 @@ DATA_PATH=/home/alex/horde-data
 In `nano`: move with the arrow keys, save with **Ctrl+O** then **Enter**, quit with **Ctrl+X**.
 
 !!! warning "Do not keep the example paths"
-    `.env.example` ships TrueNAS-style paths (`/mnt/tank/...`, `/opt/dockge/...`). On any other machine they do not exist, and Docker silently creates them **owned by root**. Horde then cannot save downloads. Always point both paths at folders you created.
+    `.env.example` ships TrueNAS-style paths (`/mnt/tank/...`, `/opt/dockge/...`). On any other machine they do not exist, and Docker silently creates them **owned by root**, somewhere you did not choose. Horde then cannot save downloads. Always point both paths at folders you created.
 
 Make sure that user owns both folders (use the numbers from `id -u` and `id -g`):
 
 ```bash
-sudo chown -R 1000:1000 /home/alex/horde-media /home/alex/horde-data
+sudo chown -R 1000:1000 ~/horde-media ~/horde-data
 ```
 
 Horde fixes the ownership of the data folder by itself on start; the media folder is left exactly as you set it, so this step matters for it.
@@ -192,7 +193,7 @@ Start with the log: `docker compose logs --tail=50 horde`. The cause is usually 
 | `horde` keeps restarting, log says `refusing to run as root` | `PUID` or `PGID` in `.env` is `0`. Set them to your own `id -u` / `id -g`. |
 | Downloads fail with *permission denied*, or the log mentions `/downloads` | The media folder is not owned by `PUID`:`PGID`. Rerun the `chown` from step 3 with the right numbers, then `docker compose up -d`. If you left the example paths in `.env`, fix them first. |
 | Browser cannot connect | Check `docker compose ps`, use port **8686** (not 8080), and use the host's LAN address. A firewall on the host (for example `ufw`) may need `sudo ufw allow 8686/tcp`. |
-| Browser shows `host_not_allowed` | You opened Horde under a domain name (for example `horde.mydomain.com`). Add `HORDE_ALLOWED_HOSTS=horde.mydomain.com` to `.env`, then `docker compose up -d`. Plain IP addresses, `localhost`, single-word names and `*.local` / `*.lan` names always work. |
+| Browser shows `host_not_allowed` | You opened Horde under a domain name (for example `horde.mydomain.com`). Add `HORDE_ALLOWED_HOSTS=horde.mydomain.com` to `.env`, then `docker compose up -d`. LAN and Tailscale IP addresses, `localhost`, single-word names (`mynas`) and names ending in `.local`, `.lan`, `.home.arpa`, `.internal` or `.ts.net` always work. |
 | The page looks old or broken after an update | Hard-refresh the browser: **Ctrl+Shift+R** (Mac: **Cmd+Shift+R**). |
 | Forgot the admin password | **Forgot password?** on the sign-in page, or `docker exec -it horde python -m app.cli reset-password <username>` ([Accounts](../ops/authentication.md)). |
 | `fatal: not a git repository` when updating | Horde was installed from a ZIP. Clone it again with `git clone` (step 1) and reuse the same `.env`; your videos and data are untouched. |

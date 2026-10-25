@@ -100,8 +100,8 @@ sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
 | `DATA_PATH` | Full path of the data folder (database, thumbnails). **Must be a local disk, never SMB/NFS**: the SQLite database can corrupt on network filesystems. |
 
 The example values are TrueNAS paths. Do not leave them on another machine:
-Docker would silently create them owned by root and Horde could not write to
-them. Keep paths in `.env`, never in `docker-compose.yml`.
+Docker would silently create them owned by root and Horde could not save
+downloads there. Keep paths in `.env`, never in `docker-compose.yml`.
 
 **4. Start it.**
 

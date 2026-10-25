@@ -69,7 +69,21 @@ services:
               capabilities: [gpu]
 ```
 
-For AMD (ROCm) use the `ollama/ollama:<version>-rocm` image with `/dev/kfd` and `/dev/dri`; the commented examples in `docker-compose.yml` show the lines. Copy them into the override file rather than uncommenting them in place, because `update.sh` stops when `docker-compose.yml` has local edits.
+For AMD (ROCm), use Ollama's ROCm image and pass both devices. Use the same version as the `image:` line in `docker-compose.yml`, and the host's group numbers from `getent group video render`:
+
+```yaml
+services:
+  ollama:
+    image: ollama/ollama:0.40.5-rocm
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"    # video, from getent
+      - "105"   # render, from getent
+```
+
+Keep these in the override file rather than uncommenting the examples in `docker-compose.yml`, because `update.sh` stops when that file has local edits.
 
 Horde's **H.264 encode** GPU (for playback compatibility copies) is a separate pass-through on the `horde` service. Settings → System → **GPU** / **None detected** is that container, not Ollama. See [GPU](environment.md#gpu).
 

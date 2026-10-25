@@ -30,7 +30,7 @@ services:
       - "9000:8080"   # host port 9000 → Horde's 8080 inside the container
 ```
 
-Then run `docker compose up -d` from the Horde folder and open `http://<server-ip>:9000`. Keep `8080` on the right-hand side. `!override` replaces the default mapping instead of adding a second one; it needs Docker Compose 2.24.4 or newer (`docker compose version`). `update.sh` finds the new port by itself.
+Then run `docker compose up -d` from the Horde folder and open `http://<server-ip>:9000`. Keep `8080` on the right-hand side. `!override` replaces the default mapping instead of adding a second one; it needs Docker Compose 2.24.4 or newer (`docker compose version`). Dockge uses the Compose inside its own container, so check that one with `sudo docker exec dockge docker compose version` (use your Dockge container's name) or deploy this change from the shell instead. `update.sh` finds the new port by itself.
 
 ## CORS (cast receivers)
 

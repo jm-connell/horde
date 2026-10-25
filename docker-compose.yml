@@ -38,16 +38,16 @@ services:
     # devices:
     #   - /dev/kfd
     #   - /dev/dri
-    # group_add:
-    #   - video
-    #   - render
+    # group_add:          # host GIDs from `getent group video render`
+    #   - "44"
+    #   - "105"
     #
     # Intel (iGPU / Arc via /dev/dri):
     # devices:
     #   - /dev/dri
-    # group_add:
-    #   - video
-    #   - render
+    # group_add:          # host GIDs from `getent group video render`
+    #   - "44"
+    #   - "105"
     restart: unless-stopped
 
   horde:
@@ -129,7 +129,7 @@ services:
       - HORDE_BACKUP_KEEP=${HORDE_BACKUP_KEEP:-7}
     # Set DOWNLOADS_PATH and DATA_PATH in .env, never here. The fallbacks after
     # `:-` are TrueNAS examples; on any other machine Docker would create them as
-    # root-owned folders that Horde cannot write to.
+    # root-owned folders, and Horde cannot save downloads into a root-owned one.
     volumes:
       # Media library (videos, Channel/Year/...).
       - ${DOWNLOADS_PATH:-/mnt/tank/media/youtube_archive}:/downloads
@@ -172,9 +172,9 @@ services:
     # AMD / Intel VAAPI or AMD AMF:
     # devices:
     #   - /dev/dri
-    # group_add:
-    #   - video
-    #   - render
+    # group_add:          # host GIDs from `getent group video render`
+    #   - "44"
+    #   - "105"
     #
     # AMD ROCm extra (if using AMF via /dev/kfd):
     # devices:

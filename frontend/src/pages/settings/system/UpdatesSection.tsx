@@ -65,7 +65,7 @@ export function UpdateSetupHelp() {
               <br />
               Not on TrueNAS? Run{" "}
               <span className="font-mono">sudo crontab -e</span> and add this
-              line instead:
+              line instead, with your Horde folder in place of the example:
               <Code>{`* * * * * bash ${SHELL_PATH}/scripts/update_watch.sh`}</Code>
             </li>
             <li>Within a minute this page shows the Update now button.</li>

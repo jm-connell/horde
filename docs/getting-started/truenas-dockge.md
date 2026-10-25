@@ -86,7 +86,7 @@ cd horde
 cp .env.example .env
 ```
 
-If `git clone` says *Permission denied*, the stacks folder belongs to root: put `sudo` in front of the `git clone`, `cp` and (in step 4) `nano` commands. Check that it worked with `ls`: you should see `docker-compose.yml`, `Dockerfile` and `.env.example`.
+If `git clone` says *Permission denied*, the stacks folder belongs to root: run `sudo git clone https://github.com/jm-connell/horde.git horde`, then give the folder to your own user so later updates work without `sudo` (`sudo chown -R $(id -u):$(id -g) horde`), and continue with `cd horde`. Check that it worked with `ls`: you should see `docker-compose.yml`, `Dockerfile` and `.env.example`.
 
 If a leftover empty `horde` stack folder already exists from Add Stack, delete that stack in Dockge (or rename the folder) before cloning, or clone as a different name.
 
