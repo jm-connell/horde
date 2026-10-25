@@ -136,6 +136,26 @@ def test_new_settings_are_not_migrated_again():
     assert settings_svc._merge_ai(current) == current
 
 
+@pytest.mark.parametrize("block", [None, {}])
+def test_an_install_that_never_saved_ai_settings_keeps_ollama(
+    tmp_dirs, monkeypatch, block
+):
+    # Before connection_version, no ai block meant Ollama, found automatically,
+    # with the default models; upgrading must not turn AI off.
+    monkeypatch.setattr("app.config.OLLAMA_BASE_URL", "")
+    data: dict = {"setup_completed": True}
+    if block is not None:
+        data["ai"] = block
+    (tmp_dirs["data"] / "app_settings.json").write_text(json.dumps(data))
+    ai = settings_svc.ai_settings()
+    assert ai["enabled"] is True
+    assert ai["autodetect_ollama"] == "chat"
+    assert (ai["chat_model"], ai["embed_model"]) == (
+        "llama3.2:3b",
+        "nomic-embed-text",
+    )
+
+
 def test_the_migration_reaches_the_file_on_the_next_save(tmp_dirs):
     path = tmp_dirs["data"] / "app_settings.json"
     path.write_text(
