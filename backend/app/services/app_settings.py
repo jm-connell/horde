@@ -306,10 +306,12 @@ def _path() -> Path:
 
 def _merge_ai(raw: Any) -> dict[str, Any]:
     merged = dict(AI_DEFAULTS)
-    if isinstance(raw, dict):
-        if raw and "connection_version" not in raw:
-            raw = _migrate_legacy_ai(raw)
-        merged.update({k: v for k, v in raw.items() if k in AI_DEFAULTS})
+    raw = raw if isinstance(raw, dict) else {}
+    # Older settings, including a file with no ai block at all (which meant
+    # Ollama, found automatically): convert once.
+    if "connection_version" not in raw:
+        raw = _migrate_legacy_ai(raw)
+    merged.update({k: v for k, v in raw.items() if k in AI_DEFAULTS})
     merged["category_min_score"] = clamp_category_min_score(
         merged.get("category_min_score")
     )

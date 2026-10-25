@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0017_playlist_stream_entries"
+HEAD = "0018_playlist_entry_links"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1185,3 +1185,39 @@ def test_playlist_stream_entries_revision_snapshots_existing_items(tmp_dirs):
         assert conn.execute(
             text("SELECT video_id, title FROM playlist_items")
         ).fetchall() == [(None, "One")]
+
+
+def test_playlist_entries_keep_only_links_that_can_be_streamed(tmp_dirs):
+    """0017 copied every ``source_url`` into its entries; only http(s) links can
+    be streamed or downloaded, so 0018 clears the rest (as ``snapshot()`` does)."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0016_two_factor")
+    with engine.begin() as conn:
+        _insert_video(conn, 1, "Linked", "[]", "x/a.mp4", "https://example.com/a")
+        _insert_video(conn, 2, "Imported", "[]", "x/b.mp4", "file:///media/b.mp4")
+        conn.execute(
+            text(
+                "INSERT INTO playlists (id, name, source_type, subscribed, position, "
+                "created_at, visibility) VALUES (1, 'Mix', 'user', 0, 0, "
+                "'2024-01-01 00:00:00', 'public')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO playlist_items (playlist_id, video_id, position) "
+                "VALUES (1, 1, 0), (1, 2, 1)"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.begin() as conn:
+        assert conn.execute(
+            text("SELECT video_id, url FROM playlist_items ORDER BY position")
+        ).fetchall() == [(1, "https://example.com/a"), (2, None)]
