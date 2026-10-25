@@ -1,0 +1,7 @@
+# The pip that ships in the image. The base image bundles whatever pip was
+# current when it was built, and pip vendors its own CA bundle (certifi), which
+# it uses at runtime for YTDLP_AUTO_UPDATE. Pin it here, hash-checked, so a
+# fixed pip does not wait for a base-image rebuild.
+# 26.2.2: vendors certifi 2026.10.19 (GHSA-6q48-6c7w-9gw2).
+pip==26.2.2 \
+    --hash=sha256:fd7f4dfa8190e014013b9f08f3e973f4e4c26ffd179a204895533a7254813a70
