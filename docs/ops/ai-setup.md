@@ -13,7 +13,7 @@ Optional AI powers embeddings (hybrid search, related videos, category shelves),
 | Models on your own hardware, server already running | Ollama, LM Studio, llama.cpp `llama-server`, vLLM, LocalAI, … | The server's address |
 | Models on this machine, no server yet | The **bundled Ollama** container (below) | A GPU passed through (CPU works, slowly) |
 
-In Settings → AI (and the setup wizard) there is one field: paste an API key or a server URL. A key from OpenRouter (`sk-or-…`), OpenAI (`sk-…`), Google Gemini (`AIza…`) or Groq (`gsk_…`) is recognised on its own; for any other provider paste its API URL, then the key. Connecting tests the server and shows which provider it found. Titles, descriptions, captions, notes and chat messages are sent to the provider, so a server you run keeps them on your network.
+In Settings → AI (and the setup wizard) there is one field: paste an API key or a server URL. A key from OpenRouter (`sk-or-…`), OpenAI (`sk-proj-…`, `sk-svcacct-…`), Google Gemini (`AIza…`) or Groq (`gsk_…`) is recognised on its own; for any other provider (DeepSeek and Anthropic keys also start with `sk-`) paste its API URL, then the key. A key is only ever sent to the provider that issued it. Connecting tests the server and shows which provider it found. Titles, descriptions, captions, notes and chat messages are sent to the provider, so a server you run keeps them on your network.
 
 ### Providers without embeddings
 
@@ -32,7 +32,7 @@ Horde runs in a container. Inside it, `localhost` / `127.0.0.1` is the **Horde c
 | A cloud provider | Just its API key (OpenRouter, OpenAI, Gemini, Groq), or its API URL, e.g. `https://api.mistral.ai/v1` |
 | Horde run without Docker (local development) | `http://127.0.0.1:<port>/v1` |
 
-Default ports: Ollama **11434**, LM Studio **1234**, llama.cpp **8080**, vLLM **8000**. A bare `host:port` gets `http://` and `/v1` added for you. **Find a server on this machine** under the URL box tries the bundled Ollama and those ports on `host.docker.internal`.
+Default ports: Ollama **11434**, LM Studio **1234**, llama.cpp **8080**, vLLM **8000**. A bare `host:port` gets `http://` and `/v1` added for you, and an address without a port gets Ollama's `11434`. **Find a server on this machine** under the URL box tries the bundled Ollama and those ports on `host.docker.internal`.
 
 Things that commonly get in the way:
 

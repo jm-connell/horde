@@ -14,32 +14,40 @@ export type AiProvider = {
   noEmbeddings?: boolean;
 };
 
-/** Checked in order, so `sk-or-` comes before OpenAI's plain `sk-`. */
-const KEY_PROVIDERS: (AiProvider & { keyPrefix: string })[] = [
+/**
+ * Providers whose keys say who issued them. OpenAI's are matched narrowly:
+ * DeepSeek, Anthropic and others also hand out plain `sk-` keys, and a key
+ * must never be sent to a provider that did not issue it.
+ */
+const KEY_PROVIDERS: (AiProvider & { isKey: (key: string) => boolean })[] = [
   {
     label: "OpenRouter",
-    keyPrefix: "sk-or-",
+    isKey: (k) => k.startsWith("sk-or-"),
     url: "https://openrouter.ai/api/v1",
     chat: "google/gemini-2.5-flash-lite",
     embed: "openai/text-embedding-3-small",
   },
   {
     label: "Google Gemini",
-    keyPrefix: "AIza",
+    isKey: (k) => k.startsWith("AIza"),
     url: "https://generativelanguage.googleapis.com/v1beta/openai",
     chat: "gemini-2.5-flash-lite",
     embed: "gemini-embedding-001",
   },
   {
     label: "Groq",
-    keyPrefix: "gsk_",
+    isKey: (k) => k.startsWith("gsk_"),
     url: "https://api.groq.com/openai/v1",
     chat: "llama-3.1-8b-instant",
     noEmbeddings: true,
   },
   {
     label: "OpenAI",
-    keyPrefix: "sk-",
+    // Project, service-account and admin keys, and legacy keys, which embed
+    // "T3BlbkFJ" ("OpenAI" in base64).
+    isKey: (k) =>
+      /^sk-(proj|svcacct|admin)-/.test(k) ||
+      (k.startsWith("sk-") && k.includes("T3BlbkFJ")),
     url: "https://api.openai.com/v1",
     chat: "gpt-4.1-mini",
     embed: "text-embedding-3-small",
@@ -74,22 +82,40 @@ export type EndpointInput =
   | { url: string; key: string | null; provider?: AiProvider }
   | { error: string };
 
+/** Ollama's port: the likeliest server behind an address typed without one. */
+const DEFAULT_PORT = "11434";
+
+/** A host name or IP, optionally with a port and path (no scheme). */
+const BARE_ADDRESS = /^[A-Za-z0-9.-]+(:\d{1,5})?(\/\S*)?$/;
+
+/** The provider that issued ``key``, if Horde can tell. */
+export function keyProvider(key: string): AiProvider | undefined {
+  const value = key.trim();
+  return KEY_PROVIDERS.find((p) => p.isKey(value));
+}
+
 /** A pasted API key or server URL, as the URL (and key) to connect to. */
 export function readEndpointInput(text: string): EndpointInput {
   const value = text.trim();
   if (!value) return { error: "Paste an API key or a server URL." };
-  // Keys have none of a URL's punctuation; host names like `ollama` are short.
-  if (!/[\s:/.]/.test(value)) {
-    const provider = KEY_PROVIDERS.find((p) => value.startsWith(p.keyPrefix));
-    if (provider) return { url: provider.url, key: value, provider };
-    if (value.length >= 20)
-      return {
-        error:
-          "Horde can't tell which provider this key is for. Paste the provider's API URL here and the key in the key field.",
-      };
+  const provider = keyProvider(value);
+  if (provider) return { url: provider.url, key: value, provider };
+  if (/^https?:\/\//i.test(value)) return { url: value, key: null };
+  // A bare address has a dot, a port or a path, or is a short host name like
+  // `ollama`; anything else is most likely a key, which must not be sent
+  // anywhere as a host name.
+  if (BARE_ADDRESS.test(value) && (/[.:/]/.test(value) || value.length < 20)) {
+    const [hostPort, ...path] = value.split("/");
+    const port = hostPort.includes(":") ? "" : `:${DEFAULT_PORT}`;
+    return {
+      url: `http://${hostPort}${port}${path.length ? `/${path.join("/")}` : ""}`,
+      key: null,
+    };
   }
-  const url = value.includes("://") ? value : `http://${value}`;
-  return { url, key: null };
+  return {
+    error:
+      "Horde can't tell which provider this key is for. Paste the provider's API URL here and the key in the key field.",
+  };
 }
 
 function hostAndPort(url: string): { host: string; port: string } {
@@ -127,9 +153,19 @@ export function providerLabel(url: string, kind?: string | null): string {
 
 /** The pasted key's provider, while the input is still being typed. */
 export function keyProviderLabel(text: string): string {
-  const read = readEndpointInput(text);
-  return "provider" in read && read.provider ? read.provider.label : "";
+  return keyProvider(text)?.label ?? "";
+}
+
+/**
+ * Why ``key`` must not go to ``url``: it is a key Horde recognises, issued
+ * for another host. Empty when it may.
+ */
+export function keyMismatch(url: string, key: string): string {
+  const issuer = keyProvider(key);
+  if (!issuer || hostAndPort(issuer.url).host === hostAndPort(url).host)
+    return "";
+  return `That key is for ${issuer.label}: paste it in the first field on its own.`;
 }
 
 export const COMPATIBLE_PROVIDERS_TIP =
-  "Any service with an OpenAI-compatible API works. Paste just the key for OpenRouter, OpenAI, Google Gemini or Groq. For others (Mistral, DeepSeek, Together, …) paste the provider's API URL, then the key. For a server you run (Ollama, LM Studio, llama.cpp, vLLM) paste its address, e.g. 192.168.1.50:11434.";
+  "Any service with an OpenAI-compatible API works. Paste just the key for OpenRouter, OpenAI, Google Gemini or Groq. For others (Mistral, DeepSeek, Together, …) paste the provider's API URL, then the key. For a server you run (Ollama, LM Studio, llama.cpp, vLLM) paste its address, e.g. 192.168.1.50:1234; without a port, Ollama's 11434 is used.";

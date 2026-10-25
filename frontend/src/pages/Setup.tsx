@@ -19,6 +19,7 @@ import { Toggle } from "./settings/ui";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 import {
   COMPATIBLE_PROVIDERS_TIP,
+  keyMismatch,
   keyProviderLabel,
   providerFor,
   providerLabel,
@@ -219,6 +220,11 @@ export default function Setup() {
     const read = readEndpointInput(connectInput);
     if ("error" in read) {
       setAiStatus(read.error);
+      return;
+    }
+    const mismatch = read.key ? "" : keyMismatch(read.url, connectKey.trim());
+    if (mismatch) {
+      setAiStatus(mismatch);
       return;
     }
     await connectAi(
@@ -512,7 +518,10 @@ function WizardPanel({
                     placeholder="API key or server URL"
                     aria-label="API key or server URL"
                     value={connectInput}
-                    onChange={(e) => setConnectInput(e.target.value)}
+                    onChange={(e) => {
+                      setConnectInput(e.target.value);
+                      setAiStatus(null);
+                    }}
                     className={INPUT}
                   />
                   <HelpTip text={COMPATIBLE_PROVIDERS_TIP} />
@@ -523,7 +532,10 @@ function WizardPanel({
                       placeholder="API key (if it needs one)"
                       aria-label="API key"
                       value={connectKey}
-                      onChange={(e) => setConnectKey(e.target.value)}
+                      onChange={(e) => {
+                        setConnectKey(e.target.value);
+                        setAiStatus(null);
+                      }}
                       className={INPUT_KEY}
                     />
                   )}

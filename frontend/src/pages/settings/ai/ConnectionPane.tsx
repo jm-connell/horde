@@ -15,6 +15,7 @@ import { useSettingsPage } from "../context";
 import { openRouterPriceHint } from "../openRouterModels";
 import { Section, SettingRow, Toggle } from "../ui";
 import { useAiPage } from "./aiPageContext";
+import { providerKindLabel } from "../aiProviderUsage";
 import { providerLabel } from "../aiProviders";
 import EndpointFields from "./EndpointFields";
 import ModelField from "./ModelField";
@@ -37,6 +38,10 @@ export default function ConnectionPane() {
   const embedModels = useAiModels("embed", embedUrl).data;
   const separateEmbed = splitOpen || Boolean(aiDraft.embed_base_url);
   const isOpenRouter = aiStatus?.provider === "openrouter";
+  // Empty base_url: the OLLAMA_BASE_URL fallback is in use; name the kind.
+  const connectedTo =
+    providerLabel(aiDraft.base_url, aiStatus?.provider) ||
+    providerKindLabel(aiStatus?.provider);
   const usesOllama =
     aiStatus?.provider === "ollama" || aiStatus?.embed_provider === "ollama";
   const embedChoices = embedModels?.embedding_models?.length
@@ -74,7 +79,8 @@ export default function ConnectionPane() {
             {aiStatus?.configured && aiStatus.reachable && (
               <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                Connected · {providerLabel(aiDraft.base_url, aiStatus.provider)}
+                Connected
+                {connectedTo ? ` · ${connectedTo}` : ""}
               </span>
             )}
             {aiDraft.enabled && aiStatus?.configured && !aiStatus.reachable && (
@@ -107,7 +113,7 @@ export default function ConnectionPane() {
                 else if (provider?.noEmbeddings && switched)
                   patch.embed_model = "";
               }
-              await saveAi(patch);
+              return (await saveAi(patch))?.base_url ?? null;
             }}
           />
           <p className="text-xs text-muted">
@@ -116,7 +122,7 @@ export default function ConnectionPane() {
             <code>host.docker.internal</code>; for another PC use its LAN
             address (e.g. <code>http://192.168.1.50:11434</code>). A bare{" "}
             <code>host:port</code> gets <code>http://</code> and{" "}
-            <code>/v1</code> added. See{" "}
+            <code>/v1</code> added (no port: Ollama&apos;s 11434). See{" "}
             <a
               className="underline underline-offset-2 hover:text-gray-300"
               href="/wiki/ops/ai-setup/"
@@ -265,7 +271,7 @@ export default function ConnectionPane() {
                       (url !== aiDraft.embed_base_url || !aiDraft.embed_model)
                     )
                       patch.embed_model = provider.embed;
-                    await saveAi(patch);
+                    return (await saveAi(patch))?.embed_base_url ?? null;
                   }}
                 />
               </div>

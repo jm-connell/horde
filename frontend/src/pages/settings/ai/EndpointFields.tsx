@@ -6,6 +6,7 @@ import { INPUT_INLINE, INPUT_KEY, PANEL_BTN } from "../constants";
 import HelpTip from "../../../components/HelpTip";
 import {
   COMPATIBLE_PROVIDERS_TIP,
+  keyMismatch,
   keyProviderLabel,
   providerFor,
   providerLabel,
@@ -32,12 +33,15 @@ export default function EndpointFields({
   savedUrl: string;
   keySet: boolean;
   keyMasked: string;
-  /** Save the endpoint; ``provider`` is set when Horde recognised it. */
+  /**
+   * Save the endpoint; ``provider`` is set when Horde recognised it. Resolves
+   * to the URL as saved (normalised), or ``null`` when saving failed.
+   */
   onSave: (
     url: string,
     key: string | null,
     provider?: AiProvider
-  ) => Promise<void>;
+  ) => Promise<string | null>;
 }) {
   const { showToast, showError } = useSettingsPage();
   const [input, setInput] = useState(savedUrl);
@@ -63,7 +67,13 @@ export default function EndpointFields({
       setProblem(parsed.error);
       return null;
     }
-    return { ...parsed, key: parsed.key ?? (key.trim() || null) };
+    const typedKey = key.trim();
+    const mismatch = parsed.key ? "" : keyMismatch(parsed.url, typedKey);
+    if (mismatch) {
+      setProblem(mismatch);
+      return null;
+    }
+    return { ...parsed, key: parsed.key ?? (typedKey || null) };
   };
 
   const save = async (
@@ -71,8 +81,9 @@ export default function EndpointFields({
     apiKey: string | null,
     provider?: AiProvider
   ) => {
-    await onSave(url, apiKey, provider ?? providerFor(url));
-    setInput(url);
+    const saved = await onSave(url, apiKey, provider ?? providerFor(url));
+    if (saved === null) return;
+    setInput(saved);
     setKey("");
   };
 
@@ -211,6 +222,7 @@ export default function EndpointFields({
             className={PANEL_BTN}
             onClick={() => {
               setInput(row.base_url);
+              setKey("");
               setResult(null);
               setProblem("");
               setFound(null);

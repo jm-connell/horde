@@ -22,7 +22,7 @@ One connection to any OpenAI-compatible endpoint serves chat, and embeddings unl
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
 | Enable AI | `enabled` | `true` | Master switch; AI also needs a URL |
-| API key or server URL | `base_url` | `""` | One field. A key from OpenRouter, OpenAI, Gemini or Groq fills in its provider's URL; anything else is an OpenAI-compatible base URL (a bare `host:port` gets `http://` and `/v1`). Connecting shows the provider found (by host, or Ollama by probe) |
+| API key or server URL | `base_url` | `""` | One field. A key from OpenRouter, OpenAI, Gemini or Groq fills in its provider's URL; anything else is an OpenAI-compatible base URL (a bare `host:port` gets `http://` and `/v1`; no port means Ollama's 11434). Connecting shows the provider found (by host, or Ollama by probe) |
 | API key | `api_key` | `""` | Shown for a URL (for servers that need one). Stored server-side; read back masked (`api_key_set`). Dropped when the URL changes without a new key, so it never goes to another host |
 | Connect / Test | — | — | Lists the server's models and saves the URL and key |
 | Find a server on this machine | — | — | Probes the bundled Ollama and ports 11434 / 1234 / 8080 on the Docker host |

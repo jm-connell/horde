@@ -60,7 +60,10 @@ export function useAiCore() {
     }
   }, [openRouterCosts, showToast]);
 
-  const saveAi = async (patch: Partial<AiSettings>) => {
+  /** Saves ``patch``; the saved settings, or ``null`` when that failed. */
+  const saveAi = async (
+    patch: Partial<AiSettings>
+  ): Promise<AiSettings | null> => {
     const next = { ...aiDraft, ...patch };
     setAiDraft(next);
     const updated = await saveAppSettings({ ai: patch }).catch((err) => {
@@ -72,6 +75,7 @@ export function useAiCore() {
       setAiDraft({ ...DEFAULT_AI, ...updated.ai });
     }
     refreshAiStatus();
+    return updated?.ai ?? null;
   };
 
   const runAiProcess = async (action: AiProcessAction) => {
