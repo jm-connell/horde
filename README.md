@@ -50,30 +50,30 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
-New to Docker or self-hosting? The step-by-step guides explain every command
-and how to check it worked:
-**[Install with Docker](https://jm-connell.github.io/horde/getting-started/install-docker/)**
-(any Linux machine) or
-**[TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truenas-dockge/)**.
-The short version:
+Full walkthroughs: [Install with Docker](https://jm-connell.github.io/horde/getting-started/install-docker/)
+and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truenas-dockge/).
 
-**You need** a 64-bit Linux host with Docker, the Docker Compose plugin
-(`docker compose version` should print v2 or newer) and Git. Run everything
-below in a terminal **on that host** (SSH or the TrueNAS shell), not in
-Dockge's per-container **Bash** button. If Docker answers *permission denied*,
-put `sudo` in front of the `docker` commands.
+### Requirements
 
-**1. Download Horde.** There is no Docker Hub image: Compose builds it from
-this repo. Use `git clone` (not a ZIP) so `update.sh` can update it later.
+- 64-bit Linux host with Docker, the Docker Compose plugin (`docker compose
+  version` reports v2 or newer) and Git.
+- Run all commands in a shell on the host (SSH or the TrueNAS shell), not in
+  Dockge's per-container **Bash** button.
+- If Docker reports `permission denied`, prefix `docker` commands with `sudo`.
+
+### 1. Clone
+
+There is no Docker Hub image; Compose builds it from this repo. Use
+`git clone`, not a ZIP, so `update.sh` can update it later.
 
 ```bash
 git clone https://github.com/jm-connell/horde.git
 cd horde
 ```
 
-On **TrueNAS / Dockge**, clone *into* Dockge's stacks folder instead, so the
-folder name becomes the stack name (do not use **Add Stack** and paste only
-`docker-compose.yml`; the build needs the whole repo):
+TrueNAS / Dockge: clone into the Dockge stacks folder so the folder name is the
+stack name. Do not use **Add Stack** with only `docker-compose.yml`; the build
+needs the whole repo.
 
 ```bash
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
@@ -81,58 +81,64 @@ git clone https://github.com/jm-connell/horde.git horde
 cd horde
 ```
 
-**2. Make two folders** outside the repo: one for videos, one for Horde's
-database. Own them as the user Horde should write files as (`id -u` and
-`id -g` print your numbers).
+### 2. Create folders
+
+Create a media folder and a data folder outside the repo, owned by the user
+Horde should write files as (`id -u` / `id -g`):
 
 ```bash
 mkdir -p /home/you/horde-media /home/you/horde-data
 sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
 ```
 
-**3. Fill in four settings.** `cp .env.example .env`, then edit `.env`
-(for example `nano .env`):
+### 3. Configure
 
-| Variable | What to put |
-|----------|-------------|
-| `PUID` / `PGID` | The numbers from `id -u` / `id -g` (TrueNAS → Credentials → Local Users). Not `0`. |
-| `DOWNLOADS_PATH` | Full path of the videos folder (`Channel/Year/...`). May be a network share. |
-| `DATA_PATH` | Full path of the data folder (database, thumbnails). **Must be a local disk, never SMB/NFS**: the SQLite database can corrupt on network filesystems. |
+```bash
+cp .env.example .env
+```
 
-The example values are TrueNAS paths. Do not leave them on another machine:
-Docker would silently create them owned by root and Horde could not save
-downloads there. Keep paths in `.env`, never in `docker-compose.yml`.
+Set these in `.env`:
 
-**4. Start it.**
+| Variable | Value |
+|----------|-------|
+| `PUID` / `PGID` | Output of `id -u` / `id -g` (TrueNAS: Credentials → Local Users). Not `0`. |
+| `DOWNLOADS_PATH` | Full path of the media folder. May be a network share. |
+| `DATA_PATH` | Full path of the data folder (database, thumbnails). Must be a local disk, not SMB/NFS: SQLite can corrupt on network filesystems. |
+
+The example values are TrueNAS paths. On other machines Docker creates missing
+paths owned by root, and Horde cannot save downloads there. Keep paths in
+`.env`, not in `docker-compose.yml`.
+
+### 4. Start
 
 ```bash
 docker compose up --build -d
 ```
 
-On Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not
-rewrite volume lines in the compose editor. The first build compiles the UI
-and wiki and takes several minutes.
+Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not edit
+the volume lines in the compose editor. The first build takes several minutes.
 
-**5. Open** `http://<server-ip>:8686` (host port **8686**, not 8080) and
-create the admin account; a short setup wizard follows.
-`docker compose ps` should show `horde` as `Up (healthy)`, and
-`curl -s http://127.0.0.1:8686/api/health` should print `"status":"ok"`.
-Stuck? See [If something goes wrong](https://jm-connell.github.io/horde/getting-started/install-docker/#if-something-goes-wrong).
+### 5. Open
 
-Optional SMB on the media folder: dropped `.mp4` / `.mkv` / `.webm` files
-show up in **Import** within `SCAN_INTERVAL_SEC` (default 60s).
+Go to `http://<server-ip>:8686` (host port 8686, not 8080), create the admin
+account and complete the setup wizard. To verify: `docker compose ps` shows
+`horde` as `Up (healthy)`, and `curl -s http://127.0.0.1:8686/api/health`
+returns `"status":"ok"`. Common errors:
+[troubleshooting table](https://jm-connell.github.io/horde/getting-started/install-docker/#if-something-goes-wrong).
 
-AI is optional: pick a provider in the setup wizard or Settings → AI (any
-OpenAI-compatible URL plus an API key if it needs one). To run models on this
-machine without setting up a server, start the bundled Ollama with
-`docker compose --profile ai up -d` and choose "Run Ollama for me". See the
-[AI setup](docs/ops/ai-setup.md) page for Docker networking.
+### Optional
 
-Extra Compose settings (a GPU, a different port) go in a
-`docker-compose.override.yml` next to `docker-compose.yml`, which Compose
-reads automatically and updates leave alone; see
-[GPU](https://jm-connell.github.io/horde/ops/environment/#gpu) and
-[Change the port](https://jm-connell.github.io/horde/ops/ports-networking/#change-the-port).
+- **Imports:** `.mp4` / `.mkv` / `.webm` files copied into the media folder
+  (for example over SMB) appear in **Import** within `SCAN_INTERVAL_SEC`
+  (default 60s).
+- **AI:** choose a provider in the setup wizard or Settings → AI (any
+  OpenAI-compatible URL, plus an API key if required). For local models without
+  your own server, run `docker compose --profile ai up -d` and choose "Run
+  Ollama for me". Docker networking: [AI setup](docs/ops/ai-setup.md).
+- **GPU or a different port:** put these in `docker-compose.override.yml` next
+  to `docker-compose.yml`. Compose reads it automatically and updates do not
+  touch it. See [GPU](https://jm-connell.github.io/horde/ops/environment/#gpu)
+  and [Change the port](https://jm-connell.github.io/horde/ops/ports-networking/#change-the-port).
 
 ### Update
 
