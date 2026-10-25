@@ -8,6 +8,7 @@ produces the same software as a rebuild today.
 | Python runtime deps | `backend/requirements.txt` (direct) and `backend/requirements.lock` (full tree, hashes) | `uv pip compile --generate-hashes` |
 | Frontend deps | `frontend/package.json` and `frontend/package-lock.json` | `npm ci` |
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
+| pip in the image | `docker/pip.lock` | exact version plus hash |
 | Base images | `Dockerfile` `FROM` lines | exact version tag plus `@sha256` digest |
 | Node / Python in CI | `.nvmrc` (24) and `.github/workflows` | same major as the Dockerfile |
 
@@ -51,6 +52,15 @@ the line readable, the digest makes it immutable. Dependabot opens weekly pull
 requests for both. To bump by hand, find the new digest with
 `docker buildx imagetools inspect python:3.14.9-slim-bookworm` and update the tag
 and digest together.
+
+## Bumping pip
+
+The image's pip is pinned in `docker/pip.lock` rather than taken from the base
+image, because pip vendors its own CA bundle (certifi) and uses it at runtime for
+`YTDLP_AUTO_UPDATE`. Dependabot does not watch this file. When the Trivy image
+scan flags a package under pip's vendored copies, bump the version and hash from
+the pip release's PyPI page, and check the release's `src/pip/_vendor/vendor.txt`
+to confirm it vendors the fixed version.
 
 ## Bumping yt-dlp
 
