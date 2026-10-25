@@ -80,7 +80,7 @@ context one at a time; the ones tests rely on are reset by the fixtures in
 | `services/sprites.py` | `sprite_pool` | One ffmpeg pool for the process; the test fixture stops and reopens it |
 | `services/ffmpeg_progress.py` | `children` | Registry of live ffmpeg children, terminated on shutdown |
 | `services/ytdlp_common.py`, `ytdlp_extract.py` | extract gate, cookie-required marks, info and feed caches, last failure | Caches of yt-dlp answers keyed by URL; the extraction gate must be shared by all threads |
-| `services/ai/provider.py` | resolved Ollama URL, model cache, last error, pulling set | Cache of the external service's state |
+| `services/ai/provider.py` | per-URL reachability and Ollama-probe caches, model cache, last error, pulling set | Cache of the external service's state |
 | `services/channel_catalog/runtime.py`, `index.py` | stop/wake events, head-sync in-flight set | Catalog worker control; one catalog job runs at a time |
 | `services/scanner.py` | scan lock, suspend event, active-download sets | Coordinates the scanner with downloads in the same process |
 | `services/compat_rendition.py`, `stream_preview.py`, `activity.py`, `job_metadata.py`, `subtitle_retry.py`, `metadata_sync.py` | in-flight job tables, pending queues, cooldowns | Progress bookkeeping for background work |

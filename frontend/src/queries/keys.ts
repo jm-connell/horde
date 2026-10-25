@@ -16,7 +16,8 @@ export const queryKeys = {
   ai: {
     status: ["ai", "status"] as const,
     costs: ["ai", "costs"] as const,
-    models: ["ai", "openrouter-models"] as const,
+    models: (target: "chat" | "embed", baseUrl: string) =>
+      ["ai", "models", target, baseUrl] as const,
   },
   system: {
     stats: ["system", "stats"] as const,
@@ -71,6 +72,7 @@ export const queryKeys = {
     all: ["playlists"] as const,
     list: ["playlists", "list"] as const,
     detail: (id: number) => ["playlists", "detail", id] as const,
+    serverCopies: (id: number) => ["playlists", "server-copies", id] as const,
   },
   history: {
     all: ["history"] as const,

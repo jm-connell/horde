@@ -22,7 +22,7 @@ A **setup wizard** runs on first install (and after **Settings → System → Re
 2. Volume normalization
 3. **Playback compatibility**: AV1 only, H.264 up to 1080p, H.264 full resolution, or AV1 + H.264 copy (shows your GPU/encoder and whether this device can play AV1)
 4. Theme palette
-5. Optional AI (OpenRouter key or Ollama) — skip if you do not need it yet
+5. Optional AI (a cloud provider key, your own server, or the bundled Ollama) — skip if you do not need it yet
 
 **Use defaults** finishes immediately with built-in settings. You can change anything later under [Settings](../settings/index.md). Existing installs that already have `app_settings.json` are not sent through the wizard.
 
@@ -80,7 +80,7 @@ Open [Settings](../settings/index.md) early and skim:
 | Appearance | Theme / UI preferences |
 | Library | Sort defaults, channel list, sync options |
 | Playback | Default player mode, descriptions |
-| AI | Ollama / OpenRouter when you want smarter search and tags |
+| AI | Any OpenAI-compatible provider when you want smarter search and tags |
 | System | Storage stats, update notice, documentation link |
 
 You do not need AI for a working archive. Enable it later via [AI setup](../ops/ai-setup.md) (`docker compose --profile ai up -d` for on-host Ollama).

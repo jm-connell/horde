@@ -18,7 +18,7 @@ Horde is **one OS process**: a uvicorn server running one FastAPI app. There is 
                           |               |                |
                    SQLite (WAL)     DOWNLOADS_DIR      yt-dlp / ffmpeg
                    DATA_DIR/horde.db  (media)          (child processes)
-                          optional: bgutil POT, Ollama, OpenRouter (HTTP)
+                          optional: bgutil POT, an OpenAI-compatible AI provider (HTTP)
 ```
 
 - **Request threads.** Sync route handlers run in uvicorn's thread pool and open their own SQLModel `Session` per request. Middleware that touches the database (sign-in) hops to a worker thread so the event loop stays free.
@@ -170,7 +170,7 @@ reads:  hybrid search = keyword hits + embedding neighbours, merged
         chat = per-user messages, context from retrieved caption chunks (streamed over SSE)
 ```
 
-- **Providers**: Ollama (local) and/or OpenRouter (cloud), chosen from settings and environment; embeddings, chat and tagging can route differently. Provider calls that cost money are recorded in `openrouter_usage` on a separate session, so jobs commit before the HTTP call; a hard budget pauses the worker.
+- **Providers**: one OpenAI-compatible endpoint (cloud or local) from settings, with an optional second endpoint for embeddings ([ADR 0017](../adr/0017-openai-compatible-provider.md)). Provider calls that cost money are recorded in `openrouter_usage` on a separate session, so jobs commit before the HTTP call; a hard budget pauses the worker.
 - **Single-flight** because homelab GPUs thrash under parallel model calls ([design note](single-flight-ai.md)). Queue state is in SQLite, so a restart recovers it (`running` becomes `queued`).
 - **Vector search** scores every stored chunk with one matrix product. The normalised `float32` matrix lives in `services/ai/vector_index.py`, on the engine object, and is updated incrementally from a cheap per-video fingerprint instead of being rebuilt on every change ([ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md)). It needs `numpy` and about `chunks x dim x 4` bytes.
 - **Per-user vs shared**: summaries, tags, chapters and embeddings are shared library data; chat is per user; "For you" is seeded from the signed-in user's history. Members need `use_ai`.

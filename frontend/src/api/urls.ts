@@ -1,4 +1,5 @@
 import type { Playlist, Video } from "../types";
+import { youtubeThumbnailUrl } from "../utils";
 
 /** HLS master playlist of a followed channel's live stream (by YouTube video id). */
 export function liveMasterUrl(videoId: string): string {
@@ -15,7 +16,12 @@ export function listThumbnailUrl(videoId: number): string {
 }
 
 export function playlistCoverUrl(playlist: Playlist): string | null {
-  if (!playlist.has_thumbnail) return null;
+  if (!playlist.has_thumbnail) {
+    // Nothing downloaded gives a cover: the first streamed video's YouTube one.
+    return playlist.cover_youtube_id
+      ? youtubeThumbnailUrl(playlist.cover_youtube_id)
+      : null;
+  }
   if (playlist.has_custom_cover) {
     return `/api/playlists/${playlist.id}/thumbnail?v=c`;
   }

@@ -15,7 +15,7 @@ export interface paths {
         put?: never;
         /**
          * Ai Apply Workload
-         * @description Apply a workload profile: resolve models for the Ollama GPU, save, optional pull.
+         * @description Apply a workload profile; on Ollama also pick and download GPU-sized models.
          */
         post: operations["ai_apply_workload_api_ai_apply_workload_post"];
         delete?: never;
@@ -35,6 +35,46 @@ export interface paths {
         get: operations["ai_categories_api_ai_categories_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/costs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ai Costs
+         * @description Spend reported by the provider (only OpenRouter reports a cost per call).
+         */
+        get: operations["ai_costs_api_ai_costs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/detect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ai Detect
+         * @description Look for a local AI server at the usual addresses (Ollama, LM Studio, ...).
+         */
+        post: operations["ai_detect_api_ai_detect_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -126,57 +166,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai/openrouter/costs": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ai Openrouter Costs */
-        get: operations["ai_openrouter_costs_api_ai_openrouter_costs_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/openrouter/models": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Ai Openrouter Models */
-        get: operations["ai_openrouter_models_api_ai_openrouter_models_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/ai/openrouter/test": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Ai Openrouter Test */
-        post: operations["ai_openrouter_test_api_ai_openrouter_test_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai/pause": {
         parameters: {
             query?: never;
@@ -218,7 +207,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Ai Recommendations */
+        /**
+         * Ai Recommendations
+         * @description The home page's "For you" shelf, or one category's videos.
+         *
+         *     "For you" works without AI (ranked from the watch history alone); the
+         *     category shelves need it.
+         */
         get: operations["ai_recommendations_api_ai_recommendations_get"];
         put?: never;
         post?: never;
@@ -271,7 +266,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ai Test */
+        /**
+         * Ai Test
+         * @description Probe an endpoint (or the saved one) and list the models it offers.
+         */
         post: operations["ai_test_api_ai_test_post"];
         delete?: never;
         options?: never;
@@ -1807,6 +1805,46 @@ export interface paths {
         patch: operations["update_playlist_api_playlists__playlist_id__patch"];
         trace?: never;
     };
+    "/api/playlists/{playlist_id}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download All
+         * @description Download every streamed entry; each joins the playlist in its place.
+         */
+        post: operations["download_all_api_playlists__playlist_id__download_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/playlists/{playlist_id}/entries/{entry_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Entry
+         * @description Remove one entry, downloaded or streamed. The video stays in the library.
+         */
+        delete: operations["remove_entry_api_playlists__playlist_id__entries__entry_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/playlists/{playlist_id}/items": {
         parameters: {
             query?: never;
@@ -1873,6 +1911,29 @@ export interface paths {
         head?: never;
         /** Reorder Items */
         patch: operations["reorder_items_api_playlists__playlist_id__reorder_patch"];
+        trace?: never;
+    };
+    "/api/playlists/{playlist_id}/server-copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Server Copies
+         * @description What "Download all" and "Remove from server" would do to this playlist.
+         *
+         *     Removing skips videos that any other playlist (anyone's) also holds, so it
+         *     never takes a video out from under another playlist.
+         */
+        get: operations["server_copies_api_playlists__playlist_id__server_copies_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/playlists/{playlist_id}/sync": {
@@ -3330,17 +3391,93 @@ export interface components {
         };
         /**
          * AiConnectionTest
-         * @description Result of probing an Ollama base URL (``POST /api/ai/test``).
+         * @description Result of probing an OpenAI-compatible endpoint (``POST /api/ai/test``).
          */
         AiConnectionTest: {
             /** Base Url */
             base_url?: string | null;
             /** Detail */
             detail?: string | null;
+            /** Embedding Models */
+            embedding_models?: components["schemas"]["AiModelRow"][];
+            /** Kind */
+            kind?: string | null;
             /** Models */
-            models?: string[] | null;
+            models?: components["schemas"]["AiModelRow"][];
             /** Ok */
             ok: boolean;
+            /** Presets */
+            presets?: components["schemas"]["AiModelPreset"][];
+        };
+        /** AiCostsRead */
+        AiCostsRead: {
+            /**
+             * All
+             * @default 0
+             */
+            all: number;
+            /**
+             * All Calls
+             * @default 0
+             */
+            all_calls: number;
+            /**
+             * Blocked
+             * @default false
+             */
+            blocked: boolean;
+            /**
+             * D30
+             * @default 0
+             */
+            d30: number;
+            /**
+             * D30 Calls
+             * @default 0
+             */
+            d30_calls: number;
+            /**
+             * D7
+             * @default 0
+             */
+            d7: number;
+            /**
+             * D7 Calls
+             * @default 0
+             */
+            d7_calls: number;
+            /**
+             * H24
+             * @default 0
+             */
+            h24: number;
+            /**
+             * H24 Calls
+             * @default 0
+             */
+            h24_calls: number;
+            /**
+             * Hard Limit
+             * @default false
+             */
+            hard_limit: boolean;
+            /**
+             * Over Budget
+             * @default false
+             */
+            over_budget: boolean;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
+            /**
+             * Y1
+             * @default 0
+             */
+            y1: number;
+            /**
+             * Y1 Calls
+             * @default 0
+             */
+            y1_calls: number;
         };
         /** AiCurrentJob */
         AiCurrentJob: {
@@ -3370,6 +3507,43 @@ export interface components {
             title?: string | null;
             /** Video Id */
             video_id?: number | null;
+        };
+        /**
+         * AiDetectResult
+         * @description Local AI servers found at the usual addresses (``POST /api/ai/detect``).
+         */
+        AiDetectResult: {
+            /** Servers */
+            servers?: components["schemas"]["AiDetectedServer"][];
+        };
+        /** AiDetectedServer */
+        AiDetectedServer: {
+            /** Base Url */
+            base_url: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /** AiHealth */
+        AiHealth: {
+            /** Base Url */
+            base_url?: string | null;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Last Error */
+            last_error?: string | null;
+            /** Provider */
+            provider?: string | null;
+            /** Pulling */
+            pulling?: string[] | null;
+            /** Reachable */
+            reachable: boolean;
         };
         /** AiJobAction */
         AiJobAction: {
@@ -3430,6 +3604,32 @@ export interface components {
             updated_at?: string | null;
             /** Video Id */
             video_id?: number | null;
+        };
+        /** AiModelPreset */
+        AiModelPreset: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Model */
+            model: string;
+        };
+        /**
+         * AiModelRow
+         * @description A model an endpoint offers; prices only come from OpenRouter.
+         */
+        AiModelRow: {
+            /** Completion Per Million */
+            completion_per_million?: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Prompt Per Million */
+            prompt_per_million?: number | null;
         };
         /** AiProcessRequest */
         AiProcessRequest: {
@@ -3538,6 +3738,16 @@ export interface components {
              */
             ai_summaries: boolean;
             /**
+             * Api Key
+             * @default
+             */
+            api_key: string;
+            /**
+             * Api Key Set
+             * @default false
+             */
+            api_key_set: boolean;
+            /**
              * Auto Pull Models
              * @default true
              */
@@ -3548,18 +3758,38 @@ export interface components {
              */
             base_url: string;
             /**
+             * Budget Hard Limit
+             * @default false
+             */
+            budget_hard_limit: boolean;
+            /**
              * Category Min Score
              * @default 0.55
              */
             category_min_score: number;
             /**
              * Chat Model
-             * @default llama3.2:3b
+             * @default
              */
             chat_model: string;
             /**
+             * Embed Api Key
+             * @default
+             */
+            embed_api_key: string;
+            /**
+             * Embed Api Key Set
+             * @default false
+             */
+            embed_api_key_set: boolean;
+            /**
+             * Embed Base Url
+             * @default
+             */
+            embed_base_url: string;
+            /**
              * Embed Model
-             * @default nomic-embed-text
+             * @default
              */
             embed_model: string;
             /**
@@ -3573,63 +3803,10 @@ export interface components {
              */
             enrich_tags: boolean;
             /**
-             * Ollama Prefer Embeddings
-             * @default false
-             */
-            ollama_prefer_embeddings: boolean;
-            /**
-             * Openrouter Api Key
-             * @default
-             */
-            openrouter_api_key: string;
-            /**
-             * Openrouter Api Key Set
-             * @default false
-             */
-            openrouter_api_key_set: boolean;
-            /**
-             * Openrouter Budget Hard Limit
-             * @default false
-             */
-            openrouter_budget_hard_limit: boolean;
-            /**
-             * Openrouter Embed Model
-             * @default openai/text-embedding-3-small
-             */
-            openrouter_embed_model: string;
-            /**
-             * Openrouter Enabled
-             * @default false
-             */
-            openrouter_enabled: boolean;
-            /**
-             * Openrouter Model
-             * @default google/gemini-2.5-flash-lite
-             */
-            openrouter_model: string;
-            /**
-             * Openrouter Scope
-             * @default specialized
-             * @enum {string}
-             */
-            openrouter_scope: "specialized" | "all";
-            /**
-             * Openrouter Show Costs
-             * @default false
-             */
-            openrouter_show_costs: boolean;
-            /** Openrouter Weekly Budget Usd */
-            openrouter_weekly_budget_usd?: number | null;
-            /**
              * Paused
              * @default false
              */
             paused: boolean;
-            /**
-             * Provider
-             * @default ollama
-             */
-            provider: string;
             /**
              * Schedule
              * @default on_download
@@ -3641,6 +3818,11 @@ export interface components {
              * @default 03:00
              */
             schedule_time: string;
+            /**
+             * Show Costs
+             * @default false
+             */
+            show_costs: boolean;
             /**
              * Summary Length
              * @default short
@@ -3664,6 +3846,8 @@ export interface components {
             use_subtitles: boolean;
             /** Vram Gb */
             vram_gb?: number | null;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
             /**
              * Workload Profile
              * @default normal
@@ -3683,46 +3867,36 @@ export interface components {
             ai_duplicates?: boolean | null;
             /** Ai Summaries */
             ai_summaries?: boolean | null;
+            /** Api Key */
+            api_key?: string | null;
             /** Auto Pull Models */
             auto_pull_models?: boolean | null;
             /** Base Url */
             base_url?: string | null;
+            /** Budget Hard Limit */
+            budget_hard_limit?: boolean | null;
             /** Category Min Score */
             category_min_score?: number | null;
             /** Chat Model */
             chat_model?: string | null;
+            /** Embed Api Key */
+            embed_api_key?: string | null;
+            /** Embed Base Url */
+            embed_base_url?: string | null;
             /** Embed Model */
             embed_model?: string | null;
             /** Enabled */
             enabled?: boolean | null;
             /** Enrich Tags */
             enrich_tags?: boolean | null;
-            /** Ollama Prefer Embeddings */
-            ollama_prefer_embeddings?: boolean | null;
-            /** Openrouter Api Key */
-            openrouter_api_key?: string | null;
-            /** Openrouter Budget Hard Limit */
-            openrouter_budget_hard_limit?: boolean | null;
-            /** Openrouter Embed Model */
-            openrouter_embed_model?: string | null;
-            /** Openrouter Enabled */
-            openrouter_enabled?: boolean | null;
-            /** Openrouter Model */
-            openrouter_model?: string | null;
-            /** Openrouter Scope */
-            openrouter_scope?: ("specialized" | "all") | null;
-            /** Openrouter Show Costs */
-            openrouter_show_costs?: boolean | null;
-            /** Openrouter Weekly Budget Usd */
-            openrouter_weekly_budget_usd?: number | null;
             /** Paused */
             paused?: boolean | null;
-            /** Provider */
-            provider?: string | null;
             /** Schedule */
             schedule?: ("on_download" | "on_request" | "timer" | "set_time") | null;
             /** Schedule Time */
             schedule_time?: string | null;
+            /** Show Costs */
+            show_costs?: boolean | null;
             /** Summary Length */
             summary_length?: ("short" | "medium" | "long") | null;
             /** Tag Rescan Days */
@@ -3733,6 +3907,8 @@ export interface components {
             use_subtitles?: boolean | null;
             /** Vram Gb */
             vram_gb?: number | null;
+            /** Weekly Budget Usd */
+            weekly_budget_usd?: number | null;
             /** Workload Profile */
             workload_profile?: ("light" | "normal" | "heavy") | null;
         };
@@ -3746,18 +3922,33 @@ export interface components {
             chat_model: string;
             /** Chat Model Present */
             chat_model_present: boolean;
+            /**
+             * Configured
+             * @default false
+             */
+            configured: boolean;
             current_job?: components["schemas"]["AiCurrentJob"] | null;
             /**
              * Deferred Count
              * @default 0
              */
             deferred_count: number;
-            /** Embed Backend */
-            embed_backend?: string | null;
+            /** Embed Base Url */
+            embed_base_url?: string | null;
             /** Embed Model */
             embed_model: string;
             /** Embed Model Present */
             embed_model_present: boolean;
+            /**
+             * Embed Provider
+             * @default
+             */
+            embed_provider: string;
+            /**
+             * Embed Reachable
+             * @default false
+             */
+            embed_reachable: boolean;
             /** Enabled */
             enabled: boolean;
             /**
@@ -3789,8 +3980,6 @@ export interface components {
             invent_sample_size: number;
             /** Last Error */
             last_error?: string | null;
-            /** Llm Backend */
-            llm_backend?: string | null;
             /** Lock Reason */
             lock_reason?: string | null;
             /**
@@ -3798,41 +3987,6 @@ export interface components {
              * @default true
              */
             models_match_profile: boolean;
-            /**
-             * Ollama Prefer Embeddings
-             * @default false
-             */
-            ollama_prefer_embeddings: boolean;
-            /**
-             * Openrouter Api Key Set
-             * @default false
-             */
-            openrouter_api_key_set: boolean;
-            /**
-             * Openrouter Embed Model
-             * @default openai/text-embedding-3-small
-             */
-            openrouter_embed_model: string;
-            /**
-             * Openrouter Enabled
-             * @default false
-             */
-            openrouter_enabled: boolean;
-            /**
-             * Openrouter Model
-             * @default google/gemini-2.5-flash-lite
-             */
-            openrouter_model: string;
-            /**
-             * Openrouter Reachable
-             * @default false
-             */
-            openrouter_reachable: boolean;
-            /**
-             * Openrouter Scope
-             * @default specialized
-             */
-            openrouter_scope: string;
             /**
              * Paused
              * @default false
@@ -3867,6 +4021,11 @@ export interface components {
              * @default normal
              */
             recommended_profile: string;
+            /**
+             * Reports Cost
+             * @default false
+             */
+            reports_cost: boolean;
             /**
              * Runnable Count
              * @default 0
@@ -3904,8 +4063,16 @@ export interface components {
         };
         /** AiTestRequest */
         AiTestRequest: {
+            /** Api Key */
+            api_key?: string | null;
             /** Base Url */
             base_url?: string | null;
+            /**
+             * Target
+             * @default chat
+             * @enum {string}
+             */
+            target: "chat" | "embed";
         };
         /** AppSettingsRead */
         AppSettingsRead: {
@@ -5099,6 +5266,7 @@ export interface components {
         HealthFull: {
             /** Active Downloads */
             active_downloads: number;
+            ai?: components["schemas"]["AiHealth"] | null;
             disk?: components["schemas"]["DiskUsage"] | null;
             downloads: components["schemas"]["HealthDownloads"];
             ffmpeg?: components["schemas"]["FfmpegInfo"] | null;
@@ -5108,8 +5276,6 @@ export interface components {
             horde_version?: string | null;
             /** Library Video Count */
             library_video_count: number;
-            ollama?: components["schemas"]["OllamaHealth"] | null;
-            openrouter?: components["schemas"]["OpenRouterHealth"] | null;
             pot_provider?: components["schemas"]["PotProviderStatus"] | null;
             /** Review Pending Count */
             review_pending_count: number;
@@ -5574,145 +5740,6 @@ export interface components {
              */
             ok: boolean;
         };
-        /** OllamaHealth */
-        OllamaHealth: {
-            /** Base Url */
-            base_url?: string | null;
-            /** Enabled */
-            enabled: boolean;
-            /** Last Error */
-            last_error?: string | null;
-            /** Pulling */
-            pulling?: string[] | null;
-            /** Reachable */
-            reachable: boolean;
-            /** Ready */
-            ready: boolean;
-        };
-        /** OpenRouterConnectionTest */
-        OpenRouterConnectionTest: {
-            /** Detail */
-            detail?: string | null;
-            /** Model Count */
-            model_count?: number | null;
-            /** Ok */
-            ok: boolean;
-        };
-        /** OpenRouterCostsRead */
-        OpenRouterCostsRead: {
-            /**
-             * All
-             * @default 0
-             */
-            all: number;
-            /**
-             * All Calls
-             * @default 0
-             */
-            all_calls: number;
-            /**
-             * Blocked
-             * @default false
-             */
-            blocked: boolean;
-            /**
-             * D30
-             * @default 0
-             */
-            d30: number;
-            /**
-             * D30 Calls
-             * @default 0
-             */
-            d30_calls: number;
-            /**
-             * D7
-             * @default 0
-             */
-            d7: number;
-            /**
-             * D7 Calls
-             * @default 0
-             */
-            d7_calls: number;
-            /**
-             * H24
-             * @default 0
-             */
-            h24: number;
-            /**
-             * H24 Calls
-             * @default 0
-             */
-            h24_calls: number;
-            /**
-             * Hard Limit
-             * @default false
-             */
-            hard_limit: boolean;
-            /**
-             * Over Budget
-             * @default false
-             */
-            over_budget: boolean;
-            /** Weekly Budget Usd */
-            weekly_budget_usd?: number | null;
-            /**
-             * Y1
-             * @default 0
-             */
-            y1: number;
-            /**
-             * Y1 Calls
-             * @default 0
-             */
-            y1_calls: number;
-        };
-        /** OpenRouterHealth */
-        OpenRouterHealth: {
-            /** Api Key Set */
-            api_key_set?: boolean | null;
-            /** Configured */
-            configured?: boolean | null;
-            /** Enabled */
-            enabled: boolean;
-            /** Model */
-            model?: string | null;
-            /** Reachable */
-            reachable?: boolean | null;
-            /** Scope */
-            scope?: string | null;
-        };
-        /** OpenRouterModelRow */
-        OpenRouterModelRow: {
-            /** Completion Per Million */
-            completion_per_million?: number | null;
-            /** Id */
-            id: string;
-            /**
-             * Name
-             * @default
-             */
-            name: string;
-            /** Prompt Per Million */
-            prompt_per_million?: number | null;
-        };
-        /** OpenRouterModelsResponse */
-        OpenRouterModelsResponse: {
-            /** Embedding Models */
-            embedding_models?: components["schemas"]["OpenRouterModelRow"][];
-            /** Models */
-            models?: components["schemas"]["OpenRouterModelRow"][];
-            /** Presets */
-            presets?: {
-                [key: string]: string;
-            }[];
-        };
-        /** OpenRouterTestRequest */
-        OpenRouterTestRequest: {
-            /** Api Key */
-            api_key?: string | null;
-        };
         /** PasswordChange */
         PasswordChange: {
             /** Current Password */
@@ -5775,6 +5802,8 @@ export interface components {
             can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
+            /** Cover Youtube Id */
+            cover_youtube_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5782,6 +5811,16 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /**
+             * Downloaded Count
+             * @default 0
+             */
+            downloaded_count: number;
+            /**
+             * Entries
+             * @default []
+             */
+            entries: components["schemas"]["PlaylistEntry"][];
             /**
              * Has Custom Cover
              * @default false
@@ -5825,6 +5864,34 @@ export interface components {
             /** @default public */
             visibility: components["schemas"]["PlaylistVisibility"];
         };
+        /** PlaylistDownloadResult */
+        PlaylistDownloadResult: {
+            /** Queued */
+            queued: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /**
+         * PlaylistEntry
+         * @description One playlist entry: a library video, or a video that is streamed.
+         */
+        PlaylistEntry: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Duration Sec */
+            duration_sec?: number | null;
+            /** Id */
+            id: number;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url?: string | null;
+            video?: components["schemas"]["VideoRead"] | null;
+            /** Youtube Id */
+            youtube_id?: string | null;
+        };
         /** PlaylistImport */
         PlaylistImport: {
             /**
@@ -5850,6 +5917,11 @@ export interface components {
         };
         /** PlaylistItemAdd */
         PlaylistItemAdd: {
+            /**
+             * Download
+             * @default false
+             */
+            download: boolean;
             /** Url */
             url?: string | null;
             /** Video Id */
@@ -5905,6 +5977,8 @@ export interface components {
             can_edit: boolean;
             /** Cover Video Id */
             cover_video_id?: number | null;
+            /** Cover Youtube Id */
+            cover_youtube_id?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -5912,6 +5986,11 @@ export interface components {
             created_at: string;
             /** Description */
             description: string | null;
+            /**
+             * Downloaded Count
+             * @default 0
+             */
+            downloaded_count: number;
             /**
              * Has Custom Cover
              * @default false
@@ -5955,8 +6034,30 @@ export interface components {
         };
         /** PlaylistReorder */
         PlaylistReorder: {
-            /** Video Ids */
+            /**
+             * Item Ids
+             * @default []
+             */
+            item_ids: number[];
+            /**
+             * Video Ids
+             * @default []
+             */
             video_ids: number[];
+        };
+        /**
+         * PlaylistServerCopies
+         * @description What the bulk download and remove actions would do to a playlist.
+         */
+        PlaylistServerCopies: {
+            /** Missing */
+            missing: number;
+            /** Removable Bytes */
+            removable_bytes: number;
+            /** Removable Video Ids */
+            removable_video_ids: number[];
+            /** Shared */
+            shared: number;
         };
         /** PlaylistSizeEstimate */
         PlaylistSizeEstimate: {
@@ -6041,8 +6142,21 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * RecommendationItemRead
+         * @description A library video (``video``) or an upload that is not downloaded (``stream``).
+         */
+        RecommendationItemRead: {
+            stream?: components["schemas"]["ChannelFeedEntry"] | null;
+            video?: components["schemas"]["VideoRead"] | null;
+        };
         /** RecommendationSectionRead */
         RecommendationSectionRead: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["RecommendationItemRead"][];
             /** Kind */
             kind?: string | null;
             /** Seed Video Id */
@@ -7032,6 +7146,82 @@ export interface operations {
             };
         };
     };
+    ai_costs_api_ai_costs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiCostsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    ai_detect_api_ai_detect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiDetectResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     ai_list_jobs_api_ai_jobs_get: {
         parameters: {
             query?: {
@@ -7231,124 +7421,6 @@ export interface operations {
             };
         };
     };
-    ai_openrouter_costs_api_ai_openrouter_costs_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterCostsRead"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_openrouter_models_api_ai_openrouter_models_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterModelsResponse"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_openrouter_test_api_ai_openrouter_test_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: {
-            content: {
-                "application/json": components["schemas"]["OpenRouterTestRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OpenRouterConnectionTest"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     ai_pause_api_ai_pause_post: {
         parameters: {
             query?: never;
@@ -7435,6 +7507,8 @@ export interface operations {
                 category?: string | null;
                 limit?: number;
                 offset?: number;
+                /** @description Mix in followed channels' indexed uploads that are not downloaded. */
+                include_streams?: boolean;
             };
             header?: never;
             path?: never;
@@ -7554,7 +7628,7 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
                 "application/json": components["schemas"]["AiTestRequest"];
             };
@@ -11434,6 +11508,85 @@ export interface operations {
             };
         };
     };
+    download_all_api_playlists__playlist_id__download_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistDownloadResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_entry_api_playlists__playlist_id__entries__entry_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+                entry_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     add_item_api_playlists__playlist_id__items_post: {
         parameters: {
             query?: never;
@@ -11581,6 +11734,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PlaylistDetail"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    server_copies_api_playlists__playlist_id__server_copies_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                playlist_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlaylistServerCopies"];
                 };
             };
             /** @description Validation error */

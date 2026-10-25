@@ -157,9 +157,7 @@ test("AI panes and system status render without calling providers", async ({
 }) => {
   await page.goto("/settings?tab=ai");
   await expect(page.getByRole("button", { name: "Providers" })).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: "OpenRouter", exact: true })
-  ).toBeVisible();
+  await expect(page.getByLabel("AI provider URL")).toBeVisible();
   await page.getByRole("button", { name: "Features" }).click();
   await expect(page.getByText("AI video summaries")).toBeVisible();
   await expect(page.getByText("AI video chapters")).toBeVisible();
@@ -250,4 +248,11 @@ test("a change still in flight when the page reloads is not overwritten by the s
       return (await res.json()).ui.default_library_sort;
     })
     .toBe("title");
+});
+
+test("settings links to the GitHub issue tracker", async ({ page }) => {
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("link", { name: "Report it on GitHub" })
+  ).toHaveAttribute("href", /github\.com\/jm-connell\/horde\/issues/);
 });

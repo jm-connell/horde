@@ -8,7 +8,7 @@ A channel’s **remote listing** of videos (metadata from YouTube / yt-dlp) used
 
 ## Embedding
 
-A numeric vector representing text (title, description, notes, tags, subtitle chunks) for **semantic search**, related videos, and recommendation shelves. Usually produced by a local Ollama embed model; optionally by OpenRouter when scope is `all`. See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
+A numeric vector representing text (title, description, notes, tags, subtitle chunks) for **semantic search**, related videos, and recommendation shelves. Produced by the AI provider's embedding model (often a small local one such as `nomic-embed-text` on Ollama). See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
 
 ## GPU
 
@@ -28,16 +28,11 @@ A library row with `needs_review=True`: ingested media that still needs human pl
 
 ## Workload profile
 
-**Light / Normal / Heavy** intensity for Ollama-side AI work. Combined with a VRAM tier to pick models and invent/index limits. Critical VRAM locks to Light only. See [Workload profiles](../design/workload-profiles.md).
+**Light / Normal / Heavy** intensity for AI work; on Ollama also the model size. Combined with a VRAM tier to pick models and invent/index limits. Critical VRAM locks to Light only. See [Workload profiles](../design/workload-profiles.md).
 
-## OpenRouter scope
+## AI provider
 
-| Value | Meaning |
-|-------|---------|
-| `specialized` | Cloud LLM for summaries/chat/tags/duplicates; embeddings prefer local |
-| `all` | Cloud may also handle embeddings / invent vectors |
-
-Configured under AI settings. See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
+Any endpoint that speaks the OpenAI API (`/v1/chat/completions`, `/v1/embeddings`): a cloud service such as OpenRouter or a server you run such as Ollama. Embeddings can use a second provider. Configured under AI settings. See [Local vs cloud AI](../design/local-vs-cloud-ai.md).
 
 ## Sprite
 

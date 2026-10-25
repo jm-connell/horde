@@ -231,8 +231,8 @@ test("a promotion or demotion reaches an open page without a reload", async ({
   // The provider setup is the real one, not the member's trimmed copy.
   await tabs.getByRole("tab", { name: "AI" }).click();
   await member.getByRole("button", { name: "Providers", exact: true }).click();
-  await expect(member.getByLabel("Ollama base URL")).toHaveValue(
-    "http://127.0.0.1:9"
+  await expect(member.getByLabel("AI provider URL")).toHaveValue(
+    "http://127.0.0.1:9/v1"
   );
 
   // Demoted: the next refused request brings the member view back.

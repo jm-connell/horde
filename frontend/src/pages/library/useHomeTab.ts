@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
-import { dataOrNull, useAiStatus } from "../../queries/status";
 import { loadHomeTab, saveHomeTab, type HomeTab } from "../libraryStorage";
 
-/** Library or Recommended on the home page; Recommended needs AI that is ready. */
+/** Library or Recommended on the home page. */
 export function useHomeTab(search: string) {
   const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
-  const aiStatus = dataOrNull(useAiStatus({ interval: 15_000 }));
-  const aiReady = Boolean(
-    aiStatus?.ready && aiStatus.enabled && !aiStatus.paused
-  );
 
   const setHomeTab = useCallback((tab: HomeTab) => {
     setHomeTabState(tab);
@@ -20,5 +15,5 @@ export function useHomeTab(search: string) {
     if (search.trim()) setHomeTab("library");
   }, [search, setHomeTab]);
 
-  return { homeTab, setHomeTab, aiReady };
+  return { homeTab, setHomeTab };
 }

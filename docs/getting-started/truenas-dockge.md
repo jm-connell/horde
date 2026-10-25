@@ -146,7 +146,7 @@ curl -sf http://127.0.0.1:8686/api/health
 docker compose --profile ai up -d
 ```
 
-Or point Horde at Ollama on a GPU PC via `OLLAMA_BASE_URL` / Settings → AI. See [AI setup](../ops/ai-setup.md).
+Or point Horde at an AI server on a GPU PC (or a cloud provider) in Settings → AI. See [AI setup](../ops/ai-setup.md).
 
 ### GPU (optional)
 

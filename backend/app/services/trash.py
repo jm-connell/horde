@@ -67,7 +67,7 @@ from ..models import (
     require_id,
     utcnow,
 )
-from . import library, scanner
+from . import library, playlist_entries, scanner
 from .channel_autodownload import active_youtube_ids
 from .channel_catalog import skips
 from .paths import TRASH_DIR_NAME, find_video_by_path
@@ -86,7 +86,9 @@ STARTUP_DELAY_SEC = 120.0
 #: A trash folder no entry owns is only looked at once it is this old, so that a
 #: trash still moving its files is left alone. What it holds is put back, never erased.
 ORPHAN_MIN_AGE = timedelta(hours=1)
-SNAPSHOT_VERSION = 1
+#: 2: a streamable video's playlist entries stay behind (as streamed ones) while
+#: it is in the trash; version 1 snapshots deleted them.
+SNAPSHOT_VERSION = 2
 #: Written into each trash folder before any file is moved into it.
 MANIFEST_NAME = ".horde-trash-manifest.json"
 
@@ -563,12 +565,26 @@ def _insert_rows(session: Session, snapshot: dict[str, Any]) -> Video:
         if data.get("user_id") in existing_users:
             session.add(UserVideoState.model_validate(_decode(data)))
     for item in snapshot.get("playlist_items", []):
-        if session.get(Playlist, item["playlist_id"]) is not None:
+        playlist_id = item["playlist_id"]
+        if session.get(Playlist, playlist_id) is None:
+            continue
+        # Inserting the video linked the entries trashing left behind as
+        # streamed ones. Since version 2 a missing entry was removed by
+        # somebody meanwhile; before it, and for videos with nothing to
+        # stream, trashing deleted the entry, so it comes back here.
+        linked = session.exec(
+            select(PlaylistItem).where(
+                PlaylistItem.playlist_id == playlist_id,
+                PlaylistItem.video_id == video_id,
+            )
+        ).first()
+        if linked is not None:
+            continue
+        kept_behind = int(snapshot.get("version") or 1) >= 2
+        if not (kept_behind and playlist_entries.streamable_url(video.source_url)):
             session.add(
-                PlaylistItem(
-                    playlist_id=item["playlist_id"],
-                    video_id=video_id,
-                    position=int(item.get("position") or 0),
+                playlist_entries.new_item(
+                    playlist_id, video, int(item.get("position") or 0)
                 )
             )
     watch_time_ids = snapshot.get("watch_time_ids", [])

@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0016_two_factor"
+HEAD = "0017_playlist_stream_entries"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -339,9 +339,13 @@ def test_deleted_ids_are_never_reused_and_children_cascade(init_db):
         # Raw DELETE: only the database FKs can remove the children.
         session.execute(text("DELETE FROM videos WHERE id = :id"), {"id": doomed_id})
         session.commit()
-        for table in ("playlist_items", "video_embeddings", "video_ai_meta", "ai_jobs"):
+        for table in ("video_embeddings", "video_ai_meta", "ai_jobs"):
             count = session.execute(text(f"SELECT count(*) FROM {table}")).scalar()  # noqa: S608
             assert count == 0, table
+        # A playlist entry outlives its video, as a streamed entry.
+        assert session.execute(
+            text("SELECT video_id FROM playlist_items")
+        ).scalars().all() == [None]
 
         replacement = Video(title="new", file_path="n.mp4")
         session.add(replacement)
@@ -864,9 +868,10 @@ def test_rollback_writes_are_repaired_on_the_next_start(init_db):
     with Session(engine) as session:
         assert library.all_tags(session) == ["kept"]
         assert session.get(Playlist, playlist_id).cover_video_id is None
-        assert [i.video_id for i in session.exec(select(PlaylistItem)).all()] == [
-            keep_id
-        ]
+        # The entry whose video vanished stays, without its video.
+        assert sorted(
+            (i.video_id or 0) for i in session.exec(select(PlaylistItem)).all()
+        ) == [0, keep_id]
         assert session.get(VideoAiMeta, doomed_id) is None
         assert session.exec(select(DownloadJob)).one().video_id is None
 
@@ -976,6 +981,22 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
         con.executescript(
             """
             DROP TRIGGER trg_videos_tags_delete;
+            -- playlist_items as it was before streamed entries
+            DROP TABLE playlist_items;
+            CREATE TABLE playlist_items (
+                id INTEGER NOT NULL PRIMARY KEY,
+                playlist_id INTEGER NOT NULL,
+                video_id INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                CONSTRAINT fk_playlist_items_playlist_id_playlists
+                    FOREIGN KEY(playlist_id) REFERENCES playlists (id)
+                    ON DELETE CASCADE,
+                CONSTRAINT fk_playlist_items_video_id_videos
+                    FOREIGN KEY(video_id) REFERENCES videos (id) ON DELETE CASCADE,
+                CONSTRAINT uq_playlist_items_pair UNIQUE (playlist_id, video_id)
+            );
+            CREATE INDEX ix_playlist_items_playlist_id ON playlist_items (playlist_id);
+            CREATE INDEX ix_playlist_items_video_id ON playlist_items (video_id);
             ALTER TABLE user_sessions DROP COLUMN reauth_at;
             DROP TABLE user_recovery_codes;
             ALTER TABLE users DROP COLUMN totp_last_step;
@@ -1102,3 +1123,65 @@ def test_two_factor_revision_leaves_existing_accounts_without_it(tmp_dirs):
         assert (
             conn.execute(text("SELECT count(*) FROM user_recovery_codes")).scalar() == 0
         )
+
+
+def test_playlist_stream_entries_revision_snapshots_existing_items(tmp_dirs):
+    """0016 -> 0017: entries keep their video and gain its snapshot; a deleted
+    video now leaves the entry behind (as a stream) instead of removing it."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0016_two_factor")
+    with engine.begin() as conn:
+        _insert_video(
+            conn,
+            1,
+            "One",
+            "[]",
+            "x/one.mp4",
+            "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+            youtube_id="aaaaaaaaaaa",
+            channel="Chan",
+            duration_sec=61.0,
+        )
+        conn.execute(
+            text(
+                "INSERT INTO playlists (id, name, source_type, subscribed, position, "
+                "created_at, visibility) VALUES (1, 'Mix', 'user', 0, 0, "
+                "'2024-01-01 00:00:00', 'public')"
+            )
+        )
+        conn.execute(
+            text(
+                "INSERT INTO playlist_items (playlist_id, video_id, position) "
+                "VALUES (1, 1, 0)"
+            )
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.begin() as conn:
+        assert conn.execute(
+            text(
+                "SELECT video_id, youtube_id, url, title, channel, duration_sec "
+                "FROM playlist_items"
+            )
+        ).fetchall() == [
+            (
+                1,
+                "aaaaaaaaaaa",
+                "https://www.youtube.com/watch?v=aaaaaaaaaaa",
+                "One",
+                "Chan",
+                61.0,
+            )
+        ]
+        conn.execute(text("PRAGMA foreign_keys=ON"))
+        conn.execute(text("DELETE FROM videos WHERE id = 1"))
+        assert conn.execute(
+            text("SELECT video_id, title FROM playlist_items")
+        ).fetchall() == [(None, "One")]

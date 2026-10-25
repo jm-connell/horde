@@ -631,7 +631,7 @@ def index_catalog(catalog_id: int) -> None:
         act.update(
             detail=f"{channel_name or channel_url} · queueing embeddings",
             label="Queueing catalog embeddings",
-            engine="ollama",
+            engine="ai",
         )
         _enqueue_catalog_embeds(catalog_id)
 

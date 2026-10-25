@@ -56,10 +56,7 @@ export const STATUS_TIPS = {
   ytdlp:
     "The downloader Horde uses to fetch metadata and video files from YouTube and other sites. Keep it current — extractors break when sites change.",
   pot: "YouTube issues Proof-of-Origin (PO) tokens to tell real players from bots. Horde’s bgutil-pot sidecar mints them for yt-dlp. If this is down, downloads and previews often fail with bot-check errors.",
-  ollama:
-    "Local LLM used for summaries, tags, chat, and embeddings. Configure it under AI → Providers.",
-  openrouter:
-    "Optional cloud LLM for models you don’t run locally. Needs an API key under AI → Providers.",
+  ai: "The AI provider (any OpenAI-compatible endpoint: OpenRouter, Ollama, LM Studio, …) used for summaries, tags, chat, and search indexes. Configure it under AI → Providers.",
   cookies:
     "Browser or Netscape cookies for yt-dlp. Horde leaves them off public requests and only attaches them after an age-restricted or members-only block on that one video. Bot checks use the PO token sidecar, not cookies. This still identifies your account to YouTube for those gated videos.",
   library:
@@ -153,9 +150,9 @@ export const AI_PROCESS_JOBS: {
 ];
 
 export const EMBED_MODEL_TIP =
-  "Search index model — used for semantic search, related videos, and filling category shelves. Much lighter on VRAM than chat (typically ~0.5–1GB). nomic-embed-text is a solid default; mxbai-embed-large is higher quality for category matching but heavier; all-minilm is the lightest. Changing this requires re-indexing the library.";
+  "Search index model — used for semantic search, related videos, and filling category shelves. On Ollama, nomic-embed-text is a solid default (~0.5–1GB VRAM); on OpenRouter or OpenAI, openai/text-embedding-3-small. Leave empty to turn search indexes off. Changing it requires re-indexing the library.";
 export const CHAT_MODEL_TIP =
-  "Ollama chat model — used when OpenRouter is off. Invents recommendation category chips; also enriches tags and scores duplicates as a local fallback. Needs more VRAM than search indexes: 1B ≈ 1–2GB, 3B-class ≈ 3–6GB.";
+  "Chat model — writes summaries, chapters and chat replies, enriches tags, invents category chips and checks duplicates. On Ollama, 3B-class models need about 3–6GB of VRAM.";
 
 export const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -235,30 +232,12 @@ export const AI_SCHEDULE_OPTIONS: {
   },
 ];
 
-export const EMBED_MODEL_OPTIONS = [
-  { value: "nomic-embed-text", label: "nomic-embed-text (default)" },
-  { value: "mxbai-embed-large", label: "mxbai-embed-large" },
-  { value: "all-minilm", label: "all-minilm" },
-  { value: "__custom__", label: "Custom…" },
-];
-
-export const CHAT_MODEL_OPTIONS = [
-  { value: "llama3.2:3b", label: "llama3.2:3b" },
-  { value: "llama3.2:1b", label: "llama3.2:1b" },
-  { value: "qwen2.5:3b", label: "qwen2.5:3b" },
-  { value: "qwen2.5:7b", label: "qwen2.5:7b" },
-  { value: "qwen2.5:14b", label: "qwen2.5:14b" },
-  { value: "llama3.1:8b", label: "llama3.1:8b" },
-  { value: "phi3:mini", label: "phi3:mini" },
-  { value: "__custom__", label: "Custom…" },
-];
-
 export const WORKLOAD_TIP =
-  "Applies with Local AI or OpenRouter. Light keeps invent samples and indexing queues " +
+  "Applies with any provider. Light keeps invent samples and indexing queues " +
   "small for quieter runs. Normal is the balanced default. Heavy uses larger invent " +
   "samples, deeper subtitle context, and bigger index batches — more processing time, " +
-  "better coverage on large libraries. When Local AI is used, applying a workload also " +
-  "picks Ollama models based on available VRAM.";
+  "better coverage on large libraries. When the provider is Ollama, applying a workload " +
+  "also picks and downloads models that fit its GPU.";
 
 export const VRAM_OVERRIDE_TIP =
   "When Ollama runs on another PC, Horde cannot always read that GPU. Enter its VRAM in " +
@@ -293,20 +272,17 @@ export const CHAPTER_MODE_OPTIONS: { value: AiChaptersMode; label: string }[] =
 
 export const DEFAULT_AI: AiSettings = {
   enabled: true,
-  provider: "ollama",
   base_url: "",
-  embed_model: "nomic-embed-text",
-  chat_model: "llama3.2:3b",
-  openrouter_enabled: false,
-  openrouter_api_key: "",
-  openrouter_api_key_set: false,
-  openrouter_model: "google/gemini-2.5-flash-lite",
-  openrouter_scope: "specialized",
-  openrouter_embed_model: "openai/text-embedding-3-small",
-  ollama_prefer_embeddings: false,
-  openrouter_show_costs: false,
-  openrouter_weekly_budget_usd: null,
-  openrouter_budget_hard_limit: false,
+  api_key: "",
+  api_key_set: false,
+  chat_model: "",
+  embed_base_url: "",
+  embed_api_key: "",
+  embed_api_key_set: false,
+  embed_model: "",
+  show_costs: false,
+  weekly_budget_usd: null,
+  budget_hard_limit: false,
   schedule: "on_download",
   timer_hours: 6,
   schedule_time: "03:00",

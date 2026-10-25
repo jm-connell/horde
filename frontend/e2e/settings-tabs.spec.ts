@@ -64,17 +64,49 @@ test("a theme saved on the appearance tab can be applied and deleted", async ({
   await expect(row).toHaveCount(0);
 });
 
-test("the AI provider sub-pane is still selected after visiting another tab", async ({
+test("a pasted server address or API key is recognised and saved", async ({
   page,
 }) => {
   await page.goto("/settings?tab=ai");
-  await page.getByRole("button", { name: "OpenRouter", exact: true }).click();
-  const costs = page.getByRole("heading", { name: "OpenRouter costs" });
-  await expect(costs).toBeVisible();
-  await page.getByRole("tab", { name: "Library" }).click();
-  await expect(page.getByText("Progress expiry")).toBeVisible();
-  await page.getByRole("tab", { name: "AI" }).click();
-  await expect(costs).toBeVisible();
+  const field = page.getByLabel("AI provider URL or API key");
+  const savedAi = async () => {
+    const saved = page.waitForResponse(
+      (r) =>
+        r.url().endsWith("/api/settings") && r.request().method() === "PATCH"
+    );
+    await page.getByRole("button", { name: "Save without testing" }).click();
+    return (
+      (await (await saved).json()) as {
+        ai: {
+          base_url: string;
+          api_key_set: boolean;
+          chat_model: string;
+          embed_model: string;
+        };
+      }
+    ).ai;
+  };
+
+  // A bare address on Ollama's port: http:// and /v1 are added, and Ollama's
+  // starting models are suggested while none are set.
+  await field.fill("host.docker.internal:11434");
+  let ai = await savedAi();
+  expect(ai.base_url).toBe("http://host.docker.internal:11434/v1");
+  expect(ai.chat_model).toBe("llama3.2:3b");
+  expect(ai.embed_model).toBe("nomic-embed-text");
+
+  // A key with a known prefix stands for its provider; no URL or key field.
+  await field.fill("sk-or-e2e-placeholder");
+  await expect(page.getByText("OpenRouter key")).toBeVisible();
+  await expect(page.getByLabel("AI provider API key")).toHaveCount(0);
+  ai = await savedAi();
+  expect(ai.base_url).toBe("https://openrouter.ai/api/v1");
+  expect(ai.api_key_set).toBe(true);
+  await expect(field).toHaveValue("https://openrouter.ai/api/v1");
+
+  // Embeddings can move to a second server.
+  await page.getByText("Use a different server for embeddings").click();
+  await expect(page.getByLabel("Embeddings provider URL")).toBeVisible();
 });
 
 test("a closed settings tab stops polling its status", async ({ page }) => {

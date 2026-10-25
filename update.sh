@@ -142,15 +142,15 @@ print_health_summary() {
 import json, sys
 data = json.load(sys.stdin)
 pot = data.get("pot_provider") or {}
-ollama = data.get("ollama") or {}
+ai = data.get("ai") or {}
 print("Health summary:")
 print("  status:            {}".format(data.get("status", "?")))
 print("  horde_version:     {} ({})".format(data.get("horde_version", "?"), data.get("horde_sha", "?")))
 print("  yt_dlp_version:    {}".format(data.get("yt_dlp_version", "?")))
 print("  pot_provider:      {}".format(pot.get("status", "n/a")))
 print("  wiki_available:    {}".format(data.get("wiki_available", "?")))
-if ollama:
-    print("  ollama.reachable:  {}".format(ollama.get("reachable", "?")))
+if ai:
+    print("  ai.reachable:      {}".format(ai.get("reachable", "?")))
 print("  library_videos:    {}".format(data.get("library_video_count", "?")))
 ' <<<"$json"
   else

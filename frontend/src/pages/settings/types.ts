@@ -6,8 +6,6 @@ export type LegacySettingsTab = "downloads";
 
 export type AiPane = "providers" | "features" | "jobs";
 
-export type AiProviderPane = "local" | "openrouter";
-
 export type AiProcessAction =
   | "all_recent"
   | "all_full"

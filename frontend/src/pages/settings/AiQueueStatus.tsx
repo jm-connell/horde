@@ -6,11 +6,10 @@ import type {
 } from "../../types";
 import { formatSize } from "../../utils";
 import {
-  formatOpenRouterModelLine,
-  formatOpenRouterSpendLine,
+  formatProviderLine,
+  formatSpendLine,
   ollamaIsUsed,
-  openrouterIsUsed,
-} from "./aiOllamaUsage";
+} from "./aiProviderUsage";
 import { plural } from "./helpers";
 
 function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
@@ -119,12 +118,9 @@ export default function AiQueueStatus({
     aiStatus.queue_depth > 0 &&
     !aiStatus.current_job;
   const showOllamaGpu = ollamaIsUsed(aiStatus);
-  const showOpenRouter = openrouterIsUsed(aiStatus);
-  const openRouterModelLine = showOpenRouter
-    ? formatOpenRouterModelLine(aiStatus)
-    : "";
-  const openRouterSpendLine = showOpenRouter
-    ? formatOpenRouterSpendLine(openRouterCosts)
+  const providerLine = formatProviderLine(aiStatus);
+  const spendLine = aiStatus.reports_cost
+    ? formatSpendLine(openRouterCosts)
     : "";
 
   const statusLabel = !aiStatus.enabled
@@ -190,7 +186,7 @@ export default function AiQueueStatus({
               {statusLabel}
             </dd>
           </div>
-          {showOllamaGpu && (
+          {aiStatus.base_url && (
             <div className="flex justify-between gap-3">
               <dt className="text-gray-400">URL</dt>
               <dd className="truncate text-right font-mono text-xs text-gray-300">
@@ -215,15 +211,13 @@ export default function AiQueueStatus({
         <p className="text-xs text-amber-400/90">{aiStatus.blocked_reason}</p>
       )}
       {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
-      {showOpenRouter && openRouterModelLine && (
+      {providerLine && (
         <div className="flex justify-between gap-3">
-          <dt className="text-gray-400">OpenRouter</dt>
-          <dd className="truncate text-right text-gray-200">
-            {openRouterModelLine}
-          </dd>
+          <dt className="text-gray-400">Provider</dt>
+          <dd className="truncate text-right text-gray-200">{providerLine}</dd>
         </div>
       )}
-      {showOpenRouter && openRouterSpendLine && (
+      {spendLine && (
         <div className="flex justify-between gap-3">
           <dt className="text-gray-400">Spend</dt>
           <dd
@@ -233,7 +227,7 @@ export default function AiQueueStatus({
                 : "text-right text-gray-200"
             }
           >
-            {openRouterSpendLine}
+            {spendLine}
           </dd>
         </div>
       )}

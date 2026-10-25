@@ -24,7 +24,6 @@ from ..models import (
     DownloadJob,
     OpenRouterUsage,
     Playlist,
-    PlaylistItem,
     RetentionKeep,
     UserVideoState,
     UserWatchTime,
@@ -33,7 +32,7 @@ from ..models import (
     VideoAiMeta,
     VideoEmbedding,
 )
-from . import library, thumbnails
+from . import library, playlist_entries, thumbnails
 from .metadata import sprite_image_path, sprite_meta_path
 from .paths import media_server_sidecar_paths, resolve_compat_path
 
@@ -44,7 +43,6 @@ _OWNED_ROW_COLUMNS: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (VideoEmbedding, col(VideoEmbedding.video_id)),
     (VideoAiChatMessage, col(VideoAiChatMessage.video_id)),
     (VideoAiMeta, col(VideoAiMeta.video_id)),
-    (PlaylistItem, col(PlaylistItem.video_id)),
     (AiJob, col(AiJob.video_id)),
     (UserVideoState, col(UserVideoState.video_id)),
     (RetentionKeep, col(RetentionKeep.video_id)),
@@ -128,6 +126,7 @@ def delete_video_cascade(
     video_id = video.id
     files = collect_video_files(video, include_media=delete_files)
     if video_id is not None:
+        playlist_entries.detach_video(session, video)
         for model, owner_column in _OWNED_ROW_COLUMNS:
             session.execute(delete(model).where(owner_column == video_id))
         for model, ref_column in _NULLED_REFERENCES:

@@ -40,7 +40,15 @@ Removed YouTube entries are **not** dropped from Horde. Video files are never de
 
 ## Add videos from the library
 
-Expand a playlist and click **Add Video**. The field searches downloaded titles and channels as you type; pick a result to append it. You can also paste a video URL — if it is already in the library it is added immediately, otherwise Horde queues a download and attaches it when the file is ready.
+Expand a playlist and click **Add Video**. The field searches downloaded titles and channels as you type; pick a result to append it. You can also paste a video URL: if it is already in the library it is added as is, otherwise it joins the playlist **without downloading** (see below). On a streamed video's watch page, **+ Playlist** beside the download button does the same.
+
+## Downloaded and streamed videos
+
+A playlist can mix videos on the server with videos that are only streamed. Streamed ones are marked **Not downloaded**, play through the stream preview like any other not-downloaded video, and keep their place, title and channel.
+
+- **Download** on a streamed row, or **Download all (N)** at the top, downloads them to the server (needs the **Download** permission and edit rights on the playlist). Each one stays where it is in the list and plays from the server once it finishes.
+- **Remove from server** deletes the playlist's downloaded videos from the server (needs **Delete videos**) and keeps them in the playlist as streamed entries, so the list stays useful for reference and you get the space back. Videos that are also in another playlist (anyone's) stay downloaded; the confirmation says how many and how much space is freed. With the trash on, they go to the trash first and **Undo** brings them back in place.
+- Deleting a video anywhere else works the same way: its playlist entries stay as streamed ones when it came from a link, and are dropped when it was a local file with nothing to stream from.
 
 Bulk-add is still the fastest path for large sets:
 
@@ -72,7 +80,7 @@ Use **Subscribe** on that same page if you want future videos as well.
 
 ## Play all
 
-**Play all** loads playlist items into the player queue.
+**Play all** loads playlist items into the player queue, streamed ones included.
 
 | Detail | Value |
 |--------|--------|
@@ -87,7 +95,8 @@ See [Video player](player.md) for queue vs related autoplay (queue wins; related
 Click a playlist row on `/playlists` to expand it (or open `/playlists?open=<id>`). From there you can:
 
 - Browse members in order (drag the grip on the left to reorder)
-- Add videos with **Add Video** (library search or a download link)
+- Add videos with **Add Video** (library search, or a link to add without downloading)
+- **Download all** or **Remove from server** (see [Downloaded and streamed videos](#downloaded-and-streamed-videos))
 - Open any item in the [watch](watching.md) player
 - Remove items you no longer want in the list
 - The pencil beside the expand chevron turns the playlist title into an input and shows cover options (first video by default, any member's thumbnail, or an uploaded image). Uploads open a 16:9 editor so you can zoom, rotate, and position the crop before saving.

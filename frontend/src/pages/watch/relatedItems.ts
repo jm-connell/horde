@@ -14,6 +14,8 @@ export interface RelatedItem {
   durationSec: number | null;
   /** Set on the stream page, where related videos can be either. */
   downloaded?: boolean;
+  /** A broadcast that is live now. */
+  live?: boolean;
   /** What "+ Queue" adds: the library video, or the stream by its link. */
   queueEntry: QueueEntry | null;
 }
@@ -50,6 +52,7 @@ export function streamRelatedItems(entries: ChannelFeedEntry[]): RelatedItem[] {
       channel: e.channel ?? null,
       durationSec: e.duration ?? null,
       downloaded,
+      live: e.live_status === "is_live",
       queueEntry: e.url
         ? {
             queue_kind: "stream",

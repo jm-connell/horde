@@ -1075,3 +1075,54 @@ def test_the_sweep_moves_files_back_but_keeps_what_it_does_not_know(
 
     assert media.read_bytes() == b"M" * 100  # the video's file is back
     assert (folder / "stranger.txt").read_text() == "not ours"  # and nothing else went
+
+
+def test_a_trashed_youtube_video_stays_in_its_playlist_and_restores_in_place(
+    client, init_db, add_video
+):
+    url = "https://www.youtube.com/watch?v=ytplaylist1"
+    video = add_video(write_file=True, yt_id="ytplaylist1", source_url=url)
+    first = add_video(write_file=True)
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    client.post(
+        f"/api/playlists/{pid}/items/bulk", json={"video_ids": [first.id, video.id]}
+    )
+
+    resp = client.delete(f"/api/videos/{video.id}?delete_file=true")
+    entry_id = int(resp.headers[ENTRY_HEADER])
+    entries = client.get(f"/api/playlists/{pid}").json()["entries"]
+    assert [(e["youtube_id"], e["video"] is None) for e in entries] == [
+        (first.youtube_id, False),
+        ("ytplaylist1", True),  # streamed while it is in the trash
+    ]
+
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
+    entries = client.get(f"/api/playlists/{pid}").json()["entries"]
+    assert [e["video"] and e["video"]["id"] for e in entries] == [first.id, video.id]
+
+
+def test_restoring_a_video_trashed_before_streamed_entries_puts_it_back(
+    client, init_db, add_video
+):
+    """A version 1 snapshot: trashing deleted the playlist entry outright."""
+    url = "https://www.youtube.com/watch?v=oldsnapsh01"
+    video = add_video(write_file=True, yt_id="oldsnapsh01", source_url=url)
+    pid = client.post("/api/playlists", json={"name": "Mix"}).json()["id"]
+    client.post(f"/api/playlists/{pid}/items", json={"video_id": video.id})
+    entry_id = int(
+        client.delete(f"/api/videos/{video.id}?delete_file=true").headers[ENTRY_HEADER]
+    )
+    with Session(init_db["engine"]) as session:
+        # What the old code left: no entry, and a version 1 snapshot.
+        for item in session.exec(select(PlaylistItem)).all():
+            session.delete(item)
+        entry = session.get(TrashEntry, entry_id)
+        snapshot = json.loads(entry.snapshot_json)
+        snapshot["version"] = 1
+        entry.snapshot_json = json.dumps(snapshot)
+        session.add(entry)
+        session.commit()
+
+    assert client.post(f"/api/trash/{entry_id}/restore").status_code == 200
+    entries = client.get(f"/api/playlists/{pid}").json()["entries"]
+    assert [e["video"] and e["video"]["id"] for e in entries] == [video.id]

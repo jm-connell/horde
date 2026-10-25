@@ -43,20 +43,18 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 
 | Key | Default | Type | Range / values | Storage |
 |-----|---------|------|----------------|---------|
-| `enabled` | `true` | bool | | AI |
-| `provider` | `"ollama"` | string | | AI |
-| `base_url` | `""` | string | Empty = discovery / default | AI |
-| `embed_model` | `"nomic-embed-text"` | string | | AI |
-| `chat_model` | `"llama3.2:3b"` | string | | AI |
-| `openrouter_enabled` | `false` | bool | | AI |
-| `openrouter_api_key` | `""` | string | Secret; not echoed after set | AI |
-| `openrouter_model` | `"google/gemini-2.5-flash-lite"` | string | | AI |
-| `openrouter_scope` | `"specialized"` | string | `specialized` \| `all` | AI |
-| `openrouter_embed_model` | `"openai/text-embedding-3-small"` | string | | AI |
-| `ollama_prefer_embeddings` | `false` | bool | | AI |
-| `openrouter_show_costs` | `false` | bool | | AI |
-| `openrouter_weekly_budget_usd` | `null` | float \| null | ~0.01–100000; null/0 = off | AI |
-| `openrouter_budget_hard_limit` | `false` | bool | | AI |
+| `enabled` | `true` | bool | Also needs `base_url` | AI |
+| `base_url` | `""` | string | OpenAI-compatible URL; bare `http://host:port` gets `/v1` | AI |
+| `api_key` | `""` | string | Secret; read back masked | AI |
+| `chat_model` | `""` | string | | AI |
+| `embed_base_url` | `""` | string | Empty = use `base_url` | AI |
+| `embed_api_key` | `""` | string | Secret; read back masked | AI |
+| `embed_model` | `""` | string | Empty = no embeddings | AI |
+| `autodetect_ollama` | `""` | string | `chat` \| `embed` while an upgraded install looks for Ollama | AI |
+| `connection_version` | `2` | int | Settings shape; older files are converted once | AI |
+| `show_costs` | `false` | bool | | AI |
+| `weekly_budget_usd` | `null` | float \| null | ~0.01–100000; null/0 = off | AI |
+| `budget_hard_limit` | `false` | bool | | AI |
 | `schedule` | `"on_download"` | string | `on_download` \| `on_request` \| `timer` \| `set_time` | AI |
 | `timer_hours` | `6` | number | Hours between timer runs | AI |
 | `schedule_time` | `"03:00"` | string | Local `HH:MM` | AI |

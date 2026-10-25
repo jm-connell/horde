@@ -132,7 +132,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "providers",
     keywords:
-      "ollama connection enable ai base url queue indexed features gpu vram workload light normal heavy general override openrouter api key privacy",
+      "provider ollama openai lm studio llama.cpp vllm groq gemini mistral connection enable ai base url test queue indexed features gpu vram workload light normal heavy general openrouter api key privacy",
   },
   {
     tab: "ai",
@@ -143,7 +143,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "ai",
     pane: "providers",
-    keywords: "models embedding chat model vram auto-pull gpu",
+    keywords:
+      "models embedding chat model search index vram auto-pull download gpu",
   },
   {
     tab: "ai",

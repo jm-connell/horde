@@ -25,10 +25,11 @@ from ..workers import BackgroundWorker
 from . import embeddings, tasks
 from . import text as ai_text
 from .provider import (
+    embeddings_configured,
+    finish_legacy_ollama_detect,
     get_embed_provider,
     get_llm_provider,
-    openrouter_configured,
-    openrouter_owns_embeddings,
+    llm_configured,
 )
 
 logger = logging.getLogger(__name__)
@@ -97,23 +98,22 @@ def enqueue_for_video(
     ai = app_settings.ai_settings()
     if ai.get("paused"):
         return
-    ollama_on = bool(ai.get("enabled", True))
-    or_on = openrouter_configured()
-    if not ollama_on and not or_on:
+    llm_on = llm_configured()
+    can_embed = embeddings_configured()
+    if not llm_on and not can_embed:
         return
     schedule = str(ai.get("schedule") or "on_download")
     # Automatic per-video enqueue only in on_download mode (timer uses sweeps).
     if schedule != "on_download" and not force:
         return
-    # Enqueue embeds only when a backend can eventually serve them (Ollama
-    # enabled, or OpenRouter scope=all). Temporary unreachability is fine —
-    # the worker waits with blocked_reason instead of burning attempts.
-    can_embed = ollama_on or openrouter_owns_embeddings()
+    # Enqueue only work a configured endpoint can eventually serve. Temporary
+    # unreachability is fine: the worker waits with blocked_reason instead of
+    # burning attempts.
     if can_embed:
         enqueue_job(AiJobKind.embed_video, video_id, force=force)
-    if include_tags and ai.get("enrich_tags", True) and (ollama_on or or_on):
+    if include_tags and ai.get("enrich_tags", True) and llm_on:
         enqueue_job(AiJobKind.enrich_tags, video_id, force=force)
-    if ai.get("ai_summaries", True) and (ollama_on or or_on):
+    if ai.get("ai_summaries", True) and llm_on:
         should_summarize = False
         with Session(get_engine()) as session:
             video = session.get(Video, video_id)
@@ -126,11 +126,7 @@ def enqueue_for_video(
         if should_summarize:
             enqueue_job(AiJobKind.summarize, video_id, force=force)
     chapters_mode = str(ai.get("ai_chapters_mode") or "on_download")
-    if (
-        ai.get("ai_chapters", True)
-        and chapters_mode == "on_download"
-        and (ollama_on or or_on)
-    ):
+    if ai.get("ai_chapters", True) and chapters_mode == "on_download" and llm_on:
         should_chapters = False
         with Session(get_engine()) as session:
             video = session.get(Video, video_id)
@@ -170,11 +166,10 @@ def enqueue_missing_embeds(
 ) -> dict:
     """Queue embeds for videos needing index; loops until drained or cap iterations."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
-    ai = app_settings.ai_settings()
-    if not (bool(ai.get("enabled", True)) or openrouter_owns_embeddings()):
+    if not embeddings_configured():
         return _result(
             breakdown,
-            empty="No embed provider configured (enable Ollama or OpenRouter All)",
+            empty="No embedding model configured (Settings → AI)",
         )
     batch_limit, _ = _runtime_limits()
     if limit is not None:
@@ -225,11 +220,10 @@ def maybe_enqueue_index_catchup() -> dict:
 def enqueue_reindex_embeds(*, limit: int | None = None) -> dict:
     """Queue embeds for missing, stale, or wrong-model indexes (e.g. after model change)."""
     breakdown = {"embed": 0, "tags": 0, "categories": 0}
-    ai = app_settings.ai_settings()
-    if not (bool(ai.get("enabled", True)) or openrouter_owns_embeddings()):
+    if not embeddings_configured():
         return _result(
             breakdown,
-            empty="No embed provider configured (enable Ollama or OpenRouter All)",
+            empty="No embedding model configured (Settings → AI)",
         )
     batch_limit, _ = _runtime_limits()
     if limit is not None:
@@ -828,11 +822,11 @@ def _job_runnable(
 
 def _waiting_reason(*, llm_ok: bool, embed_ok: bool) -> str | None:
     if not llm_ok and not embed_ok:
-        return "No AI provider reachable (enable Ollama or OpenRouter)"
+        return "No AI provider reachable (Settings → AI)"
     if not embed_ok:
-        return "Waiting for embed provider (Ollama or OpenRouter All)"
+        return "Waiting for the embedding provider (Settings → AI)"
     if not llm_ok:
-        return "Waiting for chat provider (Ollama or OpenRouter)"
+        return "Waiting for the chat provider (Settings → AI)"
     return None
 
 
@@ -889,7 +883,7 @@ def _compute_blocked_reason(
 
         budget = budget_status()
         if budget.get("blocked"):
-            return "OpenRouter weekly budget hard limit reached"
+            return "AI weekly budget hard limit reached"
     except Exception:
         # Runs on every idle pass of the worker, so keep it out of the warnings.
         logger.debug("could not read the AI budget status", exc_info=True)
@@ -1001,20 +995,19 @@ def _run_claimed_job(
     kind_key = kind.value if hasattr(kind, "value") else str(kind)
     info = current_job_info() or {}
     detail = info.get("title") or info.get("channel")
-    ai_engine = "ollama"
+    ai_engine: str | None = None
     try:
         from .provider import embed_backend_name, llm_backend_name
 
         if kind_key in ("embed_video", "embed_catalog_video"):
-            ai_engine = embed_backend_name() or "ollama"
+            ai_engine = embed_backend_name()
         else:
-            ai_engine = llm_backend_name() or "ollama"
+            ai_engine = llm_backend_name()
     except Exception:
         logger.debug(
             "could not resolve the AI backend name for the activity entry",
             exc_info=True,
         )
-        ai_engine = "ollama"
 
     act = None
     try:
@@ -1112,7 +1105,7 @@ def _maybe_run_daily() -> None:
     ai = app_settings.ai_settings()
     if ai.get("paused"):
         return
-    if not ai.get("enabled", True) and not openrouter_configured():
+    if not llm_configured() and not embeddings_configured():
         return
     if str(ai.get("schedule") or "") != "set_time":
         return
@@ -1136,11 +1129,12 @@ def _timer_loop(worker: BackgroundWorker) -> None:
     while not worker.stopping:
         pause = 60.0
         try:
+            # A migrated install still looking for its Ollama; a no-op otherwise.
+            finish_legacy_ollama_detect()
             ai = app_settings.ai_settings()
             schedule = str(ai.get("schedule") or "")
-            if (ai.get("enabled", True) or openrouter_configured()) and not ai.get(
-                "paused"
-            ):
+            configured = llm_configured() or embeddings_configured()
+            if configured and not ai.get("paused"):
                 if schedule == "timer":
                     hours = float(ai.get("timer_hours") or 6)
                     hours = max(0.25, min(hours, 168.0))

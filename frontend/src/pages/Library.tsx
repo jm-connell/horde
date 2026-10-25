@@ -55,7 +55,7 @@ function OnlineLibrary() {
     handleSortChange,
     toggleOrder,
   } = useLibraryQuery(settings, update);
-  const { homeTab, setHomeTab, aiReady } = useHomeTab(search);
+  const { homeTab, setHomeTab } = useHomeTab(search);
 
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
@@ -66,7 +66,8 @@ function OnlineLibrary() {
 
   const isHome = !activeChannel && !activeTag;
   const onChannelPage = Boolean(activeChannel);
-  const showHomeTabs = isHome && aiReady;
+  // Recommended works without AI (ranked from the watch history).
+  const showHomeTabs = isHome;
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
   const { refreshKey, refreshLibrary, reloadChannels } =

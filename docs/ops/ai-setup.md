@@ -1,47 +1,77 @@
 # AI setup
 
-Optional AI powers embeddings (hybrid search), tags, summaries, chat, recommendations, and category shelves. Providers: **Ollama** (local) and/or **OpenRouter** (cloud).
+Optional AI powers embeddings (hybrid search, related videos, category shelves), tags, summaries, chapters and chat. Horde talks to **any OpenAI-compatible provider**: you give it a base URL, an API key if the provider needs one, a chat model and an embedding model.
 
 !!! tip "UI controls"
-    Most knobs live under [Settings → AI](../settings/ai.md). This page covers Compose, discovery, VRAM tiers, workloads, and budgets.
+    Everything here is set in the setup wizard or [Settings → AI](../settings/ai.md) → Providers. This page explains which URL to use, the optional bundled Ollama, GPU sizing, and budgets.
 
-## Enable Ollama via Compose
+## Pick a provider
+
+| You want | Use | Needs |
+|----------|-----|-------|
+| No GPU, little setup | A cloud provider: **OpenRouter** (one key for most models, reports cost per call), OpenAI, Google Gemini, Mistral, Groq, DeepSeek, Together | An API key |
+| Models on your own hardware, server already running | Ollama, LM Studio, llama.cpp `llama-server`, vLLM, LocalAI, … | The server's address |
+| Models on this machine, no server yet | The **bundled Ollama** container (below) | A GPU passed through (CPU works, slowly) |
+
+In Settings → AI (and the setup wizard) there is one field: paste an API key or a server URL. A key from OpenRouter (`sk-or-…`), OpenAI (`sk-proj-…`, `sk-svcacct-…`), Google Gemini (`AIza…`) or Groq (`gsk_…`) is recognised on its own; for any other provider (DeepSeek and Anthropic keys also start with `sk-`) paste its API URL, then the key. A key is only ever sent to the provider that issued it. Connecting tests the server and shows which provider it found. Titles, descriptions, captions, notes and chat messages are sent to the provider, so a server you run keeps them on your network.
+
+### Providers without embeddings
+
+Groq, DeepSeek and Anthropic's OpenAI endpoint have no `/v1/embeddings`. Leave the embedding model empty (search indexes stay off), or turn on **Use a different server for embeddings** and point that at one that has them, for example OpenRouter or a local Ollama with `nomic-embed-text`.
+
+## Which URL do I type? (Docker networking)
+
+Horde runs in a container. Inside it, `localhost` / `127.0.0.1` is the **Horde container itself**, not your server, so a URL that works in your browser may not work from Horde.
+
+| Where the AI server runs | URL to use in Horde |
+|--------------------------|---------------------|
+| The bundled `ollama` service in Horde's compose file | `http://ollama:11434/v1` |
+| Another container in the **same** compose project | `http://<service-name>:<port>/v1` |
+| On the Docker host itself (Ollama app, LM Studio, …) | `http://host.docker.internal:<port>/v1` |
+| Another PC on your network | `http://<that PC's LAN IP>:<port>/v1`, e.g. `http://192.168.1.50:11434/v1` |
+| A cloud provider | Just its API key (OpenRouter, OpenAI, Gemini, Groq), or its API URL, e.g. `https://api.mistral.ai/v1` |
+| Horde run without Docker (local development) | `http://127.0.0.1:<port>/v1` |
+
+Default ports: Ollama **11434**, LM Studio **1234**, llama.cpp **8080**, vLLM **8000**. A bare `host:port` gets `http://` and `/v1` added for you, and an address without a port gets Ollama's `11434`. **Find a server on this machine** under the URL box tries the bundled Ollama and those ports on `host.docker.internal`.
+
+Things that commonly get in the way:
+
+- **`host.docker.internal`** needs `extra_hosts: ["host.docker.internal:host-gateway"]` on the `horde` service. Horde's `docker-compose.yml` has it; add it if you wrote your own compose file.
+- **The server only listens on localhost.** Ollama does by default: set `OLLAMA_HOST=0.0.0.0` (systemd: `systemctl edit ollama`, then restart). LM Studio: enable *Serve on local network*. llama.cpp: start with `--host 0.0.0.0`.
+- **A firewall** on the AI machine blocks the port from the Docker network or the LAN. Allow the port.
+- **A different compose project or network.** Containers only reach each other by service name on a shared network; otherwise use the host's address and published port.
+
+Use **Test** in Settings: it lists the models the server offers, or says why it failed (unreachable, rejected credentials, no API at that path).
+
+## Bundled Ollama ("Run Ollama for me")
 
 ```bash
 docker compose --profile ai up -d
 ```
 
-That starts the `ollama` service (profile `ai`) with models under `OLLAMA_DATA_PATH` (default `./ollama`). Horde does not require the profile if Ollama already runs elsewhere — set `OLLAMA_BASE_URL` or leave it empty for auto-discover.
+That starts the optional `ollama` service with its models under `OLLAMA_DATA_PATH` (default `./ollama`). Then choose **Run Ollama for me** in the setup wizard, or set the URL to `http://ollama:11434/v1` in Settings. Horde picks models that fit the GPU (below) and asks Ollama to download them; AI jobs wait until they arrive.
+
+`update.sh` keeps the profile on while the `horde-ollama` container exists and carries `OLLAMA_DATA_PATH` over.
 
 ### GPU templates
 
-Compose comments include passthrough snippets for NVIDIA (`deploy.resources`), AMD ROCm (`/dev/kfd`, `/dev/dri`), and Intel (`/dev/dri`). Uncomment the block that matches your host. For a GPU on another machine, leave the local `ollama` service off and point Horde at that host.
+The compose file has commented passthrough snippets for NVIDIA (`deploy.resources`), AMD ROCm (`/dev/kfd`, `/dev/dri`), and Intel (`/dev/dri`) on the `ollama` service. Uncomment the one that matches your host. Without one, Ollama runs on the CPU, which works but is slow.
 
-Horde’s **H.264 encode** GPU (for playback compatibility copies) is a separate pass-through on the `horde` service. Settings → System → **GPU** / **None detected** is that container, not Ollama. See [GPU](environment.md#gpu).
+Horde's **H.264 encode** GPU (for playback compatibility copies) is a separate pass-through on the `horde` service. Settings → System → **GPU** / **None detected** is that container, not Ollama. See [GPU](environment.md#gpu).
 
-## `OLLAMA_BASE_URL`
+## Ollama extras
 
-| Value | Behavior |
-|-------|----------|
-| Set (e.g. `http://192.168.1.50:11434`) | Always use this URL |
-| Empty | Auto-discover (below), after any URL saved in Settings |
+When the provider URL points at an Ollama server (Horde checks for Ollama's `/api/version` beside `/v1`), Settings → AI shows an **Ollama** section:
 
-`OPENROUTER_API_KEY` in the environment overrides the key stored in Settings when set.
+- **Download recommended models**: picks chat and embedding models for the GPU and downloads them.
+- **Download missing models**: when on, a configured model that is not installed is downloaded automatically.
+- **Ollama VRAM (GB)**: tells Horde the GPU size when it cannot read it (Ollama on another PC).
 
-## Auto-discover order
-
-Settings URL (if any) is tried first, then:
-
-| Runtime | Order |
-|---------|-------|
-| **Inside Docker** (`/.dockerenv`) | `http://ollama:11434` → `http://host.docker.internal:11434` → `http://127.0.0.1:11434` |
-| **Host / local dev** | `http://127.0.0.1:11434` → `http://host.docker.internal:11434` → `http://ollama:11434` |
-
-Compose gives Horde `extra_hosts: host.docker.internal:host-gateway` so a host-installed Ollama is reachable from the container.
+Other servers load whatever model you name; Horde does not manage their models.
 
 ## VRAM tiers
 
-Horde sizes models against the **Ollama machine’s** GPU (override → Ollama `/api/info` → same-host probe), not necessarily the Horde host.
+Horde sizes Ollama models against the **Ollama machine's** GPU (override → Ollama `/api/info` → same-host probe), not necessarily the Horde host.
 
 | Tier | VRAM | Default embed | Default chat |
 |------|------|---------------|--------------|
@@ -51,11 +81,9 @@ Horde sizes models against the **Ollama machine’s** GPU (override → Ollama `
 | **large** | ≥ 16 GB | `mxbai-embed-large` | `qwen2.5:14b` |
 | **unknown** | undetected | `nomic-embed-text` | `qwen2.5:3b` |
 
-If VRAM cannot be read for a remote Ollama, set **Settings → AI → Ollama VRAM (GB)** so tiers stay accurate.
-
 ## Workload profiles
 
-Profile scales invent/sample intensity and enqueue batch limits (models stay tier-based):
+Profile scales invent/sample intensity and enqueue batch limits for any provider; on Ollama, applying one also picks the tier's models:
 
 | Profile | Intensity multiplier | Notes |
 |---------|----------------------|-------|
@@ -65,34 +93,42 @@ Profile scales invent/sample intensity and enqueue batch limits (models stay tie
 
 **Critical** VRAM **locks** the profile to **Light** so models fit. Recommended defaults: critical→light, large→heavy, medium/small→normal.
 
-## OpenRouter scope
+!!! warning "Reindex after an embedding model change"
+    Vectors are model-specific. Changing the embedding model (or the server that runs it, when the model differs) requires rebuilding indexes; Settings offers to. Stale vectors break hybrid search and recommendations.
 
-| Scope | Behavior |
-|-------|----------|
-| **specialized** (default) | Summaries, chat, tags, duplicate confirmation via OpenRouter; embeddings stay on Ollama when available |
-| **all** | All AI tasks including embeddings go through OpenRouter (unless you prefer Ollama embeddings) |
+## Costs and the weekly budget
 
-### Prefer Ollama embeddings
+Only providers that report a cost per call (OpenRouter's `usage.cost`) have costs: Settings → AI → **Costs** then shows the totals, kept locally in `openrouter_usage` (rolling windows). Other providers show no costs, and the budget never blocks them.
 
-`ollama_prefer_embeddings` (Settings) keeps embeddings on Ollama even when OpenRouter scope is **all**. Useful for privacy or cost.
+- Set a **weekly budget** (USD).
+- Enable **Stop AI calls when exceeded** to block further calls and **pause the AI queue** when spend ≥ budget.
 
-!!! warning "Reindex after embed model change"
-    Vectors are model-specific. Changing the embed model (or switching OpenRouter ↔ Ollama for embeddings) requires rebuilding indexes — use AI maintenance **reindex** / rebuild search indexes. Stale vectors break hybrid search and recommendations.
+A budget alone warns in the UI without stopping the queue.
 
-## Weekly budget
+## Environment variables
 
-OpenRouter spend is tracked locally in `openrouter_usage` (rolling 7 days).
+| Variable | Behavior |
+|----------|----------|
+| `OPENROUTER_API_KEY` | Overrides the saved key while the provider URL is OpenRouter; never sent elsewhere |
+| `OLLAMA_BASE_URL` | Legacy: used when Settings has no provider URL, and when upgrading |
+| `OLLAMA_DATA_PATH` | Where the bundled Ollama keeps its models |
 
-- Set a **weekly budget** (USD) in Settings → AI.
-- Enable **hard limit** to block further OpenRouter calls and **pause the AI queue** when spend ≥ budget.
+## Upgrading from the Ollama / OpenRouter split
 
-Soft budget alone warns in the UI without stopping the queue.
+Before this change Settings had separate Ollama and OpenRouter panes. On the first start after the upgrade Horde converts them once, keeping model names so nothing is re-indexed:
+
+| Before | After |
+|--------|-------|
+| OpenRouter on, Tasks *Specialized*, Ollama on | Chat: OpenRouter. Embeddings: the Ollama URL (second server; found as above if it was left empty) |
+| OpenRouter on, Tasks *All* | Chat and embeddings: OpenRouter |
+| Ollama only | Chat and embeddings: the Ollama URL with `/v1` |
+| Ollama only, URL left empty (auto-discover) | Horde looks for Ollama (compose service, then the Docker host) at start and then every minute, and saves the first one that answers. Until then those jobs wait; setting a provider in Settings ends the search |
 
 ## Queue visibility & recovery
 
-Settings → AI → Jobs shows **runnable / deferred / waiting / failed** counts plus a blocked reason when providers are down. Terminal failures list under **Failed jobs** with Retry / Retry all / Clear failed.
+Settings → AI → Jobs shows **runnable / deferred / waiting / failed** counts plus a blocked reason when the provider is down. Terminal failures list under **Failed jobs** with Retry / Retry all / Clear failed.
 
-If Ollama was offline, waiting jobs resume automatically once it is reachable again (no Horde restart required). See [Troubleshooting — Ollama offline](troubleshooting.md#ollama-offline).
+If the provider was offline, waiting jobs resume automatically once it is reachable again (no Horde restart required). See [Troubleshooting — AI provider offline](troubleshooting.md#ai-provider-offline).
 
 ## Related
 
@@ -100,3 +136,4 @@ If Ollama was offline, waiting jobs resume automatically once it is reachable ag
 - [AI pipeline](../architecture/ai-pipeline.md)
 - [Local vs cloud AI](../design/local-vs-cloud-ai.md)
 - [Workload profiles](../design/workload-profiles.md)
+- [ADR 0017: one OpenAI-compatible provider](../adr/0017-openai-compatible-provider.md)

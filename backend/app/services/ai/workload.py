@@ -508,20 +508,12 @@ def detect_gpu_for_ai(
     url = (base_url or "").strip() or None
     if not url:
         try:
-            from .provider import resolve_base_url
+            from .provider import ollama_root_url
 
-            url = resolve_base_url()
+            url = ollama_root_url()
         except Exception:
             logger.debug("could not resolve the Ollama base URL", exc_info=True)
             url = None
-    if not url:
-        from ...config import OLLAMA_BASE_URL
-
-        url = (
-            (ai.get("base_url") or "").strip()
-            or (OLLAMA_BASE_URL or "").strip()
-            or None
-        )
 
     if url:
         ollama_gpu = probe_ollama_gpu(url)
@@ -740,13 +732,22 @@ def resolve_runtime(
 
 
 def settings_patch_for_runtime(runtime: RuntimeConfig) -> dict[str, Any]:
-    """Fields to persist when applying a workload profile."""
-    return {
+    """Fields to persist when applying a workload profile.
+
+    The GPU-sized model names only replace the models of an Ollama connection;
+    a hosted provider's model ids are the user's choice.
+    """
+    from .provider import chat_connection, embed_connection, ollama_admin
+
+    patch: dict[str, Any] = {
         "workload_profile": runtime.profile,
-        "embed_model": runtime.embed_model,
-        "chat_model": runtime.chat_model,
         "category_min_score": runtime.category_min_score,
     }
+    if ollama_admin(chat_connection()) is not None:
+        patch["chat_model"] = runtime.chat_model
+    if ollama_admin(embed_connection()) is not None:
+        patch["embed_model"] = runtime.embed_model
+    return patch
 
 
 # Stock defaults that may be auto-upgraded when a larger GPU is detected.
@@ -776,10 +777,18 @@ def ensure_quality_chat_model() -> str:
     Custom user choices are left alone.
     """
     from .. import app_settings
-    from .provider import ensure_models, get_provider, models_equivalent
+    from .provider import (
+        chat_connection,
+        ensure_models,
+        models_equivalent,
+        ollama_admin,
+    )
 
     ai = app_settings.ai_settings()
-    current = str(ai.get("chat_model") or "llama3.2:3b").strip()
+    current = str(ai.get("chat_model") or "").strip()
+    if ollama_admin(chat_connection()) is None:
+        # Model sizing by GPU only applies to a local Ollama server.
+        return current
     auto_pull = bool(ai.get("auto_pull_models", True))
 
     runtime = resolve_runtime(ai.get("workload_profile") or "normal")
@@ -798,10 +807,9 @@ def ensure_quality_chat_model() -> str:
         app_settings.save({"ai": patch})
         current = recommended
 
-    provider = get_provider()
-    if provider is not None and auto_pull:
+    if auto_pull:
         try:
-            ensure_models(provider)
+            ensure_models()
         except Exception:
             logger.warning(
                 "could not pull the quality chat model",

@@ -218,3 +218,52 @@ test("dragged description and chapter sizes stick on this device", async ({
     .poll(async () => Math.abs((await width()) - before))
     .toBeLessThan(2);
 });
+
+test("dragging the description open all the way expands it", async ({
+  page,
+}) => {
+  test.skip(!hasDesktopPlayerChrome(page), "resizing is desktop only");
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const description = page
+    .locator(".ui-panel")
+    .filter({ has: page.getByText("Aurora over the ridge line.") })
+    .last();
+  await expect(description).toBeVisible();
+  const height = async () => (await description.boundingBox())?.height ?? 0;
+  const before = await height();
+
+  const handle = await description
+    .getByRole("separator", { name: "Resize description" })
+    .boundingBox();
+  if (!handle) throw new Error("resize handle is not laid out");
+  const x = handle.x + handle.width / 2;
+  const y = handle.y + handle.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + 600, { steps: 8 });
+  await page.mouse.up();
+
+  // All the text is showing, so it counts as expanded: the arrow flips and
+  // the tags button an expanded box has appears.
+  await expect(
+    description.getByRole("button", { name: "Collapse description" }).first()
+  ).toBeVisible();
+  await expect(
+    description.getByRole("button", { name: /^Show (tags|notes)$/ })
+  ).toBeVisible();
+
+  // Collapsing goes back to the default size, not the dragged one.
+  await description
+    .getByRole("button", { name: "Collapse description" })
+    .first()
+    .click();
+  await expect(
+    description.getByRole("button", { name: "Expand description" })
+  ).toBeVisible();
+  await expect
+    .poll(async () => Math.abs((await height()) - before))
+    .toBeLessThan(2);
+});

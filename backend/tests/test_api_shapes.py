@@ -19,8 +19,7 @@ def test_health_full_and_public(client, anon_client):
         "yt_dlp_version",
         "ffmpeg",
         "pot_provider",
-        "ollama",
-        "openrouter",
+        "ai",
         "disk",
         "storage_warning",
         "library_video_count",
@@ -127,21 +126,16 @@ def test_ai_controls(client):
 def test_ai_connection_tests_keep_their_optional_keys_absent(client, monkeypatch):
     monkeypatch.setattr(
         "app.api.ai.test_connection",
-        lambda base_url: {"ok": False, "base_url": base_url, "detail": "Unreachable"},
+        lambda target, base_url, api_key: {
+            "ok": False,
+            "base_url": base_url,
+            "detail": "Unreachable",
+        },
     )
     assert client.post("/api/ai/test", json={"base_url": "http://x"}).json() == {
         "ok": False,
         "base_url": "http://x",
         "detail": "Unreachable",
-    }
-    monkeypatch.setattr(
-        "app.api.ai.test_openrouter_connection",
-        lambda key: {"ok": True, "detail": "Connected (2 models)", "model_count": 2},
-    )
-    assert client.post("/api/ai/openrouter/test", json={}).json() == {
-        "ok": True,
-        "detail": "Connected (2 models)",
-        "model_count": 2,
     }
 
 

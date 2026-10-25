@@ -31,7 +31,7 @@ Beyond readiness and `queue_depth`, status exposes:
 
 | Field | Purpose |
 |-------|---------|
-| `blocked_reason` | Why nothing is running (paused, provider unreachable, OpenRouter budget hard limit) |
+| `blocked_reason` | Why nothing is running (paused, provider unreachable, weekly budget hard limit) |
 | `runnable_count` | Queued jobs due now with a provider available |
 | `deferred_count` | Queued with future `run_after` (retry backoff) |
 | `waiting_count` | Queued but provider missing for that kind |
@@ -59,17 +59,19 @@ Health (`GET /api/health`) mirrors `workers.ai_error_count` and `workers.ai_bloc
 
 ## Provider routing
 
-Resolved from Settings + env (`OLLAMA_BASE_URL`, `OPENROUTER_API_KEY`):
+One OpenAI-compatible client (`services/ai/provider.py`, [ADR 0017](../adr/0017-openai-compatible-provider.md)) resolved from Settings (`base_url`, `api_key`, `chat_model`, `embed_base_url`, `embed_api_key`, `embed_model`) and env (`OPENROUTER_API_KEY`; `OLLAMA_BASE_URL` as a legacy fallback):
 
-| Concern | Typical routing |
-|---------|-----------------|
-| Embeddings | Ollama embed model, or OpenRouter when scope is **all** (unless `ollama_prefer_embeddings`) |
-| Chat / summary / tags / chapters | OpenRouter when enabled + specialized/all; else Ollama chat model |
-| Workload models | VRAM tier defaults from [AI setup](../ops/ai-setup.md) |
+| Concern | Routing |
+|---------|---------|
+| Chat / summary / tags / chapters | `/chat/completions` on the chat connection |
+| Embeddings | `/embeddings` on `embed_base_url` when set, else on the chat connection; none when `embed_model` is empty |
+| Cost | Recorded when the response carries `usage.cost` (OpenRouter) |
+| Model downloads, VRAM sizing | Only when the endpoint's host answers Ollama's `/api/version` |
+| Workload models | VRAM tier defaults from [AI setup](../ops/ai-setup.md) (Ollama only) |
 
-When Ollama HTTP calls fail, the resolved URL cache is invalidated so a dead cache cannot keep claiming jobs. Queued jobs that cannot run yet stay `queued` (attempts unchanged) and may show a `waiting: …` note after ~2 minutes.
+Reachability (`GET /models`) is cached per URL; a failed call drops the cache so a dead endpoint cannot keep claiming jobs, and a failure is retried after 30 s. Queued jobs that cannot run yet stay `queued` (attempts unchanged) and may show a `waiting: …` note after ~2 minutes.
 
-Embeds are only enqueued when Ollama is **enabled** or OpenRouter owns embeddings (`scope=all`) — not when neither backend can ever serve them.
+Embeds are only enqueued when an embedding model and endpoint are set; tags, summaries and chapters only when a chat model and endpoint are set.
 
 ## Vector search
 
@@ -95,14 +97,14 @@ Changing the embed model invalidates compatibility — reindex so all rows share
 | **Hybrid search** | Keyword + embedding similarity over library (and catalog) vectors |
 | **Recommend** | Category chips + "For you" + related videos ([below](#recommendations)) |
 | **Chat RAG** | Retrieve relevant chunks, stream assistant reply (SSE) |
-| **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#weekly-budget)) |
+| **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#costs-and-the-weekly-budget)) |
 
 ## Recommendations
 
 The rankings live in `services/ai/recommend.py` and `services/library.related_videos`, and score videos by their profiles.
 
 - **Categories** (`refresh_categories`): the chat model reads a numbered sample of the library (recent watches, recent downloads, then one video per channel) and proposes 8-15 categories, each with the numbers of 3-8 sample videos that belong in it. When the model follows that format, a category with fewer than two valid examples is dropped as a guess; models that ignore it fall back to picking examples by embedding. A category's vector blends the embedded name, blurb and example titles (40%) with the mean of its examples' vectors (60%). A video then joins a category only when it clears the floor (0.35), scores within 0.04 of **its own best category**, and either clears `category_min_score` or is within 0.08 of the category's top match. The competition is what keeps a shelf from filling with videos that belong somewhere else; with embed models whose unrelated texts already score high (such as `nomic-embed-text`) it does most of the filtering and `category_min_score` matters little.
-- **For you**: seeded from the viewer's 30 most recent watches. Each seed is weighted by recency (0.93 per step back) and by how far the viewer got (finished or past halfway counts fully, opened and abandoned counts about a third). A video's score is 75% its best weighted seed match and 25% its weighted average match across all seeds, plus a small boost for channels the viewer follows. Videos the viewer has watched are left out of the ranked part; one channel's repeated picks are pushed down so a single channel cannot fill the shelf. Unscored videos follow by recency, then the viewer's watched videos, so infinite scroll still reaches the whole library.
+- **For you**: seeded from the viewer's 30 most recent watches. Each seed is weighted by recency (0.93 per step back) and by how far the viewer got (finished or past halfway counts fully, opened and abandoned counts about a third). A video's score is 75% its best weighted seed match and 25% its weighted average match across all seeds, plus a small boost for channels the viewer follows. Videos the viewer has watched are left out of the ranked part; one channel's repeated picks are pushed down so a single channel cannot fill the shelf. Unscored videos follow by recency, then the viewer's watched videos, so infinite scroll still reaches the whole library. Without an embedding provider (or before any watched video has vectors) the same shelf is ranked from the history alone (`_taste` in `services/ai/recommend.py`): 45% how much the viewer watches the channel (recency 0.97 per step, weighted by engagement, over the last 200 watches), 25% the three strongest tags it shares with watched videos, 15% a followed channel and 15% freshness (halving every 30 days). With `include_streams` the newest 30 indexed, not-downloaded uploads of each followed channel join the ranking: scored by their catalog embeddings with AI, by the same taste formula without it, so they merge with library videos on one scale.
 - **More like this** (`GET /api/videos/{id}/related`): neighbours of the video's profile, plus 0.05 for the same channel and up to 0.08 for shared tags (rare tags count more than tags most of the library has), minus 0.05 for videos the viewer has already watched. Every page re-ranks the same 200 nearest neighbours, so pages continue one ranking; same-channel, shared-tag and random videos fill in when AI is off or the ranking runs out.
 - **Tags** (`enrich_tags`): the prompt lists the library's most used tags so the model reuses them, and a suggestion that differs from one only in case takes the library's spelling. Consistent tags make the shared-tag boost and tag chips more useful.
 

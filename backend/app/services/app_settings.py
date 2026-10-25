@@ -14,26 +14,28 @@ from .css_sanitize import sanitize_ui_css
 logger = logging.getLogger(__name__)
 
 AI_DEFAULTS: dict[str, Any] = {
+    # Master switch; AI also needs ``base_url`` (an OpenAI-compatible endpoint).
     "enabled": True,
-    "provider": "ollama",
     "base_url": "",
-    "embed_model": "nomic-embed-text",
-    "chat_model": "llama3.2:3b",
-    # Optional OpenRouter LLM backend (summaries, chat, tags, duplicate LLM).
-    "openrouter_enabled": False,
-    "openrouter_api_key": "",
-    "openrouter_model": "google/gemini-2.5-flash-lite",
-    # specialized = LLM tasks only; all = also embeddings / invent vectors.
-    "openrouter_scope": "specialized",
-    "openrouter_embed_model": "openai/text-embedding-3-small",
-    # When OpenRouter scope is all, prefer Ollama for embeddings if available.
-    "ollama_prefer_embeddings": False,
+    "api_key": "",
+    "chat_model": "",
+    # Empty embed_base_url = embeddings use the chat connection. Empty embed_model
+    # = no embeddings (search, related videos and categories stay off).
+    "embed_base_url": "",
+    "embed_api_key": "",
+    "embed_model": "",
+    # "chat" / "embed" while a migrated Ollama setup still needs its address
+    # found (provider.finish_legacy_ollama_detect); "" otherwise.
+    "autodetect_ollama": "",
+    # Bumped when the stored shape changes; see _migrate_legacy_ai.
+    "connection_version": 2,
     # Show per-response cost chips in Watch UI (Settings totals always show).
-    "openrouter_show_costs": False,
-    # Soft/hard weekly OpenRouter spend limit (rolling 7 days). null = off.
-    "openrouter_weekly_budget_usd": None,
-    # When true and weekly spend >= budget, block further OpenRouter calls.
-    "openrouter_budget_hard_limit": False,
+    # Only providers that report cost (OpenRouter) have any.
+    "show_costs": False,
+    # Soft/hard weekly spend limit (rolling 7 days). null = off.
+    "weekly_budget_usd": None,
+    # When true and weekly spend >= budget, block further AI calls.
+    "budget_hard_limit": False,
     # on_download | on_request | timer | set_time
     "schedule": "on_download",
     "timer_hours": 6,
@@ -71,19 +73,92 @@ _WEEKLY_BUDGET_USD_LO = 0.01
 _WEEKLY_BUDGET_USD_HI = 100_000.0
 _SUMMARY_LENGTHS = frozenset({"short", "medium", "long"})
 _CHAPTERS_MODES = frozenset({"on_download", "on_watch"})
-_OPENROUTER_SCOPES = frozenset({"specialized", "all"})
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
 
-def normalize_openrouter_scope(value: Any) -> str:
-    raw = str(value or "").strip().lower()
-    if raw in _OPENROUTER_SCOPES:
-        return raw
-    return "specialized"
+def normalize_base_url(value: Any) -> str:
+    """Trim an endpoint URL; a bare ``scheme://host[:port]`` gets ``/v1``.
+
+    Every OpenAI-compatible server Horde knows serves the API under ``/v1``
+    unless its URL already names a path (OpenRouter ``/api/v1``, Groq
+    ``/openai/v1``, Gemini ``/v1beta/openai``).
+    """
+    raw = str(value or "").strip().rstrip("/")
+    if not raw:
+        return ""
+    scheme, sep, rest = raw.partition("://")
+    if sep and "/" not in rest:
+        return f"{raw}/v1"
+    return raw
 
 
-def normalize_openrouter_embed_model(value: Any) -> str:
-    raw = str(value or "").strip()
-    return raw or str(AI_DEFAULTS["openrouter_embed_model"])
+def _legacy_ollama_url(raw: dict[str, Any]) -> str:
+    from ..config import OLLAMA_BASE_URL
+
+    url = str(raw.get("base_url") or "").strip() or OLLAMA_BASE_URL
+    return normalize_base_url(url)
+
+
+def _migrate_legacy_ai(raw: dict[str, Any]) -> dict[str, Any]:
+    """Map the pre-2 split (Ollama + optional OpenRouter) onto one connection.
+
+    Model ids are kept as they were, so stored embeddings still match and
+    nothing is re-indexed.
+    """
+    from ..config import OPENROUTER_API_KEY
+
+    out = {k: v for k, v in raw.items() if k in AI_DEFAULTS}
+    stored_key = str(raw.get("openrouter_api_key") or "").strip()
+    openrouter_on = bool(raw.get("openrouter_enabled")) and bool(
+        stored_key or OPENROUTER_API_KEY
+    )
+    ollama_on = bool(raw.get("enabled", True)) and (
+        str(raw.get("provider") or "ollama") == "ollama"
+    )
+    ollama_url = _legacy_ollama_url(raw)
+    ollama_embed = str(raw.get("embed_model") or "nomic-embed-text")
+    out["enabled"] = openrouter_on or ollama_on
+    out["autodetect_ollama"] = ""
+    for old, new in (
+        ("openrouter_show_costs", "show_costs"),
+        ("openrouter_weekly_budget_usd", "weekly_budget_usd"),
+        ("openrouter_budget_hard_limit", "budget_hard_limit"),
+    ):
+        if old in raw:
+            out[new] = raw[old]
+    if openrouter_on:
+        out["base_url"] = OPENROUTER_BASE_URL
+        out["api_key"] = stored_key
+        out["chat_model"] = (
+            str(raw.get("openrouter_model") or "").strip()
+            or "google/gemini-2.5-flash-lite"
+        )
+        prefer_ollama = bool(raw.get("ollama_prefer_embeddings")) and ollama_on
+        if str(raw.get("openrouter_scope") or "") == "all" and not prefer_ollama:
+            out["embed_base_url"] = ""
+            out["embed_model"] = (
+                str(raw.get("openrouter_embed_model") or "").strip()
+                or "openai/text-embedding-3-small"
+            )
+        elif ollama_on:
+            out["embed_base_url"] = ollama_url
+            out["embed_model"] = ollama_embed
+            if not ollama_url:
+                out["autodetect_ollama"] = "embed"
+        else:
+            out["embed_base_url"] = ""
+            out["embed_model"] = ""
+    else:
+        out["base_url"] = ollama_url
+        out["api_key"] = ""
+        out["chat_model"] = str(raw.get("chat_model") or "llama3.2:3b")
+        out["embed_base_url"] = ""
+        out["embed_model"] = ollama_embed
+        if ollama_on and not ollama_url:
+            out["autodetect_ollama"] = "chat"
+    out["connection_version"] = AI_DEFAULTS["connection_version"]
+    return out
 
 
 def clamp_category_min_score(value: Any) -> float:
@@ -232,6 +307,8 @@ def _path() -> Path:
 def _merge_ai(raw: Any) -> dict[str, Any]:
     merged = dict(AI_DEFAULTS)
     if isinstance(raw, dict):
+        if raw and "connection_version" not in raw:
+            raw = _migrate_legacy_ai(raw)
         merged.update({k: v for k, v in raw.items() if k in AI_DEFAULTS})
     merged["category_min_score"] = clamp_category_min_score(
         merged.get("category_min_score")
@@ -242,20 +319,15 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     )
     merged["tag_rescan_days"] = clamp_tag_rescan_days(merged.get("tag_rescan_days"))
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
-    merged["openrouter_scope"] = normalize_openrouter_scope(
-        merged.get("openrouter_scope")
+    for key in ("base_url", "embed_base_url"):
+        merged[key] = normalize_base_url(merged.get(key))
+    for key in ("api_key", "embed_api_key", "chat_model", "embed_model"):
+        merged[key] = str(merged.get(key) or "").strip()
+    merged["show_costs"] = bool(merged.get("show_costs", False))
+    merged["weekly_budget_usd"] = clamp_weekly_budget_usd(
+        merged.get("weekly_budget_usd")
     )
-    merged["openrouter_embed_model"] = normalize_openrouter_embed_model(
-        merged.get("openrouter_embed_model")
-    )
-    merged["ollama_prefer_embeddings"] = bool(merged.get("ollama_prefer_embeddings"))
-    merged["openrouter_show_costs"] = bool(merged.get("openrouter_show_costs", False))
-    merged["openrouter_weekly_budget_usd"] = clamp_weekly_budget_usd(
-        merged.get("openrouter_weekly_budget_usd")
-    )
-    merged["openrouter_budget_hard_limit"] = bool(
-        merged.get("openrouter_budget_hard_limit")
-    )
+    merged["budget_hard_limit"] = bool(merged.get("budget_hard_limit"))
     return merged
 
 
@@ -599,7 +671,7 @@ def reset_to_defaults() -> dict[str, Any]:
 
     This is the one deliberate way out of a corrupt, unrecoverable file. No
     backup is kept and the ``.bak`` / ``.corrupt-*`` copies are deleted, since
-    they would still contain secrets such as the OpenRouter key.
+    they would still contain secrets such as the AI API keys.
     """
     with _lock:
         out = _factory_defaults(setup_completed=False)

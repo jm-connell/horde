@@ -125,7 +125,7 @@ Create both host directories before the first start if they do not exist yet. Li
 |---------|--------------|------|
 | `horde` | Always | FastAPI + built React UI on container port 8080 |
 | `bgutil-pot` | Always | PO-token provider for yt-dlp (no Google login) |
-| `ollama` | Profile `ai` only | Optional local LLM for embeddings, tags, recommendations |
+| `ollama` | Profile `ai` only | Optional bundled Ollama, for running models on this machine ("Run Ollama for me") |
 
 ```bash
 # Default stack (horde + bgutil-pot)
@@ -135,7 +135,7 @@ docker compose up --build -d
 docker compose --profile ai up -d
 ```
 
-For remote Ollama on another machine, leave the `ai` profile off and set `OLLAMA_BASE_URL` (or configure it under [Settings → AI](../settings/index.md)). Details: [AI setup](../ops/ai-setup.md).
+For a cloud provider or an AI server you already run (Ollama on a GPU PC, LM Studio, …), leave the `ai` profile off and set the provider URL in the setup wizard or [Settings → AI](../settings/ai.md). Which URL to use from inside Docker: [AI setup](../ops/ai-setup.md#which-url-do-i-type-docker-networking).
 
 GPU passthrough for the `horde` service is commented out by default. Settings → System shows **GPU** / **None detected** until you uncomment the NVIDIA or `/dev/dri` block. Horde does not need a GPU for normal use. See [GPU](../ops/environment.md#gpu).
 

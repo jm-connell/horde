@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useUpdateAppSettings } from "../queries/app";
 import { dataOrNull, useSystemStats } from "../queries/status";
 import Collapse from "../components/Collapse";
+import HelpTip from "../components/HelpTip";
 import {
   flushSettingsSync,
   markSetupCompleted,
@@ -16,6 +17,14 @@ import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
+import {
+  COMPATIBLE_PROVIDERS_TIP,
+  keyMismatch,
+  keyProviderLabel,
+  providerFor,
+  providerLabel,
+  readEndpointInput,
+} from "./settings/aiProviders";
 
 const STEPS = [
   "welcome",
@@ -26,7 +35,10 @@ const STEPS = [
   "done",
 ] as const;
 type Step = (typeof STEPS)[number];
-type AiChoice = "skip" | "openrouter" | "ollama";
+type AiChoice = "skip" | "connect" | "bundled";
+
+/** The compose service `docker compose --profile ai up -d` starts. */
+const BUNDLED_OLLAMA_URL = "http://ollama:11434/v1";
 
 const STEP_TITLE: Record<Step, string> = {
   welcome: "Welcome",
@@ -55,8 +67,8 @@ export default function Setup() {
   const systemStats = dataOrNull(useSystemStats());
   const [finishing, setFinishing] = useState(false);
   const [aiChoice, setAiChoice] = useState<AiChoice>("skip");
-  const [openRouterKey, setOpenRouterKey] = useState("");
-  const [ollamaUrl, setOllamaUrl] = useState("");
+  const [connectInput, setConnectInput] = useState("");
+  const [connectKey, setConnectKey] = useState("");
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [leaving, setLeaving] = useState<Step | null>(null);
@@ -134,59 +146,95 @@ export default function Setup() {
     setStep(STEPS[Math.max(stepIndex - 1, 0)]);
   };
 
-  const saveOpenRouter = async () => {
-    const key = openRouterKey.trim();
-    if (!key) {
-      setAiStatus("Paste an API key first.");
-      return;
+  /**
+   * Test an endpoint and save it with models: the preset's suggestions, an
+   * Ollama server's GPU-sized picks (downloaded in the background), or the
+   * first models the server lists.
+   */
+  const connectAi = async (
+    url: string,
+    key: string,
+    presetModels?: {
+      chat?: string;
+      embed?: string;
     }
+  ) => {
     setAiBusy(true);
     setAiStatus(null);
     try {
-      const result = await api.testOpenRouterConnection(key);
+      const result = await api.testAiConnection({
+        base_url: url,
+        api_key: key || null,
+      });
       if (!result.ok) {
-        setAiStatus(result.detail || "Could not reach OpenRouter.");
+        setAiStatus(result.detail || "Could not reach that server.");
         return;
       }
+      const saved = result.base_url ?? url;
+      const listed = result.models ?? [];
+      const embeds = result.embedding_models ?? [];
+      const isOllama = result.kind === "ollama";
+      const chat =
+        presetModels?.chat ||
+        (isOllama ? "llama3.2:3b" : "") ||
+        listed.find((m) => !embeds.some((e) => e.id === m.id))?.id ||
+        "";
+      const embed =
+        presetModels?.embed ||
+        (isOllama ? "nomic-embed-text" : "") ||
+        embeds[0]?.id ||
+        "";
       await saveAppSettings({
         ai: {
           enabled: true,
-          openrouter_enabled: true,
-          openrouter_api_key: key,
+          base_url: saved,
+          api_key: key,
+          chat_model: chat,
+          embed_model: embed,
         },
       });
-      setAiStatus("OpenRouter connected. You can continue.");
+      if (isOllama) {
+        // Picks models that fit the Ollama GPU and starts downloading them.
+        await api.applyAiWorkload();
+        setAiStatus(
+          "Connected to Ollama. Models are downloading in the background; AI features start once they finish."
+        );
+      } else {
+        setAiStatus(
+          chat
+            ? `Connected to ${providerLabel(saved, result.kind)}. You can continue.`
+            : `Connected to ${providerLabel(saved, result.kind)}. Pick a chat model later in Settings → AI.`
+        );
+      }
       goNext();
     } catch (err) {
       setAiStatus(
-        err instanceof Error ? err.message : "OpenRouter test failed."
+        err instanceof Error ? err.message : "Connection test failed."
       );
     } finally {
       setAiBusy(false);
     }
   };
 
-  const saveOllama = async () => {
-    setAiBusy(true);
-    setAiStatus(null);
-    try {
-      const url = ollamaUrl.trim();
-      const result = await api.testAiConnection(url || undefined);
-      if (!result.ok) {
-        setAiStatus(result.detail || "Could not reach Ollama.");
-        return;
-      }
-      await saveAppSettings({
-        ai: { enabled: true, base_url: url },
-      });
-      setAiStatus("Ollama connected. You can continue.");
-      goNext();
-    } catch (err) {
-      setAiStatus(err instanceof Error ? err.message : "Ollama test failed.");
-    } finally {
-      setAiBusy(false);
+  const saveConnect = async () => {
+    const read = readEndpointInput(connectInput);
+    if ("error" in read) {
+      setAiStatus(read.error);
+      return;
     }
+    const mismatch = read.key ? "" : keyMismatch(read.url, connectKey.trim());
+    if (mismatch) {
+      setAiStatus(mismatch);
+      return;
+    }
+    await connectAi(
+      read.url,
+      read.key ?? connectKey.trim(),
+      read.provider ?? providerFor(read.url)
+    );
   };
+
+  const saveBundled = () => connectAi(BUNDLED_OLLAMA_URL, "");
 
   const panelProps: Omit<WizardPanelProps, "step"> = {
     settings,
@@ -196,18 +244,18 @@ export default function Setup() {
     finishing,
     aiChoice,
     setAiChoice,
-    openRouterKey,
-    setOpenRouterKey,
-    ollamaUrl,
-    setOllamaUrl,
+    connectInput,
+    setConnectInput,
+    connectKey,
+    setConnectKey,
     aiStatus,
     setAiStatus,
     aiBusy,
     goNext,
     goBack,
     finish,
-    saveOpenRouter,
-    saveOllama,
+    saveConnect,
+    saveBundled,
   };
 
   return (
@@ -267,18 +315,18 @@ type WizardPanelProps = {
   finishing: boolean;
   aiChoice: AiChoice;
   setAiChoice: (choice: AiChoice) => void;
-  openRouterKey: string;
-  setOpenRouterKey: (value: string) => void;
-  ollamaUrl: string;
-  setOllamaUrl: (value: string) => void;
+  connectInput: string;
+  setConnectInput: (value: string) => void;
+  connectKey: string;
+  setConnectKey: (value: string) => void;
   aiStatus: string | null;
   setAiStatus: (value: string | null) => void;
   aiBusy: boolean;
   goNext: () => void;
   goBack: () => void;
   finish: () => void | Promise<void>;
-  saveOpenRouter: () => void | Promise<void>;
-  saveOllama: () => void | Promise<void>;
+  saveConnect: () => void | Promise<void>;
+  saveBundled: () => void | Promise<void>;
 };
 
 function WizardPanel({
@@ -290,18 +338,18 @@ function WizardPanel({
   finishing,
   aiChoice,
   setAiChoice,
-  openRouterKey,
-  setOpenRouterKey,
-  ollamaUrl,
-  setOllamaUrl,
+  connectInput,
+  setConnectInput,
+  connectKey,
+  setConnectKey,
   aiStatus,
   setAiStatus,
   aiBusy,
   goNext,
   goBack,
   finish,
-  saveOpenRouter,
-  saveOllama,
+  saveConnect,
+  saveBundled,
 }: WizardPanelProps) {
   const stepIndex = STEPS.indexOf(step);
   return (
@@ -424,14 +472,16 @@ function WizardPanel({
         {step === "ai" && (
           <>
             <p className="text-sm text-gray-400">
-              AI is optional. Skip for now and enable it later in Settings → AI.
+              AI is optional: summaries, chapters, chat about a video, smarter
+              tags and semantic search. Skip for now and set it up later in
+              Settings → AI.
             </p>
             <div className="flex flex-wrap gap-2">
               {(
                 [
                   { id: "skip" as const, label: "Skip for now" },
-                  { id: "openrouter" as const, label: "OpenRouter" },
-                  { id: "ollama" as const, label: "Local Ollama" },
+                  { id: "connect" as const, label: "Connect a provider" },
+                  { id: "bundled" as const, label: "Run Ollama for me" },
                 ] as const
               ).map((opt) => (
                 <button
@@ -451,55 +501,85 @@ function WizardPanel({
                 </button>
               ))}
             </div>
-            <Collapse open={aiChoice === "openrouter"}>
+            <Collapse open={aiChoice === "connect"}>
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted">
-                  Cloud LLM for summaries, tags, and chat. The key is stored on
-                  this Horde server.
+                  Paste an API key from a cloud provider (no GPU needed; titles,
+                  captions and chat messages are sent to it) or the address of
+                  an AI server you run. Horde runs in Docker, so use{" "}
+                  <span className="font-mono">host.docker.internal</span> for a
+                  server on this machine, or the LAN address of another PC.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
-                    type="password"
+                    type={keyProviderLabel(connectInput) ? "password" : "text"}
                     autoComplete="off"
-                    placeholder="sk-or-…"
-                    value={openRouterKey}
-                    onChange={(e) => setOpenRouterKey(e.target.value)}
-                    className={INPUT_KEY}
-                  />
-                  <button
-                    type="button"
-                    disabled={aiBusy}
-                    onClick={() => void saveOpenRouter()}
-                    className={PANEL_BTN}
-                  >
-                    {aiBusy ? "Testing…" : "Test and save"}
-                  </button>
-                </div>
-              </div>
-            </Collapse>
-            <Collapse open={aiChoice === "ollama"}>
-              <div className="space-y-2 pt-2">
-                <p className="text-xs text-muted">
-                  Leave the URL blank to use the default (Docker Compose{" "}
-                  <span className="font-mono">ai</span> profile, or localhost).
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input
-                    type="text"
-                    placeholder="http://127.0.0.1:11434"
-                    value={ollamaUrl}
-                    onChange={(e) => setOllamaUrl(e.target.value)}
+                    spellCheck={false}
+                    placeholder="API key or server URL"
+                    aria-label="API key or server URL"
+                    value={connectInput}
+                    onChange={(e) => {
+                      setConnectInput(e.target.value);
+                      setAiStatus(null);
+                    }}
                     className={INPUT}
                   />
+                  <HelpTip text={COMPATIBLE_PROVIDERS_TIP} />
+                  {!keyProviderLabel(connectInput) && (
+                    <input
+                      type="password"
+                      autoComplete="off"
+                      placeholder="API key (if it needs one)"
+                      aria-label="API key"
+                      value={connectKey}
+                      onChange={(e) => {
+                        setConnectKey(e.target.value);
+                        setAiStatus(null);
+                      }}
+                      className={INPUT_KEY}
+                    />
+                  )}
                   <button
                     type="button"
                     disabled={aiBusy}
-                    onClick={() => void saveOllama()}
+                    onClick={() => void saveConnect()}
                     className={PANEL_BTN}
                   >
-                    {aiBusy ? "Testing…" : "Test and save"}
+                    {aiBusy ? "Connecting…" : "Connect"}
                   </button>
                 </div>
+                {keyProviderLabel(connectInput) && (
+                  <p className="text-xs text-muted">
+                    {keyProviderLabel(connectInput)} key
+                  </p>
+                )}
+              </div>
+            </Collapse>
+            <Collapse open={aiChoice === "bundled"}>
+              <div className="space-y-2 pt-2">
+                <p className="text-xs text-muted">
+                  Horde&apos;s compose file defines an optional Ollama
+                  container, but it is not installed or started by default. This
+                  command downloads the Ollama image the first time (a large
+                  download) and starts it next to Horde; run it from the folder
+                  holding <span className="font-mono">docker-compose.yml</span>:
+                </p>
+                <pre className="ui-panel overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-xs text-gray-200">
+                  docker compose --profile ai up -d
+                </pre>
+                <p className="text-xs text-muted">
+                  Then connect: Horde picks models that fit your GPU and
+                  downloads them (a few GB). Without a GPU passed to the
+                  container, Ollama runs on the CPU, which is slow.
+                </p>
+                <button
+                  type="button"
+                  disabled={aiBusy}
+                  onClick={() => void saveBundled()}
+                  className={PANEL_BTN}
+                >
+                  {aiBusy ? "Connecting…" : "Connect to the Ollama container"}
+                </button>
               </div>
             </Collapse>
             {aiStatus ? (

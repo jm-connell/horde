@@ -400,48 +400,16 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
             "disk usage unavailable for %s", ctx.paths.downloads, exc_info=True
         )
 
-    ollama = None
-    openrouter = None
+    ai_health = None
     # Health is polled every few seconds: failures below log at debug, not warning.
     try:
-        from .services import app_settings as settings_svc
-        from .services.ai.provider import (
-            last_error,
-            openrouter_api_key_set,
-            openrouter_configured,
-            pulling_models,
-            resolve_base_url,
-            resolve_openrouter_api_key,
-        )
+        from .services.ai.provider import health_summary
 
-        # Keep health cheap for readiness probes (dev.bat Wait-ForBackend).
-        # Full model status lives on GET /api/ai/status.
-        ai = settings_svc.ai_settings()
-        enabled = bool(ai.get("enabled", True))
-        url = resolve_base_url() if enabled else None
-        ollama = {
-            "enabled": enabled,
-            "ready": bool(url),
-            "reachable": bool(url),
-            "base_url": url,
-            "pulling": pulling_models(),
-            "last_error": last_error(),
-        }
-        or_enabled = bool(ai.get("openrouter_enabled"))
-        key_set = openrouter_api_key_set(str(ai.get("openrouter_api_key") or ""))
-        openrouter = {
-            "enabled": or_enabled,
-            "configured": openrouter_configured(),
-            "api_key_set": key_set,
-            "model": str(ai.get("openrouter_model") or ""),
-            "scope": str(ai.get("openrouter_scope") or "specialized"),
-            # Avoid remote ping on /health; presence of a key is enough here.
-            "reachable": bool(or_enabled and resolve_openrouter_api_key()),
-        }
+        # Cache-only; full model status lives on GET /api/ai/status.
+        ai_health = health_summary()
     except Exception:
         logger.debug("AI status unavailable for health", exc_info=True)
-        ollama = {"enabled": False, "ready": False, "reachable": False}
-        openrouter = {"enabled": False, "configured": False, "reachable": False}
+        ai_health = {"enabled": False, "reachable": False}
 
     sha = cache.git_sha
 
@@ -494,8 +462,7 @@ def build_health_payload(app_: FastAPI) -> dict[str, Any]:
         "yt_dlp_version": cache.ytdlp_version,
         "ffmpeg": cache.ffmpeg(),
         "pot_provider": cache.pot_status(),
-        "ollama": ollama,
-        "openrouter": openrouter,
+        "ai": ai_health,
         "disk": disk,
         "storage_warning": getattr(app_.state, "storage_warning", None),
         "library_video_count": video_count,

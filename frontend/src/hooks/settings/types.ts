@@ -175,6 +175,8 @@ export interface Settings {
   playbackMode: ViewMode;
   lastCustomChannel: string;
   showContinueWatching: boolean;
+  /** "For you" also lists followed channels' indexed uploads that are not downloaded. */
+  recommendStreams: boolean;
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
   showDownloadNavBadge: boolean;

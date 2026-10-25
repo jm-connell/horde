@@ -97,7 +97,11 @@ test("a playlist is built, reordered, trimmed and deleted", async ({
 
 test("playlists can be renamed from the row", async ({ page }) => {
   await page.goto("/playlists");
-  await page.getByRole("button", { name: "Edit playlist" }).click();
+  await page
+    .locator("[id^='playlist-row-']")
+    .filter({ has: page.getByRole("heading", { name: "Evening set" }) })
+    .getByRole("button", { name: "Edit playlist" })
+    .click();
   const name = page.getByLabel("Playlist name");
   await name.fill("Night set");
   await name.press("Enter");
@@ -189,4 +193,52 @@ test("a private playlist is seen and edited only by its owner", async ({
   // The administrator never sees the viewer's private playlist.
   await page.reload();
   await expect(page.getByText("Viewer's own")).toHaveCount(0);
+});
+
+test("a playlist mixes downloaded and streamed videos and can leave the server", async ({
+  page,
+}) => {
+  await page.goto("/playlists");
+  await page.getByRole("heading", { name: "Watch later", level: 3 }).click();
+  const panelId = await page
+    .getByRole("button", { name: "Collapse playlist" })
+    .getAttribute("aria-controls");
+  const panel = page.locator(`#${panelId}`);
+  const header = page.locator(`#${panelId!.replace("panel", "row")}`);
+  const entries = panel.locator("[data-horde='playlist-entry']");
+
+  await expect(entries).toHaveCount(2);
+  await expect(header.getByText("2 videos · 1 downloaded")).toBeVisible();
+  const streamed = entries.filter({ hasText: "Ridge walk" });
+  await expect(
+    streamed.getByRole("button", { name: "Download", exact: true })
+  ).toBeVisible();
+  // A streamed entry opens as a stream.
+  await expect(streamed.getByRole("link")).toHaveAttribute(
+    "href",
+    /\/watch\?url=.*e2estream01/
+  );
+  await expect(
+    panel.getByRole("button", { name: "Download all (1)" })
+  ).toBeVisible();
+
+  // Removing it from the server keeps it in the playlist, as a stream.
+  await panel.getByRole("button", { name: "Remove from server" }).click();
+  const dialog = page.getByRole("dialog", {
+    name: "Remove these videos from the server?",
+  });
+  await expect(dialog).toContainText("1 video");
+  await dialog.getByRole("button", { name: "Remove from server" }).click();
+  await expect(header.getByText("2 videos · 0 downloaded")).toBeVisible();
+  await expect(
+    entries
+      .filter({ hasText: "Cedar Notes" })
+      .getByRole("button", { name: "Download", exact: true })
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Download all (2)" })
+  ).toBeVisible();
+  await expect(
+    panel.getByRole("button", { name: "Remove from server" })
+  ).toHaveCount(0);
 });

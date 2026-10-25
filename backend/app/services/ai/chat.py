@@ -16,12 +16,10 @@ from .. import app_settings
 from . import embeddings as ai_embeddings
 from . import text as ai_text
 from .provider import (
-    OpenRouterProvider,
     format_provider_error,
     get_llm_provider,
     llm_features_allowed,
     require_llm_chat_model,
-    resolve_llm_model,
 )
 from .workload import ensure_quality_chat_model
 
@@ -278,15 +276,12 @@ def run_chat_turn(
         yield _sse(
             {
                 "type": "error",
-                "detail": "No LLM available (enable OpenRouter or Ollama)",
+                "detail": "No AI chat provider is reachable (Settings → AI)",
                 "status": 503,
             }
         )
         return
-    if isinstance(provider, OpenRouterProvider):
-        chat_model = resolve_llm_model(provider)
-    else:
-        chat_model = ensure_quality_chat_model()
+    chat_model = ensure_quality_chat_model()
     missing = require_llm_chat_model(provider, chat_model)
     if missing:
         yield _sse({"type": "error", "detail": missing, "status": 503})

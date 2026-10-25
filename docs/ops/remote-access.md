@@ -86,7 +86,7 @@ To bind a LAN interface only, use that host IP instead of `127.0.0.1`. See [Port
 |---------|-----|
 | **Ollama** (`11434`) | Unauthenticated model API; keep on LAN / Docker network only |
 | **bgutil-pot** | Internal POT helper for yt-dlp; no public role |
-| **OpenRouter API key** | Lives in Horde settings / env — anyone who reaches Horde can use or change it |
+| **AI provider API key** | Lives in Horde settings / env — anyone who reaches Horde can use or change it |
 
 Horde’s default threat model is “trusted network or trusted gateway.” To go beyond that, follow the [internet exposure checklist](internet-exposure.md).
 

@@ -83,17 +83,16 @@ def stats(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def health(payload: dict[str, Any]) -> dict[str, Any]:
-    """Drop provider internals (addresses, models, OpenRouter setup, error texts)."""
+    """Drop provider internals (addresses, models, error texts)."""
     trimmed = dict(payload)
-    if trimmed.get("ollama"):
-        trimmed["ollama"] = {
-            **trimmed["ollama"],
+    if trimmed.get("ai"):
+        trimmed["ai"] = {
+            **trimmed["ai"],
+            "provider": None,
             "base_url": None,
             "last_error": None,
             "pulling": None,
         }
-    # Only the administrator's Settings > System shows the OpenRouter setup.
-    trimmed["openrouter"] = None
     if trimmed.get("pot_provider"):
         trimmed["pot_provider"] = {
             **trimmed["pot_provider"],

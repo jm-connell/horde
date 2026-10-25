@@ -166,7 +166,7 @@ Add a [notification](notifications.md) target. **Failed sign-ins** (on for new t
 Be honest with yourself about what this does **not** fix:
 
 - **A signed-in user can make the server fetch URLs.** Downloads, previews and playlist imports go through yt-dlp. Horde checks each URL before the call, but yt-dlp then resolves names and follows redirects itself, so a hostile redirect can still reach an internal address ([details](security.md#private-urls)). Do not create accounts for people you would not trust with a shell-like tool on that host.
-- **Members are trusted not to be hostile.** They share the library and can see every video; a member with the `download` permission uses your bandwidth and disk, one with `use_ai` can spend your OpenRouter budget.
+- **Members are trusted not to be hostile.** They share the library and can see every video; a member with the `download` permission uses your bandwidth and disk, one with `use_ai` can spend your AI provider budget.
 - **Cast links are bearer URLs.** A signed `?mt=` media link works without a login for 12 hours for one video; anyone who gets the URL can fetch that video.
 - **The wiki is public.** `/wiki` and the interface files carry no data but are served without signing in.
 - **The secrets live in `DATA_DIR`.** Session hashes, the signing key (`secret_key`) and each account's two-step secret are in the data folder and its backups. Protect them like the library itself.

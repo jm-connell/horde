@@ -69,29 +69,29 @@ Horde is built from a **git clone** of this repo. Compose `build: .` needs `Dock
 
 Full from-zero steps: [Install with Docker](../getting-started/install-docker.md).
 
-## Ollama offline
+## AI provider offline
 
-**Symptoms:** AI status Offline / Blocked; embeds/tags show **waiting** (not progressing); `/api/health` shows `ollama.reachable: false` and may include `workers.ai_blocked_reason`. Settings → System / AI → Jobs shows the blocked reason.
+**Symptoms:** AI status Offline / Blocked; embeds/tags show **waiting** (not progressing); `/api/health` shows `ai.reachable: false` and may include `workers.ai_blocked_reason`. Settings → System / AI → Jobs shows the blocked reason.
 
 **Waiting vs failed:**
 
 | State | Meaning |
 |-------|---------|
-| **Waiting** | Jobs stay `queued`, attempts stay `0`, provider missing/unreachable. Resume when Ollama (or OpenRouter) is back — no Retry needed. |
+| **Waiting** | Jobs stay `queued`, attempts stay `0`, provider missing/unreachable. Resume when the provider is back — no Retry needed. |
 | **Deferred** | Job failed once/twice and has a future `run_after` backoff. |
 | **Failed** | Terminal after 3 attempts — use **Retry** / **Retry all** under Settings → AI → Jobs. |
 
 **Checks:**
 
-1. If using Compose AI profile: `docker compose --profile ai up -d` and wait for Ollama to listen on 11434.
-2. Set `OLLAMA_BASE_URL` explicitly if auto-discover fails (especially remote GPUs).
-3. From inside the Horde container, curl the candidate URLs in [AI setup](ai-setup.md) order.
-4. OpenRouter-only setups can run without Ollama when scope covers the tasks you need (embeddings may still want Ollama unless scope is **all** or cloud embeds are configured).
-5. After Ollama returns, jobs should claim without restarting Horde (dead URL cache is invalidated on provider errors).
+1. Settings → AI → Providers → **Test**: it names the problem (unreachable, rejected credentials, no API at that path).
+2. From inside the Horde container, try the URL: `docker exec horde curl -s <url>/models`. `localhost` there is the Horde container; see [Which URL do I type?](ai-setup.md#which-url-do-i-type-docker-networking).
+3. Bundled Ollama: `docker compose --profile ai up -d` and wait for it to listen on 11434. Ollama on another machine must listen on `0.0.0.0` (`OLLAMA_HOST`), not only localhost.
+4. **Waiting for the embedding provider** with a chat-only provider (Groq, DeepSeek): set a second server for embeddings, or clear the embedding model.
+5. After the provider returns, jobs claim without restarting Horde (the reachability cache is dropped on provider errors and retried every 30 s).
 
 ## AI jobs fail with `database is locked`
 
-**Symptoms:** Settings → AI → Jobs shows every embed (or tag/summary) failed with `(sqlite3.OperationalError) database is locked` on `INSERT INTO openrouter_usage`. OpenRouter itself often succeeded — the job dies while writing the cost ledger.
+**Symptoms:** Settings → AI → Jobs shows every embed (or tag/summary) failed with `(sqlite3.OperationalError) database is locked` on `INSERT INTO openrouter_usage`. The provider call itself often succeeded — the job dies while writing the cost ledger.
 
 **Cause:** The AI worker held an uncommitted SQLite write (for example deleting old embedding rows) while a second Session tried to record OpenRouter usage.
 

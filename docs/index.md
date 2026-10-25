@@ -10,7 +10,7 @@ Horde was built because of the features I believe Plex is missing. Plex is great
 
 Every video watched through Horde instead of YouTube avoids all YouTube pre-roll and mid-roll ads. Baked-in video sponsors can also be skipped with included support for [SponsorBlock](https://github.com/ajayyy/SponsorBlock).
 
-There are several useful AI features that are fully optional. Horde can use either an Ollama instance or an OpenRouter API key. I prefer OpenRouter as it's fast, low maintenance, and for Horde's use, extremely cheap. Some AI features include summary generation, chat about a video (using metadata and subtitle files), enhanced search and recommendations, and generating tags.
+There are several useful AI features that are fully optional. Horde works with any OpenAI-compatible provider: OpenRouter, OpenAI, Gemini, or your own Ollama / LM Studio server. I prefer OpenRouter as it's fast, low maintenance, and for Horde's use, extremely cheap. Some AI features include summary generation, chat about a video (using metadata and subtitle files), enhanced search and recommendations, and generating tags.
 
 I strongly recommend using Tailscale (or something similar) if you aren't already. This makes remote access and playback very straightforward, assuming your network has the upload bandwidth necessary.
 
@@ -33,7 +33,7 @@ See the [feature overview](features.md) for screenshots and detail. In short:
 | **Import**        | Drag-and-drop or drop files on the share; review before they join the library                  |
 | **Player**        | Standard / theater / windowed, mini player, PiP, Chromecast, SponsorBlock, chapters, subtitles |
 | **Playlists**     | Your own lists, imported YouTube playlists, or subscribed lists that pick up new parts         |
-| **AI** (optional) | Ollama and/or OpenRouter for embeddings, tags, summaries, chat, recommendations, duplicates    |
+| **AI** (optional) | Any OpenAI-compatible provider (OpenRouter, Ollama, LM Studio, …) for embeddings, tags, summaries, chat, recommendations, duplicates |
 
 
 Install starts with **cloning this git repo** onto the Docker host (Horde is built from source, not pulled as a Hub image). Then either `docker compose up --build` or Dockge **Scan** + **Deploy**.

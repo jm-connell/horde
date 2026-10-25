@@ -8,6 +8,7 @@ import {
   formatViewCount,
   watchProcessingLabel,
 } from "../../utils";
+import AddToPlaylist from "../../components/AddToPlaylist";
 import StreamDownloadControl from "./StreamDownloadControl";
 import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
@@ -114,7 +115,11 @@ export default function WatchHeader({
             )}
         </div>
         {!isLibrary && !isLive && (
-          <div className="shrink-0">
+          <div className="flex shrink-0 items-center gap-2">
+            <AddToPlaylist
+              streamUrl={source.url}
+              buttonClassName="rounded-lg border border-ink-600 px-3 py-1 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
+            />
             <StreamDownloadControl download={streamDownload} />
           </div>
         )}

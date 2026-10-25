@@ -1,8 +1,8 @@
 """Reset the database to a fixed library for browser tests.
 
 Imported only when ``HORDE_E2E`` is set. The seeded library has no YouTube URLs,
-AI is off, and download dispatch is a no-op, so the suite never calls YouTube,
-OpenRouter, or Ollama.
+AI is off, and download dispatch is a no-op, so the suite never calls YouTube
+or an AI provider.
 """
 
 from __future__ import annotations
@@ -203,11 +203,7 @@ def _write_settings(data_dir: Path, *, setup_completed: bool) -> None:
         "direct_youtube_search": False,
         "youtube_video_search": False,
         "channel_catalog_enabled": False,
-        "ai": {
-            "enabled": False,
-            "openrouter_enabled": False,
-            "openrouter_api_key": "",
-        },
+        "ai": {"enabled": False, "base_url": "", "connection_version": 2},
         # Non-empty ui skips the client's first-visit settings migration, which
         # would otherwise PATCH defaults over whatever a test just saved.
         "ui": {
@@ -290,6 +286,8 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
             channel="Northwind",
             tags=json.dumps(["ambient"]),
             file_path="Northwind/2024/Cedar Notes.mp4",
+            # A YouTube link: removed from the server, it stays in its playlist.
+            source_url="https://www.youtube.com/watch?v=e2ecedar001",
             duration_sec=200,
             height_px=1080,
         )
@@ -378,6 +376,35 @@ def _seed_library(downloads: Path, engine: Engine) -> None:
                 playlist_id=require_id(playlist),
                 video_id=require_id(harbor),
                 position=1,
+            )
+        )
+        # One downloaded video and one that is only streamed.
+        later = Playlist(
+            name="Watch later",
+            source_type=PlaylistSource.user,
+            position=1,
+            owner_user_id=require_id(admin),
+        )
+        session.add(later)
+        session.commit()
+        session.refresh(later)
+        session.add(
+            PlaylistItem(
+                playlist_id=require_id(later),
+                video_id=require_id(cedar),
+                position=0,
+            )
+        )
+        session.add(
+            PlaylistItem(
+                playlist_id=require_id(later),
+                video_id=None,
+                position=1,
+                youtube_id="e2estream01",
+                url="https://www.youtube.com/watch?v=e2estream01",
+                title="Ridge walk",
+                channel="Northwind",
+                duration_sec=240.0,
             )
         )
         session.add(

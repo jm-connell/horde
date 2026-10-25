@@ -37,8 +37,7 @@ Health snapshot from `GET /api/health`:
 | Horde | `horde_version` (+ update available / up to date when the update check succeeds) |
 | yt-dlp | `yt_dlp_version` |
 | PO token provider | Connected / version, or error detail |
-| Ollama | Disabled / Ready / Connected / Offline — shows `ollama.last_error` when not Ready |
-| OpenRouter | Disabled / Configured / No API key |
+| AI provider | Disabled / Not set up / Connected (with the kind: OpenRouter, Ollama, OpenAI-compatible) / Not reachable — shows `ai.last_error` when not reachable |
 | Cookies | Configured / Not configured (`youtube.cookies_configured`) |
 | Library | Video count and library size (same figures as Storage above) |
 | Pending import | Review queue depth |
@@ -73,7 +72,7 @@ CPU, RAM, disk, and **GPU** as seen from this Horde process (NVIDIA / AMD / Inte
 The **GPU** card is always shown. **None detected** means the `horde` container has no card — Horde still runs. Deep link: `/wiki/ops/environment/#gpu`. How to pass a device in, and when you actually need one: [GPU](../ops/environment.md#gpu).
 
 !!! tip
-    AI workload sizing uses the **Ollama** machine instead — configure VRAM under [AI → Providers](ai.md#local-ollama).
+    AI workload sizing uses the **Ollama** machine instead — configure VRAM under [AI → Providers](ai.md#ollama).
 
 ## Background activity
 
@@ -84,7 +83,7 @@ Also shown:
 1. **Channel catalog** — queue depth, current channel/phase, errors. Actions:
     - **Refresh catalogs** — incremental: new channels + new uploads on ready catalogs
     - **Full reindex…** — re-walk every channel up to `channel_catalog_max_videos` (can take a long time)
-2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle. **Ollama GPU** (and host GPU util/temp) only appear when local Ollama is actually in use. When OpenRouter is the active backend, those rows are replaced by **OpenRouter** (model + LLM vs all-tasks) and **Spend** (24h / 7-day totals, weekly budget if set, 24h call count).
+2. **AI** — compact queue status with pause/resume (`ai.paused`). **Index missing** appears when search-index coverage is incomplete and the queue is idle. **Provider** shows the provider kind and chat model. **Ollama GPU** (and host GPU util/temp) only appear when an Ollama server is in use. **Spend** (24h / 7-day totals, weekly budget if set, 24h call count) appears when the provider reports cost (OpenRouter).
 3. **Metadata sync** — shown while a Library resync is running (done/failed/total + current title)
 
 Catalog indexing only appears when `channel_catalog_enabled` is on ([Library](library.md#channel-catalog)).
@@ -98,7 +97,7 @@ Last section on the System tab. **Reset Horde…** restores factory settings and
 | Reset (default) | Rewrite `app_settings.json` to defaults (`setup_completed: false`). Clear download job history, the AI job queue, OpenRouter usage ledger, and uploaded fonts/backgrounds. **Keep** library files, videos, playlists, catalogs, and watch progress. |
 | **Erase all media** | Also delete every library file under the downloads volume, plus playlists, catalogs, embeddings, AI meta/chat, thumbs, sprites, and the feed meta cache. Type `RESET` to confirm. |
 
-Docker/env paths (`DOWNLOADS_PATH`, cookies, `OPENROUTER_API_KEY`, Ollama URL) are **not** changed. This is not a substitute for deleting host volumes; see [Backup & restore](../ops/backup-restore.md).
+Docker/env paths (`DOWNLOADS_PATH`, cookies, `OPENROUTER_API_KEY`, `OLLAMA_BASE_URL`) are **not** changed. This is not a substitute for deleting host volumes; see [Backup & restore](../ops/backup-restore.md).
 
 ## See also
 

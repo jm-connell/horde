@@ -93,9 +93,9 @@ Full guide: [Playlists](guides/playlists.md).
 
 ## Optional AI
 
-Turn the archive into something you can actually ask questions of. Use **Ollama** on a GPU host, **OpenRouter** (often cheaper and lower maintenance for this app), or both.
+Turn the archive into something you can actually ask questions of. Use any OpenAI-compatible provider: a cloud one such as **OpenRouter** (often cheaper and lower maintenance for this app), a server you run such as **Ollama** or LM Studio, or a cloud model for chat with local embeddings.
 
-![Settings → AI with local and OpenRouter providers](assets/screenshots/settings-ai.webp)
+![Settings → AI provider settings](assets/screenshots/settings-ai.webp)
 
 | Feature | Needs |
 |---------|--------|

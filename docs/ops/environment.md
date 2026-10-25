@@ -48,8 +48,8 @@ Cookie file wins over browser cookies when the file exists. Details: [YouTube ac
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `OLLAMA_BASE_URL` | *(empty)* | Fixed Ollama URL. Empty = [auto-discover](ai-setup.md). |
-| `OPENROUTER_API_KEY` | *(empty)* | Optional key that overrides the key stored in Settings → AI. |
+| `OLLAMA_BASE_URL` | *(empty)* | Legacy Ollama URL, used when Settings → AI has no provider URL. The provider is set in Settings; see [AI setup](ai-setup.md). |
+| `OPENROUTER_API_KEY` | *(empty)* | Optional key that overrides the key stored in Settings → AI while the provider URL is OpenRouter. |
 
 ## Security
 
@@ -129,7 +129,7 @@ Horde does **not** require a GPU to download, browse, or play the library. Playb
 | **H.264 only, full resolution** | Strongly advised: every 1440p/4K download is re-encoded |
 | **AV1 + H.264 copy** | Helpful: new YouTube downloads need no encode, but copies of existing videos and imports are encoded |
 | One-off **Create compatible copy** | Optional: hardware encode is much faster; software takes minutes per 1080p video |
-| Local **Ollama** (tags, chat, search) | On the **Ollama** machine — or skip Ollama and use OpenRouter |
+| A local AI server such as **Ollama** (tags, chat, search) | On the AI server's machine — or use a cloud provider |
 | Everything else | No |
 
 Keep **Playback compatibility → AV1 only** if you do not want encode work. Tradeoffs: [Playback compatibility](../guides/downloads.md#compatibility-codecs).

@@ -22,6 +22,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0014](0014-playlist-ownership-and-visibility.md) | Playlists belong to a user and are App-wide or Private; a private one answers 404 to everyone else | Accepted |
 | [0015](0015-watch-time-per-hour.md) | Watch time is counted from progress saves, stored per UTC hour, and outlives the video | Accepted |
 | [0016](0016-two-step-sign-in.md) | Two-step sign-in: TOTP from the standard library, a signed ticket between the steps, recovery codes | Accepted |
+| [0017](0017-openai-compatible-provider.md) | One OpenAI-compatible AI provider instead of Ollama plus OpenRouter | Accepted |
 
 ## Writing a new record
 

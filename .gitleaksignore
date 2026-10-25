@@ -1,0 +1,8 @@
+# False positives (fingerprint: commit:file:rule:line).
+# A recommend.py docstring read as a generic API key, and the comment that
+# first described it here by quoting it.
+2ae26d459381aec15dea06aacd25d9bbe2571b32:backend/app/services/ai/recommend.py:generic-api-key:347
+a4001129f4be75cd0b7efe24396451de1513e9ae:.gitleaksignore:generic-api-key:2
+# Made-up OpenRouter-style keys in the settings API tests (masking and redaction).
+4f9be10b9fbfff5390a3018a1be0aaa86e5badd8:backend/tests/test_api_settings.py:generic-api-key:63
+4f9be10b9fbfff5390a3018a1be0aaa86e5badd8:backend/tests/test_api_settings.py:generic-api-key:248
