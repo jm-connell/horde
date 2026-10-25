@@ -36,7 +36,7 @@ See the [feature overview](features.md) for screenshots and detail. In short:
 | **AI** (optional) | Any OpenAI-compatible provider (OpenRouter, Ollama, LM Studio, …) for embeddings, tags, summaries, chat, recommendations, duplicates |
 
 
-Install starts with **cloning this git repo** onto the Docker host (Horde is built from source, not pulled as a Hub image). Then either `docker compose up --build` or Dockge **Scan** + **Deploy**.
+Install starts with **cloning this git repo** onto the Docker host (Horde is built from source, not pulled as a Hub image). Then either `docker compose up --build` or Dockge **Scan** + **Deploy**. New to Docker or self-hosting? The install guides spell out every command, explain what it does and how to check it worked.
 
 [Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button }
 

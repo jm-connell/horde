@@ -50,28 +50,30 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
-There is no Docker Hub image. Clone this repo onto the Docker host, set two
-paths in `.env`, and Compose **builds** the image (a prebuilt GHCR image is an
-optional alternative; see Update below). Use a real
-`git clone` (not a GitHub ZIP) so later `update.sh` can `git pull`.
+New to Docker or self-hosting? The step-by-step guides explain every command
+and how to check it worked:
+**[Install with Docker](https://jm-connell.github.io/horde/getting-started/install-docker/)**
+(any Linux machine) or
+**[TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truenas-dockge/)**.
+The short version:
 
-Do this on the **host** (SSH / TrueNAS shell) — not Dockge’s per-service
-**Bash** button, which is inside a container.
+**You need** a 64-bit Linux host with Docker, the Docker Compose plugin
+(`docker compose version` should print v2 or newer) and Git. Run everything
+below in a terminal **on that host** (SSH or the TrueNAS shell), not in
+Dockge's per-container **Bash** button. If Docker answers *permission denied*,
+put `sudo` in front of the `docker` commands.
 
-### Clone
-
-Any Docker host:
+**1. Download Horde.** There is no Docker Hub image: Compose builds it from
+this repo. Use `git clone` (not a ZIP) so `update.sh` can update it later.
 
 ```bash
 git clone https://github.com/jm-connell/horde.git
 cd horde
 ```
 
-**TrueNAS / Dockge:** clone *into* `DOCKGE_STACKS_DIR` so the folder name is
-the stack name. The host path and the path *inside the Dockge container* must
-match (default `/opt/stacks`; on TrueNAS prefer a pool dataset). Do not
-**Add Stack** and paste only `docker-compose.yml` — `build: .` needs the
-whole repo. Dockge itself: [louislam/dockge](https://github.com/louislam/dockge).
+On **TrueNAS / Dockge**, clone *into* Dockge's stacks folder instead, so the
+folder name becomes the stack name (do not use **Add Stack** and paste only
+`docker-compose.yml`; the build needs the whole repo):
 
 ```bash
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
@@ -79,43 +81,29 @@ git clone https://github.com/jm-connell/horde.git horde
 cd horde
 ```
 
-### Configure
+**2. Make two folders** outside the repo: one for videos, one for Horde's
+database. Own them as the user Horde should write files as (`id -u` and
+`id -g` print your numbers).
 
 ```bash
-cp .env.example .env
-```
-
-Change the TrueNAS-shaped defaults before first start. They do not exist on
-other machines, so Docker would silently create them as root-owned folders and
-Horde could not write to them. Keep paths in `.env`, not hardcoded in
-`docker-compose.yml`.
-
-| Variable | What to put |
-|----------|-------------|
-| `PUID` / `PGID` | File owner (`id <user>`, or TrueNAS → Credentials → Local Users) |
-| `DOWNLOADS_PATH` | Host folder for videos (`Channel/Year/...`) |
-| `DATA_PATH` | Host folder for SQLite + thumbnails (on the pool, not in the git tree). **Must be a local disk or dataset, never SMB/NFS**: the SQLite database uses WAL, which can corrupt on network filesystems |
-
-```bash
-# generic example — use your real paths and the same PUID:PGID as in .env
 mkdir -p /home/you/horde-media /home/you/horde-data
 sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
 ```
 
-TrueNAS-shaped `.env`:
+**3. Fill in four settings.** `cp .env.example .env`, then edit `.env`
+(for example `nano .env`):
 
-```env
-PUID=1000
-PGID=1000
-DOWNLOADS_PATH=/mnt/tank/media/youtube_archive
-DATA_PATH=/mnt/tank/apps/horde/data
-SCAN_INTERVAL_SEC=60
-```
+| Variable | What to put |
+|----------|-------------|
+| `PUID` / `PGID` | The numbers from `id -u` / `id -g` (TrueNAS → Credentials → Local Users). Not `0`. |
+| `DOWNLOADS_PATH` | Full path of the videos folder (`Channel/Year/...`). May be a network share. |
+| `DATA_PATH` | Full path of the data folder (database, thumbnails). **Must be a local disk, never SMB/NFS**: the SQLite database can corrupt on network filesystems. |
 
-Optional SMB on the media dataset: dropped `.mp4` / `.mkv` / `.webm` files
-show up in **Import** within `SCAN_INTERVAL_SEC` (default 60s).
+The example values are TrueNAS paths. Do not leave them on another machine:
+Docker would silently create them owned by root and Horde could not write to
+them. Keep paths in `.env`, never in `docker-compose.yml`.
 
-### Start
+**4. Start it.**
 
 ```bash
 docker compose up --build -d
@@ -123,16 +111,28 @@ docker compose up --build -d
 
 On Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not
 rewrite volume lines in the compose editor. The first build compiles the UI
-and wiki and can take several minutes.
+and wiki and takes several minutes.
 
-Open `http://<server-ip>:8686` (host **8686** → container **8080**) and create the
-admin account. `curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
+**5. Open** `http://<server-ip>:8686` (host port **8686**, not 8080) and
+create the admin account; a short setup wizard follows.
+`docker compose ps` should show `horde` as `Up (healthy)`, and
+`curl -s http://127.0.0.1:8686/api/health` should print `"status":"ok"`.
+Stuck? See [If something goes wrong](https://jm-connell.github.io/horde/getting-started/install-docker/#if-something-goes-wrong).
+
+Optional SMB on the media folder: dropped `.mp4` / `.mkv` / `.webm` files
+show up in **Import** within `SCAN_INTERVAL_SEC` (default 60s).
 
 AI is optional: pick a provider in the setup wizard or Settings → AI (any
 OpenAI-compatible URL plus an API key if it needs one). To run models on this
 machine without setting up a server, start the bundled Ollama with
 `docker compose --profile ai up -d` and choose "Run Ollama for me". See the
 [AI setup](docs/ops/ai-setup.md) page for Docker networking.
+
+Extra Compose settings (a GPU, a different port) go in a
+`docker-compose.override.yml` next to `docker-compose.yml`, which Compose
+reads automatically and updates leave alone; see
+[GPU](https://jm-connell.github.io/horde/ops/environment/#gpu) and
+[Change the port](https://jm-connell.github.io/horde/ops/ports-networking/#change-the-port).
 
 ### Update
 

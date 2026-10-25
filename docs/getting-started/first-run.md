@@ -3,7 +3,7 @@
 You have Horde running (Docker or local dev). This page walks through the first useful loop: the setup wizard, a test download, confirm it on disk and in the library, and know where settings live.
 
 !!! info "Create the admin account first"
-    The first screen asks you to create the administrator account (username and password). Add other people later in *Account settings* (the account menu at the top right). See [Accounts and sign-in](../ops/authentication.md). Stay on a trusted LAN.
+    The first screen asks you to create the administrator account (a username and a password of at least 8 characters). Nothing else works until you do. Add other people later in *Account settings* (the account menu at the top right). Forgot the password later? Use **Forgot password?** on the sign-in page. See [Accounts and sign-in](../ops/authentication.md). Stay on a trusted LAN.
 
 ## Open the UI
 
@@ -16,17 +16,16 @@ You have Horde running (Docker or local dev). This page walks through the first 
 !!! note "Docker host port"
     Production Compose publishes **8686 → 8080**. Do not expect the UI on host port `8080` unless you changed the mapping.
 
-A **setup wizard** runs on first install (and after **Settings → System → Reset Horde**). It covers:
+Right after you create the admin account, a short **setup wizard** runs (on a new install, and again after **Settings → System → Reset Horde**). Every step can be changed later in [Settings](../settings/index.md), so do not worry about getting it perfect:
 
-1. LAN warning and a storage health snapshot (disk free + library count)
-2. Volume normalization
-3. **Playback compatibility**: AV1 only, H.264 up to 1080p, H.264 full resolution, or AV1 + H.264 copy (shows your GPU/encoder and whether this device can play AV1)
-4. Theme palette
-5. Optional AI (a cloud provider key, your own server, or the bundled Ollama) — skip if you do not need it yet
+1. **Welcome**: how many videos the library has and how much disk space is free. **Use defaults** here skips the rest of the wizard.
+2. **Downloads**: whether to even out the volume of new downloads (loudness normalization).
+3. **Playback compatibility**: which devices can play your library. The default, **AV1 only**, needs no GPU and plays in current Chrome, Firefox and Edge; some Apple devices and older TVs cannot play AV1 and need one of the H.264 options. The step shows your GPU/encoder and whether *this* device can play AV1. Unsure? Keep the default ([details](../guides/downloads.md#compatibility-codecs)).
+4. **Look**: a color palette.
+5. **AI (optional)**: **Skip for now**, **Connect a provider** (paste an API key from a cloud provider such as OpenRouter, OpenAI, Gemini or Groq, or the address of an AI server you run), or **Run Ollama for me** (the bundled Ollama container, started with one command on the server). See [AI setup](../ops/ai-setup.md).
+6. **You’re set**: opens **Downloads** when the library is empty, or the library when it already has videos.
 
-**Use defaults** finishes immediately with built-in settings. You can change anything later under [Settings](../settings/index.md). Existing installs that already have `app_settings.json` are not sent through the wizard.
-
-When the wizard finishes, Horde opens **Downloads**. Settings stay in the app chrome (gear / Settings).
+Installs that were already set up before the wizard existed are not sent through it.
 
 ## Download your first video
 
