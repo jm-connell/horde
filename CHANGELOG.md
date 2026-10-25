@@ -7,76 +7,23 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
-### Upgrade notes
-
-- One database migration (`0017_playlist_stream_entries`) runs at startup. It
-  rebuilds only `playlist_items` (to let an entry outlive its video) and copies
-  each entry's title, channel, link and duration from its video.
-- **AI settings are converted once** to the new single provider: an OpenRouter
-  setup keeps its key and models, an Ollama setup keeps its URL (now with
-  `/v1`) and models, and an OpenRouter-for-chat, Ollama-for-embeddings setup
-  becomes a second embeddings server. Nothing is re-indexed. An Ollama URL that
-  was left empty for auto-discovery is looked up at startup and then every
-  minute until one answers. Rolling back to an earlier release after this
-  start loses the AI provider settings (the old keys are gone); set them again. The
-  `/api/ai/openrouter/*` endpoints and the `ollama` / `openrouter` blocks of
-  `/api/health` are replaced (see [ADR 0017](docs/adr/0017-openai-compatible-provider.md)).
-
-### Added
-
-- **Any OpenAI-compatible AI provider.** Settings → AI is one form: paste an
-  API key or a server URL. Keys from OpenRouter, OpenAI, Gemini and Groq are
-  recognised on their own; any other provider or server takes its URL (and a
-  key if it needs one). Connecting shows which provider it found, and the chat
-  and embedding models are listed from the server. Embeddings can use a
-  second server, for providers without them. **Find a server on this machine**
-  probes the usual local ports. The setup wizard offers the same field, or
-  **Run Ollama for me** (the bundled container, with models sized to the
-  GPU). Costs and the weekly budget show for providers that report
-  cost (OpenRouter). [AI setup](docs/ops/ai-setup.md) explains which URL to
-  use from inside Docker.
-
-- **Playlists with videos that are not downloaded.** Pasting a link into a
-  playlist, or **+ Playlist** on a stream's page, adds the video without
-  downloading it; it is marked **Not downloaded** and plays as a stream.
-  **Download all** downloads the rest to the server, and **Remove from
-  server** deletes the downloaded copies (to the trash, with Undo) while the
-  playlist keeps them. Videos that another playlist also holds stay
-  downloaded.
-- **Recommended without AI.** The home page's Recommended tab is always there:
-  without an AI provider, For you ranks from your watch history (channels you
-  watch, shared tags, followed channels, freshness). **Include not
-  downloaded** also suggests followed channels' indexed uploads.
-- **A channel's other live streams first.** Watching a live stream, More like
-  this starts with the channel's other broadcasts that are live right now
-  (a tournament's A and B streams).
-- A **Report it on GitHub** link at the bottom of Settings.
-
-### Changed
-
-- Deleting a video that came from a link keeps its playlist entries, as
-  streamed entries, instead of removing them.
-- Panels that switch sides (the queue when the mini player opens or closes,
-  the channel download panel) glide instead of jumping, and hover highlights
-  fade.
-- Dragging the description box open until all the text shows counts as
-  expanding it (the arrow flips and the tags button appears); collapsing
-  returns to the default height.
-- The video chat answers in a more natural voice and no longer recites the
-  title and description when you say hello.
-
-## [1.1.0] - 2026-10-23
+## [1.1.0] - 2026-10-25
 
 Deleted videos now wait in a trash, channels can clean up after themselves,
 playlists and offline downloads can be private, History shows your watch stats,
 and Horde can send notifications. Sign-in gains two-step codes and the hardening
 needed to put Horde on the internet behind a reverse proxy, if you choose to.
+Playlists can hold videos you have not downloaded, Recommended works without
+AI, and AI works with any OpenAI-compatible provider: paste a key or a server
+address.
 
 ### Upgrade notes
 
-- **Seven database migrations** (`0010_trash` to `0016_two_factor`) run on their
-  own at startup. They only add tables and columns; no existing table is
-  rebuilt. Horde backs the database up first, as for every migration. Rolling
+- **Nine database migrations** (`0010_trash` to `0018_playlist_entry_links`)
+  run on their own at startup. All but one only add tables and columns;
+  `0017_playlist_stream_entries` rebuilds `playlist_items` (so an entry can
+  outlive its video) and copies each entry's title, channel, link and duration
+  from its video. Horde backs the database up first, as for every migration. Rolling
   back to 1.0.x needs `update.sh --rollback` or a restored backup (the older
   version refuses a database it does not know).
 - **Deleting a video no longer frees the disk straight away.** Its files wait
@@ -105,6 +52,16 @@ needed to put Horde on the internet behind a reverse proxy, if you choose to.
   See [Environment](docs/ops/environment.md).
 - An installed app picks up the new **Share to Horde** option on Android after
   it is reinstalled once.
+- **AI settings are converted once** to the new single provider: an OpenRouter
+  setup keeps its key and models, an Ollama setup keeps its URL (now with
+  `/v1`) and models, and an OpenRouter-for-chat, Ollama-for-embeddings setup
+  becomes a second embeddings server. Nothing is re-indexed. An Ollama URL that
+  was left empty for auto-discovery (as on an install that never saved AI
+  settings) is looked up at startup and then every minute until one answers.
+  Rolling back to an earlier release after this start loses the AI provider
+  settings (the old keys are gone); set them again. The
+  `/api/ai/openrouter/*` endpoints and the `ollama` / `openrouter` blocks of
+  `/api/health` are replaced (see [ADR 0017](docs/adr/0017-openai-compatible-provider.md)).
 
 ### Added
 
@@ -196,6 +153,32 @@ needed to put Horde on the internet behind a reverse proxy, if you choose to.
   pointed at the same folder shows proper titles, dates, tags and artwork
   (channel = show, year = season). See
   [Media servers](docs/guides/media-servers.md).
+- **Any OpenAI-compatible AI provider.** Settings → AI is one form: paste an
+  API key or a server URL. Keys from OpenRouter, OpenAI, Gemini and Groq are
+  recognised on their own; any other provider or server takes its URL (and a
+  key if it needs one). Connecting shows which provider it found, and the chat
+  and embedding models are listed from the server. Embeddings can use a
+  second server, for providers without them. **Find a server on this machine**
+  probes the usual local ports. The setup wizard offers the same field, or
+  **Run Ollama for me** (the bundled container, with models sized to the
+  GPU). Costs and the weekly budget show for providers that report
+  cost (OpenRouter). [AI setup](docs/ops/ai-setup.md) explains which URL to
+  use from inside Docker.
+- **Playlists with videos that are not downloaded.** Pasting a link into a
+  playlist, or **+ Playlist** on a stream's page, adds the video without
+  downloading it; it shows a **Download** button and plays as a stream.
+  **Download all** downloads the rest to the server, and **Remove from
+  server** deletes the downloaded copies (to the trash, with Undo) while the
+  playlist keeps them. Videos that another playlist also holds stay
+  downloaded.
+- **Recommended without AI.** The home page's Recommended tab is always there:
+  without an AI provider, For you ranks from your watch history (channels you
+  watch, shared tags, followed channels, freshness). **Include not
+  downloaded** also suggests followed channels' indexed uploads.
+- **A channel's other live streams first.** Watching a live stream, More like
+  this starts with the channel's other broadcasts that are live right now
+  (a tournament's A and B streams).
+- A **Report it on GitHub** link at the bottom of Settings.
 
 ### Changed
 
@@ -223,6 +206,16 @@ needed to put Horde on the internet behind a reverse proxy, if you choose to.
   `frontend/src/api/*.ts` behind the same entry point, and the videos router is
   split into `videos.py`, `video_ai.py` and `video_media.py`. The OpenAPI schema
   is unchanged by the split.
+- Deleting a video that came from a link keeps its playlist entries, as
+  streamed entries, instead of removing them.
+- Panels that switch sides (the queue when the mini player opens or closes,
+  the channel download panel) glide instead of jumping, and hover highlights
+  fade.
+- Dragging the description box open until all the text shows counts as
+  expanding it (the arrow flips and the tags button appears); collapsing
+  returns to the default height.
+- The video chat answers in a more natural voice and no longer recites the
+  title and description when you say hello.
 
 ### Fixed
 
