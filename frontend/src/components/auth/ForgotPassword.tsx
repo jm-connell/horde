@@ -133,8 +133,9 @@ export default function ForgotPassword({
           line, for example from{" "}
           <code className="font-mono text-xs text-accent">
             docker logs horde
-          </code>
-          .
+          </code>{" "}
+          on the server (with <code className="font-mono text-xs">sudo</code> in
+          front on most hosts) or the stack&apos;s log in Dockge.
         </p>
         <p className="mt-2 text-xs text-muted">
           A code works once and expires after 15 minutes. A new code can be
