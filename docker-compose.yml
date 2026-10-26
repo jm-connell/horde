@@ -12,7 +12,7 @@ services:
   # or an AI server you already run (see docs/ops/ai-setup.md).
   ollama:
     # Pinned: bump deliberately (the `rocm` variant is ollama/ollama:<version>-rocm).
-    image: ollama/ollama:0.40.5
+    image: ollama/ollama:0.40.9
     container_name: horde-ollama
     profiles: ["ai"]
     init: true
