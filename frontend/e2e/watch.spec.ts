@@ -28,6 +28,19 @@ test("watch page shows metadata, chapters, and player controls", async ({
   await expect(pause.or(play)).toBeVisible();
   if (await pause.isVisible()) await pause.click();
   await expect(play).toBeVisible();
+  // "Main theme" starts at 0:42 in a 20 s file: once the duration is known,
+  // the seek bar has no (invisible, focusable) marker for it.
+  await expect
+    .poll(() =>
+      page
+        .locator("video")
+        .first()
+        .evaluate((v) => (v as HTMLVideoElement).duration)
+    )
+    .toBeGreaterThan(0);
+  await expect(
+    page.getByRole("button", { name: /^Chapter Main theme at/ })
+  ).toHaveCount(0);
   if (hasDesktopPlayerChrome(page)) {
     await expect(
       page.getByRole("button", { name: "Mute", exact: true })
