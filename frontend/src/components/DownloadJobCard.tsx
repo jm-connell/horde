@@ -161,6 +161,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
   const [title, setTitle] = useState(resolveTitle);
   const [channel, setChannel] = useState(resolveChannel);
+  // Set when every thumbnail URL failed, so "No preview" replaces a broken image.
+  const [thumbFailedFor, setThumbFailedFor] = useState<string | null>(null);
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
@@ -585,7 +587,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               videoGone ? " grayscale" : ""
             }`}
           >
-            {thumbSrc ? (
+            {thumbSrc && thumbFailedFor !== thumbSrc ? (
               <img
                 loading="lazy"
                 width={96}
@@ -599,7 +601,10 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   const el = e.currentTarget;
                   const nextIdx = Number(el.dataset.fallbackIdx || "0") + 1;
                   const next = thumbFallbacks[nextIdx];
-                  if (!next) return;
+                  if (!next) {
+                    setThumbFailedFor(thumbSrc);
+                    return;
+                  }
                   el.dataset.fallbackIdx = String(nextIdx);
                   el.src = next;
                 }}
@@ -627,7 +632,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
             {failed && (errorMsg || errorHint) && (
               <div className="mb-3 space-y-1 text-sm text-red-400">
-                {errorMsg && <p>{errorMsg}</p>}
+                {errorMsg && <p className="wrap-anywhere">{errorMsg}</p>}
                 {errorHint && errorHint !== errorMsg && (
                   <p className="text-xs text-red-400/80">{errorHint}</p>
                 )}
