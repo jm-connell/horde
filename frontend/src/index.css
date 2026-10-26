@@ -767,7 +767,7 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
    holds the start state only during the delay; afterwards the card's own
    hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
 html[data-page-fade="on"] .ui-card-enter {
-  animation: card-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: card-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
   animation-delay: var(--card-enter-delay, 0ms);
 }
 
