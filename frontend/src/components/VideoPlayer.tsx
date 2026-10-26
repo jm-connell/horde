@@ -527,8 +527,11 @@ export default function VideoPlayer({
             size={subtitleSize}
             left={subtitleLeft}
             offset={subtitleOffset}
+            centered={isMobile && !isMini}
             active
-            onPositionChange={onSubtitlePositionChange}
+            onPositionChange={
+              isMobile && !isMini ? undefined : onSubtitlePositionChange
+            }
             timelineRef={isMini ? undefined : scrubberRef}
             controlsVisible={!isMini && controlsVisible}
           />

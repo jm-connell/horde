@@ -733,6 +733,37 @@ video.sub-large::cue {
   font-size: clamp(1.125rem, 5.625cqmin, 2.5rem);
 }
 
+/* Phones: size captions from the player width (the viewport-based sizes are
+   far too big for a phone-width picture) and centre the rows. inline-size,
+   not size: this stage's height comes from its content. */
+.player-touch {
+  container-type: inline-size;
+}
+
+.player-touch .subtitle-overlay-small {
+  font-size: clamp(0.6875rem, 3cqw, 1.05rem);
+}
+
+.player-touch .subtitle-overlay-medium {
+  font-size: clamp(0.75rem, 3.6cqw, 1.25rem);
+}
+
+.player-touch .subtitle-overlay-large {
+  font-size: clamp(0.875rem, 4.4cqw, 1.5rem);
+}
+
+/* left/right 0 + auto margins centre it without halving the width it can wrap in. */
+.subtitle-overlay-centered {
+  left: 0;
+  right: 0;
+  width: max-content;
+  margin-inline: auto;
+}
+
+.subtitle-overlay-centered .subtitle-overlay-line {
+  justify-content: center;
+}
+
 /* Native player fullscreen — hide site chrome on mobile. */
 :fullscreen {
   display: flex;
