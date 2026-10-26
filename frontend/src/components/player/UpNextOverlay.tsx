@@ -72,7 +72,7 @@ export default function UpNextOverlay({
             <button
               type="button"
               onClick={onPlayNow}
-              className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft"
+              className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft"
             >
               Play now
             </button>

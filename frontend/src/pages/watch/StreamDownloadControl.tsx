@@ -44,7 +44,7 @@ export default function StreamDownloadControl({
     <>
       {!downloadActive && can("download") && (
         <div className="relative" ref={downloadMenuRef}>
-          <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
+          <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60">
             <button
               type="button"
               onClick={() => void handleStreamDownload()}

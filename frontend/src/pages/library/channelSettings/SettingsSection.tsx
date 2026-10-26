@@ -5,7 +5,7 @@ export const fieldLabel = "mb-1 block text-xs font-medium text-gray-400";
 export const numberInput =
   "w-20 rounded-md border border-ink-700 bg-ink-950 px-2 py-1 text-sm text-gray-100 outline-hidden focus:border-accent disabled:opacity-50";
 export const primaryButton =
-  "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60";
+  "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-60";
 export const secondaryButton =
   "rounded-lg border border-ink-700 bg-ink-800 px-3 py-1.5 text-sm text-gray-200 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60";
 

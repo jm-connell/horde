@@ -492,7 +492,7 @@ export default function VideoEditForm({
             <button
               onClick={save}
               disabled={saving || !canSave}
-              className="ui-interactive rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+              className="ui-interactive rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : saveLabel}
             </button>

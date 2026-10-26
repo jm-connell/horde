@@ -5,7 +5,7 @@ import { useEffect, useId, useRef } from "react";
 export const AUTH_INPUT =
   "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden placeholder:text-muted focus:border-accent";
 export const AUTH_PRIMARY =
-  "w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50";
+  "w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50";
 
 export function AuthCard({
   title,

@@ -1,4 +1,4 @@
-import { mutedTextFor } from "../../utils/contrast";
+import { contrastRatio, mutedTextFor } from "../../utils/contrast";
 import { FONT_SIZE_SCALE, PANEL_BLUR_MAX_PX } from "./defaults";
 import type { CustomColors, Settings, Theme } from "./types";
 
@@ -13,6 +13,7 @@ const THEME_CSS_VARS = [
   "--accent-deep",
   "--text-muted",
   "--accent-text",
+  "--on-accent",
 ] as const;
 
 export type Rgb = [number, number, number];
@@ -98,6 +99,16 @@ function applyCustomColors(colors: CustomColors): void {
     "--accent-deep",
     rgbString(mixRgb(accent, black, 0.25))
   );
+  // Text on accent fills: the page color when it reads on the accent (dark
+  // backgrounds), otherwise whichever of near-black or white reads better.
+  const ink: Rgb = [15, 23, 42];
+  const onAccent =
+    contrastRatio(bg, accent) >= 4.5
+      ? bg
+      : contrastRatio(ink, accent) >= contrastRatio(white, accent)
+        ? ink
+        : white;
+  root.style.setProperty("--on-accent", rgbString(onAccent));
 }
 
 export function applyMotionPrefs(settings: Settings): void {

@@ -26,7 +26,7 @@ export default function MatchReasonBadge({
       <HelpTip text={text} placement="bottom">
         <button
           type="button"
-          className="flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-xs font-bold text-white ring-1 ring-white/50 hover:bg-accent hover:text-ink-950 hover:ring-accent"
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-black/80 text-xs font-bold text-white ring-1 ring-white/50 hover:bg-accent hover:text-on-accent hover:ring-accent"
           aria-label="Why this video matched"
           onClick={(e) => {
             e.preventDefault();

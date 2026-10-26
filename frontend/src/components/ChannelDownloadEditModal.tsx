@@ -144,7 +144,7 @@ export default function ChannelDownloadEditModal({
             type="button"
             onClick={onDownloadNow}
             disabled={item.submitting}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60"
           >
             Download now
           </button>

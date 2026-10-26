@@ -39,7 +39,7 @@ export default function TagDrawer({
           {activeTag && (
             <button
               onClick={() => onSelectTag(null)}
-              className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-ink-950"
+              className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-on-accent"
             >
               #{activeTag} ✕
             </button>

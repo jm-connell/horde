@@ -802,7 +802,7 @@ export default function Download() {
               !url.trim() ||
               (playlistMode !== "subscribe" && selectedUrls.size === 0)
             }
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950 transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             {importButtonLabel}
           </button>
@@ -810,7 +810,7 @@ export default function Download() {
           <button
             type="submit"
             disabled={submitting || !url.trim()}
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-ink-950 transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting ? "Starting..." : downloadButtonLabel}
           </button>
@@ -857,7 +857,7 @@ export default function Download() {
               <span className="text-sm font-semibold text-gray-100">
                 Active downloads
               </span>
-              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-ink-950">
+              <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-on-accent">
                 {activeCount}
               </span>
             </button>
@@ -872,7 +872,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => resumeQueue()}
-                  className="ui-interactive rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
+                  className="ui-interactive rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-soft"
                 >
                   Resume all
                 </button>

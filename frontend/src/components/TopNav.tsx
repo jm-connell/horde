@@ -341,7 +341,7 @@ export default function TopNav() {
 
   const badge = (count: number) =>
     count > 0 ? (
-      <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-ink-950">
+      <span className="rounded-full bg-accent px-2 py-0.5 text-xs font-bold text-on-accent">
         {count}
       </span>
     ) : null;

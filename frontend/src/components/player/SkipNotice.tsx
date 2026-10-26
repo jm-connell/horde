@@ -35,7 +35,7 @@ export default function SkipNoticeChip({
         <button
           type="button"
           onClick={onSkip}
-          className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-ink-950 hover:bg-accent-soft"
+          className="rounded-md bg-accent px-2 py-0.5 text-[11px] font-semibold text-on-accent hover:bg-accent-soft"
         >
           Skip
         </button>

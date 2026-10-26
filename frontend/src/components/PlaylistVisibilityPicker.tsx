@@ -43,7 +43,7 @@ export default function PlaylistVisibilityPicker({
                 }
                 className={`cursor-pointer rounded-md px-3 py-1 text-sm has-focus-visible:ring-2 has-focus-visible:ring-accent ${
                   value === option.value
-                    ? "bg-accent font-semibold text-ink-950"
+                    ? "bg-accent font-semibold text-on-accent"
                     : "text-gray-300 hover:text-gray-100"
                 } ${blocked || disabled ? "cursor-not-allowed opacity-50" : ""}`}
               >

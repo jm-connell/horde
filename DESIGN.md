@@ -15,6 +15,7 @@ colors:
   accent: "#22d3ee"
   accent-soft: "#67e8f9"
   accent-deep: "#0891b2"
+  on-accent: "#08090c"
   text-strong: "#f3f4f6"
   text-body: "#e5e7eb"
   text-secondary: "#d1d5db"
@@ -54,7 +55,7 @@ spacing:
 components:
   button-primary:
     backgroundColor: "{colors.accent}"
-    textColor: "{colors.ink-950}"
+    textColor: "{colors.on-accent}"
     rounded: "{rounded.lg}"
     padding: "6px 12px"
   button-primary-hover:
@@ -123,7 +124,11 @@ reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
 ### Primary
 - **Screening Cyan** (#22d3ee, `accent`): the active nav item, selected
   states, primary buttons, progress fills, focus rings, live and "new"
-  markers. Text on it is `ink-950`.
+  markers.
+- **On Accent** (`on-accent`, `text-on-accent`): text and icons on an accent
+  fill. Dark themes use the page color; light, frozen and mocha use a dark ink;
+  custom themes pick whichever reads better. Never use `text-ink-950` on an
+  accent fill: on light themes it is near-white.
 - **Lit Cyan** (#67e8f9, `accent-soft`): hover state of accent buttons and
   links.
 - **Deep Cyan** (#0891b2, `accent-deep`): pressed or low-emphasis accent.
@@ -216,7 +221,7 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 
 ## Components
 
-- **Buttons.** Primary: accent fill, `ink-950` text, semibold, `accent-soft` on
+- **Buttons.** Primary: accent fill, `on-accent` text, semibold, `accent-soft` on
   hover. Secondary: `ink-800` fill, `gray-200` text, `ink-700` on hover. Quiet:
   text only, `text-muted` to `accent` on hover. All pressables scale to 0.97 on
   press (80ms) when the button press setting is on, and get `ui-interactive` for

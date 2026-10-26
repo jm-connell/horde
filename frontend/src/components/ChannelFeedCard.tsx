@@ -137,7 +137,7 @@ function FeedMetaRow({
               onDownload();
             }}
             disabled={downloading}
-            className="h-6 shrink-0 rounded-sm bg-accent px-2.5 text-xs font-medium leading-none text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+            className="h-6 shrink-0 rounded-sm bg-accent px-2.5 text-xs font-medium leading-none text-on-accent hover:bg-accent-soft disabled:opacity-60"
           >
             {downloading ? "Downloading" : "Download"}
           </button>
@@ -465,7 +465,7 @@ export default function ChannelFeedCard({
                     onDownload();
                   }}
                   disabled={downloading}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60"
                 >
                   {downloading ? "Downloading" : "Download"}
                 </button>

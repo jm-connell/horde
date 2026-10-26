@@ -516,7 +516,7 @@ export default function PlaylistRow({
                     type="button"
                     onClick={playAll}
                     disabled={playable.length === 0}
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
                   >
                     Play all
                   </button>
