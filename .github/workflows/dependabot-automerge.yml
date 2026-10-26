@@ -1,0 +1,74 @@
+name: Dependabot auto-merge
+
+# Merges Dependabot's grouped minor/patch pull requests (branches named after a
+# `*-minor-patch` group in .github/dependabot.yml) once every check on the head
+# commit has passed. Major updates arrive as one pull request per dependency
+# and always wait for a person, as does anything with a red or missing check.
+#
+# main has no required status checks, so GitHub's own auto-merge would merge
+# at once; this waits for the checks itself. It runs after each of CI,
+# Security and Image finishes, and the last one to finish sees every check
+# complete and merges.
+#
+# A merge made with the default GITHUB_TOKEN starts no workflows, so after
+# merging it dispatches the push-to-main workflows on main itself (Release
+# needs a green CI and Image run on the tagged commit, and Trivy only blocks
+# on main).
+
+on:
+  workflow_run:
+    workflows: [CI, Security, Image]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-automerge-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+jobs:
+  merge:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      startsWith(github.event.workflow_run.head_branch, 'dependabot/') &&
+      contains(github.event.workflow_run.head_branch, '-minor-patch-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
+      checks: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      BRANCH: ${{ github.event.workflow_run.head_branch }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Merge when every check on the head commit passed
+        run: |
+          pr="$(gh pr list --head "${BRANCH}" --state open --author app/dependabot \
+            --json number,headRefOid --jq ".[] | select(.headRefOid == \"${SHA}\") | .number")"
+          if [ -z "${pr}" ]; then
+            echo "No open Dependabot pull request has ${SHA} as its head."
+            exit 0
+          fi
+          checks="$(gh api --paginate "repos/${GH_REPO}/commits/${SHA}/check-runs?per_page=100" \
+            --jq '.check_runs[] | "\(.status) \(.conclusion) \(.name)"')"
+          echo "${checks}"
+          for wf in CI Security Image; do
+            ran="$(gh run list --commit "${SHA}" --workflow "${wf}" --json conclusion \
+              --jq '[.[] | select(.conclusion == "success")] | length')"
+            if [ "${ran}" = "0" ]; then
+              echo "${wf} has no successful run on ${SHA} yet."
+              exit 0
+            fi
+          done
+          if echo "${checks}" | grep -vqE '^completed (success|neutral|skipped) '; then
+            echo "Not merging: a check is unfinished or did not pass."
+            exit 0
+          fi
+          gh pr merge "${pr}" --squash --match-head-commit "${SHA}"
+          for wf in ci.yml security.yml image.yml; do
+            gh workflow run "$wf" --ref main
+          done
