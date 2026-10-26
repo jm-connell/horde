@@ -36,6 +36,53 @@ test("reduced motion keeps card fades but drops the rise", async ({ page }) => {
   );
 });
 
+test("text on accent fills stays readable on every theme", async ({ page }) => {
+  await page.goto("/download");
+  // The form's primary button: always rendered, accent fill, on-accent text.
+  const pill = page.getByRole("button", { name: /^Download( \(|$)/ });
+  await expect(pill).toBeVisible();
+  const themes = [
+    "",
+    "oled",
+    "terminal",
+    "nord",
+    "light",
+    "indigo",
+    "cyber",
+    "sunset",
+    "forest",
+    "slate",
+    "earthy",
+    "frozen",
+    "mocha",
+  ];
+  const ratios = await pill.evaluate((el, names) => {
+    const lum = (rgb: string) => {
+      const [r, g, b] = (rgb.match(/[\d.]+/g) ?? []).slice(0, 3).map((v) => {
+        const c = Number(v) / 255;
+        return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const root = document.documentElement;
+    const out: Record<string, number> = {};
+    for (const name of names) {
+      if (name) root.setAttribute("data-theme", name);
+      else root.removeAttribute("data-theme");
+      const s = getComputedStyle(el);
+      const [a, b] = [lum(s.color), lum(s.backgroundColor)];
+      out[name || "default"] =
+        (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+    }
+    return out;
+  }, themes);
+  // Indigo's mid-tone accent tops out near 4.3:1 with either black or white
+  // text; every other theme clears AA.
+  for (const [theme, ratio] of Object.entries(ratios)) {
+    expect(ratio, theme).toBeGreaterThanOrEqual(theme === "indigo" ? 4 : 4.5);
+  }
+});
+
 test("watch page has no serious accessibility violations", async ({
   page,
   request,

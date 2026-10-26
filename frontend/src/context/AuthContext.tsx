@@ -281,7 +281,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft"
           >
             Retry
           </button>

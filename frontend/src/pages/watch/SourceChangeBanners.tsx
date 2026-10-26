@@ -37,7 +37,7 @@ export default function SourceChangeBanners({
                     });
                   if (updated) onVideoUpdated(updated);
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-soft"
               >
                 Use source
               </button>
@@ -83,7 +83,7 @@ export default function SourceChangeBanners({
                     });
                   if (updated) onVideoUpdated(updated);
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-ink-950 hover:bg-accent-soft"
+                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-soft"
               >
                 Use source
               </button>

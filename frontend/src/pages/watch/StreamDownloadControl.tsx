@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import { presetOptionLabel, resolveQualityPreset } from "../../presets";
 import { downloadProcessingLabel, formatSize } from "../../utils";
 import type { StreamDownload } from "./useStreamDownload";
+import { CheckIcon, ChevronIcon } from "../../components/icons";
 
 function downloadButtonLabel(preset: string): string {
   if (preset === "best") return "Download Best Quality";
@@ -44,7 +45,7 @@ export default function StreamDownloadControl({
     <>
       {!downloadActive && can("download") && (
         <div className="relative" ref={downloadMenuRef}>
-          <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60">
+          <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60">
             <button
               type="button"
               onClick={() => void handleStreamDownload()}
@@ -68,7 +69,7 @@ export default function StreamDownloadControl({
                   presetMenuOpen ? "rotate-180" : ""
                 }`}
               >
-                ▼
+                <ChevronIcon />
               </span>
             </button>
           </div>
@@ -102,7 +103,10 @@ export default function StreamDownloadControl({
                     >
                       <span>{presetOptionLabel(p, presetSizes)}</span>
                       {p === selectedPreset && (
-                        <span className="text-accent">✓</span>
+                        <>
+                          <CheckIcon className="text-accent" />
+                          <span className="sr-only">(selected)</span>
+                        </>
                       )}
                     </button>
                   </li>

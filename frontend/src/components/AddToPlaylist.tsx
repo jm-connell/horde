@@ -135,7 +135,7 @@ export default function AddToPlaylist({
           />
           <button
             onClick={createAndAdd}
-            className="shrink-0 rounded-sm bg-accent px-2 py-1 text-xs font-semibold text-ink-950 hover:bg-accent-soft"
+            className="shrink-0 rounded-sm bg-accent px-2 py-1 text-xs font-semibold text-on-accent hover:bg-accent-soft"
           >
             Add
           </button>

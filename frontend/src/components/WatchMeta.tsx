@@ -14,6 +14,7 @@ import {
 } from "../hooks/usePanelSize";
 import { useSettings } from "../hooks/useSettings";
 import type { Chapter } from "../utils";
+import { ChevronIcon, CloseIcon } from "./icons";
 
 const COLLAPSED_REM_SIDE = 12;
 const COLLAPSED_REM_STACKED = 7.5;
@@ -346,7 +347,7 @@ export default function WatchMeta({
                         );
                       }}
                     >
-                      ×
+                      <CloseIcon />
                     </button>
                   )}
                 </span>
@@ -526,7 +527,9 @@ export default function WatchMeta({
             >
               <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
                 <span>Description</span>
-                <span>{settings.descriptionExpanded ? "▲" : "▼"}</span>
+                <ChevronIcon
+                  className={`transition-transform duration-200 ease-out ${settings.descriptionExpanded ? "rotate-180" : ""}`}
+                />
               </span>
             </button>
           )}

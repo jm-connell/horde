@@ -119,7 +119,7 @@ export default function ReauthDialog({
             <button
               type="submit"
               disabled={busy}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50"
             >
               {busy ? "Checking…" : "Confirm"}
             </button>

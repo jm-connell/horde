@@ -55,6 +55,7 @@ import {
 } from "./downloadJobCardState";
 
 import { getItem, setItem } from "../storage";
+import { CheckIcon, CloseIcon } from "./icons";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -161,6 +162,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
   const [title, setTitle] = useState(resolveTitle);
   const [channel, setChannel] = useState(resolveChannel);
+  // Set when every thumbnail URL failed, so "No preview" replaces a broken image.
+  const [thumbFailedFor, setThumbFailedFor] = useState<string | null>(null);
   const [note, setNote] = useState(job.notes_pending ?? "");
   const [saved, setSaved] = useState(false);
   const [showNote, setShowNote] = useState(Boolean(job.notes_pending));
@@ -457,18 +460,22 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   return (
     <>
       <div
-        className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
-          active
-            ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]"
-            : ""
-        }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
+        className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700${
+          videoGone ? " opacity-60" : ""
+        }${playlistOpen ? " z-30" : ""}`}
       >
+        {active && (
+          // Accent bar on the card's outline: 4px down the left edge, fading
+          // out a few pixels into the rounded corners.
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-px rounded-[inherit] border-y border-l-4 border-accent [mask-image:linear-gradient(to_right,#000_5px,transparent_11px)]"
+          />
+        )}
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
-            {completed && !videoGone && (
-              <span className="shrink-0 text-accent">✓</span>
-            )}
-            {failed && <span className="shrink-0 text-red-400">✗</span>}
+            {completed && !videoGone && <CheckIcon className="text-accent" />}
+            {failed && <CloseIcon className="text-red-400" />}
             {editingTitle ? (
               <input
                 ref={titleInputRef}
@@ -574,7 +581,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   : "Cancel download"
               }
             >
-              ×
+              <CloseIcon />
             </button>
           </div>
         </div>
@@ -585,7 +592,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               videoGone ? " grayscale" : ""
             }`}
           >
-            {thumbSrc ? (
+            {thumbSrc && thumbFailedFor !== thumbSrc ? (
               <img
                 loading="lazy"
                 width={96}
@@ -599,7 +606,10 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   const el = e.currentTarget;
                   const nextIdx = Number(el.dataset.fallbackIdx || "0") + 1;
                   const next = thumbFallbacks[nextIdx];
-                  if (!next) return;
+                  if (!next) {
+                    setThumbFailedFor(thumbSrc);
+                    return;
+                  }
                   el.dataset.fallbackIdx = String(nextIdx);
                   el.src = next;
                 }}
@@ -627,7 +637,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
 
             {failed && (errorMsg || errorHint) && (
               <div className="mb-3 space-y-1 text-sm text-red-400">
-                {errorMsg && <p>{errorMsg}</p>}
+                {errorMsg && <p className="wrap-anywhere">{errorMsg}</p>}
                 {errorHint && errorHint !== errorMsg && (
                   <p className="text-xs text-red-400/80">{errorHint}</p>
                 )}

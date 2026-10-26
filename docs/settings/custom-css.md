@@ -10,7 +10,7 @@ Instead Horde documents a **small stable surface**:
 
 | Kind | Examples |
 |------|----------|
-| CSS variables | `--accent`, `--ink-950` … `--ink-600` |
+| CSS variables | `--accent`, `--on-accent`, `--ink-950` … `--ink-600` |
 | Page hook | `html[data-page="watch"]` |
 | Theme hook | `html[data-theme="oled"]` |
 | Landmark hooks | `[data-horde="nav"]`, `[data-horde="video-card"]` |
@@ -46,6 +46,7 @@ Colors are **space-separated RGB** (no commas) so Tailwind utilities can do `rgb
   --accent: 34 211 238;
   --accent-soft: 103 232 249;
   --accent-deep: 8 145 178;
+  --on-accent: 8 9 12;    /* text on accent fills */
   --font-sans: Inter, system-ui, sans-serif;
 }
 ```
@@ -102,6 +103,8 @@ Warm accent over any built-in palette:
   --accent-deep: 200 80 20;
 }
 ```
+
+`--on-accent` is the text color on accent fills (primary buttons, count pills). Dark themes use the page background; light, frozen and mocha use a dark ink. If you set a much lighter or darker `--accent`, set `--on-accent` to whichever of a near-black or white reads on it.
 
 Rounder library cards:
 

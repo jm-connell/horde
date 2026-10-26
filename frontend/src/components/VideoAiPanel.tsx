@@ -19,6 +19,7 @@ import ResizeHandle from "./ResizeHandle";
 import TypingDots from "./TypingDots";
 import type { AiTarget } from "./aiTarget";
 import VideoAiChat from "./VideoAiChat";
+import { ChevronIcon } from "./icons";
 
 type AiTab = "summary" | "chat";
 
@@ -157,7 +158,9 @@ export default function VideoAiPanel({
         >
           <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
             <span>AI</span>
-            <span>{expanded ? "▲" : "▼"}</span>
+            <ChevronIcon
+              className={`transition-transform duration-200 ease-out ${expanded ? "rotate-180" : ""}`}
+            />
           </span>
         </button>
         <div className="flex shrink-0 items-center gap-2">

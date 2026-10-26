@@ -9,6 +9,7 @@ import {
 import LibraryGrid, { type LibraryGridOptions } from "./LibraryGrid";
 import { videoGridClassName } from "./videoGridClassName";
 import type { useGlobalSearch } from "./useGlobalSearch";
+import { ChevronIcon } from "../../components/icons";
 
 function SearchResultSection({
   title,
@@ -44,7 +45,7 @@ function SearchResultSection({
             }`}
             aria-hidden
           >
-            ▼
+            <ChevronIcon />
           </span>
           <span>
             {title}

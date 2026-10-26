@@ -11,6 +11,9 @@ import {
   type QueueEntry,
 } from "../context/playbackQueue";
 import Collapse from "./Collapse";
+import { ChevronIcon, CloseIcon, GripIcon } from "./icons";
+
+const EXIT_MS = 150;
 
 interface Props {
   className?: string;
@@ -37,6 +40,9 @@ export default function PlaybackQueue({
   // Rows already queued when the panel mounted appear at once; only rows
   // added while it is on screen slide in.
   const [initialKeys] = useState(() => new Set(queue.map(queueKey)));
+  // Rows on their way out: they fade and slide for EXIT_MS, then leave the
+  // queue, so a removal is seen rather than a row vanishing.
+  const [leaving, setLeaving] = useState<ReadonlySet<string>>(new Set());
 
   useEffect(() => {
     if (queue.length > prevLen.current && listRef.current) {
@@ -63,6 +69,18 @@ export default function PlaybackQueue({
   };
 
   const scrollable = Boolean(collapsible && listMaxHeightClass);
+
+  const remove = (key: string) => {
+    setLeaving((s) => new Set(s).add(key));
+    window.setTimeout(() => {
+      removeFromQueue(key);
+      setLeaving((s) => {
+        const next = new Set(s);
+        next.delete(key);
+        return next;
+      });
+    }, EXIT_MS);
+  };
 
   const list = (
     <ul
@@ -94,9 +112,11 @@ export default function PlaybackQueue({
               dragIndex.current = null;
               setDragging(null);
             }}
-            className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] duration-200 ease-out hover:bg-ink-800 ${
-              dragging === key ? "opacity-50" : ""
-            } ${
+            className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] ease-out hover:bg-ink-800 ${
+              leaving.has(key)
+                ? "pointer-events-none translate-x-2 opacity-0 duration-150 motion-reduce:translate-x-0"
+                : "duration-200"
+            } ${dragging === key ? "opacity-50" : ""} ${
               initialKeys.has(key)
                 ? ""
                 : "starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0"
@@ -106,7 +126,7 @@ export default function PlaybackQueue({
               className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
               title="Drag to reorder"
             >
-              ⠿
+              <GripIcon />
             </span>
             <button
               onClick={() => play(v)}
@@ -126,11 +146,14 @@ export default function PlaybackQueue({
                 )}
               </div>
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-sm leading-snug text-gray-200">
+                <span
+                  className="line-clamp-2 wrap-break-word text-sm leading-snug text-gray-200"
+                  title={v.title}
+                >
                   {v.title}
                 </span>
                 {stream && (
-                  <span className="text-[11px] text-muted">
+                  <span className="block truncate text-[11px] text-muted">
                     Not downloaded
                     {v.channel ? ` · ${v.channel}` : ""}
                   </span>
@@ -138,11 +161,11 @@ export default function PlaybackQueue({
               </span>
             </button>
             <button
-              onClick={() => removeFromQueue(queueKey(v))}
+              onClick={() => remove(key)}
               className="shrink-0 px-2 text-muted hover:text-accent"
               title="Remove"
             >
-              ✕
+              <CloseIcon />
             </button>
           </li>
         );
@@ -168,7 +191,7 @@ export default function PlaybackQueue({
                 expanded ? "rotate-180" : ""
               }`}
             >
-              ▼
+              <ChevronIcon />
             </span>
           </button>
           <button

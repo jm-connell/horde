@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { getItem, setItem } from "../storage";
+import { CloseIcon } from "./icons";
 /**
  * Plain-language explanation of why offline features need HTTPS, with setup
  * pointers. Shown on the Offline page, when tapping Download over plain
@@ -119,7 +120,7 @@ export function HttpsNotice() {
           aria-label="Dismiss"
           className="ui-interactive shrink-0 rounded-sm p-1 text-gray-400 hover:text-gray-100"
         >
-          ✕
+          <CloseIcon />
         </button>
       </div>
       {expanded && (

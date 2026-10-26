@@ -170,7 +170,7 @@ export default function Playlists() {
               <button
                 onClick={create}
                 disabled={busy || !name.trim()}
-                className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
               >
                 Create
               </button>
@@ -192,7 +192,7 @@ export default function Playlists() {
                 <button
                   onClick={subscribe}
                   disabled={subscribing || !subscribeUrl.trim()}
-                  className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                  className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
                 >
                   {subscribing ? "Subscribing..." : "Subscribe"}
                 </button>

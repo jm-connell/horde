@@ -97,7 +97,7 @@ export default function CompatGate({
           <button
             type="button"
             onClick={onRequest}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-ink-950 hover:bg-accent-soft"
+            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft"
           >
             Create compatible copy
           </button>

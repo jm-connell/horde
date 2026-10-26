@@ -6,6 +6,7 @@ import { useAuth } from "../../../context/AuthContext";
 import type { SecurityCheckItem, TwoFactorRequirement } from "../../../types";
 import { Chip, Section } from "../ui";
 import { useSettingsPage } from "../context";
+import { CheckIcon } from "../../../components/icons";
 
 const REQUIREMENTS: { value: TwoFactorRequirement; label: string }[] = [
   { value: "off", label: "Optional" },
@@ -16,7 +17,7 @@ const REQUIREMENTS: { value: TwoFactorRequirement; label: string }[] = [
 function Mark({ status }: { status: SecurityCheckItem["status"] }) {
   return status === "ok" ? (
     <span className="text-green-400">
-      <span aria-hidden="true">✓</span>
+      <CheckIcon />
       <span className="sr-only">Passed</span>
     </span>
   ) : (

@@ -11,6 +11,7 @@ import { playerChromeBtn } from "./playerChrome";
 import { activeChapterAt } from "./useChapters";
 import { LIVE_EDGE_TOLERANCE_SEC } from "./useLiveWindow";
 import type { PlayerMenu } from "./usePlayerMenu";
+import { PauseIcon, PlayIcon } from "../icons";
 
 interface Props {
   visible: boolean;
@@ -165,7 +166,7 @@ export default function ControlBar({
           className="ui-player-chrome shrink-0 text-xl leading-none hover:text-accent"
           aria-label={playing ? "Pause" : "Play"}
         >
-          {playing ? "❚❚" : "►"}
+          {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
 
         {!isMobile && (

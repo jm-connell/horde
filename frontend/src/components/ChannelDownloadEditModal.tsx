@@ -6,6 +6,7 @@ import type { ChannelStat } from "../types";
 import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { backdropClick, youtubeThumbnailUrl } from "../utils";
 import ThemedSelect from "./ThemedSelect";
+import { CloseIcon } from "./icons";
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 
@@ -66,7 +67,7 @@ export default function ChannelDownloadEditModal({
             className="text-muted hover:text-gray-300"
             aria-label="Close"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 
@@ -144,7 +145,7 @@ export default function ChannelDownloadEditModal({
             type="button"
             onClick={onDownloadNow}
             disabled={item.submitting}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-ink-950 hover:bg-accent-soft disabled:opacity-60"
+            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60"
           >
             Download now
           </button>

@@ -44,6 +44,7 @@ import {
 import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
+import { CloseIcon } from "./icons";
 
 export default function PlaylistRow({
   playlist,
@@ -435,7 +436,10 @@ export default function PlaylistRow({
                   className="w-full min-w-0 rounded-md border border-ink-600 bg-ink-950 px-2 py-0.5 font-semibold text-gray-100 outline-hidden focus:border-accent disabled:opacity-50"
                 />
               ) : (
-                <span className="block truncate font-semibold text-gray-100">
+                <span
+                  className="block truncate font-semibold text-gray-100"
+                  title={playlist.name}
+                >
                   {playlist.name}
                 </span>
               )}
@@ -516,7 +520,7 @@ export default function PlaylistRow({
                     type="button"
                     onClick={playAll}
                     disabled={playable.length === 0}
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-ink-950 hover:bg-accent-soft disabled:opacity-50"
+                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
                   >
                     Play all
                   </button>
@@ -758,7 +762,10 @@ export default function PlaylistRow({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-100">
+                          <p
+                            className="truncate text-sm font-medium text-gray-100"
+                            title={v.title}
+                          >
                             {v.title}
                           </p>
                           <p className="flex items-center gap-1.5 text-xs text-muted">
@@ -876,7 +883,7 @@ export default function PlaylistRow({
                             className="shrink-0 px-2 text-muted hover:text-accent"
                             title="Remove from playlist"
                           >
-                            ✕
+                            <CloseIcon />
                           </button>
                         )}
                       </div>

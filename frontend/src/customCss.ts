@@ -32,6 +32,10 @@ export const CSS_VARIABLES: CssHookRow[] = [
   { selector: "--accent", meaning: "Accent / interactive color" },
   { selector: "--accent-soft", meaning: "Lighter accent (hover, chips)" },
   { selector: "--accent-deep", meaning: "Darker accent" },
+  {
+    selector: "--on-accent",
+    meaning: "Text on accent fills (primary buttons, pills)",
+  },
   { selector: "--font-sans", meaning: "UI typeface stack" },
   {
     selector: "--ui-panel-alpha",

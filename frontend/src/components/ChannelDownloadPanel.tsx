@@ -17,6 +17,7 @@ import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";
 import ChannelDownloadEditModal from "./ChannelDownloadEditModal";
 import ThemedSelect from "./ThemedSelect";
+import { CloseIcon } from "./icons";
 
 export default function ChannelDownloadPanel({
   defaultPreset,
@@ -100,7 +101,7 @@ export default function ChannelDownloadPanel({
       aria-label="Hide download panel"
       className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-sm text-sm text-muted hover:bg-ink-800 hover:text-gray-300"
     >
-      ×
+      <CloseIcon />
     </button>
   ) : null;
 

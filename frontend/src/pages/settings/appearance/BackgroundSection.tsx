@@ -12,6 +12,7 @@ import { Chip, Section, SettingRow, Toggle } from "../ui";
 import { useAuth } from "../../../context/AuthContext";
 import { useSettingsPage } from "../context";
 import type { AppearanceState } from "../useAppearanceState";
+import { CloseIcon } from "../../../components/icons";
 
 export default function BackgroundSection({
   appearance,
@@ -199,7 +200,7 @@ export default function BackgroundSection({
                         }}
                         className="absolute right-1 top-1 rounded-sm bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
                       >
-                        ✕
+                        <CloseIcon />
                       </button>
                     )}
                   </div>

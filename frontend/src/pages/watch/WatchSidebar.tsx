@@ -8,6 +8,7 @@ import VideoCard from "../../components/VideoCard";
 import { formatDuration } from "../../utils";
 import type { RelatedItem } from "./relatedItems";
 import type { RelatedFeed } from "./useRelatedFeed";
+import { PlayIcon } from "../../components/icons";
 
 function DownloadedBadge() {
   return (
@@ -61,7 +62,7 @@ export function WatchSidebar({
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-muted">
-                      <span className="text-xl">▶</span>
+                      <PlayIcon className="text-xl" />
                     </div>
                   )}
                   {v.queueEntry && (
@@ -158,7 +159,7 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-muted">
-                  <span className="text-xl">▶</span>
+                  <PlayIcon className="text-xl" />
                 </div>
               )}
             </div>

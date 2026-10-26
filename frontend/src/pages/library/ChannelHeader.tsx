@@ -156,7 +156,7 @@ function FollowButton({
       className={
         follow.followed
           ? `${actionButton} border-accent/50 text-accent`
-          : "inline-flex h-9 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-ink-950 transition-colors hover:bg-accent-soft disabled:opacity-50"
+          : "inline-flex h-9 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-on-accent transition-colors hover:bg-accent-soft disabled:opacity-50"
       }
     >
       {follow.followed ? (hover ? "Unfollow" : "Following") : "Follow"}

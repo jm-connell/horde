@@ -221,6 +221,10 @@ export default function ScrubBar({
         <div className="pointer-events-none absolute inset-x-0 top-0 h-full">
           {chapters.slice(1).map((ch, i) => {
             const chapterIndex = i + 1;
+            // Chapter lists from metadata can outrun the file (a trimmed or
+            // partial download); a marker past the end would be an invisible,
+            // still focusable button.
+            if (ch.startSec >= duration) return null;
             const active = isChapterActive(chapters, chapterIndex, current);
             return (
               <button

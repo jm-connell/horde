@@ -32,6 +32,7 @@ import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { VideoPlayerProps } from "./videoPlayerTypes";
 import UpNextOverlay from "./player/UpNextOverlay";
+import { PauseIcon, PlayIcon } from "./icons";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
 
@@ -581,7 +582,7 @@ export default function VideoPlayer({
               controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
           >
-            {playing ? "❚❚" : "►"}
+            {playing ? <PauseIcon /> : <PlayIcon />}
           </button>
         )}
 

@@ -11,6 +11,7 @@ import {
   playlistAddSuggestions,
   type PlaylistAddSuggestion,
 } from "./playlistAddSearch";
+import { CloseIcon } from "./icons";
 
 type LinkPreview = {
   url: string;
@@ -368,7 +369,7 @@ export default function PlaylistAddVideo({
                   open ? "opacity-100" : "pointer-events-none opacity-0"
                 }`}
               >
-                ✕
+                <CloseIcon />
               </button>
             </div>
           </div>
