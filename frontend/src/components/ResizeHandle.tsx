@@ -140,7 +140,7 @@ export default function ResizeHandle({
     >
       <span
         aria-hidden
-        className={`${bar} rounded-full bg-gray-500 transition-all duration-150 group-hover/resize:bg-accent group-focus-visible/resize:bg-accent group-active/resize:bg-accent`}
+        className={`${bar} rounded-full bg-gray-500 transition-[width,height,background-color] duration-150 group-hover/resize:bg-accent group-focus-visible/resize:bg-accent group-active/resize:bg-accent`}
       />
     </div>
   );

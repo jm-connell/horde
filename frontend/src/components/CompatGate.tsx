@@ -63,8 +63,8 @@ export default function CompatGate({
           <div className="w-64 max-w-full">
             <div className="h-1.5 overflow-hidden rounded-full bg-white/15">
               <div
-                className="h-full rounded-full bg-accent transition-[width] duration-500"
-                style={{ width: `${Math.max(3, pct)}%` }}
+                className="h-full w-full rounded-full bg-accent transition-transform duration-500 ease-linear"
+                style={{ transform: `translateX(${Math.max(3, pct) - 100}%)` }}
               />
             </div>
             <p className="mt-1.5 text-xs text-gray-400">

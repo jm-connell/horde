@@ -615,8 +615,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             {!completed && !failed && !cancelled && (
               <div className="mb-4 h-2.5 w-full overflow-hidden rounded-full bg-ink-700">
                 <div
-                  className="h-full rounded-full bg-accent transition-all duration-300"
-                  style={{ width: `${percent}%` }}
+                  className="h-full w-full rounded-full bg-accent transition-transform duration-300 ease-linear"
+                  style={{ transform: `translateX(${percent - 100}%)` }}
                 />
               </div>
             )}
