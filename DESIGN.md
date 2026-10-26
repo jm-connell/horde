@@ -1,0 +1,254 @@
+---
+name: Horde
+description: A self-hosted video archive that feels like a home screening room.
+colors:
+  ink-950: "#08090c"
+  ink-900: "#0d0f14"
+  ink-800: "#14171f"
+  ink-700: "#1c212b"
+  ink-600: "#2a313f"
+  accent: "#22d3ee"
+  accent-soft: "#67e8f9"
+  accent-deep: "#0891b2"
+  text-strong: "#f3f4f6"
+  text-body: "#e5e7eb"
+  text-secondary: "#d1d5db"
+  text-muted: "#878a91"
+  danger: "#f87171"
+  warning: "#fbbf24"
+typography:
+  page-title:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: "1.25rem"
+    fontWeight: 600
+  section-label:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 600
+    letterSpacing: "0.025em"
+  body:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 400
+  label:
+    fontFamily: "Inter, system-ui, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 500
+rounded:
+  sm: "4px"
+  md: "6px"
+  lg: "8px"
+  xl: "12px"
+  full: "9999px"
+spacing:
+  xs: "4px"
+  sm: "8px"
+  md: "12px"
+  lg: "16px"
+  xl: "24px"
+components:
+  button-primary:
+    backgroundColor: "{colors.accent}"
+    textColor: "{colors.ink-950}"
+    rounded: "{rounded.lg}"
+    padding: "6px 12px"
+  button-primary-hover:
+    backgroundColor: "{colors.accent-soft}"
+  button-secondary:
+    backgroundColor: "{colors.ink-800}"
+    textColor: "{colors.text-body}"
+    rounded: "{rounded.lg}"
+    padding: "6px 12px"
+  panel:
+    backgroundColor: "{colors.ink-900}"
+    rounded: "{rounded.xl}"
+    padding: "16px"
+  video-card:
+    backgroundColor: "{colors.ink-900}"
+    rounded: "{rounded.xl}"
+  chip:
+    backgroundColor: "{colors.ink-800}"
+    textColor: "{colors.text-secondary}"
+    rounded: "{rounded.full}"
+    padding: "2px 10px"
+  menu:
+    backgroundColor: "{colors.ink-900}"
+    rounded: "{rounded.lg}"
+---
+
+# Design System: Horde
+
+## Overview
+
+**Creative North Star: "The Home Screening Room"**
+
+Horde is the room where the household's archive is shown. The lights are low,
+the picture is the brightest thing on screen, and everything else (navigation,
+controls, panels) sits back in near-black layers until it is needed. One accent
+color marks what is live, selected or actionable; it is never decoration.
+
+It is an app people operate every day, so the system favours precision over
+atmosphere: dense but calm lists and grids, small type, consistent spacing,
+fast quiet motion. Personality comes from the details (the liquid nav pill, the
+card rise, the translucent panels over an optional animated background) and from
+the user's own choices. Every user can re-theme Horde, change its font and size,
+and add custom CSS, so the system is defined in roles, not fixed colors.
+
+**Key Characteristics:**
+- Dark, layered "ink" surfaces with a single accent per theme.
+- Thumbnails and the player carry the color; chrome stays neutral.
+- Small, dense type (mostly 12–14px) with clear weight steps.
+- Rounded but not soft: 8px controls, 12px panels and cards, pills for chips.
+- Quick motion on one curve; nothing waits on an animation.
+
+## Colors
+
+A five-step neutral ink scale plus one accent with a soft and a deep variant.
+Values above are the default theme; every theme redefines the same roles as RGB
+triples on `:root` / `[data-theme]` in `frontend/src/index.css`, and Tailwind
+reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
+
+### Primary
+- **Screening Cyan** (#22d3ee, `accent`): the active nav item, selected
+  states, primary buttons, progress fills, focus rings, live and "new"
+  markers. Text on it is `ink-950`.
+- **Lit Cyan** (#67e8f9, `accent-soft`): hover state of accent buttons and
+  links.
+- **Deep Cyan** (#0891b2, `accent-deep`): pressed or low-emphasis accent.
+
+### Neutral
+- **Projection Black** (#08090c, `ink-950`): page background, header, text on
+  accent. Also the phone status bar color.
+- **Seat Row** (#0d0f14, `ink-900`): panels, cards, menus.
+- **Aisle** (#14171f, `ink-800`): secondary buttons, inputs, hovered rows, chips.
+- **Rail** (#1c212b, `ink-700`): borders, rings, dividers, progress tracks.
+- **Usher** (#2a313f, `ink-600`): hovered borders, strongest neutral.
+- **Text**: `gray-100` (#f3f4f6) for headings and titles, `gray-200` (#e5e7eb)
+  for body, `gray-300` for secondary, `text-muted` (#878a91, theme-tuned) for
+  metadata.
+- **Status**: red-400 for failures and destructive actions, amber-400/300 for
+  waiting, held and warning states.
+
+### Named Rules
+**The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`),
+never raw hex or Tailwind palette colors for surfaces and accents. A color that
+only looks right on the default theme is a bug on the other twelve.
+
+**The Muted Contrast Rule.** Secondary text uses `text-muted`, which is tuned per
+theme to 4.5:1. Do not reach for `text-gray-500/600`.
+
+**The One Accent Rule.** The accent marks state and the primary action. If a
+screen has more than a few accent elements, something is decoration.
+
+## Typography
+
+**Body Font:** Inter (with system-ui, sans-serif), replaceable per user through
+`--font-sans` (11 presets plus custom Google Fonts). Root size is per user too
+(16px default, scaled by the font size setting), so size in `rem`.
+
+**Character:** One family, small sizes, hierarchy by weight and color rather
+than by big type.
+
+### Hierarchy
+- **Page title** (600, 1.25rem; 1.5rem bold on a few top-level pages):
+  one per page, `text-gray-100`.
+- **Section label** (600, 0.75rem, uppercase, wide tracking, `text-gray-400`):
+  panel headers such as "Up next" and "Continue watching".
+- **Title** (500, 0.875rem): card and row titles, clamped to two lines.
+- **Body** (400, 0.875rem): descriptions, settings copy.
+- **Label / meta** (400–500, 0.75rem, `text-muted`): channel, date, size,
+  duration badges (tabular numbers).
+
+### Named Rules
+**The Small Type Rule.** Body copy is 14px and metadata 12px; anything smaller
+(10–11px) is reserved for badges over thumbnails. Text fields stay at 16px or
+more on touch screens so iOS does not zoom.
+
+## Layout
+
+Single-column app shell under a fixed translucent header. Pages sit in a centred
+container with a 16px gutter on phones, wider on desktop; settings and forms cap
+at `max-w-2xl`, the library grid and watch page use the full width. The library
+is a responsive card grid with an optional channel sidebar; the watch page puts
+the player first with metadata and a related-videos sidebar beside it on wide
+screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
+(`gap-2`) inside components and 12–16px between them; panels pad 16–20px.
+
+Theater mode widens the player to the viewport; the mini player docks bottom
+right and the play queue docks beside it. Respect `env(safe-area-inset-*)` for
+the header and anything fixed to an edge.
+
+## Elevation & Depth
+
+Depth is tonal first: page `ink-950`, panels and cards `ink-900` with a 1px
+`ink-700` ring, raised controls `ink-800`. With panel transparency on (the
+default), panels and cards become translucent with a backdrop blur over the
+optional animated background, so layering reads as glass rather than shadow.
+Shadows appear only on floating layers (menus, dialogs, the mini player and
+docked queue: `shadow-lg` to `shadow-2xl`) and as a response to hover when the
+user's hover motion setting asks for it (lift shadow or accent glow).
+
+### Named Rules
+**The Flat-At-Rest Rule.** Surfaces in the page flow carry no shadow at rest.
+Shadow means "floating above the page" or "responding to you".
+
+## Shapes
+
+Rounded rectangles throughout. Controls and rows `rounded-lg` (8px), panels and
+cards `rounded-xl` (12px), thumbnails inside a card follow the card, small
+badges `rounded-sm`, chips, toggles and progress bars `rounded-full`. Borders
+are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
+1px accent ring), not thicker borders.
+
+## Components
+
+- **Buttons.** Primary: accent fill, `ink-950` text, semibold, `accent-soft` on
+  hover. Secondary: `ink-800` fill, `gray-200` text, `ink-700` on hover. Quiet:
+  text only, `text-muted` to `accent` on hover. All pressables scale to 0.97 on
+  press (80ms) when the button press setting is on, and get `ui-interactive` for
+  the user's hover motion.
+- **Video card.** Thumbnail with duration badge and a thin accent progress bar
+  for watched position; title (two lines), channel and meta below. "+ Queue"
+  appears on hover or focus and confirms with "✓ Queued". Cards rise in on mount
+  with a short stagger.
+- **Panels.** `ui-panel` sections with a section label header, optional
+  collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
+- **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
+  when reorderable, quiet remove button on the right.
+- **Inputs and selects.** `ink-800` fill, `ink-700` ring, accent focus ring;
+  `ThemedSelect` for custom option lists.
+- **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
+  150ms; dialogs centre. Both trap focus and close on Escape.
+- **Progress.** Full-width fill moved with `translateX`, linear, on an `ink-700`
+  or `ink-800` track; accent for downloads, sky for background jobs, red on
+  failure.
+
+### Motion
+One curve, `ease-fluid` (`cubic-bezier(0.22, 1, 0.36, 1)`, a strong ease-out),
+for anything entering, expanding or moving. Durations: press 80ms, hover and
+small toggles 150–200ms, menus 150ms, panels and collapses 200–300ms, nothing in
+routine UI over 300ms. Progress is linear. Animate `transform` and `opacity`;
+new list items enter with `@starting-style` (Tailwind `starting:`). Hover motion
+only applies under `(hover: hover) and (pointer: fine)`. Under reduced motion,
+fades stay and movement goes.
+
+## Do's and Don'ts
+
+**Do**
+- Use role tokens and check new UI on at least the default, light and OLED
+  themes.
+- Keep the accent for state and the one primary action on a view.
+- Use `text-muted` for secondary text and `tabular-nums` for changing numbers.
+- Give every new animation a purpose (feedback, continuity, state) and keep it
+  under 300ms on `ease-fluid`.
+- Acknowledge every action on screen (a state change, a toast or an entering
+  item), even when the result lands somewhere else.
+
+**Don't**
+- Hard-code hex colors, Tailwind palette grays for surfaces, or a second accent.
+- Add shadows to in-flow surfaces, gradient text, or decorative glow.
+- Animate `width`, `height`, `top` or `left` on anything that repeats or runs
+  during playback.
+- Animate keyboard-initiated actions or anything users trigger many times a
+  minute.
+- Use text glyphs for icons in new UI; use inline SVG with `currentColor`.
