@@ -465,12 +465,11 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
         }${playlistOpen ? " z-30" : ""}`}
       >
         {active && (
-          // Accent bar on the card's outline: 4px down the left edge, thinning
-          // around the corners to the 1px outline, then fading out along the
-          // top and bottom edges.
+          // Accent bar on the card's outline: 4px down the left edge, fading
+          // out a few pixels into the rounded corners.
           <span
             aria-hidden
-            className="pointer-events-none absolute -inset-px rounded-[inherit] border-y border-l-4 border-accent [mask-image:linear-gradient(to_right,#000_14px,transparent_56px)]"
+            className="pointer-events-none absolute -inset-px rounded-[inherit] border-y border-l-4 border-accent [mask-image:linear-gradient(to_right,#000_5px,transparent_11px)]"
           />
         )}
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
