@@ -764,6 +764,17 @@ video.sub-large::cue {
   justify-content: center;
 }
 
+/* Phones: the control bar's fade is tall next to a phone-size picture; let
+   taps on it reach the video (show/hide controls) and keep only the scrub
+   bar and buttons interactive. */
+.player-touch .player-controlbar {
+  pointer-events: none;
+}
+
+.player-touch .player-controlbar[data-visible="true"] > * {
+  pointer-events: auto;
+}
+
 /* Native player fullscreen — hide site chrome on mobile. */
 :fullscreen {
   display: flex;
