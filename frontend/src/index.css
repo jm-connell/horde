@@ -946,6 +946,39 @@ html[data-translucent-panels="on"] header.ui-panel {
   ) !important;
 }
 
+/* Phones: no gray flash over a tapped control (button press and :hover
+   already acknowledge the tap), no double-tap-zoom wait before a click, and
+   no text selection when a control is long-pressed. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role="button"],
+summary,
+label,
+select {
+  touch-action: manipulation;
+}
+
+button,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* iOS Safari zooms into any text field under 16px on focus and stays zoomed. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="color"]
+    ),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
 .ui-nav-icon {
   background-color: transparent !important;
   box-shadow: none !important;
