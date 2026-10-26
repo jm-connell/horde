@@ -7,8 +7,14 @@ name: Dependabot auto-merge
 #
 # main has no required status checks, so GitHub's own auto-merge would merge
 # at once; this waits for the checks itself. It runs after each of CI,
-# Security and Image finishes, and the last one to finish sees every check
-# complete and merges.
+# Security and Image finishes, and the last one to finish sees all three green
+# and merges. Only check runs from GitHub Actions count: checks from other
+# apps (CodeQL default setup) finish on their own schedule and would never
+# wake this workflow up again.
+#
+# Every commit on the branch must come from Dependabot or from
+# dependabot-lock.yml, so a push by anyone else to a Dependabot branch still
+# needs a review.
 #
 # A merge made with the default GITHUB_TOKEN starts no workflows, so after
 # merging it dispatches the push-to-main workflows on main itself (Release
@@ -24,13 +30,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: dependabot-automerge-${{ github.event.workflow_run.head_branch }}
+  group: dependabot-automerge-${{ github.event.workflow_run.head_sha }}
   cancel-in-progress: false
 
 jobs:
   merge:
     if: >-
       github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
       startsWith(github.event.workflow_run.head_branch, 'dependabot/') &&
       contains(github.event.workflow_run.head_branch, '-minor-patch-')
     runs-on: ubuntu-latest
@@ -53,8 +60,14 @@ jobs:
             echo "No open Dependabot pull request has ${SHA} as its head."
             exit 0
           fi
+          authors="$(gh api --paginate "repos/${GH_REPO}/pulls/${pr}/commits?per_page=100" \
+            --jq '.[] | .author.login // "unknown"' | sort -u)"
+          if grep -vqxE 'dependabot\[bot\]|github-actions\[bot\]' <<<"${authors}"; then
+            printf 'Not merging: the branch has commits from someone else:\n%s\n' "${authors}"
+            exit 0
+          fi
           checks="$(gh api --paginate "repos/${GH_REPO}/commits/${SHA}/check-runs?per_page=100" \
-            --jq '.check_runs[] | "\(.status) \(.conclusion) \(.name)"')"
+            --jq '.check_runs[] | select(.app.slug == "github-actions") | "\(.status) \(.conclusion) \(.name)"')"
           echo "${checks}"
           for wf in CI Security Image; do
             ran="$(gh run list --commit "${SHA}" --workflow "${wf}" --json conclusion \
@@ -64,7 +77,7 @@ jobs:
               exit 0
             fi
           done
-          if echo "${checks}" | grep -vqE '^completed (success|neutral|skipped) '; then
+          if grep -vqE '^completed (success|neutral|skipped) ' <<<"${checks}"; then
             echo "Not merging: a check is unfinished or did not pass."
             exit 0
           fi

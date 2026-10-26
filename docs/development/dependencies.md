@@ -32,7 +32,8 @@ when the two drift apart: every direct requirement must be in the lock at a
 version its specifier allows. It needs no network. Dependabot cannot regenerate
 the lock, so `.github/workflows/dependabot-lock.yml` runs the command above on
 each Dependabot branch that bumps `requirements.txt`, pushes the new lock and
-starts the checks again. The check cannot notice a dependency removed from
+starts the checks again. Dependabot then stops rebasing that pull request; if it
+conflicts, comment `@dependabot recreate` on it. The check cannot notice a dependency removed from
 `requirements.txt` whose pins linger in the lock; regenerate after removals too.
 
 `uv` is the only extra tool needed (`pipx install uv` or `pip install uv`). The
