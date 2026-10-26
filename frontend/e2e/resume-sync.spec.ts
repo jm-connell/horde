@@ -218,9 +218,16 @@ test("refreshing the details of a playing video does not rewind it", async ({
   // Subtitles still being fetched: the page and the player re-read the video
   // every few seconds, each time with the position saved a moment ago.
   await page.route(`**/api/videos/${kiln}`, async (route) => {
-    const response = await route.fetch();
-    const json = { ...(await response.json()), subtitles_pending: true };
-    await route.fulfill({ response, json });
+    // The page cancels a re-read when a newer one starts; reading a cancelled
+    // response throws "Response has been disposed". Nothing waits on that
+    // request any more, so let it go.
+    try {
+      const response = await route.fetch();
+      const json = { ...(await response.json()), subtitles_pending: true };
+      await route.fulfill({ response, json });
+    } catch (err) {
+      if (!String(err).includes("disposed")) throw err;
+    }
   });
   await page.goto(`/watch/${kiln}`);
   await waitForMedia(page);
