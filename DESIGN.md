@@ -1,6 +1,11 @@
 ---
 name: Horde
 description: A self-hosted video archive that feels like a home screening room.
+# Color and font values below are the DEFAULT theme only. Each user can pick
+# another theme, custom colors, custom CSS, a different font and font size, so
+# what is normative is the role (ink-950, accent, text-muted, the --font-sans
+# hook), never the literal value. Radius, spacing, type scale and motion are
+# fixed across themes.
 colors:
   ink-950: "#08090c"
   ink-900: "#0d0f14"
@@ -94,6 +99,13 @@ card rise, the translucent panels over an optional animated background) and from
 the user's own choices. Every user can re-theme Horde, change its font and size,
 and add custom CSS, so the system is defined in roles, not fixed colors.
 
+**What is fixed and what is not.** Colors and the font family are user
+choices: the values in this file are the default theme, shown so the roles have
+something concrete to point at. Design against the roles. What does not change
+between users is the structure: which role each element uses, the type scale in
+`rem` (it scales with the user's font size), radius, spacing, elevation and
+motion.
+
 **Key Characteristics:**
 - Dark, layered "ink" surfaces with a single accent per theme.
 - Thumbnails and the player carry the color; chrome stays neutral.
@@ -142,9 +154,11 @@ screen has more than a few accent elements, something is decoration.
 
 ## Typography
 
-**Body Font:** Inter (with system-ui, sans-serif), replaceable per user through
-`--font-sans` (11 presets plus custom Google Fonts). Root size is per user too
-(16px default, scaled by the font size setting), so size in `rem`.
+**Body Font:** whatever the user picks, through `--font-sans` (`font-sans`).
+Inter (with system-ui, sans-serif) is the default; there are 11 presets plus
+custom Google Fonts, monospace and display faces among them. Never name a font
+family in a component. Root size is per user too (16px default, scaled by the
+font size setting), so size in `rem` and let layouts tolerate wider glyphs.
 
 **Character:** One family, small sizes, hierarchy by weight and color rather
 than by big type.
