@@ -126,16 +126,17 @@ reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
   states, primary buttons, progress fills, focus rings, live and "new"
   markers.
 - **On Accent** (`on-accent`, `text-on-accent`): text and icons on an accent
-  fill. Dark themes use the page color; light, frozen and mocha use a dark ink;
-  custom themes pick whichever reads better. Never use `text-ink-950` on an
+  fill. Dark themes, and earthy (whose accent is a dark brown), use the page
+  color; light, frozen and mocha use a dark ink; custom themes pick whichever
+  reads better. Never use `text-ink-950` on an
   accent fill: on light themes it is near-white.
 - **Lit Cyan** (#67e8f9, `accent-soft`): hover state of accent buttons and
   links.
 - **Deep Cyan** (#0891b2, `accent-deep`): pressed or low-emphasis accent.
 
 ### Neutral
-- **Projection Black** (#08090c, `ink-950`): page background, header, text on
-  accent. Also the phone status bar color.
+- **Projection Black** (#08090c, `ink-950`): page background and header. Also
+  the phone status bar color.
 - **Seat Row** (#0d0f14, `ink-900`): panels, cards, menus.
 - **Aisle** (#14171f, `ink-800`): secondary buttons, inputs, hovered rows, chips.
 - **Rail** (#1c212b, `ink-700`): borders, rings, dividers, progress tracks.
@@ -228,7 +229,7 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   the user's hover motion.
 - **Video card.** Thumbnail with duration badge and a thin accent progress bar
   for watched position; title (two lines), channel and meta below. "+ Queue"
-  appears on hover or focus and confirms with "✓ Queued". Cards rise in on mount
+  appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
