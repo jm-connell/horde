@@ -28,6 +28,8 @@ interface Props {
   left: number;
   /** Vertical position as % from the bottom of the player. */
   offset: number;
+  /** Phones: centre horizontally at the default height, ignoring left/offset. */
+  centered?: boolean;
   active: boolean;
   onPositionChange?: (left: number, offset: number) => void;
   /** Seek bar to clear while player chrome is visible. */
@@ -37,6 +39,8 @@ interface Props {
 }
 
 const SLIDE_MS = 250;
+/** Bottom offset (%) of centred captions; matches the default position. */
+const CENTERED_OFFSET = 12;
 
 type ViewLine = {
   key: number;
@@ -56,6 +60,7 @@ export default function SubtitleOverlay({
   size,
   left,
   offset,
+  centered = false,
   active,
   onPositionChange,
   timelineRef,
@@ -347,7 +352,16 @@ export default function SubtitleOverlay({
 
   useEffect(() => {
     measureLiftRef.current();
-  }, [controlsVisible, dragging, left, offset, size, view.length, rollupSig]);
+  }, [
+    controlsVisible,
+    dragging,
+    left,
+    offset,
+    centered,
+    size,
+    view.length,
+    rollupSig,
+  ]);
 
   useEffect(() => {
     const run = () => measureLiftRef.current();
@@ -440,12 +454,21 @@ export default function SubtitleOverlay({
       ref={rootRef}
       className={`subtitle-overlay subtitle-overlay-${size}${
         dragging ? " subtitle-overlay-dragging" : ""
-      }${canDrag ? " subtitle-overlay-draggable" : ""}`}
-      style={{
-        left: `${clamp(left, 0, 90)}%`,
-        bottom: `${clamp(offset, 0, 85)}%`,
-        transform: `translateY(-${liftPx}px)`,
-      }}
+      }${canDrag ? " subtitle-overlay-draggable" : ""}${
+        centered ? " subtitle-overlay-centered" : ""
+      }`}
+      style={
+        centered
+          ? {
+              bottom: `${CENTERED_OFFSET}%`,
+              transform: `translateY(-${liftPx}px)`,
+            }
+          : {
+              left: `${clamp(left, 0, 90)}%`,
+              bottom: `${clamp(offset, 0, 85)}%`,
+              transform: `translateY(-${liftPx}px)`,
+            }
+      }
       aria-hidden
       onPointerDown={canDrag ? onPointerDown : undefined}
       onPointerMove={canDrag ? onPointerMove : undefined}

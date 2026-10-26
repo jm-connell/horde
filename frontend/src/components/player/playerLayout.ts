@@ -31,10 +31,11 @@ export function playerLayout({
         ? "relative flex h-full w-full items-center justify-center overflow-hidden bg-black leading-none"
         : "relative w-full overflow-hidden bg-black leading-none";
 
-  const innerClass =
+  const innerClass = `${
     !isMini && (mode === "windowed" || isNativeFullscreen)
       ? "relative h-full w-full leading-none"
-      : "relative w-full leading-none";
+      : "relative w-full leading-none"
+  }${isMobile && !isMini ? " player-touch" : ""}`;
 
   const miniStyle =
     isMini && videoAspect

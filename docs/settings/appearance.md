@@ -133,7 +133,7 @@ When effect is `flowing-gradient`, `flowingGradientPreset`:
 
 ### Pause while watching
 
-`pauseBackgroundWhileWatching` (**default `false`**) stops animated backgrounds during playback to save GPU/CPU.
+`pauseBackgroundWhileWatching` (**default `false`**) stops animated backgrounds during playback to save GPU/CPU. Fit-window and fullscreen playback pause the animation either way, since it is hidden; standard and theater keep it running unless this is on.
 
 ## Interface chrome
 

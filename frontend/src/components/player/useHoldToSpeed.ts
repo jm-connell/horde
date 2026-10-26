@@ -12,12 +12,14 @@ interface Options {
   /** Set after a hold or drag so the click that ends it doesn't toggle play. */
   suppressClick: { current: boolean };
   togglePlay: () => void;
+  /** Phones: a short tap on the picture (shows or hides the controls). */
+  onMobileTap: () => void;
 }
 
 /**
  * Pointer handling on the video itself: press and hold to play at the hold
- * speed (restoring the previous rate on release), tap to toggle on phones and
- * click to toggle elsewhere.
+ * speed (restoring the previous rate on release), tap to show or hide the
+ * controls on phones and click to toggle playback elsewhere.
  */
 export function useHoldToSpeed({
   videoRef,
@@ -28,6 +30,7 @@ export function useHoldToSpeed({
   holdPlaybackRate,
   suppressClick,
   togglePlay,
+  onMobileTap,
 }: Options) {
   const heldRate = useRef<number | null>(null);
   const holdTimer = useRef<number | null>(null);
@@ -131,13 +134,11 @@ export function useHoldToSpeed({
 
       endHold();
 
+      // onVideoClick ignores clicks on phones, so the tap needs no click
+      // suppression (which would also swallow a quick tap on the play button).
       if (wasShortTap && isMobile) {
         e.preventDefault();
-        suppressClick.current = true;
-        window.setTimeout(() => {
-          suppressClick.current = false;
-        }, 300);
-        togglePlay();
+        onMobileTap();
       }
 
       pointerDownOnVideo.current = false;
@@ -149,7 +150,7 @@ export function useHoldToSpeed({
         }
       }
     },
-    [isMini, endHold, isMobile, togglePlay, suppressClick]
+    [isMini, endHold, isMobile, onMobileTap]
   );
 
   const onVideoPointerCancel = useCallback(() => {

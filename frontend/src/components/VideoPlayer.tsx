@@ -361,6 +361,7 @@ export default function VideoPlayer({
   const {
     controlsVisible,
     revealControls,
+    hideControls,
     onPlayerMouseMove,
     onPlayerMouseLeave,
     onControlsInteractionStart,
@@ -391,6 +392,14 @@ export default function VideoPlayer({
     revealControls,
   });
 
+  // Phones, YouTube-style: a tap on the picture shows or hides the controls;
+  // the large centre button plays and pauses.
+  const touchControls = isMobile && !isMini;
+  const onMobileTap = useCallback(() => {
+    if (controlsVisible) hideControls();
+    else revealControls();
+  }, [controlsVisible, hideControls, revealControls]);
+
   const {
     endHold,
     onVideoPointerDown,
@@ -406,6 +415,7 @@ export default function VideoPlayer({
     holdPlaybackRate: settings.holdPlaybackRate,
     suppressClick,
     togglePlay,
+    onMobileTap,
   });
 
   const videoEvents = useVideoEvents({
@@ -485,7 +495,15 @@ export default function VideoPlayer({
         style={{ touchAction: "manipulation" }}
         onMouseMove={onPlayerMouseMove}
         onMouseLeave={onPlayerMouseLeave}
-        onTouchStart={isMini ? revealMiniControls : revealControls}
+        onTouchStart={
+          isMini
+            ? revealMiniControls
+            : (e) => {
+                // A tap on the picture is handled by onMobileTap on release.
+                if (touchControls && e.target === videoRef.current) return;
+                revealControls();
+              }
+        }
       >
         {/* eslint-disable-next-line jsx-a11y/media-has-caption -- subtitle <track>s are rendered per available language below; the rule only recognises a static kind="captions" */}
         <video
@@ -527,8 +545,11 @@ export default function VideoPlayer({
             size={subtitleSize}
             left={subtitleLeft}
             offset={subtitleOffset}
+            centered={isMobile && !isMini}
             active
-            onPositionChange={onSubtitlePositionChange}
+            onPositionChange={
+              isMobile && !isMini ? undefined : onSubtitlePositionChange
+            }
             timelineRef={isMini ? undefined : scrubberRef}
             controlsVisible={!isMini && controlsVisible}
           />
@@ -547,6 +568,22 @@ export default function VideoPlayer({
           isPreview={streamType === "dash"}
           onRetry={retryPlayback}
         />
+
+        {touchControls && !blockingOverlay && !buffering && !mediaError && (
+          <button
+            type="button"
+            onClick={() => {
+              togglePlay();
+              revealControls();
+            }}
+            aria-label={playing ? "Pause video" : "Play video"}
+            className={`absolute left-1/2 top-1/2 z-6 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-black/55 text-2xl leading-none text-white transition-opacity duration-300 ${
+              controlsVisible ? "opacity-100" : "pointer-events-none opacity-0"
+            }`}
+          >
+            {playing ? "❚❚" : "►"}
+          </button>
+        )}
 
         {isMini ? (
           <MiniPlayerFrame

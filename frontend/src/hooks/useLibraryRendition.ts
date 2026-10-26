@@ -16,8 +16,10 @@ export type LibraryRenditionState = {
   support: OriginalSupport;
   /** Sidecar job progress while the device waits on it. */
   compat: CompatState | null;
-  /** True while the server rewrites the original so Safari can play it. */
+  /** True while waiting on the server's Safari prep answer or rewrite. */
   safariPreparing: boolean;
+  /** True only while a rewrite is actually queued or running. */
+  safariRewriting: boolean;
   safariPrep: CompatState | null;
   /** True when the original failed to play (not just predicted to). */
   originalFailed: boolean;
@@ -138,6 +140,8 @@ export function useLibraryRendition(
     };
   }, [wantsSafariPrep, videoId, safariPrep]);
 
+  // An already-prepared file answers "ready" at once: only a real rewrite
+  // shows the "Preparing for Safari" gate.
   const safariPending =
     safariPrep?.status === "queued" || safariPrep?.status === "running";
   useEffect(() => {
@@ -231,6 +235,7 @@ export function useLibraryRendition(
   return {
     rendition: checking || safariPreparing ? null : choice.rendition,
     safariPreparing,
+    safariRewriting: safariPreparing && safariPending,
     safariPrep,
     checking,
     support: effectiveSupport,

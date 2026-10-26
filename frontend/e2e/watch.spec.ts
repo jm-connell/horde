@@ -267,3 +267,39 @@ test("dragging the description open all the way expands it", async ({
     .poll(async () => Math.abs((await height()) - before))
     .toBeLessThan(2);
 });
+
+test("on a phone a tap shows or hides the controls and the centre button plays", async ({
+  page,
+}) => {
+  test.skip(hasDesktopPlayerChrome(page), "phone player only");
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const video = page.locator("video").first();
+  const paused = () => video.evaluate((v: HTMLVideoElement) => v.paused);
+  await video.evaluate((v: HTMLVideoElement) => v.pause());
+  const bar = page.locator(".player-controlbar");
+  await expect(bar).toHaveAttribute("data-visible", "true");
+
+  const box = (await video.boundingBox())!;
+  const tapPicture = () =>
+    page.touchscreen.tap(box.x + box.width / 4, box.y + box.height / 4);
+  // A tap on the picture toggles the controls, not playback.
+  await tapPicture();
+  await expect(bar).toHaveAttribute("data-visible", "false");
+  expect(await paused()).toBe(true);
+  await tapPicture();
+  await expect(bar).toHaveAttribute("data-visible", "true");
+  expect(await paused()).toBe(true);
+
+  // The centre button plays and pauses.
+  await page.getByRole("button", { name: "Play video" }).tap();
+  await expect.poll(paused).toBe(false);
+  await page.getByRole("button", { name: "Pause video" }).tap();
+  await expect.poll(paused).toBe(true);
+
+  // The control bar's fade passes taps through to the picture.
+  const barBox = (await bar.boundingBox())!;
+  await page.touchscreen.tap(box.x + box.width / 2, barBox.y + 8);
+  await expect(bar).toHaveAttribute("data-visible", "false");
+});

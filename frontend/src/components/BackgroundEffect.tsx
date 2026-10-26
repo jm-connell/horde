@@ -65,9 +65,10 @@ export default function BackgroundEffect() {
   const pauseWhileWatching = settings.pauseBackgroundWhileWatching;
   const onWatchPage = location.pathname.startsWith("/watch/");
   // A full-size player that is playing makes the effect pure overhead.
-  // Fullscreen and playing theater/fit-window modes always pause (the effect is
-  // hidden anyway). "Pause while watching" additionally pauses behind a playing
-  // standard player and on the Watch page; with it off the effect keeps running.
+  // Fullscreen and playing fit-window mode always pause (the effect is hidden
+  // anyway). "Pause while watching" additionally pauses behind a playing
+  // standard or theater player and on the Watch page; with it off the effect
+  // keeps running.
   const shouldPause =
     playerFullscreen ||
     playerCovering ||

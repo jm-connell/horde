@@ -45,6 +45,13 @@ export function useControlsVisibility({
     scheduleHideControls();
   }, [scheduleHideControls]);
 
+  /** Phones: a tap on the picture hides the controls it revealed. */
+  const hideControls = useCallback(() => {
+    if (menuOpen || controlsInteracting.current) return;
+    clearHideControlsTimer();
+    setControlsVisible(false);
+  }, [menuOpen, clearHideControlsTimer]);
+
   const onPlayerMouseMove = useCallback(() => {
     if (isMini) {
       revealMiniControls();
@@ -95,6 +102,7 @@ export function useControlsVisibility({
   return {
     controlsVisible,
     revealControls,
+    hideControls,
     onPlayerMouseMove,
     onPlayerMouseLeave,
     onControlsInteractionStart,

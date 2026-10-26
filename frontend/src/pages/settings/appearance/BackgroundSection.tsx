@@ -472,7 +472,7 @@ export default function BackgroundSection({
 
           <SettingRow
             title="Pause while watching"
-            description="Stop the animation on the watch page and while a video plays, to save GPU. Theater, fit-window and fullscreen playback always pause it."
+            description="Stop the animation on the watch page and while a video plays, to save GPU. Fit-window and fullscreen playback always pause it."
             control={
               <Toggle
                 checked={settings.pauseBackgroundWhileWatching}

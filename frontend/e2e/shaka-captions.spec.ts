@@ -171,3 +171,22 @@ test("a live broadcast plays through the Shaka HLS build", async ({ page }) => {
   ).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveText("");
 });
+
+test("on a phone captions are centred and sized to the player", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await openStream(page, false);
+  await page.getByRole("button", { name: "CC (subtitles)" }).click();
+  await expect(page.locator(".subtitle-overlay-visible")).toHaveText(CUE);
+
+  const video = (await page.locator("video").first().boundingBox())!;
+  const caption = (await page.locator(".subtitle-overlay").boundingBox())!;
+  const centre = (b: { x: number; width: number }) => b.x + b.width / 2;
+  expect(Math.abs(centre(caption) - centre(video))).toBeLessThan(2);
+  const fontPx = await page
+    .locator(".subtitle-overlay")
+    .evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+  // Medium on a 390 px wide picture: about 14 px, not the 20 px desktop floor.
+  expect(fontPx).toBeLessThan(16);
+});

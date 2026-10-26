@@ -15,6 +15,8 @@ Horde’s player is shared across library watch and stream preview. It supports 
 
 Leave windowed with ++escape++ (or the UI control).
 
+On phones, a tap on the picture shows or hides the controls, and the large button in the middle of the picture plays and pauses.
+
 ## Keyboard shortcuts
 
 Shortcuts apply when focus is not in a text field:
@@ -38,7 +40,7 @@ See also the [keyboard shortcuts reference](../reference/keyboard-shortcuts.md).
 
 Supported speeds: **0.25× through 3×** (steps: 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3).
 
-**Hold to 2×:** press and hold the play surface for **250ms** to temporarily play at 2×; release (including outside the video / on blur) restores the previous speed. Short taps on mobile still toggle play.
+**Hold to 2×:** press and hold the play surface for **250ms** to temporarily play at 2×; release (including outside the video / on blur) restores the previous speed. On phones a short tap shows or hides the controls instead.
 
 Default speed is configurable under [Settings → Playback](../settings/playback.md).
 
@@ -46,7 +48,7 @@ Theater mode is remembered in playback settings and should survive leaving watch
 
 ## Subtitles
 
-External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c++. Cue styling supports size options in settings. Subtitle overlays are **draggable** so you can reposition them on screen.
+External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c++. Cue styling supports size options in settings. Subtitle overlays are **draggable** so you can reposition them on screen. On phones they sit centred near the bottom, sized to the player, and are not draggable.
 
 ## Chapters
 

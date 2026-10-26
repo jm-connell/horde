@@ -14,8 +14,8 @@ export function usePlayerBodyFlags(
     const body = document.body;
     if (playing && !isMini) body.dataset.playerPlaying = "true";
     else delete body.dataset.playerPlaying;
-    // Theater / fit-window playback covers most of the page.
-    if (playing && !isMini && (mode === "theater" || mode === "windowed")) {
+    // Fit-window playback covers the page; theater leaves the background visible.
+    if (playing && !isMini && mode === "windowed") {
       body.dataset.playerCovering = "true";
     } else delete body.dataset.playerCovering;
     return () => {
