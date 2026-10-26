@@ -15,7 +15,7 @@ COPY frontend/ ./
 RUN npm run build
 
 # --- Stage 2: build the MkDocs wiki ---
-FROM --platform=$BUILDPLATFORM python:3.14.8-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS docs
+FROM --platform=$BUILDPLATFORM python:3.15.0-slim-bookworm@sha256:0e019bbdfb5d9874cb2389f1c2884b64aa2ac97c99960b5bc521cef978c0617d AS docs
 WORKDIR /docs
 COPY docs/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
@@ -24,7 +24,7 @@ COPY docs/ ./docs/
 RUN mkdocs build -d /docs-out --strict
 
 # --- Stage 3: python runtime serving API + static build + wiki ---
-FROM python:3.14.8-slim-bookworm@sha256:48b13b003dda20b16f9442b8475aa05fe21bf6579a8c881db92ffb4d8fd20f83 AS runtime
+FROM python:3.15.0-slim-bookworm@sha256:0e019bbdfb5d9874cb2389f1c2884b64aa2ac97c99960b5bc521cef978c0617d AS runtime
 WORKDIR /app
 
 # Which ffmpeg to ship. The build FAILS if the requested flavor cannot be
