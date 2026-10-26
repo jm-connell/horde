@@ -157,6 +157,10 @@ Legacy boolean `liquidNav` migrates to `liquid` / `none`.
 | `lift` | Cards rise with soft shadow |
 | `glow` | Accent glow around hovered surfaces |
 
+Hover motion only shows on devices with a mouse or trackpad, so a tap on a phone does not leave a card lifted. When the system asks for reduced motion, hover motion and button press feedback are off whatever this setting says; pages, cards and thumbnails still fade in, without moving.
+
+The phone status bar and installed-app title bar take the theme's page background color.
+
 ### Panel transparency
 
 Sliders are always visible. First install defaults to **50%** transparency and **50%** blur. Existing installs that had the old “Translucent panels” toggle **off** migrate to 0% / 0% (opaque).
