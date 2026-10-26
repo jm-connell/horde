@@ -19,6 +19,19 @@ Browser ──► host:8686 ──► container:8080 (FastAPI)
                 └── /*              SPA (index.html)
 ```
 
+## Change the port { #change-the-port }
+
+Something else already using 8686, or you prefer another number? Do not edit `docker-compose.yml` (updates stop when it has local edits). Create `docker-compose.override.yml` next to it instead; Compose reads that file automatically and Git ignores it:
+
+```yaml
+services:
+  horde:
+    ports: !override
+      - "9000:8080"   # host port 9000 → Horde's 8080 inside the container
+```
+
+Then run `docker compose up -d` from the Horde folder and open `http://<server-ip>:9000`. Keep `8080` on the right-hand side. `!override` replaces the default mapping instead of adding a second one; it needs Docker Compose 2.24.4 or newer (`docker compose version`). Dockge uses the Compose inside its own container, so check that one with `sudo docker exec dockge docker compose version` (use your Dockge container's name) or deploy this change from the shell instead. `update.sh` finds the new port by itself.
+
 ## CORS (cast receivers)
 
 Only the video stream, subtitle and thumbnail routes send CORS headers (`Access-Control-Allow-Origin: *`, methods `GET`, `HEAD`, `OPTIONS`, `Range` allowed), so Chromecast can fetch them cross-origin. All other routes send none. Horde also only answers LAN-style `Host` names; behind a reverse proxy set `HORDE_ALLOWED_HOSTS`. See [Security](security.md).

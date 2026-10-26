@@ -114,7 +114,7 @@ These are **Compose / host** variables used when mounting volumes — not read b
 
 ## GPU { #gpu }
 
-Settings → System → Resources shows a **GPU** card from what the **`horde` container** can see (`nvidia-smi`, ROCm, or `/dev/dri`). **None detected** means that process has no card — usually the GPU snippets in `docker-compose.yml` are still commented out, TrueNAS isolated the device to another app, or the host has no GPU. Horde still runs.
+Settings → System → Resources shows a **GPU** card from what the **`horde` container** can see (`nvidia-smi`, ROCm, or `/dev/dri`). **None detected** means that process has no card — usually no GPU has been [passed in](#pass-the-gpu-into-horde) yet (the default), TrueNAS isolated the device to another app, or the host has no GPU. Horde still runs.
 
 This is **not** the Ollama GPU. Passing a device into `ollama` (or running Ollama on another PC) does not fill the System GPU card.
 
@@ -136,11 +136,17 @@ Keep **Playback compatibility → AV1 only** if you do not want encode work. Tra
 
 ### Pass the GPU into Horde
 
-The GPU snippets on the **`horde`** service in `docker-compose.yml` start commented out. Uncomment the block that matches the host, then recreate the stack (`docker compose up --build -d` or Dockge deploy).
+Put GPU settings in a file named `docker-compose.override.yml` in the Horde folder, next to `docker-compose.yml`. Docker Compose (and Dockge) read it automatically, Git ignores it, and updates leave it alone. Do **not** uncomment the GPU examples inside `docker-compose.yml` itself: `update.sh` and the **Update now** button stop when that file has local edits.
 
-**NVIDIA** (needs nvidia-container-toolkit on the host):
+Create the file with `nano docker-compose.override.yml`, paste the block for your GPU, save, and run `docker compose up -d`. If the file already exists, add the lines under its existing `horde:` entry instead of repeating `services:`.
+
+**NVIDIA** (install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html) on the host first; TrueNAS includes it once the NVIDIA driver is installed):
 
 ```yaml
+services:
+  horde:
+    environment:
+      - NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
     deploy:
       resources:
         reservations:
@@ -150,23 +156,36 @@ The GPU snippets on the **`horde`** service in `docker-compose.yml` start commen
               capabilities: [gpu]
 ```
 
-On TrueNAS: install NVIDIA drivers in the TrueNAS UI, and do **not** isolate the GPU to another app (Plex, Jellyfin, official Apps). An isolated GPU is invisible to Dockge.
+The `NVIDIA_DRIVER_CAPABILITIES` line asks the toolkit for the video encode libraries (NVENC); without it the card can show up in Settings while encoding still falls back to the CPU.
 
-**Intel QSV / AMD VAAPI:**
+**Intel Quick Sync / AMD VAAPI** (`/dev/dri`): first look up the host's group numbers for the device, because group names inside the container differ from the host's:
 
-```yaml
-    devices:
-      - /dev/dri
-    group_add:
-      - video
-      - render
+```bash
+getent group video render   # e.g. video:x:44:  and  render:x:105:
 ```
 
-**AMD ROCm extra** (if using AMF via `/dev/kfd`): also mount `/dev/kfd` as in the compose comments.
+Use the numbers from that output (a host with no `render` group needs only the `video` line):
 
-`git pull` / `update.sh` overwrites tracked `docker-compose.yml`. Re-apply uncommented GPU lines after an update. Keep media paths in `.env`; device passthrough has to live in compose.
+```yaml
+services:
+  horde:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"    # video, from getent
+      - "105"   # render, from getent
+```
 
-Ollama passthrough is a **separate** uncomment on the `ollama` service. See [AI setup](ai-setup.md).
+**AMD ROCm extra** (AMF via `/dev/kfd`): add `- /dev/kfd:/dev/kfd` under `devices`.
+
+!!! warning "`/dev/dri` passthrough is not yet confirmed to work"
+    Horde starts as root and then switches to `PUID`:`PGID`, and that switch may drop the extra groups that `group_add` gives the container. If Settings → Library still reports a CPU encoder after this, run `docker logs horde` and look for *permission denied* on `/dev/dri`. A **GPU** entry in Settings only means the device file is visible, not that ffmpeg can open it. NVIDIA does not depend on these groups.
+
+On TrueNAS: install the NVIDIA driver in the TrueNAS UI if you have an NVIDIA card, and do **not** isolate the GPU to another app (Plex, Jellyfin, official Apps). An isolated GPU is invisible to Dockge stacks.
+
+Check the result in Settings → System → Resources (**GPU** shows the card) and Settings → Library (the encoder says **GPU**). The real test is making a compatibility copy of a 1080p video: on the GPU it takes well under the video's running time. `docker compose config` prints the merged configuration if you want to confirm Compose picked the file up.
+
+The `ollama` service's GPU is separate: add an `ollama:` entry with the same `deploy` block (NVIDIA) or `devices` (AMD/Intel) to the same override file. See [AI setup](ai-setup.md#gpu-templates).
 
 ### Playback compatibility encoding { #horde-encode-gpu }
 

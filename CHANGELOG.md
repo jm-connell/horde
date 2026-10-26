@@ -7,6 +7,20 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The install guides, README quick start and `.env.example` are rewritten for
+  people new to Docker: every command explained, how to check each step, a
+  `sudo` note, and a troubleshooting table for the usual first-install errors.
+- GPU passthrough and a different host port now go in
+  `docker-compose.override.yml` instead of edits to `docker-compose.yml`, which
+  make `update.sh` and the **Update now** button stop. If you uncommented the
+  GPU lines in `docker-compose.yml`, move them (see Updating → Local compose
+  edits). The `/dev/dri` example uses the host's numeric group IDs.
+- The setup wizard's Ollama step, the update-button setup help and the
+  password-reset hint say where to run the commands, including a crontab line
+  for hosts other than TrueNAS.
+
 ## [1.1.0] - 2026-10-25
 
 Deleted videos now wait in a trash, channels can clean up after themselves,

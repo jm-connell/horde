@@ -163,7 +163,7 @@ If the old data directory still exists on disk, set `DATA_PATH` / `DOWNLOADS_PAT
 
 **Symptoms:** Settings → System → Resources **GPU** says **None detected**.
 
-That means the `horde` container cannot probe a card. Horde still runs. Usual causes: GPU snippets in `docker-compose.yml` still commented out; TrueNAS isolated the GPU to another app; NVIDIA toolkit / `/dev/dri` missing; no GPU on the host.
+That means the `horde` container cannot probe a card. Horde still runs. Usual causes: no GPU passed in yet (it goes in `docker-compose.override.yml`, see [GPU](environment.md#pass-the-gpu-into-horde)); TrueNAS isolated the GPU to another app; NVIDIA toolkit / `/dev/dri` missing; no GPU on the host.
 
 Horde does not need a GPU for AV1 only or H.264 up to 1080p. See [GPU](environment.md#gpu) for when you need one and how to pass the device in.
 

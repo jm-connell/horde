@@ -45,10 +45,11 @@ export function UpdateSetupHelp() {
           <ol className="list-decimal space-y-2 pl-5">
             <li>
               Open the TrueNAS shell (System → Shell) or SSH to the Docker host.
+              Not Dockge&apos;s Bash button: that shell is inside the container.
             </li>
             <li>
-              Run this (adjust the folder to your stack folder). It checks the
-              connection and prints the exact command to use:
+              Run this, replacing the folder with the one you cloned Horde into.
+              It checks the connection and prints the exact command to use:
               <Code>{`sudo bash ${SHELL_PATH}/scripts/update_watch.sh --setup`}</Code>
             </li>
             <li>
@@ -61,6 +62,11 @@ export function UpdateSetupHelp() {
               . Run As User: <span className="font-mono">root</span>. Schedule:
               Custom, every minute (<span className="font-mono">* * * * *</span>
               ). Leave “Hide Standard Output” checked and save.
+              <br />
+              Not on TrueNAS? Run{" "}
+              <span className="font-mono">sudo crontab -e</span> and add this
+              line instead, with your Horde folder in place of the example:
+              <Code>{`* * * * * bash ${SHELL_PATH}/scripts/update_watch.sh`}</Code>
             </li>
             <li>Within a minute this page shows the Update now button.</li>
           </ol>

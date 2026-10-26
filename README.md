@@ -10,35 +10,52 @@ I don't take credit for creating this, it was all Opus 4.8, Composer 2.5, and re
 
 --
 
-FastAPI serves a built React UI (and an in-app MkDocs wiki) from one container.
-Compose always starts a [bgutil POT](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
-sidecar for YouTube; Ollama is an optional profile. Built for TrueNAS / Dockge,
-works on any Docker host.
+Horde is a single Docker container: a FastAPI backend that serves the React UI,
+the API and an offline copy of the documentation. Docker Compose also starts a
+small [bgutil POT](https://github.com/Brainicism/bgutil-ytdlp-pot-provider)
+container that helps YouTube downloads work without a Google login. A bundled
+Ollama container for local AI is optional. Horde is built for TrueNAS with
+Dockge and runs on any Linux Docker host.
 
-**Accounts.** The first visit asks you to create the admin account (nothing else works until you do), and the admin adds other people, each with their own watch history, AI chats and look; members get only the permissions the admin grants. Lost the admin password: `docker exec -it horde python -m app.cli reset-password <user>`. Optional two-step sign-in (authenticator app and recovery codes) can be required of everyone. Behind an authenticating reverse proxy see `HORDE_AUTH_DISABLED`. Horde is built for a trusted LAN or VPN and is meant to stay there by default; to reach it from the internet anyway, follow the [internet exposure checklist](docs/ops/internet-exposure.md) first. See [Accounts and sign-in](docs/ops/authentication.md).
-
-Full docs ship in the image: **Settings → System → Documentation**, or `/wiki/`
-on the host. Interactive API docs: `/docs`.
+Documentation: [jm-connell.github.io/horde](https://jm-connell.github.io/horde/),
+or **Settings → System → Documentation** (`/wiki/`) in a running Horde.
+Interactive API reference: `/docs`.
 
 ## Features
 
-- **Downloads** — paste a yt-dlp URL, pick a quality preset, watch a FIFO queue
-  with live progress, pause/resume, and YouTube playlist import.
-- **On disk** — `Channel/Year/Title [id].ext` so SMB browsing matches the UI.
-- **Import** — drag-and-drop upload or drop `.mp4` / `.mkv` / `.webm` into the
-  media folder; a review queue before they join the library.
-- **Library** — channel sidebar, YouTube channel catalogs (browse / preview /
-  download undownloaded uploads), hybrid search, tags, bulk select, continue
-  watching.
-- **Player** — standard / theater / windowed, mini player, PiP, Chromecast,
-  SponsorBlock, chapters, subtitles. Optional YouTube stream preview (fragile;
-  no live transcoding — the browser plays the original, or a pre-made
-  ≤1080p H.264 copy on devices that can't decode AV1).
-- **Live streams** — follow channels and see, quietly in the sidebar, which are
-  live; watch through a server-side HLS proxy with scrub-back (DVR).
-- **Playlists** — your own lists or imported YouTube playlists.
-- **AI** (optional) — any OpenAI-compatible provider (OpenRouter, OpenAI, Ollama, LM Studio, …) for embeddings, tags, summaries,
-  chat, recommendations, and duplicate help.
+- **Downloads**: paste any yt-dlp-supported URL, pick a quality preset, and
+  follow a queue with live progress, pause and resume. Imports whole YouTube
+  playlists.
+- **Files on disk**: saved as `Channel/Year/Title [id].ext`, so browsing the
+  share over SMB matches the UI.
+- **Import**: upload in the browser, or copy `.mp4` / `.mkv` / `.webm` files
+  into the media folder. New files wait in a review queue before joining the
+  library.
+- **Library**: channel sidebar, hybrid search, tags, bulk selection, continue
+  watching, and YouTube channel catalogs to browse, preview and download
+  uploads you don't have yet.
+- **Player**: standard, theater and windowed modes, mini player,
+  picture-in-picture, Chromecast, SponsorBlock, chapters and subtitles. Videos
+  play as stored, without live transcoding; devices that cannot play AV1 can get
+  an H.264 copy made ahead of time (Playback compatibility, Settings → Library).
+- **YouTube streaming**: preview a video before deciding to download it. Works
+  for most videos, but quality varies and it can break when YouTube changes.
+- **Live streams**: follow channels, see which are live in the sidebar, and
+  watch with rewind (4 hours by default).
+- **Playlists**: your own lists, imported YouTube playlists, or subscribed
+  playlists that pick up new videos as they are added.
+- **Accounts**: one administrator plus members, each with their own watch
+  history, AI chats and appearance; members get only the permissions the admin
+  grants. Optional two-step sign-in.
+- **AI** (optional): summaries, chapters, chat about a video, tags, semantic
+  search and recommendations, with any OpenAI-compatible provider (OpenRouter,
+  OpenAI, Gemini, Groq, Ollama, LM Studio, …).
+
+Horde is meant for a home network or VPN. Everyone signs in, but before
+exposing it to the internet, follow the
+[internet exposure checklist](https://jm-connell.github.io/horde/ops/internet-exposure/).
+See [Accounts and sign-in](https://jm-connell.github.io/horde/ops/authentication/),
+including how to reset a lost admin password.
 
 ## Screenshots
 
@@ -50,28 +67,30 @@ on the host. Interactive API docs: `/docs`.
 
 ## Quick start
 
-There is no Docker Hub image. Clone this repo onto the Docker host, set two
-paths in `.env`, and Compose **builds** the image (a prebuilt GHCR image is an
-optional alternative; see Update below). Use a real
-`git clone` (not a GitHub ZIP) so later `update.sh` can `git pull`.
+Full walkthroughs: [Install with Docker](https://jm-connell.github.io/horde/getting-started/install-docker/)
+and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truenas-dockge/).
 
-Do this on the **host** (SSH / TrueNAS shell) — not Dockge’s per-service
-**Bash** button, which is inside a container.
+### Requirements
 
-### Clone
+- 64-bit Linux host with Docker, the Docker Compose plugin (`docker compose
+  version` reports v2 or newer) and Git.
+- Run all commands in a shell on the host (SSH or the TrueNAS shell), not in
+  Dockge's per-container **Bash** button.
+- If Docker reports `permission denied`, prefix `docker` commands with `sudo`.
 
-Any Docker host:
+### 1. Clone
+
+There is no Docker Hub image; Compose builds it from this repo. Use
+`git clone`, not a ZIP, so `update.sh` can update it later.
 
 ```bash
 git clone https://github.com/jm-connell/horde.git
 cd horde
 ```
 
-**TrueNAS / Dockge:** clone *into* `DOCKGE_STACKS_DIR` so the folder name is
-the stack name. The host path and the path *inside the Dockge container* must
-match (default `/opt/stacks`; on TrueNAS prefer a pool dataset). Do not
-**Add Stack** and paste only `docker-compose.yml` — `build: .` needs the
-whole repo. Dockge itself: [louislam/dockge](https://github.com/louislam/dockge).
+TrueNAS / Dockge: clone into the Dockge stacks folder so the folder name is the
+stack name. Do not use **Add Stack** with only `docker-compose.yml`; the build
+needs the whole repo.
 
 ```bash
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
@@ -79,167 +98,176 @@ git clone https://github.com/jm-connell/horde.git horde
 cd horde
 ```
 
-### Configure
+### 2. Create folders
+
+Create a media folder and a data folder outside the repo, owned by the user
+Horde should write files as (`id -u` / `id -g`):
+
+```bash
+mkdir -p /home/you/horde-media /home/you/horde-data
+sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
+```
+
+### 3. Configure
 
 ```bash
 cp .env.example .env
 ```
 
-Change the TrueNAS-shaped defaults before first start. They do not exist on
-other machines, so Docker would silently create them as root-owned folders and
-Horde could not write to them. Keep paths in `.env`, not hardcoded in
-`docker-compose.yml`.
+Set these in `.env`:
 
-| Variable | What to put |
-|----------|-------------|
-| `PUID` / `PGID` | File owner (`id <user>`, or TrueNAS → Credentials → Local Users) |
-| `DOWNLOADS_PATH` | Host folder for videos (`Channel/Year/...`) |
-| `DATA_PATH` | Host folder for SQLite + thumbnails (on the pool, not in the git tree). **Must be a local disk or dataset, never SMB/NFS**: the SQLite database uses WAL, which can corrupt on network filesystems |
+| Variable | Value |
+|----------|-------|
+| `PUID` / `PGID` | Output of `id -u` / `id -g` (TrueNAS: Credentials → Local Users). Not `0`. |
+| `DOWNLOADS_PATH` | Full path of the media folder. May be a network share. |
+| `DATA_PATH` | Full path of the data folder (database, thumbnails). Must be a local disk, not SMB/NFS: SQLite can corrupt on network filesystems. |
 
-```bash
-# generic example — use your real paths and the same PUID:PGID as in .env
-mkdir -p /home/you/horde-media /home/you/horde-data
-sudo chown -R 1000:1000 /home/you/horde-media /home/you/horde-data
-```
+The example values are TrueNAS paths. On other machines Docker creates missing
+paths owned by root, and Horde cannot save downloads there. Keep paths in
+`.env`, not in `docker-compose.yml`.
 
-TrueNAS-shaped `.env`:
-
-```env
-PUID=1000
-PGID=1000
-DOWNLOADS_PATH=/mnt/tank/media/youtube_archive
-DATA_PATH=/mnt/tank/apps/horde/data
-SCAN_INTERVAL_SEC=60
-```
-
-Optional SMB on the media dataset: dropped `.mp4` / `.mkv` / `.webm` files
-show up in **Import** within `SCAN_INTERVAL_SEC` (default 60s).
-
-### Start
+### 4. Start
 
 ```bash
 docker compose up --build -d
 ```
 
-On Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not
-rewrite volume lines in the compose editor. The first build compiles the UI
-and wiki and can take several minutes.
+Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not edit
+the volume lines in the compose editor. The first build takes several minutes.
 
-Open `http://<server-ip>:8686` (host **8686** → container **8080**) and create the
-admin account. `curl -sf http://127.0.0.1:8686/api/health` should return `status: ok`.
+### 5. Open
 
-AI is optional: pick a provider in the setup wizard or Settings → AI (any
-OpenAI-compatible URL plus an API key if it needs one). To run models on this
-machine without setting up a server, start the bundled Ollama with
-`docker compose --profile ai up -d` and choose "Run Ollama for me". See the
-[AI setup](docs/ops/ai-setup.md) page for Docker networking.
+Go to `http://<server-ip>:8686` (host port 8686, not 8080), create the admin
+account and complete the setup wizard. To verify: `docker compose ps` shows
+`horde` as `Up (healthy)`, and `curl -s http://127.0.0.1:8686/api/health`
+returns `"status":"ok"`. Common errors:
+[troubleshooting table](https://jm-connell.github.io/horde/getting-started/install-docker/#if-something-goes-wrong).
 
-### Update
+### Optional
 
-Administrators can update from the app: **Settings → System → Updates → Update now**.
-It needs a one-time setup, a cron job on the host that runs
+- **Imports:** `.mp4` / `.mkv` / `.webm` files copied into the media folder
+  (for example over SMB) appear in **Import** within `SCAN_INTERVAL_SEC`
+  (default 60s).
+- **AI:** choose a provider in the setup wizard or Settings → AI (any
+  OpenAI-compatible URL, plus an API key if required). For local models without
+  your own server, run `docker compose --profile ai up -d` and choose "Run
+  Ollama for me". Docker networking: [AI setup](docs/ops/ai-setup.md).
+- **GPU or a different port:** put these in `docker-compose.override.yml` next
+  to `docker-compose.yml`. Compose reads it automatically and updates do not
+  touch it. See [GPU](https://jm-connell.github.io/horde/ops/environment/#gpu)
+  and [Change the port](https://jm-connell.github.io/horde/ops/ports-networking/#change-the-port).
+
+## Update
+
+The **Update now** button in **Settings → System → Updates** updates Horde from
+the browser. It needs a one-time setup: a cron job on the host that runs
 `scripts/update_watch.sh` every minute as root (TrueNAS: System → Advanced
-Settings → Cron Jobs). Horde itself never gets Docker access; the button only
-leaves a request file that the job picks up. Steps and troubleshooting:
-[Updating](docs/getting-started/updating.md#update-from-the-app).
+Settings → Cron Jobs). Horde itself never gets access to Docker; the button
+leaves a request that the cron job picks up. Steps:
+[Updating](https://jm-connell.github.io/horde/getting-started/updating/#update-from-the-app).
 
-The button runs the same script as the shell. From the same clone, on the host:
+From a shell on the host, the same update is:
 
 ```bash
 cd /path/to/horde          # e.g. /mnt/tank/dockge/stacks/horde
 bash update.sh
 ```
 
-That snapshots live volume mounts into `.env`, backs up the SQLite database,
-moves the checkout to the newest release tag (`HORDE_UPDATE_CHANNEL=main`
-follows every commit instead), rebuilds with the version baked in (tagged
-`horde:<shortsha>`), recreates containers, and waits on `/api/health`. If the
-new version is not healthy it rolls back automatically; `bash update.sh
---rollback` goes back on demand. Media and settings on host volumes are
-preserved. Hard-refresh the browser (`Ctrl+Shift+R`). Do not `git reset
---hard` to unstick a pull. Details: [Updating](docs/getting-started/updating.md).
+Either way, `update.sh`:
 
-Prefer not to build on the NAS? Tagged releases are published as multi-arch
-images to `ghcr.io/jm-connell/horde`; see "Use the published image" in the
-same page.
+- backs up the database,
+- moves to the newest release (set `HORDE_UPDATE_CHANNEL=main` in `.env` to
+  follow every commit instead),
+- rebuilds the image (or pulls it, with the published image), recreates the containers and waits until Horde reports
+  healthy,
+- rolls back automatically if the new version does not start.
 
-If you use Dockge, refresh it so it reloads compose — do **not** click
-**Deploy** with a stale editor (the script already recreated the stack).
+`bash update.sh --rollback` undoes the last update. Videos and settings are not
+affected. After an update, hard-refresh the browser (`Ctrl+Shift+R`). On
+Dockge, reload the page instead of clicking **Deploy**: the script has already
+recreated the stack.
 
-yt-dlp is **pinned** in `backend/requirements.txt` at image build time; pull
-+ rebuild is how you pick up a newer pin. Set `YTDLP_AUTO_UPDATE=1` in `.env`
-to fetch the newest yt-dlp on every container start instead (opt-in).
+Do not run `git reset --hard` or edit `docker-compose.yml` to get past a failed
+update; see [Updating](https://jm-connell.github.io/horde/getting-started/updating/)
+for what to do instead. To skip building on the host, use the prebuilt
+multi-arch images at `ghcr.io/jm-connell/horde`
+([Use the published image](https://jm-connell.github.io/horde/getting-started/updating/#use-the-published-image)).
 
-Longer walkthroughs: [`docs/getting-started/install-docker.md`](docs/getting-started/install-docker.md),
-[`docs/getting-started/truenas-dockge.md`](docs/getting-started/truenas-dockge.md),
-[`docs/getting-started/updating.md`](docs/getting-started/updating.md).
+yt-dlp is pinned in the image and updates with Horde. To install the newest
+yt-dlp on every container start instead, set `YTDLP_AUTO_UPDATE=1` in `.env`.
+
+## Configuration
+
+Settings that live in `.env` (most others are in the app's Settings page):
+
+| Variable | Purpose |
+|----------|---------|
+| `PUID` / `PGID` | User and group Horde writes files as (default `1000`) |
+| `DOWNLOADS_PATH` | Host folder for videos, mounted at `/downloads` |
+| `DATA_PATH` | Host folder for the database and thumbnails, mounted at `/app/data` (local disk only) |
+| `SCAN_INTERVAL_SEC` | How often the media folder is rescanned for new files (default `60` seconds) |
+| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
+| `YTDLP_COOKIE_FILE` | Optional cookies file for age-restricted or blocked videos |
+| `OPENROUTER_API_KEY` | Optional; overrides the key saved in Settings → AI while the provider is OpenRouter |
+| `HORDE_UPDATE_CHANNEL` | Used by `update.sh`: `release` (default), `prerelease` or `main` |
+| `HORDE_ALLOWED_HOSTS` | Extra host names to accept, e.g. a domain name behind a reverse proxy |
+| `HORDE_TRUST_PROXY` | `1` behind a reverse proxy you control |
+| `HORDE_AUTH_DISABLED` | `1` only when a reverse proxy handles sign-in and is the only way in |
+
+After editing `.env`, apply it with `docker compose up -d`. Every variable:
+[Environment variables](https://jm-connell.github.io/horde/ops/environment/).
+
+## YouTube access
+
+The `bgutil-pot` container generates YouTube's proof-of-origin tokens, so no
+Google login is needed. Keep download concurrency low
+(`MAX_DOWNLOAD_CONCURRENCY`, default `2`) to avoid being flagged.
+
+If downloads fail with bot or sign-in errors, check Settings → System for the
+token service status and the last error. As a fallback, provide cookies with
+`YTDLP_COOKIE_FILE` or `YTDLP_COOKIES_FROM_BROWSER`. Details:
+[YouTube access](https://jm-connell.github.io/horde/ops/youtube-access/).
+
+## Notes
+
+- **Playback compatibility** (Settings → Library): AV1 only (default), H.264
+  up to 1080p, H.264 at full resolution (converts 1440p/4K downloads, replacing
+  the originals), or AV1 plus an H.264 copy (up to 1080p by default). The
+  player picks the file the device can play. H.264 encoding uses a GPU when one
+  is passed to the container, otherwise the CPU.
+- **Channel catalogs** are YouTube-only. Other yt-dlp sites still download.
+- **Health endpoints**: `GET /api/health` (status; version and details when
+  signed in), `GET /api/ready` (database, migrations and workers; `503` when not
+  ready), `GET /api/ping` (liveness).
+
+## Documentation
+
+| Topic | Wiki section |
+|-------|--------------|
+| Install, TrueNAS, first run, updating | [Getting started](https://jm-connell.github.io/horde/getting-started/install-docker/) |
+| Library, player, downloads, AI | Using Horde |
+| Every setting | Settings |
+| Environment variables, storage, troubleshooting | Configuration & ops |
+| Architecture and design decisions | Architecture, Design decisions, Decision records |
+| API reference | `/docs` on a running Horde |
+
+The same documentation is at [jm-connell.github.io/horde](https://jm-connell.github.io/horde/)
+and at `/wiki/` in every Horde. Its source is in [`docs/`](docs/).
 
 ## Local development
 
 ```bash
-./start.sh          # Linux: backend :8080 + Vite ~5173
+./start.sh          # Linux: backend on :8080, Vite dev server on :5173
 # Windows: dev.bat
 ```
 
-Open the Vite URL (usually `http://localhost:5173`). Wiki build runs unless
-you set `SKIP_WIKI=1`. Tests: `pytest` in `backend/`, `npm test` in
-`frontend/`. CI (pytest, Vitest, wiki, Docker image) runs on every GitHub
-push — see [`docs/getting-started/testing.md`](docs/getting-started/testing.md).
-
-## Configuration
-
-| Variable | Purpose |
-|----------|---------|
-| `PUID` / `PGID` | UID/GID the container uses for files (default `1000`) |
-| `DOWNLOADS_PATH` | Host media dataset → `/downloads` |
-| `DATA_PATH` | Host DB + thumbnails → `/app/data` |
-| `SCAN_INTERVAL_SEC` | Folder rescan interval (default `60`) |
-| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
-| `YTDLP_POT_BASE_URL` | Compose: `http://bgutil-pot:4416` |
-| `YTDLP_COOKIE_FILE` | Optional Netscape cookies (age gates / hard blocks) |
-| `OLLAMA_BASE_URL` | Legacy fallback when Settings → AI has no provider URL |
-| `OPENROUTER_API_KEY` | Optional; overrides the saved key while the provider is OpenRouter |
-| `HORDE_GITHUB_REPO` | Repo for in-app update checks |
-| `HORDE_UPDATE_CHANNEL` | `update.sh` only: `release` (default), `prerelease` or `main` |
-| `HORDE_ALLOWED_HOSTS` | Extra `Host` names to accept (public names behind a reverse proxy) |
-| `HORDE_TRUST_PROXY` | `1` behind a proxy you control: trust `X-Forwarded-For` / `-Proto` |
-| `HORDE_AUTH_DISABLED` | `1` only when a proxy authenticates users and is the only way in |
-
-Full list: `/wiki/` → Configuration & ops → Environment variables, or
-[`docs/ops/environment.md`](docs/ops/environment.md).
-
-## YouTube access
-
-Compose always runs `bgutil-pot` so proof-of-origin tokens are generated
-without a Google login. Keep download concurrency modest (`MAX_DOWNLOAD_CONCURRENCY`,
-default 2) to reduce IP flagging.
-
-If extracts still fail with bot / sign-in errors, check Settings → System
-(POT health, last extract failure). Cookie fallbacks: `YTDLP_COOKIE_FILE` or
-`YTDLP_COOKIES_FROM_BROWSER`. Details:
-[`docs/ops/youtube-access.md`](docs/ops/youtube-access.md).
-
-## Documentation
-
-| Topic | Where |
-|-------|--------|
-| Public wiki (GitHub Pages) | [jm-connell.github.io/horde](https://jm-connell.github.io/horde/) |
-| Install, TrueNAS, first run, updates | `/wiki/` → Getting started |
-| Library, player, downloads, AI | `/wiki/` → Using Horde |
-| Every setting | `/wiki/` → Settings |
-| Env vars, storage, troubleshooting | `/wiki/` → Configuration & ops |
-| Architecture & design rationale | `/wiki/` → Architecture (start with the architecture map) / Design decisions / Decision records |
-| API (Swagger) | `/docs` |
-
-Source Markdown lives in [`docs/`](docs/) and is built into the image with
-MkDocs Material. The same site is deployed to GitHub Pages from `main`.
-
-## Notes
-
-- Playback compatibility (Settings → Library): AV1 only (default), H.264 up to 1080p, H.264 full resolution (converts 1440p/4K, replacing originals), or AV1 + a ≤1080p H.264 copy beside the original. The player picks whichever file the device can decode. H.264 encodes use a GPU encoder when passed into the container, otherwise software.
-- Channel catalogs (index remote uploads for feed search and stream preview)
-  are YouTube-only. Non-YouTube yt-dlp URLs still download.
-- Health: `GET /api/health` (version, yt-dlp, POT, wiki, library count when signed in; anonymous callers get only `status`, `setup_required` and `auth_required`), `GET /api/ready` (database, migrations and workers; `503` when not ready), `GET /api/ping` (liveness).
+Open `http://localhost:5173`. Set `SKIP_WIKI=1` to skip building the wiki.
+Run tests with `pytest` in `backend/` and `npm test` in `frontend/`; CI runs
+the full set on every push. See
+[Local development](https://jm-connell.github.io/horde/getting-started/local-dev/)
+and [Automated testing](https://jm-connell.github.io/horde/getting-started/testing/).
+Contributor guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
+[`CLAUDE.md`](CLAUDE.md).
 
 ## License
 

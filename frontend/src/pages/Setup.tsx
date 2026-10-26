@@ -561,8 +561,12 @@ function WizardPanel({
                   Horde&apos;s compose file defines an optional Ollama
                   container, but it is not installed or started by default. This
                   command downloads the Ollama image the first time (a large
-                  download) and starts it next to Horde; run it from the folder
-                  holding <span className="font-mono">docker-compose.yml</span>:
+                  download) and starts it next to Horde. Run it in a terminal on
+                  the server (SSH or the TrueNAS shell, not Dockge&apos;s Bash
+                  button), from the Horde folder that holds{" "}
+                  <span className="font-mono">docker-compose.yml</span>. If
+                  Docker answers &ldquo;permission denied&rdquo;, put{" "}
+                  <span className="font-mono">sudo</span> in front.
                 </p>
                 <pre className="ui-panel overflow-x-auto rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-xs text-gray-200">
                   docker compose --profile ai up -d
@@ -570,7 +574,23 @@ function WizardPanel({
                 <p className="text-xs text-muted">
                   Then connect: Horde picks models that fit your GPU and
                   downloads them (a few GB). Without a GPU passed to the
-                  container, Ollama runs on the CPU, which is slow.
+                  container, Ollama runs on the CPU, which is slow
+                  {health?.wiki_available ? (
+                    <>
+                      {" "}
+                      (
+                      <a
+                        href="/wiki/ops/ai-setup/#gpu-templates"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-accent hover:underline"
+                      >
+                        how to add a GPU
+                      </a>
+                      )
+                    </>
+                  ) : null}
+                  .
                 </p>
                 <button
                   type="button"
