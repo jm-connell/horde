@@ -21,6 +21,21 @@ test("library page has no serious accessibility violations", async ({
   await expectNoSeriousViolations(page, "library");
 });
 
+test("reduced motion keeps card fades but drops the rise", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  const card = page.locator("[data-horde='video-card'].ui-card-enter").first();
+  await expect(card).toBeVisible();
+  await expect(page.locator("html")).toHaveAttribute("data-page-fade", "on");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-hover-motion",
+    "off"
+  );
+  expect(await card.evaluate((el) => getComputedStyle(el).animationName)).toBe(
+    "page-fade-in"
+  );
+});
+
 test("watch page has no serious accessibility violations", async ({
   page,
   request,

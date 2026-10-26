@@ -75,7 +75,7 @@ export default class ErrorBoundary extends Component<Props, State> {
         data-horde="error-boundary"
         className={
           this.props.fullPage
-            ? "flex min-h-screen items-center justify-center bg-ink-950 px-4 text-gray-200"
+            ? "flex min-h-svh items-center justify-center bg-ink-950 px-4 text-gray-200"
             : "flex items-center justify-center px-4 py-16"
         }
       >

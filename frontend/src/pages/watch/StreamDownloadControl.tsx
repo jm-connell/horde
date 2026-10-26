@@ -123,8 +123,8 @@ export default function StreamDownloadControl({
           </span>
           <span className="inline-block h-1 w-12 overflow-hidden rounded-full bg-ink-800 sm:w-20">
             <span
-              className="block h-full rounded-full bg-accent/70 transition-all duration-300"
-              style={{ width: `${downloadPercent}%` }}
+              className="block h-full w-full rounded-full bg-accent/70 transition-transform duration-300 ease-linear"
+              style={{ transform: `translateX(${downloadPercent - 100}%)` }}
             />
           </span>
           {(live?.downloaded_bytes != null || live?.total_bytes != null) && (

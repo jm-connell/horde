@@ -612,7 +612,7 @@ export default function TopNav() {
           <button
             type="button"
             aria-label="Close navigation menu"
-            className={`fixed inset-0 z-20 cursor-default bg-black/40 transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+            className={`fixed inset-0 z-20 cursor-default bg-black/40 transition-opacity duration-300 ease-fluid motion-reduce:transition-none ${
               menuShown ? "opacity-100" : "pointer-events-none opacity-0"
             }`}
             onClick={() => setMenuOpen(false)}

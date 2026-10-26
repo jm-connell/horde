@@ -59,8 +59,8 @@ function ProgressBar({
   return (
     <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-ink-800">
       <div
-        className="h-full rounded-full bg-sky-500/80 transition-[width] duration-500"
-        style={{ width: `${pct}%` }}
+        className="h-full w-full rounded-full bg-sky-500/80 transition-transform duration-500 ease-linear"
+        style={{ transform: `translateX(${pct - 100}%)` }}
       />
     </div>
   );

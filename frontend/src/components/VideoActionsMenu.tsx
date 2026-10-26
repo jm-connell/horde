@@ -127,7 +127,7 @@ export default function VideoActionsMenu({
           triggerRef,
         }}
       >
-        <MenuScroll className="max-h-[min(24rem,calc(100vh-2rem))]">
+        <MenuScroll className="max-h-[min(24rem,calc(100dvh-2rem))]">
           {can("edit_metadata") && (
             <button
               onClick={() => {

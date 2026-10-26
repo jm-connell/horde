@@ -422,17 +422,15 @@ export default function Import() {
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-ink-800">
                 <div
-                  className={`h-full transition-all ${
+                  className={`h-full w-full transition-[transform,background-color] ease-linear ${
                     u.status === "error" ? "bg-red-500" : "bg-accent"
                   }`}
                   style={{
-                    width: `${
-                      u.status === "done"
-                        ? 100
-                        : u.status === "error"
-                          ? 100
-                          : u.pct
-                    }%`,
+                    transform: `translateX(${
+                      u.status === "done" || u.status === "error"
+                        ? 0
+                        : u.pct - 100
+                    }%)`,
                   }}
                 />
               </div>

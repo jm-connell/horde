@@ -314,8 +314,9 @@ test("a not-downloaded related video can be queued and played from the queue", a
     .first();
   await item.hover();
   await item.getByTitle("Add to queue").click();
-  // Adding does not open it.
+  // Adding does not open it, and the button acknowledges the click.
   await expect(page).toHaveURL(WATCH);
+  await expect(item.getByTitle("Add to queue")).toHaveText("✓ Queued");
 
   const queue = page.getByText(/^Up next \(1\)$/).locator("xpath=../..");
   await expect(queue.getByText("Not yet downloaded clip")).toBeVisible();

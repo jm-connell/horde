@@ -18,7 +18,7 @@ export function AuthCard({
 }) {
   return (
     <div className="relative min-h-full overflow-x-hidden">
-      <main className="relative z-10 mx-auto flex min-h-screen max-w-md flex-col justify-center px-4 py-12">
+      <main className="relative z-10 mx-auto flex min-h-svh max-w-md flex-col justify-center px-4 py-12">
         <div className="ui-panel rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700">
           {eyebrow && <p className="mb-1 text-xs text-muted">{eyebrow}</p>}
           <h1 className="mb-5 text-2xl font-semibold text-gray-100">{title}</h1>

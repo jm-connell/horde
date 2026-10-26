@@ -25,6 +25,12 @@
   --color-accent-deep: rgb(var(--accent-deep));
 }
 
+/* The house motion curve (a strong ease-out): `ease-fluid` in classes,
+   var(--ease-fluid) in CSS. */
+@theme {
+  --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @theme {
   /* Tailwind 3 sRGB values for the palette shades in use. The theme overrides
      below and the contrast checks were tuned against these; Tailwind 4's
@@ -809,7 +815,7 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
    holds the start state only during the delay; afterwards the card's own
    hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
 html[data-page-fade="on"] .ui-card-enter {
-  animation: card-enter 420ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: card-enter 300ms var(--ease-fluid) backwards;
   animation-delay: var(--card-enter-delay, 0ms);
 }
 
@@ -940,16 +946,16 @@ html[data-page-fade="on"] .ui-fade-img {
 }
 
 .wizard-step-in-next {
-  animation: wizard-step-in-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-in-next 300ms var(--ease-fluid) both;
 }
 .wizard-step-in-prev {
-  animation: wizard-step-in-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-in-prev 300ms var(--ease-fluid) both;
 }
 .wizard-step-out-next {
-  animation: wizard-step-out-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-out-next 300ms var(--ease-fluid) both;
 }
 .wizard-step-out-prev {
-  animation: wizard-step-out-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-out-prev 300ms var(--ease-fluid) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -980,6 +986,39 @@ html[data-translucent-panels="on"] header.ui-panel {
   background-color: rgb(
     var(--ink-950) / var(--ui-panel-header-alpha, 0.52)
   ) !important;
+}
+
+/* Phones: no gray flash over a tapped control (button press and :hover
+   already acknowledge the tap), no double-tap-zoom wait before a click, and
+   no text selection when a control is long-pressed. */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button,
+a,
+[role="button"],
+summary,
+label,
+select {
+  touch-action: manipulation;
+}
+
+button,
+[role="button"] {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* iOS Safari zooms into any text field under 16px on focus and stays zoomed. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not(
+      [type="color"]
+    ),
+  textarea,
+  select {
+    font-size: max(16px, 1rem);
+  }
 }
 
 .ui-nav-icon {
@@ -1104,58 +1143,62 @@ html[data-hover-motion="subtle"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="lift"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]) {
   transition:
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 300ms var(--ease-fluid),
+    box-shadow 300ms var(--ease-fluid),
+    filter 300ms var(--ease-fluid),
     background-color 280ms ease,
     color 280ms ease,
     border-color 280ms ease,
     opacity 280ms ease;
 }
 
-html[data-hover-motion="subtle"] .ui-card:hover {
-  transform: translateY(-2px);
-}
+/* Hover states only where a pointer really hovers: a tap on a touch screen
+   fires :hover and leaves the card lifted until the next tap elsewhere. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-hover-motion="subtle"] .ui-card:hover {
+    transform: translateY(-2px);
+  }
 
-html[data-hover-motion="lift"] .ui-card:hover {
-  transform: translateY(-5px);
-  filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.45));
-}
+  html[data-hover-motion="lift"] .ui-card:hover {
+    transform: translateY(-5px);
+    filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.45));
+  }
 
-html[data-hover-motion="glow"] .ui-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px rgb(var(--accent) / 0.35),
-    0 0 24px rgb(var(--accent) / 0.18);
-}
+  html[data-hover-motion="glow"] .ui-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.35),
+      0 0 24px rgb(var(--accent) / 0.18);
+  }
 
-html[data-hover-motion="subtle"]
-  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
-html[data-hover-motion="subtle"] .ui-interactive:hover,
-html[data-hover-motion="subtle"] select:hover,
-html[data-hover-motion="subtle"]
-  input:not([type="range"]):not([type="color"]):hover {
-  filter: brightness(1.06);
-}
+  html[data-hover-motion="subtle"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="subtle"] .ui-interactive:hover,
+  html[data-hover-motion="subtle"] select:hover,
+  html[data-hover-motion="subtle"]
+    input:not([type="range"]):not([type="color"]):hover {
+    filter: brightness(1.06);
+  }
 
-html[data-hover-motion="lift"]
-  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
-html[data-hover-motion="lift"] .ui-interactive:hover,
-html[data-hover-motion="lift"] select:hover {
-  transform: translateY(-1px);
-}
+  html[data-hover-motion="lift"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="lift"] .ui-interactive:hover,
+  html[data-hover-motion="lift"] select:hover {
+    transform: translateY(-1px);
+  }
 
-html[data-hover-motion="glow"]
-  button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
-    .ui-player-chrome
-  ):hover,
-html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
-html[data-hover-motion="glow"] select:hover,
-html[data-hover-motion="glow"]
-  input:not([type="range"]):not([type="color"]):hover {
-  box-shadow:
-    0 0 0 1px rgb(var(--accent) / 0.25),
-    0 0 16px rgb(var(--accent) / 0.12);
+  html[data-hover-motion="glow"]
+    button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
+      .ui-player-chrome
+    ):hover,
+  html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
+  html[data-hover-motion="glow"] select:hover,
+  html[data-hover-motion="glow"]
+    input:not([type="range"]):not([type="color"]):hover {
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.25),
+      0 0 16px rgb(var(--accent) / 0.12);
+  }
 }
 
 /* Panel toggles keep a wide hit target; glow the label chip instead of a
@@ -1165,17 +1208,24 @@ html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
   padding: 0.3rem 0.55rem;
   margin: -0.3rem -0.55rem;
   transition:
-    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow 300ms var(--ease-fluid),
+    transform 300ms var(--ease-fluid);
 }
 
-html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press,
 html[data-hover-motion="glow"]
   .ui-panel-toggle:focus-visible
   .ui-panel-toggle-press {
   box-shadow:
     0 0 0 1px rgb(var(--accent) / 0.35),
     0 0 18px rgb(var(--accent) / 0.16);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press {
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.35),
+      0 0 18px rgb(var(--accent) / 0.16);
+  }
 }
 
 /* Button press feedback (always on unless reduced motion).
@@ -1227,17 +1277,13 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   }
 }
 
+/* Reduced motion drops movement, not feedback: page, card and thumbnail
+   fades stay (opacity only). applyMotionPrefs already sets hover motion
+   and button press to "off" then; controls keep their own color
+   transitions. */
 @media (prefers-reduced-motion: reduce) {
-  html[data-page-fade="on"] .page-shell {
-    animation: none;
-  }
-
-  .ui-card-enter {
-    animation: none !important;
-  }
-
-  .ui-fade-img {
-    transition: none !important;
+  html[data-page-fade="on"] .ui-card-enter {
+    animation-name: page-fade-in;
   }
 
   html[data-hover-motion="subtle"] .ui-card,

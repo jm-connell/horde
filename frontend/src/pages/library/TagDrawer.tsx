@@ -32,7 +32,7 @@ export default function TagDrawer({
     <div>
       {!isHome && !onChannelPage && (activeTag || hasTags) && (
         <div
-          className={`flex flex-wrap items-center gap-2 transition-[margin] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+          className={`flex flex-wrap items-center gap-2 transition-[margin] duration-300 ease-fluid motion-reduce:transition-none ${
             showTags && hasTags ? "mb-2" : "mb-5"
           }`}
         >
@@ -57,7 +57,7 @@ export default function TagDrawer({
       {hasTags && (
         <Collapse open={showTags} className="motion-reduce:transition-none">
           <div
-            className={`mb-5 flex flex-wrap items-center gap-2 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+            className={`mb-5 flex flex-wrap items-center gap-2 transition-transform duration-300 ease-fluid motion-reduce:transition-none ${
               showTags ? "translate-y-0" : "pointer-events-none -translate-y-1"
             }`}
             aria-hidden={!showTags}

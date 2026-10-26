@@ -109,7 +109,9 @@ export function applyMotionPrefs(settings: Settings): void {
   root.dataset.navIndicator = reduced ? "none" : settings.navIndicator;
   root.dataset.hoverMotion = reduced ? "off" : settings.hoverMotion;
   root.dataset.buttonPress = reduced ? "off" : "on";
-  root.dataset.pageFade = reduced ? "off" : "on";
+  // Fades stay under reduced motion: index.css turns the card rise into a
+  // plain fade there, and page and thumbnail fades are opacity only.
+  root.dataset.pageFade = "on";
   const s = settings.translucentPanelStrength;
   const b = settings.translucentPanelBlur;
   // 0% transparency keeps Tailwind fills; any amount above enables the sliders.
@@ -146,14 +148,23 @@ export function applyTheme(theme: Theme, customColors?: CustomColors): void {
   if (theme === "custom" && customColors) {
     root.setAttribute("data-theme", "custom");
     applyCustomColors(customColors);
-    return;
-  }
-
-  clearCustomThemeVars();
-
-  if (theme === "default") {
-    root.removeAttribute("data-theme");
   } else {
-    root.setAttribute("data-theme", theme);
+    clearCustomThemeVars();
+    if (theme === "default") {
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", theme);
+    }
   }
+  syncThemeColor(root);
+}
+
+/** Paint the phone status bar / PWA title bar in the theme's page background
+ *  instead of index.html's fixed default-theme color. */
+function syncThemeColor(root: HTMLElement): void {
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]'
+  );
+  const ink = getComputedStyle(root).getPropertyValue("--ink-950").trim();
+  if (meta && ink) meta.content = `rgb(${ink})`;
 }

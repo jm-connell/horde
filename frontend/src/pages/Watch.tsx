@@ -119,7 +119,7 @@ export default function Watch() {
 
   return (
     <div
-      className={`${contentClass} transition-[margin-top] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${isWide ? "-mt-6" : "mt-0"}`}
+      className={`${contentClass} transition-[margin-top] duration-300 ease-fluid motion-reduce:transition-none ${isWide ? "-mt-6" : "mt-0"}`}
     >
       <div
         className={

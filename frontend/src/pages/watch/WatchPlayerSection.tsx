@@ -31,12 +31,12 @@ export default function WatchPlayerSection({
 }) {
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
-    : `relative left-1/2 -translate-x-1/2 bg-black transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+    : `relative left-1/2 -translate-x-1/2 bg-black transition-[width] duration-300 ease-fluid motion-reduce:transition-none ${
         isWide ? "w-screen" : "w-full"
       }`;
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
   const playerMetaClass =
-    "transition-[padding] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none" +
+    "transition-[padding] duration-300 ease-fluid motion-reduce:transition-none" +
     (isWide ? " px-3 md:px-6" : "");
 
   return (
