@@ -77,4 +77,5 @@ npm ci            # exact install from the lock file (what CI and Docker do)
 npm audit --omit=dev --audit-level=high
 ```
 
-Node 24 is required (`engines` in `package.json`, `.nvmrc` at the repo root).
+Node 24 or newer is required (`engines` in `package.json`); the image, CI and
+`.nvmrc` at the repo root use Node 26.

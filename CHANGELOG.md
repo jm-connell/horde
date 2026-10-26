@@ -20,6 +20,8 @@ All notable changes to Horde are documented here. The format follows
 - The setup wizard's Ollama step, the update-button setup help and the
   password-reset hint say where to run the commands, including a crontab line
   for hosts other than TrueNAS.
+- The image's frontend build stage, CI and `.nvmrc` use Node 26 (Node 24 or
+  newer still works for building from source).
 
 ## [1.1.0] - 2026-10-25
 
