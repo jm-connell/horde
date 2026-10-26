@@ -23,9 +23,14 @@ from ...models import (
     require_id,
 )
 from .. import activity, compat_rendition, follows, library, media_sidecars, scanner
-from ..fsutil import MoveJournal, safe_unlink
+from ..fsutil import MoveJournal, is_within, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
-from ..metadata import probe_dimensions, probe_duration
+from ..metadata import (
+    probe_dimensions,
+    probe_duration,
+    sprite_image_path,
+    sprite_meta_path,
+)
 from ..paths import (
     find_video_by_path,
     media_server_sidecar_paths,
@@ -310,10 +315,11 @@ def _commit_or_roll_back(
 
 def _remove_replaced_files(stale_paths: list[Path]) -> None:
     """The new row is durable: only now remove what it replaced (old media,
-    subtitles, stale H.264 sidecar). Done before the finalize thread starts so it
-    cannot delete freshly fetched subtitles that share a name."""
+    subtitles, stale H.264 sidecar, seek sprites). Done before the finalize thread
+    starts so it cannot delete freshly fetched subtitles that share a name."""
+    data = get_paths().data
     for stale in stale_paths:
-        if not safe_unlink(stale):
+        if not safe_unlink(stale, root=data if is_within(stale, data) else None):
             logger.warning(
                 "could not remove the replaced file %s after commit; "
                 "delete it manually if it is still there",
@@ -486,6 +492,11 @@ def _stale_files_of(video: Video, final_path: Path) -> list[Path]:
     old_compat = resolve_compat_path(video)
     if old_compat is not None:
         stale.append(old_compat)
+    # Seek sprites are keyed by video id, so the new file would inherit the old
+    # sheet (and "sprites exist" would skip the rebuild) unless it goes too.
+    video_id = require_id(video)
+    stale.append(sprite_image_path(get_paths().sprites, video_id))
+    stale.append(sprite_meta_path(get_paths().sprites, video_id))
     return stale
 
 
@@ -571,6 +582,7 @@ def _apply_file_facts(video: Video, request: CommitRequest) -> None:
     video.compat_size = None
     video.compat_source = None
     video.compat_error = None
+    video.sprite_path = None
 
 
 def commit_library_video(request: CommitRequest) -> CommittedVideo:

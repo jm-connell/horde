@@ -11,11 +11,14 @@ from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, select
 from ytdlp_fakes import FakeYtdlp, make_info, run_job_inline, stub_media_probes
 
+from app.context import get_paths
 from app.models import DownloadJob, JobStatus, Video
 from app.services import scanner
 from app.services.downloads import dbwrite, errors, finalize, staging
 from app.services.downloads.queue import download_queue
+from app.services.metadata import sprite_image_path, sprite_meta_path
 from app.services.paths import STAGING_DIR_NAME
+from app.services.sprites import sprite_pool
 
 YT = "aaaaaaaaaaa"
 URL = f"https://www.youtube.com/watch?v={YT}"
@@ -148,6 +151,27 @@ def test_successful_redownload_replaces_atomically_and_updates_row(
     with Session(init_db["engine"]) as s:
         assert s.get(Video, existing.id).file_size == 777
     assert not (root / STAGING_DIR_NAME / str(job_id)).exists()
+
+
+def test_redownload_drops_the_old_seek_sprites(init_db, fake, existing):
+    """Sprites are keyed by video id: a replaced file must not keep the old sheet."""
+    sprites = get_paths().sprites
+    sprites.mkdir(parents=True, exist_ok=True)
+    sprite_image_path(sprites, existing.id).write_bytes(b"OLD SHEET")
+    sprite_meta_path(sprites, existing.id).write_text("{}")
+    with Session(init_db["engine"]) as s:
+        row = s.get(Video, existing.id)
+        row.sprite_path = str(sprite_image_path(sprites, existing.id))
+        s.add(row)
+        s.commit()
+
+    run_job_inline(_redownload_job(init_db, existing))
+    sprite_pool.wait_idle(10)
+
+    image = sprite_image_path(sprites, existing.id)
+    meta = sprite_meta_path(sprites, existing.id)
+    assert not image.is_file() or image.read_bytes() != b"OLD SHEET"
+    assert not meta.is_file() or meta.read_text() != "{}"
 
 
 def test_replace_into_new_folder_removes_old_copy_after_commit(
