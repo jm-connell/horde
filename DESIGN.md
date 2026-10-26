@@ -231,6 +231,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   for watched position; title (two lines), channel and meta below. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
+- **Download job card.** Panel with title, status, thumbnail, progress and
+  actions. Cards in Active downloads carry a 4px accent bar on the left edge
+  (`border-l-4 border-l-accent`). This is intentional and owner-approved: it
+  marks a download in progress at a glance. Keep it even though impeccable's
+  side-tab rule flags it.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
 - **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
