@@ -84,6 +84,21 @@ const LIVE_MAX_RECOVERABLE = 40;
 export const LIVE_ENDED_MESSAGE = "This live stream has ended.";
 export const LIVE_NOT_LIVE_MESSAGE = "This video is not live right now.";
 
+/**
+ * Shaka 5 `preferredVideo` entries for codecs in order of preference (it
+ * replaced `preferredVideoCodecs`); other fields keep Shaka's defaults.
+ */
+function preferVideoCodecs(codecs: string[]) {
+  return codecs.map((codec) => ({
+    codec,
+    label: "",
+    role: "",
+    language: "",
+    hdrLevel: "AUTO",
+    layout: "",
+  }));
+}
+
 /** HTTP status of a Shaka BAD_HTTP_STATUS (1001) error: `data[1]`. */
 export function httpStatusOf(
   error: ShakaError | null | undefined
@@ -258,8 +273,6 @@ export function useShakaDashLoad({
         if (cancelled) return;
 
         const abrEnabled = initialChoice === "auto";
-        const videoEl = videoRef.current;
-        const SimpleTextDisplayer = shaka.text?.SimpleTextDisplayer;
 
         p.configure({
           streaming: live ? LIVE_STREAMING_CONFIG : VOD_STREAMING_CONFIG,
@@ -269,7 +282,9 @@ export function useShakaDashLoad({
             defaultBandwidthEstimate: bwEstimate,
             switchInterval: 8,
           },
-          preferredVideoCodecs: preferAv1 ? ["av01", "avc1"] : ["avc1"],
+          preferredVideo: preferVideoCodecs(
+            preferAv1 ? ["av01", "avc1"] : ["avc1"]
+          ),
           restrictions: {
             maxHeight: abrEnabled ? maxHeight : 8192,
             maxWidth: 8192,
@@ -277,12 +292,6 @@ export function useShakaDashLoad({
           mediaSource: {
             codecSwitchingStrategy: "smooth",
           },
-          ...(videoEl && SimpleTextDisplayer
-            ? {
-                textDisplayFactory: () =>
-                  new SimpleTextDisplayer(videoEl, "Horde Text"),
-              }
-            : {}),
         });
 
         p.addEventListener("error", ((event: Event) => {
@@ -376,7 +385,9 @@ export function useShakaDashLoad({
             if (candidates[0]) {
               const codec = (candidates[0].videoCodec ?? "").toLowerCase();
               if (codec.startsWith("av01")) {
-                p.configure({ preferredVideoCodecs: ["av01", "avc1"] });
+                p.configure({
+                  preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+                });
               }
               p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
             }
@@ -478,7 +489,9 @@ export function useApplyShakaQuality(
           // when Auto prefers H.264 for power efficiency.
           const codec = (candidates[0].videoCodec ?? "").toLowerCase();
           if (codec.startsWith("av01")) {
-            p.configure({ preferredVideoCodecs: ["av01", "avc1"] });
+            p.configure({
+              preferredVideo: preferVideoCodecs(["av01", "avc1"]),
+            });
           }
           p.selectVariantTrack(candidates[0], /* clearBuffer */ true);
         }
