@@ -1071,49 +1071,53 @@ html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]) {
     opacity 280ms ease;
 }
 
-html[data-hover-motion="subtle"] .ui-card:hover {
-  transform: translateY(-2px);
-}
+/* Hover states only where a pointer really hovers: a tap on a touch screen
+   fires :hover and leaves the card lifted until the next tap elsewhere. */
+@media (hover: hover) and (pointer: fine) {
+  html[data-hover-motion="subtle"] .ui-card:hover {
+    transform: translateY(-2px);
+  }
 
-html[data-hover-motion="lift"] .ui-card:hover {
-  transform: translateY(-5px);
-  filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.45));
-}
+  html[data-hover-motion="lift"] .ui-card:hover {
+    transform: translateY(-5px);
+    filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.45));
+  }
 
-html[data-hover-motion="glow"] .ui-card:hover {
-  transform: translateY(-2px);
-  box-shadow:
-    0 0 0 1px rgb(var(--accent) / 0.35),
-    0 0 24px rgb(var(--accent) / 0.18);
-}
+  html[data-hover-motion="glow"] .ui-card:hover {
+    transform: translateY(-2px);
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.35),
+      0 0 24px rgb(var(--accent) / 0.18);
+  }
 
-html[data-hover-motion="subtle"]
-  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
-html[data-hover-motion="subtle"] .ui-interactive:hover,
-html[data-hover-motion="subtle"] select:hover,
-html[data-hover-motion="subtle"]
-  input:not([type="range"]):not([type="color"]):hover {
-  filter: brightness(1.06);
-}
+  html[data-hover-motion="subtle"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="subtle"] .ui-interactive:hover,
+  html[data-hover-motion="subtle"] select:hover,
+  html[data-hover-motion="subtle"]
+    input:not([type="range"]):not([type="color"]):hover {
+    filter: brightness(1.06);
+  }
 
-html[data-hover-motion="lift"]
-  button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
-html[data-hover-motion="lift"] .ui-interactive:hover,
-html[data-hover-motion="lift"] select:hover {
-  transform: translateY(-1px);
-}
+  html[data-hover-motion="lift"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="lift"] .ui-interactive:hover,
+  html[data-hover-motion="lift"] select:hover {
+    transform: translateY(-1px);
+  }
 
-html[data-hover-motion="glow"]
-  button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
-    .ui-player-chrome
-  ):hover,
-html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
-html[data-hover-motion="glow"] select:hover,
-html[data-hover-motion="glow"]
-  input:not([type="range"]):not([type="color"]):hover {
-  box-shadow:
-    0 0 0 1px rgb(var(--accent) / 0.25),
-    0 0 16px rgb(var(--accent) / 0.12);
+  html[data-hover-motion="glow"]
+    button:not(:disabled):not(.ui-panel-toggle):not(.ui-nav-icon):not(
+      .ui-player-chrome
+    ):hover,
+  html[data-hover-motion="glow"] .ui-interactive:not(.ui-panel-toggle):hover,
+  html[data-hover-motion="glow"] select:hover,
+  html[data-hover-motion="glow"]
+    input:not([type="range"]):not([type="color"]):hover {
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.25),
+      0 0 16px rgb(var(--accent) / 0.12);
+  }
 }
 
 /* Panel toggles keep a wide hit target; glow the label chip instead of a
@@ -1127,13 +1131,20 @@ html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
     transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press,
 html[data-hover-motion="glow"]
   .ui-panel-toggle:focus-visible
   .ui-panel-toggle-press {
   box-shadow:
     0 0 0 1px rgb(var(--accent) / 0.35),
     0 0 18px rgb(var(--accent) / 0.16);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-hover-motion="glow"] .ui-panel-toggle:hover .ui-panel-toggle-press {
+    box-shadow:
+      0 0 0 1px rgb(var(--accent) / 0.35),
+      0 0 18px rgb(var(--accent) / 0.16);
+  }
 }
 
 /* Button press feedback (always on unless reduced motion).
