@@ -461,7 +461,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
     <>
       <div
         className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
-          active ? "overflow-hidden" : ""
+          active
+            ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]"
+            : ""
         }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
       >
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
