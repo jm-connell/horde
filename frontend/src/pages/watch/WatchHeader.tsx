@@ -6,8 +6,10 @@ import {
   formatResolution,
   formatSize,
   formatViewCount,
+  safeHref,
   watchProcessingLabel,
 } from "../../utils";
+import { extractYouTubeId } from "../../hooks/useSponsorBlock";
 import AddToPlaylist from "../../components/AddToPlaylist";
 import StreamDownloadControl from "./StreamDownloadControl";
 import type { StreamDownload } from "./useStreamDownload";
@@ -40,6 +42,12 @@ export default function WatchHeader({
   const channelHref = channelName
     ? `/?channel=${encodeURIComponent(channelName)}`
     : "/";
+  // Streams link back to the page they were opened from.
+  const originalHref = isLibrary
+    ? undefined
+    : safeHref(source.meta.source_url ?? source.url);
+  const originalLabel =
+    originalHref && extractYouTubeId(originalHref, "") ? "YouTube" : "Source";
   const backHref = channelParam
     ? `/?channel=${encodeURIComponent(channelParam)}`
     : "/";
@@ -114,13 +122,28 @@ export default function WatchHeader({
               </span>
             )}
         </div>
-        {!isLibrary && !isLive && (
+        {!isLibrary && (
           <div className="flex shrink-0 items-center gap-2">
-            <AddToPlaylist
-              streamUrl={source.url}
-              buttonClassName="rounded-lg border border-ink-600 px-3 py-1 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
-            />
-            <StreamDownloadControl download={streamDownload} />
+            {originalHref && (
+              <a
+                href={originalHref}
+                target="_blank"
+                rel="noreferrer"
+                title={`Open on ${originalLabel}`}
+                className="text-xs text-gray-400 hover:text-accent"
+              >
+                {originalLabel} ↗
+              </a>
+            )}
+            {!isLive && (
+              <>
+                <AddToPlaylist
+                  streamUrl={source.url}
+                  buttonClassName="rounded-lg border border-ink-600 px-3 py-1 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent"
+                />
+                <StreamDownloadControl download={streamDownload} />
+              </>
+            )}
           </div>
         )}
       </div>
