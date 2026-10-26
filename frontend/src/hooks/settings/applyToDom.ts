@@ -146,14 +146,23 @@ export function applyTheme(theme: Theme, customColors?: CustomColors): void {
   if (theme === "custom" && customColors) {
     root.setAttribute("data-theme", "custom");
     applyCustomColors(customColors);
-    return;
-  }
-
-  clearCustomThemeVars();
-
-  if (theme === "default") {
-    root.removeAttribute("data-theme");
   } else {
-    root.setAttribute("data-theme", theme);
+    clearCustomThemeVars();
+    if (theme === "default") {
+      root.removeAttribute("data-theme");
+    } else {
+      root.setAttribute("data-theme", theme);
+    }
   }
+  syncThemeColor(root);
+}
+
+/** Paint the phone status bar / PWA title bar in the theme's page background
+ *  instead of index.html's fixed default-theme color. */
+function syncThemeColor(root: HTMLElement): void {
+  const meta = document.querySelector<HTMLMetaElement>(
+    'meta[name="theme-color"]'
+  );
+  const ink = getComputedStyle(root).getPropertyValue("--ink-950").trim();
+  if (meta && ink) meta.content = `rgb(${ink})`;
 }

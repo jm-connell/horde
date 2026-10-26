@@ -36,6 +36,11 @@ test("appearance changes theme and loading animation", async ({ page }) => {
   await page.getByRole("button", { name: "Theme" }).click();
   await page.getByRole("option", { name: "OLED (true black)" }).click();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "oled");
+  // The phone status bar follows the theme's page background.
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+    "content",
+    "rgb(0 0 0)"
+  );
 
   const comet = page
     .getByRole("group", { name: "Loading animation" })
