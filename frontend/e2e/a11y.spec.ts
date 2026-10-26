@@ -38,7 +38,8 @@ test("reduced motion keeps card fades but drops the rise", async ({ page }) => {
 
 test("text on accent fills stays readable on every theme", async ({ page }) => {
   await page.goto("/download");
-  const pill = page.locator(".bg-accent.text-on-accent").first();
+  // The form's primary button: always rendered, accent fill, on-accent text.
+  const pill = page.getByRole("button", { name: /^Download( \(|$)/ });
   await expect(pill).toBeVisible();
   const themes = [
     "",
