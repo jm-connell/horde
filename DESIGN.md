@@ -232,9 +232,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
 - **Download job card.** Panel with title, status, thumbnail, progress and
-  actions. Cards in Active downloads carry a 4px accent bar on the left edge
-  (`border-l-4 border-l-accent`). This is intentional and owner-approved: it
-  marks a download in progress at a glance. Keep it even though impeccable's
+  actions. Cards in Active downloads carry an accent bar on the outline: 4px
+  down the left edge, thinning around the corners to the 1px outline and
+  fading out about 56px along the top and bottom (a masked overlay span in
+  `DownloadJobCard`). This is intentional and owner-approved: it marks a
+  download in progress at a glance. Keep it even though impeccable's
   side-tab rule flags it.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.

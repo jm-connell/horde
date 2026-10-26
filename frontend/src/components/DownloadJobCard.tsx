@@ -460,12 +460,19 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
   return (
     <>
       <div
-        className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700 ${
-          active
-            ? "overflow-hidden border-l-4 border-l-accent pl-[calc(1.25rem-2px)]"
-            : ""
-        }${videoGone ? " opacity-60" : ""}${playlistOpen ? " z-30" : ""}`}
+        className={`ui-panel relative rounded-xl border border-ink-700 bg-ink-900 p-5 ring-1 ring-ink-700${
+          videoGone ? " opacity-60" : ""
+        }${playlistOpen ? " z-30" : ""}`}
       >
+        {active && (
+          // Accent bar on the card's outline: 4px down the left edge, thinning
+          // around the corners to the 1px outline, then fading out along the
+          // top and bottom edges.
+          <span
+            aria-hidden
+            className="pointer-events-none absolute -inset-px rounded-[inherit] border-y border-l-4 border-accent [mask-image:linear-gradient(to_right,#000_14px,transparent_56px)]"
+          />
+        )}
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
             {completed && !videoGone && <CheckIcon className="text-accent" />}
