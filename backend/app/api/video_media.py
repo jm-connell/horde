@@ -236,7 +236,10 @@ def get_sprite_sheet(video_id: int, session: Session = Depends(get_session)):
     path = sprite_image_path(get_paths().sprites, video_id)
     if not path.is_file():
         raise HTTPException(status_code=404, detail="Sprites not ready")
-    return FileResponse(path, media_type="image/jpeg")
+    # Same URL after a rebuild (e.g. a redownload): revalidate by ETag every time.
+    return FileResponse(
+        path, media_type="image/jpeg", headers={"Cache-Control": "no-cache"}
+    )
 
 
 @router.post("/videos/{video_id}/sprites/generate", response_model=SpriteGenerateResult)
