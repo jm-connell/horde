@@ -1236,7 +1236,9 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
 }
 
 /* Reduced motion drops movement, not feedback: page, card and thumbnail
-   fades stay (opacity only), and controls keep their color transitions. */
+   fades stay (opacity only). applyMotionPrefs already sets hover motion
+   and button press to "off" then; controls keep their own color
+   transitions. */
 @media (prefers-reduced-motion: reduce) {
   html[data-page-fade="on"] .ui-card-enter {
     animation-name: page-fade-in;
@@ -1253,14 +1255,11 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   html[data-button-press="on"] .ui-interactive,
   html[data-button-press="on"] .ui-panel-toggle-press,
   html[data-button-press="on"] a.ui-card {
-    transition:
-      background-color 280ms ease,
-      color 280ms ease,
-      border-color 280ms ease,
-      opacity 280ms ease !important;
+    transition: none !important;
     transform: none !important;
     filter: none !important;
     box-shadow: none !important;
+    animation: none !important;
   }
 }
 

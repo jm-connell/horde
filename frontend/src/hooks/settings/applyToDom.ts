@@ -109,7 +109,9 @@ export function applyMotionPrefs(settings: Settings): void {
   root.dataset.navIndicator = reduced ? "none" : settings.navIndicator;
   root.dataset.hoverMotion = reduced ? "off" : settings.hoverMotion;
   root.dataset.buttonPress = reduced ? "off" : "on";
-  root.dataset.pageFade = reduced ? "off" : "on";
+  // Fades stay under reduced motion: index.css turns the card rise into a
+  // plain fade there, and page and thumbnail fades are opacity only.
+  root.dataset.pageFade = "on";
   const s = settings.translucentPanelStrength;
   const b = settings.translucentPanelBlur;
   // 0% transparency keeps Tailwind fills; any amount above enables the sliders.
