@@ -10,6 +10,7 @@ import {
   queueKey,
   type QueueEntry,
 } from "../context/playbackQueue";
+import Collapse from "./Collapse";
 
 interface Props {
   className?: string;
@@ -32,6 +33,10 @@ export default function PlaybackQueue({
   const listRef = useRef<HTMLUListElement>(null);
   const prevLen = useRef(queue.length);
   const [expanded, setExpanded] = useState(true);
+  const [dragging, setDragging] = useState<number | null>(null);
+  // Rows already queued when the panel mounted appear at once; only rows
+  // added while it is on screen slide in.
+  const [initialKeys] = useState(() => new Set(queue.map(queueKey)));
 
   useEffect(() => {
     if (queue.length > prevLen.current && listRef.current) {
@@ -57,7 +62,6 @@ export default function PlaybackQueue({
     onPlay?.();
   };
 
-  const showList = !collapsible || expanded;
   const scrollable = Boolean(collapsible && listMaxHeightClass);
 
   return (
@@ -72,7 +76,14 @@ export default function PlaybackQueue({
             className="flex min-w-0 flex-1 items-center justify-between text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
           >
             <span>Up next ({queue.length})</span>
-            <span>{expanded ? "▲" : "▼"}</span>
+            <span
+              aria-hidden
+              className={`inline-block transition-transform duration-200 ease-out ${
+                expanded ? "rotate-180" : ""
+              }`}
+            >
+              ▼
+            </span>
           </button>
           <button
             onClick={clearQueue}
@@ -95,7 +106,7 @@ export default function PlaybackQueue({
         </div>
       )}
 
-      {showList && (
+      <Collapse open={!collapsible || expanded} durationClass="duration-200">
         <ul
           ref={listRef}
           className={`space-y-1 horde-scrollbar ${
@@ -105,11 +116,15 @@ export default function PlaybackQueue({
           {queue.map((v, index) => {
             const stream = isQueuedStream(v);
             const thumb = stream ? v.thumbnail : thumbnailUrl(v);
+            const key = queueKey(v);
             return (
               <li
-                key={queueKey(v)}
+                key={key}
                 draggable
-                onDragStart={() => (dragIndex.current = index)}
+                onDragStart={() => {
+                  dragIndex.current = index;
+                  setDragging(index);
+                }}
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => {
                   if (dragIndex.current !== null) {
@@ -117,8 +132,17 @@ export default function PlaybackQueue({
                   }
                   dragIndex.current = null;
                 }}
-                onDragEnd={() => (dragIndex.current = null)}
-                className="flex items-center gap-2 rounded-lg p-1 hover:bg-ink-800"
+                onDragEnd={() => {
+                  dragIndex.current = null;
+                  setDragging(null);
+                }}
+                className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] duration-200 ease-out hover:bg-ink-800 ${
+                  dragging === index ? "opacity-50" : ""
+                } ${
+                  initialKeys.has(key)
+                    ? ""
+                    : "starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0"
+                }`}
               >
                 <span
                   className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
@@ -166,7 +190,7 @@ export default function PlaybackQueue({
             );
           })}
         </ul>
-      )}
+      </Collapse>
     </div>
   );
 }
