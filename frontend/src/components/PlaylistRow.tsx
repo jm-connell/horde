@@ -435,7 +435,10 @@ export default function PlaylistRow({
                   className="w-full min-w-0 rounded-md border border-ink-600 bg-ink-950 px-2 py-0.5 font-semibold text-gray-100 outline-hidden focus:border-accent disabled:opacity-50"
                 />
               ) : (
-                <span className="block truncate font-semibold text-gray-100">
+                <span
+                  className="block truncate font-semibold text-gray-100"
+                  title={playlist.name}
+                >
                   {playlist.name}
                 </span>
               )}
@@ -758,7 +761,10 @@ export default function PlaylistRow({
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-gray-100">
+                          <p
+                            className="truncate text-sm font-medium text-gray-100"
+                            title={v.title}
+                          >
                             {v.title}
                           </p>
                           <p className="flex items-center gap-1.5 text-xs text-muted">

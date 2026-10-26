@@ -126,11 +126,14 @@ export default function PlaybackQueue({
                 )}
               </div>
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-2 text-sm leading-snug text-gray-200">
+                <span
+                  className="line-clamp-2 wrap-break-word text-sm leading-snug text-gray-200"
+                  title={v.title}
+                >
                   {v.title}
                 </span>
                 {stream && (
-                  <span className="text-[11px] text-muted">
+                  <span className="block truncate text-[11px] text-muted">
                     Not downloaded
                     {v.channel ? ` · ${v.channel}` : ""}
                   </span>
