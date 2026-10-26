@@ -1,9 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { streamUrl, thumbnailUrl } from "../api";
-import {
-  usePlaybackActions,
-  usePlaybackSession,
-} from "../context/PlaybackContext";
+import { usePlaybackSession } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
 import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
@@ -21,6 +18,7 @@ import CardPreviewVideo from "./CardPreviewVideo";
 import CardTitle from "./CardTitle";
 import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
+import QueueButton from "./QueueButton";
 
 function CardChannelName({
   channel,
@@ -73,7 +71,6 @@ export default function VideoCard({
   /** `feed` drops the card chrome on small screens (YouTube-style home). */
   layout?: "card" | "feed";
 }) {
-  const { addToQueue } = usePlaybackActions();
   const { current } = usePlaybackSession();
   const [settings] = useSettings();
   const thumb = thumbnailUrl(video);
@@ -209,20 +206,7 @@ export default function VideoCard({
             )}
           </div>
         ) : (
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              addToQueue(video);
-            }}
-            title="Add to queue"
-            className={`absolute right-2 top-2 z-20 rounded bg-black/70 px-2 py-1 text-xs font-medium text-white transition-opacity hover:bg-accent hover:text-ink-950 ${
-              hideQueueButton
-                ? "hidden"
-                : "pointer-events-none opacity-0 group-hover:pointer-events-auto group-hover:opacity-100"
-            }`}
-          >
-            + Queue
-          </button>
+          !hideQueueButton && <QueueButton entry={video} />
         )}
         <MatchReasonBadge
           text={matchTip}
