@@ -6,3 +6,8 @@ a4001129f4be75cd0b7efe24396451de1513e9ae:.gitleaksignore:generic-api-key:2
 # Made-up OpenRouter-style keys in the settings API tests (masking and redaction).
 4f9be10b9fbfff5390a3018a1be0aaa86e5badd8:backend/tests/test_api_settings.py:generic-api-key:63
 4f9be10b9fbfff5390a3018a1be0aaa86e5badd8:backend/tests/test_api_settings.py:generic-api-key:248
+# More made-up OpenRouter-style keys in older versions of the settings API tests.
+c7d6b6a72827d77b30b7b0acdab3c380cc876ff3:backend/tests/test_api_settings.py:generic-api-key:199
+eb2194f31764f7102f4fae4d477f039bb823371e:backend/tests/test_api_settings.py:generic-api-key:40
+# A localStorage key name ("horde.abr-bandwidth.v1"), not a secret.
+acb0e949e0248d74069443a27d7eabfda1a2728b:frontend/src/utils/decodeCapability.ts:generic-api-key:163
