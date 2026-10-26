@@ -13,10 +13,10 @@ This is not a substitute for playing a real video on your LAN. The player still 
 | **Backend API** | pytest + FastAPI `TestClient` on a temp SQLite + temp `DOWNLOADS_DIR` | Yes | Library, review, playlists, settings, download enqueue (yt-dlp stubbed), Range streaming |
 | **Frontend unit** | Vitest (node) | Yes | Formatters, presets, catalog progress copy, URL helpers |
 | **Frontend build** | `tsc -b && vite build` | Yes | Type errors and a broken production bundle |
-| **Browser UI** | Playwright (Chromium) against the built SPA + FastAPI | Yes | Nav, library, history, download form, playlists, import, watch chrome, settings, setup wizard, 404 and error boundary, service-worker update prompt, axe accessibility scan of every main page |
+| **Browser UI** | Playwright (Chromium) against the built SPA + FastAPI | Yes | Nav, library, history, download form, playlists, import, watch chrome, Shaka DASH and HLS playback and captions (tiny inline media), settings, setup wizard, 404 and error boundary, service-worker update prompt, axe accessibility scan of every main page |
 | **Wiki** | `mkdocs build --strict` | Yes | Broken nav / missing Markdown pages |
 | **Container** | `docker build` of the repo `Dockerfile` | Yes | The TrueNAS/Dockge artifact (frontend + wiki + Python image) |
-| **Player decode / Cast** | Manual | No | Shaka, DASH preview, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
+| **Player decode / Cast** | Manual | No | Real YouTube DASH/HLS in Shaka, mini-player reparenting, Cast, iOS — still [manual](../reference/video-player-smoke.md) |
 | **Live YouTube / Ollama** | Not in CI | No | Bot checks, cookies, GPU models — flaky and network-bound |
 
 CI **must not** call YouTube, OpenRouter, or a real Ollama. Download tests stub `extract_preview`; AI enqueue is a no-op. Playwright sets `HORDE_E2E=1`, which skips background workers, returns a synthetic download preview, and refuses to dispatch yt-dlp. That keeps the suite deterministic and offline.

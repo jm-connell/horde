@@ -1,4 +1,8 @@
-/** Minimal typings for the Shaka DASH and HLS builds used by VideoPlayer. */
+/**
+ * Minimal typings for the Shaka 5 DASH and HLS builds used by VideoPlayer.
+ * Keep in step with `node_modules/shaka-player/dist/shaka-player.dash.d.ts`:
+ * nothing checks these against the real API.
+ */
 declare module "shaka-player/dist/shaka-player.dash.js" {
   export interface ShakaVariantTrack {
     id: number;
@@ -49,11 +53,6 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     mimeType?: string | null;
   }
 
-  export interface ShakaTextDisplayer {
-    destroy(): void;
-    setTextVisibility(visible: boolean): void;
-  }
-
   export interface ShakaPlayer {
     attach(element: HTMLMediaElement): Promise<void>;
     load(manifestUri: string): Promise<void>;
@@ -81,9 +80,8 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
       forced?: boolean
     ): Promise<ShakaTextTrack>;
     getTextTracks(): ShakaTextTrack[];
+    /** Selecting a track shows it; `null` hides (unloads) text. */
     selectTextTrack(track: ShakaTextTrack | null): void;
-    setTextTrackVisibility(visible: boolean): void;
-    isTextTrackVisible(): boolean;
   }
 
   export interface ShakaNamespace {
@@ -93,12 +91,6 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     };
     polyfill: {
       installAll(): void;
-    };
-    text?: {
-      SimpleTextDisplayer: new (
-        video: HTMLMediaElement,
-        label?: string
-      ) => ShakaTextDisplayer;
     };
     util?: {
       Error?: {

@@ -62,22 +62,20 @@ export function useCaptions({
 
     if (effectiveStreamType === "dash" && player) {
       try {
+        // Shaka 5 shows the text track it selects and hides (unloads) text on
+        // `selectTextTrack(null)`; there is no separate visibility toggle.
         const shakaTracks = player.getTextTracks() ?? [];
-        if (!selected) {
-          player.setTextTrackVisibility(false);
-        } else {
-          const match =
-            shakaTracks.find(
+        const match = !selected
+          ? undefined
+          : (shakaTracks.find(
               (t) => (t.language || "").toLowerCase() === selected
             ) ??
             shakaTracks.find(
               (t) =>
                 (t.language || "").toLowerCase().split("-")[0] ===
                 selected.split("-")[0]
-            );
-          if (match) player.selectTextTrack(match);
-          player.setTextTrackVisibility(showNative);
-        }
+            ));
+        player.selectTextTrack(showNative && match ? match : null);
       } catch {
         // Caption APIs can throw if the player is mid-destroy.
       }

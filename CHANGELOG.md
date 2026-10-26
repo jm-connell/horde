@@ -20,6 +20,10 @@ All notable changes to Horde are documented here. The format follows
 - The setup wizard's Ollama step, the update-button setup help and the
   password-reset hint say where to run the commands, including a crontab line
   for hosts other than TrueNAS.
+- The player uses Shaka Player 5 for stream previews and live broadcasts.
+  Captions keep working in picture in picture: Shaka 5 dropped the text
+  visibility calls the player used. A Playwright test now plays real DASH and
+  HLS media through Shaka.
 - The image's frontend build stage, CI and `.nvmrc` use Node 26 (Node 24 or
   newer still works for building from source).
 
