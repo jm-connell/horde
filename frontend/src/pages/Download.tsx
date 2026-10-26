@@ -912,7 +912,7 @@ export default function Download() {
               {activeJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="origin-top transition-[opacity,transform,max-height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)]"
+                  className="transition-[opacity,translate] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] starting:translate-y-2 starting:opacity-0 motion-reduce:starting:translate-y-0"
                 >
                   <DownloadJobCard
                     job={job}
