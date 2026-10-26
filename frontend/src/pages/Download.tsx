@@ -839,7 +839,7 @@ export default function Download() {
 
       {activeSectionVisible && (
         <section
-          className={`ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40 transition-[opacity,translate] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`ui-panel mt-6 rounded-xl bg-accent/5 p-4 ring-1 ring-accent/40 transition-[opacity,translate] duration-300 ease-fluid ${
             activeSectionEntered
               ? "translate-y-0 opacity-100"
               : "pointer-events-none translate-y-2 opacity-0"
@@ -912,7 +912,7 @@ export default function Download() {
               {activeJobs.map((job) => (
                 <div
                   key={job.id}
-                  className="transition-[opacity,translate] duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] starting:translate-y-2 starting:opacity-0 motion-reduce:starting:translate-y-0"
+                  className="transition-[opacity,translate] duration-200 ease-fluid starting:translate-y-2 starting:opacity-0 motion-reduce:starting:translate-y-0"
                 >
                   <DownloadJobCard
                     job={job}

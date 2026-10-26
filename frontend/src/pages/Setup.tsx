@@ -56,7 +56,7 @@ const PRIMARY_BTN =
 const GHOST_BTN =
   "rounded-lg px-4 py-2 text-sm text-gray-400 hover:text-gray-200 disabled:opacity-50";
 const HEIGHT_EASE =
-  "transition-[height] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none";
+  "transition-[height] duration-300 ease-fluid motion-reduce:transition-none";
 
 export default function Setup() {
   const navigate = useNavigate();
@@ -267,7 +267,7 @@ export default function Setup() {
         {STEPS.map((id, i) => (
           <span
             key={id}
-            className={`h-1 flex-1 rounded-full transition-colors duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`h-1 flex-1 rounded-full transition-colors duration-300 ease-fluid ${
               i <= stepIndex ? "bg-accent" : "bg-ink-700"
             }`}
           />

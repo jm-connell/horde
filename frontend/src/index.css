@@ -25,6 +25,12 @@
   --color-accent-deep: rgb(var(--accent-deep));
 }
 
+/* The house motion curve (a strong ease-out): `ease-fluid` in classes,
+   var(--ease-fluid) in CSS. */
+@theme {
+  --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @theme {
   /* Tailwind 3 sRGB values for the palette shades in use. The theme overrides
      below and the contrast checks were tuned against these; Tailwind 4's
@@ -767,7 +773,7 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
    holds the start state only during the delay; afterwards the card's own
    hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
 html[data-page-fade="on"] .ui-card-enter {
-  animation: card-enter 300ms cubic-bezier(0.22, 1, 0.36, 1) backwards;
+  animation: card-enter 300ms var(--ease-fluid) backwards;
   animation-delay: var(--card-enter-delay, 0ms);
 }
 
@@ -898,16 +904,16 @@ html[data-page-fade="on"] .ui-fade-img {
 }
 
 .wizard-step-in-next {
-  animation: wizard-step-in-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-in-next 300ms var(--ease-fluid) both;
 }
 .wizard-step-in-prev {
-  animation: wizard-step-in-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-in-prev 300ms var(--ease-fluid) both;
 }
 .wizard-step-out-next {
-  animation: wizard-step-out-next 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-out-next 300ms var(--ease-fluid) both;
 }
 .wizard-step-out-prev {
-  animation: wizard-step-out-prev 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: wizard-step-out-prev 300ms var(--ease-fluid) both;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1062,9 +1068,9 @@ html[data-hover-motion="subtle"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="lift"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]) {
   transition:
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    filter 300ms cubic-bezier(0.22, 1, 0.36, 1),
+    transform 300ms var(--ease-fluid),
+    box-shadow 300ms var(--ease-fluid),
+    filter 300ms var(--ease-fluid),
     background-color 280ms ease,
     color 280ms ease,
     border-color 280ms ease,
@@ -1127,8 +1133,8 @@ html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
   padding: 0.3rem 0.55rem;
   margin: -0.3rem -0.55rem;
   transition:
-    box-shadow 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    transform 300ms cubic-bezier(0.22, 1, 0.36, 1);
+    box-shadow 300ms var(--ease-fluid),
+    transform 300ms var(--ease-fluid);
 }
 
 html[data-hover-motion="glow"]

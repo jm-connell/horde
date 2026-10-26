@@ -53,13 +53,13 @@ export default function LibrarySidebar({
           <button
             type="button"
             aria-label="Close channels"
-            className={`absolute inset-0 bg-ink-950/60 backdrop-blur-xs transition-opacity duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`absolute inset-0 bg-ink-950/60 backdrop-blur-xs transition-opacity duration-300 ease-fluid ${
               overlayOpen ? "opacity-100" : "opacity-0"
             }`}
             onClick={onClose}
           />
           <div
-            className={`absolute top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 left-3 pl-12 md:left-6 md:pl-13 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            className={`absolute top-0 flex h-full max-w-[85vw] flex-col p-3 pt-20 left-3 pl-12 md:left-6 md:pl-13 transition-transform duration-300 ease-fluid ${
               // Clear left-3 / md:left-6 so the panel fully exits the viewport.
               overlayOpen
                 ? "translate-x-0"
@@ -80,7 +80,7 @@ export default function LibrarySidebar({
 
       <aside
         data-horde="sidebar"
-        className={`relative hidden shrink-0 transition-[width] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] md:block ${
+        className={`relative hidden shrink-0 transition-[width] duration-300 ease-fluid md:block ${
           narrowViewport || sidebarCollapsed ? "w-10" : "w-56"
         }${narrowViewport && overlayOpen ? " z-60" : ""}`}
       >

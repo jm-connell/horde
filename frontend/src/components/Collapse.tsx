@@ -14,7 +14,7 @@ export default function Collapse({
 }) {
   return (
     <div
-      className={`grid transition-[grid-template-rows,opacity] ${durationClass} ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`grid transition-[grid-template-rows,opacity] ${durationClass} ease-fluid ${
         open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
       } ${className}`}
     >

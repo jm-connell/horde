@@ -251,7 +251,7 @@ export default function PlaylistAddVideo({
   return (
     <div className={`flex-1 ${open ? "min-w-0" : "min-w-max"}`}>
       <div
-        className="grid w-full transition-[grid-template-columns] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        className="grid w-full transition-[grid-template-columns] duration-300 ease-fluid motion-reduce:transition-none"
         style={{
           gridTemplateColumns: open
             ? "max-content minmax(0, 1fr)"
@@ -267,7 +267,7 @@ export default function PlaylistAddVideo({
         <div className="col-span-2 col-start-1 row-start-1 w-0 min-w-full">
           <div className="overflow-x-clip">
             <div
-              className={`relative flex items-center overflow-hidden rounded-lg border transition-[border-color,background-color] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none ${
+              className={`relative flex items-center overflow-hidden rounded-lg border transition-[border-color,background-color] duration-300 ease-fluid motion-reduce:transition-none ${
                 open
                   ? "border-ink-700 bg-ink-950 focus-within:border-accent"
                   : "border-ink-600 hover:border-accent"

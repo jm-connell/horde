@@ -91,7 +91,7 @@ function DescriptionBoxToggle({
     >
       <svg
         viewBox="0 0 24 24"
-        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        className={`h-[18px] w-[18px] shrink-0 transition-transform duration-300 ease-fluid ${
           expanded ? "rotate-180" : ""
         }`}
         fill="none"
