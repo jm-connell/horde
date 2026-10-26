@@ -10,7 +10,7 @@ produces the same software as a rebuild today.
 | Docs toolchain | `docs/requirements.txt` | exact `mkdocs-material` version |
 | pip in the image | `docker/pip.lock` | exact version plus hash |
 | Base images | `Dockerfile` `FROM` lines | exact version tag plus `@sha256` digest |
-| Node / Python in CI | `.nvmrc` (24) and `.github/workflows` | same major as the Dockerfile |
+| Node / Python in CI | `.nvmrc` (26) and `.github/workflows` | same major as the Dockerfile |
 
 The Docker image installs the lock file with `pip install --require-hashes`, so a
 tampered or unexpectedly changed package fails the build instead of shipping.
