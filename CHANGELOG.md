@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-10-26
+
 ### Changed
 
 - The install guides, README quick start and `.env.example` are rewritten for
@@ -658,7 +660,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.1.0...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.1.1...main
+[1.1.1]: https://github.com/jm-connell/horde/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jm-connell/horde/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/jm-connell/horde/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/jm-connell/horde/compare/v1.0.1...v1.0.2
