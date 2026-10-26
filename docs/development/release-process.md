@@ -69,5 +69,8 @@ The Trivy image scan (`Security` workflow) fails on CRITICAL findings that have 
 ## Dependency automation
 
 - Dependabot opens one grouped minor/patch pull request per ecosystem each week (Python, npm, Docker, Compose, Actions) and separate pull requests for major updates.
+- `dependabot-automerge.yml` squash-merges a grouped minor/patch pull request once CI, Security and Image have all passed on its head commit, then runs those workflows on `main` (a merge by the Actions token starts none by itself). Major updates, anything with a failing check, and any branch with a commit not made by Dependabot or `dependabot-lock.yml` wait for review.
+- `dependabot-lock.yml` regenerates `backend/requirements.lock` on Dependabot's Python pull requests, which Dependabot cannot do itself, and reruns the checks there. Those reruns are not `pull_request` events, so the Trivy scan blocks on them as it does on `main`.
+- Once the lock commit is on its branch, Dependabot stops rebasing that pull request. If it conflicts or goes stale, comment `@dependabot recreate`; the lock is regenerated on the fresh branch.
 - `ytdlp-bump.yml` opens a pull request within a day of a new yt-dlp release, after the backend tests and `pip-audit` pass on the regenerated lock. Merge it and cut a patch release when YouTube extraction is broken.
 - Regenerate the Python lock by hand with the command in [Dependencies](dependencies.md).

@@ -29,9 +29,11 @@ Commit both files together. To upgrade everything the constraints allow, add
 
 `scripts/check_requirements_lock.py` (a gate in `scripts/check.sh` and CI) fails
 when the two drift apart: every direct requirement must be in the lock at a
-version its specifier allows. It needs no network. A Dependabot pull request that
-bumps `requirements.txt` therefore stays red until the lock is regenerated on its
-branch with the command above. The check cannot notice a dependency removed from
+version its specifier allows. It needs no network. Dependabot cannot regenerate
+the lock, so `.github/workflows/dependabot-lock.yml` runs the command above on
+each Dependabot branch that bumps `requirements.txt`, pushes the new lock and
+starts the checks again. Dependabot then stops rebasing that pull request; if it
+conflicts, comment `@dependabot recreate` on it. The check cannot notice a dependency removed from
 `requirements.txt` whose pins linger in the lock; regenerate after removals too.
 
 `uv` is the only extra tool needed (`pipx install uv` or `pip install uv`). The
@@ -49,7 +51,9 @@ CI runs the same audit weekly and on every pull request (`security.yml`).
 
 Base images are pinned like `python:3.14.8-slim-bookworm@sha256:…`. The tag keeps
 the line readable, the digest makes it immutable. Dependabot opens weekly pull
-requests for both. To bump by hand, find the new digest with
+requests for both, except a new Python minor (3.14 to 3.15), which it is told to
+ignore: that move changes the lock, CI, ruff and mypy targets together and is
+done by hand. To bump by hand, find the new digest with
 `docker buildx imagetools inspect python:3.14.9-slim-bookworm` and update the tag
 and digest together.
 

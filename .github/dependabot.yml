@@ -1,14 +1,16 @@
 # Dependency update PRs. Minor and patch updates arrive as one grouped PR per
-# ecosystem each week; major updates get their own PR so they are reviewed alone.
+# ecosystem each week, and .github/workflows/dependabot-automerge.yml merges
+# each one once all its checks pass. Major updates get their own PR so they are
+# reviewed alone. The group names must keep ending in "-minor-patch": that is
+# how the auto-merge workflow recognises them.
 # yt-dlp is handled by .github/workflows/ytdlp-bump.yml (daily), because
 # Dependabot allows only one schedule per ecosystem and directory.
 version: 2
 
 updates:
   # Dependabot edits backend/requirements.txt but cannot regenerate the
-  # hash-pinned backend/requirements.lock the image installs. CI's lock check
-  # (scripts/check_requirements_lock.py) fails such a PR until someone runs the
-  # uv command from the lock's header on its branch and pushes the new lock.
+  # hash-pinned backend/requirements.lock the image installs;
+  # .github/workflows/dependabot-lock.yml does that on the PR branch.
   - package-ecosystem: pip
     directory: /backend
     schedule:
@@ -40,6 +42,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # A new Python minor (3.14 -> 3.15) is a language upgrade, not a routine
+    # bump: the lock, CI, ruff and mypy all target one version and move together
+    # by hand. Patch releases (3.14.x) still arrive in the group.
+    ignore:
+      - dependency-name: python
+        update-types: ["version-update:semver-minor"]
     groups:
       docker-minor-patch:
         update-types: [minor, patch]

@@ -1,0 +1,106 @@
+name: Dependabot lock
+
+# Dependabot edits backend/requirements.txt but cannot regenerate the
+# hash-pinned backend/requirements.lock, so CI's lock check fails on every pip
+# pull request. This regenerates the lock on the Dependabot branch.
+#
+# Two jobs, as in ytdlp-bump.yml, so package code never runs next to a write
+# token:
+#   compile  (read-only, no persisted credentials) runs uv, which may build an
+#            sdist to read its metadata, and uploads the new lock;
+#   push     (write) never installs or runs package code. It accepts only a
+#            changed requirements.lock, commits it and pushes.
+#
+# A push made with the default GITHUB_TOKEN starts no workflows, so `push`
+# dispatches CI, Security and Image on the branch itself. Their checks land on
+# the new head commit, and dependabot-automerge.yml takes it from there.
+
+on:
+  pull_request:
+    paths:
+      - backend/requirements.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependabot-lock-${{ github.head_ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.lock.outputs.changed }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14"
+      - name: Regenerate the lock
+        id: lock
+        run: |
+          python -m pip install uv==0.13.1
+          uv pip compile --generate-hashes --python-version 3.14 \
+            backend/requirements.txt -o backend/requirements.lock
+          if git diff --quiet -- backend/requirements.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git diff --stat -- backend/requirements.lock
+            mkdir lock-out
+            cp backend/requirements.lock lock-out/
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.lock.outputs.changed == 'true'
+        with:
+          name: requirements-lock
+          path: lock-out/
+          retention-days: 1
+
+  push:
+    needs: compile
+    if: needs.compile.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: ${{ github.head_ref }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: requirements-lock
+          path: lock-in
+      - name: Commit the lock and start the checks
+        run: |
+          if [ "$(git rev-parse HEAD)" != "${HEAD_SHA}" ]; then
+            echo "The branch moved since this run started; its own run handles it."
+            exit 0
+          fi
+          cp lock-in/requirements.lock backend/requirements.lock
+          rm -rf lock-in
+          if [ "$(git status --porcelain)" != " M backend/requirements.lock" ]; then
+            echo "::error::expected only backend/requirements.lock to change"
+            git status --porcelain
+            exit 1
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Regenerate requirements.lock" \
+            -m "Automated by .github/workflows/dependabot-lock.yml."
+          git push origin "HEAD:${BRANCH}"
+          for wf in ci.yml security.yml image.yml; do
+            gh workflow run "$wf" --ref "${BRANCH}"
+          done
