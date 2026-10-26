@@ -85,3 +85,19 @@ def test_sprite_generation_tolerates_deleted_video(
     session.expire_all()
     assert session.get(Video, vid) is None
     assert _failed_sprite_tasks(vid) == []
+
+
+def test_sprite_sheet_is_revalidated_so_a_rebuilt_sheet_shows(client, add_video):
+    """The sheet's URL never changes: without no-cache a browser keeps an old one."""
+    from app.context import get_paths
+    from app.services.metadata import sprite_image_path
+
+    video = add_video()
+    path = sprite_image_path(get_paths().sprites, video.id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"\xff\xd8sheet")
+
+    resp = client.get(f"/api/videos/{video.id}/sprites")
+
+    assert resp.status_code == 200
+    assert resp.headers["cache-control"] == "no-cache"
