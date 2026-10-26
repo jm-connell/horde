@@ -7,7 +7,7 @@
 # always built on the build host (fast, no emulation) even for arm64 images.
 
 # --- Stage 1: build the React frontend ---
-FROM --platform=$BUILDPLATFORM node:24.22.0-alpine3.24@sha256:44fce696f38ba8c987c4db89954051000bbd05ffd8d8659ba15ed4a8602e937f AS frontend
+FROM --platform=$BUILDPLATFORM node:26.12.1-alpine3.24@sha256:40cd011b55415bc894e45b02fdd5a5dfde056921b7d23a64c74f80497af48797 AS frontend
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
