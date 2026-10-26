@@ -33,7 +33,7 @@ export default function PlaybackQueue({
   const listRef = useRef<HTMLUListElement>(null);
   const prevLen = useRef(queue.length);
   const [expanded, setExpanded] = useState(true);
-  const [dragging, setDragging] = useState<number | null>(null);
+  const [dragging, setDragging] = useState<string | null>(null);
   // Rows already queued when the panel mounted appear at once; only rows
   // added while it is on screen slide in.
   const [initialKeys] = useState(() => new Set(queue.map(queueKey)));
@@ -63,6 +63,92 @@ export default function PlaybackQueue({
   };
 
   const scrollable = Boolean(collapsible && listMaxHeightClass);
+
+  const list = (
+    <ul
+      ref={listRef}
+      className={`space-y-1 horde-scrollbar ${
+        scrollable ? `${listMaxHeightClass} overflow-y-auto` : ""
+      }`}
+    >
+      {queue.map((v, index) => {
+        const stream = isQueuedStream(v);
+        const thumb = stream ? v.thumbnail : thumbnailUrl(v);
+        const key = queueKey(v);
+        return (
+          <li
+            key={key}
+            draggable
+            onDragStart={() => {
+              dragIndex.current = index;
+              setDragging(key);
+            }}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={() => {
+              if (dragIndex.current !== null) {
+                reorderQueue(dragIndex.current, index);
+              }
+              dragIndex.current = null;
+            }}
+            onDragEnd={() => {
+              dragIndex.current = null;
+              setDragging(null);
+            }}
+            className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] duration-200 ease-out hover:bg-ink-800 ${
+              dragging === key ? "opacity-50" : ""
+            } ${
+              initialKeys.has(key)
+                ? ""
+                : "starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0"
+            }`}
+          >
+            <span
+              className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
+              title="Drag to reorder"
+            >
+              ⠿
+            </span>
+            <button
+              onClick={() => play(v)}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
+              <div className="h-10 w-16 shrink-0 overflow-hidden rounded-sm bg-ink-800">
+                {thumb && (
+                  <img
+                    loading="lazy"
+                    decoding="async"
+                    width={64}
+                    height={40}
+                    src={thumb}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
+              <span className="min-w-0 flex-1">
+                <span className="line-clamp-2 text-sm leading-snug text-gray-200">
+                  {v.title}
+                </span>
+                {stream && (
+                  <span className="text-[11px] text-muted">
+                    Not downloaded
+                    {v.channel ? ` · ${v.channel}` : ""}
+                  </span>
+                )}
+              </span>
+            </button>
+            <button
+              onClick={() => removeFromQueue(queueKey(v))}
+              className="shrink-0 px-2 text-muted hover:text-accent"
+              title="Remove"
+            >
+              ✕
+            </button>
+          </li>
+        );
+      })}
+    </ul>
+  );
 
   return (
     <div
@@ -106,91 +192,13 @@ export default function PlaybackQueue({
         </div>
       )}
 
-      <Collapse open={!collapsible || expanded} durationClass="duration-200">
-        <ul
-          ref={listRef}
-          className={`space-y-1 horde-scrollbar ${
-            scrollable ? `${listMaxHeightClass} overflow-y-auto` : ""
-          }`}
-        >
-          {queue.map((v, index) => {
-            const stream = isQueuedStream(v);
-            const thumb = stream ? v.thumbnail : thumbnailUrl(v);
-            const key = queueKey(v);
-            return (
-              <li
-                key={key}
-                draggable
-                onDragStart={() => {
-                  dragIndex.current = index;
-                  setDragging(index);
-                }}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => {
-                  if (dragIndex.current !== null) {
-                    reorderQueue(dragIndex.current, index);
-                  }
-                  dragIndex.current = null;
-                }}
-                onDragEnd={() => {
-                  dragIndex.current = null;
-                  setDragging(null);
-                }}
-                className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] duration-200 ease-out hover:bg-ink-800 ${
-                  dragging === index ? "opacity-50" : ""
-                } ${
-                  initialKeys.has(key)
-                    ? ""
-                    : "starting:-translate-y-1 starting:opacity-0 motion-reduce:starting:translate-y-0"
-                }`}
-              >
-                <span
-                  className="shrink-0 cursor-grab px-1 text-muted active:cursor-grabbing"
-                  title="Drag to reorder"
-                >
-                  ⠿
-                </span>
-                <button
-                  onClick={() => play(v)}
-                  className="flex min-w-0 flex-1 items-center gap-3 text-left"
-                >
-                  <div className="h-10 w-16 shrink-0 overflow-hidden rounded-sm bg-ink-800">
-                    {thumb && (
-                      <img
-                        loading="lazy"
-                        decoding="async"
-                        width={64}
-                        height={40}
-                        src={thumb}
-                        alt=""
-                        className="h-full w-full object-cover"
-                      />
-                    )}
-                  </div>
-                  <span className="min-w-0 flex-1">
-                    <span className="line-clamp-2 text-sm leading-snug text-gray-200">
-                      {v.title}
-                    </span>
-                    {stream && (
-                      <span className="text-[11px] text-muted">
-                        Not downloaded
-                        {v.channel ? ` · ${v.channel}` : ""}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                <button
-                  onClick={() => removeFromQueue(queueKey(v))}
-                  className="shrink-0 px-2 text-muted hover:text-accent"
-                  title="Remove"
-                >
-                  ✕
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </Collapse>
+      {collapsible ? (
+        <Collapse open={expanded} durationClass="duration-200">
+          {list}
+        </Collapse>
+      ) : (
+        list
+      )}
     </div>
   );
 }
