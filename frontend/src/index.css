@@ -1150,13 +1150,13 @@ html[data-hover-motion="subtle"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="lift"] input:not([type="range"]):not([type="color"]),
 html[data-hover-motion="glow"] input:not([type="range"]):not([type="color"]) {
   transition:
-    transform 300ms var(--ease-fluid),
-    box-shadow 300ms var(--ease-fluid),
-    filter 300ms var(--ease-fluid),
-    background-color 280ms ease,
-    color 280ms ease,
-    border-color 280ms ease,
-    opacity 280ms ease;
+    transform 200ms var(--ease-fluid),
+    box-shadow 200ms var(--ease-fluid),
+    filter 200ms var(--ease-fluid),
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    opacity 200ms ease;
 }
 
 /* Hover states only where a pointer really hovers: a tap on a touch screen
@@ -1215,8 +1215,8 @@ html[data-hover-motion="glow"] .ui-panel-toggle .ui-panel-toggle-press {
   padding: 0.3rem 0.55rem;
   margin: -0.3rem -0.55rem;
   transition:
-    box-shadow 300ms var(--ease-fluid),
-    transform 300ms var(--ease-fluid);
+    box-shadow 200ms var(--ease-fluid),
+    transform 200ms var(--ease-fluid);
 }
 
 html[data-hover-motion="glow"]
