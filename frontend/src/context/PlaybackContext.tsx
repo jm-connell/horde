@@ -885,7 +885,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
             : mimeFromPath(current.file_path)
         }
         blockingOverlay={
-          libraryRendition.safariPreparing ? (
+          libraryRendition.safariRewriting ? (
             <SafariPrepGate prep={libraryRendition.safariPrep} isMini={!dock} />
           ) : compatBlocked ? (
             <CompatGate
