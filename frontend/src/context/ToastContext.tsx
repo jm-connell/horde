@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { CloseIcon } from "../components/icons";
 
 export type ToastVariant = "info" | "error";
 
@@ -158,7 +159,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           aria-label="Dismiss notification"
           className="shrink-0 rounded-sm px-1 text-muted hover:text-gray-100"
         >
-          <span aria-hidden>×</span>
+          <CloseIcon />
         </button>
       ) : null}
     </div>

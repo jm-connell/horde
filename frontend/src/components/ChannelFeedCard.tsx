@@ -26,6 +26,7 @@ import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
+import { PlayIcon } from "./icons";
 
 const maxResCache = new Map<string, string>();
 
@@ -220,7 +221,7 @@ function FeedThumbnail({
             />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-muted">
-              <span className="text-4xl">▶</span>
+              <PlayIcon className="text-4xl" />
             </div>
           )}
           {previewSrc && previewVideoId != null ? (
@@ -238,7 +239,7 @@ function FeedThumbnail({
           }`}
         >
           <span className="rounded-full bg-black/70 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-white/20">
-            ▶
+            <PlayIcon />
           </span>
         </div>
         {live && (

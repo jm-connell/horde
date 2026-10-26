@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { usePlaybackActions } from "../context/PlaybackContext";
 import type { QueueEntry } from "../context/playbackQueue";
+import { CheckIcon } from "./icons";
 
 /** How long "Queued" stays up after a click. */
 const ADDED_MS = 1400;
@@ -43,7 +44,15 @@ export default function QueueButton({
           : "pointer-events-none bg-black/70 text-white opacity-0 hover:bg-accent hover:text-on-accent"
       } ${className}`}
     >
-      <span aria-live="polite">{added ? "✓ Queued" : "+ Queue"}</span>
+      <span aria-live="polite" className="inline-flex items-center gap-1">
+        {added ? (
+          <>
+            <CheckIcon /> Queued
+          </>
+        ) : (
+          "+ Queue"
+        )}
+      </span>
     </button>
   );
 }

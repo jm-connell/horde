@@ -44,6 +44,7 @@ import {
 import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
+import { CloseIcon } from "./icons";
 
 export default function PlaylistRow({
   playlist,
@@ -882,7 +883,7 @@ export default function PlaylistRow({
                             className="shrink-0 px-2 text-muted hover:text-accent"
                             title="Remove from playlist"
                           >
-                            ✕
+                            <CloseIcon />
                           </button>
                         )}
                       </div>

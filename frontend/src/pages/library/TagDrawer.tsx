@@ -1,5 +1,6 @@
 import Collapse from "../../components/Collapse";
 import type { TagStat } from "../../types";
+import { CloseIcon } from "../../components/icons";
 
 /**
  * The tag chips under the header: the open tag's clear chip (tag pages), the
@@ -39,9 +40,10 @@ export default function TagDrawer({
           {activeTag && (
             <button
               onClick={() => onSelectTag(null)}
-              className="rounded-full bg-accent px-3 py-1 text-xs font-medium text-on-accent"
+              aria-label={`Clear tag #${activeTag}`}
+              className="inline-flex items-center gap-1 rounded-full bg-accent px-3 py-1 text-xs font-medium text-on-accent"
             >
-              #{activeTag} ✕
+              #{activeTag} <CloseIcon />
             </button>
           )}
           {hasTags && (

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { bookmarkletHref } from "../shareTarget";
 import Collapse from "./Collapse";
+import { ChevronIcon } from "./icons";
 
 /**
  * Unobtrusive help below the download form: how to send a link to Horde from
@@ -33,7 +34,9 @@ export default function SendLinksHelp() {
         aria-controls="send-links-help"
         className="ui-interactive flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-gray-400 hover:text-gray-200"
       >
-        <span aria-hidden="true">{open ? "▼" : "▶"}</span>
+        <ChevronIcon
+          className={`transition-transform duration-200 ease-out ${open ? "" : "-rotate-90"}`}
+        />
         Send links from your browser
       </button>
       <Collapse open={open}>

@@ -23,6 +23,7 @@ import {
   type CropInput,
   type CropTransform,
 } from "../utils/imageCrop";
+import { CloseIcon } from "./icons";
 
 const INITIAL_TRANSFORM: CropTransform = {
   zoom: 1,
@@ -383,7 +384,7 @@ export default function ImageCropModal({
             className="text-muted hover:text-gray-300 disabled:opacity-50"
             aria-label="Close"
           >
-            ×
+            <CloseIcon />
           </button>
         </div>
 

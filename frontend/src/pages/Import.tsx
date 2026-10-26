@@ -24,6 +24,7 @@ import {
 import { formatSize } from "../utils";
 
 import { getJson, setJson } from "../storage";
+import { ChevronIcon } from "../components/icons";
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
@@ -495,7 +496,9 @@ export default function Import() {
                 onClick={() => setShowDuplicates((v) => !v)}
                 className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-accent"
               >
-                <span>{showDuplicates ? "▼" : "▶"}</span>
+                <ChevronIcon
+                  className={`transition-transform duration-200 ease-out ${showDuplicates ? "" : "-rotate-90"}`}
+                />
                 <span>
                   Possible duplicates ({visibleGroups.length} group
                   {visibleGroups.length === 1 ? "" : "s"})

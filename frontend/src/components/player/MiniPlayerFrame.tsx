@@ -1,3 +1,4 @@
+import { CloseIcon, PauseIcon, PlayIcon } from "../icons";
 interface Props {
   title?: string;
   playing: boolean;
@@ -48,7 +49,7 @@ export default function MiniPlayerFrame({
           className="flex min-h-[44px] min-w-[44px] touch-manipulation items-center justify-center text-2xl leading-none hover:text-accent"
           aria-label={playing ? "Pause" : "Play"}
         >
-          {playing ? "❚❚" : "►"}
+          {playing ? <PauseIcon /> : <PlayIcon />}
         </button>
         <span className="min-w-0 flex-1 truncate text-sm text-gray-200">
           {title}
@@ -83,7 +84,7 @@ export default function MiniPlayerFrame({
           title="Close"
           aria-label="Close"
         >
-          ✕
+          <CloseIcon />
         </button>
       </div>
     </>

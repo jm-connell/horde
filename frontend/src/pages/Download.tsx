@@ -43,6 +43,7 @@ import { getItem, setItem } from "../storage";
 import PlaylistEntryList from "./download/PlaylistEntryList";
 import PlaylistModePicker from "./download/PlaylistModePicker";
 import { toastBulkSkips } from "./download/skips";
+import { ChevronIcon } from "../components/icons";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
@@ -851,9 +852,11 @@ export default function Download() {
               onClick={toggleActiveCollapsed}
               className="ui-interactive flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left"
             >
-              <span className="text-gray-400">
-                {activeCollapsed ? "▶" : "▼"}
-              </span>
+              <ChevronIcon
+                className={`text-gray-400 transition-transform duration-200 ease-out ${
+                  activeCollapsed ? "-rotate-90" : ""
+                }`}
+              />
               <span className="text-sm font-semibold text-gray-100">
                 Active downloads
               </span>

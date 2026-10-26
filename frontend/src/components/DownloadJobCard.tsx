@@ -55,6 +55,7 @@ import {
 } from "./downloadJobCardState";
 
 import { getItem, setItem } from "../storage";
+import { CheckIcon, CloseIcon } from "./icons";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -465,10 +466,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
       >
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
-            {completed && !videoGone && (
-              <span className="shrink-0 text-accent">✓</span>
-            )}
-            {failed && <span className="shrink-0 text-red-400">✗</span>}
+            {completed && !videoGone && <CheckIcon className="text-accent" />}
+            {failed && <CloseIcon className="text-red-400" />}
             {editingTitle ? (
               <input
                 ref={titleInputRef}
@@ -574,7 +573,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   : "Cancel download"
               }
             >
-              ×
+              <CloseIcon />
             </button>
           </div>
         </div>

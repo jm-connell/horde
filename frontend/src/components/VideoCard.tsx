@@ -19,6 +19,7 @@ import CardTitle from "./CardTitle";
 import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
+import { PlayIcon } from "./icons";
 
 function CardChannelName({
   channel,
@@ -152,7 +153,7 @@ export default function VideoCard({
           />
         ) : (
           <div className="flex h-full w-full items-center justify-center text-muted">
-            <span className="text-4xl">▶</span>
+            <PlayIcon className="text-4xl" />
           </div>
         )}
         {canPreview ? (

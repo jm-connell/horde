@@ -203,7 +203,7 @@ test("a tag link opens the filtered library and its chip clears it", async ({
   await expect(videoCard(page, "Aurora Drift")).toBeVisible();
   await expect(videoCard(page, "Kiln fire")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "#ambient ✕" }).click();
+  await page.getByRole("button", { name: "Clear tag #ambient" }).click();
   await expect(
     page.getByRole("heading", { name: "Home", level: 1 })
   ).toBeVisible();

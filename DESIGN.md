@@ -270,4 +270,6 @@ fades stay and movement goes.
   during playback.
 - Animate keyboard-initiated actions or anything users trigger many times a
   minute.
-- Use text glyphs for icons in new UI; use inline SVG with `currentColor`.
+- Use text glyphs (✕ ▼ ✓ ▶) for icons; they change with the user's font. Use
+  the inline SVG icons in `frontend/src/components/icons.tsx` (1em,
+  `currentColor`, decorative), and keep the name on the button.

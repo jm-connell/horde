@@ -11,6 +11,7 @@ import ManageSection from "./ManageSection";
 import RetentionSection from "./RetentionSection";
 import SearchSection from "./SearchSection";
 import { sectionId, type ChannelSettingsSection } from "./channelSettingsText";
+import { CloseIcon } from "../../../components/icons";
 
 /**
  * Every per-channel setting in one place: a side sheet on wide screens, a
@@ -85,7 +86,7 @@ export default function ChannelSettingsSheet({
             aria-label="Close channel settings"
             className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xl leading-none text-muted hover:bg-ink-800 hover:text-gray-200"
           >
-            ×
+            <CloseIcon />
           </button>
         </header>
         <div

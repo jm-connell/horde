@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Video } from "../types";
 import VideoCard from "./VideoCard";
+import { CloseIcon } from "./icons";
 
 interface Props {
   videos: Video[];
@@ -131,7 +132,7 @@ export default function ContinueWatchingRow({
                   title="Remove from continue watching"
                   aria-label="Remove from continue watching"
                 >
-                  ✕
+                  <CloseIcon />
                 </button>
                 <VideoCard
                   video={v}
