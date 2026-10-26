@@ -586,7 +586,13 @@ test.describe("player behaviour across state changes", () => {
     await expect(controlBar(page)).toHaveClass(/opacity-0/, {
       timeout: 8000,
     });
+    // Theater leaves the background visible; fit-window covers it.
     await page.keyboard.press("t");
+    await page.waitForTimeout(200);
+    expect(
+      await page.evaluate(() => document.body.dataset.playerCovering)
+    ).toBeUndefined();
+    await page.keyboard.press("f");
     await expect
       .poll(() => page.evaluate(() => document.body.dataset.playerCovering))
       .toBe("true");
