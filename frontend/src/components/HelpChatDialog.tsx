@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { getJson, removeItem, setJson } from "../storage";
 import { backdropClick } from "../utils";
 import AiMarkdown from "./AiMarkdown";
+import { markdownHref } from "./aiMarkdownParse";
 import {
   HELP_CHAT_STORAGE_KEY,
   HELP_SUGGESTIONS,
@@ -36,7 +37,6 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const askedInitial = useRef(false);
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
@@ -130,9 +130,13 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
   const sendRef = useRef(send);
   sendRef.current = send;
   useEffect(() => {
-    if (askedInitial.current || !initialQuestion?.trim()) return;
-    askedInitial.current = true;
-    void sendRef.current(initialQuestion);
+    if (!initialQuestion?.trim()) return;
+    // Deferred so StrictMode's mount, unmount, mount sends it once: the
+    // unmount clears the timer instead of aborting a request already sent.
+    const timer = window.setTimeout(
+      () => void sendRef.current(initialQuestion)
+    );
+    return () => window.clearTimeout(timer);
   }, [initialQuestion]);
 
   function clear() {
@@ -252,7 +256,7 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
                           {m.sources.map((s) => (
                             <li key={s.path} className="truncate">
                               <a
-                                href={s.url}
+                                href={markdownHref(s.url)}
                                 target="_blank"
                                 rel="noreferrer"
                                 title={s.path}
