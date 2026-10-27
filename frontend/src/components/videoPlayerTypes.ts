@@ -89,6 +89,6 @@ export interface VideoPlayerProps {
   mediaSuspended?: boolean;
   /** Covers the video (e.g. "this device can't decode AV1"); src may be "". */
   blockingOverlay?: ReactNode;
-  /** Library file failed to decode; return true when the caller recovers. */
-  onSourceError?: () => boolean;
+  /** Library file failed to play; resolves true when the caller recovers. */
+  onSourceError?: (error: MediaError | null) => Promise<boolean>;
 }
