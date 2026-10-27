@@ -4,10 +4,27 @@ import { expect, test } from "./fixtures";
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
-test("Ask about Horde answers from the Settings footer and keeps the thread", async ({
+test("the footer links to the docs and the GitHub issue tracker", async ({
   page,
 }) => {
-  const bodies: { message: string; history: unknown[] }[] = [];
+  await page.goto("/");
+  const footer = page.locator('[data-horde="footer"]');
+  await expect(footer.getByRole("link", { name: "Docs" })).toHaveAttribute(
+    "href",
+    "/wiki/"
+  );
+  await expect(
+    footer.getByRole("link", { name: "Report a bug or idea" })
+  ).toHaveAttribute("href", /github\.com\/jm-connell\/horde\/issues/);
+  await expect(
+    footer.getByRole("link", { name: "Source on GitHub" })
+  ).toHaveAttribute("href", "https://github.com/jm-connell/horde");
+});
+
+test("Ask about Horde opens in the corner, follows the user and moves", async ({
+  page,
+}) => {
+  const bodies: { message: string; history: unknown[]; page: string }[] = [];
   await page.route(/\/api\/ai\/help\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
@@ -42,29 +59,49 @@ test("Ask about Horde answers from the Settings footer and keeps the thread", as
     });
   });
 
+  await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/settings");
-  const ask = page.getByRole("textbox", { name: "Ask about Horde" });
-  await ask.fill("How do I set up AI?");
-  await ask.press("Enter");
+  await page.getByRole("tab", { name: "Playback" }).click();
+  const open = page.getByRole("button", { name: "Ask about Horde" });
+  await open.click();
+  await expect(open).toHaveAttribute("aria-expanded", "true");
 
-  const dialog = page.getByRole("dialog", { name: "Ask about Horde" });
-  await expect(dialog.getByText("How do I set up AI?")).toBeVisible();
-  await expect(dialog.getByText("Settings → AI")).toBeVisible();
-  await expect(dialog.locator("pre")).toHaveText(
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toBeFocused();
+  // Docked in the bottom-right corner, not over the middle of the page.
+  const box = (await panel.boundingBox())!;
+  expect(box.x + box.width).toBeGreaterThan(1280 - 40);
+  expect(box.y + box.height).toBeGreaterThan(800 - 40);
+
+  await input.fill("How do I set up AI?");
+  await input.press("Enter");
+  await expect(panel.getByText("Settings → AI")).toBeVisible();
+  await expect(panel.locator("pre")).toHaveText(
     "OLLAMA_URL=http://ollama:11434"
   );
-  await dialog.getByText("Sources (1)").click();
-  await expect(dialog.getByRole("link", { name: "AI setup" })).toHaveAttribute(
+  // The server is told which screen the question was asked from.
+  expect(bodies[0].page).toBe("Settings, Playback tab (/settings)");
+  await panel.getByText("Sources (1)").click();
+  await expect(panel.getByRole("link", { name: "AI setup" })).toHaveAttribute(
     "href",
     "/wiki/ops/ai-setup/"
   );
-  await expectNoSeriousViolations(page, "help chat", '[role="dialog"]');
+  await expectNoSeriousViolations(
+    page,
+    "help chat",
+    '[data-horde="help-chat"]'
+  );
 
-  // A follow-up carries the conversation so far.
-  const input = dialog.getByRole("textbox", { name: "Your question" });
+  // It is not modal: the page behind still works, and the panel stays open
+  // with its thread on the next page.
+  await page.getByRole("link", { name: "History" }).first().click();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(panel.getByText("Settings → AI")).toBeVisible();
   await input.fill("Can I use a local model?");
   await input.press("Enter");
-  await expect(dialog.getByText("Yes, local models work too.")).toBeVisible();
+  await expect(panel.getByText("Yes, local models work too.")).toBeVisible();
+  expect(bodies[1].page).toBe("History (/history)");
   expect(bodies[1].history).toEqual([
     { role: "user", content: "How do I set up AI?" },
     {
@@ -73,30 +110,70 @@ test("Ask about Horde answers from the Settings footer and keeps the thread", as
     },
   ]);
 
-  // Escape closes; the thread is still there for this tab after a reload.
-  await page.keyboard.press("Escape");
-  await expect(dialog).toBeHidden();
+  // Drag it by the header, then resize it from the top-left corner.
+  const before = (await panel.boundingBox())!;
+  const header = panel.locator("header");
+  const hb = (await header.boundingBox())!;
+  await page.mouse.move(hb.x + 60, hb.y + 15);
+  await page.mouse.down();
+  await page.mouse.move(hb.x - 240, hb.y - 100, { steps: 5 });
+  await page.mouse.up();
+  const moved = (await panel.boundingBox())!;
+  expect(moved.x).toBeCloseTo(before.x - 300, 0);
+  expect(moved.y).toBeCloseTo(before.y - 115, 0);
+  expect(moved.width).toBeCloseTo(before.width, 0);
+
+  await page.mouse.move(moved.x + 3, moved.y + 3);
+  await page.mouse.down();
+  await page.mouse.move(moved.x - 97, moved.y - 47, { steps: 5 });
+  await page.mouse.up();
+  const resized = (await panel.boundingBox())!;
+  expect(resized.width).toBeCloseTo(moved.width + 100, 0);
+  expect(resized.height).toBeCloseTo(moved.height + 50, 0);
+  expect(resized.x + resized.width).toBeCloseTo(moved.x + moved.width, 0);
+
+  // Escape closes; after a reload the footer reopens the same thread in the
+  // same place.
+  await input.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(open).toBeFocused();
   await page.reload();
-  await page.getByRole("textbox", { name: "Ask about Horde" }).fill("Thanks");
-  await page.getByRole("button", { name: "Ask", exact: true }).click();
-  await expect(dialog.getByText("Yes, local models work too.")).toBeVisible();
-  await dialog.getByRole("button", { name: "Clear" }).click();
-  await expect(dialog.getByText("Yes, local models work too.")).toBeHidden();
+  await open.click();
+  await expect(panel.getByText("Yes, local models work too.")).toBeVisible();
+  const reopened = (await panel.boundingBox())!;
+  expect(reopened.x).toBeCloseTo(resized.x, 0);
+  expect(reopened.width).toBeCloseTo(resized.width, 0);
+  await panel.getByRole("button", { name: "Clear" }).click();
+  await expect(panel.getByText("Yes, local models work too.")).toBeHidden();
   await expect(
-    dialog.getByRole("button", { name: "How do I set up AI features?" })
+    panel.getByRole("button", { name: "How do I set up AI features?" })
   ).toBeVisible();
+  await panel.getByRole("button", { name: "Close" }).click();
+  await expect(open).toHaveAttribute("aria-expanded", "false");
+});
+
+test("Ask about Horde fills the bottom of a phone screen", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const box = (await page
+    .getByRole("dialog", { name: "Ask about Horde" })
+    .boundingBox())!;
+  expect(box.x).toBeCloseTo(8, 0);
+  expect(box.width).toBeCloseTo(390 - 16, 0);
 });
 
 test("Ask about Horde shows the server's reason when no AI is set up", async ({
   page,
 }) => {
-  await page.goto("/settings");
-  const ask = page.getByRole("textbox", { name: "Ask about Horde" });
-  await ask.fill("What is Horde?");
-  await ask.press("Enter");
-  const dialog = page.getByRole("dialog", { name: "Ask about Horde" });
-  await expect(dialog.getByText("What is Horde?")).toBeVisible();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await input.fill("What is Horde?");
+  await input.press("Enter");
+  await expect(panel.getByText("What is Horde?")).toBeVisible();
   // The e2e server has no AI provider; the real route answers with an error event.
-  await expect(dialog.getByRole("alert")).toHaveText(/\S/);
-  await expect(dialog.getByText("Looking it up")).toBeHidden();
+  await expect(panel.getByRole("alert")).toHaveText(/\S/);
+  await expect(panel.getByText("Looking it up")).toBeHidden();
 });

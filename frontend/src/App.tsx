@@ -25,6 +25,7 @@ import {
 import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
+import AppFooter from "./components/AppFooter";
 import BackgroundEffect from "./components/BackgroundEffect";
 import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
@@ -36,6 +37,7 @@ import { ReauthProvider } from "./context/ReauthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { HomeResetProvider } from "./context/HomeResetContext";
+import { HelpChatProvider } from "./context/HelpChatContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
@@ -195,6 +197,7 @@ function AppShell() {
       <BackgroundEffect />
       <TopNav />
       <AppRoutes />
+      <AppFooter />
     </div>
   );
 }
@@ -245,9 +248,11 @@ export default function App() {
                     <SearchProvider>
                       <HomeResetProvider>
                         <PlaybackProvider>
-                          <AppShell />
-                          <OfflineUnlockSetup />
-                          <OverlayScrollThumb viewport />
+                          <HelpChatProvider>
+                            <AppShell />
+                            <OfflineUnlockSetup />
+                            <OverlayScrollThumb viewport />
+                          </HelpChatProvider>
                         </PlaybackProvider>
                       </HomeResetProvider>
                     </SearchProvider>

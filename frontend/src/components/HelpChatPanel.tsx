@@ -1,9 +1,15 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocation } from "react-router-dom";
 import { api } from "../api";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import {
+  usePlaybackLayout,
+  usePlaybackSession,
+} from "../context/PlaybackContext";
+import type { PageDetail } from "../context/HelpChatContext";
+import { useSearch } from "../context/SearchContext";
+import { useIsMobile } from "../hooks/useIsMobile";
 import { getJson, removeItem, setJson } from "../storage";
-import { backdropClick } from "../utils";
 import AiMarkdown from "./AiMarkdown";
 import { markdownHref } from "./aiMarkdownParse";
 import {
@@ -14,26 +20,58 @@ import {
   isHelpThread,
   parseSources,
 } from "./helpChat";
+import {
+  clampHelpFrame,
+  defaultHelpFrame,
+  type HelpFrame,
+  resizeFromTopLeft,
+} from "./helpChatLayout";
+import { describePage } from "./helpPage";
+import { CloseIcon } from "./icons";
 import TypingDots from "./TypingDots";
 
 interface Props {
-  /** Asked as soon as the dialog opens (from the Settings footer box). */
-  initialQuestion?: string;
+  /** Where the user dragged or resized it to; null until they do. */
+  frame: HelpFrame | null;
+  onFrameChange: (frame: HelpFrame) => void;
+  /** The current page's note on what is showing (e.g. the Settings tab). */
+  pageDetail: () => PageDetail | null;
   onClose: () => void;
 }
 
 const BUTTON =
   "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40";
 
+function useViewport() {
+  const [size, setSize] = useState(() => ({
+    vw: window.innerWidth,
+    vh: window.innerHeight,
+  }));
+  useEffect(() => {
+    const onResize = () =>
+      setSize({ vw: window.innerWidth, vh: window.innerHeight });
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  return size;
+}
+
 /**
- * Ask about Horde: a chat that answers from this server's docs and source.
+ * Ask about Horde: a chat in the corner that answers from this server's docs
+ * and source. It floats over every page (drag it by its header, resize it
+ * from the top-left corner) and tells the server which page the user is on.
  * The conversation lives in this tab (sessionStorage) and is sent with each
  * question.
  */
-export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
+export default function HelpChatPanel({
+  frame,
+  onFrameChange,
+  pageDetail,
+  onClose,
+}: Props) {
   const titleId = useId();
   const inputId = useId();
-  const panelRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -44,16 +82,38 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useFocusTrap(panelRef, { onEscape: onClose });
+  const location = useLocation();
+  const { committedQuery } = useSearch();
+  const { current, stream, miniPlayerActive } = usePlaybackSession();
+  const { miniPlayerRect } = usePlaybackLayout();
+  const isMobile = useIsMobile();
+  const { vw, vh } = useViewport();
+  const box = frame
+    ? clampHelpFrame(frame, vw, vh)
+    : defaultHelpFrame(vw, vh, miniPlayerRect);
 
   useEffect(() => {
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    const opener = document.activeElement;
     inputRef.current?.focus();
     return () => {
-      document.body.style.overflow = prevOverflow;
       abortRef.current?.abort();
+      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
     };
+  }, []);
+
+  // Escape closes it while focus is inside (it is not modal, so only then).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      closeRef.current();
+    };
+    el.addEventListener("keydown", onKey);
+    return () => el.removeEventListener("keydown", onKey);
   }, []);
 
   useEffect(() => {
@@ -65,6 +125,67 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, sending]);
+
+  // Window listeners of a drag in flight, so unmounting mid-drag drops them.
+  const dragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanup.current?.(), []);
+
+  function startDrag(
+    e: React.PointerEvent<HTMLElement>,
+    apply: (dx: number, dy: number) => HelpFrame
+  ) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    const { clientX: x0, clientY: y0, pointerId } = e;
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      onFrameChange(apply(ev.clientX - x0, ev.clientY - y0));
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      dragCleanup.current = null;
+    };
+    dragCleanup.current?.();
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    dragCleanup.current = stop;
+  }
+
+  function onHeaderPointerDown(e: React.PointerEvent<HTMLElement>) {
+    if ((e.target as HTMLElement).closest("button, a")) return;
+    const start = box;
+    startDrag(e, (dx, dy) =>
+      clampHelpFrame(
+        { ...start, left: start.left + dx, top: start.top + dy },
+        window.innerWidth,
+        window.innerHeight
+      )
+    );
+  }
+
+  function onResizePointerDown(e: React.PointerEvent<HTMLElement>) {
+    const start = box;
+    startDrag(e, (dx, dy) =>
+      resizeFromTopLeft(start, dx, dy, window.innerWidth, window.innerHeight)
+    );
+  }
+
+  function currentPage(): string {
+    const playing = current
+      ? { title: current.title, mini: miniPlayerActive }
+      : stream
+        ? { title: stream.title, mini: miniPlayerActive }
+        : null;
+    const detail = pageDetail();
+    return describePage(location.pathname, location.search, {
+      detail: detail?.pathname === location.pathname ? detail.text : undefined,
+      query: committedQuery,
+      playing,
+    });
+  }
 
   async function send(question: string) {
     const text = question.trim();
@@ -91,7 +212,7 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      await api.streamHelpChat(text, history, {
+      await api.streamHelpChat(text, history, currentPage(), {
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "sources") {
@@ -126,19 +247,6 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
     }
   }
 
-  // The latest `send`, for the one-shot effect below.
-  const sendRef = useRef(send);
-  sendRef.current = send;
-  useEffect(() => {
-    if (!initialQuestion?.trim()) return;
-    // Deferred so StrictMode's mount, unmount, mount sends it once: the
-    // unmount clears the timer instead of aborting a request already sent.
-    const timer = window.setTimeout(
-      () => void sendRef.current(initialQuestion)
-    );
-    return () => window.clearTimeout(timer);
-  }, [initialQuestion]);
-
   function clear() {
     if (sending) return;
     setMessages([]);
@@ -147,182 +255,207 @@ export default function HelpChatDialog({ initialQuestion, onClose }: Props) {
     inputRef.current?.focus();
   }
 
+  const placement: React.CSSProperties | undefined = isMobile
+    ? undefined
+    : {
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        height: box.height,
+      };
+
   return createPortal(
-    <div
-      className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4"
-      role="presentation"
-      onClick={backdropClick(onClose)}
+    <section
+      role="dialog"
+      aria-modal="false"
+      aria-labelledby={titleId}
+      data-horde="help-chat"
+      ref={panelRef}
+      style={placement}
+      className={`ui-panel ui-panel-legible fixed z-50 flex flex-col overflow-hidden rounded-xl bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
+        isMobile
+          ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] h-[min(36rem,75dvh)]"
+          : ""
+      }`}
     >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        className="ui-panel ui-panel-legible flex h-[min(40rem,calc(100dvh-2rem))] w-full max-w-2xl flex-col overflow-hidden rounded-xl bg-ink-900 shadow-xl outline-hidden ring-1 ring-ink-600"
-      >
-        <div className="flex items-start justify-between gap-3 border-b border-ink-700 px-5 py-3">
-          <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-semibold text-gray-100">
-              Ask about Horde
-            </h2>
-            <p className="mt-0.5 text-xs text-muted">
-              Answers come from this server’s docs and source code, and can be
-              wrong. Check the linked pages.
-            </p>
-          </div>
-          <div className="flex shrink-0 gap-2">
-            {messages.length > 0 && (
-              <button
-                type="button"
-                onClick={clear}
-                disabled={sending}
-                className={BUTTON}
-              >
-                Clear
-              </button>
-            )}
-            <button type="button" onClick={onClose} className={BUTTON}>
-              Close
-            </button>
-          </div>
-        </div>
-
+      {!isMobile && (
         <div
-          ref={listRef}
-          className="horde-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4"
-          aria-live="polite"
-        >
-          {messages.length === 0 && !sending && (
-            <div className="space-y-3">
-              <p className="text-sm text-gray-400">
-                Ask how to use, set up or troubleshoot Horde, or how something
-                works under the hood.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {HELP_SUGGESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    onClick={() => void send(q)}
-                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent"
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-          {messages.map((m) => {
-            const waiting =
-              sending && m.role === "assistant" && !m.content.trim();
-            return (
-              <div
-                key={m.id}
-                className={
-                  m.role === "user" ? "flex justify-end" : "flex justify-start"
-                }
-              >
-                <div
-                  className={
-                    m.role === "user"
-                      ? "w-fit max-w-[80%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
-                      : "w-fit max-w-[95%] min-w-0 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
-                  }
-                >
-                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    {m.role === "user" ? "You" : "Horde"}
-                  </p>
-                  {waiting ? (
-                    <TypingDots label="Looking it up" className="py-1" />
-                  ) : (
-                    <AiMarkdown
-                      text={m.content}
-                      className={
-                        m.role === "user"
-                          ? "space-y-2 text-sm text-gray-200"
-                          : "space-y-2 text-sm text-gray-300"
-                      }
-                    />
-                  )}
-                  {m.role === "assistant" &&
-                    !!m.sources?.length &&
-                    !waiting && (
-                      <details className="mt-2 text-xs text-muted">
-                        <summary className="cursor-pointer select-none hover:text-gray-300">
-                          Sources ({m.sources.length})
-                        </summary>
-                        <ul className="mt-1 space-y-0.5">
-                          {m.sources.map((s) => (
-                            <li key={s.path} className="truncate">
-                              <a
-                                href={markdownHref(s.url)}
-                                target="_blank"
-                                rel="noreferrer"
-                                title={s.path}
-                                className="text-accent underline-offset-2 hover:underline"
-                              >
-                                {s.title}
-                              </a>
-                            </li>
-                          ))}
-                        </ul>
-                      </details>
-                    )}
-                </div>
-              </div>
-            );
-          })}
-          {error && (
-            <p role="alert" className="text-xs text-amber-400/90">
-              {error}
-            </p>
-          )}
+          className="absolute left-0 top-0 z-10 h-4 w-4 cursor-nwse-resize touch-none"
+          title="Drag to resize"
+          aria-hidden="true"
+          onPointerDown={onResizePointerDown}
+        />
+      )}
+      <header
+        className={`flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5 ${
+          isMobile ? "" : "cursor-move touch-none select-none"
+        }`}
+        onPointerDown={isMobile ? undefined : onHeaderPointerDown}
+      >
+        <div className="min-w-0">
+          <h2 id={titleId} className="text-sm font-semibold text-gray-100">
+            Ask about Horde
+          </h2>
+          <p className="truncate text-xs text-muted">
+            From Horde’s docs and code. Can be wrong.
+          </p>
         </div>
-
-        <form
-          className="flex items-end gap-2 border-t border-ink-700 px-4 py-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void send(draft);
-          }}
-        >
-          <label htmlFor={inputId} className="sr-only">
-            Your question
-          </label>
-          <textarea
-            id={inputId}
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                void send(draft);
-              }
-            }}
-            rows={2}
-            maxLength={4000}
-            disabled={sending}
-            placeholder="Ask about Horde…"
-            className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden"
-          />
-          {sending ? (
+        <div className="flex shrink-0 items-center gap-1">
+          {messages.length > 0 && (
             <button
               type="button"
-              onClick={() => abortRef.current?.abort()}
-              className={BUTTON}
+              onClick={clear}
+              disabled={sending}
+              className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
             >
-              Stop
-            </button>
-          ) : (
-            <button type="submit" disabled={!draft.trim()} className={BUTTON}>
-              Send
+              Clear
             </button>
           )}
-        </form>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            title="Close"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-accent"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      </header>
+
+      <div
+        ref={listRef}
+        className="horde-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
+        aria-live="polite"
+      >
+        {messages.length === 0 && !sending && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-400">
+              Ask how to use, set up or troubleshoot Horde, or how something
+              works under the hood. The page you are on is sent with your
+              question.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {HELP_SUGGESTIONS.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  onClick={() => void send(q)}
+                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-left text-xs text-gray-300 hover:border-accent hover:text-accent"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {messages.map((m) => {
+          const waiting =
+            sending && m.role === "assistant" && !m.content.trim();
+          return (
+            <div
+              key={m.id}
+              className={
+                m.role === "user" ? "flex justify-end" : "flex justify-start"
+              }
+            >
+              <div
+                className={
+                  m.role === "user"
+                    ? "w-fit max-w-[85%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
+                    : "w-fit max-w-full min-w-0 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
+                }
+              >
+                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                  {m.role === "user" ? "You" : "Horde"}
+                </p>
+                {waiting ? (
+                  <TypingDots label="Looking it up" className="py-1" />
+                ) : (
+                  <AiMarkdown
+                    text={m.content}
+                    className={
+                      m.role === "user"
+                        ? "space-y-2 text-sm text-gray-200"
+                        : "space-y-2 text-sm text-gray-300"
+                    }
+                  />
+                )}
+                {m.role === "assistant" && !!m.sources?.length && !waiting && (
+                  <details className="mt-2 text-xs text-muted">
+                    <summary className="cursor-pointer select-none hover:text-gray-300">
+                      Sources ({m.sources.length})
+                    </summary>
+                    <ul className="mt-1 space-y-0.5">
+                      {m.sources.map((s) => (
+                        <li key={s.path} className="truncate">
+                          <a
+                            href={markdownHref(s.url)}
+                            target="_blank"
+                            rel="noreferrer"
+                            title={s.path}
+                            className="text-accent underline-offset-2 hover:underline"
+                          >
+                            {s.title}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </div>
+          );
+        })}
+        {error && (
+          <p role="alert" className="text-xs text-amber-400/90">
+            {error}
+          </p>
+        )}
       </div>
-    </div>,
+
+      <form
+        className="flex items-end gap-2 border-t border-ink-700 px-3 py-2.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void send(draft);
+        }}
+      >
+        <label htmlFor={inputId} className="sr-only">
+          Your question
+        </label>
+        <textarea
+          id={inputId}
+          ref={inputRef}
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void send(draft);
+            }
+          }}
+          rows={2}
+          maxLength={4000}
+          disabled={sending}
+          placeholder="Ask about Horde…"
+          className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-base text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden md:text-sm"
+        />
+        {sending ? (
+          <button
+            type="button"
+            onClick={() => abortRef.current?.abort()}
+            className={BUTTON}
+          >
+            Stop
+          </button>
+        ) : (
+          <button type="submit" disabled={!draft.trim()} className={BUTTON}>
+            Send
+          </button>
+        )}
+      </form>
+    </section>,
     document.body
   );
 }

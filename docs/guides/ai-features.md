@@ -43,13 +43,15 @@ Per-video chat lets you ask about content, chapters, or themes. Context is built
 
 ## Ask about Horde
 
-**Settings** has an **Ask about Horde** box at the bottom of the page. Type a question (how to set up AI, why a download failed, where files live, how a feature works under the hood) and a dialog opens with the answer. Follow-up questions keep the conversation; **Clear** starts over.
+The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen). **Escape** or the close button hides it; **Clear** starts over.
+
+Each question also tells Horde which page you are on (for example "Settings, Playback tab" or the video playing), so "what does this page do?" gets a useful answer.
 
 Answers come from the documentation and the source code shipped with your version of Horde: the wiki pages, `README.md`, `.env.example`, `docker-compose.yml`, the changelog, and the backend and frontend code. For each question Horde picks the best-matching sections (a keyword search, no embeddings needed) and sends them with the features overview to the chat model, so it works with small local models too. Under each answer, **Sources** links the wiki pages and the files on GitHub (at your build's commit) it was given.
 
 - Needs the `use_ai` permission and a working chat provider; it does not depend on the **AI video chat** toggle. With OpenRouter, spend is recorded under `chat` in the cost ledger.
 - Members are told when something is an administrator's setting.
-- The conversation is kept in the browser tab only (until the tab closes or **Clear**); the server stores none of it. Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
+- The conversation, and where you put the panel, are kept in the browser tab only (until the tab closes or **Clear**); the server stores none of it. Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
 - Answers can be wrong. The model only sees the excerpts it was given; check the linked pages before changing anything important.
 
 ## Streamed videos

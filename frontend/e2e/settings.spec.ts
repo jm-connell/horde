@@ -254,10 +254,3 @@ test("a change still in flight when the page reloads is not overwritten by the s
     })
     .toBe("title");
 });
-
-test("settings links to the GitHub issue tracker", async ({ page }) => {
-  await page.goto("/settings");
-  await expect(
-    page.getByRole("link", { name: "Report it on GitHub" })
-  ).toHaveAttribute("href", /github\.com\/jm-connell\/horde\/issues/);
-});

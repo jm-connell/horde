@@ -2,10 +2,10 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
-import HelpChatDialog from "../components/HelpChatDialog";
 import LiquidNav from "../components/LiquidNav";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { useAuth } from "../context/AuthContext";
+import { useHelpPageDetail } from "../context/HelpChatContext";
 import { setItem } from "../storage";
 import AppearanceTab from "./settings/AppearanceTab";
 import LibraryTab from "./settings/LibraryTab";
@@ -26,8 +26,6 @@ import {
   tabMatchesQuery,
 } from "./settings/search";
 import type { SettingsTab } from "./settings/types";
-
-const REPORT_BUG_URL = "https://github.com/jm-connell/horde/issues/new";
 
 /**
  * The settings page shell: the tab bar, the search box and which tab is open
@@ -60,12 +58,11 @@ export default function Settings() {
   });
   // Demoted while an admin-only tab was open: that tab is gone.
   const tab = tabAllowed(chosenTab) ? chosenTab : "appearance";
+  const tabLabel = TABS.find((t) => t.id === tab)?.label;
+  useHelpPageDetail("/settings", tabLabel ? `${tabLabel} tab` : null);
   const paneState = useAiPaneState();
   const { setAiPane } = paneState;
   const [searchQuery, setSearchQuery] = useState("");
-  const [helpDraft, setHelpDraft] = useState("");
-  // The question the help dialog opens with; null while it is closed.
-  const [helpQuestion, setHelpQuestion] = useState<string | null>(null);
 
   const q = searchQuery.trim().toLowerCase();
   const match = (...parts: (string | undefined | null)[]) =>
@@ -192,52 +189,6 @@ export default function Settings() {
           </Suspense>
         </div>
       </SettingsPageProvider>
-
-      <footer className="mt-4 space-y-3 text-center text-xs text-muted">
-        {can("use_ai") && (
-          <form
-            className="mx-auto flex max-w-md gap-2"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setHelpQuestion(helpDraft.trim());
-              setHelpDraft("");
-            }}
-          >
-            <input
-              type="text"
-              value={helpDraft}
-              onChange={(e) => setHelpDraft(e.target.value)}
-              maxLength={4000}
-              placeholder="Ask about Horde…"
-              aria-label="Ask about Horde"
-              className="ui-panel min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-100 outline-hidden placeholder:text-muted focus:border-accent"
-            />
-            <button
-              type="submit"
-              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-            >
-              Ask
-            </button>
-          </form>
-        )}
-        <p>
-          Found a bug or have an idea?{" "}
-          <a
-            href={REPORT_BUG_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="text-accent underline underline-offset-2"
-          >
-            Report it on GitHub
-          </a>
-        </p>
-      </footer>
-      {helpQuestion != null && (
-        <HelpChatDialog
-          initialQuestion={helpQuestion}
-          onClose={() => setHelpQuestion(null)}
-        />
-      )}
     </div>
   );
 }
