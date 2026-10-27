@@ -4,6 +4,7 @@ import {
   isTextEntryTarget,
   ownsArrowKeys,
 } from "../../utils/keyboardTarget";
+import { actionForKey, type HotkeyMap } from "../../hotkeys";
 import type { ViewMode } from "../videoPlayerTypes";
 
 interface Options {
@@ -12,6 +13,8 @@ interface Options {
   isMini: boolean;
   /** Letter/punctuation/Space shortcuts (WCAG 2.1.4); arrows + Escape stay on. */
   singleKeyShortcuts: boolean;
+  /** The user's key for each action. */
+  hotkeys: HotkeyMap;
   volume: number;
   hasChapters: boolean;
   togglePlay: () => void;
@@ -30,7 +33,8 @@ interface Options {
 }
 
 /**
- * Window-level player shortcuts: Space/k, c, t, f, Escape, arrows, < >, n.
+ * Window-level player shortcuts (rebindable, see `hotkeys.ts`), plus Escape to
+ * leave fit-window mode.
  * Typing in a field and Ctrl/Cmd/Alt chords are left alone, and buttons and
  * sliders keep the keys they already use.
  */
@@ -39,6 +43,7 @@ export function usePlayerKeyboard({
   mode,
   isMini,
   singleKeyShortcuts,
+  hotkeys,
   volume,
   hasChapters,
   togglePlay,
@@ -57,64 +62,71 @@ export function usePlayerKeyboard({
       // Never hijack browser/OS shortcuts or typing.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (isTextEntryTarget(e.target)) return;
+      if (e.key === "Escape" && mode === "windowed") {
+        if (!isMini) revealControls();
+        exitWindowed();
+        return;
+      }
       // WCAG 2.1.4: character-key shortcuts can be switched off in Settings.
       if (e.key.length === 1 && !singleKeyShortcuts) return;
       // Buttons and menu items own Space; sliders and menus own the arrows.
       if (e.key === " " && isInteractiveControl(e.target)) return;
       if (e.key.startsWith("Arrow") && ownsArrowKeys(e.target)) return;
-      const isPlayerKey =
-        e.key === " " ||
-        e.key === "k" ||
-        e.key === "c" ||
-        e.key === "C" ||
-        e.key === "t" ||
-        e.key === "f" ||
-        e.key === "ArrowRight" ||
-        e.key === "ArrowLeft" ||
-        e.key === "ArrowUp" ||
-        e.key === "ArrowDown" ||
-        e.key === ">" ||
-        e.key === "." ||
-        e.key === "<" ||
-        e.key === "," ||
-        e.key === "n" ||
-        (e.key === "Escape" && mode === "windowed");
-      if (isPlayerKey && !isMini) revealControls();
-      if (e.key === " " || e.key === "k") {
-        e.preventDefault();
-        togglePlay();
-      } else if (e.key === "c" || e.key === "C") {
-        e.preventDefault();
-        cycleCaptions();
-      } else if (e.key === "t") {
-        toggleTheater();
-      } else if (e.key === "f") {
-        toggleWindowed();
-      } else if (e.key === "Escape" && mode === "windowed") {
-        exitWindowed();
-      } else if (e.key === "ArrowRight" && videoRef.current) {
-        seekTo(videoRef.current.currentTime + 5);
-      } else if (e.key === "ArrowLeft" && videoRef.current) {
-        seekTo(videoRef.current.currentTime - 5);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        applyVolume(Math.min(1, Math.round((volume + 0.05) * 100) / 100), true);
-      } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        applyVolume(Math.max(0, Math.round((volume - 0.05) * 100) / 100), true);
-      } else if (e.key === ">" || e.key === ".") {
-        stepRate(1);
-      } else if (e.key === "<" || e.key === ",") {
-        stepRate(-1);
-      } else if (e.key === "n" && hasChapters && videoRef.current) {
-        e.preventDefault();
-        const next = nextChapterStart(videoRef.current.currentTime);
-        if (next != null) seekTo(next);
+      const action = actionForKey(hotkeys, e.key);
+      if (!action || action === "focusSearch") return;
+      // A bound key never also does its browser default (Space scrolling).
+      e.preventDefault();
+      if (!isMini) revealControls();
+      const video = videoRef.current;
+      switch (action) {
+        case "playPause":
+          togglePlay();
+          break;
+        case "captions":
+          cycleCaptions();
+          break;
+        case "theater":
+          toggleTheater();
+          break;
+        case "fitWindow":
+          toggleWindowed();
+          break;
+        case "seekForward":
+          if (video) seekTo(video.currentTime + 5);
+          break;
+        case "seekBack":
+          if (video) seekTo(video.currentTime - 5);
+          break;
+        case "volumeUp":
+          applyVolume(
+            Math.min(1, Math.round((volume + 0.05) * 100) / 100),
+            true
+          );
+          break;
+        case "volumeDown":
+          applyVolume(
+            Math.max(0, Math.round((volume - 0.05) * 100) / 100),
+            true
+          );
+          break;
+        case "speedUp":
+          stepRate(1);
+          break;
+        case "speedDown":
+          stepRate(-1);
+          break;
+        case "nextChapter": {
+          if (!hasChapters || !video) break;
+          const next = nextChapterStart(video.currentTime);
+          if (next != null) seekTo(next);
+          break;
+        }
       }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [
+    hotkeys,
     singleKeyShortcuts,
     togglePlay,
     toggleTheater,

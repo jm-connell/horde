@@ -6,7 +6,7 @@ Horde uses a **single search box** in the top navigation bar, on every page, plu
 
 Type in the search field in the navigation bar, just left of your account button (on narrow screens, tap the search icon). Typing on any other page, or on a channel page, takes you to the [Library](library.md) home page with the results. Library and catalog results update as you type (debounced). A compact **YT** control inside the search box (and the same setting under [Settings → Library](../settings/library.md)) turns live YouTube results on or off. With it highlighted, YouTube itself is queried after you pause typing (or immediately if you press Enter). Search text is sent to YouTube.
 
-On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [Direct YouTube search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from home **YouTube video search**.
+On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
 
 ## Result sections
 
@@ -47,7 +47,7 @@ The channel header search:
 
 Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
 
-When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, “related by search index,” or “Found on YouTube” for Direct YouTube search extras.
+When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
 
 ### What gets indexed
 

@@ -34,7 +34,7 @@ Shortcuts apply when focus is not in a text field:
 | <kbd>&lt;</kbd> or <kbd>,</kbd> | Speed down |
 | ++n++ | Next chapter |
 
-See also the [keyboard shortcuts reference](../reference/keyboard-shortcuts.md).
+These are the defaults; rebind them under **Settings → Playback → Hotkeys**. See also the [keyboard shortcuts reference](../reference/keyboard-shortcuts.md).
 
 ## Playback speed
 

@@ -1,11 +1,12 @@
 # Keyboard shortcuts
 
-Player shortcuts are handled globally while the full player is active. They mirror common YouTube-style bindings.
+Player shortcuts are handled globally while the full player is active. They mirror common YouTube-style bindings. Every key below except ++escape++ can be rebound under **Settings → Playback → Hotkeys**; the table lists the defaults.
 
 ## Shortcuts
 
 | Key | Action |
 |-----|--------|
+| ++slash++ | Focus the search bar (any page) |
 | ++space++ or ++k++ | Play / pause |
 | ++c++ | Cycle captions / subtitle track |
 | ++t++ | Toggle theater mode |
@@ -25,8 +26,8 @@ Player shortcuts are handled globally while the full player is active. They mirr
 !!! note "Form fields"
     Shortcuts are ignored when focus is in an `INPUT`, `TEXTAREA`, `SELECT` or any `contenteditable` element so you can type titles, notes, and search queries normally. They are also ignored when ++ctrl++, ++alt++ or ++cmd++ is held, and ++space++ / the arrow keys are left to a focused button, menu item or slider.
 
-!!! tip "Turn single-key shortcuts off"
-    **Settings → Playback → Single-key player shortcuts** disables the letter, punctuation and ++space++ shortcuts (WCAG 2.1.4), for example when speech-input software types into the page. Arrow keys and ++escape++ keep working. The choice is stored with the other playback preferences.
+!!! tip "Turn single-character hotkeys off"
+    **Settings → Playback → Hotkeys → Single-character hotkeys** disables the letter, punctuation and ++space++ shortcuts (WCAG 2.1.4), for example when speech-input software types into the page. Arrow keys and ++escape++ keep working. The choice is stored with the other playback preferences.
 
 ## Menus and dialogs
 

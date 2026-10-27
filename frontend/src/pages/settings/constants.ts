@@ -39,13 +39,13 @@ export const CATALOG_INDEX_TIP =
 export const STORAGE_LIMIT_TIP =
   "Downloads wait, and start again by themselves, while the library is at this size. A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot. Imports are not held. Downloads also wait when the disk is nearly full (less than HORDE_MIN_FREE_GB free, 2 GB by default).";
 export const CATALOG_MAX_TIP =
-  "Maximum YouTube uploads to keep per channel. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
+  "How many of each YouTube channel’s uploads Horde indexes, newest first, for channel feed search and auto-download. It does not limit how many videos you can download. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
 export const DIRECT_YOUTUBE_SEARCH_TIP =
-  "When on, channel search also queries YouTube for uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; the YT control in a channel’s search box can override this.";
+  "When on, a channel page’s search box also asks YouTube for that channel’s uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; the YT control in a channel’s search box can override this per channel.";
 export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
   "Search this channel on YouTube. Search text is sent to YouTube.";
 export const YOUTUBE_VIDEO_SEARCH_TIP =
-  "When on, Library home search can query YouTube for videos that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. Separate from Direct YouTube search on channel pages.";
+  "When on, the main search bar also shows videos from all of YouTube that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. The YT control in the search bar toggles the same setting.";
 export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP = "Toggle YouTube search results";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
@@ -169,25 +169,67 @@ export const CHANNEL_SORT_OPTIONS: { value: ChannelSort; label: string }[] = [
   { value: "subscriber_count", label: "Subscriber count" },
 ];
 
-export const THEMES: { value: Theme; label: string; preview: string }[] = [
-  { value: "default", label: "Default (cyan)", preview: "#22d3ee" },
-  { value: "oled", label: "OLED (true black)", preview: "#22d3ee" },
-  { value: "terminal", label: "Terminal (green)", preview: "#4ade80" },
-  { value: "nord", label: "Nord", preview: "#88c0d0" },
+/** Dark palettes first, then light, then Custom; `group` heads each run. */
+export const THEMES: {
+  value: Theme;
+  label: string;
+  preview: string;
+  group: "Dark" | "Light" | "Custom";
+}[] = [
+  {
+    value: "default",
+    label: "Default (cyan)",
+    preview: "#22d3ee",
+    group: "Dark",
+  },
+  {
+    value: "oled",
+    label: "OLED (true black)",
+    preview: "#22d3ee",
+    group: "Dark",
+  },
+  {
+    value: "terminal",
+    label: "Terminal (green)",
+    preview: "#4ade80",
+    group: "Dark",
+  },
+  { value: "nord", label: "Nord", preview: "#88c0d0", group: "Dark" },
+  {
+    value: "indigo",
+    label: "Midnight Indigo",
+    preview: "#6366f1",
+    group: "Dark",
+  },
+  { value: "cyber", label: "Neon Cyber", preview: "#00f5ff", group: "Dark" },
+  { value: "sunset", label: "Warm Sunset", preview: "#ff6b35", group: "Dark" },
+  { value: "forest", label: "Forest Deep", preview: "#22c55e", group: "Dark" },
+  { value: "slate", label: "Slate Minimal", preview: "#60a5fa", group: "Dark" },
   {
     value: "light",
-    label: "Minimal Neutrals + Teal (light)",
+    label: "Minimal Neutrals + Teal",
     preview: "#14b8a6",
+    group: "Light",
   },
-  { value: "indigo", label: "Midnight Indigo", preview: "#6366f1" },
-  { value: "cyber", label: "Neon Cyber", preview: "#00f5ff" },
-  { value: "sunset", label: "Warm Sunset", preview: "#ff6b35" },
-  { value: "forest", label: "Forest Deep", preview: "#22c55e" },
-  { value: "slate", label: "Slate Minimal", preview: "#60a5fa" },
-  { value: "earthy", label: "Earthy Modern (light)", preview: "#854d0e" },
-  { value: "frozen", label: "Frozen Blue Minimal (light)", preview: "#0ea5e9" },
-  { value: "mocha", label: "Soft Mocha & Sage (light)", preview: "#a78bfa" },
-  { value: "custom", label: "Custom", preview: "#22d3ee" },
+  {
+    value: "earthy",
+    label: "Earthy Modern",
+    preview: "#854d0e",
+    group: "Light",
+  },
+  {
+    value: "frozen",
+    label: "Frozen Blue Minimal",
+    preview: "#0ea5e9",
+    group: "Light",
+  },
+  {
+    value: "mocha",
+    label: "Soft Mocha & Sage",
+    preview: "#a78bfa",
+    group: "Light",
+  },
+  { value: "custom", label: "Custom", preview: "#22d3ee", group: "Custom" },
 ];
 
 export const TABS: { id: SettingsTab; label: string }[] = [

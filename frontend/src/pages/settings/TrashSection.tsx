@@ -181,11 +181,7 @@ export default function TrashSection() {
   const count = summary?.count ?? 0;
 
   return (
-    <Section
-      title="Trash"
-      description="Deleted videos wait here before they are erased for good. Until then they still use disk space."
-      hidden={!allowed || !match(...TRASH_TERMS)}
-    >
+    <Section title="Trash" hidden={!allowed || !match(...TRASH_TERMS)}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p
           ref={summaryRef}

@@ -1,5 +1,6 @@
 import type { ViewMode } from "../../components/videoPlayerTypes";
 import type { SavedCustomFont, UiFont } from "../../fonts";
+import type { HotkeyOverrides } from "../../hotkeys";
 import type { LoadingStyle } from "../../loadingStyles";
 import type {
   SponsorBlockCategoryMap,
@@ -203,20 +204,21 @@ export interface Settings {
   /** History page stats band showing its details (charts) or only the tiles. */
   historyStatsExpanded: boolean;
   showRelatedVideos: boolean;
-  /** When true, show up-next countdown for related videos after end (queue still advances immediately). */
-  autoplayRelated: boolean;
   /**
-   * After a video ends, play the channel's next upload when it clearly
-   * continues the series, even if it is not downloaded (before any related
-   * video).
+   * When true, show an up-next countdown after a video ends (the queue still
+   * advances immediately): the channel's next upload when it clearly continues
+   * the series, even if it is not downloaded, otherwise a related video.
    */
-  autoplayNextPart: boolean;
+  autoplayRelated: boolean;
   /** Single-character player shortcuts (WCAG 2.1.4: must be switchable off). */
   playerShortcuts: boolean;
-  /** Muted thumbnail preview on mouse hover (desktop / fine pointer). */
+  /** Rebound shortcuts; actions not listed keep their default keys. */
+  hotkeys: HotkeyOverrides;
+  /**
+   * Thumbnail previews: on hover with a fine pointer, or when a card is
+   * uniquely centered on touch screens.
+   */
   previewOnHover: boolean;
-  /** Muted thumbnail preview when a card is uniquely centered (touch / phones). */
-  previewWhenCentered: boolean;
   /** Thumbnail preview audio muted. Synced, not shown in Settings. */
   previewMuted: boolean;
   /** On a channel page, include uploads that are not yet in the library. */

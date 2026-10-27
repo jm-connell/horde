@@ -27,13 +27,11 @@ export type PreviewMode = "hover" | "center" | "off";
 
 export function resolvePreviewMode(opts: {
   previewOnHover: boolean;
-  previewWhenCentered: boolean;
   hoverCapable: boolean;
   reducedMotion: boolean;
 }): PreviewMode {
-  if (opts.reducedMotion) return "off";
-  if (opts.hoverCapable) return opts.previewOnHover ? "hover" : "off";
-  return opts.previewWhenCentered ? "center" : "off";
+  if (opts.reducedMotion || !opts.previewOnHover) return "off";
+  return opts.hoverCapable ? "hover" : "center";
 }
 
 export function previewStartSec(

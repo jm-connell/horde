@@ -5,6 +5,7 @@ import {
   normalizeUiFont,
   parseCustomFontInput,
 } from "../../fonts";
+import { normalizeHotkeyOverrides } from "../../hotkeys";
 import { isLoadingStyle } from "../../loadingStyles";
 import {
   normalizeSponsorBlockCategories,
@@ -483,13 +484,10 @@ export function normalizeSettings(
       parsed.playerShortcuts,
       DEFAULTS.playerShortcuts
     ),
+    hotkeys: normalizeHotkeyOverrides(parsed.hotkeys),
     previewOnHover: normalizeBool(
       parsed.previewOnHover,
       DEFAULTS.previewOnHover
-    ),
-    previewWhenCentered: normalizeBool(
-      parsed.previewWhenCentered,
-      DEFAULTS.previewWhenCentered
     ),
     previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
@@ -507,7 +505,7 @@ function normalizeFontSettings(
   }
 ): Pick<Settings, "uiFont" | "customFonts"> {
   let customFonts = normalizeCustomFonts(parsed.customFonts);
-  let uiFont = parsed.uiFont;
+  let uiFont = parsed.uiFont ?? DEFAULTS.uiFont;
 
   const legacyUrl =
     typeof parsed.customFontUrl === "string" ? parsed.customFontUrl.trim() : "";

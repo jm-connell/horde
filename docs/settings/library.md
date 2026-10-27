@@ -92,15 +92,17 @@ These are **top-level** keys (not the `ui` blob). The whole section is server-wi
 | Setting | Key | Default | Range |
 |---------|-----|---------|-------|
 | Index channel libraries | `channel_catalog_enabled` | `true` | boolean |
-| Max videos per channel | `channel_catalog_max_videos` | `1000` | 100–5000 |
-| Direct YouTube search | `direct_youtube_search` | `true` | boolean |
-| YouTube video search | `youtube_video_search` | `true` | boolean |
+| Max indexed videos per channel | `channel_catalog_max_videos` | `1000` | 100–5000 |
+| YouTube results in channel search | `direct_youtube_search` | `true` | boolean |
+| YouTube results in library search | `youtube_video_search` | `true` | boolean |
 
 When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
-**Direct YouTube search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default with the **YT** control in its search box.
+**Max indexed videos per channel** caps how many of each channel's uploads are indexed, newest first, for channel feed search and auto-download. It does not limit how many videos you can download.
 
-**YouTube video search** is the **YT** control inside the Library home search box: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page Direct YouTube search.
+**YouTube results in channel search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default with the **YT** control in its search box.
+
+**YouTube results in library search** is the **YT** control inside the main search bar: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page setting above.
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

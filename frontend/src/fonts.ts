@@ -35,7 +35,7 @@ export interface SavedCustomFont {
 export const FONT_OPTIONS: FontPreset[] = [
   {
     value: "default",
-    label: "Inter (default)",
+    label: "Inter",
     stack: "Inter, system-ui, sans-serif",
     googleFamily: null,
   },
@@ -83,9 +83,10 @@ export const FONT_OPTIONS: FontPreset[] = [
   },
   {
     value: "oxanium",
-    label: "Oxanium",
+    label: "Oxanium (default)",
     stack: '"Oxanium", system-ui, sans-serif',
-    googleFamily: "Oxanium:wght@400;500;600;700",
+    // Bundled (main.tsx): the default font loads from this server.
+    googleFamily: null,
   },
   {
     value: "source-sans-3",

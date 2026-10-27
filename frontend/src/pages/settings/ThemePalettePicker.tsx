@@ -30,7 +30,9 @@ export default function ThemePalettePicker({
               style={{ background: opt.preview }}
               aria-hidden
             />
-            <span className="min-w-0 truncate">{opt.label}</span>
+            <span className="min-w-0 truncate">
+              {opt.group === "Light" ? `${opt.label} (light)` : opt.label}
+            </span>
           </button>
         );
       })}
