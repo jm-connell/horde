@@ -159,7 +159,8 @@ _SYNONYMS: dict[str, tuple[tuple[str, float], ...]] = {
     "upgrade": (("redownload", 0.5), ("replace", 0.5)),
 }
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*|[0-9]{2,}")
-_CAMEL = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
+#: An acronym stops before the capital that starts the next word (``HTMLParser``).
+_CAMEL = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")
 _HEADING = re.compile(r"^(#{1,3})\s+(.+?)\s*#*\s*$")
 _IMAGE_LINE = re.compile(r"^\s*!\[[^\]]*\]\([^)]*\)\s*$")
 _FENCE = re.compile(r"^\s*(```|~~~)")

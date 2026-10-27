@@ -55,6 +55,22 @@ def test_tokenize_splits_identifiers_and_drops_stopwords():
     assert "how" not in terms and "does" not in terms
 
 
+@pytest.mark.parametrize(
+    ("word", "parts"),
+    [
+        ("HTMLParser", {"html", "parser"}),
+        ("parseURL", {"parse", "url"}),
+        ("HDR10", {"hdr", "10"}),
+    ],
+)
+def test_tokenize_splits_acronyms_from_the_next_word(word, parts):
+    assert parts <= set(help_chat.tokenize(word))
+
+
+def test_tokenize_handles_a_long_run_of_capitals():
+    assert help_chat.tokenize("A" * 100_000) == ["a" * 100_000]
+
+
 def test_index_reads_docs_frontend_and_backend_but_not_tests(index):
     paths = {c.path for c in index.chunks}
     assert "docs/guides/downloads.md" in paths
