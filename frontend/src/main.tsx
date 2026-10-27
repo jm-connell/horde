@@ -9,6 +9,12 @@ import {
 } from "./hooks/useSettings";
 import { applyCustomCss, applyPageId } from "./customCss";
 import { applyUiFont } from "./fonts";
+// The default UI font ships with the app, so a fresh install never asks
+// Google Fonts for anything.
+import "@fontsource/oxanium/400.css";
+import "@fontsource/oxanium/500.css";
+import "@fontsource/oxanium/600.css";
+import "@fontsource/oxanium/700.css";
 import "./index.css";
 import { startConnectivity } from "./offline/connectivity";
 import { offlineManager } from "./offline/manager";
