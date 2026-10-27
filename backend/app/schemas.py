@@ -1255,3 +1255,16 @@ class NotificationTestResult(BaseModel):
     status_code: int | None = None
     #: A short fixed sentence, never the raw exception.
     error: str | None = None
+
+
+class HelpChatTurn(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class HelpChatRequest(BaseModel):
+    """One Ask-about-Horde question and the conversation before it."""
+
+    message: str = Field(..., min_length=1, max_length=4000)
+    #: Earlier turns, oldest first; the server keeps none.
+    history: list[HelpChatTurn] = Field(default_factory=list, max_length=24)

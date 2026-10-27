@@ -5459,6 +5459,54 @@
         "title": "HealthYoutube",
         "type": "object"
       },
+      "HelpChatRequest": {
+        "description": "One Ask-about-Horde question and the conversation before it.",
+        "properties": {
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HelpChatTurn"
+            },
+            "maxItems": 24,
+            "title": "History",
+            "type": "array"
+          },
+          "message": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "HelpChatRequest",
+        "type": "object"
+      },
+      "HelpChatTurn": {
+        "properties": {
+          "content": {
+            "maxLength": 8000,
+            "minLength": 1,
+            "title": "Content",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "role",
+          "content"
+        ],
+        "title": "HelpChatTurn",
+        "type": "object"
+      },
       "HistoryStats": {
         "properties": {
           "best_day": {
@@ -10581,6 +10629,59 @@
           }
         },
         "summary": "Ai Detect",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/help/chat": {
+      "post": {
+        "description": "Ask about Horde: answers from this server's docs and source (SSE).",
+        "operationId": "post_help_chat_api_ai_help_chat_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HelpChatRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Server-sent events, one JSON object per event"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Post Help Chat",
         "tags": [
           "ai"
         ]

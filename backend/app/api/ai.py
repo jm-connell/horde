@@ -5,13 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlmodel import Session
 
-from ..auth import current_user, require_admin
+from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
 from ..context import get_session
 from ..models import require_id
+from ..openapi_responses import EVENT_STREAM, RAW
 from ..response_schemas import (
     AiApplyWorkloadResult,
     AiCategoriesRead,
@@ -23,8 +25,8 @@ from ..response_schemas import (
     PausedResponse,
     RecommendationsRead,
 )
-from ..schemas import ChannelFeedEntry
-from ..services.ai import embeddings, recommend, worker
+from ..schemas import ChannelFeedEntry, HelpChatRequest
+from ..services.ai import embeddings, help_chat, recommend, worker
 from ..services.ai.provider import (
     build_status,
     detect_local_servers,
@@ -422,6 +424,31 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
         enqueued=result["enqueued"],
         breakdown=result["breakdown"],
         detail=result["detail"],
+    )
+
+
+@router.post(
+    "/help/chat",
+    response_class=RAW,
+    responses=EVENT_STREAM,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def post_help_chat(
+    request: Request,
+    payload: HelpChatRequest,
+    user: AuthUser = Depends(current_user),
+):
+    """Ask about Horde: answers from this server's docs and source (SSE)."""
+    return StreamingResponse(
+        help_chat.stream_help_events(
+            payload.message,
+            [turn.model_dump() for turn in payload.history],
+            user.id,
+            is_admin=user.is_admin,
+            authorized=StreamAuthGuard.of(request).still_valid,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
