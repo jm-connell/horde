@@ -45,6 +45,15 @@ _HISTORY_CHARS = 16_000
 #: Docs answer most questions; code still wins when it matches much better,
 #: and is not held back when the question is about the code.
 _DOC_BOOST = 1.4
+#: Notes for contributors: matched like code, so "how do I" questions reach
+#: the user guides first.
+_INTERNAL_DOCS = (
+    "CHANGELOG.md",
+    "docs/adr/",
+    "docs/architecture/",
+    "docs/design/",
+    "docs/development/",
+)
 # The page the user is on nudges retrieval without outweighing the question.
 _PAGE_WEIGHT = 0.3
 _PAGE_CHARS = 300
@@ -139,6 +148,16 @@ _STOPWORDS = frozenset(
         "using",
     }
 )
+#: Words users type for the words the docs use (``4k`` is lost to tokenize),
+#: with the weight the doc's word gets. "Upgrade" also means a new Horde
+#: version, so its link to re-downloading a video counts for less.
+_SYNONYMS: dict[str, tuple[tuple[str, float], ...]] = {
+    "res": (("resolution", 1.0),),
+    "rez": (("resolution", 1.0),),
+    "4k": (("2160", 1.0), ("resolution", 1.0)),
+    "2k": (("1440", 1.0), ("resolution", 1.0)),
+    "upgrade": (("redownload", 0.5), ("replace", 0.5)),
+}
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*|[0-9]{2,}")
 _CAMEL = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 _HEADING = re.compile(r"^(#{1,3})\s+(.+?)\s*#*\s*$")
@@ -359,7 +378,8 @@ class HelpIndex:
                 norm = _K1 * (1 - _B + _B * self._lengths[index] / self._avg_len)
                 scores[index] += weight * idf * count * (_K1 + 1) / (count + norm)
         for index in scores:
-            if self.chunks[index].is_doc:
+            chunk = self.chunks[index]
+            if chunk.is_doc and not chunk.path.startswith(_INTERNAL_DOCS):
                 scores[index] *= doc_boost
         best = sorted(scores, key=lambda i: scores[i], reverse=True)[:limit]
         return [self.chunks[i] for i in best]
@@ -388,6 +408,9 @@ def query_terms(
             terms[term] = 0.5
     for term in tokenize(question):
         terms[term] = 1.0
+    for word in re.findall(r"[a-z0-9]+", question.lower()):
+        for term, weight in _SYNONYMS.get(word, ()):
+            terms[term] = max(terms.get(term, 0.0), weight)
     return terms
 
 

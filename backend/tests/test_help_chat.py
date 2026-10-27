@@ -77,6 +77,30 @@ def test_retrieval_finds_the_matching_section(index):
     assert all(c.path != "docs/features.md" for c in picked)
 
 
+def test_shorthand_reaches_the_words_the_docs_use(docs_root, tmp_dirs):
+    (docs_root / "docs" / "guides" / "watching.md").write_text(
+        "# Watching\n\n## Change resolution\n\n"
+        "Replace the file with a 2160p download at a higher resolution.\n"
+    )
+    index = help_chat.HelpIndex(docs_root)
+    picked = help_chat.select_excerpts(index, "how to upgrade res to 4k", [])
+    assert picked and picked[0].title == "Watching › Change resolution"
+
+
+def test_guides_outrank_contributor_notes_on_how_to_questions(docs_root, tmp_dirs):
+    # A made-up word, so the real backend source (always indexed) cannot match.
+    text = "# Grimbleshelf\n\nThe grimbleshelf keeps removed videos for 30 days.\n"
+    for folder in ("architecture", "guides"):
+        (docs_root / "docs" / folder).mkdir(exist_ok=True)
+        (docs_root / "docs" / folder / "grimbleshelf.md").write_text(text)
+    index = help_chat.HelpIndex(docs_root)
+    picked = help_chat.select_excerpts(index, "what is the grimbleshelf?", [])
+    assert [c.path for c in picked[:2]] == [
+        "docs/guides/grimbleshelf.md",
+        "docs/architecture/grimbleshelf.md",
+    ]
+
+
 def test_follow_up_questions_use_the_previous_question(index):
     history = [
         {"role": "user", "content": "tell me about disk limits"},
