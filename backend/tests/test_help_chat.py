@@ -193,3 +193,71 @@ def test_help_chat_refuses_when_ai_is_off(client, help_env, monkeypatch):
 def test_help_chat_rejects_bad_requests(client, help_env, body):
     assert client.post("/api/ai/help/chat", json=body).status_code == 422
     assert help_env == []
+
+
+def test_headings_skip_code_fences_and_attr_lists(tmp_path, tmp_dirs):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "ops.md").write_text(
+        "# Ops\n\n## Disk limits { #disk-limits }\n\nText.\n\n"
+        "```bash\n# not a heading\ndocker logs horde\n```\n"
+    )
+    built = help_chat.HelpIndex(tmp_path)
+    built.ensure_built()
+    titles = {c.title for c in built.chunks if c.path == "docs/ops.md"}
+    assert titles == {"Ops", "Ops › Disk limits"}
+
+
+def test_a_failed_build_leaves_no_half_index(tmp_path, tmp_dirs, monkeypatch):
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "a.md").write_text("# A\n\nalpha\n")
+    (tmp_path / "docs" / "b.md").write_text("# B\n\nbeta\n")
+    built = help_chat.HelpIndex(tmp_path)
+    real = help_chat._chunks_for
+    calls = {"n": 0}
+
+    def flaky(path, text):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("boom")
+        return real(path, text)
+
+    monkeypatch.setattr(help_chat, "_chunks_for", flaky)
+    with pytest.raises(RuntimeError):
+        built.ensure_built()
+    assert built.chunks == []
+    built.ensure_built()
+    paths = [c.path for c in built.chunks if c.path.startswith("docs/")]
+    assert paths == ["docs/a.md", "docs/b.md"]
+
+
+def test_history_is_capped_and_kept_alternating(monkeypatch):
+    big = "x" * 8000
+    history = [
+        {"role": "user", "content": "q1"},
+        {"role": "assistant", "content": big},
+        {"role": "user", "content": "q2"},
+        {"role": "assistant", "content": big},
+        {"role": "user", "content": "unanswered"},
+        {"role": "user", "content": "q3"},
+        {"role": "assistant", "content": "a3"},
+        {"role": "user", "content": "stopped"},
+    ]
+    trimmed = help_chat.trim_history(history)
+    assert [t["content"] for t in trimmed] == ["q2", big, "q3", "a3"]
+    assert sum(len(t["content"]) for t in trimmed) <= help_chat._HISTORY_CHARS
+
+
+def test_an_index_failure_is_an_error_event(client, help_env, monkeypatch):
+    def broken():
+        raise RuntimeError("disk gone")
+
+    monkeypatch.setattr(help_chat, "help_index", broken)
+    events = _events(client.post("/api/ai/help/chat", json={"message": "x"}).text)
+    assert events == [
+        {
+            "type": "error",
+            "detail": "Horde's help pages could not be loaded",
+            "status": 503,
+        }
+    ]
+    assert help_env == []

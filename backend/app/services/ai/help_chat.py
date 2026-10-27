@@ -40,6 +40,8 @@ _CONTEXT_CHARS = 16_000
 _MAX_CHUNKS_PER_FILE = 3
 _CODE_WINDOW_LINES = 60
 _MD_SECTION_CHARS = 2_400
+#: Characters of earlier turns sent back to the model, newest kept first.
+_HISTORY_CHARS = 16_000
 #: Docs answer most questions; code still wins when it matches much better,
 #: and is not held back when the question is about the code.
 _DOC_BOOST = 1.4
@@ -138,6 +140,9 @@ _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*|[0-9]{2,}")
 _CAMEL = re.compile(r"[A-Z]+(?=[A-Z][a-z])|[A-Z]?[a-z]+|[A-Z]+|[0-9]+")
 _HEADING = re.compile(r"^(#{1,3})\s+(.+?)\s*#*\s*$")
 _IMAGE_LINE = re.compile(r"^\s*!\[[^\]]*\]\([^)]*\)\s*$")
+_FENCE = re.compile(r"^\s*(```|~~~)")
+#: An attr_list suffix on a heading (``## Disk limits { #disk-limits }``).
+_ATTRS = re.compile(r"\s*\{[^}]*\}\s*$")
 
 
 @dataclass(frozen=True)
@@ -229,12 +234,16 @@ def _markdown_chunks(path: str, text: str) -> Iterator[Chunk]:
     heading = ""
     start = 1
     body: list[str] = []
+    in_fence = False
     for number, line in enumerate(lines, start=1):
-        match = _HEADING.match(line)
+        if _FENCE.match(line):
+            in_fence = not in_fence
+        # A ``# comment`` in a shell block is not a heading.
+        match = None if in_fence else _HEADING.match(line)
         if match:
             if body:
                 sections.append((heading, start, body))
-            heading = match.group(2).strip()
+            heading = _ATTRS.sub("", match.group(2)).strip()
             if len(match.group(1)) == 1 and page_title == path:
                 page_title = heading
             start, body = number, [line]
@@ -301,7 +310,11 @@ class HelpIndex:
                 self._built = True
 
     def _build(self) -> None:
+        # Built into locals so a failed build leaves the index empty, not half full.
         postings: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        chunks: list[Chunk] = []
+        lengths: list[int] = []
+        primer = ""
         for rel, path in _source_files(self.root):
             try:
                 text = path.read_text(encoding="utf-8", errors="replace")
@@ -309,19 +322,20 @@ class HelpIndex:
                 logger.warning("help index: cannot read %s", path, exc_info=True)
                 continue
             if rel == _PRIMER:
-                self.primer = "\n".join(
+                primer = "\n".join(
                     line for line in text.splitlines() if not _IMAGE_LINE.match(line)
                 ).strip()
             for chunk in _chunks_for(rel, text):
                 # The path and heading count as words of the excerpt too.
                 terms = Counter(tokenize(f"{chunk.title} {chunk.path} {chunk.text}"))
-                index = len(self.chunks)
-                self.chunks.append(chunk)
-                self._lengths.append(sum(terms.values()))
+                index = len(chunks)
+                chunks.append(chunk)
+                lengths.append(sum(terms.values()))
                 for term, count in terms.items():
                     postings[term].append((index, count))
+        self.chunks, self._lengths, self.primer = chunks, lengths, primer
         self._postings = dict(postings)
-        self._avg_len = (sum(self._lengths) / len(self._lengths)) or 1.0
+        self._avg_len = (sum(lengths) / len(lengths)) if lengths else 1.0
         logger.info(
             "help index: %d excerpts from %s", len(self.chunks), self.root.as_posix()
         )
@@ -376,7 +390,7 @@ def select_excerpts(
     picked: list[Chunk] = []
     per_file: Counter[str] = Counter()
     used = 0
-    asks_code = bool(_CODE_WORDS & set(question.lower().split()))
+    asks_code = bool(_CODE_WORDS & set(_WORD.findall(question.lower())))
     query = query_terms(question, history)
     for chunk in index.search(query, doc_boost=1.0 if asks_code else _DOC_BOOST):
         if chunk.path == _PRIMER or per_file[chunk.path] >= _MAX_CHUNKS_PER_FILE:
@@ -387,6 +401,34 @@ def select_excerpts(
         per_file[chunk.path] += 1
         used += len(chunk.text)
     return picked
+
+
+def trim_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    """The newest turns within ``_HISTORY_CHARS``, alternating user / assistant.
+
+    The client writes these turns, so their size is capped here. A question
+    left unanswered (an error, Stop) is dropped when another user turn follows
+    it, since some servers refuse two user turns in a row.
+    """
+    turns = list(history)
+    turns.append({"role": "user", "content": ""})  # the question being asked
+    alternating = [
+        turn
+        for turn, after in zip(turns, turns[1:], strict=False)
+        if not (turn["role"] == "user" and after["role"] == "user")
+    ]
+    kept: list[dict[str, str]] = []
+    used = 0
+    for turn in reversed(alternating):
+        used += len(turn["content"])
+        if used > _HISTORY_CHARS:
+            break
+        kept.append(turn)
+    kept.reverse()
+    # Start on a question, not on a reply cut from its question.
+    while kept and kept[0]["role"] != "user":
+        kept.pop(0)
+    return kept
 
 
 def git_ref() -> str:
@@ -445,7 +487,7 @@ class _HelpChat:
     usage_video_id: int | None = None
 
     def __init__(self, history: list[dict[str, str]], *, is_admin: bool) -> None:
-        self._history = history
+        self._history = trim_history(history)
         self._is_admin = is_admin
         self.sources: list[dict[str, str]] | None = None
 
@@ -458,6 +500,14 @@ class _HelpChat:
             raise ai_chat.ChatError("Message is empty", status_code=400)
         if len(text) > 4000:
             raise ai_chat.ChatError("Message is too long", status_code=400)
+        # Build now, while a failure can still be reported as an error event.
+        try:
+            help_index().ensure_built()
+        except Exception as exc:
+            logger.warning("help index could not be built", exc_info=True)
+            raise ai_chat.ChatError(
+                "Horde's help pages could not be loaded", status_code=503
+            ) from exc
 
     def add_message(
         self,
