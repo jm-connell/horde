@@ -1,3 +1,4 @@
+import { removeItem } from "../storage";
 import type { HelpChatTurn } from "../types";
 
 /** A page or file an answer was drawn from (the server's `sources` event). */
@@ -16,6 +17,18 @@ export interface HelpMessage {
 
 /** This tab's conversation (sessionStorage; the server keeps none). */
 export const HELP_CHAT_STORAGE_KEY = "horde.helpChat";
+
+/** Whether the panel is open and where it was dragged to, for this tab. */
+export const HELP_PANEL_STORAGE_KEY = "horde.helpChatPanel";
+
+/** Forget this tab's conversation and panel (on sign-out: the next person). */
+export function clearHelpChatStorage() {
+  removeItem(HELP_PANEL_STORAGE_KEY, "session");
+  removeItem(HELP_CHAT_STORAGE_KEY, "session");
+}
+
+/** The panel's element id, for the footer button's `aria-controls`. */
+export const HELP_PANEL_ID = "horde-help-chat";
 
 /** Turns sent back with each question; the server accepts at most 24. */
 const MAX_HISTORY = 12;

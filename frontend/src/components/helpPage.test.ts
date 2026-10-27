@@ -7,28 +7,21 @@ describe("describePage", () => {
     expect(describePage("/nope", "?a=1")).toBe("an unknown page (/nope?a=1)");
   });
 
-  it("adds the selected tab, the library search and what is playing", () => {
+  it("adds what part of the page is showing and the mini player", () => {
     expect(describePage("/settings", "", { detail: "AI tab" })).toBe(
       "Settings, AI tab (/settings)"
     );
-    expect(describePage("/", "", { query: " cats " })).toBe(
-      'Library, searching "cats" (/)'
+    expect(describePage("/playlists", "", { miniPlayer: true })).toBe(
+      "Playlists, with a video in the mini player (/playlists)"
     );
-    expect(
-      describePage("/watch/7", "", { playing: { title: "Cats", mini: false } })
-    ).toBe('Watch page, watching "Cats" (/watch/7)');
-    expect(
-      describePage("/playlists", "", { playing: { title: "Cats", mini: true } })
-    ).toBe('Playlists, with "Cats" in the mini player (/playlists)');
   });
 
-  it("stays within what the server accepts", () => {
+  it("stays within what the server keeps", () => {
     const long = "x".repeat(500);
-    const page = describePage("/", `?${long}`, {
+    const page = describePage(`/${long}`, `?${long}`, {
       detail: long,
-      query: long,
-      playing: { title: long, mini: true },
+      miniPlayer: true,
     });
-    expect(page.length).toBeLessThanOrEqual(300);
+    expect(page.length).toBeLessThanOrEqual(200);
   });
 });

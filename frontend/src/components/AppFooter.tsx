@@ -1,4 +1,5 @@
 import { useHelpChat } from "../context/HelpChatContext";
+import { HELP_PANEL_ID } from "./helpChat";
 
 const REPO_URL = "https://github.com/jm-connell/horde";
 
@@ -17,6 +18,7 @@ export default function AppFooter() {
         <button
           type="button"
           aria-expanded={help.open}
+          aria-controls={help.open ? HELP_PANEL_ID : undefined}
           onClick={() => help.setOpen(!help.open)}
           className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 font-medium text-gray-200 hover:border-accent hover:text-accent"
         >

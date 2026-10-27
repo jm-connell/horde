@@ -37,7 +37,7 @@ import { ReauthProvider } from "./context/ReauthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { HomeResetProvider } from "./context/HomeResetContext";
-import { HelpChatProvider } from "./context/HelpChatContext";
+import { HelpChatHost, HelpChatProvider } from "./context/HelpChatContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
@@ -198,6 +198,7 @@ function AppShell() {
       <TopNav />
       <AppRoutes />
       <AppFooter />
+      <HelpChatHost />
     </div>
   );
 }

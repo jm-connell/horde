@@ -33,6 +33,7 @@ import {
 import { safeNextPath } from "../utils/authPaths";
 import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
+import { clearHelpChatStorage } from "../components/helpChat";
 import { useToast } from "./ToastContext";
 
 /** Last state that came from the server, so the installed app still opens offline. */
@@ -233,6 +234,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     writeCachedState(null);
     clearUnlockedAccount();
     clearLocalSettings();
+    clearHelpChatStorage();
     pendingProgress.setOwner(null);
     deviceResume.setOwner(null);
     deviceAccounts.setViewer(null);

@@ -8,8 +8,10 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import ErrorBoundary from "../components/ErrorBoundary";
 import HelpChatPanel from "../components/HelpChatPanel";
 import type { HelpFrame } from "../components/helpChatLayout";
+import { HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY } from "../components/helpChat";
 import { getJson, setJson } from "../storage";
 import { useAuth } from "./AuthContext";
 
@@ -24,6 +26,14 @@ interface HelpChatValue {
   clearDetail: (detail: PageDetail) => void;
 }
 
+interface HostValue {
+  frame: HelpFrame | null;
+  setFrame: (frame: HelpFrame) => void;
+  pageDetail: () => PageDetail | null;
+  /** True once the user opened it in this page load (not restored on reload). */
+  openedHere: boolean;
+}
+
 /** A page's own note on what is showing, e.g. the selected Settings tab. */
 export interface PageDetail {
   /** The page it belongs to, so a page on its way out is not reported. */
@@ -32,9 +42,7 @@ export interface PageDetail {
 }
 
 const Ctx = createContext<HelpChatValue | null>(null);
-
-/** Whether the panel is open and where it was dragged to, for this tab. */
-const PANEL_STORAGE_KEY = "horde.helpChatPanel";
+const HostCtx = createContext<HostValue | null>(null);
 
 interface PanelState {
   open: boolean;
@@ -74,10 +82,11 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     setJson(PANEL_STORAGE_KEY, state, "session");
   }, [state]);
 
-  const setOpen = useCallback(
-    (open: boolean) => setState((s) => ({ ...s, open })),
-    []
-  );
+  const [openedHere, setOpenedHere] = useState(false);
+  const setOpen = useCallback((open: boolean) => {
+    if (open) setOpenedHere(true);
+    setState((s) => ({ ...s, open }));
+  }, []);
   const detail = useRef<PageDetail | null>(null);
   const setDetail = useCallback((next: PageDetail) => {
     detail.current = next;
@@ -100,18 +109,42 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     [available, state.open, setOpen, setDetail, clearDetail]
   );
 
+  const host = useMemo(
+    () => ({
+      frame: state.frame,
+      setFrame,
+      pageDetail: () => detail.current,
+      openedHere,
+    }),
+    [state.frame, setFrame, openedHere]
+  );
+
   return (
     <Ctx.Provider value={value}>
-      {children}
-      {value.open && (
-        <HelpChatPanel
-          frame={state.frame}
-          onFrameChange={setFrame}
-          pageDetail={() => detail.current}
-          onClose={() => setOpen(false)}
-        />
-      )}
+      <HostCtx.Provider value={host}>{children}</HostCtx.Provider>
     </Ctx.Provider>
+  );
+}
+
+/**
+ * The panel itself, mounted by the app shell once setup is done (not over the
+ * loading screen or the setup wizard). Its own error boundary keeps a bad
+ * answer from taking down the page.
+ */
+export function HelpChatHost() {
+  const { open, setOpen } = useHelpChat();
+  const host = useContext(HostCtx);
+  if (!open || !host) return null;
+  return (
+    <ErrorBoundary scope="help-chat">
+      <HelpChatPanel
+        frame={host.frame}
+        onFrameChange={host.setFrame}
+        pageDetail={host.pageDetail}
+        focusOnOpen={host.openedHere}
+        onClose={() => setOpen(false)}
+      />
+    </ErrorBoundary>
   );
 }
 

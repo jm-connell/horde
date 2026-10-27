@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { api } from "../api";
@@ -7,13 +7,13 @@ import {
   usePlaybackSession,
 } from "../context/PlaybackContext";
 import type { PageDetail } from "../context/HelpChatContext";
-import { useSearch } from "../context/SearchContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { getJson, removeItem, setJson } from "../storage";
 import AiMarkdown from "./AiMarkdown";
 import { markdownHref } from "./aiMarkdownParse";
 import {
   HELP_CHAT_STORAGE_KEY,
+  HELP_PANEL_ID,
   HELP_SUGGESTIONS,
   type HelpMessage,
   historyForRequest,
@@ -36,6 +36,8 @@ interface Props {
   onFrameChange: (frame: HelpFrame) => void;
   /** The current page's note on what is showing (e.g. the Settings tab). */
   pageDetail: () => PageDetail | null;
+  /** Focus the question box (false when restored open after a reload). */
+  focusOnOpen: boolean;
   onClose: () => void;
 }
 
@@ -67,6 +69,7 @@ export default function HelpChatPanel({
   frame,
   onFrameChange,
   pageDetail,
+  focusOnOpen,
   onClose,
 }: Props) {
   const titleId = useId();
@@ -83,7 +86,6 @@ export default function HelpChatPanel({
   const [error, setError] = useState<string | null>(null);
 
   const location = useLocation();
-  const { committedQuery } = useSearch();
   const { current, stream, miniPlayerActive } = usePlaybackSession();
   const { miniPlayerRect } = usePlaybackLayout();
   const isMobile = useIsMobile();
@@ -92,12 +94,21 @@ export default function HelpChatPanel({
     ? clampHelpFrame(frame, vw, vh)
     : defaultHelpFrame(vw, vh, miniPlayerRect);
 
+  const autoFocusRef = useRef(focusOnOpen);
   useEffect(() => {
+    if (autoFocusRef.current) inputRef.current?.focus();
+    return () => abortRef.current?.abort();
+  }, []);
+  // A layout effect, so its cleanup still sees the panel (and where focus
+  // is) before React removes it.
+  useLayoutEffect(() => {
     const opener = document.activeElement;
-    inputRef.current?.focus();
+    const panel = panelRef.current;
     return () => {
-      abortRef.current?.abort();
-      if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+      // Only when closing from inside: the user may have moved on since.
+      const inside = !!panel?.contains(document.activeElement);
+      if (inside && opener instanceof HTMLElement && opener.isConnected)
+        opener.focus({ preventScroll: true });
     };
   }, []);
 
@@ -174,16 +185,10 @@ export default function HelpChatPanel({
   }
 
   function currentPage(): string {
-    const playing = current
-      ? { title: current.title, mini: miniPlayerActive }
-      : stream
-        ? { title: stream.title, mini: miniPlayerActive }
-        : null;
     const detail = pageDetail();
     return describePage(location.pathname, location.search, {
       detail: detail?.pathname === location.pathname ? detail.text : undefined,
-      query: committedQuery,
-      playing,
+      miniPlayer: miniPlayerActive && !!(current || stream),
     });
   }
 
@@ -269,10 +274,11 @@ export default function HelpChatPanel({
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
+      id={HELP_PANEL_ID}
       data-horde="help-chat"
       ref={panelRef}
       style={placement}
-      className={`ui-panel ui-panel-legible fixed z-50 flex flex-col overflow-hidden rounded-xl bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
+      className={`ui-panel ui-panel-legible fixed z-45 flex flex-col overflow-hidden rounded-xl bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
         isMobile
           ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] h-[min(36rem,75dvh)]"
           : ""
@@ -325,6 +331,9 @@ export default function HelpChatPanel({
 
       <div
         ref={listRef}
+        // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
+        tabIndex={0}
+        aria-label="Conversation"
         className="horde-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
         aria-live="polite"
       >

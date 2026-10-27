@@ -248,8 +248,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 - **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
   150ms; dialogs centre. Both trap focus and close on Escape.
 - **Floating panels.** The Ask about Horde chat is a non-modal floating
-  panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, above the mini
-  player): it opens in the bottom-right corner (above or beside the mini
+  panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
+  the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
   corner like the mini player, and becomes a bottom sheet on phones. Escape
   closes it while focus is inside; the page behind stays usable.

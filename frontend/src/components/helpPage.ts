@@ -15,7 +15,8 @@ const MAX_PATH = 100;
 /**
  * One line telling Ask about Horde where the user is, e.g.
  * `Settings, AI tab (/settings)`. Sent with each question so "this
- * page" and vague questions have something to go on.
+ * page" and vague questions have something to go on. At most 200
+ * characters, well under the server's 300.
  */
 export function describePage(
   pathname: string,
@@ -23,9 +24,8 @@ export function describePage(
   extra: {
     /** What part of the page is showing, e.g. "AI tab". */
     detail?: string;
-    /** The library search box's committed query. */
-    query?: string;
-    playing?: { title: string; mini: boolean } | null;
+    /** A video is playing in the mini player. */
+    miniPlayer?: boolean;
   } = {}
 ): string {
   let label =
@@ -36,15 +36,8 @@ export function describePage(
         )?.[1] ?? "an unknown page");
   const detail = extra.detail?.trim();
   if (detail) label += `, ${detail.slice(0, 40)}`;
-  const query = extra.query?.trim();
-  if (query && pathname === "/") label += `, searching "${query.slice(0, 60)}"`;
-  const playing = extra.playing;
-  if (playing?.title) {
-    const title = playing.title.slice(0, 80);
-    label += playing.mini
-      ? `, with "${title}" in the mini player`
-      : `, watching "${title}"`;
-  }
-  // At most 300 characters, the server's limit.
-  return `${label.slice(0, 300 - MAX_PATH - 3)} (${(pathname + search).slice(0, MAX_PATH)})`;
+  if (extra.miniPlayer) label += ", with a video in the mini player";
+  // Only Horde's own words and the URL: no video titles or search text,
+  // which come from elsewhere and would steer the answer.
+  return `${label} (${(pathname + search).slice(0, MAX_PATH)})`;
 }

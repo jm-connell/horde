@@ -47,7 +47,7 @@ _HISTORY_CHARS = 16_000
 _DOC_BOOST = 1.4
 # The page the user is on nudges retrieval without outweighing the question.
 _PAGE_WEIGHT = 0.3
-_PAGE_CHARS = 200
+_PAGE_CHARS = 300
 _CODE_WORDS = frozenset(
     {
         "code",
