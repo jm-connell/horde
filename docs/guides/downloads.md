@@ -122,6 +122,8 @@ On an **active** queue card (or the stream-watch download indicator), pick a dif
 
 ## Change resolution (library)
 
+Use this to upgrade a video you already have, for example a 1080p download that YouTube now offers in 4K (2160p): there is no need to delete it and download it again.
+
 On a library watch page, **••• → Change resolution** re-queues the source URL and **replaces the file in place** at the chosen preset (optional loudnorm via **Normalize volume**). Custom title/description/notes and locked tags are kept. The modal shows the current file height and notes that the source may not offer the selected tier.
 
 ## Queue behavior
@@ -173,7 +175,7 @@ If the disk runs out **while** a download writes (`No space left on device`), th
 4. Choose a **destination**:
    - **Save to library** (default) — archives on the server under Channel/Year and appears in Library.
    - **Direct download to client** — Horde still fetches/merges on the server into a temporary folder, then sends the file to this device, which saves it into [offline storage](offline.md) and plays it from the **Offline** page. It is **not** kept in the library; dismissing the job card deletes the server's temp file (the offline copy stays). Without HTTPS the browser saves the file instead.
-5. Submit — cards appear immediately (`Working…` until metadata fills). Already queued, downloading, or library videos toast instead of adding a second job.
+5. Press **Download** (it shows the approximate size, or reads **Download to client**) — cards appear immediately (`Working…` until metadata fills). Already queued, downloading, or library videos toast instead of adding a second job.
 
 Completed library downloads land in the [Library](library.md), organized by channel/year on disk ([storage layout](../ops/storage-layout.md)). Device jobs show **Watch** once saved offline, and a **Save file** action to also save the raw file to the device.
 

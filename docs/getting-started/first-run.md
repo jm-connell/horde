@@ -29,7 +29,7 @@ Installs that were already set up before the wizard existed are not sent through
 
 ## Download your first video
 
-1. Open **Downloads** (or the download entry point in the UI).
+1. Open **Download** in the top bar.
 2. Paste a YouTube URL (or another [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported link).
 3. Pick a quality preset if offered, then start the job.
 4. Watch progress update live while yt-dlp runs.
