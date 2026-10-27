@@ -263,7 +263,7 @@ and at `/wiki/` in every Horde. Its source is in [`docs/`](docs/).
 
 Open `http://localhost:5173`. Set `SKIP_WIKI=1` to skip building the wiki.
 Run tests with `pytest` in `backend/` and `npm test` in `frontend/`; CI runs
-the full set on every push. See
+the full set on every pull request and push to `main`. See
 [Local development](https://jm-connell.github.io/horde/getting-started/local-dev/)
 and [Automated testing](https://jm-connell.github.io/horde/getting-started/testing/).
 Contributor guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
