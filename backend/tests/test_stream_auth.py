@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import threading
-import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 
 import pytest
 from sqlmodel import Session
@@ -30,6 +30,29 @@ def _stop_streams(app) -> None:
     event.set()
 
 
+@contextmanager
+def _stream_open() -> Iterator[threading.Event]:
+    """Set once a stream has re-identified its caller and found them valid.
+
+    Revoking before that races the request itself: on a slow machine the
+    stream can start after the change and open as the new identity.
+    """
+    from app.auth import StreamAuthGuard
+
+    opened = threading.Event()
+    real = StreamAuthGuard.valid_now
+
+    def spy(self: StreamAuthGuard) -> bool:
+        ok = real(self)
+        if ok:
+            opened.set()
+        return ok
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(StreamAuthGuard, "valid_now", spy)
+        yield opened
+
+
 def _read_stream(client, url: str, lines: list[str], done: threading.Event) -> None:
     with client.stream("GET", url) as response:
         for line in response.iter_lines():
@@ -45,14 +68,15 @@ def _assert_stream_ends_after(
     reader = threading.Thread(
         target=_read_stream, args=(member_client, url, lines, done), daemon=True
     )
-    reader.start()
-    try:
-        time.sleep(0.4)
-        assert not done.is_set(), "the stream ended before access was revoked"
-        revoke()
-        assert done.wait(5), "the stream outlived the revoked account"
-    finally:
-        _stop_streams(member_client.app)
+    with _stream_open() as opened:
+        reader.start()
+        try:
+            assert opened.wait(5), "the stream never opened"
+            assert not done.is_set(), "the stream ended before access was revoked"
+            revoke()
+            assert done.wait(5), "the stream outlived the revoked account"
+        finally:
+            _stop_streams(member_client.app)
         reader.join(5)
 
 
@@ -187,15 +211,16 @@ def _stream_ends_after(proxied, headers: dict[str, str], revoke) -> None:
             args=(c, "/api/downloads/events", lines, done),
             daemon=True,
         )
-        reader.start()
-        try:
-            time.sleep(0.4)
-            assert not done.is_set(), "the stream ended before the identity changed"
-            revoke()
-            assert done.wait(5), "the stream outlived the identity it started with"
-        finally:
-            _stop_streams(proxied)
-            reader.join(5)
+        with _stream_open() as opened:
+            reader.start()
+            try:
+                assert opened.wait(5), "the stream never opened"
+                assert not done.is_set(), "the stream ended before the identity changed"
+                revoke()
+                assert done.wait(5), "the stream outlived the identity it started with"
+            finally:
+                _stop_streams(proxied)
+                reader.join(5)
 
 
 def test_a_trusted_header_stream_ends_when_that_account_is_disabled(
