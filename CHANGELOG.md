@@ -7,6 +7,15 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Ask about Horde**: a box at the bottom of Settings opens a chat that
+  answers questions about using, setting up and troubleshooting Horde from the
+  docs and source code shipped with your version, with links to the pages and
+  files it used. It uses the configured chat model (local or cloud) and the
+  `use_ai` permission. The image now carries the docs' Markdown and the
+  frontend source under `/app/source` for it (about 5 MB).
+
 ## [1.1.1] - 2026-10-26
 
 ### Changed
