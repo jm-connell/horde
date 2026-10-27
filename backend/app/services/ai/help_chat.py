@@ -159,8 +159,7 @@ _SYNONYMS: dict[str, tuple[tuple[str, float], ...]] = {
     "upgrade": (("redownload", 0.5), ("replace", 0.5)),
 }
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9_]*|[0-9]{2,}")
-#: An acronym stops before the capital that starts the next word (``HTMLParser``).
-_CAMEL = re.compile(r"[A-Z]+(?![a-z])|[A-Z]?[a-z]+|[0-9]+")
+_RUN = re.compile(r"[A-Z]+|[a-z]+|[0-9]+")
 _HEADING = re.compile(r"^(#{1,3})\s+(.+?)\s*#*\s*$")
 _IMAGE_LINE = re.compile(r"^\s*!\[[^\]]*\]\([^)]*\)\s*$")
 _FENCE = re.compile(r"^\s*(```|~~~)")
@@ -191,11 +190,25 @@ class Chunk:
         return {"path": self.path, "title": self.title, "url": url}
 
 
+def _camel_parts(word: str) -> list[str]:
+    """``HTMLParser`` -> ``HTML``, ``Parser``: a capital before lowercase starts a word."""
+    runs = _RUN.findall(word)
+    parts: list[str] = []
+    for i, run in enumerate(runs):
+        if run.isupper() and i + 1 < len(runs) and runs[i + 1].islower():
+            if len(run) > 1:
+                parts.append(run[:-1])
+            runs[i + 1] = run[-1] + runs[i + 1]
+        else:
+            parts.append(run)
+    return parts
+
+
 def tokenize(text: str) -> list[str]:
     """Lowercase terms; identifiers also yield their camelCase / snake_case parts."""
     out: list[str] = []
     for word in _WORD.findall(text):
-        parts = [p for p in _CAMEL.findall(word) if p]
+        parts = _camel_parts(word)
         terms = (
             {word.lower(), *(p.lower() for p in parts)}
             if len(parts) > 1
