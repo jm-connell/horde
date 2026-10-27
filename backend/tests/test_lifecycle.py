@@ -151,14 +151,12 @@ def test_initial_library_scan_does_not_delay_startup(lifespan_env, monkeypatch):
 def test_startup_warns_about_a_proxy_without_allowed_hosts(
     lifespan_env, monkeypatch, caplog, trust_proxy, hosts, warns
 ):
-    monkeypatch.setattr(
-        main.app.state, "host_policy", HostPolicy.from_env(hosts), raising=False
-    )
-    monkeypatch.setattr(
-        main.app.state,
-        "auth",
-        AuthRuntime(config=AuthConfig(trust_proxy=trust_proxy)),
-        raising=False,
+    # Patch State's backing dict: since pytest 9.2, setattr's undo deletes an
+    # attribute State serves through __getattr__ instead of restoring it.
+    state = main.app.state._state
+    monkeypatch.setitem(state, "host_policy", HostPolicy.from_env(hosts))
+    monkeypatch.setitem(
+        state, "auth", AuthRuntime(config=AuthConfig(trust_proxy=trust_proxy))
     )
 
     with caplog.at_level(logging.WARNING, logger="app.main"), TestClient(main.app):
