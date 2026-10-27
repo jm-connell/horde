@@ -88,3 +88,36 @@ def test_unknown_api_paths_404_whatever_their_spelling(tmp_path):
         assert resp.json()["code"] == "not_found", path
     # Paths that merely start with the letters stay SPA routes.
     assert client.get("/apiary").status_code == 200
+
+
+def test_wiki_only_static_dir_serves_wiki_without_spa(tmp_path):
+    """Dev builds only the wiki into static/; the Vite server serves the SPA."""
+    from app.main import mount_frontend
+
+    root = tmp_path / "static"
+    (root / "wiki").mkdir(parents=True)
+    (root / "wiki" / "index.html").write_text("<title>Horde wiki</title>")
+
+    app = FastAPI()
+    mount_frontend(app, root, root / "wiki")
+    client = TestClient(app)
+
+    resp = client.get("/wiki/")
+    assert resp.status_code == 200
+    assert "Horde wiki" in resp.text
+    assert client.get("/watch/12").status_code == 404
+
+
+def test_full_build_serves_wiki_and_spa(tmp_path):
+    from app.main import mount_frontend
+
+    root = _frontend(tmp_path)
+    (root / "wiki").mkdir()
+    (root / "wiki" / "index.html").write_text("<title>Horde wiki</title>")
+
+    app = FastAPI()
+    mount_frontend(app, root, root / "wiki")
+    client = TestClient(app)
+
+    assert "Horde wiki" in client.get("/wiki/").text
+    assert "<title>Horde</title>" in client.get("/watch/12").text
