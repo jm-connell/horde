@@ -109,7 +109,7 @@ test("single-key shortcuts can be switched off; arrows still seek", async ({
   // Turn the shortcuts off in Settings > Playback.
   await page.goto("/settings?tab=playback");
   const toggle = page.getByRole("switch", {
-    name: /Single-key player shortcuts/,
+    name: /Single-character hotkeys/,
   });
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await toggle.click();
@@ -131,4 +131,52 @@ test("single-key shortcuts can be switched off; arrows still seek", async ({
   const before = await time();
   await page.keyboard.press("ArrowRight");
   await expect.poll(time).toBeGreaterThanOrEqual(before + 4);
+});
+
+test("a rebound hotkey drives the player and focuses search", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=playback");
+  const playPause = page.getByRole("button", { name: /^Play \/ pause:/ });
+  await expect(playPause).toHaveText("Space / K");
+  await playPause.click();
+  await expect(playPause).toHaveText("Press a key…");
+  await page.keyboard.press("j");
+  await expect(playPause).toHaveText("J");
+  await page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/settings") &&
+      r.request().method() === "PATCH" &&
+      r.ok()
+  );
+
+  // "/" focuses the nav search from any page.
+  await page.locator("h1").click();
+  await page.keyboard.press("/");
+  await expect(
+    page.getByRole("searchbox", { name: "Search library" })
+  ).toBeFocused();
+
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(
+    page.getByRole("heading", { name: "Aurora Drift", level: 1 })
+  ).toBeVisible();
+  const video = page.locator("video").first();
+  await video.evaluate(async (v: HTMLVideoElement) => {
+    v.muted = true;
+    if (v.readyState < 1) {
+      await new Promise((r) =>
+        v.addEventListener("loadedmetadata", r, { once: true })
+      );
+    }
+    v.pause();
+  });
+  await page.locator("h1").click();
+  const paused = () => video.evaluate((v: HTMLVideoElement) => v.paused);
+  await page.keyboard.press("k");
+  await page.waitForTimeout(300);
+  expect(await paused()).toBe(true);
+  await page.keyboard.press("j");
+  await expect.poll(paused).toBe(false);
 });

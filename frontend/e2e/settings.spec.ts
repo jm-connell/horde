@@ -90,7 +90,9 @@ test("library settings persist sort default, dates, and progress expiry", async 
     page.getByRole("heading", { name: "Progress expiry" })
   ).toBeVisible();
   await expect(page.getByText("Show dates on video cards")).toBeVisible();
-  await expect(page.getByText("Direct YouTube search")).toBeVisible();
+  await expect(
+    page.getByText("YouTube results in channel search")
+  ).toBeVisible();
 
   const dates = page.getByRole("switch", { name: /Show dates on video cards/ });
   const saved = waitForSettingsPatch(page, "show_card_dates", false);

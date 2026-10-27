@@ -25,6 +25,12 @@ import {
 } from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
 import YoutubeSearchChip from "./YoutubeSearchChip";
+import { actionForKey, resolveHotkeys } from "../hotkeys";
+import {
+  isInteractiveControl,
+  isTextEntryTarget,
+  ownsArrowKeys,
+} from "../utils/keyboardTarget";
 
 interface NavLinkDef {
   to: string;
@@ -131,6 +137,7 @@ export default function TopNav() {
   const menuBtnRef = useRef<HTMLButtonElement>(null);
   const menuPanelRef = useRef<HTMLElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const desktopSearchRef = useRef<HTMLInputElement>(null);
   const lastScrollY = useRef(0);
 
   const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
@@ -298,6 +305,32 @@ export default function TopNav() {
     if (!onHome) navigate("/");
   };
 
+  // The "Focus search" hotkey, on every page. No dependency list: it reads
+  // the current layout and settings each render.
+  useEffect(() => {
+    const hotkeys = resolveHotkeys(settings.hotkeys);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (isTextEntryTarget(e.target)) return;
+      if (e.key.length === 1 && !settings.playerShortcuts) return;
+      if (e.key === " " && isInteractiveControl(e.target)) return;
+      if (e.key.startsWith("Arrow") && ownsArrowKeys(e.target)) return;
+      if (actionForKey(hotkeys, e.key) !== "focusSearch") return;
+      e.preventDefault();
+      if (useHamburger) {
+        // Open the box where we are; typing goes home (onSearchInput), so a
+        // stray key press does not pull the user off the watch page.
+        setMenuOpen(false);
+        setNavHidden(false);
+        setSearchOpen(true);
+      } else {
+        desktopSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   const closeSearch = () => {
     setSearchOpen(false);
     searchInputRef.current?.blur();
@@ -461,6 +494,7 @@ export default function TopNav() {
                 className="relative mr-2 w-44 self-center xl:w-60"
               >
                 <input
+                  ref={desktopSearchRef}
                   type="search"
                   value={search}
                   onChange={(e) => onSearchInput(e.target.value)}

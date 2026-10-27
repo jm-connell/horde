@@ -7,9 +7,8 @@ Controls under **Settings → Playback** (`?tab=playback`). All of these keys sy
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
 | Show description | `showDescription` | `true` | Description block on the watch page |
-| Show related videos sidebar | `showRelatedVideos` | `true` | Desktop normal view: recommendations to the right of the player |
-| Autoplay related | `autoplayRelated` | `true` | When a video ends and the queue is empty, count down and play a related video (also toggled in player controls) |
-| Autoplay the next part | `autoplayNextPart` | `false` | When a video ends, count down and play the channel's next upload if it clearly continues the series, even if it is not downloaded; otherwise fall back to a related video ([details](../guides/watching.md#autoplay-the-next-part)) |
+| Show related videos in sidebar | `showRelatedVideos` | `true` | Desktop normal view: recommendations to the right of the player |
+| Autoplay related | `autoplayRelated` | `true` | When a video ends and the queue is empty, count down and play the [next part](../guides/watching.md#autoplay-the-next-part) of a series if there is one, otherwise a related video (also toggled in player controls) |
 | Show undownloaded on channel pages | `showUndownloadedOnChannel` | `true` | Include uploads not yet in the library; off = downloaded only |
 | Default stream quality | `defaultStreamQuality` | `auto` | Starting quality for streamed (not downloaded) video |
 
@@ -26,7 +25,11 @@ Controls under **Settings → Playback** (`?tab=playback`). All of these keys sy
 
 You can still change quality in the player for the current session.
 
-## Subtitles
+## Autoplay previews on hover
+
+`previewOnHover` (default `true`) plays a muted preview on video cards: on hover with a mouse or trackpad, and on the card centered on screen on phones and tablets. One setting covers both. It does not affect the watch page player.
+
+## Subtitle size
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
@@ -91,3 +94,7 @@ Applied as the starting speed for new playback sessions.
 - [Watching](../guides/watching.md)
 - [Appearance](appearance.md) — backgrounds / chrome while watching (`pauseBackgroundWhileWatching`)
 - [All settings](all-settings.md)
+
+## Hotkeys
+
+**Settings → Playback → Hotkeys** lists every keyboard shortcut. Click an action's key and press a new one to rebind it (++escape++ cancels); a key moves off any other action that used it, so one key never does two things. **Reset** puts one action back on its default, **Reset all hotkeys** all of them. Rebound keys are stored in `hotkeys` (only the changed actions). **Single-character hotkeys** (`playerShortcuts`) turns the letter, symbol and ++space++ keys off. See [Keyboard shortcuts](../reference/keyboard-shortcuts.md).

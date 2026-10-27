@@ -44,7 +44,6 @@ export default function SponsorBlockSection() {
       <div className="space-y-4">
         <SettingRow
           title="Enable SponsorBlock"
-          description="YouTube only — non-YouTube videos ignore this setting."
           control={
             <Toggle
               checked={settings.sponsorBlockEnabled}
@@ -60,7 +59,6 @@ export default function SponsorBlockSection() {
           <>
             <SettingRow
               title="Skip behavior"
-              description="Auto skip jumps over segments. Ask to skip shows a notice you can click."
               control={
                 <div className="flex flex-wrap justify-end gap-2">
                   <Chip
@@ -81,7 +79,6 @@ export default function SponsorBlockSection() {
             {settings.sponsorBlockSkipMode === "auto" && (
               <SettingRow
                 title="Show skip notice"
-                description="Brief on-screen notification when a segment is skipped, with an undo control."
                 control={
                   <Toggle
                     checked={settings.sponsorBlockShowNotice}

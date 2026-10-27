@@ -53,6 +53,13 @@ test("a theme saved on the appearance tab can be applied and deleted", async ({
   page,
 }) => {
   await page.goto("/settings?tab=appearance");
+  // Saving a theme is offered only for the Custom palette.
+  await expect(page.getByLabel("Theme name")).toHaveCount(0);
+  await page.getByRole("button", { name: "Theme" }).click();
+  const listbox = page.getByRole("listbox");
+  await expect(listbox.getByText("Dark", { exact: true })).toBeVisible();
+  await expect(listbox.getByText("Light", { exact: true })).toBeVisible();
+  await listbox.getByRole("option", { name: "Custom", exact: true }).click();
   await page.getByLabel("Theme name").fill("Evening");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await expect(page.getByText("Saved theme “Evening”")).toBeVisible();

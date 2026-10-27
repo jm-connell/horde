@@ -31,9 +31,12 @@ import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
 import type { VideoPlayerProps } from "./videoPlayerTypes";
+import { resolveHotkeys } from "../hotkeys";
 import UpNextOverlay from "./player/UpNextOverlay";
 
 export type { StreamType, SubtitleSource, ViewMode } from "./videoPlayerTypes";
+
+const DEFAULT_HOTKEYS = resolveHotkeys({});
 
 export default function VideoPlayer({
   src,
@@ -75,6 +78,7 @@ export default function VideoPlayer({
   onPlayUpNext,
   autoplayRelated = true,
   singleKeyShortcuts = true,
+  hotkeys = DEFAULT_HOTKEYS,
   onAutoplayRelatedChange,
   onActiveQualityChange,
   onFrameInsetChange,
@@ -378,6 +382,7 @@ export default function VideoPlayer({
     mode,
     isMini,
     singleKeyShortcuts,
+    hotkeys,
     volume,
     hasChapters: chapters.length > 0,
     togglePlay,

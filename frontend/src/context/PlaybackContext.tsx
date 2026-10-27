@@ -35,6 +35,7 @@ import {
 } from "../utils";
 import { watchHref } from "../utils/watchHref";
 import { shouldSuspendPlaybackForWatch } from "../utils/watchHandoff";
+import { resolveHotkeys } from "../hotkeys";
 import {
   clampMiniPos,
   miniPlayerHostInsets,
@@ -171,6 +172,10 @@ function loadQueue(): QueueEntry[] {
 export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
   const [settings, updateSettings] = useSettings();
+  const hotkeys = useMemo(
+    () => resolveHotkeys(settings.hotkeys),
+    [settings.hotkeys]
+  );
   const isMobile = useIsMobile();
   const [current, setCurrent] = useState<Video | null>(null);
   const [stream, setStream] = useState<StreamSession | null>(null);
@@ -546,8 +551,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   // Turning autoplay off mid-countdown cancels the overlay.
   useEffect(() => {
-    if (!settings.autoplayRelated && !settings.autoplayNextPart) clearUpNext();
-  }, [settings.autoplayRelated, settings.autoplayNextPart, clearUpNext]);
+    if (!settings.autoplayRelated) clearUpNext();
+  }, [settings.autoplayRelated, clearUpNext]);
 
   const playSuggested = useCallback(
     (video: QueueEntry) => {
@@ -628,8 +633,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     const endedId = current.id;
     const exclude = new Set(recentWatchedRef.current);
     exclude.add(endedId);
+    if (!settings.autoplayRelated) return;
     const playRelated = () => {
-      if (!settings.autoplayRelated) return;
       api
         .getRelatedVideos(endedId, 12)
         .then((rows) => {
@@ -639,10 +644,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         })
         .catch(() => undefined);
     };
-    if (!settings.autoplayNextPart) {
-      playRelated();
-      return;
-    }
     // The channel's next upload first, when it clearly continues the series;
     // otherwise a related video as before.
     api
@@ -676,7 +677,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     advance,
     startUpNextCountdown,
     settings.autoplayRelated,
-    settings.autoplayNextPart,
   ]);
 
   const registerDock = useCallback((el: HTMLElement | null) => setDock(el), []);
@@ -957,6 +957,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onPlayUpNext={upNext ? () => playSuggested(upNext) : undefined}
         autoplayRelated={settings.autoplayRelated}
         singleKeyShortcuts={settings.playerShortcuts}
+        hotkeys={hotkeys}
         onAutoplayRelatedChange={(enabled) =>
           updateSettings({ autoplayRelated: enabled })
         }
@@ -1014,6 +1015,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
         singleKeyShortcuts={settings.playerShortcuts}
+        hotkeys={hotkeys}
         onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}

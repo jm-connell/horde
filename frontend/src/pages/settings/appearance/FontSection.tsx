@@ -27,7 +27,6 @@ export default function FontSection({
   return (
     <Section
       title="Font"
-      description="App typeface and size. Inter (default) keeps the current stack."
       hidden={
         !!q &&
         !match(
@@ -74,9 +73,6 @@ export default function FontSection({
             onChange={(value: UiFont) => update({ uiFont: value })}
             className="w-full min-w-48 max-w-[18rem]"
           />
-          <p className="mt-2 text-sm text-gray-400">
-            The quick brown fox jumps over the lazy dog 0123456789
-          </p>
         </div>
         <div
           className={
@@ -88,9 +84,6 @@ export default function FontSection({
           }
         >
           <p className="mb-2 text-sm font-medium text-gray-200">Font size</p>
-          <p className="mb-3 text-xs text-muted">
-            Scales text across the app without extreme zoom steps.
-          </p>
           <div data-font-size-control className="flex flex-wrap gap-2">
             {FONT_SIZE_OPTIONS.map((opt) => (
               <Chip

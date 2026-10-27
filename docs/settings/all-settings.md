@@ -106,7 +106,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `customBackgroundTint` | `"#08090c"` | string | Hex | UI blob |
 | `customBackgroundTintOpacity` | `0.45` | number | 0–1 | UI blob |
 | `pauseBackgroundWhileWatching` | `false` | bool | | UI blob |
-| `navIndicator` | `"liquid"` | string | `none` \| `liquid` \| `underline` \| `fade` | UI blob |
+| `navIndicator` | `"underline"` | string | `none` \| `liquid` \| `underline` \| `fade` | UI blob |
 | `hoverMotion` | `"subtle"` | string | `off` \| `subtle` \| `lift` \| `glow` | UI blob |
 | `translucentPanelStrength` | `0.5` | number | 0–1 (higher = more see-through) | UI blob |
 | `translucentPanelBlur` | `0.5` | number | 0–1 (higher = stronger frost) | UI blob |
@@ -116,7 +116,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `translucentPanelLegibility` | `true` | bool | | UI blob |
 | `loadingStyle` | `"dots"` | string | `dots` \| `spinner` \| `bar` \| `pulse` \| `wave` \| `comet` \| `tiles` \| `petal` \| `cube` \| `spiral` \| `swarm` \| `leapfrog` \| `plus` \| `ringwalk` | UI blob |
 | `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |
-| `uiFont` | `"default"` | string | Builtin id or saved custom id | UI blob |
+| `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |
 
 ### Library / downloads (UI)
@@ -144,7 +144,10 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 |------------|---------|------|--------|---------|
 | `showDescription` | `true` | bool | | UI blob |
 | `showRelatedVideos` | `true` | bool | | UI blob |
-| `autoplayRelated` | `true` | bool | | UI blob |
+| `autoplayRelated` | `true` | bool | Up-next countdown: next part of a series, else a related video | UI blob |
+| `previewOnHover` | `true` | bool | Thumbnail previews (hover, or centered card on touch screens) | UI blob |
+| `playerShortcuts` | `true` | bool | Single-character hotkeys on/off | UI blob |
+| `hotkeys` | `{}` | object | Rebound hotkeys: action id → keys; missing actions use defaults | UI blob |
 | `showUndownloadedOnChannel` | `true` | bool | | UI blob |
 | `defaultStreamQuality` | `"auto"` | string | `auto` \| `2160` \| `1440` \| `1080` \| `720` \| `480` | UI blob |
 | `subtitleSize` | `"medium"` | string | `small` \| `medium` \| `large` | UI blob |

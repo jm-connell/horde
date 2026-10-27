@@ -4,24 +4,24 @@ Controls under **Settings → Appearance** (`?tab=appearance`). Most of these ke
 
 ## Themes
 
-Built-in `data-theme` values (plus **Custom**):
+Built-in `data-theme` values (plus **Custom**). The palette dropdown lists the dark palettes first, then the light ones, then Custom.
 
-| Value | Label |
-|-------|--------|
-| `default` | Default (cyan) |
-| `oled` | OLED (true black) |
-| `terminal` | Terminal (green) |
-| `nord` | Nord |
-| `light` | Minimal Neutrals + Teal (light) |
-| `indigo` | Midnight Indigo |
-| `cyber` | Neon Cyber |
-| `sunset` | Warm Sunset |
-| `forest` | Forest Deep |
-| `slate` | Slate Minimal |
-| `earthy` | Earthy Modern (light) |
-| `frozen` | Frozen Blue Minimal (light) |
-| `mocha` | Soft Mocha & Sage (light) |
-| `custom` | Custom |
+| Value | Label | Group |
+|-------|--------|-------|
+| `default` | Default (cyan) | Dark |
+| `oled` | OLED (true black) | Dark |
+| `terminal` | Terminal (green) | Dark |
+| `nord` | Nord | Dark |
+| `indigo` | Midnight Indigo | Dark |
+| `cyber` | Neon Cyber | Dark |
+| `sunset` | Warm Sunset | Dark |
+| `forest` | Forest Deep | Dark |
+| `slate` | Slate Minimal | Dark |
+| `light` | Minimal Neutrals + Teal | Light |
+| `earthy` | Earthy Modern | Light |
+| `frozen` | Frozen Blue Minimal | Light |
+| `mocha` | Soft Mocha & Sage | Light |
+| `custom` | Custom | Custom |
 
 **Default:** `default`.
 
@@ -36,7 +36,7 @@ When theme is `custom`, `customColors` supplies:
 
 ### Saved custom theme presets
 
-**Save current** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, **custom CSS**, background effect knobs, nav/hover/loading chrome, font size, and UI font.
+With the **Custom** palette selected, **Save theme** snapshots appearance-related fields into `customThemes` (name up to 64 characters). Applying a preset restores theme colors, **custom CSS**, background effect knobs, nav/hover/loading chrome, font size, and UI font.
 
 !!! note "Cap"
     At most **40** presets. Extra entries are dropped on normalize (`customThemes.slice(0, 40)`).
@@ -47,7 +47,7 @@ When theme is `custom`, `customColors` supplies:
 
 | Id | Label |
 |----|--------|
-| `default` | Inter (default) |
+| `default` | Inter |
 | `jetbrains-mono` | JetBrains Mono |
 | `roboto` | Roboto |
 | `source-code-pro` | Source Code Pro |
@@ -55,12 +55,12 @@ When theme is `custom`, `customColors` supplies:
 | `space-grotesk` | Space Grotesk |
 | `ibm-plex-sans` | IBM Plex Sans |
 | `inconsolata` | Inconsolata |
-| `oxanium` | Oxanium |
+| `oxanium` | Oxanium (**default**) |
 | `source-sans-3` | Source Sans 3 |
 | `electrolize` | Electrolize |
 | `custom` | Add custom… (transient while adding) |
 
-Google Fonts families load via CSS link when selected. Permanently saved customs live in `customFonts` (URL or uploaded file) and are selected by their saved id. Uploading a font file (and deleting one from the server) is for administrators; members add Google Fonts by URL or name, and removing a font only takes it off their own list.
+Oxanium, the default, ships with Horde (`@fontsource/oxanium`, SIL Open Font License) and loads from your server. The other Google Fonts families load from Google via a CSS link only when selected. Permanently saved customs live in `customFonts` (URL or uploaded file) and are selected by their saved id. Uploading a font file (and deleting one from the server) is for administrators; members add Google Fonts by URL or name, and removing a font only takes it off their own list.
 
 ### Font size (`fontSize`)
 
@@ -131,7 +131,7 @@ When effect is `flowing-gradient`, `flowingGradientPreset`:
 | `backgroundEffectColorMode` | `accent` | `accent` \| `custom` |
 | `backgroundEffectColor` | `#22d3ee` | Hex when mode is `custom` |
 
-### Pause while watching
+### Pause background animation during playback
 
 `pauseBackgroundWhileWatching` (**default `false`**) stops animated backgrounds during playback to save GPU/CPU. Fit-window and fullscreen playback pause the animation either way, since it is hidden; standard and theater keep it running unless this is on.
 
@@ -142,8 +142,8 @@ When effect is `flowing-gradient`, `flowingGradientPreset`:
 | Value | Behavior |
 |-------|----------|
 | `none` | Static active state only |
-| `liquid` | Jelly pill that morphs between items (**default**) |
-| `underline` | Sliding accent bar |
+| `liquid` | Liquid pill: the edge nearest the clicked item flows ahead and the pill thins as it stretches, then the trailing edge follows and settles |
+| `underline` | Sliding accent bar (**default**) |
 | `fade` | Soft pill that eases between items |
 
 Legacy boolean `liquidNav` migrates to `liquid` / `none`.

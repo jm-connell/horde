@@ -50,7 +50,7 @@ If **Autoplay related** is on and the play queue is empty when a video ends, Hor
 
 ## Autoplay the next part
 
-With **Autoplay the next part** on (Settings → Playback, off by default), a library video that ends with an empty queue first looks for the channel's **next upload**. If that upload clearly continues the series, the up-next countdown plays it, downloaded or not ("Next part · not downloaded" on the card); otherwise Horde falls back to a related video as above.
+With **Autoplay related** on (Settings → Playback or the player controls, on by default), a library video that ends with an empty queue first looks for the channel's **next upload**. If that upload clearly continues the series, the up-next countdown plays it, downloaded or not ("Next part · not downloaded" on the card); otherwise Horde falls back to a related video as above.
 
 "Clearly continues" is strict, because a wrong guess plays something unrelated. Only the very next upload counts (Shorts, live streams and premieres are skipped), and its title must either repeat the previous one with a number one higher ("Day 12" → "Day 13", "Part 3" → "Part 4") or share the same series tag set off by `|`, `:`, `-` or brackets ("GTA RP | …"). A tag that names the channel, or one the channel puts on more than 40% of its recent uploads (a format such as "| xQc Reacts"), does not count. The next upload is read from the channel's index when the channel is indexed, otherwise from its downloaded videos in publish order. The API is `GET /api/videos/{id}/next-part`.
 ## Title / description drift
