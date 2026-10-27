@@ -23,7 +23,6 @@ export default function ThemeSection({
     <Section
       first
       title="Theme"
-      description="Choose a color palette. Snapshot the current Appearance choices — colors, custom CSS, background, font, and UI — then reapply later."
       hidden={
         !!q &&
         !match(
@@ -41,45 +40,47 @@ export default function ThemeSection({
     >
       <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-200">Palette</p>
           <ThemedSelect
             aria-label="Theme"
             value={settings.theme}
             options={THEMES.map((t) => ({
               value: t.value,
               label: t.label,
+              group: t.group,
             }))}
             onChange={(value) => update({ theme: value })}
             className="w-full min-w-48 max-w-[18rem]"
           />
         </div>
-        <div>
-          <p className="mb-2 text-sm font-medium text-gray-200">Save theme</p>
-          <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="text"
-              value={themeNameDraft}
-              onChange={(e) => setThemeNameDraft(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  saveCurrentAsTheme();
-                }
-              }}
-              placeholder="Theme name"
-              maxLength={64}
-              aria-label="Theme name"
-              className={`${INPUT} min-w-0 flex-1`}
-            />
-            <button
-              type="button"
-              onClick={saveCurrentAsTheme}
-              className={PANEL_BTN}
-            >
-              Save
-            </button>
+        {settings.theme === "custom" && (
+          <div>
+            <p className="mb-2 text-sm font-medium text-gray-200">Save theme</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={themeNameDraft}
+                onChange={(e) => setThemeNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    saveCurrentAsTheme();
+                  }
+                }}
+                placeholder="Theme name"
+                maxLength={64}
+                aria-label="Theme name"
+                className={`${INPUT} min-w-0 flex-1`}
+              />
+              <button
+                type="button"
+                onClick={saveCurrentAsTheme}
+                className={PANEL_BTN}
+              >
+                Save
+              </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
       {settings.customThemes.length > 0 && (
         <ul className="mt-4 space-y-2">

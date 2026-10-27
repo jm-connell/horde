@@ -11,6 +11,7 @@ import { Chip, Section, SettingRow, Toggle } from "./ui";
 import { useSettingsPage } from "./context";
 import { connectivity } from "../../offline/connectivity";
 import { useConnectivity } from "../../offline/hooks";
+import HotkeysSection from "./HotkeysSection";
 import SponsorBlockSection from "./SponsorBlockSection";
 
 export default function PlaybackTab() {
@@ -37,7 +38,6 @@ export default function PlaybackTab() {
       <Section
         first
         title="Watch page"
-        description="Layout options on the video watch page."
         hidden={
           !match("watch page", "description", "related videos", "autoplay")
         }
@@ -45,7 +45,6 @@ export default function PlaybackTab() {
         <div className="space-y-4">
           <SettingRow
             title="Show description"
-            description="Display the video description on the watch page."
             hidden={!!q && !match("description", "watch page")}
             control={
               <Toggle
@@ -59,8 +58,7 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
-            title="Show related videos sidebar"
-            description="On desktop in normal view, show recommended videos in a column to the right of the player."
+            title="Show related videos in sidebar"
             hidden={!!q && !match("related videos", "sidebar")}
             control={
               <Toggle
@@ -75,7 +73,7 @@ export default function PlaybackTab() {
           />
           <SettingRow
             title="Autoplay related"
-            description="When a video ends and the queue is empty, count down and play a related video. Also available in the player controls."
+            description="When a video ends and the queue is empty, count down and play the next part of a series, or else a related video. Also available in the player controls."
             hidden={!!q && !match("autoplay related")}
             control={
               <Toggle
@@ -84,36 +82,6 @@ export default function PlaybackTab() {
                   update({
                     autoplayRelated: !settings.autoplayRelated,
                   })
-                }
-              />
-            }
-          />
-          <SettingRow
-            title="Autoplay the next part"
-            description="When a video ends, play the channel's next upload if it clearly continues the series (Day 12 → Day 13, the same series tag), even if it is not downloaded. Otherwise a related video plays as above. Needs the channel indexed, or the next part downloaded."
-            hidden={!!q && !match("autoplay next part series channel")}
-            control={
-              <Toggle
-                checked={settings.autoplayNextPart}
-                onChange={() =>
-                  update({
-                    autoplayNextPart: !settings.autoplayNextPart,
-                  })
-                }
-              />
-            }
-          />
-          <SettingRow
-            title="Single-key player shortcuts"
-            description="Space, K, C, T, F, N, comma and period control the player while it is on screen. Turn off if these clash with speech-input or assistive software; arrow keys and Escape keep working."
-            hidden={
-              !!q && !match("shortcut", "keyboard", "keys", "hotkey", "single")
-            }
-            control={
-              <Toggle
-                checked={settings.playerShortcuts}
-                onChange={() =>
-                  update({ playerShortcuts: !settings.playerShortcuts })
                 }
               />
             }
@@ -139,7 +107,6 @@ export default function PlaybackTab() {
           />
           <SettingRow
             title="Default stream quality"
-            description="Starting quality for streamed (not yet downloaded) videos. Auto adapts to your device and network; you can still change quality in the player."
             hidden={
               !!q &&
               !match("stream quality", "resolution", "4k", "1080p", "streaming")
@@ -165,62 +132,30 @@ export default function PlaybackTab() {
       </Section>
 
       <Section
-        title="Thumbnail previews"
-        description="In-place playback on video cards. Does not affect the watch page player."
+        title="Autoplay previews on hover"
         hidden={
           !match(
             "thumbnail previews",
             "hover preview",
             "preview on hover",
+            "autoplay previews",
             "centered",
-            "autoplay thumbnail",
             "card preview"
           )
         }
-      >
-        <div className="space-y-4">
-          <SettingRow
-            title="Preview on hover"
-            description="On desktop, play a preview when you hover a video."
-            hidden={
-              !!q &&
-              !match("preview on hover", "hover preview", "desktop", "mouse")
-            }
-            control={
-              <Toggle
-                checked={settings.previewOnHover}
-                onChange={() =>
-                  update({
-                    previewOnHover: !settings.previewOnHover,
-                  })
-                }
-              />
+        action={
+          <Toggle
+            label="Autoplay previews on hover"
+            checked={settings.previewOnHover}
+            onChange={() =>
+              update({ previewOnHover: !settings.previewOnHover })
             }
           />
-          <SettingRow
-            title="Preview when centered"
-            description="On phones, play a preview when a video is centered on screen."
-            hidden={
-              !!q &&
-              !match("preview when centered", "centered", "mobile", "phone")
-            }
-            control={
-              <Toggle
-                checked={settings.previewWhenCentered}
-                onChange={() =>
-                  update({
-                    previewWhenCentered: !settings.previewWhenCentered,
-                  })
-                }
-              />
-            }
-          />
-        </div>
-      </Section>
+        }
+      />
 
       <Section
-        title="Subtitles"
-        description="Caption size. Drag subtitles on the player to reposition; placement is remembered across videos."
+        title="Subtitle size"
         hidden={!match("subtitles", "caption", "size")}
       >
         <div className="flex flex-wrap gap-2">
@@ -240,7 +175,6 @@ export default function PlaybackTab() {
 
       <Section
         title="Default playback speed"
-        description="Speed a video starts at."
         hidden={!match("playback speed", "speed", "default")}
       >
         <div className="flex flex-wrap gap-2">
@@ -259,66 +193,58 @@ export default function PlaybackTab() {
 
       <Section
         title="Hold-click speed"
-        description="Hold the video to play at this speed until you release."
         hidden={
           !match("hold", "hold-click", "hold speed", "click to hold", "speed")
         }
-      >
-        <SettingRow
-          title="Hold speed"
-          description="Any rate, e.g. 1.25, 1.75, 3."
-          control={
-            <span className="flex items-center gap-2">
-              <input
-                type="number"
-                min={0.25}
-                max={16}
-                step={0.05}
-                inputMode="decimal"
-                aria-label="Hold-click playback speed"
-                value={holdDraft}
-                onChange={(e) => setHoldDraft(e.target.value)}
-                onBlur={(e) => commitHoldRate(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.currentTarget.blur();
-                  }
-                }}
-                className={`${INPUT_COMPACT} tabular-nums`}
-              />
-              <span className="text-sm text-gray-400">x</span>
-            </span>
-          }
-        />
-      </Section>
+        action={
+          <span className="flex items-center gap-2">
+            <input
+              type="number"
+              min={0.25}
+              max={16}
+              step={0.05}
+              inputMode="decimal"
+              aria-label="Hold-click playback speed"
+              value={holdDraft}
+              onChange={(e) => setHoldDraft(e.target.value)}
+              onBlur={(e) => commitHoldRate(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }}
+              className={`${INPUT_COMPACT} tabular-nums`}
+            />
+            <span className="text-sm text-gray-400">x</span>
+          </span>
+        }
+      />
 
       <Section
         title="Offline mode"
-        description="Use Horde without the server. Only videos saved for offline are shown."
+        description={
+          offlineMode && !net.manual
+            ? "On automatically: the server can't be reached. Turn off to retry now."
+            : net.reconnecting
+              ? "Connecting…"
+              : "Only show videos that have been saved for offline playback."
+        }
         hidden={!match("offline mode", "offline", "connection", "airplane")}
-      >
-        <SettingRow
-          title="Offline mode"
-          description={
-            offlineMode && !net.manual
-              ? "On automatically: the server can't be reached. Turn off to retry now."
-              : net.reconnecting
-                ? "Connecting…"
-                : "Stays on until you turn it off, even on a working connection."
-          }
-          control={
-            <Toggle
-              checked={offlineMode}
-              disabled={net.reconnecting}
-              onChange={() =>
-                offlineMode
-                  ? void connectivity.reconnect()
-                  : connectivity.goOffline()
-              }
-            />
-          }
-        />
-      </Section>
+        action={
+          <Toggle
+            label="Offline mode"
+            checked={offlineMode}
+            disabled={net.reconnecting}
+            onChange={() =>
+              offlineMode
+                ? void connectivity.reconnect()
+                : connectivity.goOffline()
+            }
+          />
+        }
+      />
+
+      <HotkeysSection />
     </>
   );
 }

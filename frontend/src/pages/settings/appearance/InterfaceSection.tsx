@@ -24,7 +24,6 @@ export default function InterfaceSection({
   return (
     <Section
       title="Interface"
-      description="Motion, panels, and loading chrome. Reduced automatically when the system prefers less motion."
       hidden={
         !!q &&
         !match(
@@ -175,10 +174,7 @@ export default function InterfaceSection({
                 : undefined
           }
         >
-          <p className="mb-1 text-sm font-medium text-gray-200">Panels</p>
-          <p className="mb-3 text-xs text-muted">
-            Let background effects show through cards and chrome.
-          </p>
+          <p className="mb-3 text-sm font-medium text-gray-200">Panels</p>
           <div className="space-y-3">
             <label className="block">
               <span className="mb-2 flex items-center justify-between text-sm text-gray-300">

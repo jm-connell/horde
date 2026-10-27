@@ -215,13 +215,9 @@ export default function LibraryTab() {
         )}
 
         <div className="mt-6 border-t border-ink-700 pt-6">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
             Default video sort
           </h3>
-          <p className="mb-3 text-xs text-muted">
-            Used when you open the library or after a temporary sort expires (3
-            hours).
-          </p>
           <div className="flex flex-wrap gap-2">
             {LIBRARY_SORT_OPTIONS.filter((o) => o.value !== "random").map(
               (opt) => (
@@ -270,7 +266,6 @@ export default function LibraryTab() {
 
       <Section
         title="Downloads"
-        description="Background download queue and navigation preferences."
         hidden={
           !canDownload ||
           !match(...DOWNLOAD_PREF_TERMS, ...(isAdmin ? COMPAT_TERMS : []))
@@ -279,7 +274,6 @@ export default function LibraryTab() {
         <div className="space-y-4">
           <SettingRow
             title="Show active download count in navigation"
-            description="Badge on the Download tab while jobs are queued or in progress."
             hidden={!!q && !match("download count", "navigation", "badge")}
             control={
               <Toggle
@@ -294,7 +288,6 @@ export default function LibraryTab() {
           />
           <SettingRow
             title="Normalize volume on download"
-            description="Apply loudness normalization when saving new videos (requires ffmpeg)."
             hidden={!!q && !match("normalize volume", "loudness")}
             control={
               <Toggle
@@ -328,7 +321,6 @@ export default function LibraryTab() {
 
       <Section
         title="Metadata and catalog"
-        description="Pull fresh thumbnails, captions, view counts, and titles from each video's source URL. Choose what to sync. Channel catalogs refresh on the same interval."
         hidden={
           !isAdmin ||
           !match(
@@ -344,6 +336,8 @@ export default function LibraryTab() {
             "youtube",
             "direct youtube search",
             "youtube video search",
+            "channel search",
+            "library search",
             ...MEDIA_SERVER_TERMS
           )
         }
@@ -369,8 +363,8 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
-            title="Direct YouTube search"
-            description="Channel search also queries YouTube for older uploads. Search text is sent to YouTube. The YT control in a channel’s search box can override this."
+            title="YouTube results in channel search"
+            description="A channel’s search box also finds that channel’s uploads on YouTube that are not indexed yet."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={DIRECT_YOUTUBE_SEARCH_TIP} />
@@ -388,8 +382,8 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
-            title="YouTube video search"
-            description="Library home search can query YouTube for videos not in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter."
+            title="YouTube results in library search"
+            description="The main search bar also shows matching videos from all of YouTube."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={YOUTUBE_VIDEO_SEARCH_TIP} />
@@ -406,90 +400,92 @@ export default function LibraryTab() {
               </div>
             }
           />
-          <div>
-            <label
-              htmlFor="settings-catalog-max"
-              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
-            >
-              Max videos per channel
-              <HelpTip text={CATALOG_MAX_TIP} />
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="settings-catalog-max"
-                type="number"
-                min={100}
-                max={5000}
-                step={100}
-                value={catalogMaxInput}
-                onChange={(e) => setCatalogMaxInput(e.target.value)}
-                onBlur={() => {
-                  const n = parseInt(catalogMaxInput, 10);
-                  if (isNaN(n)) {
-                    setCatalogMaxInput(
-                      String(appSettings?.channel_catalog_max_videos ?? 1000)
-                    );
-                    return;
-                  }
-                  const clamped = Math.max(100, Math.min(5000, n));
-                  setCatalogMaxInput(String(clamped));
-                  if (
-                    clamped !==
-                    (appSettings?.channel_catalog_max_videos ?? 1000)
-                  ) {
-                    void saveCatalogSettings({
-                      channel_catalog_max_videos: clamped,
-                    });
-                  }
-                }}
-                className={INPUT_COMPACT}
-              />
-              <span className="text-xs text-muted">100–5000</span>
+          <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
+            <div>
+              <label
+                htmlFor="settings-catalog-max"
+                className="mb-1 flex items-center gap-1.5 text-xs text-muted"
+              >
+                Max indexed videos per channel
+                <HelpTip text={CATALOG_MAX_TIP} />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="settings-catalog-max"
+                  type="number"
+                  min={100}
+                  max={5000}
+                  step={100}
+                  value={catalogMaxInput}
+                  onChange={(e) => setCatalogMaxInput(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(catalogMaxInput, 10);
+                    if (isNaN(n)) {
+                      setCatalogMaxInput(
+                        String(appSettings?.channel_catalog_max_videos ?? 1000)
+                      );
+                      return;
+                    }
+                    const clamped = Math.max(100, Math.min(5000, n));
+                    setCatalogMaxInput(String(clamped));
+                    if (
+                      clamped !==
+                      (appSettings?.channel_catalog_max_videos ?? 1000)
+                    ) {
+                      void saveCatalogSettings({
+                        channel_catalog_max_videos: clamped,
+                      });
+                    }
+                  }}
+                  className={INPUT_COMPACT}
+                />
+                <span className="text-xs text-muted">100–5000</span>
+              </div>
+              {parseInt(catalogMaxInput, 10) > 1000 && (
+                <p className="mt-1.5 text-xs text-amber-400/90">
+                  Large indexes can take a long time and may slow other YouTube
+                  work while running.
+                </p>
+              )}
             </div>
-            {parseInt(catalogMaxInput, 10) > 1000 && (
-              <p className="mt-1.5 text-xs text-amber-400/90">
-                Large indexes can take a long time and may slow other YouTube
-                work while running.
-              </p>
-            )}
-          </div>
-          <div>
-            <label
-              htmlFor="settings-metadata-interval"
-              className="mb-1 flex items-center gap-1.5 text-xs text-muted"
-            >
-              Metadata / catalog refresh interval (hours)
-              <HelpTip text={METADATA_INTERVAL_TIP} />
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                id="settings-metadata-interval"
-                type="number"
-                min={1}
-                max={168}
-                value={syncIntervalInput}
-                onChange={(e) => setSyncIntervalInput(e.target.value)}
-                onBlur={() => {
-                  const n = parseInt(syncIntervalInput, 10);
-                  if (isNaN(n)) {
-                    setSyncIntervalInput(
-                      String(appSettings?.metadata_sync_interval_hours ?? 24)
-                    );
-                    return;
-                  }
-                  const clamped = Math.max(1, Math.min(168, n));
-                  setSyncIntervalInput(String(clamped));
-                  if (
-                    clamped !==
-                    (appSettings?.metadata_sync_interval_hours ?? 24)
-                  ) {
-                    void saveCatalogSettings({
-                      metadata_sync_interval_hours: clamped,
-                    });
-                  }
-                }}
-                className={INPUT_COMPACT}
-              />
+            <div>
+              <label
+                htmlFor="settings-metadata-interval"
+                className="mb-1 flex items-center gap-1.5 text-xs text-muted"
+              >
+                Refresh interval (hours)
+                <HelpTip text={METADATA_INTERVAL_TIP} />
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  id="settings-metadata-interval"
+                  type="number"
+                  min={1}
+                  max={168}
+                  value={syncIntervalInput}
+                  onChange={(e) => setSyncIntervalInput(e.target.value)}
+                  onBlur={() => {
+                    const n = parseInt(syncIntervalInput, 10);
+                    if (isNaN(n)) {
+                      setSyncIntervalInput(
+                        String(appSettings?.metadata_sync_interval_hours ?? 24)
+                      );
+                      return;
+                    }
+                    const clamped = Math.max(1, Math.min(168, n));
+                    setSyncIntervalInput(String(clamped));
+                    if (
+                      clamped !==
+                      (appSettings?.metadata_sync_interval_hours ?? 24)
+                    ) {
+                      void saveCatalogSettings({
+                        metadata_sync_interval_hours: clamped,
+                      });
+                    }
+                  }}
+                  className={INPUT_COMPACT}
+                />
+              </div>
             </div>
           </div>
         </div>

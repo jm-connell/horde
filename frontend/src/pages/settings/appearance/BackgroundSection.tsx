@@ -38,7 +38,6 @@ export default function BackgroundSection({
   return (
     <Section
       title="Background"
-      description="Atmospheric effects and custom images behind the UI."
       hidden={
         !!q &&
         !match(
@@ -67,7 +66,6 @@ export default function BackgroundSection({
     >
       {settings.backgroundEffect === "none" ? (
         <div>
-          <p className="mb-2 text-sm font-medium text-gray-200">Animation</p>
           <ThemedSelect
             aria-label="Background animation"
             value={settings.backgroundEffect}
@@ -80,18 +78,10 @@ export default function BackgroundSection({
             }
             className="w-48 min-w-44"
           />
-          <p className="mt-2 text-xs text-muted">
-            {
-              BACKGROUND_EFFECT_OPTIONS.find(
-                (o) => o.value === settings.backgroundEffect
-              )?.description
-            }
-          </p>
         </div>
       ) : settings.backgroundEffect === "custom-image" ? (
         <div className="space-y-4">
           <div>
-            <p className="mb-2 text-sm font-medium text-gray-200">Animation</p>
             <ThemedSelect
               aria-label="Background animation"
               value={settings.backgroundEffect}
@@ -104,13 +94,6 @@ export default function BackgroundSection({
               }
               className="w-48 min-w-44"
             />
-            <p className="mt-2 text-xs text-muted">
-              {
-                BACKGROUND_EFFECT_OPTIONS.find(
-                  (o) => o.value === settings.backgroundEffect
-                )?.description
-              }
-            </p>
           </div>
 
           {isAdmin && (
@@ -321,10 +304,8 @@ export default function BackgroundSection({
       ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
-            <div>
-              <p className="mb-2 text-sm font-medium text-gray-200">
-                Animation
-              </p>
+            {/* Lines up with the Color column's label. */}
+            <div className="sm:pt-7">
               <ThemedSelect
                 aria-label="Background animation"
                 value={settings.backgroundEffect}
@@ -339,13 +320,6 @@ export default function BackgroundSection({
                 }
                 className="w-48 min-w-44"
               />
-              <p className="mt-2 text-xs text-muted">
-                {
-                  BACKGROUND_EFFECT_OPTIONS.find(
-                    (o) => o.value === settings.backgroundEffect
-                  )?.description
-                }
-              </p>
             </div>
             <div>
               <p className="mb-2 text-sm font-medium text-gray-200">Color</p>
@@ -472,8 +446,7 @@ export default function BackgroundSection({
           )}
 
           <SettingRow
-            title="Pause while watching"
-            description="Stop the animation on the watch page and while a video plays, to save GPU. Fit-window and fullscreen playback always pause it."
+            title="Pause background animation during playback"
             control={
               <Toggle
                 checked={settings.pauseBackgroundWhileWatching}

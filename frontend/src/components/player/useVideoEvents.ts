@@ -27,8 +27,8 @@ interface Options {
   enterCompatMode: () => boolean;
   onProgress?: (sec: number) => void;
   onEnded?: () => void;
-  /** Library file failed to decode; return true when the caller recovers. */
-  onSourceError?: () => boolean;
+  /** Library file failed to play; resolves true when the caller recovers. */
+  onSourceError?: (error: MediaError | null) => Promise<boolean>;
 }
 
 type VideoEvent = SyntheticEvent<HTMLVideoElement>;
@@ -104,7 +104,7 @@ export function useVideoEvents({
       }
     },
     onEnded,
-    onError: () => {
+    onError: (e: VideoEvent) => {
       hideBuffering();
       if (effectiveStreamType === "dash") {
         if (enterCompatMode()) return;
@@ -119,10 +119,21 @@ export function useVideoEvents({
         );
         return;
       }
-      if (!effectiveSrc || onSourceError?.()) return;
-      setMediaError(
-        "This video could not be played. Check your connection and try again."
-      );
+      if (!effectiveSrc) return;
+      const el = e.currentTarget;
+      const failedSrc = el.currentSrc;
+      const fail = () =>
+        setMediaError(
+          "This video could not be played. Check your connection and try again."
+        );
+      if (!onSourceError) {
+        fail();
+        return;
+      }
+      void onSourceError(el.error).then((handled) => {
+        // Ignore the answer if the player moved on to another file meanwhile.
+        if (!handled && el.currentSrc === failedSrc) fail();
+      });
     },
   };
 }

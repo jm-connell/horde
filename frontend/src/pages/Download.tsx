@@ -530,8 +530,8 @@ export default function Download() {
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-1 text-2xl font-bold text-gray-100">Download</h1>
       <p className="mb-6 text-sm text-gray-400">
-        Paste a YouTube or other supported link. Adjust the title and channel
-        before downloading if you like. Downloads continue in the background and
+        Paste a YouTube or other supported link. Adjust video data before or
+        during download if needed. Downloads continue in the background and
         appear below.
       </p>
 

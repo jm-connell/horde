@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, type Rendition } from "../api";
+import { api, streamUrl, type Rendition } from "../api";
 import type { CompatState, Video } from "../types";
 import {
   checkOriginalSupport,
@@ -26,8 +26,8 @@ export type LibraryRenditionState = {
   requestCompat: () => void;
   /** Play the original even though the device probably cannot decode it. */
   forceOriginal: () => void;
-  /** VideoPlayer onError hook: returns true when handled here. */
-  handleOriginalError: () => boolean;
+  /** VideoPlayer onError hook: resolves true when handled here. */
+  handleOriginalError: (error: MediaError | null) => Promise<boolean>;
 };
 
 const POLL_MS = 2000;
@@ -52,6 +52,27 @@ export function nextSafariPrepStep(
   return "fail";
 }
 
+/**
+ * Whether a failed original is the device's fault (it cannot decode or read the
+ * format) rather than a missing file or the network. Chrome also reports a 404
+ * on a plain <video src> as MEDIA_ERR_SRC_NOT_SUPPORTED, so that code only
+ * counts when the server actually serves the file.
+ */
+export async function isFormatFailure(
+  error: MediaError | null,
+  url: string
+): Promise<boolean> {
+  if (error?.code === MediaError.MEDIA_ERR_DECODE) return true;
+  if (error?.code !== MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED) return false;
+  try {
+    const res = await fetch(url, { headers: { Range: "bytes=0-0" } });
+    void res.body?.cancel();
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export function useLibraryRendition(
   video: Video | null,
   mode: DownloadVideoCodec,
@@ -68,6 +89,8 @@ export function useLibraryRendition(
 
   const videoId = video?.id ?? null;
   const offline = videoId != null && videoId < 0;
+  const videoIdRef = useRef(videoId);
+  videoIdRef.current = videoId;
 
   useEffect(() => {
     setForced(false);
@@ -222,15 +245,21 @@ export function useLibraryRendition(
     return () => window.clearInterval(timer);
   }, [pending, videoId]);
 
-  const handleOriginalError = useCallback((): boolean => {
-    if (!video || offline) return false;
-    if (choice.rendition !== "original") return false;
-    // H.264 originals failing is a real error (missing file, network).
-    if (video.vcodec === "h264" && (video.bit_depth ?? 8) <= 8) return false;
-    setForced(false);
-    setOriginalFailed(true);
-    return true;
-  }, [video, offline, choice.rendition]);
+  const handleOriginalError = useCallback(
+    async (error: MediaError | null): Promise<boolean> => {
+      if (!video || offline) return false;
+      if (choice.rendition !== "original") return false;
+      // H.264 originals failing is a real error (missing file, network).
+      if (video.vcodec === "h264" && (video.bit_depth ?? 8) <= 8) return false;
+      if (!(await isFormatFailure(error, streamUrl(video.id)))) return false;
+      // Another video opened while checking: nothing to show for this one.
+      if (videoIdRef.current !== video.id) return true;
+      setForced(false);
+      setOriginalFailed(true);
+      return true;
+    },
+    [video, offline, choice.rendition]
+  );
 
   return {
     rendition: checking || safariPreparing ? null : choice.rendition,

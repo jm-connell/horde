@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import type { HotkeyMap } from "../hotkeys";
 import type { SubtitleSize } from "../hooks/useSettings";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
@@ -77,6 +78,8 @@ export interface VideoPlayerProps {
   autoplayRelated?: boolean;
   /** Letter/punctuation/Space shortcuts (WCAG 2.1.4); arrows + Escape stay on. */
   singleKeyShortcuts?: boolean;
+  /** Key for each shortcut; the defaults when not given. */
+  hotkeys?: HotkeyMap;
   onAutoplayRelatedChange?: (enabled: boolean) => void;
   /** Fires when the live DASH track quality changes (YouTube ladder height). */
   onActiveQualityChange?: (quality: number | null) => void;
@@ -89,6 +92,6 @@ export interface VideoPlayerProps {
   mediaSuspended?: boolean;
   /** Covers the video (e.g. "this device can't decode AV1"); src may be "". */
   blockingOverlay?: ReactNode;
-  /** Library file failed to decode; return true when the caller recovers. */
-  onSourceError?: () => boolean;
+  /** Library file failed to play; resolves true when the caller recovers. */
+  onSourceError?: (error: MediaError | null) => Promise<boolean>;
 }

@@ -54,7 +54,7 @@ The channel header search box looks across **indexed uploads** (titles, and desc
 - Multi-word queries require **all keywords** as whole words (stopwords like *the* / *to* / *his* are ignored). `paint fix` matches *I painted his House to Fix his WiFi*; `car` does not match *graphics card*. Home library search uses the same matcher.
 - Natural-language phrasing also uses catalog and library search indexes when those embeddings are ready (including captions on downloads).
 - While a query runs, the feed shows **Searching indexed catalog…** then **Finding related matches…**. If indexing is still in progress, results may be incomplete.
-- With the **YT** control in the channel search box on (default from Settings → Library **Direct YouTube search**; **Channel settings → Search** sets it per channel or back to the server default), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
+- With the **YT** control in the channel search box on (default from Settings → Library **YouTube results in channel search**; **Channel settings → Search** sets it per channel or back to the server default), Horde also queries YouTube for extra matches from that channel. Local and YouTube cards are then sorted together by **Recent / Popular** (and the ↑/↓ direction) at the top of the page. A quiet **Loading YouTube results…** line appears until that call finishes.
 
 See [Search](search.md).
 
@@ -151,7 +151,7 @@ Progress appears in status UI / AI queue breakdown as catalog indexing jobs.
 |---------|-------|---------|
 | `channel_catalog_max_videos` | **100–5000** | **1000** |
 
-Set this under [Settings → Library](../settings/library.md). Values above 1000 take longer and can slow other YouTube work while indexing.
+Shown as **Max indexed videos per channel** under [Settings → Library](../settings/library.md). It caps the index (feed search and auto-download backfill), not how many videos you can download. Values above 1000 take longer and can slow other YouTube work while indexing.
 
 ### Maintenance
 

@@ -101,24 +101,39 @@ export function ProcessActionRow({
 export function Section({
   title,
   description,
+  action,
   children,
   first = false,
   hidden = false,
 }: {
   title?: string;
   description?: string;
-  children: React.ReactNode;
+  /** A section that is a single setting puts its control beside the title. */
+  action?: React.ReactNode;
+  children?: React.ReactNode;
   first?: boolean;
   hidden?: boolean;
 }) {
   if (hidden) return null;
+  const heading = title ? (
+    <h2
+      className={`text-xs font-semibold uppercase tracking-wider text-gray-400 ${
+        action ? "" : "mb-1"
+      }`}
+    >
+      {title}
+    </h2>
+  ) : null;
   return (
     <div className={first ? undefined : "border-t border-ink-700 pt-6"}>
-      {title ? (
-        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400">
-          {title}
-        </h2>
-      ) : null}
+      {action ? (
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          {heading}
+          {action}
+        </div>
+      ) : (
+        heading
+      )}
       {description && (
         <p className={`mb-3 text-xs text-muted ${title ? "" : "mt-0"}`}>
           {description}

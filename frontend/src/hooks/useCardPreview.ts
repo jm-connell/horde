@@ -238,7 +238,6 @@ function computeMode(): PreviewMode {
   const settings = loadSettings();
   return resolvePreviewMode({
     previewOnHover: settings.previewOnHover,
-    previewWhenCentered: settings.previewWhenCentered,
     hoverCapable: window.matchMedia(HOVER_QUERY).matches,
     reducedMotion: window.matchMedia(MOTION_QUERY).matches,
   });

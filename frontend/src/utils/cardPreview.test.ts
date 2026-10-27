@@ -18,7 +18,6 @@ describe("resolvePreviewMode", () => {
     expect(
       resolvePreviewMode({
         previewOnHover: true,
-        previewWhenCentered: true,
         hoverCapable: true,
         reducedMotion: true,
       })
@@ -26,38 +25,29 @@ describe("resolvePreviewMode", () => {
   });
 
   it("uses hover on fine pointers and center otherwise", () => {
+    for (const hoverCapable of [true, false]) {
+      expect(
+        resolvePreviewMode({
+          previewOnHover: false,
+          hoverCapable,
+          reducedMotion: false,
+        })
+      ).toBe("off");
+    }
     expect(
       resolvePreviewMode({
         previewOnHover: true,
-        previewWhenCentered: false,
         hoverCapable: true,
         reducedMotion: false,
       })
     ).toBe("hover");
     expect(
       resolvePreviewMode({
-        previewOnHover: false,
-        previewWhenCentered: true,
-        hoverCapable: true,
-        reducedMotion: false,
-      })
-    ).toBe("off");
-    expect(
-      resolvePreviewMode({
         previewOnHover: true,
-        previewWhenCentered: true,
         hoverCapable: false,
         reducedMotion: false,
       })
     ).toBe("center");
-    expect(
-      resolvePreviewMode({
-        previewOnHover: true,
-        previewWhenCentered: false,
-        hoverCapable: false,
-        reducedMotion: false,
-      })
-    ).toBe("off");
   });
 });
 

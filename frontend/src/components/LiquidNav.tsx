@@ -7,20 +7,18 @@ import {
   type ReactNode,
 } from "react";
 import { useSettings, type NavIndicator } from "../hooks/useSettings";
+import { JELLY_MS, jellyKeyframes, type PillRect } from "./liquidJelly";
 
-interface PillRect {
-  left: number;
-  top: number;
-  width: number;
-  height: number;
+function prefersReducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
 /**
  * Sliding nav indicator (liquid / underline / fade) that follows the child
  * marked with data-liquid-active="true".
  *
- * Liquid mode: the highlight stretches to cover old→new, then snaps into the
- * new item so it feels like the destination is sucking the pill across.
+ * Liquid mode: the pill pours into the clicked item like liquid (see
+ * `jellyKeyframes`); a click mid-move carries on from where it is.
  */
 export default function LiquidNav({
   children,
@@ -44,9 +42,9 @@ export default function LiquidNav({
   const containerRef = useRef<HTMLDivElement>(null);
   const [pill, setPill] = useState<PillRect | null>(null);
   const [ready, setReady] = useState(false);
-  const [traveling, setTraveling] = useState(false);
   const prevPill = useRef<PillRect | null>(null);
-  const travelTimer = useRef<number | null>(null);
+  const pillRef = useRef<HTMLSpanElement>(null);
+  const jelly = useRef<Animation | null>(null);
 
   const measure = useCallback(() => {
     const root = containerRef.current;
@@ -74,47 +72,32 @@ export default function LiquidNav({
         Math.abs(prev.width - next.width) > 2 ||
         Math.abs(prev.top - next.top) > 2);
 
-    if (moved && prev && style === "liquid") {
-      // Phase 1: stretch to bridge old and new (no transition).
-      const bridge: PillRect = {
-        left: Math.min(prev.left, next.left),
-        top: Math.min(prev.top, next.top),
-        width:
-          Math.max(prev.left + prev.width, next.left + next.width) -
-          Math.min(prev.left, next.left),
-        height: Math.max(prev.height, next.height),
+    const el = pillRef.current;
+    if (
+      moved &&
+      prev &&
+      style === "liquid" &&
+      el &&
+      typeof el.animate === "function" &&
+      !prefersReducedMotion()
+    ) {
+      // Start from where the pill is on screen, even mid-animation.
+      const from: PillRect = {
+        left: el.offsetLeft,
+        top: el.offsetTop,
+        width: el.offsetWidth,
+        height: el.offsetHeight,
       };
-      setReady(false);
-      setTraveling(true);
-      setPill(bridge);
-      prevPill.current = next;
-
-      if (travelTimer.current) window.clearTimeout(travelTimer.current);
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setReady(true);
-          setPill(next);
-          travelTimer.current = window.setTimeout(() => {
-            setTraveling(false);
-            travelTimer.current = null;
-          }, 320);
-        });
+      jelly.current?.cancel();
+      jelly.current = el.animate(jellyKeyframes(from, next), {
+        duration: JELLY_MS,
       });
-      return;
-    }
-
-    if (moved) {
-      setTraveling(true);
-      if (travelTimer.current) window.clearTimeout(travelTimer.current);
-      travelTimer.current = window.setTimeout(() => {
-        setTraveling(false);
-        travelTimer.current = null;
-      }, 300);
     }
 
     prevPill.current = next;
     setPill(next);
-    setReady(true);
+    // Liquid moves are the jelly animation, not a CSS transition.
+    setReady(style !== "liquid");
   }, [style]);
 
   useLayoutEffect(() => {
@@ -136,7 +119,7 @@ export default function LiquidNav({
     return () => {
       window.removeEventListener("resize", onResize);
       ro?.disconnect();
-      if (travelTimer.current) window.clearTimeout(travelTimer.current);
+      jelly.current?.cancel();
     };
   }, [measure, enabled]);
 
@@ -150,15 +133,12 @@ export default function LiquidNav({
 
   const isUnderline = style === "underline";
   const isFade = style === "fade";
-  const isLiquid = style === "liquid";
 
   const transition = !ready
     ? "none"
-    : isLiquid
-      ? "left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1), height 280ms cubic-bezier(0.22, 1, 0.36, 1), border-radius 280ms cubic-bezier(0.22, 1, 0.36, 1)"
-      : isFade
-        ? "left 300ms ease, top 300ms ease, width 300ms ease, height 300ms ease, opacity 240ms ease"
-        : "left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1)";
+    : isFade
+      ? "left 300ms ease, top 300ms ease, width 300ms ease, height 300ms ease, opacity 240ms ease"
+      : "left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1)";
 
   return (
     <div
@@ -169,6 +149,7 @@ export default function LiquidNav({
     >
       {pill && (
         <span
+          ref={pillRef}
           aria-hidden
           className={`pointer-events-none absolute z-0 ${
             isUnderline
@@ -192,7 +173,7 @@ export default function LiquidNav({
                   width: pill.width,
                   height: pill.height,
                   transition,
-                  borderRadius: isLiquid && traveling ? "0.85rem" : "0.5rem",
+                  borderRadius: "0.5rem",
                 }
           }
         />

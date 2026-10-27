@@ -650,12 +650,6 @@ def _spa_file_response(path: Path) -> FileResponse:
 
 def mount_frontend(target: FastAPI, frontend_dir: Path, wiki_dir: Path) -> None:
     """Serve the built React app (and wiki) from ``frontend_dir``."""
-    target.mount(
-        "/assets",
-        _ImmutableStaticFiles(directory=frontend_dir / "assets"),
-        name="assets",
-    )
-
     # Mount before the SPA catch-all so /wiki/ is not swallowed by index.html.
     if wiki_dir.is_dir():
         target.mount(
@@ -663,6 +657,16 @@ def mount_frontend(target: FastAPI, frontend_dir: Path, wiki_dir: Path) -> None:
             StaticFiles(directory=wiki_dir, html=True),
             name="wiki",
         )
+
+    # In dev only the wiki is built here; the Vite server serves the SPA.
+    if not (frontend_dir / "index.html").is_file():
+        return
+
+    target.mount(
+        "/assets",
+        _ImmutableStaticFiles(directory=frontend_dir / "assets"),
+        name="assets",
+    )
 
     root = frontend_dir.resolve()
 

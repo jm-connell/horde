@@ -52,7 +52,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     access: "admin",
     keywords:
-      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search youtube video search",
+      "library metadata resync thumbnails captions view counts channel catalog index max videos refresh interval youtube only youtube direct youtube search youtube video search youtube results channel search library search indexed",
   },
   {
     tab: "library",
