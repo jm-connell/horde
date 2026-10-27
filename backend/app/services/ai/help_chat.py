@@ -45,6 +45,9 @@ _HISTORY_CHARS = 16_000
 #: Docs answer most questions; code still wins when it matches much better,
 #: and is not held back when the question is about the code.
 _DOC_BOOST = 1.4
+# The page the user is on nudges retrieval without outweighing the question.
+_PAGE_WEIGHT = 0.3
+_PAGE_CHARS = 200
 _CODE_WORDS = frozenset(
     {
         "code",
@@ -371,9 +374,14 @@ def help_index() -> HelpIndex:
     return index
 
 
-def query_terms(question: str, history: list[dict[str, str]]) -> dict[str, float]:
-    """The question's terms, plus the previous question's at half weight."""
+def query_terms(
+    question: str, history: list[dict[str, str]], page: str = ""
+) -> dict[str, float]:
+    """The question's terms, the previous question's at half weight and the
+    page the user is on at less."""
     terms: dict[str, float] = {}
+    for term in tokenize(page):
+        terms[term] = _PAGE_WEIGHT
     earlier = [m["content"] for m in history if m.get("role") == "user"]
     if earlier:
         for term in tokenize(earlier[-1]):
@@ -384,14 +392,14 @@ def query_terms(question: str, history: list[dict[str, str]]) -> dict[str, float
 
 
 def select_excerpts(
-    index: HelpIndex, question: str, history: list[dict[str, str]]
+    index: HelpIndex, question: str, history: list[dict[str, str]], page: str = ""
 ) -> list[Chunk]:
     """Top excerpts within the character budget, a few per file at most."""
     picked: list[Chunk] = []
     per_file: Counter[str] = Counter()
     used = 0
     asks_code = bool(_CODE_WORDS & set(_WORD.findall(question.lower())))
-    query = query_terms(question, history)
+    query = query_terms(question, history, page)
     for chunk in index.search(query, doc_boost=1.0 if asks_code else _DOC_BOOST):
         if chunk.path == _PRIMER or per_file[chunk.path] >= _MAX_CHUNKS_PER_FILE:
             continue
@@ -437,7 +445,12 @@ def git_ref() -> str:
     return sha if re.fullmatch(r"[0-9a-f]{7,40}", sha) else "main"
 
 
-def system_prompt(*, is_admin: bool) -> str:
+def clean_page(page: str | None) -> str:
+    """The client's description of where the user is, as one short line."""
+    return " ".join((page or "").split())[:_PAGE_CHARS]
+
+
+def system_prompt(*, is_admin: bool, page: str = "") -> str:
     version = (os.environ.get("HORDE_VERSION") or "").strip() or "a development build"
     role = (
         "The person asking is this server's administrator: they can change every "
@@ -461,6 +474,12 @@ def system_prompt(*, is_admin: bool) -> str:
         "say so plainly, never invent settings, buttons or variables, and point to "
         f"the wiki (/wiki/) or the GitHub issues ({REPO_URL}/issues). Keep answers "
         "short unless asked for detail, and use Markdown."
+        + (
+            f'\nThe user is looking at: {page}. "This page" or "here" means '
+            "that screen; use it when the question is vague, ignore it otherwise."
+            if page
+            else ""
+        )
     )
 
 
@@ -486,9 +505,12 @@ class _HelpChat:
     label = "help"
     usage_video_id: int | None = None
 
-    def __init__(self, history: list[dict[str, str]], *, is_admin: bool) -> None:
+    def __init__(
+        self, history: list[dict[str, str]], *, is_admin: bool, page: str = ""
+    ) -> None:
         self._history = trim_history(history)
         self._is_admin = is_admin
+        self._page = page
         self.sources: list[dict[str, str]] | None = None
 
     def validate(self, session: Session, message: str) -> None:
@@ -532,7 +554,7 @@ class _HelpChat:
 
     def context(self, session: Session, question: str) -> str | None:
         index = help_index()
-        excerpts = select_excerpts(index, question, self._history)
+        excerpts = select_excerpts(index, question, self._history, self._page)
         ref = git_ref()
         seen: dict[str, dict[str, str]] = {}
         for chunk in excerpts:
@@ -550,10 +572,15 @@ def stream_help_events(
     user_id: int,
     *,
     is_admin: bool,
+    page: str | None = None,
     authorized: ai_chat.Authorized | None = None,
 ) -> Generator[str]:
-    """SSE events for one help turn; a ``sources`` event precedes the reply."""
-    target = _HelpChat(history, is_admin=is_admin)
+    """SSE events for one help turn; a ``sources`` event precedes the reply.
+
+    ``page`` is the client's description of the screen the user is on.
+    """
+    where = clean_page(page)
+    target = _HelpChat(history, is_admin=is_admin, page=where)
     sent_sources = False
     with Session(get_engine()) as session:
         for event in ai_chat.run_chat_turn(
@@ -562,7 +589,7 @@ def stream_help_events(
             message,
             user_id,
             authorized,
-            system_prompt=system_prompt(is_admin=is_admin),
+            system_prompt=system_prompt(is_admin=is_admin, page=where),
         ):
             # ``context`` has run once the turn reaches the model.
             if target.sources is not None and not sent_sources:

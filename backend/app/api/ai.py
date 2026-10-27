@@ -445,6 +445,7 @@ def post_help_chat(
             [turn.model_dump() for turn in payload.history],
             user.id,
             is_admin=user.is_admin,
+            page=payload.page,
             authorized=StreamAuthGuard.of(request).still_valid,
         ),
         media_type="text/event-stream",

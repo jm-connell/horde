@@ -5352,6 +5352,8 @@ export interface components {
             history?: components["schemas"]["HelpChatTurn"][];
             /** Message */
             message: string;
+            /** Page */
+            page?: string | null;
         };
         /** HelpChatTurn */
         HelpChatTurn: {

@@ -1268,3 +1268,5 @@ class HelpChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     #: Earlier turns, oldest first; the server keeps none.
     history: list[HelpChatTurn] = Field(default_factory=list, max_length=24)
+    #: Where the user is in the app, e.g. "Settings, AI tab (/settings?tab=ai)".
+    page: str | None = Field(default=None, max_length=300)

@@ -5475,6 +5475,18 @@
             "minLength": 1,
             "title": "Message",
             "type": "string"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page"
           }
         },
         "required": [

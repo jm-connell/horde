@@ -191,9 +191,14 @@ export const aiApi = {
   streamHelpChat(
     message: string,
     history: HelpChatTurn[],
+    page: string,
     opts: ChatStreamOptions
   ): Promise<void> {
-    return postEventStream("/api/ai/help/chat", { message, history }, opts);
+    return postEventStream(
+      "/api/ai/help/chat",
+      { message, history, page },
+      opts
+    );
   },
 
   // --- AI for a streamed (not downloaded) video; all need `use_ai` ---
