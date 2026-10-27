@@ -14,7 +14,7 @@ export default function AppFooter() {
     // layer, which holds fixed bars such as the library's bulk actions.
     <footer
       data-horde="footer"
-      className="relative mx-auto flex max-w-[1920px] flex-wrap items-center justify-center gap-x-5 gap-y-2 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-2 text-xs md:px-6"
+      className="relative mx-auto mt-auto flex w-full max-w-[1920px] flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-ink-800 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 text-xs md:px-6"
     >
       {help.available && (
         <button

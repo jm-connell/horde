@@ -96,7 +96,7 @@ function AppRoutes() {
     <main
       ref={mainRef}
       data-horde="main"
-      className="page-shell relative z-10 mx-auto max-w-[1920px] px-3 py-6 md:px-6"
+      className="page-shell relative z-10 mx-auto w-full max-w-[1920px] px-3 py-6 md:px-6"
     >
       {/* A render error stays inside <main> so the nav still works, and
           resets on navigation. Lazy routes suspend here until their chunk
@@ -192,8 +192,9 @@ function AppShell() {
     );
   }
 
+  // A column so the footer sits at the bottom of short pages.
   return (
-    <div className="relative min-h-full overflow-x-hidden">
+    <div className="relative flex min-h-full flex-col overflow-x-hidden">
       <BackgroundEffect />
       <TopNav />
       <AppRoutes />

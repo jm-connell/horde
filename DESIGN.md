@@ -197,7 +197,7 @@ screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 Theater mode widens the player to the viewport; the mini player docks bottom
 right and the play queue docks beside it. A quiet footer (centred
 `text-muted` links, one secondary-style "Ask about Horde" button) closes every
-page. Respect `env(safe-area-inset-*)` for
+page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
 ## Elevation & Depth
