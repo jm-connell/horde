@@ -839,8 +839,9 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
   }
 }
 
-/* Cards rise and fade in as they mount, a few at a time (first 12 staggered,
-   the rest together), so a grid settles in instead of popping. "backwards"
+/* Cards rise and fade in as they mount, a few at a time, so a grid settles in
+   instead of popping. Only the first 12 are staggered; later cards (such as
+   pages appended by infinite scroll) rise at once. "backwards"
    holds the start state only during the delay; afterwards the card's own
    hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
 html[data-page-fade="on"] .ui-card-enter {
@@ -894,7 +895,7 @@ html[data-page-fade="on"] .ui-card-enter {
 }
 .ui-card-enter:nth-child(n + 13),
 :nth-child(n + 13) > .ui-card-enter {
-  --card-enter-delay: 360ms;
+  --card-enter-delay: 0ms;
 }
 
 @keyframes card-enter {
