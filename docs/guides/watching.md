@@ -65,7 +65,7 @@ Redownload (“Change resolution”) and auto-replace of the same YouTube id kee
 
 ## Watch overflow menu
 
-On library videos, **•••** includes edit, notes, **Change resolution**, normalize volume, download file, open source (labeled **Open on YouTube** / site when known), and delete.
+On library videos, **•••** includes edit, notes, **Change resolution**, **Save a clip…** (YouTube videos; see [Clips](#clips-of-a-stream)), normalize volume, download file, open source (labeled **Open on YouTube** / site when known), and delete.
 
 ## Stream → library handoff
 
@@ -75,7 +75,7 @@ On the watch page you’ll also see messaging about downloading at the selected 
 
 ## Clips of a stream
 
-On a **live** or **past** YouTube stream, the **•••** button under the description has **Save a clip…**. The page scrolls back up to the video and the clip picker opens right under it, so you keep watching while you choose. Pick the start and end (**Use current time** takes the player's position; on a past stream you can also type `h:mm:ss`), then **Save clip**. While the picker is open the chosen start and end are marked on the seek bar (amber handles and the span between them); playback is not moved there. Drag a handle to move that end, and the time in the picker follows; a focused handle also moves with the arrow keys (1 s, or 10 s with Shift). It needs the *download* permission.
+On a **live** or **past** YouTube stream, and on a **downloaded** video that came from YouTube, the **•••** button under the description has **Save a clip…**. For a downloaded video the clip is still fetched from YouTube, at the same times as your copy (a copy that is not the whole video, such as one recorded part-way into a live stream, may not line up). The page scrolls back up to the video and the clip picker opens right under it, so you keep watching while you choose. Pick the start and end (**Use current time** takes the player's position; on a past stream you can also type `h:mm:ss`), then **Save clip**. While the picker is open the chosen start and end are marked on the seek bar (amber handles and the span between them); playback is not moved there. Drag a handle to move that end, and the time in the picker follows; a focused handle also moves with the arrow keys (1 s, or 10 s with Shift). It needs the *download* permission.
 
 The clip is downloaded on its own and saved to your library as a **separate video**, titled like *Stream title (clip 1:02:03–1:05:00)*, with a line at the top of its description saying what it was cut from. It is not treated as a copy of the full stream: you can save several clips of one stream, and still download the whole stream as well. A clip has no source link, so it has no subtitles, SponsorBlock segments or **Change resolution**.
 

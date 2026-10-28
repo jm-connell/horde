@@ -987,6 +987,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
+        clipMarkers={clipMarkers}
       />
     ) : stream != null ? (
       <VideoPlayer

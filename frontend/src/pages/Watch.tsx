@@ -9,6 +9,7 @@ import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
+import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import ClipPanel from "./watch/ClipPanel";
 import RedownloadDialog from "./watch/RedownloadDialog";
 import StreamActions from "./watch/StreamActions";
@@ -59,21 +60,39 @@ export default function Watch() {
   const video = source?.kind === "library" ? source.video : null;
   const actions = useWatchActions({ video, setSource });
   const { can } = useAuth();
-  // Live and past broadcasts can be clipped (YouTube only: the server checks).
-  const clip =
-    source &&
-    source.kind !== "library" &&
-    can("download") &&
-    (source.meta.is_live || source.meta.was_live)
-      ? {
-          url: source.meta.source_url ?? source.url,
-          title: source.meta.title ?? null,
-          live: Boolean(source.meta.is_live),
-        }
-      : null;
+  // Live and past broadcasts can be clipped, and downloaded YouTube videos
+  // (the clip comes from YouTube; the library file shares its timeline).
+  const clip = !can("download")
+    ? null
+    : video
+      ? video.source_url && extractYouTubeId(video.source_url, "")
+        ? { url: video.source_url, title: video.title, live: false }
+        : null
+      : source &&
+          source.kind !== "library" &&
+          (source.meta.is_live || source.meta.was_live)
+        ? {
+            url: source.meta.source_url ?? source.url,
+            title: source.meta.title ?? null,
+            live: Boolean(source.meta.is_live),
+          }
+        : null;
   // The stream the clip picker is open for (closed on another stream).
   const [clipOpenFor, setClipOpenFor] = useState<string | null>(null);
   const clipOpen = clip != null && clipOpenFor === clip.url;
+  const openClip = clip
+    ? () => {
+        setClipOpenFor(clip.url);
+        // Back up to the video: the clip is picked while watching it.
+        window.scrollTo({
+          top: 0,
+          behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+            .matches
+            ? "auto"
+            : "smooth",
+        });
+      }
+    : undefined;
   const ai = useWatchAi(source, setVideo);
   const related = useRelatedFeed(video?.id);
   const streamRelated = useStreamRelated(
@@ -162,6 +181,7 @@ export default function Watch() {
                 url={clip.url}
                 title={clip.title}
                 live={clip.live}
+                library={video != null}
                 onClose={() => setClipOpenFor(null)}
               />
             ) : null
@@ -181,24 +201,10 @@ export default function Watch() {
               actions={actions}
               isMobile={isMobile}
               onVideoUpdated={setVideo}
+              onSaveClip={openClip}
             />
           )}
-          {clip && (
-            <StreamActions
-              onSaveClip={() => {
-                setClipOpenFor(clip.url);
-                // Back up to the video: the clip is picked while watching it.
-                window.scrollTo({
-                  top: 0,
-                  behavior: window.matchMedia(
-                    "(prefers-reduced-motion: reduce)"
-                  ).matches
-                    ? "auto"
-                    : "smooth",
-                });
-              }}
-            />
-          )}
+          {!video && openClip && <StreamActions onSaveClip={openClip} />}
           {!showRelatedRight &&
             relatedItems.length > 0 &&
             (video ? (

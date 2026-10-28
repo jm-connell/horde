@@ -96,22 +96,32 @@ export default function ClipPanel({
   url,
   title,
   live,
+  library = false,
   onClose,
 }: {
   url: string;
   title: string | null;
   live: boolean;
+  /** A downloaded video: "current time" is the library player's position. */
+  library?: boolean;
   onClose: () => void;
 }) {
-  const { getStreamPosition, getStreamBehindLive, setClipMarkers } =
-    usePlaybackActions();
+  const {
+    getStreamPosition,
+    getCurrentPosition,
+    getStreamBehindLive,
+    setClipMarkers,
+  } = usePlaybackActions();
   const { showToast, showError } = useToast();
   const headingId = useId();
 
   const current = (): ClipMark =>
     live
       ? liveMark(getStreamBehindLive() ?? 0, Date.now())
-      : { kind: "time", sec: Math.floor(getStreamPosition()) };
+      : {
+          kind: "time",
+          sec: Math.floor(library ? getCurrentPosition() : getStreamPosition()),
+        };
   const back = (mark: ClipMark): ClipMark =>
     mark.kind === "live"
       ? { kind: "live", atMs: mark.atMs - 60_000 }

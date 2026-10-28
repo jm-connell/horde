@@ -160,3 +160,61 @@ test("the clip's ends can be dragged on the seek bar, with a preview", async ({
   await page.keyboard.press("Shift+ArrowRight");
   await expect(panel.getByLabel("Start")).toHaveValue("0:13");
 });
+
+test("a downloaded YouTube video is clipped from its ••• menu", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .locator("[data-horde='video-card']", { hasText: "Cedar Notes" })
+    .first()
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Cedar Notes" })
+  ).toBeVisible();
+  await page.getByTitle("More actions").click();
+  await page.getByRole("menuitem", { name: "Save a clip…" }).click();
+  const panel = page.getByRole("region", { name: "Save a clip" });
+  await panel.getByLabel("Start").fill("0:03");
+  await panel.getByLabel("End").fill("0:08");
+  await expect(page.getByTestId("clip-range").getByRole("slider")).toHaveCount(
+    2
+  );
+
+  const queued = page.waitForResponse(
+    (r) => r.url().endsWith("/api/downloads/clips") && r.ok()
+  );
+  await panel.getByRole("button", { name: "Save clip" }).click();
+  const response = await queued;
+  const job = await response.json();
+  try {
+    expect(response.request().postDataJSON()).toMatchObject({
+      url: "https://www.youtube.com/watch?v=e2ecedar001",
+      start_sec: 3,
+      end_sec: 8,
+    });
+    expect(job.title).toBe("Cedar Notes (clip 0:03–0:08)");
+  } finally {
+    await page.request.delete(`/api/downloads/${job.id}`, {
+      headers: CSRF_HEADERS,
+    });
+  }
+});
+
+test("a downloaded video without a YouTube source offers no clip", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page
+    .locator("[data-horde='video-card']", { hasText: "Kiln fire" })
+    .first()
+    .click();
+  await expect(page.getByRole("heading", { name: "Kiln fire" })).toBeVisible();
+  await page.getByTitle("More actions").click();
+  await expect(
+    page.getByRole("menuitem", { name: "Edit details" })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("menuitem", { name: "Save a clip…" })
+  ).toHaveCount(0);
+});

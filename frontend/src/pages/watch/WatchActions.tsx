@@ -13,11 +13,14 @@ export default function WatchActions({
   actions,
   isMobile,
   onVideoUpdated,
+  onSaveClip,
 }: {
   video: Video;
   actions: WatchActionsState;
   isMobile: boolean;
   onVideoUpdated: (video: Video) => void;
+  /** Open the clip picker (a downloaded YouTube video). */
+  onSaveClip?: () => void;
 }) {
   const { can } = useAuth();
   return (
@@ -70,6 +73,7 @@ export default function WatchActions({
             onNormalizeVolume={actions.onNormalizeVolume}
             onDelete={actions.onDelete}
             onVideoUpdated={onVideoUpdated}
+            onSaveClip={onSaveClip}
           />
         )}
       </div>

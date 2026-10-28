@@ -34,6 +34,8 @@ interface Props {
   onNormalizeVolume?: () => void;
   onDelete: () => void;
   onVideoUpdated?: (video: Video) => void;
+  /** Save part of it as its own video (YouTube videos, with download). */
+  onSaveClip?: () => void;
 }
 
 export default function VideoActionsMenu({
@@ -44,6 +46,7 @@ export default function VideoActionsMenu({
   onNormalizeVolume,
   onDelete,
   onVideoUpdated,
+  onSaveClip,
 }: Props) {
   const { can } = useAuth();
   const [open, setOpen] = useState(false);
@@ -178,6 +181,18 @@ export default function VideoActionsMenu({
               className={itemClass}
             >
               Change resolution
+            </button>
+          )}
+          {onSaveClip && (
+            <button
+              onClick={() => {
+                setOpen(false);
+                onSaveClip();
+              }}
+              role="menuitem"
+              className={itemClass}
+            >
+              Save a clip…
             </button>
           )}
           {canNormalize && (
