@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { isYoutubeChannelUrl } from "../../../components/channelFeedYoutubeSearch";
 import { useFocusTrap } from "../../../hooks/useFocusTrap";
@@ -12,6 +12,9 @@ import RetentionSection from "./RetentionSection";
 import SearchSection from "./SearchSection";
 import { sectionId, type ChannelSettingsSection } from "./channelSettingsText";
 import { CloseIcon } from "../../../components/icons";
+
+/** Exit slide length; the entrance runs 300ms (DESIGN.md "Motion"). */
+const SHEET_EXIT_MS = 200;
 
 /**
  * Every per-channel setting in one place: a side sheet on wide screens, a
@@ -33,7 +36,16 @@ export default function ChannelSettingsSheet({
   onClose: () => void;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { onEscape: onClose });
+  // Slide out before the parent unmounts the sheet.
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<number | undefined>(undefined);
+  const close = () => {
+    if (closing) return;
+    setClosing(true);
+    closeTimer.current = window.setTimeout(onClose, SHEET_EXIT_MS);
+  };
+  useEffect(() => () => window.clearTimeout(closeTimer.current), []);
+  useFocusTrap(dialogRef, { onEscape: close });
   const titleId = useId();
   const youtube = isYoutubeChannelUrl(channelUrl);
 
@@ -60,9 +72,11 @@ export default function ChannelSettingsSheet({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-60 flex justify-end bg-black/60"
+      className={`fixed inset-0 z-60 flex justify-end transition-colors ease-fluid starting:bg-transparent ${
+        closing ? "bg-transparent duration-200" : "bg-black/60 duration-300"
+      }`}
       role="presentation"
-      onClick={backdropClick(onClose)}
+      onClick={backdropClick(close)}
     >
       <div
         ref={dialogRef}
@@ -71,7 +85,11 @@ export default function ChannelSettingsSheet({
         aria-modal="true"
         aria-labelledby={titleId}
         data-horde="channel-settings"
-        className="ui-panel ui-panel-legible flex h-full w-full flex-col bg-ink-900 shadow-2xl outline-hidden ring-1 ring-ink-700 sm:max-w-md sm:border-l sm:border-ink-700"
+        className={`ui-panel ui-panel-legible flex h-full w-full flex-col bg-ink-900 shadow-2xl outline-hidden ring-1 ring-ink-700 transition-[translate,opacity] ease-fluid starting:translate-x-full motion-reduce:starting:translate-x-0 motion-reduce:starting:opacity-0 sm:max-w-md sm:border-l sm:border-ink-700 ${
+          closing
+            ? "translate-x-full duration-200 motion-reduce:translate-x-0 motion-reduce:opacity-0"
+            : "duration-300"
+        }`}
       >
         <header className="flex items-start justify-between gap-3 border-b border-ink-700 px-5 py-4">
           <div className="min-w-0">
@@ -82,7 +100,7 @@ export default function ChannelSettingsSheet({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={close}
             aria-label="Close channel settings"
             className="-mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-xl leading-none text-muted hover:bg-ink-800 hover:text-gray-200"
           >

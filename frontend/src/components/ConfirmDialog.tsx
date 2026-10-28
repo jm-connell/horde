@@ -3,6 +3,7 @@ import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { button } from "./buttons";
+import { DIALOG_BACKDROP_ENTER, DIALOG_PANEL_ENTER } from "./dialogMotion";
 
 export type ConfirmOptions = {
   title: string;
@@ -57,7 +58,7 @@ export default function ConfirmDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4"
+      className={`fixed inset-0 z-80 flex items-center justify-center bg-black/60 p-4 ${DIALOG_BACKDROP_ENTER}`}
       role="presentation"
       onClick={backdropClick(() => {
         if (!busy) onCancel();
@@ -70,7 +71,7 @@ export default function ConfirmDialog({
         aria-labelledby={titleId}
         aria-describedby={hasBody ? bodyId : undefined}
         tabIndex={-1}
-        className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600"
+        className={`ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600 ${DIALOG_PANEL_ENTER}`}
       >
         <h2 id={titleId} className="text-base font-semibold text-gray-100">
           {title}

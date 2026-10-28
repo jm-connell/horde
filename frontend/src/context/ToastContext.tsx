@@ -32,6 +32,8 @@ interface ToastItem {
   variant: ToastVariant;
   persistent: boolean;
   action?: ToastAction;
+  /** Playing its exit transition; removed after TOAST_EXIT_MS. */
+  leaving?: boolean;
 }
 
 interface ToastContextValue {
@@ -49,22 +51,36 @@ const INFO_MS = 4000;
 const ERROR_MS = 10000;
 // A toast with an action (Undo) stays long enough to reach the button.
 const ACTION_MS = 10000;
+// Exit transition length (DESIGN.md "Motion": exits run shorter than entries).
+const TOAST_EXIT_MS = 150;
 
 let nextId = 0;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const timers = useRef(new Map<number, number>());
+  const leavingIds = useRef(new Set<number>());
   const toastsRef = useRef<ToastItem[]>([]);
   toastsRef.current = toasts;
 
+  // Mark the toast leaving so it can play its exit, then drop it. The removal
+  // timer reuses the toast's slot in `timers`, so unmount still clears it.
   const dismissToast = useCallback((id: number) => {
+    if (leavingIds.current.has(id)) return;
+    leavingIds.current.add(id);
     const timer = timers.current.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      timers.current.delete(id);
-    }
-    setToasts((prev) => prev.filter((t) => t.id !== id));
+    if (timer !== undefined) window.clearTimeout(timer);
+    timers.current.set(
+      id,
+      window.setTimeout(() => {
+        timers.current.delete(id);
+        leavingIds.current.delete(id);
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, TOAST_EXIT_MS)
+    );
+    setToasts((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, leaving: true } : t))
+    );
   }, []);
 
   // Pending dismiss timers must not outlive the provider.
@@ -135,8 +151,14 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       key={t.id}
       data-horde="toast"
       data-variant={t.variant}
-      className={`pointer-events-auto flex items-start gap-3 rounded-lg bg-ink-800 px-4 py-3 text-sm text-gray-100 shadow-xl ring-1 ${
+      data-leaving={t.leaving ? "" : undefined}
+      aria-hidden={t.leaving || undefined}
+      className={`flex items-start gap-3 rounded-lg bg-ink-800 px-4 py-3 text-sm text-gray-100 shadow-xl ring-1 transition-[opacity,translate] ease-fluid starting:translate-y-2 starting:opacity-0 motion-reduce:starting:translate-y-0 ${
         t.variant === "error" ? "ring-danger/60" : "ring-ink-600"
+      } ${
+        t.leaving
+          ? "pointer-events-none translate-y-2 opacity-0 duration-150 motion-reduce:translate-y-0"
+          : "pointer-events-auto duration-200"
       }`}
     >
       <span className="min-w-0 wrap-break-word">{t.message}</span>

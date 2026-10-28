@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
-import { CLIP_DURATION_MS, CLIP_EASING } from "./useAnimatedClipHeight";
+import { EASE_FLUID } from "../motion";
+import { CLIP_DURATION_MS } from "./useAnimatedClipHeight";
 
 /**
  * Glide an element from where it was to where it now is when `layoutKey`
@@ -53,7 +54,7 @@ export function useAnimatedLayout(
         },
         { transformOrigin: "top left", transform: "none" },
       ],
-      { duration: CLIP_DURATION_MS, easing: CLIP_EASING }
+      { duration: CLIP_DURATION_MS, easing: EASE_FLUID }
     );
   });
 }

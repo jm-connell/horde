@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useSettings, type NavIndicator } from "../hooks/useSettings";
 import { JELLY_MS, jellyKeyframes, type PillRect } from "./liquidJelly";
+import { EASE_FLUID } from "../motion";
 
 function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -138,7 +139,7 @@ export default function LiquidNav({
     ? "none"
     : isFade
       ? "left 300ms ease, top 300ms ease, width 300ms ease, height 300ms ease, opacity 240ms ease"
-      : "left 280ms cubic-bezier(0.22, 1, 0.36, 1), top 280ms cubic-bezier(0.22, 1, 0.36, 1), width 280ms cubic-bezier(0.22, 1, 0.36, 1)";
+      : `left 280ms ${EASE_FLUID}, top 280ms ${EASE_FLUID}, width 280ms ${EASE_FLUID}`;
 
   return (
     <div

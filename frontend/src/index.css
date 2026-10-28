@@ -35,7 +35,7 @@
 }
 
 /* The house motion curve (a strong ease-out): `ease-fluid` in classes,
-   var(--ease-fluid) in CSS. */
+   var(--ease-fluid) in CSS, `EASE_FLUID` (src/motion.ts) in JS. */
 @theme {
   --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -588,11 +588,14 @@ input[type="range"].accent-scrubber::-webkit-slider-thumb {
     box-shadow 120ms ease;
 }
 
-input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow:
-    0 0 0 4px rgb(var(--accent) / 0.25),
-    0 0 10px rgb(var(--accent) / 0.7);
+/* Hover growth only for real pointers: on touch it sticks after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow:
+      0 0 0 4px rgb(var(--accent) / 0.25),
+      0 0 10px rgb(var(--accent) / 0.7);
+  }
 }
 
 input[type="range"].accent-scrubber::-webkit-slider-thumb:active {
@@ -613,9 +616,11 @@ input[type="range"].accent-scrubber::-moz-range-thumb {
     box-shadow 120ms ease;
 }
 
-input[type="range"].accent-scrubber::-moz-range-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25);
+@media (hover: hover) and (pointer: fine) {
+  input[type="range"].accent-scrubber::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25);
+  }
 }
 
 input[type="range"].accent-scrubber::-moz-range-thumb:active {
@@ -658,7 +663,7 @@ video.sub-large::cue {
   /* Player chrome uses leading-none; don't inherit that or glyphs clip. */
   line-height: 1.35;
   /* Lift above the timeline while chrome is visible; drop when it fades. */
-  transition: transform 300ms ease-out;
+  transition: transform 300ms var(--ease-fluid);
 }
 
 .subtitle-overlay-draggable {
@@ -839,8 +844,9 @@ html[data-page-fade="on"] .page-shell.page-shell--animate {
   }
 }
 
-/* Cards rise and fade in as they mount, a few at a time (first 12 staggered,
-   the rest together), so a grid settles in instead of popping. "backwards"
+/* Cards rise and fade in as they mount, a few at a time, so a grid settles in
+   instead of popping. Only the first 12 are staggered; later cards (such as
+   pages appended by infinite scroll) rise at once. "backwards"
    holds the start state only during the delay; afterwards the card's own
    hover transform is free. Thumbnails fade in once decoded (.ui-fade-img). */
 html[data-page-fade="on"] .ui-card-enter {
@@ -894,7 +900,7 @@ html[data-page-fade="on"] .ui-card-enter {
 }
 .ui-card-enter:nth-child(n + 13),
 :nth-child(n + 13) > .ui-card-enter {
-  --card-enter-delay: 360ms;
+  --card-enter-delay: 0ms;
 }
 
 @keyframes card-enter {

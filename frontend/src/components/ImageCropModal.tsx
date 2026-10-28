@@ -25,6 +25,7 @@ import {
 } from "../utils/imageCrop";
 import { CloseIcon } from "./icons";
 import { button } from "./buttons";
+import { DIALOG_BACKDROP_ENTER, DIALOG_PANEL_ENTER } from "./dialogMotion";
 
 const INITIAL_TRANSFORM: CropTransform = {
   zoom: 1,
@@ -352,7 +353,7 @@ export default function ImageCropModal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4"
+      className={`fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 ${DIALOG_BACKDROP_ENTER}`}
       role="presentation"
       onClick={backdropClick(() => {
         if (!busy) onCancel();
@@ -364,7 +365,7 @@ export default function ImageCropModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="image-crop-title"
-        className="ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6"
+        className={`ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6 ${DIALOG_PANEL_ENTER}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>

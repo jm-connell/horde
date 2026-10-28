@@ -1,5 +1,6 @@
 import type { miniPlayerHostInsets } from "../../utils/miniPlayerLayout";
 import type { MiniPlayerRect } from "../PlaybackContext";
+import { EASE_FLUID } from "../../motion";
 
 export function applyMiniHostInsets(
   host: HTMLElement,
@@ -12,7 +13,6 @@ export function applyMiniHostInsets(
 }
 
 const FLIP_DURATION_MS = 320;
-const FLIP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 // Animate the player host jumping between the watch dock and the fullscreen
 // (windowed/"fit") overlay. The host is reparented across the DOM (not just
@@ -45,7 +45,7 @@ export function flipHostTransition(host: HTMLElement, before: DOMRect) {
   // animate away from it on the next frame.
   void host.offsetWidth;
   requestAnimationFrame(() => {
-    host.style.transition = `transform ${FLIP_DURATION_MS}ms ${FLIP_EASING}`;
+    host.style.transition = `transform ${FLIP_DURATION_MS}ms ${EASE_FLUID}`;
     host.style.transform = "";
     const onEnd = (e: TransitionEvent) => {
       if (e.target !== host || e.propertyName !== "transform") return;

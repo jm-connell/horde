@@ -968,12 +968,16 @@ export default function Download() {
           </div>
           <div className="space-y-4">
             {recentJobs.map((job) => (
-              <DownloadJobCard
+              <div
                 key={job.id}
-                job={job}
-                live={progress[job.id]}
-                channels={channels}
-              />
+                className="transition-[opacity,translate] duration-200 ease-fluid starting:translate-y-2 starting:opacity-0 motion-reduce:starting:translate-y-0"
+              >
+                <DownloadJobCard
+                  job={job}
+                  live={progress[job.id]}
+                  channels={channels}
+                />
+              </div>
             ))}
           </div>
         </div>
