@@ -27,3 +27,20 @@ export function clipBarRange(
   };
   return { start: at(markers.start), end: at(markers.end) };
 }
+
+/**
+ * The mark for a seek-bar position (the inverse of `clipBarRange`): a file or
+ * past stream's own second, or for a live bar the wall-clock instant whose
+ * playhead would sit there now. Null for a live bar before its window is known.
+ */
+export function clipMarkAtBar(
+  barSec: number,
+  live: boolean,
+  liveWindow: LiveWindow | null,
+  nowMs: number
+): ClipMark | null {
+  if (!live) return { kind: "time", sec: Math.max(0, Math.round(barSec)) };
+  if (!liveWindow) return null;
+  const media = liveWindow.start + barSec;
+  return { kind: "live", atMs: nowMs - (liveWindow.end - media) * 1000 };
+}

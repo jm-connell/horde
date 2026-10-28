@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clipBarRange } from "./clipMarkers";
+import { clipBarRange, clipMarkAtBar } from "./clipMarkers";
 
 describe("clipBarRange", () => {
   it("places a past stream's marks on its own timeline", () => {
@@ -27,5 +27,23 @@ describe("clipBarRange", () => {
     expect(
       clipBarRange({ start: { kind: "live", atMs: 0 }, end: null }, null, 0)
     ).toEqual({ start: null, end: null });
+  });
+});
+
+describe("clipMarkAtBar", () => {
+  it("rounds a past stream's position to the second", () => {
+    expect(clipMarkAtBar(4253.4, false, null, 0)).toEqual({
+      kind: "time",
+      sec: 4253,
+    });
+  });
+
+  it("is the inverse of clipBarRange on a live bar", () => {
+    const win = { start: 1000, end: 4600, isLive: true };
+    const mark = clipMarkAtBar(3000, true, win, 1_000_000);
+    expect(mark).toEqual({ kind: "live", atMs: 400_000 });
+    expect(clipBarRange({ start: mark, end: null }, win, 1_000_000).start).toBe(
+      3000
+    );
   });
 });

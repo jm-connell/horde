@@ -1,8 +1,16 @@
-import { useCallback, useState, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import { spritesImageUrl } from "../../api";
 import { formatDuration, formatTimestamp, type Chapter } from "../../utils";
 import { scrubPositionFromClientX } from "../playerSeek";
+import type { Storyboard } from "../../types";
 import type { ClipBarRange } from "./clipMarkers";
+import { storyboardTileStyle } from "./storyboardTile";
 import { isChapterActive } from "./useChapters";
 import { useSeekSprites } from "./useSeekSprites";
 
@@ -10,6 +18,8 @@ interface Props {
   /** The pointer-handling track; the player also uses it to lift captions. */
   scrubberRef: RefObject<HTMLDivElement | null>;
   videoId?: number;
+  /** A stream's YouTube storyboard, for previews when there are no sprites. */
+  storyboard?: Storyboard | null;
   current: number;
   duration: number;
   chapters: Chapter[];
@@ -23,41 +33,141 @@ interface Props {
   onInteractionEnd: () => void;
   /** The clip being picked: its ends and the span between them. */
   clipRange?: ClipBarRange | null;
+  /** A clip end was dragged to this position along the bar (no seek). */
+  onClipMove?: (which: "start" | "end", sec: number) => void;
 }
 
-/** Pick-a-clip feedback: a tick at each end and the span between them. */
+type ClipEnd = "start" | "end";
+
+/**
+ * The clip being picked: the span between its ends and a draggable handle on
+ * each (arrow keys nudge a focused handle by 1 s, Shift by 10 s). Moving a
+ * handle never seeks; `onMove` reports the new position along the bar.
+ */
 function ClipRangeMarks({
   range,
   duration,
+  scrubberRef,
+  formatTime,
+  onMove,
+  onDrag,
+  onDragEnd,
 }: {
   range: ClipBarRange;
   duration: number;
+  scrubberRef: RefObject<HTMLDivElement | null>;
+  formatTime: (sec: number) => string;
+  onMove?: (which: ClipEnd, sec: number) => void;
+  /** While dragging: where the handle is (shows the hover preview there). */
+  onDrag: (pos: { time: number; pct: number }) => void;
+  onDragEnd: () => void;
 }) {
   const pct = (sec: number | null) =>
     sec == null || sec < 0 || sec > duration ? null : (sec / duration) * 100;
   const start = pct(range.start);
   const end = pct(range.end);
+  // Where each end was last moved to. A held arrow key repeats faster than a
+  // move comes back round through the clip panel as a new `range`.
+  const latest = useRef(range);
+  useEffect(() => {
+    latest.current = range;
+  }, [range]);
+
+  const handle = (which: ClipEnd, sec: number | null, at: number | null) => {
+    if (sec == null || at == null) return null;
+    const label = which === "start" ? "Clip start" : "Clip end";
+    const tick = (
+      <span className="absolute left-1/2 top-1/2 block h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-400 group-hover:w-1 group-focus-visible:w-1" />
+    );
+    if (!onMove) {
+      return (
+        <span
+          key={which}
+          className="absolute top-1/2 h-5 w-3 -translate-x-1/2 -translate-y-1/2"
+          style={{ left: `${at}%` }}
+        >
+          {tick}
+        </span>
+      );
+    }
+    const moveTo = (clientX: number) => {
+      const el = scrubberRef.current;
+      if (!el) return;
+      const pos = scrubPositionFromClientX(
+        clientX,
+        el.getBoundingClientRect(),
+        duration
+      );
+      if (!pos) return;
+      onDrag(pos);
+      onMove(which, pos.time);
+    };
+    return (
+      <span
+        key={which}
+        role="slider"
+        tabIndex={0}
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={duration}
+        aria-valuenow={Math.round(sec)}
+        aria-valuetext={formatTime(sec)}
+        title={`${label}: drag to move`}
+        className="group pointer-events-auto absolute top-1/2 z-20 h-6 w-4 -translate-x-1/2 -translate-y-1/2 cursor-ew-resize touch-none outline-hidden"
+        style={{ left: `${at}%` }}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return;
+          e.preventDefault();
+          e.stopPropagation();
+          e.currentTarget.setPointerCapture(e.pointerId);
+          moveTo(e.clientX);
+        }}
+        onPointerMove={(e) => {
+          if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+          e.stopPropagation();
+          moveTo(e.clientX);
+        }}
+        onPointerUp={(e) => {
+          e.stopPropagation();
+          if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          }
+          onDragEnd();
+        }}
+        onPointerCancel={onDragEnd}
+        onKeyDown={(e) => {
+          const step = e.shiftKey ? 10 : 1;
+          const delta =
+            e.key === "ArrowRight" ? step : e.key === "ArrowLeft" ? -step : 0;
+          if (!delta) return;
+          // Not the player's seek shortcut: this moves the clip, not playback.
+          e.preventDefault();
+          e.stopPropagation();
+          const from = latest.current[which] ?? sec;
+          const to = Math.min(duration, Math.max(0, from + delta));
+          latest.current = { ...latest.current, [which]: to };
+          onMove(which, to);
+        }}
+      >
+        {tick}
+      </span>
+    );
+  };
+
   return (
     <div
       className="pointer-events-none absolute inset-x-0 top-0 h-full"
       data-testid="clip-range"
-      aria-hidden
     >
       {start != null && end != null && end > start && (
         <span
+          aria-hidden
           className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-amber-400/45"
           style={{ left: `${start}%`, width: `${end - start}%` }}
         />
       )}
-      {[start, end].map((at, i) =>
-        at == null ? null : (
-          <span
-            key={i}
-            className="absolute top-1/2 block h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-400"
-            style={{ left: `${at}%` }}
-          />
-        )
-      )}
+      {handle("start", range.start, start)}
+      {handle("end", range.end, end)}
     </div>
   );
 }
@@ -66,6 +176,7 @@ function ClipRangeMarks({
 export default function ScrubBar({
   scrubberRef,
   videoId,
+  storyboard = null,
   current,
   duration,
   chapters,
@@ -76,6 +187,7 @@ export default function ScrubBar({
   onInteractionStart,
   onInteractionEnd,
   clipRange = null,
+  onClipMove,
 }: Props) {
   const spriteMeta = useSeekSprites(videoId);
   const [scrubHover, setScrubHover] = useState<{
@@ -187,6 +299,8 @@ export default function ScrubBar({
               backgroundSize: `${sheetW}px ${sheetH}px`,
               backgroundPosition: `-${col * spriteMeta.tile_width}px -${row * spriteMeta.tile_height}px`,
             };
+          } else if (storyboard) {
+            tileStyle = storyboardTileStyle(storyboard, time) ?? undefined;
           }
           return {
             time,
@@ -258,7 +372,21 @@ export default function ScrubBar({
         }}
       />
       {clipRange && duration > 0 && (
-        <ClipRangeMarks range={clipRange} duration={duration} />
+        <ClipRangeMarks
+          range={clipRange}
+          duration={duration}
+          scrubberRef={scrubberRef}
+          formatTime={formatTime}
+          onMove={onClipMove}
+          onDrag={(pos) => {
+            onInteractionStart();
+            setScrubHover(pos);
+          }}
+          onDragEnd={() => {
+            onInteractionEnd();
+            setScrubHover(null);
+          }}
+        />
       )}
       {/* Chapter markers */}
       {chapters.length > 0 && duration > 0 && (

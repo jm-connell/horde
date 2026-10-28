@@ -6440,6 +6440,29 @@ export interface components {
             /** Video Count */
             video_count: number;
         };
+        /**
+         * StoryboardRead
+         * @description Seek-preview sprite sheets hosted by YouTube (a finished video only).
+         *
+         *     Tile ``i`` (``floor(t / interval_sec)``, up to ``count - 1``) is on sheet
+         *     ``i // (columns * rows)``, row-major within it.
+         */
+        StoryboardRead: {
+            /** Columns */
+            columns: number;
+            /** Count */
+            count: number;
+            /** Interval Sec */
+            interval_sec: number;
+            /** Rows */
+            rows: number;
+            /** Sheets */
+            sheets: string[];
+            /** Tile Height */
+            tile_height: number;
+            /** Tile Width */
+            tile_width: number;
+        };
         /** StreamAiAction */
         StreamAiAction: {
             /**
@@ -6513,6 +6536,7 @@ export interface components {
             preview_height?: number | null;
             /** Source Url */
             source_url?: string | null;
+            storyboard?: components["schemas"]["StoryboardRead"] | null;
             /**
              * Subtitles
              * @default []

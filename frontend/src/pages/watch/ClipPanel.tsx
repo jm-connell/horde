@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
 import { usePlaybackActions } from "../../context/PlaybackContext";
@@ -129,9 +129,19 @@ export default function ClipPanel({
   const length = start && end ? clipLength(start, end) : NaN;
   const valid = Number.isFinite(length) && length >= 1;
 
+  // Dragging an end on the seek bar moves it here too (and shows its time).
+  const onMove = useCallback((which: "start" | "end", mark: ClipMark) => {
+    if (which === "start") {
+      setStart(mark);
+      setStartRev((n) => n + 1);
+    } else {
+      setEnd(mark);
+      setEndRev((n) => n + 1);
+    }
+  }, []);
   useEffect(() => {
-    setClipMarkers({ start, end });
-  }, [start, end, setClipMarkers]);
+    setClipMarkers({ start, end, onMove });
+  }, [start, end, onMove, setClipMarkers]);
   useEffect(() => () => setClipMarkers(null), [setClipMarkers]);
 
   const save = async () => {
@@ -160,8 +170,8 @@ export default function ClipPanel({
         </h2>
         <p className="text-xs text-muted">
           {live
-            ? "Play to each end and take the current time."
-            : "Type the times or take them from the player."}
+            ? "Take each end from the player, or drag the marks on the seek bar."
+            : "Type the times, take them from the player, or drag the marks on the seek bar."}
         </p>
       </div>
       <form

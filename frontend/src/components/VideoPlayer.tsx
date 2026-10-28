@@ -27,7 +27,7 @@ import SubtitleOverlay from "./SubtitleOverlay";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
-import { clipBarRange } from "./player/clipMarkers";
+import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -46,6 +46,7 @@ export default function VideoPlayer({
   live = false,
   progressiveFallbackSrc: progressiveFallbackProp,
   videoId,
+  storyboard = null,
   mimeType = "video/mp4",
   poster = null,
   mode,
@@ -485,6 +486,12 @@ export default function VideoPlayer({
   const clipRange = clipMarkers
     ? clipBarRange(clipMarkers, liveWindow, Date.now())
     : null;
+  const onClipMove = clipMarkers?.onMove
+    ? (which: "start" | "end", barSec: number) => {
+        const mark = clipMarkAtBar(barSec, live, liveWindow, Date.now());
+        if (mark) clipMarkers.onMove?.(which, mark);
+      }
+    : undefined;
   const liveControl = live
     ? {
         behindSec: liveBehind ?? 0,
@@ -627,10 +634,12 @@ export default function VideoPlayer({
             seekTo={live ? barSeekTo : seekTo}
             live={liveControl}
             clipRange={clipRange}
+            onClipMove={onClipMove}
             onInteractionStart={onControlsInteractionStart}
             onInteractionEnd={onControlsInteractionEnd}
             scrubberRef={scrubberRef}
             videoId={videoId}
+            storyboard={storyboard}
             chapters={chapters}
             hoveredChapter={hoveredChapter}
             onHoverChapter={setHoveredChapterSec}

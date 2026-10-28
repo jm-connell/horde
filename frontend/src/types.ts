@@ -8,6 +8,7 @@ export type MetadataSyncStatus = S["MetadataSyncStatus"];
 export type BackgroundItem = S["BackgroundRead"];
 export type ChannelSearchHit = S["ChannelSearchHit"];
 export type SpriteMeta = S["SpriteMetaRead"];
+export type Storyboard = S["StoryboardRead"];
 export type SubtitleTrack = S["SubtitleTrack"];
 export type SearchMatchReason = S["SearchMatchReason"];
 export type Video = S["VideoRead"];

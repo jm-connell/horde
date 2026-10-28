@@ -60,7 +60,7 @@ On desktop, the AI summary, the AI chat input, the description and the chapters 
 
 ## Scrub sprites
 
-For library videos with generated sprite sheets, hovering the scrubber shows a **preview thumbnail** for that time. Sprites are lazy-loaded during playback.
+For library videos with generated sprite sheets, hovering the scrubber shows a **preview thumbnail** for that time. Sprites are lazy-loaded during playback. A **streamed** video that is not downloaded uses YouTube's own storyboard images instead (loaded from YouTube, like its thumbnails), when YouTube has them: finished videos and past broadcasts do, a broadcast that is still live does not.
 
 ## Stream quality (DASH)
 

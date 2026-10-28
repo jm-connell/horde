@@ -4,6 +4,7 @@ import type { SubtitleSize } from "../hooks/useSettings";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
 import type { Chapter } from "../utils";
+import type { Storyboard } from "../types";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -36,6 +37,8 @@ export type ClipMark =
 export interface ClipMarkers {
   start: ClipMark | null;
   end: ClipMark | null;
+  /** An end was dragged (or nudged with the keyboard) on the seek bar. */
+  onMove?: (which: "start" | "end", mark: ClipMark) => void;
 }
 
 export interface VideoPlayerProps {
@@ -54,6 +57,8 @@ export interface VideoPlayerProps {
    */
   progressiveFallbackSrc?: string;
   videoId?: number;
+  /** A stream's YouTube storyboard: seek previews without local sprites. */
+  storyboard?: Storyboard | null;
   mimeType?: string;
   poster?: string | null;
   mode: ViewMode;

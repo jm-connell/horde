@@ -42,7 +42,7 @@ import {
   miniPlayerHostInsets,
   type MiniPos,
 } from "../utils/miniPlayerLayout";
-import type { SubtitleTrack, Video } from "../types";
+import type { Storyboard, SubtitleTrack, Video } from "../types";
 import {
   isQueuedStream,
   type QueueEntry,
@@ -78,6 +78,8 @@ export interface StreamSession {
   subtitles?: SubtitleTrack[];
   /** YouTube video id of a broadcast that is live: play `/api/live` HLS. */
   liveVideoId?: string | null;
+  /** YouTube's seek-preview sheets (finished videos only). */
+  storyboard?: Storyboard | null;
 }
 
 export type MiniPlayerRect = {
@@ -1028,6 +1030,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         }}
         onLiveBehind={handleLiveBehind}
         clipMarkers={clipMarkers}
+        storyboard={stream.storyboard ?? null}
         chapters={
           streamChaptersOverride?.url === stream.url
             ? streamChaptersOverride.chapters

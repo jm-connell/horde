@@ -12,6 +12,8 @@ const MEDIA = path.resolve(
   "../../e2e/.runtime/app/downloads/Northwind/2024/Aurora Drift.mp4"
 );
 
+const SHEET = "https://i.ytimg.com/sb/clipstr0001/storyboard3_L2/M0.jpg";
+
 async function mockPastStream(page: Page) {
   await page.route(/\/api\/preview\/meta\?/, (route) =>
     route.fulfill({
@@ -30,6 +32,15 @@ async function mockPastStream(page: Page) {
         view_count: 10,
         is_live: false,
         was_live: true,
+        storyboard: {
+          tile_width: 160,
+          tile_height: 90,
+          columns: 5,
+          rows: 5,
+          interval_sec: 1,
+          count: 20,
+          sheets: [SHEET],
+        },
       },
     })
   );
@@ -66,7 +77,10 @@ test("a past stream is clipped from the panel under the player", async ({
   // The picked range shows on the seek bar; playback is not moved to it.
   const marks = page.getByTestId("clip-range");
   await expect(marks).toBeAttached();
-  await expect(marks.locator("span")).toHaveCount(3);
+  await expect(marks.getByRole("slider")).toHaveCount(2);
+  await expect(
+    marks.getByRole("slider", { name: "Clip start" })
+  ).toHaveAttribute("aria-valuetext", "0:05");
 
   const queued = page.waitForResponse(
     (r) => r.url().endsWith("/api/downloads/clips") && r.ok()
@@ -108,4 +122,41 @@ test("the clip panel keeps what is typed and refuses an end before the start", a
   await expect(panel.getByRole("button", { name: "Save clip" })).toBeDisabled();
   await panel.getByRole("button", { name: "Cancel" }).click();
   await expect(panel).toHaveCount(0);
+});
+
+test("the clip's ends can be dragged on the seek bar, with a preview", async ({
+  page,
+}) => {
+  await mockPastStream(page);
+  const panel = await openClipPanel(page);
+  await panel.getByLabel("Start").fill("0:02");
+  await panel.getByLabel("End").fill("0:06");
+
+  const bar = await page.getByLabel("Seek").boundingBox();
+  const end = page.getByRole("slider", { name: "Clip end" });
+  await page.locator("video").hover();
+  const box = await end.boundingBox();
+  // Drag the end handle to 75% of the 20 s bar: 0:15.
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bar!.x + bar!.width * 0.75, box!.y + box!.height / 2, {
+    steps: 5,
+  });
+  // The storyboard frame for that time is shown while dragging.
+  await expect(page.locator(`[style*="${SHEET}"]`).first()).toBeVisible();
+  await page.mouse.up();
+  await expect(panel.getByLabel("End")).toHaveValue("0:15");
+  await expect(panel.getByText("Length 0:13")).toBeVisible();
+  // Moving a clip end does not move playback there.
+  const playhead = await page.evaluate(
+    () => document.querySelector("video")!.currentTime
+  );
+  expect(Math.abs(playhead - 15)).toBeGreaterThan(1);
+
+  // The keyboard nudges a focused handle: 1 s, or 10 s with Shift.
+  const start = page.getByRole("slider", { name: "Clip start" });
+  await start.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(panel.getByLabel("Start")).toHaveValue("0:13");
 });

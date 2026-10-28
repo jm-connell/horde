@@ -8350,6 +8350,53 @@
         "title": "StorageStats",
         "type": "object"
       },
+      "StoryboardRead": {
+        "description": "Seek-preview sprite sheets hosted by YouTube (a finished video only).\n\nTile ``i`` (``floor(t / interval_sec)``, up to ``count - 1``) is on sheet\n``i // (columns * rows)``, row-major within it.",
+        "properties": {
+          "columns": {
+            "title": "Columns",
+            "type": "integer"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "interval_sec": {
+            "title": "Interval Sec",
+            "type": "number"
+          },
+          "rows": {
+            "title": "Rows",
+            "type": "integer"
+          },
+          "sheets": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Sheets",
+            "type": "array"
+          },
+          "tile_height": {
+            "title": "Tile Height",
+            "type": "integer"
+          },
+          "tile_width": {
+            "title": "Tile Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "tile_width",
+          "tile_height",
+          "columns",
+          "rows",
+          "interval_sec",
+          "count",
+          "sheets"
+        ],
+        "title": "StoryboardRead",
+        "type": "object"
+      },
       "StreamAiAction": {
         "properties": {
           "force": {
@@ -8581,6 +8628,16 @@
               }
             ],
             "title": "Source Url"
+          },
+          "storyboard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryboardRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "subtitles": {
             "default": [],

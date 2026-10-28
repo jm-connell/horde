@@ -291,6 +291,22 @@ class DownloadPreview(BaseModel):
     preset_sizes: dict[str, int] = {}
 
 
+class StoryboardRead(BaseModel):
+    """Seek-preview sprite sheets hosted by YouTube (a finished video only).
+
+    Tile ``i`` (``floor(t / interval_sec)``, up to ``count - 1``) is on sheet
+    ``i // (columns * rows)``, row-major within it.
+    """
+
+    tile_width: int
+    tile_height: int
+    columns: int
+    rows: int
+    interval_sec: float
+    count: int
+    sheets: list[str]
+
+
 class StreamPreviewMeta(BaseModel):
     id: str | None = None
     title: str | None = None
@@ -309,6 +325,8 @@ class StreamPreviewMeta(BaseModel):
     is_live: bool = False
     #: A recording of a finished live stream (often hours long).
     was_live: bool = False
+    #: YouTube's thumbnails for scrubbing; None for live or when there are none.
+    storyboard: StoryboardRead | None = None
 
 
 class StreamAiRead(BaseModel):
