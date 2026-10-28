@@ -51,6 +51,11 @@ test("a channel page with its settings sheet open has no serious accessibility v
   await expect(
     page.getByRole("heading", { name: "Northwind", level: 1 })
   ).toBeVisible();
+  // The heading renders before the cards; wait for them so their fade-in has
+  // started before the scan waits on running animations.
+  await expect(
+    page.getByRole("link", { name: /Aurora Drift/ }).first()
+  ).toBeVisible();
   await expectNoSeriousViolations(page, "library/channel");
   await page.getByRole("button", { name: "Channel settings" }).click();
   await expect(
