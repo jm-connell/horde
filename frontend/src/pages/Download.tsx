@@ -903,7 +903,7 @@ export default function Download() {
                   {" "}
                   <Link
                     to="/settings?tab=system"
-                    className="underline hover:text-warning"
+                    className="underline hover:no-underline"
                   >
                     Storage settings
                   </Link>

@@ -336,7 +336,7 @@ export default function VideoEditForm({
             type="button"
             onClick={() => void loadCandidates()}
             disabled={candLoading}
-            className={`${button("secondary", "xs")} mt-3 w-full`}
+            className={`${button("secondary", "sm")} mt-3 w-full`}
           >
             {candLoading
               ? "Generating…"

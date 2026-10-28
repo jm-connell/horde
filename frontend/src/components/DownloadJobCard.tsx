@@ -552,7 +552,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             )}
             {isDeviceJob && (
               <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-                To client
+                To this device
               </span>
             )}
           </span>

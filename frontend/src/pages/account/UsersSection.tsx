@@ -15,6 +15,7 @@ import type {
 import AccountTypeFields from "../settings/AccountTypeFields";
 import { PANEL_BTN } from "../settings/constants";
 import SessionRows from "./SessionRows";
+import { button } from "../../components/buttons";
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
@@ -223,7 +224,7 @@ function CreateUser({
     >
       <h3
         id="create-user-heading"
-        className="mb-3 text-base font-semibold text-gray-100"
+        className="mb-3 text-sm font-medium text-gray-200"
       >
         Add a user
       </h3>
@@ -442,7 +443,7 @@ function UserEditor({
         )}
         <button
           type="button"
-          className={`${PANEL_BTN} text-danger`}
+          className={button("danger", "sm")}
           disabled={busy}
           onClick={onDelete}
         >

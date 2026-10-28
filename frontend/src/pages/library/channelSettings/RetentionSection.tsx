@@ -200,7 +200,7 @@ function RetentionForm({
                   onChange={(e) =>
                     setText((t) => ({ ...t, [row.key]: e.target.value }))
                   }
-                  className={`${numberInput} ${bad ? "border-danger" : ""}`}
+                  className={`${numberInput} ${bad ? "border-danger!" : ""}`}
                 />
                 <span className={checked[row.key] ? "" : "text-muted"}>
                   {row.after}

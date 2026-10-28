@@ -40,3 +40,32 @@ export function mutedTextFor(
   }
   return target;
 }
+
+function mix(a: Rgb, b: Rgb, t: number): Rgb {
+  return a.map((v, i) => Math.round(v + (b[i] - v) * t)) as Rgb;
+}
+
+/**
+ * Status text colour (danger / warning / success) for a custom theme: the
+ * smallest step from `base` towards white (`lighten`, dark themes) or black
+ * that reaches `min` on every text surface and on the colour's own 15% tint
+ * over each of them. Mid-grey backgrounds cannot keep the hue at AA; there
+ * it ends near white or black, like muted text.
+ */
+export function statusTextFor(
+  surfaces: readonly Rgb[],
+  base: Rgb,
+  lighten: boolean,
+  min = 4.6
+): Rgb {
+  const target: Rgb = lighten ? [255, 255, 255] : [0, 0, 0];
+  for (let step = 0; step <= 100; step += 1) {
+    const c = mix(base, target, step / 100);
+    const ok = surfaces.every(
+      (x) =>
+        contrastRatio(c, x) >= min && contrastRatio(c, mix(x, c, 0.15)) >= min
+    );
+    if (ok) return c;
+  }
+  return target;
+}

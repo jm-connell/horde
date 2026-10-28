@@ -220,3 +220,21 @@ test("an administrator can end a member's session from Users", async ({
   await expect(memberTab).toHaveURL(/\/login/);
   await member.close();
 });
+
+test("Delete user reads as a destructive action", async ({ page }) => {
+  await page.goto("/account");
+  const row = page.locator('[data-horde="user-row"]', { hasText: "member" });
+  await row.getByRole("button", { name: "Edit member" }).click();
+  const remove = row.getByRole("button", { name: "Delete user" });
+  await expect(remove).toBeVisible();
+  // A neutral button class must not override the danger text color.
+  const [color, danger] = await remove.evaluate((el) => {
+    const probe = document.createElement("span");
+    probe.className = "text-danger";
+    document.body.append(probe);
+    const want = getComputedStyle(probe).color;
+    probe.remove();
+    return [getComputedStyle(el).color, want];
+  });
+  expect(color).toBe(danger);
+});

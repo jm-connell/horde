@@ -67,7 +67,7 @@ export default function SendLinksHelp() {
             <button
               type="button"
               onClick={() => void copy()}
-              className={button("secondary", "sm")}
+              className={button("secondary", "xs")}
             >
               Copy bookmarklet
             </button>
