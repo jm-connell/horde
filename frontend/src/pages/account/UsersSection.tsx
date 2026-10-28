@@ -241,7 +241,8 @@ function CreateUser({
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
-          hint="At least 8 characters. Share it with them yourself."
+          hint="Share it with them yourself."
+          strength
         />
         <AccountTypeFields
           isAdmin={isAdmin}

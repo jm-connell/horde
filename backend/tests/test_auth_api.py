@@ -66,13 +66,16 @@ def test_bootstrap_creates_the_admin_once_and_signs_in(fresh_client):
 
 def test_bootstrap_validates_the_password(fresh_client):
     resp = fresh_client.post(
-        "/api/auth/bootstrap", json={"username": "owner", "password": "short"}
+        "/api/auth/bootstrap", json={"username": "owner", "password": ""}
     )
     assert (resp.status_code, resp.json()["code"]) == (400, "weak_password")
-    same = fresh_client.post(
-        "/api/auth/bootstrap", json={"username": "samename1", "password": "samename1"}
+
+
+def test_bootstrap_accepts_a_one_letter_password(fresh_client):
+    resp = fresh_client.post(
+        "/api/auth/bootstrap", json={"username": "owner", "password": "a"}
     )
-    assert same.status_code == 400
+    assert resp.status_code == 200
 
 
 def test_bootstrap_moves_legacy_history_settings_and_chat_to_the_admin(
@@ -221,7 +224,7 @@ def test_changing_your_password_signs_out_your_other_browsers(app, client, init_
 def test_new_password_must_pass_the_policy(client):
     resp = client.post(
         "/api/auth/password",
-        json={"current_password": "admin-password", "new_password": "short"},
+        json={"current_password": "admin-password", "new_password": ""},
     )
     assert (resp.status_code, resp.json()["code"]) == (400, "weak_password")
 

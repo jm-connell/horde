@@ -172,14 +172,14 @@ def clean_username(raw: str) -> tuple[str, str]:
     return name, name.lower()
 
 
-def check_password_policy(password: str, username: str) -> None:
+def check_password_policy(password: str) -> None:
     """Raise ``WeakPassword`` unless ``password`` meets the password rules."""
-    _check_password(password, username)
+    _check_password(password)
 
 
-def _check_password(password: str, username: str) -> None:
+def _check_password(password: str) -> None:
     try:
-        passwords.validate_password(password, username)
+        passwords.validate_password(password)
     except passwords.PasswordPolicyError as exc:
         raise WeakPassword(str(exc)) from exc
 
@@ -228,7 +228,7 @@ def create_user(
     become that administrator's.
     """
     name, norm = clean_username(username)
-    _check_password(password, name)
+    _check_password(password)
     if get_by_username(session, norm) is not None:
         raise UsernameTaken(f"The username {name!r} is already taken")
     first = count_users(session) == 0
@@ -339,7 +339,7 @@ def set_password(
     keep_token_hash: str | None = None,
 ) -> None:
     """Store a new password and sign the user out everywhere but ``keep_token_hash``."""
-    _check_password(new_password, user.username)
+    _check_password(new_password)
     user.password_hash = passwords.hash_password(new_password)
     user.updated_at = utcnow()
     session.add(user)
@@ -416,7 +416,7 @@ def update_user(
         user.share_downloads = share_downloads
     revoke = disabled is True
     if password is not None:
-        _check_password(password, user.username)
+        _check_password(password)
         user.password_hash = passwords.hash_password(password)
         revoke = True
     user.updated_at = utcnow()

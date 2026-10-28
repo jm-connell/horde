@@ -18,6 +18,8 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   ).toBeVisible();
   await page.getByLabel("Username").fill("owner");
   await page.getByLabel("Password", { exact: true }).fill("first-password");
+  // Advice only: any non-empty password is accepted.
+  await expect(page.getByTestId("password-strength")).toBeVisible();
   await page.getByLabel("Repeat password").fill("different-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.locator("form").getByRole("alert")).toContainText(

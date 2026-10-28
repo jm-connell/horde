@@ -13,7 +13,7 @@ Prefer **a VPN** ([Tailscale or WireGuard](remote-access.md#tailscale)) when you
 3. **Trust the proxy, and only the proxy** ([`HORDE_TRUST_PROXY=1`](#proxy)), with Horde reachable only through it.
 4. **List your public name** ([`HORDE_ALLOWED_HOSTS`](#hosts)).
 5. **Two-step sign-in set up by every account, then required of everyone** (*Settings → System → Security → Require two-step sign-in → Everyone*, see [below](#two-step)). Have each person enroll **before** you open the port.
-6. **Strong, unique passwords.** Horde enforces a minimum of 8 characters and nothing else: use a password manager and 16 or more.
+6. **Strong, unique passwords.** Horde accepts any non-empty password and only shows a strength meter: before exposing it, use a password manager and 16 characters or more.
 7. **Rate-limit sign-in at the proxy too** ([examples](#rate-limit)).
 8. **Keep updating** ([updates](#updates)).
 9. **No `HORDE_AUTH_DISABLED`** ([why](#no-auth)) and **no `HORDE_ALLOW_PRIVATE_URLS`** ([why](#private-urls)).

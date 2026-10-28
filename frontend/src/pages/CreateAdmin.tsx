@@ -10,8 +10,6 @@ import ShareDownloadsField from "../components/auth/ShareDownloadsField";
 import { clearLocalSettings } from "../hooks/useSettings";
 import { deviceAccounts } from "../offline/accounts";
 
-const MIN_LENGTH = 8;
-
 /**
  * First visit: nobody can sign in yet, so the visitor creates the administrator.
  * On a brand-new install this is step 1 of the setup wizard; on an install that
@@ -34,10 +32,6 @@ export default function CreateAdminPage({
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (password.length < MIN_LENGTH) {
-      setError(`Use at least ${MIN_LENGTH} characters for the password.`);
-      return;
-    }
     if (password !== repeat) {
       setError("The two passwords don’t match.");
       return;
@@ -85,7 +79,7 @@ export default function CreateAdminPage({
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
-          hint={`At least ${MIN_LENGTH} characters.`}
+          strength
         />
         <Field
           label="Repeat password"

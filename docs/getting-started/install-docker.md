@@ -146,7 +146,7 @@ Replace `<server-ip>` with the host's address (find it with `hostname -I` or `ip
 !!! note "Port 8686, not 8080"
     Horde listens on 8080 *inside* its container; Compose publishes it on **8686** on the host. Use `:8686` in the browser. To use another port, see [Change the port](../ops/ports-networking.md#change-the-port).
 
-The first screen asks you to create the **administrator** account (a username and a password of at least 8 characters). A short setup wizard follows; every choice in it can be changed later, and **Use defaults** skips it. Then continue with [First run](first-run.md) to download your first video.
+The first screen asks you to create the **administrator** account (a username and a password). A short setup wizard follows; every choice in it can be changed later, and **Use defaults** skips it. Then continue with [First run](first-run.md) to download your first video.
 
 ## Everyday commands
 

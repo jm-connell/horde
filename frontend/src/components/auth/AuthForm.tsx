@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from "react";
+import { passwordStrength, STRENGTH_LABELS } from "./passwordStrength";
 
 /** Shared chrome for the sign-in, first-run and password forms. */
 
@@ -39,6 +40,7 @@ export function Field({
   hint,
   required = true,
   inputMode,
+  strength = false,
 }: {
   label: string;
   value: string;
@@ -51,6 +53,8 @@ export function Field({
   required?: boolean;
   /** `numeric` brings up the number pad for one-time codes. */
   inputMode?: "numeric" | "text";
+  /** Show a strength meter under a new password (advice only, never enforced). */
+  strength?: boolean;
 }) {
   const id = useId();
   const ref = useRef<HTMLInputElement>(null);
@@ -74,11 +78,36 @@ export function Field({
         aria-describedby={hint ? `${id}-hint` : undefined}
         className={AUTH_INPUT}
       />
+      {strength && value && <StrengthMeter password={value} />}
       {hint && (
         <p id={`${id}-hint`} className="mt-1 text-xs text-muted">
           {hint}
         </p>
       )}
+    </div>
+  );
+}
+
+const METER_FILL = ["bg-red-400", "bg-amber-400", "bg-accent", "bg-accent"];
+
+function StrengthMeter({ password }: { password: string }) {
+  const level = passwordStrength(password);
+  return (
+    <div
+      className="mt-2 flex items-center gap-2"
+      data-testid="password-strength"
+    >
+      <div className="flex flex-1 gap-1" aria-hidden="true">
+        {[0, 1, 2, 3].map((i) => (
+          <span
+            key={i}
+            className={`h-1 flex-1 rounded-full ${i <= level ? METER_FILL[level] : "bg-ink-700"}`}
+          />
+        ))}
+      </div>
+      <span className="w-16 text-right text-xs text-muted" aria-live="polite">
+        {STRENGTH_LABELS[level]}
+      </span>
     </div>
   );
 }
