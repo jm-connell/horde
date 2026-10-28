@@ -282,7 +282,9 @@ One curve, `ease-fluid` (`cubic-bezier(0.22, 1, 0.36, 1)`, a strong ease-out),
 for anything entering, expanding or moving. Durations: press 80ms, hover and
 small toggles 150–200ms, menus 150ms, panels and collapses 200–300ms, nothing in
 routine UI over 300ms. Progress is linear. Animate `transform` and `opacity`;
-new list items enter with `@starting-style` (Tailwind `starting:`). Hover motion
+new list items enter with `@starting-style` (Tailwind `starting:`). Modals fade
+and scale in from 0.97 (`components/dialogMotion.ts`) and close instantly;
+sheets, toasts and the bulk bar slide in from the edge they sit on. Hover motion
 only applies under `(hover: hover) and (pointer: fine)`. Under reduced motion,
 fades stay and movement goes.
 
