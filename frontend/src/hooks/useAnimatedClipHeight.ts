@@ -1,7 +1,7 @@
 import { useLayoutEffect, useRef } from "react";
+import { EASE_FLUID } from "../motion";
 
 export const CLIP_DURATION_MS = 280;
-export const CLIP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function remPx(rem: number): number {
   const rootPx =
@@ -96,7 +96,7 @@ export function useAnimatedClipHeight(
     clip.style.transition = "none";
     clip.style.height = `${from}px`;
     void clip.offsetHeight;
-    clip.style.transition = `height ${CLIP_DURATION_MS}ms ${CLIP_EASING}`;
+    clip.style.transition = `height ${CLIP_DURATION_MS}ms ${EASE_FLUID}`;
     clip.style.height = `${target}px`;
 
     let settled = false;

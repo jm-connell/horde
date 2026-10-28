@@ -35,7 +35,7 @@
 }
 
 /* The house motion curve (a strong ease-out): `ease-fluid` in classes,
-   var(--ease-fluid) in CSS. */
+   var(--ease-fluid) in CSS, `EASE_FLUID` (src/motion.ts) in JS. */
 @theme {
   --ease-fluid: cubic-bezier(0.22, 1, 0.36, 1);
 }
