@@ -588,11 +588,14 @@ input[type="range"].accent-scrubber::-webkit-slider-thumb {
     box-shadow 120ms ease;
 }
 
-input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-  box-shadow:
-    0 0 0 4px rgb(var(--accent) / 0.25),
-    0 0 10px rgb(var(--accent) / 0.7);
+/* Hover growth only for real pointers: on touch it sticks after a tap. */
+@media (hover: hover) and (pointer: fine) {
+  input[type="range"].accent-scrubber::-webkit-slider-thumb:hover {
+    transform: scale(1.15);
+    box-shadow:
+      0 0 0 4px rgb(var(--accent) / 0.25),
+      0 0 10px rgb(var(--accent) / 0.7);
+  }
 }
 
 input[type="range"].accent-scrubber::-webkit-slider-thumb:active {
@@ -613,9 +616,11 @@ input[type="range"].accent-scrubber::-moz-range-thumb {
     box-shadow 120ms ease;
 }
 
-input[type="range"].accent-scrubber::-moz-range-thumb:hover {
-  transform: scale(1.15);
-  box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25);
+@media (hover: hover) and (pointer: fine) {
+  input[type="range"].accent-scrubber::-moz-range-thumb:hover {
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px rgb(var(--accent) / 0.25);
+  }
 }
 
 input[type="range"].accent-scrubber::-moz-range-thumb:active {
