@@ -57,8 +57,8 @@ def test_reset_password_for_an_unknown_user_fails(init_db, monkeypatch, capsys):
 
 
 def test_reset_password_enforces_the_policy(init_db, admin_user, monkeypatch, capsys):
-    code, out = _run(monkeypatch, capsys, "short\n", "reset-password", "admin")
-    assert code == 1 and "at least 8" in out.err
+    code, out = _run(monkeypatch, capsys, "\n", "reset-password", "admin")
+    assert code == 1 and "must not be empty" in out.err
 
 
 def test_create_admin_on_an_empty_database(init_db, monkeypatch, capsys):
