@@ -1,6 +1,7 @@
 import type { CompatState, Video } from "../types";
 import { formatSize } from "../utils";
 import { codecLabel, estimateCompatBytes } from "../utils/playbackRendition";
+import { button } from "./buttons";
 
 const STAGE_LABEL: Record<string, string> = {
   queued: "Waiting for a free slot on the server",
@@ -97,7 +98,7 @@ export default function CompatGate({
           <button
             type="button"
             onClick={onRequest}
-            className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft"
+            className={button("primary", "sm")}
           >
             Create compatible copy
           </button>

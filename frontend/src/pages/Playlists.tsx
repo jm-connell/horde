@@ -15,6 +15,7 @@ import ThemedSelect from "../components/ThemedSelect";
 import type { Playlist, PlaylistVisibility } from "../types";
 import { PRESET_ORDER, presetOptionLabel } from "../presets";
 import { moveItem } from "../utils";
+import { button } from "../components/buttons";
 
 export default function Playlists() {
   const { can, user } = useAuth();
@@ -170,7 +171,7 @@ export default function Playlists() {
               <button
                 onClick={create}
                 disabled={busy || !name.trim()}
-                className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+                className={`${button("primary")} shrink-0`}
               >
                 Create
               </button>
@@ -192,9 +193,9 @@ export default function Playlists() {
                 <button
                   onClick={subscribe}
                   disabled={subscribing || !subscribeUrl.trim()}
-                  className="shrink-0 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+                  className={`${button("primary")} shrink-0`}
                 >
-                  {subscribing ? "Subscribing..." : "Subscribe"}
+                  {subscribing ? "Subscribing…" : "Subscribe"}
                 </button>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">

@@ -1,4 +1,8 @@
-import { contrastRatio, mutedTextFor } from "../../utils/contrast";
+import {
+  contrastRatio,
+  mutedTextFor,
+  statusTextFor,
+} from "../../utils/contrast";
 import { FONT_SIZE_SCALE, PANEL_BLUR_MAX_PX } from "./defaults";
 import type { CustomColors, Settings, Theme } from "./types";
 
@@ -14,6 +18,9 @@ const THEME_CSS_VARS = [
   "--text-muted",
   "--accent-text",
   "--on-accent",
+  "--danger",
+  "--warning",
+  "--success",
 ] as const;
 
 export type Rgb = [number, number, number];
@@ -85,6 +92,21 @@ function applyCustomColors(colors: CustomColors): void {
       )
     )
   );
+  // Status colours (red, amber, emerald 400), lightened on dark backgrounds
+  // and darkened on light ones until they read on the surfaces text sits on
+  // (page, panel, raised) and on their own tinted panels.
+  const lighten = contrastRatio(white, bg) >= contrastRatio(black, bg);
+  const statusBases: [string, Rgb][] = [
+    ["--danger", [248, 113, 113]],
+    ["--warning", [251, 191, 36]],
+    ["--success", [52, 211, 153]],
+  ];
+  for (const [prop, base] of statusBases) {
+    root.style.setProperty(
+      prop,
+      rgbString(statusTextFor(surfaces.slice(0, 3), base, lighten))
+    );
+  }
   root.style.setProperty("--ink-950", rgbString(bg));
   root.style.setProperty("--ink-900", rgbString(mixRgb(bg, white, 0.08)));
   root.style.setProperty("--ink-800", rgbString(mixRgb(bg, white, 0.14)));

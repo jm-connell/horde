@@ -7,6 +7,7 @@ import { DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP } from "../settings/constants";
 import type { ChannelTab } from "../../api";
 import type { CatalogProgress } from "../libraryCatalogProgress";
 import type { FeedLayout, FeedSort } from "./useChannelFeedControls";
+import { ArrowIcon } from "../../components/icons";
 
 const box = "ui-panel rounded-lg border border-ink-700 bg-ink-900";
 
@@ -141,7 +142,9 @@ export default function ChannelControls({
           }
           title="Toggle sort direction"
         >
-          {feedOrder === "desc" ? "↓" : "↑"}
+          <ArrowIcon
+            className={feedOrder === "desc" ? "-rotate-90" : "rotate-90"}
+          />
         </button>
       </div>
       <label className="inline-flex shrink-0 items-center gap-2 px-1 text-sm text-gray-300">

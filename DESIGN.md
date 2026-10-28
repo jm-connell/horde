@@ -22,6 +22,7 @@ colors:
   text-muted: "#878a91"
   danger: "#f87171"
   warning: "#fbbf24"
+  success: "#34d399"
 typography:
   page-title:
     fontFamily: "Inter, system-ui, sans-serif"
@@ -57,14 +58,16 @@ components:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.on-accent}"
     rounded: "{rounded.lg}"
-    padding: "6px 12px"
+    padding: "8px 16px"
   button-primary-hover:
     backgroundColor: "{colors.accent-soft}"
   button-secondary:
-    backgroundColor: "{colors.ink-800}"
+    backgroundColor: "{colors.ink-900}"
     textColor: "{colors.text-body}"
     rounded: "{rounded.lg}"
     padding: "6px 12px"
+  button-secondary-hover:
+    borderColor: "{colors.accent}"
   panel:
     backgroundColor: "{colors.ink-900}"
     rounded: "{rounded.xl}"
@@ -144,13 +147,21 @@ reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
 - **Text**: `gray-100` (#f3f4f6) for headings and titles, `gray-200` (#e5e7eb)
   for body, `gray-300` for secondary, `text-muted` (#878a91, theme-tuned) for
   metadata.
-- **Status**: red-400 for failures and destructive actions, amber-400/300 for
-  waiting, held and warning states.
+- **Status**: three roles, tuned per theme like `text-muted` so they read
+  at 4.5:1 as text on every surface (light themes use deep red, brown and
+  green): `danger` (#f87171) for failures and destructive actions, `warning`
+  (#fbbf24) for waiting, held and warning states, `success` (#34d399) for
+  done, connected and healthy. Use `text-danger`, `bg-danger/10`,
+  `border-danger/40` and so on, never `text-red-*`/`amber-*`/`emerald-*`.
+  Solid destructive buttons are the exception: `bg-red-600` with white text
+  (4.8:1) on every theme. Raw red stays for things that sit on video or mean
+  "live" (the LIVE badge and dots, player errors).
 - **Marked range**: amber-400 ticks with an amber-400/45 span on the seek bar
   for the clip being picked, so it never reads as the accent playback progress.
 
 ### Named Rules
-**The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`),
+**The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`,
+`danger`, `warning`, `success`),
 never raw hex or Tailwind palette colors for surfaces and accents. A color that
 only looks right on the default theme is a bug on the other twelve.
 
@@ -226,11 +237,18 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 
 ## Components
 
-- **Buttons.** Primary: accent fill, `on-accent` text, semibold, `accent-soft` on
-  hover. Secondary: `ink-800` fill, `gray-200` text, `ink-700` on hover. Quiet:
-  text only, `text-muted` to `accent` on hover. All pressables scale to 0.97 on
-  press (80ms) when the button press setting is on, and get `ui-interactive` for
-  the user's hover motion.
+- **Buttons.** Take the classes from `button(variant, size)` in
+  `frontend/src/components/buttons.ts` and add only layout classes after it.
+  Primary: accent fill, `on-accent` text, medium weight, `accent-soft` on
+  hover; one per view. Secondary: `ui-panel` `ink-900` fill with a 1px `ink-700`
+  border, `gray-200` text, accent border on hover. Quiet: text only,
+  `text-muted` to `accent` on hover. Danger: `danger` outline and text,
+  `danger/10` fill on hover. Danger solid (the confirm of a destructive
+  dialog): `red-600` with white text. Sizes: `md` (px-4 py-2, dialogs and
+  forms), `sm` (px-3 py-1.5, settings rows and toolbars), `xs` (px-2.5 py-1,
+  12px, inline in lists). Disabled is 50% opacity. All pressables scale to
+  0.97 on press (80ms) when the button press setting is on, and get
+  `ui-interactive` for the user's hover motion.
 - **Video card.** Thumbnail with duration badge and a thin accent progress bar
   for watched position; title (two lines), channel and meta below. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount

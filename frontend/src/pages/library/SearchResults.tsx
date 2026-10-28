@@ -7,6 +7,7 @@ import LibraryGrid, { type LibraryGridOptions } from "./LibraryGrid";
 import { videoGridClassName } from "./videoGridClassName";
 import type { useGlobalSearch } from "./useGlobalSearch";
 import { ChevronIcon } from "../../components/icons";
+import { button } from "../../components/buttons";
 
 function SearchResultSection({
   id,
@@ -242,7 +243,7 @@ export default function SearchResults({
               <div className="flex justify-center">
                 <button
                   type="button"
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-4 py-2 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  className={button("secondary")}
                   disabled={global.youtubeLoadingMore}
                   onClick={() => global.loadMoreYoutube()}
                 >

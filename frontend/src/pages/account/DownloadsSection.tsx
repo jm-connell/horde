@@ -54,7 +54,7 @@ export default function DownloadsSection() {
     <section aria-labelledby="downloads-heading">
       <h2
         id="downloads-heading"
-        className="mb-3 text-lg font-semibold text-gray-100"
+        className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
       >
         Downloads on shared devices
       </h2>

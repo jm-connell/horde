@@ -159,7 +159,7 @@ export default function VideoAiPanel({
           <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
             <span>AI</span>
             <ChevronIcon
-              className={`transition-transform duration-200 ease-out ${expanded ? "rotate-180" : ""}`}
+              className={`transition-transform duration-200 ease-fluid ${expanded ? "rotate-180" : ""}`}
             />
           </span>
         </button>
@@ -176,7 +176,7 @@ export default function VideoAiPanel({
                   setSummaryError(null);
                   showToast("Summary cancelled");
                 }}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-warning/50 hover:text-warning"
               >
                 Cancel
               </button>
@@ -245,9 +245,7 @@ export default function VideoAiPanel({
                   className="px-4 py-3"
                 >
                   {summaryError && (
-                    <p className="mb-2 text-xs text-amber-400/90">
-                      {summaryError}
-                    </p>
+                    <p className="mb-2 text-xs text-warning">{summaryError}</p>
                   )}
                   {hasAiSummary ? (
                     <AiMarkdown text={summaryText} />

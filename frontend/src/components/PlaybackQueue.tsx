@@ -112,7 +112,7 @@ export default function PlaybackQueue({
               dragIndex.current = null;
               setDragging(null);
             }}
-            className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] ease-out hover:bg-ink-800 ${
+            className={`flex items-center gap-2 rounded-lg p-1 transition-[opacity,translate] ease-fluid hover:bg-ink-800 ${
               leaving.has(key)
                 ? "pointer-events-none translate-x-2 opacity-0 duration-150 motion-reduce:translate-x-0"
                 : "duration-200"
@@ -187,7 +187,7 @@ export default function PlaybackQueue({
             <span>Up next ({queue.length})</span>
             <span
               aria-hidden
-              className={`inline-block transition-transform duration-200 ease-out ${
+              className={`inline-block transition-transform duration-200 ease-fluid ${
                 expanded ? "rotate-180" : ""
               }`}
             >

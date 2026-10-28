@@ -55,7 +55,7 @@ import {
 } from "./downloadJobCardState";
 
 import { getItem, setItem } from "../storage";
-import { CheckIcon, CloseIcon } from "./icons";
+import { ArrowIcon, CheckIcon, CloseIcon } from "./icons";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -475,7 +475,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
         <div className="mb-3 flex items-start justify-between gap-3 text-sm">
           <span className="flex min-w-0 flex-1 items-center gap-2 font-medium text-gray-200">
             {completed && !videoGone && <CheckIcon className="text-accent" />}
-            {failed && <CloseIcon className="text-red-400" />}
+            {failed && <CloseIcon className="text-danger" />}
             {editingTitle ? (
               <input
                 ref={titleInputRef}
@@ -552,13 +552,13 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             )}
             {isDeviceJob && (
               <span className="shrink-0 rounded-sm bg-accent/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent">
-                To client
+                To this device
               </span>
             )}
           </span>
           <div className="flex shrink-0 items-center gap-2">
             {!completed && (
-              <span className={`${failed ? "text-red-400" : "text-gray-400"}`}>
+              <span className={`${failed ? "text-danger" : "text-gray-400"}`}>
                 {statusLabel}
               </span>
             )}
@@ -567,8 +567,8 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               onClick={onDismiss}
               className={
                 completed || failed || cancelled
-                  ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:border-ink-500 hover:bg-ink-700 hover:text-gray-200"
-                  : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
+                  ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:bg-ink-700 hover:text-gray-200"
+                  : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-danger/60 hover:bg-danger/10 hover:text-danger"
               }
               title={
                 completed || failed || cancelled
@@ -632,14 +632,14 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
             )}
 
             {heldReason && (
-              <p className="mb-3 text-xs text-amber-400/90">{heldReason}</p>
+              <p className="mb-3 text-xs text-warning">{heldReason}</p>
             )}
 
             {failed && (errorMsg || errorHint) && (
-              <div className="mb-3 space-y-1 text-sm text-red-400">
+              <div className="mb-3 space-y-1 text-sm text-danger">
                 {errorMsg && <p className="wrap-anywhere">{errorMsg}</p>}
                 {errorHint && errorHint !== errorMsg && (
-                  <p className="text-xs text-red-400/80">{errorHint}</p>
+                  <p className="text-xs text-danger">{errorHint}</p>
                 )}
               </div>
             )}
@@ -668,7 +668,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  placeholder="Personal note about this video..."
+                  placeholder="Personal note about this video…"
                   className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                 />
               </div>
@@ -700,7 +700,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 <button
                   type="button"
                   onClick={() => void offlineManager.downloadJob(job)}
-                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25"
+                  className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-danger/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-danger hover:bg-danger/25"
                 >
                   Retry
                 </button>
@@ -720,9 +720,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 <>
                   <Link
                     to={`/watch/${videoId}`}
-                    className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
                   >
-                    Watch →
+                    Watch <ArrowIcon className="rotate-180" />
                   </Link>
                   {can("delete_videos") && (
                     <button
@@ -730,7 +730,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                       onClick={() => setDeleteConfirm(true)}
                       disabled={deleting}
                       title="Delete this video from your library"
-                      className="shrink-0 whitespace-nowrap rounded-lg bg-red-500/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-red-400 hover:bg-red-500/25 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="shrink-0 whitespace-nowrap rounded-lg bg-danger/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-danger hover:bg-danger/25 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       Delete
                     </button>
@@ -870,7 +870,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               onChange={(e) => setDontAskAgain(e.target.checked)}
               className="rounded-sm border-ink-600"
             />
-            Don&apos;t ask again
+            Don’t ask again
           </label>
         </ConfirmDialog>
       ) : null}

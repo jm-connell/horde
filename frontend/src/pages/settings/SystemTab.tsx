@@ -218,7 +218,7 @@ export default function SystemTab() {
                     .map((c) => (
                       <p
                         key={c.id ?? c.channel_url}
-                        className="text-xs text-red-400"
+                        className="text-xs text-danger"
                       >
                         {c.channel_name || c.channel_url}: {c.last_error}
                       </p>
@@ -300,7 +300,7 @@ export default function SystemTab() {
                   : ""}
               </p>
               {metadataSyncStatus.last_error && (
-                <p className="mt-1 text-xs text-red-400">
+                <p className="mt-1 text-xs text-danger">
                   {metadataSyncStatus.last_error}
                 </p>
               )}

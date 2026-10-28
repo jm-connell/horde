@@ -114,7 +114,7 @@ export function readEndpointInput(text: string): EndpointInput {
   }
   return {
     error:
-      "Horde can't tell which provider this key is for. Paste the provider's API URL here and the key in the key field.",
+      "Horde can’t tell which provider this key is for. Paste the provider’s API URL here and the key in the key field.",
   };
 }
 
@@ -168,4 +168,4 @@ export function keyMismatch(url: string, key: string): string {
 }
 
 export const COMPATIBLE_PROVIDERS_TIP =
-  "Any service with an OpenAI-compatible API works. Paste just the key for OpenRouter, OpenAI, Google Gemini or Groq. For others (Mistral, DeepSeek, Together, …) paste the provider's API URL, then the key. For a server you run (Ollama, LM Studio, llama.cpp, vLLM) paste its address, e.g. 192.168.1.50:1234; without a port, Ollama's 11434 is used.";
+  "Any service with an OpenAI-compatible API works. Paste just the key for OpenRouter, OpenAI, Google Gemini or Groq. For others (Mistral, DeepSeek, Together, …) paste the provider’s API URL, then the key. For a server you run (Ollama, LM Studio, llama.cpp, vLLM) paste its address, e.g. 192.168.1.50:1234; without a port, Ollama’s 11434 is used.";

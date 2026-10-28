@@ -5,6 +5,7 @@ import {
   useUnfollowMutation,
 } from "../../queries/follows";
 import { INPUT_COMPACT, PANEL_BTN } from "./constants";
+import { ChevronIcon } from "../../components/icons";
 
 /** Collapsed list of followed channels with unfollow and a follow-by-URL form. */
 export default function FollowedChannelsSection() {
@@ -33,9 +34,12 @@ export default function FollowedChannelsSection() {
         type="button"
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
-        className="text-xs text-muted hover:text-gray-300"
+        className="inline-flex items-center gap-1 text-xs text-muted hover:text-gray-300"
       >
-        {open ? "▾" : "▸"} Followed channels ({follows.length})
+        <ChevronIcon
+          className={`transition-transform duration-200 ease-fluid ${open ? "" : "-rotate-90"}`}
+        />
+        Followed channels ({follows.length})
       </button>
       {open && (
         <div className="mt-2 space-y-2">
@@ -85,7 +89,7 @@ export default function FollowedChannelsSection() {
             </button>
           </form>
           {error && (
-            <p role="alert" className="text-xs text-red-400">
+            <p role="alert" className="text-xs text-danger">
               {error}
             </p>
           )}

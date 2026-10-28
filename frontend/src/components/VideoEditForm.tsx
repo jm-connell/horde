@@ -3,6 +3,8 @@ import { api, thumbnailUrl } from "../api";
 import type { ChannelStat, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
+import { ChevronIcon } from "./icons";
+import { button } from "./buttons";
 
 interface DraftState {
   title: string;
@@ -263,8 +265,7 @@ export default function VideoEditForm({
 
   const inputClass =
     "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent";
-  const labelClass =
-    "mb-1 block text-xs font-medium uppercase tracking-wide text-muted";
+  const labelClass = "mb-1 block text-xs font-medium text-gray-300";
 
   const activeCand = candidates[candIndex];
   const previewSrc = activeCand
@@ -300,16 +301,18 @@ export default function VideoEditForm({
                   onClick={() => void showCandidate(candIndex - 1)}
                   className="absolute left-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-950/80 px-2 py-1 text-sm text-gray-100 hover:bg-ink-950"
                   title="Previous frame"
+                  aria-label="Previous frame"
                 >
-                  ‹
+                  <ChevronIcon className="rotate-90" />
                 </button>
                 <button
                   type="button"
                   onClick={() => void showCandidate(candIndex + 1)}
                   className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-950/80 px-2 py-1 text-sm text-gray-100 hover:bg-ink-950"
                   title="Next frame"
+                  aria-label="Next frame"
                 >
-                  ›
+                  <ChevronIcon className="-rotate-90" />
                 </button>
                 <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-ink-950/80 px-2 py-0.5 text-[10px] text-gray-300">
                   {candIndex + 1} / {candidates.length}
@@ -333,7 +336,7 @@ export default function VideoEditForm({
             type="button"
             onClick={() => void loadCandidates()}
             disabled={candLoading}
-            className="ui-panel ui-interactive mt-3 w-full rounded-lg bg-ink-800 px-3 py-2 text-xs font-medium text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:opacity-50"
+            className={`${button("secondary", "sm")} mt-3 w-full`}
           >
             {candLoading
               ? "Generating…"
@@ -356,7 +359,7 @@ export default function VideoEditForm({
               aria-label="Thumbnail URL"
               value={draft.thumbnail_url}
               onChange={(e) => set("thumbnail_url", e.target.value)}
-              placeholder="https://..."
+              placeholder="https://…"
               className={inputClass}
             />
           </div>
@@ -427,7 +430,7 @@ export default function VideoEditForm({
                 id={`${fieldId}-source_url`}
                 value={draft.source_url}
                 onChange={(e) => set("source_url", e.target.value)}
-                placeholder="https://..."
+                placeholder="https://…"
                 className={inputClass}
               />
             </div>
@@ -439,7 +442,7 @@ export default function VideoEditForm({
                 id={`${fieldId}-channel_url`}
                 value={draft.channel_url}
                 onChange={(e) => set("channel_url", e.target.value)}
-                placeholder="https://..."
+                placeholder="https://…"
                 className={inputClass}
               />
             </div>
@@ -473,28 +476,25 @@ export default function VideoEditForm({
               value={draft.notes}
               onChange={(e) => set("notes", e.target.value)}
               rows={2}
-              placeholder="Personal note about this video..."
+              placeholder="Personal note about this video…"
               className={`${inputClass} resize-y`}
             />
           </div>
 
-          {error && <p className="text-sm text-red-400">{error}</p>}
+          {error && <p className="text-sm text-danger">{error}</p>}
 
           <div className="flex justify-end gap-2">
             {onCancel && (
-              <button
-                onClick={onCancel}
-                className="ui-panel ui-interactive rounded-lg bg-ink-800 px-5 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-              >
+              <button onClick={onCancel} className={button("secondary")}>
                 Cancel
               </button>
             )}
             <button
               onClick={save}
               disabled={saving || !canSave}
-              className="ui-interactive rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+              className={button("primary")}
             >
-              {saving ? "Saving..." : saveLabel}
+              {saving ? "Saving…" : saveLabel}
             </button>
           </div>
         </div>

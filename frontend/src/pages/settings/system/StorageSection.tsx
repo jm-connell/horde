@@ -13,15 +13,15 @@ import { inputToLimit, limitToInput, limitUsage } from "./storageLimit";
 
 const BAR_COLOR = {
   ok: "bg-accent",
-  warn: "bg-amber-500",
-  full: "bg-red-500",
+  warn: "bg-warning",
+  full: "bg-danger",
 } as const;
 
 /** The trash's share of the bar: the same colour, faded (it can be freed). */
 const TRASH_BAR_COLOR = {
   ok: "bg-accent/35",
-  warn: "bg-amber-500/35",
-  full: "bg-red-500/35",
+  warn: "bg-warning/35",
+  full: "bg-danger/35",
 } as const;
 
 /** What the library takes on disk, and the limit past which downloads wait. */
@@ -108,7 +108,7 @@ export default function StorageSection({
           </span>
         </div>
       ) : (
-        <p className="text-sm text-muted">Calculating...</p>
+        <p className="text-sm text-muted">Calculating…</p>
       )}
       <div className="mt-4">
         <label
@@ -166,7 +166,7 @@ export default function StorageSection({
             </div>
             <p
               className={`mt-1 text-xs ${
-                usage.level === "ok" ? "text-muted" : "text-amber-400/90"
+                usage.level === "ok" ? "text-muted" : "text-warning"
               }`}
             >
               {formatSize(storage.total_bytes) || "0 B"} of{" "}

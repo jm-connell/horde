@@ -18,7 +18,7 @@ export default function FollowSection({
     <SettingsSection
       id="following"
       title="Live & following"
-      description="Followed channels show in the sidebar's Live list while they stream. Following is just for your account."
+      description="Followed channels show in the sidebar’s Live list while they stream. Following is just for your account."
     >
       {follow.followable ? (
         <div className="space-y-2">

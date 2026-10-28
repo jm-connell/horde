@@ -15,6 +15,7 @@ import type {
 import AccountTypeFields from "../settings/AccountTypeFields";
 import { PANEL_BTN } from "../settings/constants";
 import SessionRows from "./SessionRows";
+import { button } from "../../components/buttons";
 
 function describe(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong";
@@ -77,7 +78,7 @@ export default function UsersSection() {
         <div className="mb-1 flex flex-wrap items-center gap-2">
           <h2
             id="users-heading"
-            className="text-lg font-semibold text-gray-100"
+            className="text-xs font-semibold uppercase tracking-wider text-gray-400"
           >
             Users
           </h2>
@@ -91,7 +92,7 @@ export default function UsersSection() {
             {adding ? "Cancel" : "Add a user"}
           </button>
         </div>
-        <p className="mb-4 text-sm text-muted">
+        <p className="mb-4 text-xs text-muted">
           Everyone signs in with their own account and has their own watch
           history. The library and playlists are shared; each account decides
           whether others on the same device see its offline downloads.
@@ -119,14 +120,14 @@ export default function UsersSection() {
                   </span>
                   {u.two_factor_enabled && (
                     <span
-                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-green-400"
+                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-success"
                       title="Signs in with a code from an authenticator app"
                     >
                       Two-step
                     </span>
                   )}
                   {u.disabled && (
-                    <span className="rounded-sm bg-red-900/40 px-1.5 py-0.5 text-xs text-red-300">
+                    <span className="rounded-sm bg-danger/10 px-1.5 py-0.5 text-xs text-danger">
                       Disabled
                     </span>
                   )}
@@ -223,7 +224,7 @@ function CreateUser({
     >
       <h3
         id="create-user-heading"
-        className="mb-3 text-base font-semibold text-gray-100"
+        className="mb-3 text-sm font-medium text-gray-200"
       >
         Add a user
       </h3>
@@ -304,8 +305,8 @@ function UserEditor({
     <div className="mt-3 space-y-4 rounded-lg bg-ink-950/50 p-3">
       {isSelf ? (
         <p className="text-sm text-muted">
-          You can&apos;t remove your own administrator access or disable your
-          own account. Another administrator has to do it.
+          You can’t remove your own administrator access or disable your own
+          account. Another administrator has to do it.
         </p>
       ) : (
         <div>
@@ -442,7 +443,7 @@ function UserEditor({
         )}
         <button
           type="button"
-          className={`${PANEL_BTN} text-red-300`}
+          className={button("danger", "sm")}
           disabled={busy}
           onClick={onDelete}
         >

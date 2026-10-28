@@ -28,9 +28,9 @@ test("download form previews a link and switches destination", async ({
     "1080p"
   );
 
-  await page.getByRole("button", { name: "Direct download to client" }).click();
+  await page.getByRole("button", { name: "Save to this device" }).click();
   await expect(
-    page.getByRole("button", { name: /^Download to client/ })
+    page.getByRole("button", { name: /^Download to this device/ })
   ).toBeVisible();
   await page.getByRole("button", { name: "Save to library" }).click();
   await expect(download).toBeVisible();

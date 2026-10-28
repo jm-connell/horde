@@ -172,6 +172,26 @@ for (const theme of ["light", "earthy", "frozen", "mocha", "nord", "sunset"]) {
   });
 }
 
+for (const theme of ["light", "earthy", "frozen", "mocha", "nord", "slate"]) {
+  // Status text (failed and queued downloads, the codec pills in Library
+  // settings) uses the danger/warning/success roles, which these themes tune.
+  test(`${theme} theme status colors have no serious accessibility violations`, async ({
+    page,
+  }) => {
+    await page.addInitScript((t) => {
+      localStorage.setItem("horde.settings", JSON.stringify({ theme: t }));
+    }, theme);
+    await page.goto("/download");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+    await expect(page.getByText("Failed extract").first()).toBeVisible();
+    await expectNoSeriousViolations(page, `download (${theme} theme)`);
+    await page.goto("/settings?tab=library");
+    await expect(page.getByText("Storage:").first()).toBeVisible();
+    await expect(page.locator("main [role='status']")).toHaveCount(0);
+    await expectNoSeriousViolations(page, `settings/library (${theme} theme)`);
+  });
+}
+
 test("sign-in page has no serious accessibility violations", async ({
   page,
   browser,

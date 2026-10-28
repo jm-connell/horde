@@ -35,6 +35,7 @@ import type { AuthState, AuthUser, Permission } from "../types";
 import { getJson, removeItem, setJson } from "../storage";
 import { clearHelpChatStorage } from "../components/helpChat";
 import { useToast } from "./ToastContext";
+import { button } from "../components/buttons";
 
 /** Last state that came from the server, so the installed app still opens offline. */
 const CACHE_KEY = "horde-auth-state";
@@ -283,7 +284,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={() => void refresh()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft"
+            className={button("primary")}
           >
             Retry
           </button>

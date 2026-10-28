@@ -11,7 +11,8 @@ import type { ChannelRetention, RetentionLimits } from "../../../types";
 import { formatDate } from "../../../utils";
 import { Toggle } from "../../settings/ui";
 import { parseLimit, retentionPreviewLine } from "./channelSettingsText";
-import SettingsSection, { numberInput, primaryButton } from "./SettingsSection";
+import { button } from "../../../components/buttons";
+import SettingsSection, { numberInput } from "./SettingsSection";
 
 /** Upper bounds the API accepts (schemas.RetentionLimits). */
 const MAX_KEEP = 100_000;
@@ -61,7 +62,7 @@ export default function RetentionSection({ channel }: { channel: string }) {
     <SettingsSection
       id="retention"
       title="Clean up old videos"
-      description="Move this channel's older videos to the trash on a schedule, so it does not pile up. You can restore them from the trash."
+      description="Move this channel’s older videos to the trash on a schedule, so it does not pile up. You can restore them from the trash."
       readOnlyNote={
         editable ? null : "Changing this needs the Delete videos permission."
       }
@@ -74,7 +75,7 @@ export default function RetentionSection({ channel }: { channel: string }) {
           editable={editable}
         />
       ) : query.isError ? (
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-danger">
           Could not load the cleanup rule: {describeError(query.error)}
         </p>
       ) : (
@@ -153,7 +154,7 @@ function RetentionForm({
   return (
     <div className="space-y-4">
       {!rule.trash_enabled && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+        <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
           The trash is turned off on this server (HORDE_TRASH_DAYS=0), so this
           rule removes nothing. Horde never deletes videos for good on its own.
         </p>
@@ -199,7 +200,7 @@ function RetentionForm({
                   onChange={(e) =>
                     setText((t) => ({ ...t, [row.key]: e.target.value }))
                   }
-                  className={`${numberInput} ${bad ? "border-red-500" : ""}`}
+                  className={`${numberInput} ${bad ? "border-danger!" : ""}`}
                 />
                 <span className={checked[row.key] ? "" : "text-muted"}>
                   {row.after}
@@ -251,7 +252,7 @@ function RetentionForm({
       </div>
 
       {error && (
-        <p className="text-sm text-red-400" role="alert">
+        <p className="text-sm text-danger" role="alert">
           {error}
         </p>
       )}
@@ -261,7 +262,7 @@ function RetentionForm({
           type="button"
           onClick={submit}
           disabled={save.isPending || !dirty}
-          className={primaryButton}
+          className={button("primary")}
         >
           {save.isPending ? "Saving…" : "Save cleanup rule"}
         </button>

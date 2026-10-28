@@ -21,7 +21,7 @@ export default function CostsPane() {
   return (
     <Section
       title="Costs"
-      description="Spend the provider reports for Horde's calls (summaries, chat, tags, embeddings). Only OpenRouter reports a cost per call."
+      description="Spend the provider reports for Horde’s calls (summaries, chat, tags, embeddings). Only OpenRouter reports a cost per call."
       hidden={
         !!q &&
         !match(
@@ -52,7 +52,7 @@ export default function CostsPane() {
             key={row.key}
             className={`rounded-lg border bg-ink-950/60 px-3 py-2 ${
               row.key === "d7" && openRouterCosts?.over_budget
-                ? "border-amber-500/40"
+                ? "border-warning/40"
                 : "border-ink-700"
             }`}
             title={aiDraft.chat_model || undefined}
@@ -63,7 +63,7 @@ export default function CostsPane() {
             <p
               className={`mt-1 text-sm font-medium tabular-nums ${
                 row.key === "d7" && openRouterCosts?.over_budget
-                  ? "text-amber-200"
+                  ? "text-warning"
                   : "text-gray-200"
               }`}
             >
@@ -73,7 +73,7 @@ export default function CostsPane() {
         ))}
       </div>
       <p className="mt-2 max-w-2xl text-xs text-muted">
-        Totals are recorded locally from the provider's usage responses. They
+        Totals are recorded locally from the provider’s usage responses. They
         may differ slightly from its dashboard.
       </p>
 
@@ -124,8 +124,8 @@ export default function CostsPane() {
           </label>
         </div>
         <p className="text-xs text-muted">
-          Uses the rolling last 7 days total. Leave blank for no limit.
-          You&apos;ll get a toast and a banner when spend crosses this amount.
+          Uses the rolling last 7 days total. Leave blank for no limit. You’ll
+          get a toast and a banner when spend crosses this amount.
         </p>
         <div
           className={`flex max-w-2xl items-center gap-3 ${
@@ -153,8 +153,8 @@ export default function CostsPane() {
           <div
             className={`rounded-lg border px-3 py-2 text-xs ${
               openRouterCosts.blocked
-                ? "border-red-500/35 bg-red-500/10 text-red-100/90"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-100/90"
+                ? "border-danger/35 bg-danger/10 text-danger"
+                : "border-warning/30 bg-warning/10 text-warning"
             }`}
           >
             {openRouterCosts.blocked ? (

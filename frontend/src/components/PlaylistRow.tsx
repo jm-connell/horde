@@ -44,7 +44,8 @@ import {
 import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
-import { CloseIcon } from "./icons";
+import { CloseIcon, ExternalIcon } from "./icons";
+import { button } from "./buttons";
 
 export default function PlaylistRow({
   playlist,
@@ -520,7 +521,7 @@ export default function PlaylistRow({
                     type="button"
                     onClick={playAll}
                     disabled={playable.length === 0}
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+                    className={`${button("primary", "sm")} shrink-0`}
                   >
                     Play all
                   </button>
@@ -568,7 +569,7 @@ export default function PlaylistRow({
                         onClick={() => void removeDownloads()}
                         disabled={removingDownloads}
                         title="Delete the downloaded copies; the playlist keeps its videos"
-                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50"
+                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-danger/60 hover:text-danger disabled:opacity-50"
                       >
                         Remove from server
                       </button>
@@ -578,7 +579,7 @@ export default function PlaylistRow({
                       type="button"
                       onClick={onStopSubscribing}
                       disabled={actionBusy}
-                      className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                      className="shrink-0 rounded-lg border border-warning/40 px-3 py-1.5 text-sm text-warning hover:bg-warning/10 disabled:opacity-50"
                     >
                       Stop subscription
                     </button>
@@ -597,7 +598,7 @@ export default function PlaylistRow({
                     <button
                       type="button"
                       onClick={onDelete}
-                      className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                      className={`${button("danger", "sm")} shrink-0`}
                     >
                       Delete
                     </button>
@@ -607,15 +608,16 @@ export default function PlaylistRow({
                       href={safeHref(playlist.source_url)}
                       target="_blank"
                       rel="noreferrer"
-                      className="shrink-0 text-sm text-accent hover:underline"
+                      className="inline-flex shrink-0 items-center gap-1 text-sm text-accent hover:underline"
                     >
-                      Source playlist ↗
+                      Source playlist
+                      <ExternalIcon />
                     </a>
                   )}
                 </div>
               </div>
               {playlist.sync_error && (
-                <p className="mt-2 text-sm text-red-400">
+                <p className="mt-2 text-sm text-danger">
                   {playlist.sync_error}
                 </p>
               )}
@@ -689,7 +691,7 @@ export default function PlaylistRow({
                           className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
                             selected
                               ? "ring-accent"
-                              : "ring-ink-700 hover:ring-ink-500"
+                              : "ring-ink-700 hover:ring-ink-600"
                           }`}
                         >
                           <PlaylistThumb
@@ -711,7 +713,7 @@ export default function PlaylistRow({
                       className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
                         playlist.has_custom_cover
                           ? "border-accent text-accent"
-                          : "border-ink-600 text-muted hover:border-ink-500 hover:text-gray-300"
+                          : "border-ink-600 text-muted hover:text-gray-300"
                       }`}
                     >
                       {playlist.has_custom_cover ? "Custom" : "Upload"}

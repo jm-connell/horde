@@ -80,14 +80,14 @@ export default function JobsPane() {
           <p className="text-sm text-muted">Loading…</p>
         )}
         {aiStatus?.paused && (
-          <p className="mt-2 text-xs text-amber-400/90">
+          <p className="mt-2 text-xs text-warning">
             Queue is paused — jobs won’t run until you resume.
           </p>
         )}
         {!aiStatus?.paused &&
           (aiStatus?.waiting_count ?? 0) > 0 &&
           aiStatus?.blocked_reason && (
-            <p className="mt-2 text-xs text-amber-400/90">
+            <p className="mt-2 text-xs text-warning">
               Jobs are waiting — {aiStatus.blocked_reason}
             </p>
           )}
@@ -151,9 +151,7 @@ export default function JobsPane() {
                       {job.attempts > 0 ? ` · ${job.attempts} attempts` : ""}
                     </p>
                     {job.error && (
-                      <p className="mt-0.5 truncate text-red-400/90">
-                        {job.error}
-                      </p>
+                      <p className="mt-0.5 truncate text-danger">{job.error}</p>
                     )}
                   </div>
                   {job.id != null && (
@@ -181,7 +179,7 @@ export default function JobsPane() {
           </div>
         )}
         {reindexPrompt && (
-          <div className="ui-panel mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+          <div className="ui-panel mt-3 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             <p>{reindexPrompt}</p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button
@@ -320,10 +318,11 @@ export default function JobsPane() {
             <div className="ui-panel mb-3 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
               <button
                 type="button"
+                aria-pressed={catchUpScope === "all_recent"}
                 onClick={() => setCatchUpScope("all_recent")}
                 className={
                   catchUpScope === "all_recent"
-                    ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-xs font-medium text-accent"
+                    ? "flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
                     : "flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200"
                 }
               >
@@ -331,15 +330,16 @@ export default function JobsPane() {
               </button>
               <button
                 type="button"
+                aria-pressed={catchUpScope === "all_full"}
                 onClick={() => setCatchUpScope("all_full")}
                 className={
                   catchUpScope === "all_full"
-                    ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-xs font-medium text-accent"
+                    ? "flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
                     : "flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200"
                 }
               >
                 Whole library
-                <span className="ml-1.5 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400">
+                <span className="ml-1.5 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning">
                   Heavy
                 </span>
               </button>
@@ -365,7 +365,7 @@ export default function JobsPane() {
             >
               <svg
                 viewBox="0 0 24 24"
-                className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-out ${
+                className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-fluid ${
                   stepsOpen ? "" : "-rotate-90"
                 }`}
                 fill="none"

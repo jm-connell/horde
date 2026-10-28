@@ -11,17 +11,17 @@ import type {
 import { INPUT, PANEL_BTN } from "./constants";
 import { KIND_HINTS, KIND_LABELS, URL_PLACEHOLDERS } from "./notificationKinds";
 import { Chip } from "./ui";
+import { button } from "../../components/buttons";
 
-const SAVE_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+const SAVE_BTN = button("primary", "sm");
 
 export function TestResult({ result }: { result: NotificationTestResult }) {
   return result.ok ? (
-    <p role="status" className="text-xs text-emerald-400">
+    <p role="status" className="text-xs text-success">
       Sent (HTTP {result.status_code}). Check that it arrived.
     </p>
   ) : (
-    <p role="alert" className="text-xs text-red-400">
+    <p role="alert" className="text-xs text-danger">
       Not delivered: {result.error ?? "unknown error"}
     </p>
   );

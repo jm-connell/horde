@@ -7,17 +7,17 @@ import { useSettingsPage } from "../context";
 import { Section } from "../ui";
 import type { SystemState } from "../useSystemState";
 import type { UpdateTone } from "./updateView";
+import { button } from "../../../components/buttons";
 
 const TONE_CLASS: Record<UpdateTone, string> = {
   progress: "text-gray-200",
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  error: "text-red-400",
+  success: "text-success",
+  warning: "text-warning",
+  error: "text-danger",
   muted: "text-muted",
 };
 
-const PRIMARY_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY_BTN = button("primary", "sm");
 
 const SHELL_PATH = "/mnt/tank/dockge/stacks/horde";
 
@@ -45,7 +45,7 @@ export function UpdateSetupHelp() {
           <ol className="list-decimal space-y-2 pl-5">
             <li>
               Open the TrueNAS shell (System → Shell) or SSH to the Docker host.
-              Not Dockge&apos;s Bash button: that shell is inside the container.
+              Not Dockge’s Bash button: that shell is inside the container.
             </li>
             <li>
               Run this, replacing the folder with the one you cloned Horde into.

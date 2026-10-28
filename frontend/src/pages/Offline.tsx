@@ -16,6 +16,7 @@ import {
 import { offlineManager } from "../offline/manager";
 import HttpsHelp from "../components/HttpsHelp";
 import { formatDuration, formatSize } from "../utils";
+import { button } from "../components/buttons";
 
 function thumbUrl(item: OfflineItem): string {
   return item.videoId < 0
@@ -64,8 +65,7 @@ function useRemove() {
   };
 }
 
-const btn =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent";
+const btn = button("secondary", "sm");
 
 function DownloadingRow({
   item,
@@ -108,7 +108,7 @@ function DownloadingRow({
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
         </div>
         <p
-          className={`mt-1 text-xs ${item.status === "error" ? "text-red-400" : "text-gray-400"}`}
+          className={`mt-1 text-xs ${item.status === "error" ? "text-danger" : "text-gray-400"}`}
         >
           {status}
           {item.totalBytes
@@ -141,7 +141,7 @@ function DownloadingRow({
             </button>
           ) : null}
           <button
-            className={`${btn} border-red-500/40! text-red-400! hover:bg-red-500/10!`}
+            className={button("danger", "sm")}
             onClick={() => onRemove(item)}
           >
             Remove
@@ -202,7 +202,7 @@ function DownloadedCard({
         aria-label={`Remove ${v.title} from this device`}
         title="Remove download"
         onClick={() => onRemove(item)}
-        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-400"
+        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
       >
         <svg
           viewBox="0 0 24 24"
@@ -286,7 +286,7 @@ export default function OfflinePage({
         conn.status === "offline" ? (
           <div className="ui-panel mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-4 py-3">
             <p className="min-w-0 flex-1 text-sm text-gray-200">
-              You're offline — showing videos downloaded to this device.
+              You’re offline — showing videos downloaded to this device.
             </p>
             <button
               className={btn}
@@ -329,9 +329,9 @@ export default function OfflinePage({
       ) : null}
 
       {snap.unsupported ? (
-        <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
+        <div className="ui-panel rounded-lg border border-warning/30 bg-ink-900 p-4">
           <p className="mb-2 font-medium text-gray-100">
-            Offline downloads aren&apos;t available on this connection
+            Offline downloads aren’t available on this connection
           </p>
           <HttpsHelp />
         </div>

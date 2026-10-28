@@ -1,4 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
+import { button } from "../components/buttons";
 
 /** Catch-all route for the completed-setup app. */
 export default function NotFound() {
@@ -17,10 +18,7 @@ export default function NotFound() {
       <p className="mt-2 break-all text-sm text-muted">
         There is nothing at <code className="text-gray-300">{pathname}</code>.
       </p>
-      <Link
-        to="/"
-        className="mt-6 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft"
-      >
+      <Link to="/" className={`${button("primary")} mt-6`}>
         Go to library
       </Link>
     </section>

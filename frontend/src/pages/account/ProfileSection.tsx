@@ -39,7 +39,7 @@ export default function ProfileSection() {
     <section aria-labelledby="profile-heading">
       <h2
         id="profile-heading"
-        className="mb-3 text-lg font-semibold text-gray-100"
+        className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
       >
         Profile
       </h2>

@@ -62,7 +62,7 @@ export default function DevicesSection() {
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <h2
           id="devices-heading"
-          className="text-lg font-semibold text-gray-100"
+          className="text-xs font-semibold uppercase tracking-wider text-gray-400"
         >
           Signed-in devices
         </h2>
@@ -82,8 +82,8 @@ export default function DevicesSection() {
           </button>
         )}
       </div>
-      <p className="mb-3 text-sm text-muted">
-        Browsers where your account is signed in. Sign out any you don&apos;t
+      <p className="mb-3 text-xs text-muted">
+        Browsers where your account is signed in. Sign out any you don’t
         recognise.
       </p>
       {sessions === null ? (

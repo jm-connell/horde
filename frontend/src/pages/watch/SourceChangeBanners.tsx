@@ -2,6 +2,7 @@ import { api } from "../../api";
 import { describeError } from "../../apiErrors";
 import { useToast } from "../../context/ToastContext";
 import type { Video } from "../../types";
+import { button } from "../../components/buttons";
 
 /** Offers to take over a changed source title or description when the user kept their own. */
 export default function SourceChangeBanners({
@@ -37,7 +38,7 @@ export default function SourceChangeBanners({
                     });
                   if (updated) onVideoUpdated(updated);
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-soft"
+                className={button("primary", "xs")}
               >
                 Use source
               </button>
@@ -83,7 +84,7 @@ export default function SourceChangeBanners({
                     });
                   if (updated) onVideoUpdated(updated);
                 }}
-                className="rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-on-accent hover:bg-accent-soft"
+                className={button("primary", "xs")}
               >
                 Use source
               </button>

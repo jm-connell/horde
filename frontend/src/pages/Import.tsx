@@ -25,6 +25,7 @@ import { formatSize } from "../utils";
 
 import { getJson, setJson } from "../storage";
 import { ChevronIcon } from "../components/icons";
+import { button } from "../components/buttons";
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
@@ -334,10 +335,10 @@ export default function Import() {
           disabled={scanning}
           aria-busy={scanning || undefined}
           onClick={() => void scanForNewFiles()}
-          className="ui-panel ui-interactive shrink-0 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${button("secondary")} shrink-0`}
           title="Rescan the media folder for videos that are not in the library"
         >
-          {scanning ? "Scanning…" : "Scan for New Files"}
+          {scanning ? "Scanning…" : "Scan for new files"}
         </button>
       </div>
 
@@ -369,7 +370,7 @@ export default function Import() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="ui-panel ui-interactive mt-2 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+          className={`${button("secondary")} mt-2`}
         >
           Choose files
         </button>
@@ -406,7 +407,7 @@ export default function Import() {
                 <span
                   className={
                     u.status === "error"
-                      ? "shrink-0 text-red-400"
+                      ? "shrink-0 text-danger"
                       : u.status === "done"
                         ? "shrink-0 text-accent"
                         : "shrink-0 text-muted"
@@ -424,7 +425,7 @@ export default function Import() {
               <div className="h-1.5 overflow-hidden rounded-full bg-ink-800">
                 <div
                   className={`h-full w-full transition-[transform,background-color] ease-linear ${
-                    u.status === "error" ? "bg-red-500" : "bg-accent"
+                    u.status === "error" ? "bg-danger" : "bg-accent"
                   }`}
                   style={{
                     transform: `translateX(${
@@ -471,15 +472,15 @@ export default function Import() {
                         }
                         load();
                       }}
-                      className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-                      title="Remove from the queue without importing. Scan for New Files can pick it up again."
+                      className={button("secondary")}
+                      title="Remove from the queue without importing. Scan for new files can pick it up again."
                     >
                       Skip
                     </button>
                     {can("delete_videos") && (
                       <button
                         onClick={() => void deleteVideoFile(v)}
-                        className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
+                        className={button("danger")}
                       >
                         Delete
                       </button>
@@ -497,7 +498,7 @@ export default function Import() {
                 className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-accent"
               >
                 <ChevronIcon
-                  className={`transition-transform duration-200 ease-out ${showDuplicates ? "" : "-rotate-90"}`}
+                  className={`transition-transform duration-200 ease-fluid ${showDuplicates ? "" : "-rotate-90"}`}
                 />
                 <span>
                   Possible duplicates ({visibleGroups.length} group
@@ -524,11 +525,11 @@ export default function Import() {
                               <span
                                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                                   group.ai_error && !group.ai_verdict
-                                    ? "bg-amber-500/15 text-amber-300"
+                                    ? "bg-warning/15 text-warning"
                                     : group.ai_verdict === "different"
                                       ? "bg-ink-800 text-gray-400"
                                       : group.ai_verdict === "similar"
-                                        ? "bg-amber-500/15 text-amber-300"
+                                        ? "bg-warning/15 text-warning"
                                         : "bg-accent/15 text-accent"
                                 }`}
                               >
@@ -585,7 +586,7 @@ export default function Import() {
                                   <button
                                     type="button"
                                     onClick={() => void deleteVideoFile(v)}
-                                    className="rounded-sm border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                    className={button("danger", "xs")}
                                   >
                                     Delete
                                   </button>

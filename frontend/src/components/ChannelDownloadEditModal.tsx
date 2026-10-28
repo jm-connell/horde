@@ -7,6 +7,7 @@ import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { backdropClick, youtubeThumbnailUrl } from "../utils";
 import ThemedSelect from "./ThemedSelect";
 import { CloseIcon } from "./icons";
+import { button } from "./buttons";
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 
@@ -134,7 +135,7 @@ export default function ChannelDownloadEditModal({
               value={item.notes}
               onChange={(e) => onSave({ notes: e.target.value })}
               rows={3}
-              placeholder="Personal note about this video..."
+              placeholder="Personal note about this video…"
               className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
             />
           </div>
@@ -145,14 +146,14 @@ export default function ChannelDownloadEditModal({
             type="button"
             onClick={onDownloadNow}
             disabled={item.submitting}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60"
+            className={button("primary")}
           >
             Download now
           </button>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+            className={button("secondary")}
           >
             Done
           </button>

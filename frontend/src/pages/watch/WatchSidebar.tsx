@@ -12,7 +12,7 @@ import { PlayIcon } from "../../components/icons";
 
 function DownloadedBadge() {
   return (
-    <span className="text-xs font-medium leading-none text-emerald-400">
+    <span className="text-xs font-medium leading-none text-success">
       Downloaded
     </span>
   );

@@ -45,7 +45,7 @@ export default function PasswordSection() {
     <section aria-labelledby="password-heading">
       <h2
         id="password-heading"
-        className="mb-3 text-lg font-semibold text-gray-100"
+        className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
       >
         Change password
       </h2>

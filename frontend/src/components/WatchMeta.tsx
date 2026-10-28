@@ -319,7 +319,7 @@ export default function WatchMeta({
                     kind === "ai"
                       ? "border-accent/40 bg-accent/10 text-accent"
                       : kind === "user"
-                        ? "border-amber-500/40 bg-amber-500/10 text-amber-300"
+                        ? "border-warning/40 bg-warning/10 text-warning"
                         : "ui-panel border-ink-700 bg-ink-900 text-gray-300"
                   }`}
                   title={
@@ -528,7 +528,7 @@ export default function WatchMeta({
               <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
                 <span>Description</span>
                 <ChevronIcon
-                  className={`transition-transform duration-200 ease-out ${settings.descriptionExpanded ? "rotate-180" : ""}`}
+                  className={`transition-transform duration-200 ease-fluid ${settings.descriptionExpanded ? "rotate-180" : ""}`}
                 />
               </span>
             </button>
@@ -563,7 +563,7 @@ export default function WatchMeta({
         </div>
         {chapterGenerate?.error &&
           (showGenerateHeader || chapterGenerate.hasExisting) && (
-            <p className="pb-1 text-right text-[10px] text-amber-400/90">
+            <p className="pb-1 text-right text-[10px] text-warning">
               {chapterGenerate.error}
             </p>
           )}

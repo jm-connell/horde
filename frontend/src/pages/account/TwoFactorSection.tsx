@@ -44,11 +44,11 @@ export default function TwoFactorSection() {
     <section aria-labelledby="two-factor-heading" data-horde="two-factor">
       <h2
         id="two-factor-heading"
-        className="mb-1 text-lg font-semibold text-gray-100"
+        className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400"
       >
         Two-step sign-in
       </h2>
-      <p className="mb-3 text-sm text-muted">
+      <p className="mb-3 text-xs text-muted">
         Ask for a code from an authenticator app as well as your password. It
         keeps your account safe if the password leaks.
       </p>
@@ -89,12 +89,12 @@ export default function TwoFactorSection() {
       ) : status.enabled ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-200">
-            <span className="font-medium text-green-400">On</span>
+            <span className="font-medium text-success">On</span>
             {status.enabled_at ? ` since ${formatDate(status.enabled_at)}` : ""}
             . {status.recovery_codes_left} of 10 recovery codes left.
           </p>
           {status.recovery_codes_left <= 2 && (
-            <p className="text-sm text-amber-400" role="status">
+            <p className="text-sm text-warning" role="status">
               You are running low on recovery codes. Make new ones.
             </p>
           )}

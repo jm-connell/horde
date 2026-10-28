@@ -18,6 +18,7 @@ import { useSettingsPage } from "./context";
 import NotificationTargetForm, { TestResult } from "./NotificationTargetForm";
 import { KIND_LABELS } from "./notificationKinds";
 import { Section, Toggle } from "./ui";
+import { button } from "../../components/buttons";
 
 const TERMS = [
   "notifications",
@@ -31,9 +32,8 @@ const TERMS = [
   "failed download",
 ];
 
-const SMALL_BTN = `${PANEL_BTN} px-2.5! py-1! text-xs!`;
-const DANGER_SMALL_BTN =
-  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
+const SMALL_BTN = button("secondary", "xs");
+const DANGER_SMALL_BTN = button("danger", "xs");
 
 /** What a target sends, in words: "Download failed, Update failed". */
 function eventsSummary(
@@ -120,7 +120,7 @@ export default function NotificationsSection() {
     >
       <div className="space-y-3">
         {query.isError && (
-          <p role="alert" className="text-xs text-red-400">
+          <p role="alert" className="text-xs text-danger">
             Could not load notification targets: {describeError(query.error)}
           </p>
         )}

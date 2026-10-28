@@ -2,6 +2,7 @@ import { useState } from "react";
 import { bookmarkletHref } from "../shareTarget";
 import Collapse from "./Collapse";
 import { ChevronIcon } from "./icons";
+import { button } from "./buttons";
 
 /**
  * Unobtrusive help below the download form: how to send a link to Horde from
@@ -35,7 +36,7 @@ export default function SendLinksHelp() {
         className="ui-interactive flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-gray-400 hover:text-gray-200"
       >
         <ChevronIcon
-          className={`transition-transform duration-200 ease-out ${open ? "" : "-rotate-90"}`}
+          className={`transition-transform duration-200 ease-fluid ${open ? "" : "-rotate-90"}`}
         />
         Send links from your browser
       </button>
@@ -60,20 +61,20 @@ export default function SendLinksHelp() {
           </p>
           <p>
             On a phone, copy the bookmarklet, save any bookmark, and paste it
-            into that bookmark's address.
+            into that bookmark’s address.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={() => void copy()}
-              className="ui-interactive rounded-lg bg-ink-800 px-3 py-1.5 font-medium text-gray-200 hover:bg-ink-700"
+              className={button("secondary", "xs")}
             >
               Copy bookmarklet
             </button>
             {copied === "yes" && <span role="status">Copied.</span>}
             {copied === "failed" && (
               <span role="status">
-                Couldn't copy here (needs HTTPS). Select the text below.
+                Couldn’t copy here (needs HTTPS). Select the text below.
               </span>
             )}
           </div>

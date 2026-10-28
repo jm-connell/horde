@@ -8,8 +8,8 @@ import type { StreamDownload } from "./useStreamDownload";
 import { CheckIcon, ChevronIcon } from "../../components/icons";
 
 function downloadButtonLabel(preset: string): string {
-  if (preset === "best") return "Download Best Quality";
-  if (preset === "audio") return "Download Audio Only";
+  if (preset === "best") return "Download best quality";
+  if (preset === "audio") return "Download audio only";
   if (preset === "2160p") return "Download 4K";
   return `Download ${preset}`;
 }

@@ -658,13 +658,13 @@ export default function ChannelFeed({
   return (
     <>
       {error && (
-        <p className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <p className="mb-4 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
           {error}
         </p>
       )}
 
       {searchError && (
-        <p className="mb-4 rounded-lg bg-red-500/10 px-4 py-3 text-sm text-red-400">
+        <p className="mb-4 rounded-lg bg-danger/10 px-4 py-3 text-sm text-danger">
           {searchError}
         </p>
       )}

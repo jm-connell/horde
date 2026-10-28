@@ -4,9 +4,9 @@ import { useToast } from "../context/ToastContext";
 import type { HiddenGroup } from "../offline/accounts";
 import { useConnectivity } from "../offline/hooks";
 import { AUTH_INPUT } from "./auth/AuthForm";
+import { button } from "./buttons";
 
-const BTN =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent";
+const BTN = button("secondary", "sm");
 
 function UnlockForm({
   group,
@@ -70,7 +70,7 @@ function UnlockForm({
         <p
           id={`${id}-error`}
           role="alert"
-          className="basis-full text-xs text-red-400"
+          className="basis-full text-xs text-danger"
         >
           That password doesn’t match.
         </p>

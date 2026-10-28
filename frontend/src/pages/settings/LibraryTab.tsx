@@ -442,7 +442,7 @@ export default function LibraryTab() {
                 <span className="text-xs text-muted">100–5000</span>
               </div>
               {parseInt(catalogMaxInput, 10) > 1000 && (
-                <p className="mt-1.5 text-xs text-amber-400/90">
+                <p className="mt-1.5 text-xs text-warning">
                   Large indexes can take a long time and may slow other YouTube
                   work while running.
                 </p>
@@ -531,7 +531,7 @@ export default function LibraryTab() {
                 : ""}
             </p>
             {metadataSyncStatus.last_error && (
-              <p className="mt-1 text-red-400">
+              <p className="mt-1 text-danger">
                 {metadataSyncStatus.last_error}
               </p>
             )}

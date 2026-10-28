@@ -78,7 +78,7 @@ export default function ConnectionTag({
           title={
             state.manual
               ? "Offline mode is on — tap to reconnect"
-              : "Can't reach the server — retrying automatically. Tap to retry now."
+              : "Can’t reach the server — retrying automatically. Tap to retry now."
           }
           aria-live="polite"
           className={`ui-interactive flex items-center gap-1.5 rounded-full border border-gray-600/60 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide whitespace-nowrap text-gray-400 hover:text-gray-200 ${
@@ -87,7 +87,7 @@ export default function ConnectionTag({
         >
           <span
             aria-hidden
-            className={`h-1.5 w-1.5 rounded-full ${busy ? "animate-pulse bg-amber-400" : "bg-gray-500"}`}
+            className={`h-1.5 w-1.5 rounded-full ${busy ? "animate-pulse bg-warning" : "bg-gray-500"}`}
           />
           {busy ? "Connecting…" : "Offline"}
         </button>
@@ -99,7 +99,7 @@ export default function ConnectionTag({
               popupAlign === "end" ? "right-0" : "left-1/2 -translate-x-1/2"
             } animate-[page-fade-in_200ms_ease-out] whitespace-nowrap rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-300 shadow-lg`}
           >
-            Couldn't connect to the server
+            Couldn’t connect to the server
           </span>
         )}
       </span>
@@ -113,11 +113,11 @@ export default function ConnectionTag({
       data-status={state.status}
       role="status"
       aria-live="polite"
-      className={`${wrap} border-amber-500/40 bg-amber-500/10 text-amber-200`}
+      className={`${wrap} border-warning/40 bg-warning/10 text-warning`}
     >
       <span
         aria-hidden
-        className={`h-2 w-2 rounded-full bg-amber-400 ${slow ? "" : "animate-pulse"}`}
+        className={`h-2 w-2 rounded-full bg-warning ${slow ? "" : "animate-pulse"}`}
       />
       {/* Phones: once the offer shows, the button carries the message. */}
       <span

@@ -1,5 +1,6 @@
 import { useId } from "react";
 import type { UpNext } from "../videoPlayerTypes";
+import { button } from "../buttons";
 
 interface Props {
   upNext: UpNext;
@@ -72,14 +73,14 @@ export default function UpNextOverlay({
             <button
               type="button"
               onClick={onPlayNow}
-              className="flex-1 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft"
+              className={`${button("primary", "sm")} flex-1`}
             >
               Play now
             </button>
             <button
               type="button"
               onClick={onCancel}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-3 py-2 text-sm text-gray-200 hover:bg-ink-700"
+              className={button("secondary", "sm")}
             >
               Cancel
             </button>

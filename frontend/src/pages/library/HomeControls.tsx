@@ -3,6 +3,7 @@ import {
   LIBRARY_SORT_OPTIONS,
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
+import { ArrowIcon, ShuffleIcon } from "../../components/icons";
 
 /** Sort, tags and select controls on the home and tag pages (search is in the nav). */
 export default function HomeControls({
@@ -51,8 +52,21 @@ export default function HomeControls({
             title={
               sort === "random" ? "Shuffle again" : "Toggle sort direction"
             }
+            aria-label={
+              sort === "random"
+                ? "Shuffle again"
+                : order === "desc"
+                  ? "Sort descending"
+                  : "Sort ascending"
+            }
           >
-            {sort === "random" ? "⟳" : order === "desc" ? "↓" : "↑"}
+            {sort === "random" ? (
+              <ShuffleIcon />
+            ) : (
+              <ArrowIcon
+                className={order === "desc" ? "-rotate-90" : "rotate-90"}
+              />
+            )}
           </button>
         </>
       )}

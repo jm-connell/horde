@@ -9,7 +9,7 @@ test("an open playlist with the add-video search has no serious accessibility vi
   await page.goto("/playlists");
   await page.getByRole("heading", { name: "Evening set", level: 3 }).click();
   await expect(page.getByRole("link", { name: /Aurora Drift/ })).toBeVisible();
-  await page.getByRole("button", { name: "Add Video", exact: true }).click();
+  await page.getByRole("button", { name: "Add video", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Search library or paste a download link" })
     .locator("visible=true")

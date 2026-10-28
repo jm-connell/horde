@@ -10,7 +10,7 @@ Instead Horde documents a **small stable surface**:
 
 | Kind | Examples |
 |------|----------|
-| CSS variables | `--accent`, `--on-accent`, `--ink-950` … `--ink-600` |
+| CSS variables | `--accent`, `--on-accent`, `--ink-950` … `--ink-600`, `--danger`, `--warning`, `--success` |
 | Page hook | `html[data-page="watch"]` |
 | Theme hook | `html[data-theme="oled"]` |
 | Landmark hooks | `[data-horde="nav"]`, `[data-horde="video-card"]` |
@@ -47,6 +47,9 @@ Colors are **space-separated RGB** (no commas) so Tailwind utilities can do `rgb
   --accent-soft: 103 232 249;
   --accent-deep: 8 145 178;
   --on-accent: 8 9 12;    /* text on accent fills */
+  --danger: 248 113 113;  /* failures, destructive actions */
+  --warning: 251 191 36;  /* waiting, held, warnings */
+  --success: 52 211 153;  /* done, connected */
   --font-sans: Inter, system-ui, sans-serif;
 }
 ```
@@ -105,6 +108,8 @@ Warm accent over any built-in palette:
 ```
 
 `--on-accent` is the text color on accent fills (primary buttons, count pills). Dark themes use the page background; light, frozen and mocha use a dark ink. If you set a much lighter or darker `--accent`, set `--on-accent` to whichever of a near-black or white reads on it.
+
+`--danger`, `--warning` and `--success` are the status text colors (errors, queued or held states, success). Each theme tunes them to stay readable on its surfaces (light themes use deep red, brown and green); if you change the `--ink-*` surfaces a lot, check them too.
 
 Rounder library cards:
 

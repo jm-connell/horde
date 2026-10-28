@@ -11,6 +11,7 @@ import {
   parseClock,
   type ClipMark,
 } from "./clipRange";
+import { button } from "../../components/buttons";
 
 const FIELD =
   "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
@@ -240,7 +241,7 @@ export default function ClipPanel({
             <button
               type="submit"
               disabled={!valid || busy}
-              className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50"
+              className={button("primary")}
             >
               {busy ? "Queuing…" : "Save clip"}
             </button>

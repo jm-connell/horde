@@ -33,7 +33,7 @@ function formatElapsed(startedAt: number, finishedAt?: number | null): string {
 function EngineChip({ engine }: { engine: string | null | undefined }) {
   if (!engine) return null;
   return (
-    <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-amber-300/90">
+    <span className="rounded-sm bg-ink-800 px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-warning">
       {engine}
     </span>
   );
@@ -113,7 +113,7 @@ function RecentRow({ task }: { task: ActivityTask }) {
           <span
             className={
               failed
-                ? "text-red-300"
+                ? "text-danger"
                 : cancelled
                   ? "text-muted"
                   : "text-gray-300"
@@ -126,18 +126,14 @@ function RecentRow({ task }: { task: ActivityTask }) {
           <p className="mt-0.5 truncate text-muted">{task.detail}</p>
         )}
         {failed && task.error && (
-          <p className="mt-0.5 text-red-400">{task.error}</p>
+          <p className="mt-0.5 text-danger">{task.error}</p>
         )}
       </div>
       <div className="shrink-0 text-right tabular-nums text-muted">
         {formatElapsed(task.started_at, task.finished_at)}
         <div
           className={
-            failed
-              ? "text-red-400"
-              : cancelled
-                ? "text-muted"
-                : "text-emerald-500/80"
+            failed ? "text-danger" : cancelled ? "text-muted" : "text-success"
           }
         >
           {task.status}

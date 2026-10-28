@@ -38,7 +38,7 @@ export default function PlaylistModePicker({
             className={`rounded-lg border px-3 py-2.5 text-left transition-colors ${
               playlistMode === mode
                 ? "border-accent bg-accent/15 text-accent"
-                : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-600"
             }`}
           >
             <span className="block text-sm font-medium">{label}</span>

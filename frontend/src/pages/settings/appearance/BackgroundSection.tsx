@@ -181,7 +181,7 @@ export default function BackgroundSection({
                           e.stopPropagation();
                           void deleteLibraryBackground(item.id);
                         }}
-                        className="absolute right-1 top-1 rounded-sm bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-red-300"
+                        className="absolute right-1 top-1 rounded-sm bg-ink-950/80 px-1.5 py-0.5 text-[10px] text-gray-300 opacity-0 ring-1 ring-ink-700 transition-opacity group-hover:opacity-100 hover:text-danger"
                       >
                         <CloseIcon />
                       </button>

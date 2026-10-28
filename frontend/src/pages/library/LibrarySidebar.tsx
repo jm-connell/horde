@@ -1,6 +1,7 @@
 import ChannelSidebar from "../../components/ChannelSidebar";
 import type { ChannelStat } from "../../types";
 import type { Settings } from "../../hooks/useSettings";
+import { ChevronIcon } from "../../components/icons";
 
 type SidebarProps = React.ComponentProps<typeof ChannelSidebar>;
 
@@ -91,9 +92,10 @@ export default function LibrarySidebar({
                 <button
                   onClick={onClose}
                   title="Collapse sidebar"
+                  aria-label="Collapse sidebar"
                   className="ui-interactive flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-base text-muted hover:bg-ink-800 hover:text-accent"
                 >
-                  ‹
+                  <ChevronIcon className="rotate-90" />
                 </button>
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">
                   Channels
@@ -109,9 +111,18 @@ export default function LibrarySidebar({
                   ? "Collapse sidebar"
                   : "Expand channels"
               }
+              aria-label={
+                narrowViewport && overlayOpen
+                  ? "Collapse sidebar"
+                  : "Expand channels"
+              }
               className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-muted ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
             >
-              {narrowViewport && overlayOpen ? "‹" : "›"}
+              <ChevronIcon
+                className={
+                  narrowViewport && overlayOpen ? "rotate-90" : "-rotate-90"
+                }
+              />
             </button>
           )}
         </div>

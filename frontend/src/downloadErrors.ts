@@ -25,7 +25,7 @@ const LABELS: Record<string, string> = {
 
 const HINTS: Record<string, string> = {
   members:
-    "Member videos can't be downloaded without a signed-in account that has membership.",
+    "Member videos can’t be downloaded without a signed-in account that has membership.",
   bot: "Check PO token health (Settings → System / YouTube access docs). Cookies are not sent for bot checks.",
   pot: "Ensure bgutil-pot is running and YTDLP_POT_BASE_URL is reachable.",
   cookies:

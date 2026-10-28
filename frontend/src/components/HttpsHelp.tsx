@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { getItem, setItem } from "../storage";
-import { CloseIcon } from "./icons";
+import { CloseIcon, ExternalIcon } from "./icons";
 /**
  * Plain-language explanation of why offline features need HTTPS, with setup
  * pointers. Shown on the Offline page, when tapping Download over plain
@@ -21,9 +21,9 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
     return (
       <div className="space-y-2 text-sm text-gray-300">
         <p>
-          This browser isn&apos;t letting Horde store videos on the device.
-          Private / incognito windows usually block it — try a normal window, or
-          install Horde to your home screen.
+          This browser isn’t letting Horde store videos on the device. Private /
+          incognito windows usually block it — try a normal window, or install
+          Horde to your home screen.
         </p>
       </div>
     );
@@ -38,7 +38,7 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
         <strong>https://</strong> addresses.
       </p>
       <p>
-        You&apos;re using{" "}
+        You’re using{" "}
         <code className="text-gray-100">{window.location.origin}</code>, which
         is plain http, so these features are off. Everything else works
         normally.
@@ -73,7 +73,7 @@ export default function HttpsHelp({ compact = false }: { compact?: boolean }) {
           rel="noreferrer"
           className="text-accent hover:underline"
         >
-          Step-by-step setup guide ↗
+          Step-by-step setup guide <ExternalIcon className="align-[-0.125em]" />
         </a>
       </p>
     </div>
@@ -99,7 +99,7 @@ export function HttpsNotice() {
   return (
     <div
       data-horde="https-notice"
-      className="ui-panel mb-4 rounded-lg border border-amber-500/30 bg-ink-900 p-3 text-sm"
+      className="ui-panel mb-4 rounded-lg border border-warning/30 bg-ink-900 p-3 text-sm"
     >
       <div className="flex items-start gap-3">
         <p className="min-w-0 flex-1 text-gray-200">

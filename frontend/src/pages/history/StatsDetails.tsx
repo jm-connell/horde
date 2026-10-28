@@ -82,8 +82,8 @@ function RangeSwitch({
           onClick={() => onChange(option.value)}
           className={`rounded-md px-3 py-1 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-accent ${
             option.value === value
-              ? "bg-ink-700 font-medium text-gray-100"
-              : "text-muted hover:text-gray-200"
+              ? "bg-accent/15 text-accent"
+              : "text-gray-400 hover:text-gray-200"
           }`}
         >
           {option.label}
@@ -187,7 +187,7 @@ function TagsAndLibrary({ stats }: { stats: HistoryStats }) {
           </div>
         </dl>
         <p className="mt-3 text-sm text-gray-300">
-          You&apos;ve watched{" "}
+          You’ve watched{" "}
           <span className="font-semibold text-gray-100">
             {formatShare(lib.watched_share)}
           </span>{" "}

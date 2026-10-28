@@ -1,12 +1,12 @@
 import { useEffect, useId, useRef } from "react";
 import { passwordStrength, STRENGTH_LABELS } from "./passwordStrength";
+import { button } from "../buttons";
 
 /** Shared chrome for the sign-in, first-run and password forms. */
 
 export const AUTH_INPUT =
   "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden placeholder:text-muted focus:border-accent";
-export const AUTH_PRIMARY =
-  "w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50";
+export const AUTH_PRIMARY = `${button("primary")} w-full`;
 
 export function AuthCard({
   title,
@@ -88,7 +88,7 @@ export function Field({
   );
 }
 
-const METER_FILL = ["bg-red-400", "bg-amber-400", "bg-accent", "bg-accent"];
+const METER_FILL = ["bg-danger", "bg-warning", "bg-accent", "bg-accent"];
 
 function StrengthMeter({ password }: { password: string }) {
   const level = passwordStrength(password);
@@ -118,7 +118,7 @@ export function FormError({ message }: { message: string | null }) {
     <p
       role="alert"
       aria-live="assertive"
-      className={message ? "mb-4 text-sm text-red-400" : "sr-only"}
+      className={message ? "mb-4 text-sm text-danger" : "sr-only"}
     >
       {message ?? ""}
     </p>

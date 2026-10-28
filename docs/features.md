@@ -67,7 +67,7 @@ Bring in files that did not come from the download queue: drag-and-drop on `/imp
 
 ![Import and review queue for dropped or uploaded files](assets/screenshots/import.webp)
 
-**Scan for New Files** walks the tree immediately instead of waiting for the watchdog. Skip does not get undone by the background poller — only that button re-queues skipped files.
+**Scan for new files** walks the tree immediately instead of waiting for the watchdog. Skip does not get undone by the background poller — only that button re-queues skipped files.
 
 Full guide: [Import & review](guides/import-review.md).
 

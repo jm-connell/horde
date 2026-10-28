@@ -6,11 +6,8 @@ import { PRESET_LABELS, PRESET_ORDER } from "../../../presets";
 import type { ChannelAutodownload } from "../../../types";
 import { Toggle } from "../../settings/ui";
 import type { AutodownloadPayload } from "../useChannelCatalog";
-import SettingsSection, {
-  fieldLabel,
-  numberInput,
-  primaryButton,
-} from "./SettingsSection";
+import { button } from "../../../components/buttons";
+import SettingsSection, { fieldLabel, numberInput } from "./SettingsSection";
 
 type PreviousMode = ChannelAutodownload["previous_mode"];
 
@@ -38,7 +35,7 @@ export default function AutoDownloadSection({
     <SettingsSection
       id="autodownload"
       title="Automatic downloads"
-      description="Download this channel's new uploads as they appear, and optionally some older ones."
+      description="Download this channel’s new uploads as they appear, and optionally some older ones."
       readOnlyNote={
         youtube && !editable
           ? "Changing this needs the Download permission."
@@ -195,7 +192,7 @@ function AutoDownloadForm({
             />
           </label>
 
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+          <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             {previousMode === "all"
               ? `All indexed videos can use a lot of storage. It is limited to the channel catalog cap (${policy.catalog_max_videos} videos).`
               : "Automatic downloads can use a lot of storage over time."}
@@ -212,7 +209,7 @@ function AutoDownloadForm({
           type="button"
           onClick={() => onSave(payload)}
           disabled={saving || !dirty}
-          className={primaryButton}
+          className={button("primary")}
         >
           {saving ? "Saving…" : "Save automatic downloads"}
         </button>

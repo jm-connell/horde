@@ -365,7 +365,7 @@ export default function VideoAiChat({
             </div>
           );
         })}
-        {error && <p className="text-xs text-amber-400/90">{error}</p>}
+        {error && <p className="text-xs text-warning">{error}</p>}
       </div>
       <div className="border-t border-ink-700 px-3 py-2">
         <form
@@ -395,7 +395,7 @@ export default function VideoAiChat({
             <button
               type="button"
               onClick={cancel}
-              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+              className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-warning/50 hover:text-warning"
             >
               Cancel
             </button>

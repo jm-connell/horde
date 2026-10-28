@@ -6,6 +6,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
 import { focusOnMount } from "../utils";
+import { button } from "./buttons";
 
 export default function LibraryBulkBar({
   selectedCount,
@@ -86,7 +87,7 @@ export default function LibraryBulkBar({
               }
               aria-haspopup="menu"
               aria-expanded={playlistOpen}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+              className={button("secondary", "sm")}
             >
               + Playlist
             </button>
@@ -127,7 +128,7 @@ export default function LibraryBulkBar({
                 onClick={onToggleNote}
                 aria-haspopup="dialog"
                 aria-expanded={bulkNoteOpen}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+                className={button("secondary", "sm")}
               >
                 Add note
               </button>
@@ -151,14 +152,14 @@ export default function LibraryBulkBar({
                     value={bulkNote}
                     onChange={(e) => onNoteChange(e.target.value)}
                     rows={3}
-                    placeholder="Note to apply to all selected..."
+                    placeholder="Note to apply to all selected…"
                     className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                     ref={focusOnMount}
                   />
                   <button
                     onClick={onSaveNote}
                     disabled={!bulkNote.trim()}
-                    className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-40"
+                    className={`${button("primary", "sm")} mt-2 w-full`}
                   >
                     Apply to {selectedCount} video
                     {selectedCount === 1 ? "" : "s"}
@@ -173,17 +174,14 @@ export default function LibraryBulkBar({
             <button
               onClick={onRefreshMetadata}
               disabled={metadataSyncing}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
+              className={button("secondary", "sm")}
             >
               {metadataSyncing ? "Syncing…" : "Resync metadata"}
             </button>
           )}
 
           {can("offline_download") && (
-            <button
-              onClick={onDownload}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-            >
+            <button onClick={onDownload} className={button("secondary", "sm")}>
               Download
             </button>
           )}
@@ -191,7 +189,7 @@ export default function LibraryBulkBar({
           {can("offline_download") && (
             <button
               onClick={onSaveFiles}
-              title="Save the video files to your device's downloads folder"
+              title="Save the video files to your device’s downloads folder"
               className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-400 hover:border-accent hover:text-gray-200"
             >
               Save files
@@ -202,7 +200,7 @@ export default function LibraryBulkBar({
             <button
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
-              className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+              className={button("danger", "sm")}
             >
               Delete
             </button>

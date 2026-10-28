@@ -4,6 +4,7 @@ import { ApiError, api } from "../api";
 import { useDownloads, isActiveJob } from "../context/DownloadContext";
 import ChannelPicker from "../components/ChannelPicker";
 import Collapse from "../components/Collapse";
+import HelpTip from "../components/HelpTip";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import SendLinksHelp from "../components/SendLinksHelp";
@@ -44,6 +45,7 @@ import PlaylistEntryList from "./download/PlaylistEntryList";
 import PlaylistModePicker from "./download/PlaylistModePicker";
 import { toastBulkSkips } from "./download/skips";
 import { ChevronIcon } from "../components/icons";
+import { button } from "../components/buttons";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
@@ -289,14 +291,16 @@ export default function Download() {
   }, [isPlaylist, destination]);
 
   const downloadButtonLabel = useMemo(() => {
-    if (submitting) return "Starting...";
+    if (submitting) return "Starting…";
     if (isBulkList) {
       const n = urlList.length;
       return `Download ${n} video${n === 1 ? "" : "s"}`;
     }
     const approx = formatApproxSize(selectedPresetSize);
     if (toDevice) {
-      return approx ? `Download to client (${approx})` : "Download to client";
+      return approx
+        ? `Download to this device (${approx})`
+        : "Download to this device";
     }
     return approx ? `Download (${approx})` : "Download";
   }, [submitting, selectedPresetSize, toDevice, isBulkList, urlList.length]);
@@ -316,7 +320,7 @@ export default function Download() {
   }, [isPlaylist, selectedUrls, playlistSizes, preset]);
 
   const importButtonLabel = useMemo(() => {
-    if (submitting) return "Starting...";
+    if (submitting) return "Starting…";
     if (playlistMode === "subscribe") {
       const count = playlistEntries.length;
       const base =
@@ -540,29 +544,18 @@ export default function Download() {
         className="ui-panel space-y-4 rounded-xl bg-ink-900 p-6 ring-1 ring-ink-700"
       >
         <div>
-          <label className="mb-1 flex items-center gap-1.5 text-sm font-medium text-gray-300">
-            Video URL
-            <span className="group relative inline-flex">
-              <span className="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-ink-700 text-[10px] font-bold text-gray-300">
-                ?
-              </span>
-              <span className="pointer-events-none absolute left-1/2 top-6 z-10 w-64 -translate-x-1/2 rounded-lg bg-ink-800 p-3 text-xs font-normal leading-relaxed text-gray-300 opacity-0 ring-1 ring-ink-600 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
-                Works with YouTube, Vimeo, Twitch, TikTok, Twitter/X,
-                Dailymotion, SoundCloud, and{" "}
-                <a
-                  href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-accent hover:underline"
-                >
-                  1000+ other sites
-                </a>{" "}
-                supported by yt-dlp.
-              </span>
-            </span>
-          </label>
+          <div className="mb-1 flex items-center gap-1.5">
+            <label
+              htmlFor="download-url"
+              className="text-sm font-medium text-gray-300"
+            >
+              Video URL
+            </label>
+            <HelpTip text="Works with YouTube, Vimeo, Twitch, TikTok, Twitter/X, Dailymotion, SoundCloud and 1000+ other sites supported by yt-dlp." />
+          </div>
           <div className="flex gap-2">
             <input
+              id="download-url"
               ref={urlInputRef}
               value={url}
               onChange={(e) => {
@@ -599,7 +592,7 @@ export default function Download() {
                     insecureClipboardHint(
                       typeof window !== "undefined" && window.isSecureContext
                     ) ||
-                      "Couldn't read the clipboard. Paste with Ctrl+V, ⌘V, or a long-press."
+                      "Couldn’t read the clipboard. Paste with Ctrl+V, ⌘V, or a long-press."
                   );
                 }}
                 className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2.5 text-sm text-gray-300 ring-1 ring-ink-700 hover:border-accent hover:text-accent"
@@ -609,24 +602,32 @@ export default function Download() {
             )}
           </div>
           <p className="mt-1 text-xs text-muted">
-            Accepts comma-separated links.
+            Accepts comma-separated links.{" "}
+            <a
+              href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent underline"
+            >
+              Supported sites
+            </a>
           </p>
           {pasteHint && (
-            <p className="mt-1 text-xs text-amber-200/90">{pasteHint}</p>
+            <p className="mt-1 text-xs text-warning">{pasteHint}</p>
           )}
           {previewing && !isBulkList && (
-            <p className="mt-1 text-xs text-muted">Reading link...</p>
+            <p className="mt-1 text-xs text-muted">Reading link…</p>
           )}
           {!previewing && previewError && (
-            <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+            <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
               <p className="font-medium">
                 {downloadErrorLabel(previewError.kind)}
               </p>
-              <p className="mt-0.5 text-xs text-red-300/90">
+              <p className="mt-0.5 text-xs text-danger">
                 {previewError.message}
               </p>
               {downloadErrorHint(previewError.kind) && (
-                <p className="mt-1 text-xs text-red-400/80">
+                <p className="mt-1 text-xs text-danger">
                   {downloadErrorHint(previewError.kind)}
                 </p>
               )}
@@ -768,7 +769,7 @@ export default function Download() {
                 className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
                   destination === "library"
                     ? "border-accent bg-accent/15 text-accent"
-                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-600"
                 }`}
               >
                 Save to library
@@ -779,10 +780,10 @@ export default function Download() {
                 className={`rounded-lg border px-3 py-2.5 text-sm transition-colors ${
                   destination === "device"
                     ? "border-accent bg-accent/15 text-accent"
-                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-500"
+                    : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-600"
                 }`}
               >
-                Direct download to client
+                Save to this device
               </button>
             </div>
             {toDevice && (
@@ -803,7 +804,7 @@ export default function Download() {
               !url.trim() ||
               (playlistMode !== "subscribe" && selectedUrls.size === 0)
             }
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${button("primary")} w-full`}
           >
             {importButtonLabel}
           </button>
@@ -811,13 +812,13 @@ export default function Download() {
           <button
             type="submit"
             disabled={submitting || !url.trim()}
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${button("primary")} w-full`}
           >
-            {submitting ? "Starting..." : downloadButtonLabel}
+            {submitting ? "Starting…" : downloadButtonLabel}
           </button>
         )}
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         {importMessage && (
           <p className="text-sm text-accent">
             {importMessage}
@@ -853,7 +854,7 @@ export default function Download() {
               className="ui-interactive flex min-h-11 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 py-2 text-left"
             >
               <ChevronIcon
-                className={`text-gray-400 transition-transform duration-200 ease-out ${
+                className={`text-gray-400 transition-transform duration-200 ease-fluid ${
                   activeCollapsed ? "-rotate-90" : ""
                 }`}
               />
@@ -875,7 +876,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => resumeQueue()}
-                  className="ui-interactive rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-soft"
+                  className={button("primary", "xs")}
                 >
                   Resume all
                 </button>
@@ -883,7 +884,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => pauseQueue()}
-                  className="ui-interactive rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-700"
+                  className={button("secondary", "xs")}
                 >
                   Pause all
                 </button>
@@ -893,7 +894,7 @@ export default function Download() {
           {queueHeldReason && (
             <p
               role="status"
-              className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-300"
+              className="mb-3 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning"
             >
               {queueHeldReason}. Waiting downloads start by themselves when
               there is room.
@@ -902,7 +903,7 @@ export default function Download() {
                   {" "}
                   <Link
                     to="/settings?tab=system"
-                    className="underline hover:text-amber-200"
+                    className="underline hover:no-underline"
                   >
                     Storage settings
                   </Link>

@@ -21,9 +21,9 @@ import {
 } from "../../trash";
 import type { TrashItem } from "../../types";
 import { formatSize } from "../../utils";
-import { PANEL_BTN } from "./constants";
 import { useSettingsPage } from "./context";
 import { Section } from "./ui";
+import { button } from "../../components/buttons";
 
 const TRASH_TERMS = [
   "trash",
@@ -36,11 +36,9 @@ const TRASH_TERMS = [
   "delete forever",
 ];
 
-const SMALL_BTN = `${PANEL_BTN} px-2.5! py-1! text-xs!`;
-const DANGER_BTN =
-  "ui-interactive rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:border-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
-const DANGER_SMALL_BTN =
-  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
+const SMALL_BTN = button("secondary", "xs");
+const DANGER_BTN = button("danger", "sm");
+const DANGER_SMALL_BTN = button("danger", "xs");
 
 /**
  * Deleted videos waiting to be erased: how much they take, emptying the trash,
@@ -126,7 +124,7 @@ export default function TrashSection() {
       title: "Delete forever?",
       body: `“${item.title}”${
         item.size_bytes ? ` (${formatSize(item.size_bytes)})` : ""
-      } will be permanently deleted. This can't be undone.`,
+      } will be permanently deleted. This can’t be undone.`,
       confirmLabel: "Delete forever",
       danger: true,
     });
@@ -150,7 +148,7 @@ export default function TrashSection() {
       title: "Empty the trash?",
       body: `Permanently delete ${videoCount(summary.count)} (${
         formatSize(summary.total_bytes) || "0 B"
-      })? This can't be undone.`,
+      })? This can’t be undone.`,
       confirmLabel: "Empty trash",
       danger: true,
     });
@@ -231,7 +229,7 @@ export default function TrashSection() {
           {list.isPending && open ? (
             <p className="text-sm text-muted">Loading…</p>
           ) : list.isError ? (
-            <p className="text-sm text-red-400">
+            <p className="text-sm text-danger">
               Could not load the trash: {describeError(list.error)}
             </p>
           ) : items.length === 0 ? (
@@ -324,7 +322,7 @@ function TrashRow({
           <p className="truncate text-xs text-muted">
             {item.reason || deletedLabel(item.trashed_at, item.trashed_by)}
             {" · "}
-            <span className={soon ? "text-amber-400/90" : undefined}>
+            <span className={soon ? "text-warning" : undefined}>
               {daysLeftLabel(item.expires_at)}
             </span>
           </p>
