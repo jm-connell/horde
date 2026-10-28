@@ -46,7 +46,7 @@ test("home shows the library, continue watching, tags, and search", async ({
   await expect(videoCard(matches, "Harbor Lights")).toBeVisible();
   await expect(videoCard(matches, "Aurora Drift")).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: /Other videos in library/ })
+    page.getByRole("button", { name: /Rest of your library/ })
   ).toBeVisible();
 });
 
@@ -347,4 +347,52 @@ test("on a phone a feed card does not reserve a second title line", async ({
   expect(title).not.toBeNull();
   // A one-line title is one line tall (20px), not a reserved two-line box.
   expect(title!.height).toBeLessThan(30);
+});
+
+test("search keeps the YouTube section in place while it loads", async ({
+  page,
+}) => {
+  // Force YouTube search on and answer it only when the test says so.
+  await page.route("**/api/settings", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...body, youtube_video_search: true },
+    });
+  });
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/youtube/search**", async (route) => {
+    await gate;
+    await route.fulfill({
+      json: {
+        entries: [
+          {
+            id: "ytharbor001",
+            url: "https://www.youtube.com/watch?v=ytharbor001",
+            title: "Harbor ferry ride",
+            channel: "Coastal Walks",
+            in_library: false,
+          },
+        ],
+        has_more: false,
+        youtube_video_search_effective: true,
+      },
+    });
+  });
+  await page.goto("/");
+  await expect(videoCard(page, "Kiln fire")).toBeVisible();
+  await (await openSearchBox(page)).fill("Harbor");
+  const heading = page.getByRole("button", { name: /On YouTube/ });
+  await expect(heading).toContainText("Searching…");
+  const nav = page.getByRole("navigation", { name: "Search results" });
+  await expect(
+    nav.getByRole("link", { name: /In your library/ })
+  ).toBeVisible();
+
+  release();
+  await expect(heading).toContainText("1");
+  await expect(heading).not.toContainText("Searching…");
+  await expect(feedCard(page, "Harbor ferry ride")).toBeVisible();
 });
