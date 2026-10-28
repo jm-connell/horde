@@ -5,6 +5,10 @@ import type { Video } from "../../types";
 import { formatResolution } from "../../utils";
 import type { WatchActionsState } from "./useWatchActions";
 import { button } from "../../components/buttons";
+import {
+  DIALOG_BACKDROP_ENTER,
+  DIALOG_PANEL_ENTER,
+} from "../../components/dialogMotion";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -32,14 +36,16 @@ export default function RedownloadDialog({
   return (
     <>
       {actions.redownloadOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+        <div
+          className={`fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 ${DIALOG_BACKDROP_ENTER}`}
+        >
           <div
             ref={dialogRef}
             tabIndex={-1}
             role="dialog"
             aria-modal="true"
             aria-labelledby="redownload-title"
-            className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-hidden ring-1 ring-ink-700"
+            className={`w-full max-w-md rounded-xl bg-ink-900 p-6 outline-hidden ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
           >
             <h2
               id="redownload-title"

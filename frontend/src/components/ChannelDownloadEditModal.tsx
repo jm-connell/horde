@@ -8,6 +8,7 @@ import { backdropClick, youtubeThumbnailUrl } from "../utils";
 import ThemedSelect from "./ThemedSelect";
 import { CloseIcon } from "./icons";
 import { button } from "./buttons";
+import { DIALOG_BACKDROP_ENTER, DIALOG_PANEL_ENTER } from "./dialogMotion";
 
 const labelClass = "mb-1 block text-xs font-medium text-gray-400";
 
@@ -43,7 +44,7 @@ export default function ChannelDownloadEditModal({
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4"
+      className={`fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 ${DIALOG_BACKDROP_ENTER}`}
       role="presentation"
       onClick={backdropClick(onClose)}
     >
@@ -53,7 +54,7 @@ export default function ChannelDownloadEditModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700"
+        className={`max-h-[90vh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2

@@ -5,6 +5,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { backdropClick } from "../../utils";
 import { Field, FormError } from "./AuthForm";
 import { button } from "../buttons";
+import { DIALOG_BACKDROP_ENTER, DIALOG_PANEL_ENTER } from "../dialogMotion";
 
 /**
  * "Confirm your password": the step-up before a sensitive administrator action
@@ -67,7 +68,7 @@ export default function ReauthDialog({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-90 flex items-center justify-center bg-black/60 p-4"
+      className={`fixed inset-0 z-90 flex items-center justify-center bg-black/60 p-4 ${DIALOG_BACKDROP_ENTER}`}
       role="presentation"
       onClick={backdropClick(() => {
         if (!busy) onDone(false);
@@ -81,7 +82,7 @@ export default function ReauthDialog({
         aria-describedby={bodyId}
         tabIndex={-1}
         data-horde="reauth-dialog"
-        className="ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600"
+        className={`ui-panel ui-panel-legible max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-xl bg-ink-900 p-5 shadow-xl outline-hidden ring-1 ring-ink-600 ${DIALOG_PANEL_ENTER}`}
       >
         <h2 id={titleId} className="text-base font-semibold text-gray-100">
           Confirm your password

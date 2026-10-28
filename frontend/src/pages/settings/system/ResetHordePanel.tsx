@@ -9,6 +9,10 @@ import { formatSize } from "../../../utils";
 import { clearHordeBrowserState } from "../../../setupStorage";
 import Collapse from "../../../components/Collapse";
 import { button } from "../../../components/buttons";
+import {
+  DIALOG_BACKDROP_ENTER,
+  DIALOG_PANEL_ENTER,
+} from "../../../components/dialogMotion";
 
 export default function ResetHordePanel({
   storage,
@@ -80,7 +84,7 @@ export default function ResetHordePanel({
         ? createPortal(
             <>
               <div
-                className="fixed inset-0 z-80 bg-black/60"
+                className={`fixed inset-0 z-80 bg-black/60 ${DIALOG_BACKDROP_ENTER}`}
                 onClick={close}
                 aria-hidden
               />
@@ -91,7 +95,7 @@ export default function ResetHordePanel({
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby="reset-horde-title"
-                  className="ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)]"
+                  className={`ui-panel pointer-events-auto w-full max-w-md overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-5 shadow-xl ring-1 ring-ink-600 max-h-[calc(100dvh-2rem)] ${DIALOG_PANEL_ENTER}`}
                 >
                   <h2
                     id="reset-horde-title"
