@@ -11,9 +11,7 @@ import {
 } from "../../utils";
 import { extractYouTubeId } from "../../hooks/useSponsorBlock";
 import AddToPlaylist from "../../components/AddToPlaylist";
-import StreamClipControl from "./StreamClipControl";
 import StreamDownloadControl from "./StreamDownloadControl";
-import { useAuth } from "../../context/AuthContext";
 import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
 
@@ -28,12 +26,8 @@ export default function WatchHeader({
   streamDownload: StreamDownload;
 }) {
   const { activeStreamQuality } = usePlaybackLayout();
-  const { can } = useAuth();
   const isLibrary = source.kind === "library";
   const isLive = !isLibrary && Boolean(source.meta.is_live);
-  // Live and past broadcasts can be clipped (YouTube only: the server checks).
-  const canClip =
-    !isLibrary && can("download") && (isLive || Boolean(source.meta.was_live));
   const title = isLibrary
     ? source.video.title
     : source.meta.title || "Untitled";
@@ -149,13 +143,6 @@ export default function WatchHeader({
                 />
                 <StreamDownloadControl download={streamDownload} />
               </>
-            )}
-            {canClip && (
-              <StreamClipControl
-                url={source.meta.source_url ?? source.url}
-                title={source.meta.title ?? null}
-                live={isLive}
-              />
             )}
           </div>
         )}

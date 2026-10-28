@@ -24,6 +24,20 @@ export interface UpNext {
   note?: string | null;
 }
 
+/**
+ * One end of a clip being picked. A finished stream is marked on its own
+ * timeline; a live one at a wall-clock instant, because "how far behind live"
+ * changes every second while the clip is being picked.
+ */
+export type ClipMark =
+  { kind: "time"; sec: number } | { kind: "live"; atMs: number };
+
+/** The clip being picked, drawn on the seek bar (either end may be unset). */
+export interface ClipMarkers {
+  start: ClipMark | null;
+  end: ClipMark | null;
+}
+
 export interface VideoPlayerProps {
   src: string;
   /** Progressive local/remote file (default) or adaptive DASH manifest. */
@@ -59,6 +73,8 @@ export interface VideoPlayerProps {
   onVolumeChange?: (volume: number) => void;
   initialPosition?: number;
   onProgress?: (sec: number) => void;
+  /** The clip being picked, shown on the seek bar (playback is not moved). */
+  clipMarkers?: ClipMarkers | null;
   /** Live: how many seconds behind the live edge the playhead is, as it changes. */
   onLiveBehind?: (sec: number) => void;
   chapters?: Chapter[];

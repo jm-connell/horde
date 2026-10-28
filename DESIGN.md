@@ -146,6 +146,8 @@ reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
   metadata.
 - **Status**: red-400 for failures and destructive actions, amber-400/300 for
   waiting, held and warning states.
+- **Marked range**: amber-400 ticks with an amber-400/45 span on the seek bar
+  for the clip being picked, so it never reads as the accent playback progress.
 
 ### Named Rules
 **The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`),

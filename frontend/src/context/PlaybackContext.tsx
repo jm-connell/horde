@@ -23,6 +23,7 @@ import {
   thumbnailUrl,
 } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
+import type { ClipMarkers } from "../components/videoPlayerTypes";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSponsorBlock } from "../hooks/useSponsorBlock";
@@ -122,6 +123,8 @@ export interface PlaybackActions {
   getStreamPosition: () => number;
   /** Live stream: seconds the playhead is behind the live edge (null if not live). */
   getStreamBehindLive: () => number | null;
+  /** Show the clip being picked on the stream's seek bar (null hides it). */
+  setClipMarkers: (markers: ClipMarkers | null) => void;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
   addToQueue: (entry: QueueEntry) => void;
@@ -193,6 +196,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const [miniCornerAnchor, setMiniCornerAnchor] = useState(true);
   const streamPosRef = useRef(0);
   const streamBehindLiveRef = useRef<number | null>(null);
+  const [clipMarkers, setClipMarkers] = useState<ClipMarkers | null>(null);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const currentRef = useRef<Video | null>(null);
@@ -763,6 +767,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playStream,
       getStreamPosition,
       getStreamBehindLive,
+      setClipMarkers,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -781,6 +786,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playStream,
       getStreamPosition,
       getStreamBehindLive,
+      setClipMarkers,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -1021,6 +1027,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           streamPosRef.current = sec;
         }}
         onLiveBehind={handleLiveBehind}
+        clipMarkers={clipMarkers}
         chapters={
           streamChaptersOverride?.url === stream.url
             ? streamChaptersOverride.chapters

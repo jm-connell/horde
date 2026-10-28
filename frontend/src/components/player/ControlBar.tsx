@@ -3,6 +3,7 @@ import { formatDuration, formatTimestamp, type Chapter } from "../../utils";
 import type { QualityChoice } from "../videoPlayerQuality";
 import type { StreamType, ViewMode } from "../videoPlayerTypes";
 import FullscreenButton from "./FullscreenButton";
+import type { ClipBarRange } from "./clipMarkers";
 import QualityMenu from "./QualityMenu";
 import ScrubBar from "./ScrubBar";
 import SpeedMenu from "./SpeedMenu";
@@ -67,6 +68,8 @@ interface Props {
   onToggleFullscreen: () => void;
   /** A live stream: the time readout becomes a LIVE / jump-to-live control. */
   live?: LiveControl | null;
+  /** The clip being picked, drawn on the seek bar. */
+  clipRange?: ClipBarRange | null;
 }
 
 export interface LiveControl {
@@ -125,6 +128,7 @@ export default function ControlBar({
   isNativeFullscreen,
   onToggleFullscreen,
   live = null,
+  clipRange = null,
 }: Props) {
   const activeChapter =
     chapters.length > 0 ? activeChapterAt(chapters, current) : null;
@@ -153,6 +157,7 @@ export default function ControlBar({
         }
         onInteractionStart={onInteractionStart}
         onInteractionEnd={onInteractionEnd}
+        clipRange={clipRange}
       />
       {ccNotice && (
         <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-white">

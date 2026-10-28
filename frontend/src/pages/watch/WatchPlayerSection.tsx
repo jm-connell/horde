@@ -17,6 +17,7 @@ export default function WatchPlayerSection({
   streamDownload,
   onVideoUpdated,
   dockRef,
+  belowPlayer,
   children,
 }: {
   source: WatchSource;
@@ -27,6 +28,8 @@ export default function WatchPlayerSection({
   onVideoUpdated: (video: Video) => void;
   /** The element the player is reparented into; registered by the page. */
   dockRef: RefObject<HTMLDivElement | null>;
+  /** Shown right under the player, above the title (the clip picker). */
+  belowPlayer?: ReactNode;
   children: ReactNode;
 }) {
   const playerOuterClass = isMobile
@@ -48,6 +51,7 @@ export default function WatchPlayerSection({
       </div>
 
       <div className={playerMetaClass}>
+        {belowPlayer}
         {source.kind === "library" && (
           <SourceChangeBanners
             video={source.video}

@@ -2,6 +2,7 @@ import { useCallback, useState, type RefObject } from "react";
 import { spritesImageUrl } from "../../api";
 import { formatDuration, formatTimestamp, type Chapter } from "../../utils";
 import { scrubPositionFromClientX } from "../playerSeek";
+import type { ClipBarRange } from "./clipMarkers";
 import { isChapterActive } from "./useChapters";
 import { useSeekSprites } from "./useSeekSprites";
 
@@ -20,6 +21,45 @@ interface Props {
   /** Keep the control bar up while the pointer is dragging the thumb. */
   onInteractionStart: () => void;
   onInteractionEnd: () => void;
+  /** The clip being picked: its ends and the span between them. */
+  clipRange?: ClipBarRange | null;
+}
+
+/** Pick-a-clip feedback: a tick at each end and the span between them. */
+function ClipRangeMarks({
+  range,
+  duration,
+}: {
+  range: ClipBarRange;
+  duration: number;
+}) {
+  const pct = (sec: number | null) =>
+    sec == null || sec < 0 || sec > duration ? null : (sec / duration) * 100;
+  const start = pct(range.start);
+  const end = pct(range.end);
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 top-0 h-full"
+      data-testid="clip-range"
+      aria-hidden
+    >
+      {start != null && end != null && end > start && (
+        <span
+          className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-amber-400/45"
+          style={{ left: `${start}%`, width: `${end - start}%` }}
+        />
+      )}
+      {[start, end].map((at, i) =>
+        at == null ? null : (
+          <span
+            key={i}
+            className="absolute top-1/2 block h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-amber-400"
+            style={{ left: `${at}%` }}
+          />
+        )
+      )}
+    </div>
+  );
 }
 
 /** Seek bar: pointer scrubbing, hover thumbnails and chapter markers. */
@@ -35,6 +75,7 @@ export default function ScrubBar({
   formatTime = formatTimestamp,
   onInteractionStart,
   onInteractionEnd,
+  clipRange = null,
 }: Props) {
   const spriteMeta = useSeekSprites(videoId);
   const [scrubHover, setScrubHover] = useState<{
@@ -216,6 +257,9 @@ export default function ScrubBar({
           background: `linear-gradient(to right, rgb(var(--accent)) ${progressPct}%, rgb(var(--ink-600)) ${progressPct}%)`,
         }}
       />
+      {clipRange && duration > 0 && (
+        <ClipRangeMarks range={clipRange} duration={duration} />
+      )}
       {/* Chapter markers */}
       {chapters.length > 0 && duration > 0 && (
         <div className="pointer-events-none absolute inset-x-0 top-0 h-full">

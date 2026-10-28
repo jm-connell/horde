@@ -1,3 +1,4 @@
+import type { ClipMark } from "../../components/videoPlayerTypes";
 import type { ClipCreate } from "../../types";
 
 /** `1:02:03` / `4:05` / `95` → seconds, or null when it is not a time. */
@@ -7,13 +8,7 @@ export function parseClock(text: string): number | null {
   return parts.reduce((total, p) => total * 60 + parseInt(p, 10), 0);
 }
 
-/**
- * One end of a clip. A finished stream is marked on its own timeline; a live
- * one at a wall-clock instant, because "how far behind live" changes every
- * second while the dialog is open.
- */
-export type ClipMark =
-  { kind: "time"; sec: number } | { kind: "live"; atMs: number };
+export type { ClipMark } from "../../components/videoPlayerTypes";
 
 /** The mark for a playhead `behindSec` behind the live edge, read at `nowMs`. */
 export function liveMark(behindSec: number, nowMs: number): ClipMark {

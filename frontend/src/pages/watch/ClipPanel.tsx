@@ -1,10 +1,8 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../../api";
-import { MenuFlyout } from "../../components/MenuFlyout";
 import { usePlaybackActions } from "../../context/PlaybackContext";
 import { useToast } from "../../context/ToastContext";
-import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { formatTimestamp } from "../../utils";
 import {
   clipLength,
@@ -17,7 +15,7 @@ import {
 const FIELD =
   "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 const SECONDARY =
-  "rounded-lg border border-ink-600 px-3 py-1.5 text-xs text-gray-300 hover:border-accent hover:text-accent";
+  "shrink-0 rounded-lg border border-ink-600 px-3 py-2 text-xs text-gray-300 hover:border-accent hover:text-accent";
 
 function markLabel(mark: ClipMark): string {
   return mark.kind === "live"
@@ -34,6 +32,7 @@ function MarkField({
   label,
   mark,
   live,
+  focusOnMount = false,
   onChange,
   onUseCurrent,
 }: {
@@ -41,23 +40,33 @@ function MarkField({
   /** Null while the typed text is not a time. */
   mark: ClipMark | null;
   live: boolean;
+  focusOnMount?: boolean;
   onChange: (mark: ClipMark | null) => void;
   onUseCurrent: () => void;
 }) {
   const id = useId();
+  const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(() => (mark ? markLabel(mark) : ""));
+  useEffect(() => {
+    // The page scrolls up to the player itself: focus without jumping.
+    if (focusOnMount) inputRef.current?.focus({ preventScroll: true });
+  }, [focusOnMount]);
   return (
-    <div className="mb-4">
+    <div className="min-w-0 flex-1">
       <label htmlFor={id} className="mb-1 block text-sm text-gray-300">
         {label}
       </label>
       <div className="flex items-center gap-2">
         {live ? (
-          <output id={id} className="flex-1 text-sm text-gray-100 tabular-nums">
+          <output
+            id={id}
+            className="flex-1 py-2 text-sm text-gray-100 tabular-nums"
+          >
             {mark ? markLabel(mark) : "–"}
           </output>
         ) : (
           <input
+            ref={inputRef}
             id={id}
             value={text}
             inputMode="numeric"
@@ -78,8 +87,12 @@ function MarkField({
   );
 }
 
-/** Pick the start and end of a clip of the playing stream and queue it. */
-function ClipDialog({
+/**
+ * Pick the start and end of a clip of the playing stream, right under the
+ * player so the video stays in view, and queue it. The picked range is drawn
+ * on the seek bar while the panel is open; playback is never moved.
+ */
+export default function ClipPanel({
   url,
   title,
   live,
@@ -90,10 +103,10 @@ function ClipDialog({
   live: boolean;
   onClose: () => void;
 }) {
-  const { getStreamPosition, getStreamBehindLive } = usePlaybackActions();
+  const { getStreamPosition, getStreamBehindLive, setClipMarkers } =
+    usePlaybackActions();
   const { showToast, showError } = useToast();
-  const dialogRef = useRef<HTMLDivElement>(null);
-  useFocusTrap(dialogRef, { active: true, onEscape: onClose });
+  const headingId = useId();
 
   const current = (): ClipMark =>
     live
@@ -116,6 +129,11 @@ function ClipDialog({
   const length = start && end ? clipLength(start, end) : NaN;
   const valid = Number.isFinite(length) && length >= 1;
 
+  useEffect(() => {
+    setClipMarkers({ start, end });
+  }, [start, end, setClipMarkers]);
+  useEffect(() => () => setClipMarkers(null), [setClipMarkers]);
+
   const save = async () => {
     if (!start || !end || !valid || busy) return;
     setBusy(true);
@@ -132,37 +150,33 @@ function ClipDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
-      <div
-        ref={dialogRef}
-        tabIndex={-1}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="clip-title"
-        className="w-full max-w-md rounded-xl bg-ink-900 p-6 outline-hidden ring-1 ring-ink-700"
-      >
-        <h2
-          id="clip-title"
-          className="mb-1 text-lg font-semibold text-gray-100"
-        >
+    <section
+      aria-labelledby={headingId}
+      className="ui-panel mt-4 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700"
+    >
+      <div className="mb-3 flex items-baseline justify-between gap-3">
+        <h2 id={headingId} className="text-sm font-semibold text-gray-100">
           Save a clip
         </h2>
-        <p className="mb-4 text-sm text-gray-400">
+        <p className="text-xs text-muted">
           {live
-            ? "Play to where the clip should start or end and take the current time. You can go back as far as the player lets you scrub."
-            : "Saved to your library as its own video."}
+            ? "Play to each end and take the current time."
+            : "Type the times or take them from the player."}
         </p>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            void save();
-          }}
-        >
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row">
           <MarkField
             key={`start-${startRev}`}
             label="Start"
             mark={start}
             live={live}
+            focusOnMount={startRev === 0}
             onChange={setStart}
             onUseCurrent={() => {
               setStart(current());
@@ -180,14 +194,22 @@ function ClipDialog({
               setEndRev((n) => n + 1);
             }}
           />
-          <p className="mb-5 text-xs text-muted" aria-live="polite">
+        </div>
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted" aria-live="polite">
             {valid
-              ? `Length ${formatTimestamp(length)}`
+              ? `Length ${formatTimestamp(length)} · progress on the `
               : start && end
                 ? "The end has to come at least a second after the start."
                 : "Enter times as h:mm:ss."}
+            {valid && (
+              <Link to="/download" className="underline">
+                Download
+              </Link>
+            )}
+            {valid && " page"}
           </p>
-          <div className="flex justify-end gap-2">
+          <div className="flex gap-2">
             <button
               type="button"
               onClick={onClose}
@@ -203,74 +225,8 @@ function ClipDialog({
               {busy ? "Queuing…" : "Save clip"}
             </button>
           </div>
-        </form>
-        <p className="mt-4 text-xs text-muted">
-          Progress shows on the{" "}
-          <Link to="/download" className="underline">
-            Download
-          </Link>{" "}
-          page.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/** The ⋯ menu beside a live or past stream, holding "Save a clip…". */
-export default function StreamClipControl({
-  url,
-  title,
-  live,
-}: {
-  url: string;
-  title: string | null;
-  live: boolean;
-}) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  return (
-    <div className="relative">
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-label="More stream actions"
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        onClick={() => setMenuOpen((v) => !v)}
-        className="rounded-lg border border-ink-600 px-2 py-1 text-xs leading-none text-gray-300 hover:border-accent hover:text-accent"
-      >
-        •••
-      </button>
-      <MenuFlyout
-        open={menuOpen}
-        className="absolute right-0 z-30 mt-1 min-w-40"
-        menu={{
-          label: "Stream actions",
-          onClose: () => setMenuOpen(false),
-          triggerRef,
-        }}
-      >
-        <button
-          type="button"
-          role="menuitem"
-          onClick={() => {
-            setMenuOpen(false);
-            setDialogOpen(true);
-          }}
-          className="block w-full px-3 py-1.5 text-left text-xs text-gray-200 hover:bg-ink-800"
-        >
-          Save a clip…
-        </button>
-      </MenuFlyout>
-      {dialogOpen && (
-        <ClipDialog
-          url={url}
-          title={title}
-          live={live}
-          onClose={() => setDialogOpen(false)}
-        />
-      )}
-    </div>
+        </div>
+      </form>
+    </section>
   );
 }

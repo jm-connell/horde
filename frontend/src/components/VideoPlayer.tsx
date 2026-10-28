@@ -27,6 +27,7 @@ import SubtitleOverlay from "./SubtitleOverlay";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
+import { clipBarRange } from "./player/clipMarkers";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -65,6 +66,7 @@ export default function VideoPlayer({
   initialPosition = 0,
   onProgress,
   onLiveBehind,
+  clipMarkers = null,
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
@@ -480,6 +482,9 @@ export default function VideoPlayer({
   useEffect(() => {
     if (liveBehind != null) onLiveBehind?.(liveBehind);
   }, [liveBehind, onLiveBehind]);
+  const clipRange = clipMarkers
+    ? clipBarRange(clipMarkers, liveWindow, Date.now())
+    : null;
   const liveControl = live
     ? {
         behindSec: liveBehind ?? 0,
@@ -621,6 +626,7 @@ export default function VideoPlayer({
             duration={live ? barDuration : duration}
             seekTo={live ? barSeekTo : seekTo}
             live={liveControl}
+            clipRange={clipRange}
             onInteractionStart={onControlsInteractionStart}
             onInteractionEnd={onControlsInteractionEnd}
             scrubberRef={scrubberRef}

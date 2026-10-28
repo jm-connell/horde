@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
@@ -8,7 +8,10 @@ import {
 import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
+import { useAuth } from "../context/AuthContext";
+import ClipPanel from "./watch/ClipPanel";
 import RedownloadDialog from "./watch/RedownloadDialog";
+import StreamActions from "./watch/StreamActions";
 import WatchActions from "./watch/WatchActions";
 import WatchInfoPanels from "./watch/WatchInfoPanels";
 import WatchPlayerSection from "./watch/WatchPlayerSection";
@@ -55,6 +58,22 @@ export default function Watch() {
   });
   const video = source?.kind === "library" ? source.video : null;
   const actions = useWatchActions({ video, setSource });
+  const { can } = useAuth();
+  // Live and past broadcasts can be clipped (YouTube only: the server checks).
+  const clip =
+    source &&
+    source.kind !== "library" &&
+    can("download") &&
+    (source.meta.is_live || source.meta.was_live)
+      ? {
+          url: source.meta.source_url ?? source.url,
+          title: source.meta.title ?? null,
+          live: Boolean(source.meta.is_live),
+        }
+      : null;
+  // The stream the clip picker is open for (closed on another stream).
+  const [clipOpenFor, setClipOpenFor] = useState<string | null>(null);
+  const clipOpen = clip != null && clipOpenFor === clip.url;
   const ai = useWatchAi(source, setVideo);
   const related = useRelatedFeed(video?.id);
   const streamRelated = useStreamRelated(
@@ -136,6 +155,17 @@ export default function Watch() {
           streamDownload={streamDownload}
           onVideoUpdated={setVideo}
           dockRef={dockRef}
+          belowPlayer={
+            clip && clipOpen ? (
+              <ClipPanel
+                key={clip.url}
+                url={clip.url}
+                title={clip.title}
+                live={clip.live}
+                onClose={() => setClipOpenFor(null)}
+              />
+            ) : null
+          }
         >
           <WatchInfoPanels
             source={source}
@@ -151,6 +181,22 @@ export default function Watch() {
               actions={actions}
               isMobile={isMobile}
               onVideoUpdated={setVideo}
+            />
+          )}
+          {clip && (
+            <StreamActions
+              onSaveClip={() => {
+                setClipOpenFor(clip.url);
+                // Back up to the video: the clip is picked while watching it.
+                window.scrollTo({
+                  top: 0,
+                  behavior: window.matchMedia(
+                    "(prefers-reduced-motion: reduce)"
+                  ).matches
+                    ? "auto"
+                    : "smooth",
+                });
+              }}
             />
           )}
           {!showRelatedRight &&
