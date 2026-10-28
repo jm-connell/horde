@@ -3766,6 +3766,87 @@
         "title": "ChapterRead",
         "type": "object"
       },
+      "ClipCreate": {
+        "description": "Save part of a video (a live or finished stream) as its own library video.\n\nA finished stream gives ``start_sec`` / ``end_sec`` (its own timeline). A\nstream that is still live gives how far behind the live edge each end is\n(``start_behind_live_sec`` > ``end_behind_live_sec``), measured when the\nrequest is sent; the server turns those into broadcast times.",
+        "properties": {
+          "end_behind_live_sec": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Behind Live Sec"
+          },
+          "end_sec": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Sec"
+          },
+          "quality_preset": {
+            "default": "best",
+            "title": "Quality Preset",
+            "type": "string"
+          },
+          "start_behind_live_sec": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Behind Live Sec"
+          },
+          "start_sec": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Sec"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url"
+        ],
+        "title": "ClipCreate",
+        "type": "object"
+      },
       "CompatBulkResult": {
         "properties": {
           "already_queued": {
@@ -4204,6 +4285,28 @@
               }
             ],
             "title": "Channel Override"
+          },
+          "clip_end_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clip End Sec"
+          },
+          "clip_start_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clip Start Sec"
           },
           "created_at": {
             "format": "date-time",
@@ -13847,6 +13950,58 @@
           }
         },
         "summary": "Create Downloads Bulk",
+        "tags": [
+          "downloads"
+        ]
+      }
+    },
+    "/api/downloads/clips": {
+      "post": {
+        "description": "Queue a clip: part of a YouTube video saved as its own library video.",
+        "operationId": "create_clip_api_downloads_clips_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClipCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DownloadJobRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create Clip",
         "tags": [
           "downloads"
         ]

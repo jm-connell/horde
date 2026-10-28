@@ -58,7 +58,7 @@ logger = logging.getLogger(__name__)
 def finalize_in_background(
     video_id: int,
     final_path: Path,
-    source_url: str,
+    source_url: str | None,
     thumbnail_url: str | None,
     list_thumbnail_url: str | None = None,
 ) -> None:
@@ -84,7 +84,13 @@ def finalize_in_background(
                 from ..subtitle_retry import apply_subtitle_outcome, outcome_from_fetch
 
                 try:
-                    outcome = subtitles.download_subtitles(final_path, source_url)
+                    # A clip has no source to fetch subtitles from: the
+                    # stream's own would not line up with it.
+                    outcome = (
+                        subtitles.download_subtitles(final_path, source_url)
+                        if source_url
+                        else outcome_from_fetch([])
+                    )
                 except Exception as exc:
                     logger.debug(
                         "subtitle fetch failed for video %s", video_id, exc_info=True
@@ -170,7 +176,8 @@ class CommitRequest:
     final_path: Path
     rel_path: str
     info: dict[str, Any]
-    source_url: str
+    #: None for a clip: it is not the video at that URL, so it must not claim it.
+    source_url: str | None
     facts: MediaFacts
 
 
@@ -331,7 +338,7 @@ def _queue_follow_up_work(
     committed: CommittedVideo,
     info: dict[str, Any],
     final_path: Path,
-    source_url: str,
+    source_url: str | None,
 ) -> None:
     """AI enrichment, channel catalog, subtitles/thumbnail and the H.264 sidecar."""
     video_id = committed.video_id
@@ -405,7 +412,7 @@ def _complete_library(
         rel_path = to_rel_path(final_path)
         scanner.mark_active(rel_path)
 
-    source_url = info.get("webpage_url") or spec.url
+    source_url = None if spec.clip else info.get("webpage_url") or spec.url
     request = CommitRequest(spec, final_path, rel_path, info, source_url, facts)
     committed = _commit_or_roll_back(request, journal, task.staging_dir is not None)
     video_id = committed.video_id

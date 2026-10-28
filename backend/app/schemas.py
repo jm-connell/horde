@@ -242,6 +242,24 @@ class DownloadCreate(BaseModel):
     playlist_id: int | None = None
 
 
+class ClipCreate(BaseModel):
+    """Save part of a video (a live or finished stream) as its own library video.
+
+    A finished stream gives ``start_sec`` / ``end_sec`` (its own timeline). A
+    stream that is still live gives how far behind the live edge each end is
+    (``start_behind_live_sec`` > ``end_behind_live_sec``), measured when the
+    request is sent; the server turns those into broadcast times.
+    """
+
+    url: str = Field(min_length=1, max_length=4000)
+    title: str | None = Field(default=None, max_length=500)
+    quality_preset: str = "best"
+    start_sec: float | None = Field(default=None, ge=0)
+    end_sec: float | None = Field(default=None, ge=0)
+    start_behind_live_sec: float | None = Field(default=None, ge=0)
+    end_behind_live_sec: float | None = Field(default=None, ge=0)
+
+
 class DownloadBulkCreate(BaseModel):
     urls: list[str] = Field(max_length=MAX_BULK_ITEMS)
     quality_preset: str = "best"
@@ -348,6 +366,9 @@ class DownloadJobRead(BaseModel):
     playlist_id: int | None = None
     #: Why a queued job is not starting: it is waiting for disk space.
     held_reason: str | None = None
+    #: A clip: the part of the video kept, in seconds from its start.
+    clip_start_sec: float | None = None
+    clip_end_sec: float | None = None
 
     @field_validator("destination", mode="before")
     @classmethod

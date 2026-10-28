@@ -19,6 +19,7 @@ from ...context import get_engine
 from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
 from ..fsutil import safe_rel
+from ..live.sessions import is_live_info
 from ..outtmpl import windows_filenames_ok
 from ..paths import staging_dir
 from ..ytdlp_common import (
@@ -49,7 +50,7 @@ from ..ytdlp_formats import (
     format_sort_for,
     pick_original_audio_format,
 )
-from . import dbwrite, lifecycle
+from . import clips, dbwrite, lifecycle
 from .artifacts import cleanup_partial_files, reject_unplayable, resolve_merged_video
 from .errors import (
     DownloadCancelled,
@@ -291,7 +292,12 @@ class DownloadRun:
             return _Outcome.SKIPPED
         self.metadata_info = merge_info(self.metadata_info, fetched)
         self.info = self.metadata_info
-        self._hold_if_too_big()
+        clip = self.spec.clip
+        if clip is not None and fetched_info is not None and is_live_info(fetched_info):
+            self._download_live_clip(fetched_info, *clip)
+            return _Outcome.FOUND
+        if clip is None:
+            self._hold_if_too_big()
         ydl_opts = self._download_opts(ydl_opts, fmt)
         self._download(ydl_opts)
         found = self.final_path is not None and self.final_path.exists()
@@ -367,12 +373,55 @@ class DownloadRun:
             self.spec.channel_override,
             self.out_root,
         )
+        clip = self.spec.clip
+        if clip is not None:
+            import yt_dlp
+
+            with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as namer:
+                outtmpl = clips.literal_outtmpl(
+                    namer, outtmpl, clips.clip_info(self.metadata_info, *clip)
+                )
+            ydl_opts = {**ydl_opts, **clips.download_range_opts(*clip)}
         self.base_opts["outtmpl"] = outtmpl
         audio_fmt = pick_original_audio_format(self.metadata_info)
         audio_id = str(audio_fmt.get("format_id") or "") if audio_fmt else ""
         fmt_spec = apply_audio_format_id([fmt], audio_id)[0] if audio_id else fmt
         opts = {**ydl_opts, "outtmpl": outtmpl, "format": fmt_spec}
         return apply_cookie_opts(opts) if self.used_cookies else opts
+
+    def _download_live_clip(
+        self, live_info: dict[str, Any], start: float, end: float
+    ) -> None:
+        """Cut the clip from the broadcast's segments while it is still live."""
+        import yt_dlp
+
+        spec = self.spec
+        info = clips.clip_info(self.metadata_info, start, end)
+        outtmpl, _ = download_outtmpl(
+            spec.destination, spec.job_id, info, spec.channel_override, self.out_root
+        )
+        with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as namer:
+            dest = Path(namer.prepare_filename({**info, "ext": "mp4"}, outtmpl=outtmpl))
+        self.prepared = dest
+        rel = safe_rel(dest)
+        if rel:
+            self.attempt_paths.add(rel)
+            self.active_paths.add(rel)
+            self._mark_library_path(rel)
+
+        def on_progress(percent: float) -> None:
+            self._raise_if_cancelled()
+            progress_store[spec.job_id] = {
+                **progress_store.get(spec.job_id, {}),
+                "status": "downloading",
+                "progress": percent,
+                "title": info.get("title"),
+            }
+            self.act.update(done=int(percent))
+
+        self.final_path = clips.download_live_clip(
+            live_info, start, end, dest, cancel=self.cancel, on_progress=on_progress
+        )
 
     # -- one yt-dlp download ---------------------------------------------------
 
@@ -468,7 +517,9 @@ class DownloadRun:
     # -- hand-off --------------------------------------------------------------
 
     def _effective_info(self) -> dict[str, Any]:
-        return merge_info(as_info(self.metadata_info), as_info(self.info))
+        info = merge_info(as_info(self.metadata_info), as_info(self.info))
+        clip = self.spec.clip
+        return info if clip is None else clips.clip_info(info, *clip)
 
     def _hand_off(self, path: Path) -> None:
         spec = self.spec

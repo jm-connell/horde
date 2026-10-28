@@ -28,6 +28,7 @@ from ..models import (
 )
 from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
 from ..schemas import (
+    ClipCreate,
     DownloadBulkCreate,
     DownloadBulkResult,
     DownloadBulkSkip,
@@ -41,7 +42,7 @@ from ..schemas import (
 from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
-from ..services.downloads import device_access
+from ..services.downloads import clips, device_access
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
 from ..services.downloads import staging as download_staging
@@ -433,6 +434,80 @@ def create_download(
         session.commit()
 
     request_job_metadata(job.id)
+    download_jobs.enqueue_download(require_id(job))
+    return _enrich_jobs(session, user, [job])[0]
+
+
+def _clip_range(
+    payload: ClipCreate, ctx: AppContext, yt_id: str
+) -> tuple[float, float]:
+    """The clip's start and end in seconds from the broadcast start."""
+    if (
+        payload.start_behind_live_sec is not None
+        or payload.end_behind_live_sec is not None
+    ):
+        if payload.start_behind_live_sec is None or payload.end_behind_live_sec is None:
+            raise CodedHTTPException(400, "Give both ends of the clip", "invalid_clip")
+        live = ctx.live.sessions.get(yt_id)
+        start = live.broadcast_seconds(payload.start_behind_live_sec) if live else None
+        end = live.broadcast_seconds(payload.end_behind_live_sec) if live else None
+        if start is None or end is None:
+            raise CodedHTTPException(
+                409, "Play the live stream before saving a clip of it", "live_not_open"
+            )
+        return start, end
+    if payload.start_sec is None or payload.end_sec is None:
+        raise CodedHTTPException(400, "Give both ends of the clip", "invalid_clip")
+    return payload.start_sec, payload.end_sec
+
+
+@router.post(
+    "/clips",
+    response_model=DownloadJobRead,
+    dependencies=[Depends(require_permission("download"))],
+)
+def create_clip(
+    payload: ClipCreate,
+    request: Request,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Queue a clip: part of a YouTube video saved as its own library video."""
+    validate_public_url(payload.url)
+    url = clean_url(payload.url, keep_playlist=False)
+    yt_id = youtube_video_id(url)
+    if not yt_id:
+        raise CodedHTTPException(400, "Clips need a YouTube video link", "invalid_url")
+    start, end = _clip_range(payload, get_ctx(request), yt_id)
+    if end - start < 1:
+        raise CodedHTTPException(
+            400, "The clip must be at least a second long", "invalid_clip"
+        )
+    if end - start > clips.MAX_CLIP_SEC:
+        raise CodedHTTPException(
+            400,
+            f"A clip can be at most {int(clips.MAX_CLIP_SEC // 3600)} hours long",
+            "invalid_clip",
+        )
+    title = (payload.title or "").strip()
+    with download_jobs.job_mutate_lock:
+        job = DownloadJob(
+            url=url,
+            quality_preset=(payload.quality_preset or "best").strip() or "best",
+            status=JobStatus.queued,
+            thumbnail_url=youtube_thumbnail_url(yt_id),
+            title=f"{title} {clips.clip_suffix(start, end)}" if title else None,
+            video_codec=normalize_video_codec(default_download_video_codec()),
+            destination="library",
+            paused=download_queue.is_paused(),
+            clip_start_sec=start,
+            clip_end_sec=end,
+        )
+        session.add(job)
+        session.commit()
+        session.refresh(job)
+        follows.record_requester(session, require_id(job), user.id)
+        session.commit()
     download_jobs.enqueue_download(require_id(job))
     return _enrich_jobs(session, user, [job])[0]
 

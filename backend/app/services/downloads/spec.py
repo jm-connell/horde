@@ -29,6 +29,15 @@ class JobSpec:
     notes_pending: str | None = None
     destination: str = DownloadDestination.library.value
     video_codec: str = "av1"
+    clip_start_sec: float | None = None
+    clip_end_sec: float | None = None
+
+    @property
+    def clip(self) -> tuple[float, float] | None:
+        """``(start, end)`` in seconds when only part of the video is wanted."""
+        if self.clip_start_sec is None or self.clip_end_sec is None:
+            return None
+        return self.clip_start_sec, self.clip_end_sec
 
     @property
     def is_device(self) -> bool:
@@ -61,4 +70,6 @@ class JobSpec:
                 notes_pending=job.notes_pending,
                 destination=destination,
                 video_codec=job.video_codec or "av1",
+                clip_start_sec=job.clip_start_sec,
+                clip_end_sec=job.clip_end_sec,
             )

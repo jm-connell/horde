@@ -70,6 +70,8 @@ def find_active_job_for_identity(
     for job in jobs:
         if job.id in hidden or (destination and job.destination != destination):
             continue
+        if job.clip_start_sec is not None:
+            continue  # a clip is its own video, never the one at this URL
         other = job.url or ""
         if yt_id and youtube_video_id(other) == yt_id:
             return job
