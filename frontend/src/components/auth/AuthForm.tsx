@@ -88,7 +88,7 @@ export function Field({
   );
 }
 
-const METER_FILL = ["bg-red-400", "bg-amber-400", "bg-accent", "bg-accent"];
+const METER_FILL = ["bg-danger", "bg-warning", "bg-accent", "bg-accent"];
 
 function StrengthMeter({ password }: { password: string }) {
   const level = passwordStrength(password);
@@ -118,7 +118,7 @@ export function FormError({ message }: { message: string | null }) {
     <p
       role="alert"
       aria-live="assertive"
-      className={message ? "mb-4 text-sm text-red-400" : "sr-only"}
+      className={message ? "mb-4 text-sm text-danger" : "sr-only"}
     >
       {message ?? ""}
     </p>

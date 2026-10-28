@@ -108,7 +108,7 @@ function DownloadingRow({
           <div className="h-full bg-accent" style={{ width: `${pct}%` }} />
         </div>
         <p
-          className={`mt-1 text-xs ${item.status === "error" ? "text-red-400" : "text-gray-400"}`}
+          className={`mt-1 text-xs ${item.status === "error" ? "text-danger" : "text-gray-400"}`}
         >
           {status}
           {item.totalBytes
@@ -141,7 +141,7 @@ function DownloadingRow({
             </button>
           ) : null}
           <button
-            className={`${btn} border-red-500/40! text-red-400! hover:bg-red-500/10!`}
+            className={`${btn} border-danger/40! text-danger! hover:bg-danger/10!`}
             onClick={() => onRemove(item)}
           >
             Remove
@@ -202,7 +202,7 @@ function DownloadedCard({
         aria-label={`Remove ${v.title} from this device`}
         title="Remove download"
         onClick={() => onRemove(item)}
-        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-red-500/10 hover:text-red-400"
+        className="absolute bottom-0 right-0 rounded-lg p-1.5 text-muted hover:bg-danger/10 hover:text-danger"
       >
         <svg
           viewBox="0 0 24 24"
@@ -329,7 +329,7 @@ export default function OfflinePage({
       ) : null}
 
       {snap.unsupported ? (
-        <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
+        <div className="ui-panel rounded-lg border border-warning/30 bg-ink-900 p-4">
           <p className="mb-2 font-medium text-gray-100">
             Offline downloads aren’t available on this connection
           </p>

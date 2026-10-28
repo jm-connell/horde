@@ -17,11 +17,11 @@ const SAVE_BTN =
 
 export function TestResult({ result }: { result: NotificationTestResult }) {
   return result.ok ? (
-    <p role="status" className="text-xs text-emerald-400">
+    <p role="status" className="text-xs text-success">
       Sent (HTTP {result.status_code}). Check that it arrived.
     </p>
   ) : (
-    <p role="alert" className="text-xs text-red-400">
+    <p role="alert" className="text-xs text-danger">
       Not delivered: {result.error ?? "unknown error"}
     </p>
   );

@@ -38,9 +38,9 @@ const TRASH_TERMS = [
 
 const SMALL_BTN = `${PANEL_BTN} px-2.5! py-1! text-xs!`;
 const DANGER_BTN =
-  "ui-interactive rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:border-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
+  "ui-interactive rounded-lg border border-danger/40 px-3 py-1.5 text-sm text-danger hover:border-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
 const DANGER_SMALL_BTN =
-  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-red-400 hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50";
+  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
 
 /**
  * Deleted videos waiting to be erased: how much they take, emptying the trash,
@@ -231,7 +231,7 @@ export default function TrashSection() {
           {list.isPending && open ? (
             <p className="text-sm text-muted">Loading…</p>
           ) : list.isError ? (
-            <p className="text-sm text-red-400">
+            <p className="text-sm text-danger">
               Could not load the trash: {describeError(list.error)}
             </p>
           ) : items.length === 0 ? (
@@ -324,7 +324,7 @@ function TrashRow({
           <p className="truncate text-xs text-muted">
             {item.reason || deletedLabel(item.trashed_at, item.trashed_by)}
             {" · "}
-            <span className={soon ? "text-amber-400/90" : undefined}>
+            <span className={soon ? "text-warning" : undefined}>
               {daysLeftLabel(item.expires_at)}
             </span>
           </p>

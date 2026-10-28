@@ -47,7 +47,7 @@ function CurrentAiJob({ job }: { job: AiCurrentJob | string }) {
             </span>
           )}
           {job.error && attempts > 1 && (
-            <span className="mt-0.5 block truncate text-[10px] text-amber-400/90">
+            <span className="mt-0.5 block truncate text-[10px] text-warning">
               {job.error}
             </span>
           )}
@@ -153,7 +153,7 @@ export default function AiQueueStatus({
               <button
                 type="button"
                 onClick={() => void onPause()}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-amber-500/50 hover:text-amber-300"
+                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-warning/50 hover:text-warning"
               >
                 Pause
               </button>
@@ -178,9 +178,7 @@ export default function AiQueueStatus({
             <dt className="text-gray-400">Status</dt>
             <dd
               className={
-                blocked
-                  ? "text-right text-amber-300"
-                  : "text-right text-gray-200"
+                blocked ? "text-right text-warning" : "text-right text-gray-200"
               }
             >
               {statusLabel}
@@ -208,7 +206,7 @@ export default function AiQueueStatus({
         </dd>
       </div>
       {blocked && aiStatus.blocked_reason && (
-        <p className="text-xs text-amber-400/90">{aiStatus.blocked_reason}</p>
+        <p className="text-xs text-warning">{aiStatus.blocked_reason}</p>
       )}
       {aiStatus.current_job && <CurrentAiJob job={aiStatus.current_job} />}
       {providerLine && (
@@ -223,7 +221,7 @@ export default function AiQueueStatus({
           <dd
             className={
               openRouterCosts?.over_budget
-                ? "text-right text-amber-200"
+                ? "text-right text-warning"
                 : "text-right text-gray-200"
             }
           >
@@ -326,13 +324,13 @@ export default function AiQueueStatus({
       {aiStatus.pulling.length > 0 && (
         <div className="flex justify-between gap-3">
           <dt className="text-gray-400">Pulling</dt>
-          <dd className="text-right text-amber-300">
+          <dd className="text-right text-warning">
             {aiStatus.pulling.join(", ")}
           </dd>
         </div>
       )}
       {aiStatus.last_error && (
-        <p className="text-xs text-red-400">{aiStatus.last_error}</p>
+        <p className="text-xs text-danger">{aiStatus.last_error}</p>
       )}
     </dl>
   );

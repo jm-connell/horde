@@ -88,9 +88,9 @@ const MODES: ModeInfo[] = [
 ];
 
 const LEVEL_CLASS: Record<Level, string> = {
-  low: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-  mid: "border-sky-500/30 bg-sky-500/10 text-sky-300",
-  high: "border-amber-500/30 bg-amber-500/10 text-amber-300",
+  low: "border-success/30 bg-success/10 text-success",
+  mid: "border-ink-600 bg-ink-800 text-gray-300",
+  high: "border-warning/30 bg-warning/10 text-warning",
 };
 
 function Pill({
@@ -106,7 +106,7 @@ function Pill({
     <span
       className={`rounded-full border px-2 py-0.5 text-[11px] ${LEVEL_CLASS[level]}`}
     >
-      <span className="opacity-70">{kind}:</span> {label}
+      {kind}: <span className="font-medium">{label}</span>
     </span>
   );
 }
@@ -227,9 +227,7 @@ export default function PlaybackCompatPicker({
             GPU:{" "}
             {hw.gpuName ? (
               <span
-                className={
-                  hw.hasGpuEncode ? "text-emerald-300" : "text-amber-300"
-                }
+                className={hw.hasGpuEncode ? "text-success" : "text-warning"}
               >
                 {hw.gpuName}
                 {hw.hasGpuEncode
@@ -238,7 +236,7 @@ export default function PlaybackCompatPicker({
               </span>
             ) : hw.hasGpuEncode ? (
               // Members get no GPU name from /api/system/stats, only whether it encodes.
-              <span className="text-emerald-300">usable for encoding</span>
+              <span className="text-success">usable for encoding</span>
             ) : stats ? (
               <span className="text-gray-300">None detected</span>
             ) : (
@@ -253,14 +251,14 @@ export default function PlaybackCompatPicker({
           {av1Here != null && (
             <span className="text-gray-400">
               This device:{" "}
-              <span className={av1Here ? "text-emerald-300" : "text-amber-300"}>
+              <span className={av1Here ? "text-success" : "text-warning"}>
                 {av1Here ? "can play AV1" : "can’t play AV1"}
               </span>
             </span>
           )}
         </div>
         {hw.gpuVisibleButUnusable && (
-          <p className="mt-1.5 text-amber-300/90">
+          <p className="mt-1.5 text-warning">
             {hw.gpuName} is on this machine, but Horde’s container can’t use it
             for encoding. Pass the GPU into the horde container (see the GPU
             section of the environment docs) and restart.
@@ -480,7 +478,7 @@ function ModeWarnings({
       {out.map((w) => (
         <p
           key={w.text}
-          className={`text-xs ${w.tone === "warn" ? "text-amber-400/90" : "text-muted"}`}
+          className={`text-xs ${w.tone === "warn" ? "text-warning" : "text-muted"}`}
         >
           {w.text}
         </p>
@@ -623,7 +621,7 @@ function LibraryActions({
                 : "Every original is already H.264."}
             </p>
             {!hasGpuEncode && summary.convertible > 0 && (
-              <p className="text-amber-400/90">
+              <p className="text-warning">
                 No GPU encoder: converting{" "}
                 {plural(summary.convertible, "video", "videos")} on the CPU
                 could take days.
@@ -646,7 +644,7 @@ function LibraryActions({
             <span className="flex items-center gap-2">
               <button
                 type="button"
-                className="rounded-lg border border-red-500/50 bg-red-500/15 px-3 py-1.5 text-sm text-red-200 hover:bg-red-500/25"
+                className="rounded-lg border border-danger/50 bg-danger/15 px-3 py-1.5 text-sm text-danger hover:bg-danger/25"
                 disabled={busy}
                 onClick={() => run(api.convertLibraryToH264, "Conversion")}
               >

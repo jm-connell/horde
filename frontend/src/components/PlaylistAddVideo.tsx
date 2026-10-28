@@ -446,7 +446,7 @@ export default function PlaylistAddVideo({
               )}
             </ul>
           </Collapse>
-          {error && <p className="mt-1 text-sm text-red-400">{error}</p>}
+          {error && <p className="mt-1 text-sm text-danger">{error}</p>}
           {status && !error && (
             <p className="mt-1 text-sm text-accent">{status}</p>
           )}

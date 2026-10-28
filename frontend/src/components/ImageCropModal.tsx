@@ -442,10 +442,10 @@ export default function ImageCropModal({
         </div>
 
         {loadError ? (
-          <p className="mt-3 text-sm text-red-400">{loadError}</p>
+          <p className="mt-3 text-sm text-danger">{loadError}</p>
         ) : null}
         {actionError ? (
-          <p className="mt-3 text-sm text-red-400">{actionError}</p>
+          <p className="mt-3 text-sm text-danger">{actionError}</p>
         ) : null}
 
         <div className="mt-4 space-y-3">

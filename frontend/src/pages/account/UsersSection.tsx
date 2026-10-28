@@ -119,14 +119,14 @@ export default function UsersSection() {
                   </span>
                   {u.two_factor_enabled && (
                     <span
-                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-emerald-400"
+                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-success"
                       title="Signs in with a code from an authenticator app"
                     >
                       Two-step
                     </span>
                   )}
                   {u.disabled && (
-                    <span className="rounded-sm bg-red-900/40 px-1.5 py-0.5 text-xs text-red-300">
+                    <span className="rounded-sm bg-danger/10 px-1.5 py-0.5 text-xs text-danger">
                       Disabled
                     </span>
                   )}
@@ -442,7 +442,7 @@ function UserEditor({
         )}
         <button
           type="button"
-          className={`${PANEL_BTN} text-red-300`}
+          className={`${PANEL_BTN} text-danger`}
           disabled={busy}
           onClick={onDelete}
         >

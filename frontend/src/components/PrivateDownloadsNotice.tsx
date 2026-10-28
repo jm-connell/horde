@@ -70,7 +70,7 @@ function UnlockForm({
         <p
           id={`${id}-error`}
           role="alert"
-          className="basis-full text-xs text-red-400"
+          className="basis-full text-xs text-danger"
         >
           That password doesn’t match.
         </p>

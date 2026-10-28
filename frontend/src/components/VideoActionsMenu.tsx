@@ -253,7 +253,7 @@ export default function VideoActionsMenu({
                 onDelete();
               }}
               role="menuitem"
-              className="block w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-red-500/10"
+              className="block w-full px-4 py-2 text-left text-sm text-danger hover:bg-danger/10"
             >
               Delete
             </button>

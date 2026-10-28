@@ -195,7 +195,7 @@ function AutoDownloadForm({
             />
           </label>
 
-          <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+          <p className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
             {previousMode === "all"
               ? `All indexed videos can use a lot of storage. It is limited to the channel catalog cap (${policy.catalog_max_videos} videos).`
               : "Automatic downloads can use a lot of storage over time."}

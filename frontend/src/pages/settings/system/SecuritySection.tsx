@@ -16,12 +16,12 @@ const REQUIREMENTS: { value: TwoFactorRequirement; label: string }[] = [
 
 function Mark({ status }: { status: SecurityCheckItem["status"] }) {
   return status === "ok" ? (
-    <span className="text-emerald-400">
+    <span className="text-success">
       <CheckIcon />
       <span className="sr-only">Passed</span>
     </span>
   ) : (
-    <span className="text-amber-400">
+    <span className="text-warning">
       <span aria-hidden="true">!</span>
       <span className="sr-only">Needs attention</span>
     </span>

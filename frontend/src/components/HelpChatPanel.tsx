@@ -417,7 +417,7 @@ export default function HelpChatPanel({
           );
         })}
         {error && (
-          <p role="alert" className="text-xs text-amber-400/90">
+          <p role="alert" className="text-xs text-warning">
             {error}
           </p>
         )}

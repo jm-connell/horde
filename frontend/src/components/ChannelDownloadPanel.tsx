@@ -245,7 +245,7 @@ export default function ChannelDownloadPanel({
                     type="button"
                     onClick={() => onCancel(item.tempId)}
                     disabled={item.submitting}
-                    className="rounded-md px-2 py-1 text-xs text-muted hover:text-red-400 disabled:opacity-50"
+                    className="rounded-md px-2 py-1 text-xs text-muted hover:text-danger disabled:opacity-50"
                   >
                     Cancel
                   </button>

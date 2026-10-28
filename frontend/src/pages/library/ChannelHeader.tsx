@@ -119,7 +119,7 @@ export default function ChannelHeader({
                   chip.tone === "accent"
                     ? "border-accent/40 bg-accent/10 text-accent"
                     : chip.tone === "error"
-                      ? "border-red-500/40 bg-red-500/10 text-red-300"
+                      ? "border-danger/40 bg-danger/10 text-danger"
                       : "border-ink-700 bg-ink-900 text-muted hover:text-gray-200"
                 }`}
               >

@@ -22,6 +22,7 @@ colors:
   text-muted: "#878a91"
   danger: "#f87171"
   warning: "#fbbf24"
+  success: "#34d399"
 typography:
   page-title:
     fontFamily: "Inter, system-ui, sans-serif"
@@ -144,13 +145,21 @@ reads them through `@theme inline` (`bg-ink-900`, `text-accent`, `text-muted`).
 - **Text**: `gray-100` (#f3f4f6) for headings and titles, `gray-200` (#e5e7eb)
   for body, `gray-300` for secondary, `text-muted` (#878a91, theme-tuned) for
   metadata.
-- **Status**: red-400 for failures and destructive actions, amber-400/300 for
-  waiting, held and warning states.
+- **Status**: three roles, tuned per theme like `text-muted` so they read
+  at 4.5:1 as text on every surface (light themes use deep red, brown and
+  green): `danger` (#f87171) for failures and destructive actions, `warning`
+  (#fbbf24) for waiting, held and warning states, `success` (#34d399) for
+  done, connected and healthy. Use `text-danger`, `bg-danger/10`,
+  `border-danger/40` and so on, never `text-red-*`/`amber-*`/`emerald-*`.
+  Solid destructive buttons are the exception: `bg-red-600` with white text
+  (4.8:1) on every theme. Raw red stays for things that sit on video or mean
+  "live" (the LIVE badge and dots, player errors).
 - **Marked range**: amber-400 ticks with an amber-400/45 span on the seek bar
   for the clip being picked, so it never reads as the accent playback progress.
 
 ### Named Rules
-**The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`),
+**The Theme Role Rule.** Use the role tokens (`ink-*`, `accent*`, `text-muted`,
+`danger`, `warning`, `success`),
 never raw hex or Tailwind palette colors for surfaces and accents. A color that
 only looks right on the default theme is a bug on the other twelve.
 

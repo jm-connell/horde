@@ -77,15 +77,15 @@ export default function ConnectionPane() {
               onChange={() => saveAi({ enabled: !aiDraft.enabled })}
             />
             {aiStatus?.configured && aiStatus.reachable && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 text-xs font-medium text-success ring-1 ring-success/30">
+                <span className="h-1.5 w-1.5 rounded-full bg-success" />
                 Connected
                 {connectedTo ? ` · ${connectedTo}` : ""}
               </span>
             )}
             {aiDraft.enabled && aiStatus?.configured && !aiStatus.reachable && (
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300 ring-1 ring-amber-500/30">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning ring-1 ring-warning/30">
+                <span className="h-1.5 w-1.5 rounded-full bg-warning" />
                 Unreachable
                 {(aiStatus.waiting_count ?? 0) > 0
                   ? ` · ${aiStatus.waiting_count} waiting`
@@ -133,7 +133,7 @@ export default function ConnectionPane() {
             </a>
             .
           </p>
-          <p className="text-xs text-amber-500/90">
+          <p className="text-xs text-warning">
             Titles, descriptions, captions, notes, and chat messages are sent to
             this provider. Use a server you run (such as Ollama) to keep them on
             your network.
@@ -220,7 +220,7 @@ export default function ConnectionPane() {
             aiStatus.reachable &&
             aiDraft.chat_model &&
             !aiStatus.chat_model_present && (
-              <p className="text-xs text-amber-400/90">
+              <p className="text-xs text-warning">
                 {usesOllama
                   ? aiStatus.pulling.includes(aiDraft.chat_model)
                     ? "Downloading this model on Ollama…"

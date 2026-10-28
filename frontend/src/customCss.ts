@@ -36,6 +36,9 @@ export const CSS_VARIABLES: CssHookRow[] = [
     selector: "--on-accent",
     meaning: "Text on accent fills (primary buttons, pills)",
   },
+  { selector: "--danger", meaning: "Failures and destructive actions" },
+  { selector: "--warning", meaning: "Waiting, held and warning states" },
+  { selector: "--success", meaning: "Done, connected and healthy states" },
   { selector: "--font-sans", meaning: "UI typeface stack" },
   {
     selector: "--ui-panel-alpha",

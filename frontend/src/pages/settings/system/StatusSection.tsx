@@ -20,7 +20,7 @@ function LastExtractFailure({
   const copy = extractFailureCopy(failure);
   return (
     <>
-      <span className="text-red-400">{downloadErrorLabel(failure.kind)}</span>
+      <span className="text-danger">{downloadErrorLabel(failure.kind)}</span>
       {copy.target ? (
         <div className="mt-0.5 text-xs text-gray-200">{copy.target}</div>
       ) : null}
@@ -117,7 +117,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
                     : ""}
                 </>
               ) : (
-                <span className="text-red-400">
+                <span className="text-danger">
                   {health.pot_provider.detail ?? "Unavailable"}
                 </span>
               )}
@@ -140,7 +140,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
               health.ai.configured &&
               !health.ai.reachable &&
               health.ai.last_error ? (
-                <div className="mt-0.5 max-w-xs text-xs text-red-400">
+                <div className="mt-0.5 max-w-xs text-xs text-danger">
                   {health.ai.last_error}
                 </div>
               ) : null}
@@ -167,7 +167,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
             {health.downloads?.active ?? health.active_downloads}
             {health.downloads?.paused ? " · paused" : ""}
             {health.downloads?.held_reason ? (
-              <span className="mt-0.5 block text-xs text-amber-400/90">
+              <span className="mt-0.5 block text-xs text-warning">
                 {health.downloads.held_reason}
               </span>
             ) : null}
@@ -183,7 +183,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
                   ? ` · ${health.workers.ai_error_count} failed`
                   : ""}
                 {health.workers.ai_blocked_reason ? (
-                  <span className="mt-0.5 block text-xs text-amber-400/90">
+                  <span className="mt-0.5 block text-xs text-warning">
                     {health.workers.ai_blocked_reason}
                   </span>
                 ) : null}

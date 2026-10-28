@@ -70,7 +70,7 @@ export default function TwoFactorEnroll({
   if (codes) {
     return (
       <div>
-        <p className="mb-3 text-sm font-medium text-emerald-400" role="status">
+        <p className="mb-3 text-sm font-medium text-success" role="status">
           Two-step sign-in is on.
         </p>
         <RecoveryCodes username={username} codes={codes} />

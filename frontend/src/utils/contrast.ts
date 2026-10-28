@@ -18,19 +18,21 @@ export function contrastRatio(a: Rgb, b: Rgb): number {
 }
 
 /**
- * Muted-text colour for a custom theme: the smallest step from `surface`
- * towards black or white (whichever contrasts more) that reaches `min`
- * against every given surface.
+ * Muted-text colour for a custom theme: the smallest step from `base`
+ * towards `toward` (by default black or white, whichever contrasts more with
+ * `base`) that reaches `min` against every given surface.
  */
 export function mutedTextFor(
   surfaces: readonly Rgb[],
   base: Rgb,
-  min = 4.6
+  min = 4.6,
+  toward?: Rgb
 ): Rgb {
   const white: Rgb = [255, 255, 255];
   const black: Rgb = [0, 0, 0];
   const target =
-    contrastRatio(white, base) >= contrastRatio(black, base) ? white : black;
+    toward ??
+    (contrastRatio(white, base) >= contrastRatio(black, base) ? white : black);
   for (let step = 0; step <= 100; step += 1) {
     const t = step / 100;
     const c = base.map((v, i) => Math.round(v + (target[i] - v) * t)) as Rgb;

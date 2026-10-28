@@ -59,7 +59,7 @@ export default function ProvidersPane() {
             </div>
           </div>
           {reindexPrompt && (
-            <div className="ui-panel rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+            <div className="ui-panel rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning">
               <p>{reindexPrompt}</p>
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -83,12 +83,10 @@ export default function ProvidersPane() {
             </div>
           )}
           {aiStatus?.profile_locked && aiStatus.lock_reason && (
-            <p className="text-xs text-amber-400/90">{aiStatus.lock_reason}</p>
+            <p className="text-xs text-warning">{aiStatus.lock_reason}</p>
           )}
           {aiStatus?.workload_warning && (
-            <p className="text-xs text-amber-400/90">
-              {aiStatus.workload_warning}
-            </p>
+            <p className="text-xs text-warning">{aiStatus.workload_warning}</p>
           )}
           {aiStatus && aiStatus.models_match_profile === false && (
             <p className="text-xs text-muted">

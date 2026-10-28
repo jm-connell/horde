@@ -94,7 +94,7 @@ export default function ManageSection({
                 <p
                   className={`text-xs ${
                     catalogProgress.status === "error"
-                      ? "text-red-400"
+                      ? "text-danger"
                       : "text-muted"
                   }`}
                 >
@@ -114,7 +114,7 @@ export default function ManageSection({
                 )}
             </div>
             {catalogProgress.lastError && (
-              <p className="mt-1.5 text-xs text-red-400">
+              <p className="mt-1.5 text-xs text-danger">
                 {catalogProgress.lastError}
               </p>
             )}

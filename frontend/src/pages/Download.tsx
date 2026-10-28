@@ -604,27 +604,27 @@ export default function Download() {
               href="https://github.com/yt-dlp/yt-dlp/blob/master/supportedsites.md"
               target="_blank"
               rel="noreferrer"
-              className="text-accent hover:underline"
+              className="text-accent underline"
             >
               Supported sites
             </a>
           </p>
           {pasteHint && (
-            <p className="mt-1 text-xs text-amber-200/90">{pasteHint}</p>
+            <p className="mt-1 text-xs text-warning">{pasteHint}</p>
           )}
           {previewing && !isBulkList && (
             <p className="mt-1 text-xs text-muted">Reading link…</p>
           )}
           {!previewing && previewError && (
-            <div className="mt-2 rounded-lg border border-red-900/60 bg-red-950/40 px-3 py-2 text-sm text-red-300">
+            <div className="mt-2 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-sm text-danger">
               <p className="font-medium">
                 {downloadErrorLabel(previewError.kind)}
               </p>
-              <p className="mt-0.5 text-xs text-red-300/90">
+              <p className="mt-0.5 text-xs text-danger">
                 {previewError.message}
               </p>
               {downloadErrorHint(previewError.kind) && (
-                <p className="mt-1 text-xs text-red-400/80">
+                <p className="mt-1 text-xs text-danger">
                   {downloadErrorHint(previewError.kind)}
                 </p>
               )}
@@ -815,7 +815,7 @@ export default function Download() {
           </button>
         )}
 
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-danger">{error}</p>}
         {importMessage && (
           <p className="text-sm text-accent">
             {importMessage}
@@ -891,7 +891,7 @@ export default function Download() {
           {queueHeldReason && (
             <p
               role="status"
-              className="mb-3 rounded-lg bg-amber-500/10 px-3 py-2 text-sm text-amber-300"
+              className="mb-3 rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning"
             >
               {queueHeldReason}. Waiting downloads start by themselves when
               there is room.
@@ -900,7 +900,7 @@ export default function Download() {
                   {" "}
                   <Link
                     to="/settings?tab=system"
-                    className="underline hover:text-amber-200"
+                    className="underline hover:text-warning"
                   >
                     Storage settings
                   </Link>

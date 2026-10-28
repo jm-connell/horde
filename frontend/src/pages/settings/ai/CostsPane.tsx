@@ -52,7 +52,7 @@ export default function CostsPane() {
             key={row.key}
             className={`rounded-lg border bg-ink-950/60 px-3 py-2 ${
               row.key === "d7" && openRouterCosts?.over_budget
-                ? "border-amber-500/40"
+                ? "border-warning/40"
                 : "border-ink-700"
             }`}
             title={aiDraft.chat_model || undefined}
@@ -63,7 +63,7 @@ export default function CostsPane() {
             <p
               className={`mt-1 text-sm font-medium tabular-nums ${
                 row.key === "d7" && openRouterCosts?.over_budget
-                  ? "text-amber-200"
+                  ? "text-warning"
                   : "text-gray-200"
               }`}
             >
@@ -153,8 +153,8 @@ export default function CostsPane() {
           <div
             className={`rounded-lg border px-3 py-2 text-xs ${
               openRouterCosts.blocked
-                ? "border-red-500/35 bg-red-500/10 text-red-100/90"
-                : "border-amber-500/30 bg-amber-500/10 text-amber-100/90"
+                ? "border-danger/35 bg-danger/10 text-danger"
+                : "border-warning/30 bg-warning/10 text-warning"
             }`}
           >
             {openRouterCosts.blocked ? (

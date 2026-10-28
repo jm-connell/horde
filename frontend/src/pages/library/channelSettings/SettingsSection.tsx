@@ -40,7 +40,7 @@ export default function SettingsSection({
       </h3>
       <p className="mt-0.5 text-xs text-muted">{description}</p>
       {readOnlyNote && (
-        <p className="mt-2 text-xs text-amber-200/90">{readOnlyNote}</p>
+        <p className="mt-2 text-xs text-warning">{readOnlyNote}</p>
       )}
       <div className="mt-4">{children}</div>
     </section>

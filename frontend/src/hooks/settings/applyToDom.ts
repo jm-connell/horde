@@ -14,6 +14,9 @@ const THEME_CSS_VARS = [
   "--text-muted",
   "--accent-text",
   "--on-accent",
+  "--danger",
+  "--warning",
+  "--success",
 ] as const;
 
 export type Rgb = [number, number, number];
@@ -85,6 +88,23 @@ function applyCustomColors(colors: CustomColors): void {
       )
     )
   );
+  // Status colours (red, amber, emerald 400), lightened on dark backgrounds
+  // and darkened on light ones until they read on every surface and on
+  // their own tinted panels.
+  const away =
+    contrastRatio(white, bg) >= contrastRatio(black, bg) ? white : black;
+  const statusBases: [string, Rgb][] = [
+    ["--danger", [248, 113, 113]],
+    ["--warning", [251, 191, 36]],
+    ["--success", [52, 211, 153]],
+  ];
+  for (const [prop, base] of statusBases) {
+    const tinted = [...surfaces, mixRgb(surfaces[1], base, 0.15)];
+    root.style.setProperty(
+      prop,
+      rgbString(mutedTextFor(tinted, base, 4.6, away))
+    );
+  }
   root.style.setProperty("--ink-950", rgbString(bg));
   root.style.setProperty("--ink-900", rgbString(mixRgb(bg, white, 0.08)));
   root.style.setProperty("--ink-800", rgbString(mixRgb(bg, white, 0.14)));

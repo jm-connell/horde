@@ -568,7 +568,7 @@ export default function PlaylistRow({
                         onClick={() => void removeDownloads()}
                         disabled={removingDownloads}
                         title="Delete the downloaded copies; the playlist keeps its videos"
-                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-red-500/60 hover:text-red-400 disabled:opacity-50"
+                        className="shrink-0 rounded-lg border border-ink-600 px-3 py-1.5 text-sm text-gray-300 hover:border-danger/60 hover:text-danger disabled:opacity-50"
                       >
                         Remove from server
                       </button>
@@ -578,7 +578,7 @@ export default function PlaylistRow({
                       type="button"
                       onClick={onStopSubscribing}
                       disabled={actionBusy}
-                      className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-sm text-amber-400 hover:bg-amber-500/10 disabled:opacity-50"
+                      className="shrink-0 rounded-lg border border-warning/40 px-3 py-1.5 text-sm text-warning hover:bg-warning/10 disabled:opacity-50"
                     >
                       Stop subscription
                     </button>
@@ -597,7 +597,7 @@ export default function PlaylistRow({
                     <button
                       type="button"
                       onClick={onDelete}
-                      className="shrink-0 rounded-lg border border-red-500/40 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+                      className="shrink-0 rounded-lg border border-danger/40 px-3 py-1.5 text-sm text-danger hover:bg-danger/10"
                     >
                       Delete
                     </button>
@@ -616,7 +616,7 @@ export default function PlaylistRow({
                 </div>
               </div>
               {playlist.sync_error && (
-                <p className="mt-2 text-sm text-red-400">
+                <p className="mt-2 text-sm text-danger">
                   {playlist.sync_error}
                 </p>
               )}

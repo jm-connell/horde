@@ -185,16 +185,16 @@ export default function EndpointFields({
           {keyProvider && !result && (
             <span className="text-muted">{keyProvider} key</span>
           )}
-          {problem && <span className="text-amber-300">{problem}</span>}
+          {problem && <span className="text-warning">{problem}</span>}
           {result?.ok && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 font-medium text-emerald-400 ring-1 ring-emerald-500/30">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/15 px-2.5 py-1 font-medium text-success ring-1 ring-success/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-success" />
               Connected · {providerLabel(result.base_url ?? input, result.kind)}
             </span>
           )}
           {result && !result.ok && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 font-medium text-amber-300 ring-1 ring-amber-500/30">
-              <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-warning/15 px-2.5 py-1 font-medium text-warning ring-1 ring-warning/30">
+              <span className="h-1.5 w-1.5 rounded-full bg-warning" />
               {result.detail || "Unreachable"}
             </span>
           )}

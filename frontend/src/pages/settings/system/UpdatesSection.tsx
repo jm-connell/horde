@@ -10,9 +10,9 @@ import type { UpdateTone } from "./updateView";
 
 const TONE_CLASS: Record<UpdateTone, string> = {
   progress: "text-gray-200",
-  success: "text-emerald-400",
-  warning: "text-amber-400",
-  error: "text-red-400",
+  success: "text-success",
+  warning: "text-warning",
+  error: "text-danger",
   muted: "text-muted",
 };
 

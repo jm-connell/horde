@@ -406,7 +406,7 @@ export default function Import() {
                 <span
                   className={
                     u.status === "error"
-                      ? "shrink-0 text-red-400"
+                      ? "shrink-0 text-danger"
                       : u.status === "done"
                         ? "shrink-0 text-accent"
                         : "shrink-0 text-muted"
@@ -424,7 +424,7 @@ export default function Import() {
               <div className="h-1.5 overflow-hidden rounded-full bg-ink-800">
                 <div
                   className={`h-full w-full transition-[transform,background-color] ease-linear ${
-                    u.status === "error" ? "bg-red-500" : "bg-accent"
+                    u.status === "error" ? "bg-danger" : "bg-accent"
                   }`}
                   style={{
                     transform: `translateX(${
@@ -479,7 +479,7 @@ export default function Import() {
                     {can("delete_videos") && (
                       <button
                         onClick={() => void deleteVideoFile(v)}
-                        className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-4 py-2 text-sm text-red-400 ring-1 ring-ink-700 hover:bg-red-500/10"
+                        className="ui-panel ui-interactive rounded-lg border border-danger/40 bg-ink-900 px-4 py-2 text-sm text-danger ring-1 ring-ink-700 hover:bg-danger/10"
                       >
                         Delete
                       </button>
@@ -524,11 +524,11 @@ export default function Import() {
                               <span
                                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                                   group.ai_error && !group.ai_verdict
-                                    ? "bg-amber-500/15 text-amber-300"
+                                    ? "bg-warning/15 text-warning"
                                     : group.ai_verdict === "different"
                                       ? "bg-ink-800 text-gray-400"
                                       : group.ai_verdict === "similar"
-                                        ? "bg-amber-500/15 text-amber-300"
+                                        ? "bg-warning/15 text-warning"
                                         : "bg-accent/15 text-accent"
                                 }`}
                               >
@@ -585,7 +585,7 @@ export default function Import() {
                                   <button
                                     type="button"
                                     onClick={() => void deleteVideoFile(v)}
-                                    className="rounded-sm border border-red-500/40 px-3 py-1 text-xs text-red-400 hover:bg-red-500/10"
+                                    className="rounded-sm border border-danger/40 px-3 py-1 text-xs text-danger hover:bg-danger/10"
                                   >
                                     Delete
                                   </button>

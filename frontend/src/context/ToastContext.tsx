@@ -136,7 +136,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       data-horde="toast"
       data-variant={t.variant}
       className={`pointer-events-auto flex items-start gap-3 rounded-lg bg-ink-800 px-4 py-3 text-sm text-gray-100 shadow-xl ring-1 ${
-        t.variant === "error" ? "ring-red-400/60" : "ring-ink-600"
+        t.variant === "error" ? "ring-danger/60" : "ring-ink-600"
       }`}
     >
       <span className="min-w-0 wrap-break-word">{t.message}</span>

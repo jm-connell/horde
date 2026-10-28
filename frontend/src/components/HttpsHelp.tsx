@@ -99,7 +99,7 @@ export function HttpsNotice() {
   return (
     <div
       data-horde="https-notice"
-      className="ui-panel mb-4 rounded-lg border border-amber-500/30 bg-ink-900 p-3 text-sm"
+      className="ui-panel mb-4 rounded-lg border border-warning/30 bg-ink-900 p-3 text-sm"
     >
       <div className="flex items-start gap-3">
         <p className="min-w-0 flex-1 text-gray-200">

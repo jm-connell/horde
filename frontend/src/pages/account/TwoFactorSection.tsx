@@ -89,12 +89,12 @@ export default function TwoFactorSection() {
       ) : status.enabled ? (
         <div className="space-y-3">
           <p className="text-sm text-gray-200">
-            <span className="font-medium text-emerald-400">On</span>
+            <span className="font-medium text-success">On</span>
             {status.enabled_at ? ` since ${formatDate(status.enabled_at)}` : ""}
             . {status.recovery_codes_left} of 10 recovery codes left.
           </p>
           {status.recovery_codes_left <= 2 && (
-            <p className="text-sm text-amber-400" role="status">
+            <p className="text-sm text-warning" role="status">
               You are running low on recovery codes. Make new ones.
             </p>
           )}

@@ -126,7 +126,7 @@ function FeedMetaRow({
         ) : entry.live_status === "is_upcoming" ? (
           <UpcomingLabel />
         ) : inLibrary ? (
-          <span className="text-xs font-medium leading-none text-emerald-400">
+          <span className="text-xs font-medium leading-none text-success">
             Downloaded
           </span>
         ) : can("download") ? (
@@ -155,7 +155,7 @@ function FeedMetaRow({
 
 export function LiveNowLabel() {
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs font-semibold leading-none text-red-400">
+    <span className="inline-flex items-center gap-1.5 text-xs font-semibold leading-none text-danger">
       <span
         aria-hidden
         className="h-2 w-2 animate-pulse rounded-full bg-red-500 motion-reduce:animate-none"
@@ -472,7 +472,7 @@ export default function ChannelFeedCard({
                 </button>
               ) : null
             ) : (
-              <span className="rounded-lg bg-emerald-500/15 px-3 py-1.5 text-sm font-medium text-emerald-400 ring-1 ring-emerald-500/40">
+              <span className="rounded-lg bg-success/15 px-3 py-1.5 text-sm font-medium text-success ring-1 ring-success/40">
                 Downloaded
               </span>
             )}

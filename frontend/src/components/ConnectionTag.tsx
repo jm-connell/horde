@@ -87,7 +87,7 @@ export default function ConnectionTag({
         >
           <span
             aria-hidden
-            className={`h-1.5 w-1.5 rounded-full ${busy ? "animate-pulse bg-amber-400" : "bg-gray-500"}`}
+            className={`h-1.5 w-1.5 rounded-full ${busy ? "animate-pulse bg-warning" : "bg-gray-500"}`}
           />
           {busy ? "Connecting…" : "Offline"}
         </button>
@@ -113,11 +113,11 @@ export default function ConnectionTag({
       data-status={state.status}
       role="status"
       aria-live="polite"
-      className={`${wrap} border-amber-500/40 bg-amber-500/10 text-amber-200`}
+      className={`${wrap} border-warning/40 bg-warning/10 text-warning`}
     >
       <span
         aria-hidden
-        className={`h-2 w-2 rounded-full bg-amber-400 ${slow ? "" : "animate-pulse"}`}
+        className={`h-2 w-2 rounded-full bg-warning ${slow ? "" : "animate-pulse"}`}
       />
       {/* Phones: once the offer shows, the button carries the message. */}
       <span

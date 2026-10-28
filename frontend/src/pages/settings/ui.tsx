@@ -79,7 +79,7 @@ export function ProcessActionRow({
         <p className="text-sm font-medium text-gray-200">
           {label}
           {heavy && (
-            <span className="ml-2 rounded-full border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-amber-400 align-middle">
+            <span className="ml-2 rounded-full border border-warning/40 bg-warning/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-warning align-middle">
               Heavy
             </span>
           )}

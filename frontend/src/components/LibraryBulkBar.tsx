@@ -202,7 +202,7 @@ export default function LibraryBulkBar({
             <button
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
-              className="ui-panel ui-interactive rounded-lg border border-red-500/40 bg-ink-900 px-3 py-1.5 text-sm text-red-400 hover:bg-red-500/10"
+              className="ui-panel ui-interactive rounded-lg border border-danger/40 bg-ink-900 px-3 py-1.5 text-sm text-danger hover:bg-danger/10"
             >
               Delete
             </button>
