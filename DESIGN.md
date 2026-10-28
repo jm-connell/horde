@@ -195,7 +195,9 @@ screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 (`gap-2`) inside components and 12–16px between them; panels pad 16–20px.
 
 Theater mode widens the player to the viewport; the mini player docks bottom
-right and the play queue docks beside it. Respect `env(safe-area-inset-*)` for
+right and the play queue docks beside it. A quiet footer (centred
+`text-muted` links, one secondary-style "Ask about Horde" button) closes every
+page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
 ## Elevation & Depth
@@ -245,6 +247,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   `ThemedSelect` for custom option lists.
 - **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
   150ms; dialogs centre. Both trap focus and close on Escape.
+- **Floating panels.** The Ask about Horde chat is a non-modal floating
+  panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
+  the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
+  player when that is there), drags by its header, resizes from its top-left
+  corner like the mini player, and becomes a bottom sheet on phones. Escape
+  closes it while focus is inside; the page behind stays usable.
 - **Progress.** Full-width fill moved with `translateX`, linear, on an `ink-700`
   or `ink-800` track; accent for downloads, sky for background jobs, red on
   failure.

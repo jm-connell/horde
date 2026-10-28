@@ -1,5 +1,6 @@
 import type {
   AiConnectionTest,
+  HelpChatTurn,
   AiJobRow,
   AiProcessResult,
   AiStatus,
@@ -181,6 +182,23 @@ export const aiApi = {
     opts: ChatStreamOptions
   ): Promise<void> {
     return postEventStream(`/api/videos/${id}/ai/chat`, { message }, opts);
+  },
+
+  /**
+   * Ask about Horde: one question and the conversation before it (the server
+   * keeps none). Events as for video chat, plus `sources` before the reply.
+   */
+  streamHelpChat(
+    message: string,
+    history: HelpChatTurn[],
+    page: string,
+    opts: ChatStreamOptions
+  ): Promise<void> {
+    return postEventStream(
+      "/api/ai/help/chat",
+      { message, history, page },
+      opts
+    );
   },
 
   // --- AI for a streamed (not downloaded) video; all need `use_ai` ---

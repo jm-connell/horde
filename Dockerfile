@@ -92,6 +92,11 @@ RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 COPY backend/app ./app
 COPY --from=frontend /build/dist ./static
 COPY --from=docs /docs-out ./static/wiki
+# The Markdown and source "Ask about Horde" answers from (services/ai/help_chat.py);
+# the backend source is ./app itself.
+COPY docs/ ./source/docs/
+COPY README.md PRODUCT.md DESIGN.md CHANGELOG.md CONTRIBUTING.md .env.example docker-compose.yml ./source/
+COPY frontend/src ./source/frontend/src
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 

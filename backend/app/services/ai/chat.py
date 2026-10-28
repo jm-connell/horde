@@ -256,8 +256,12 @@ def run_chat_turn(
     message: str,
     user_id: int,
     authorized: Authorized | None = None,
+    *,
+    system_prompt: str | None = None,
 ) -> Generator[str]:
     """Yield SSE event strings for a chat turn.
+
+    ``system_prompt`` replaces the video-chat persona (the context still follows).
 
     Events:
     - ``data: {"type":"token","text":"..."}\n\n``
@@ -313,7 +317,7 @@ def run_chat_turn(
     if context is None:
         yield _sse(_subject_gone_event())
         return
-    system = ai_text.chat_system_prompt() + "\n\n" + context
+    system = (system_prompt or ai_text.chat_system_prompt()) + "\n\n" + context
     history = target.history(session)
     session.commit()
 

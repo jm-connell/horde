@@ -1,16 +1,18 @@
 import { createElement, Fragment, type ReactNode } from "react";
+import { markdownHref, parseBlocks } from "./aiMarkdownParse";
 
 /**
  * Lightweight, safe markdown for AI summary/chat text.
- * Supports paragraphs, unordered/ordered lists, bold, italic, and inline code.
+ * Supports paragraphs, headings, unordered/ordered lists, fenced code, bold,
+ * italic, inline code and links (http(s) or a path on this server).
  * Raw HTML is never interpreted.
  */
 
 function parseInline(text: string): ReactNode[] {
   const out: ReactNode[] = [];
-  // Prefer ** / __ / ` before single * / _.
+  // Links first, then ** / __ / ` before single * / _.
   const re =
-    /(\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
+    /(\[[^\]\n]+\]\([^)\s]+\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -19,7 +21,25 @@ function parseInline(text: string): ReactNode[] {
       out.push(text.slice(last, m.index));
     }
     const token = m[0];
-    if (
+    const link = /^\[([^\]\n]+)\]\(([^)\s]+)\)$/.exec(token);
+    if (link) {
+      const href = markdownHref(link[2]);
+      out.push(
+        href
+          ? createElement(
+              "a",
+              {
+                key: `a-${key++}`,
+                href,
+                target: "_blank",
+                rel: "noreferrer",
+                className: "text-accent underline underline-offset-2",
+              },
+              link[1]
+            )
+          : link[1]
+      );
+    } else if (
       (token.startsWith("**") && token.endsWith("**")) ||
       (token.startsWith("__") && token.endsWith("__"))
     ) {
@@ -64,79 +84,6 @@ function parseInline(text: string): ReactNode[] {
   return out.length ? out : [text];
 }
 
-const UL_RE = /^\s*[-*+]\s+(.*)$/;
-const OL_RE = /^\s*\d+[.)]\s+(.*)$/;
-
-type Block =
-  { kind: "p"; text: string } | { kind: "ul" | "ol"; items: string[] };
-
-function expandFlattenedLists(raw: string): string {
-  // Recover list items that were collapsed onto one line:
-  // "* A: foo. * B: bar." → separate lines.
-  const lines = raw.split("\n");
-  return lines
-    .map((line) => {
-      const trimmed = line.trim();
-      if (!/^[-*+]\s+\S/.test(trimmed)) return line;
-      return trimmed.replace(/\s+([-*+])\s+(?=\S)/g, "\n$1 ");
-    })
-    .join("\n");
-}
-
-function parseBlocks(raw: string): Block[] {
-  const lines = expandFlattenedLists(raw)
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .split("\n");
-  const blocks: Block[] = [];
-  let para: string[] = [];
-  let list: { kind: "ul" | "ol"; items: string[] } | null = null;
-
-  const flushPara = () => {
-    const text = para.join(" ").replace(/\s+/g, " ").trim();
-    para = [];
-    if (text) blocks.push({ kind: "p", text });
-  };
-  const flushList = () => {
-    if (list && list.items.length) blocks.push(list);
-    list = null;
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed) {
-      flushPara();
-      flushList();
-      continue;
-    }
-    const ul = UL_RE.exec(line);
-    const ol = OL_RE.exec(line);
-    if (ul) {
-      flushPara();
-      if (!list || list.kind !== "ul") {
-        flushList();
-        list = { kind: "ul", items: [] };
-      }
-      list.items.push(ul[1]);
-      continue;
-    }
-    if (ol) {
-      flushPara();
-      if (!list || list.kind !== "ol") {
-        flushList();
-        list = { kind: "ol", items: [] };
-      }
-      list.items.push(ol[1]);
-      continue;
-    }
-    flushList();
-    para.push(trimmed);
-  }
-  flushPara();
-  flushList();
-  return blocks;
-}
-
 interface Props {
   text: string;
   className?: string;
@@ -165,6 +112,26 @@ export default function AiMarkdown({
                 <p key={`p-${i}`} className="leading-relaxed">
                   {parseInline(block.text)}
                 </p>
+              );
+            }
+            if (block.kind === "h") {
+              return (
+                <p
+                  key={`h-${i}`}
+                  className="font-semibold leading-relaxed text-gray-200"
+                >
+                  {parseInline(block.text)}
+                </p>
+              );
+            }
+            if (block.kind === "code") {
+              return (
+                <pre
+                  key={`code-${i}`}
+                  className="horde-scrollbar overflow-x-auto rounded-md bg-ink-950/80 px-3 py-2 font-mono text-[0.85em] leading-snug text-gray-300"
+                >
+                  <code>{block.text}</code>
+                </pre>
               );
             }
             const Tag = block.kind === "ol" ? "ol" : "ul";

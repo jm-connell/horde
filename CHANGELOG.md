@@ -7,6 +7,20 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Ask about Horde**: a chat panel, opened from the new footer, that answers
+  questions about using, setting up and troubleshooting Horde from the docs and
+  source code shipped with your version, with links to the pages and files it
+  used. It floats in the corner (drag and resize it like the mini player),
+  stays open across pages and tells the model which page you are on. It uses
+  the configured chat model (local or cloud) and the `use_ai` permission.
+  The image now carries the docs' Markdown and the frontend source under
+  `/app/source` for it (about 5 MB).
+- **Footer** on every page with Ask about Horde, the docs, the GitHub issue
+  tracker and the source. It replaces the "Report it on GitHub" line at the
+  bottom of Settings.
+
 ## [1.1.1] - 2026-10-26
 
 ### Changed

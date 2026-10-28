@@ -5,6 +5,16 @@ A closer look at what Horde actually does. Each section is a product tour, not a
 !!! warning "Trusted network"
     Everyone signs in, but Horde is built for a LAN or VPN. To expose it, follow the [internet exposure checklist](ops/internet-exposure.md); do not just port-forward it.
 
+## Where to find things
+
+The top bar has **Home** (the library), **Playlists**, **History**, **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
+
+- **Download a video**: open **Download** in the top bar, paste the link, pick a quality and press **Download**.
+- **Upgrade a video you have to a higher resolution** (say 1080p to 4K): open it, then **••• → Change resolution** under the player. The file is replaced; no need to delete and download again.
+- **Edit a video's title, notes or tags, normalize its volume, save it to this device or delete it**: the same **•••** menu on its watch page.
+- **Add files you already have**: **Import**, or drop them in the media folder.
+- **Change how Horde looks, downloads and plays**: **Settings → Appearance / Library / Playback**. **AI** and **System** are there for the administrator.
+
 ## Downloads
 
 Paste a [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported URL (YouTube is the well-tested path), pick a quality preset, and watch a FIFO queue with live progress. Pause and resume the queue. YouTube playlists can be imported as individual videos or turned into a Horde playlist.

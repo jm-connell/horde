@@ -1,5 +1,6 @@
 # Keep the build context small: only what the Dockerfile COPYs is needed
-# (frontend/, backend/app + requirements.lock, docs/ + mkdocs.yml, docker/).
+# (frontend/, backend/app + requirements.lock, docs/ + mkdocs.yml, docker/, and
+# the root files copied to ./source).
 .git
 .github
 .local
@@ -36,5 +37,11 @@ ollama
 *.db
 site/
 
-# Root-level markdown is not used by the image (docs/*.md is, so no **/*.md)
+# Root-level markdown is not used by the image (docs/*.md is, so no **/*.md),
+# except the pages "Ask about Horde" reads (Dockerfile, ./source).
 *.md
+!README.md
+!PRODUCT.md
+!DESIGN.md
+!CHANGELOG.md
+!CONTRIBUTING.md

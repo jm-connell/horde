@@ -81,6 +81,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/help/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Post Help Chat
+         * @description Ask about Horde: answers from this server's docs and source (SSE).
+         */
+        post: operations["post_help_chat_api_ai_help_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/jobs": {
         parameters: {
             query?: never;
@@ -5323,6 +5343,28 @@ export interface components {
             cookies_configured: boolean;
             last_extract_failure?: components["schemas"]["ExtractFailure"] | null;
         };
+        /**
+         * HelpChatRequest
+         * @description One Ask-about-Horde question and the conversation before it.
+         */
+        HelpChatRequest: {
+            /** History */
+            history?: components["schemas"]["HelpChatTurn"][];
+            /** Message */
+            message: string;
+            /** Page */
+            page?: string | null;
+        };
+        /** HelpChatTurn */
+        HelpChatTurn: {
+            /** Content */
+            content: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+        };
         /** HistoryStats */
         HistoryStats: {
             best_day: components["schemas"]["HistoryStatsDay"] | null;
@@ -7200,6 +7242,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiDetectResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    post_help_chat_api_ai_help_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HelpChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Server-sent events, one JSON object per event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
                 };
             };
             /** @description Validation error */

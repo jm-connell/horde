@@ -25,6 +25,7 @@ import {
 import ErrorBoundary from "./components/ErrorBoundary";
 import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
+import AppFooter from "./components/AppFooter";
 import BackgroundEffect from "./components/BackgroundEffect";
 import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
@@ -36,6 +37,7 @@ import { ReauthProvider } from "./context/ReauthContext";
 import { ToastProvider } from "./context/ToastContext";
 import { SearchProvider } from "./context/SearchContext";
 import { HomeResetProvider } from "./context/HomeResetContext";
+import { HelpChatHost, HelpChatProvider } from "./context/HelpChatContext";
 import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
@@ -94,7 +96,7 @@ function AppRoutes() {
     <main
       ref={mainRef}
       data-horde="main"
-      className="page-shell relative z-10 mx-auto max-w-[1920px] px-3 py-6 md:px-6"
+      className="page-shell relative z-10 mx-auto w-full max-w-[1920px] px-3 py-6 md:px-6"
     >
       {/* A render error stays inside <main> so the nav still works, and
           resets on navigation. Lazy routes suspend here until their chunk
@@ -190,11 +192,14 @@ function AppShell() {
     );
   }
 
+  // A column so the footer sits at the bottom of short pages.
   return (
-    <div className="relative min-h-full overflow-x-hidden">
+    <div className="relative flex min-h-full flex-col overflow-x-hidden">
       <BackgroundEffect />
       <TopNav />
       <AppRoutes />
+      <AppFooter />
+      <HelpChatHost />
     </div>
   );
 }
@@ -245,9 +250,11 @@ export default function App() {
                     <SearchProvider>
                       <HomeResetProvider>
                         <PlaybackProvider>
-                          <AppShell />
-                          <OfflineUnlockSetup />
-                          <OverlayScrollThumb viewport />
+                          <HelpChatProvider>
+                            <AppShell />
+                            <OfflineUnlockSetup />
+                            <OverlayScrollThumb viewport />
+                          </HelpChatProvider>
                         </PlaybackProvider>
                       </HomeResetProvider>
                     </SearchProvider>

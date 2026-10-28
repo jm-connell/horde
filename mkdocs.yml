@@ -124,6 +124,7 @@ nav:
       - 0015 Watch time per hour: adr/0015-watch-time-per-hour.md
       - 0016 Two-step sign-in: adr/0016-two-step-sign-in.md
       - 0017 OpenAI-compatible AI provider: adr/0017-openai-compatible-provider.md
+      - 0018 Ask about Horde retrieval: adr/0018-help-chat-retrieval.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
