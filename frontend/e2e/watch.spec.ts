@@ -290,7 +290,13 @@ test("on a phone a tap shows or hides the controls and the centre button plays",
   await expect(page).toHaveURL(/\/watch\//);
   const video = page.locator("video").first();
   const paused = () => video.evaluate((v: HTMLVideoElement) => v.paused);
+  // The player autoplays on loadedmetadata; pausing before that would be
+  // undone by it, so wait for metadata, then for the player to show paused.
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.readyState))
+    .toBeGreaterThanOrEqual(1);
   await video.evaluate((v: HTMLVideoElement) => v.pause());
+  await expect(page.getByRole("button", { name: "Play video" })).toBeAttached();
   const bar = page.locator(".player-controlbar");
   await expect(bar).toHaveAttribute("data-visible", "true");
 
@@ -310,6 +316,7 @@ test("on a phone a tap shows or hides the controls and the centre button plays",
   await expect.poll(paused).toBe(false);
   await page.getByRole("button", { name: "Pause video" }).tap();
   await expect.poll(paused).toBe(true);
+  await expect(page.getByRole("button", { name: "Play video" })).toBeAttached();
 
   // The control bar's fade passes taps through to the picture.
   const barBox = (await bar.boundingBox())!;
