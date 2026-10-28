@@ -1109,6 +1109,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/downloads/clips": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Clip
+         * @description Queue a clip: part of a YouTube video saved as its own library video.
+         */
+        post: operations["create_clip_api_downloads_clips_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads/dismiss-finished": {
         parameters: {
             query?: never;
@@ -4804,6 +4824,34 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * ClipCreate
+         * @description Save part of a video (a live or finished stream) as its own library video.
+         *
+         *     A finished stream gives ``start_sec`` / ``end_sec`` (its own timeline). A
+         *     stream that is still live gives how far behind the live edge each end is
+         *     (``start_behind_live_sec`` > ``end_behind_live_sec``), measured when the
+         *     request is sent; the server turns those into broadcast times.
+         */
+        ClipCreate: {
+            /** End Behind Live Sec */
+            end_behind_live_sec?: number | null;
+            /** End Sec */
+            end_sec?: number | null;
+            /**
+             * Quality Preset
+             * @default best
+             */
+            quality_preset: string;
+            /** Start Behind Live Sec */
+            start_behind_live_sec?: number | null;
+            /** Start Sec */
+            start_sec?: number | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+        };
         /** CompatBulkResult */
         CompatBulkResult: {
             /**
@@ -4987,6 +5035,10 @@ export interface components {
             channel: string | null;
             /** Channel Override */
             channel_override: string | null;
+            /** Clip End Sec */
+            clip_end_sec?: number | null;
+            /** Clip Start Sec */
+            clip_start_sec?: number | null;
             /**
              * Created At
              * Format: date-time
@@ -9675,6 +9727,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DownloadBulkResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_clip_api_downloads_clips_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClipCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DownloadJobRead"];
                 };
             };
             /** @description Validation error */

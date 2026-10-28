@@ -73,6 +73,17 @@ While watching a **stream preview** (`/watch?url=…`), you can start a download
 
 On the watch page you’ll also see messaging about downloading at the selected resolution and preserving title, notes, and other metadata.
 
+## Clips of a stream
+
+On a **live** or **past** YouTube stream, the **•••** button beside the title has **Save a clip…**. Pick the start and end (**Use current time** takes the player's position; on a past stream you can also type `h:mm:ss`), then **Save clip**. It needs the *download* permission.
+
+The clip is downloaded on its own and saved to your library as a **separate video**, titled like *Stream title (clip 1:02:03–1:05:00)*, with a line at the top of its description saying what it was cut from. It is not treated as a copy of the full stream: you can save several clips of one stream, and still download the whole stream as well. A clip has no source link, so it has no subtitles, SponsorBlock segments or **Change resolution**.
+
+- **Past streams** are cut by yt-dlp on the nearest keyframes, so a clip can start or end a second or two away from the times you picked.
+- **Live streams** are cut from the broadcast's own segments while it is still live. You can clip as far back as the player lets you scrub (the DVR window); the positions are matched to the broadcast's timeline from the player's distance behind live, so they can be off by a few seconds. Play the stream before saving a clip of it. If the stream ends before the clip runs, it is cut from the finished video instead.
+
+The API is `POST /api/downloads/clips` with `url` and either `start_sec`/`end_sec` (a past stream's own timeline) or `start_behind_live_sec`/`end_behind_live_sec` (live). Clips are at most 6 hours long.
+
 ## Chapters, subtitles, casting
 
 Those controls live in the shared [video player](player.md): chapters from descriptions, yt-dlp, or optional AI captions, VTT subtitles, SponsorBlock, PiP, Chromecast / AirPlay, and layout modes.

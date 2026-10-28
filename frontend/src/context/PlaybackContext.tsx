@@ -120,6 +120,8 @@ export interface PlaybackActions {
   playStream: (session: StreamSession) => void;
   /** Latest stream playback position (seconds). */
   getStreamPosition: () => number;
+  /** Live stream: seconds the playhead is behind the live edge (null if not live). */
+  getStreamBehindLive: () => number | null;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
   addToQueue: (entry: QueueEntry) => void;
@@ -190,6 +192,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const miniPosLiveRef = useRef<MiniPos | null>(null);
   const [miniCornerAnchor, setMiniCornerAnchor] = useState(true);
   const streamPosRef = useRef(0);
+  const streamBehindLiveRef = useRef<number | null>(null);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const currentRef = useRef<Video | null>(null);
@@ -465,6 +468,13 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const getStreamPosition = useCallback(() => streamPosRef.current, []);
+  const getStreamBehindLive = useCallback(
+    () => (streamRef.current?.liveVideoId ? streamBehindLiveRef.current : null),
+    []
+  );
+  const handleLiveBehind = useCallback((sec: number) => {
+    streamBehindLiveRef.current = sec;
+  }, []);
   const getCurrentPosition = useCallback(() => libraryPosRef.current, []);
 
   const addToQueue = useCallback((entry: QueueEntry) => {
@@ -749,6 +759,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playVideo,
       playStream,
       getStreamPosition,
+      getStreamBehindLive,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -766,6 +777,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playVideo,
       playStream,
       getStreamPosition,
+      getStreamBehindLive,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -1005,6 +1017,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onProgress={(sec) => {
           streamPosRef.current = sec;
         }}
+        onLiveBehind={handleLiveBehind}
         chapters={
           streamChaptersOverride?.url === stream.url
             ? streamChaptersOverride.chapters

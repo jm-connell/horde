@@ -59,6 +59,8 @@ export interface VideoPlayerProps {
   onVolumeChange?: (volume: number) => void;
   initialPosition?: number;
   onProgress?: (sec: number) => void;
+  /** Live: how many seconds behind the live edge the playhead is, as it changes. */
+  onLiveBehind?: (sec: number) => void;
   chapters?: Chapter[];
   sponsorSegments?: SponsorSegment[];
   sponsorShowNotice?: boolean;

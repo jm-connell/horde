@@ -31,6 +31,7 @@ export type ChannelCatalogStatus = S["ChannelCatalogStatusResponse"];
 export type JobStatus = S["JobStatus"];
 export type DownloadDestination = S["DownloadDestination"];
 export type DownloadJob = S["DownloadJobRead"];
+export type ClipCreate = S["ClipCreate"];
 export type DownloadPreview = S["DownloadPreview"];
 export type StreamPreviewMeta = S["StreamPreviewMeta"];
 export type StreamAi = S["StreamAiRead"];

@@ -1,4 +1,5 @@
 import type {
+  ClipCreate,
   DownloadBulkResult,
   DownloadJob,
   DownloadOverrides,
@@ -37,6 +38,15 @@ export const downloadsApi = {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, quality_preset, ...overrides }),
+    });
+  },
+
+  /** Queue part of a stream as its own library video. */
+  createClip(clip: ClipCreate): Promise<DownloadJob> {
+    return request<DownloadJob>("/api/downloads/clips", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(clip),
     });
   },
 

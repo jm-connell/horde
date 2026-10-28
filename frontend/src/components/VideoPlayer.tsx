@@ -64,6 +64,7 @@ export default function VideoPlayer({
   onVolumeChange,
   initialPosition = 0,
   onProgress,
+  onLiveBehind,
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
@@ -475,9 +476,13 @@ export default function VideoPlayer({
     else if (liveWindow) seekTo(liveWindow.end);
     videoRef.current?.play().catch(() => undefined);
   }, [liveWindow, seekTo]);
+  const liveBehind = liveWindow ? behindLive(liveWindow, current) : null;
+  useEffect(() => {
+    if (liveBehind != null) onLiveBehind?.(liveBehind);
+  }, [liveBehind, onLiveBehind]);
   const liveControl = live
     ? {
-        behindSec: liveWindow ? behindLive(liveWindow, current) : 0,
+        behindSec: liveBehind ?? 0,
         isLive: liveWindow?.isLive ?? true,
         onGoLive: goLive,
       }
