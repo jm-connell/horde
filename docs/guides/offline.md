@@ -82,7 +82,8 @@ uses the same device could see them. Each account decides whether they do:
 
 Set it under **Account settings → Downloads on shared devices** (turning
 sharing off asks for your password). Administrators choose it when they add a
-user or edit one, and the first administrator chooses it in the setup wizard.
+user or edit one. The first administrator starts with sharing on and can change
+it there afterwards.
 
 The setting travels with the account, but each device has to know it while
 there is no connection, so a device remembers which accounts have signed in on

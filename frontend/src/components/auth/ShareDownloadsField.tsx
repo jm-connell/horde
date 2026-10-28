@@ -1,9 +1,9 @@
 import { useId } from "react";
 
 /**
- * "Share this account’s downloads with other accounts on a device": on keeps videos saved for
- * offline viewing open to everyone who uses the device; off keeps them private
- * to the account (its password unlocks them with no connection).
+ * One setting per account, applied on every device the account saves videos
+ * to for offline viewing: on lets the other accounts on that device watch them;
+ * off keeps them private to the account (its password unlocks them offline).
  */
 export default function ShareDownloadsField({
   checked,
@@ -31,16 +31,16 @@ export default function ShareDownloadsField({
         />
         <span>
           {own
-            ? "Share my downloads with other accounts on this device"
-            : "Share this account’s downloads with other accounts on a device"}
+            ? "Let other accounts on a shared device watch videos I save there"
+            : "Let other accounts on a shared device watch videos this account saves there"}
         </span>
       </label>
       <p id={hintId} className="mt-1 pl-6 text-xs text-muted">
         {checked
-          ? "Anyone using the same device can watch the videos saved there, even without a connection."
+          ? "Applies on every device. Anyone signed in on that device can watch them, even offline."
           : own
-            ? "Videos you save on a shared device stay private to you. Your password unlocks them with no connection."
-            : "Videos saved on a shared device stay private to this account. Its password unlocks them with no connection."}
+            ? "Applies on every device. Your saved videos stay private to you; your password unlocks them offline."
+            : "Applies on every device. Its saved videos stay private to it; its password unlocks them offline."}
       </p>
     </div>
   );

@@ -6,7 +6,6 @@ import {
   Field,
   FormError,
 } from "../components/auth/AuthForm";
-import ShareDownloadsField from "../components/auth/ShareDownloadsField";
 import { clearLocalSettings } from "../hooks/useSettings";
 import { deviceAccounts } from "../offline/accounts";
 
@@ -25,7 +24,6 @@ export default function CreateAdminPage({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
-  const [share, setShare] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -39,11 +37,7 @@ export default function CreateAdminPage({
     setBusy(true);
     setError(null);
     try {
-      const { user } = await api.bootstrapAdmin(
-        username.trim(),
-        password,
-        share
-      );
+      const { user } = await api.bootstrapAdmin(username.trim(), password);
       await deviceAccounts.record(user, password);
       clearLocalSettings();
       await onCreated();
@@ -88,7 +82,6 @@ export default function CreateAdminPage({
           onChange={setRepeat}
           autoComplete="new-password"
         />
-        <ShareDownloadsField checked={share} onChange={setShare} own />
         <FormError message={error} />
         <button type="submit" disabled={busy} className={AUTH_PRIMARY}>
           {busy ? "Creating…" : "Create account"}

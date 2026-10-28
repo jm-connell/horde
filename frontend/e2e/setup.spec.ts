@@ -20,6 +20,8 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.getByLabel("Password", { exact: true }).fill("first-password");
   // Advice only: any non-empty password is accepted.
   await expect(page.getByTestId("password-strength")).toBeVisible();
+  // Sharing offline downloads is an account setting for later, not a setup step.
+  await expect(page.getByRole("checkbox")).toHaveCount(0);
   await page.getByLabel("Repeat password").fill("different-password");
   await page.getByRole("button", { name: "Create account" }).click();
   await expect(page.locator("form").getByRole("alert")).toContainText(
