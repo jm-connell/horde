@@ -169,7 +169,7 @@ def test_health_hides_the_pot_url_and_extract_failure_text_from_a_member(
     monkeypatch.setattr(httpx, "get", unreachable)
     cache = HealthCache(pot_base_url="http://bgutil.lan:4416")
     cache.refresh_pot()
-    monkeypatch.setattr(app.state, "health_cache", cache, raising=False)
+    monkeypatch.setitem(app.state._state, "health_cache", cache)
     monkeypatch.setattr(
         ytdlp_common,
         "get_last_extract_failure",
