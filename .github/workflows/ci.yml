@@ -1,9 +1,10 @@
 name: CI
 
 on:
+  # Branches are tested through their pull request; a push trigger on every
+  # branch ran the whole suite twice per PR commit.
   push:
-    # `stats` is the orphan branch the clone-stats bot writes to (no code to test).
-    branches-ignore: [stats]
+    branches: [main]
     paths-ignore:
       - "docs/assets/github-clones.json"
   pull_request:

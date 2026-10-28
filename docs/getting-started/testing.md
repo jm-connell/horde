@@ -110,13 +110,13 @@ docker build -t horde:local .
 
 `./start.sh` is for interactive UI work, not for this suite. Tests create their own temp data dirs and never touch `./data` or `./downloads`.
 
-## GitHub Actions (runs on every push)
+## GitHub Actions (runs on pull requests and `main`)
 
 The workflow file is `.github/workflows/ci.yml`. It runs on:
 
 | Event | When |
 |-------|------|
-| **`push`** | Every branch you push, including `main` |
+| **`push`** | Pushes to `main` only (other branches are tested through their pull request) |
 | **`pull_request`** | Opening or updating a PR (including forks) |
 | **`workflow_dispatch`** | **Actions → CI → Run workflow** after a large local change if you want a fresh run without a new commit |
 
