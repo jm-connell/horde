@@ -265,8 +265,7 @@ export default function VideoEditForm({
 
   const inputClass =
     "w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 placeholder-muted outline-hidden focus:border-accent";
-  const labelClass =
-    "mb-1 block text-xs font-medium uppercase tracking-wide text-muted";
+  const labelClass = "mb-1 block text-xs font-medium text-gray-300";
 
   const activeCand = candidates[candIndex];
   const previewSrc = activeCand

@@ -44,11 +44,11 @@ export default function TwoFactorSection() {
     <section aria-labelledby="two-factor-heading" data-horde="two-factor">
       <h2
         id="two-factor-heading"
-        className="mb-1 text-lg font-semibold text-gray-100"
+        className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400"
       >
         Two-step sign-in
       </h2>
-      <p className="mb-3 text-sm text-muted">
+      <p className="mb-3 text-xs text-muted">
         Ask for a code from an authenticator app as well as your password. It
         keeps your account safe if the password leaks.
       </p>

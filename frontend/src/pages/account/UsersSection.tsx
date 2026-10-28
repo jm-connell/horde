@@ -77,7 +77,7 @@ export default function UsersSection() {
         <div className="mb-1 flex flex-wrap items-center gap-2">
           <h2
             id="users-heading"
-            className="text-lg font-semibold text-gray-100"
+            className="text-xs font-semibold uppercase tracking-wider text-gray-400"
           >
             Users
           </h2>
@@ -91,7 +91,7 @@ export default function UsersSection() {
             {adding ? "Cancel" : "Add a user"}
           </button>
         </div>
-        <p className="mb-4 text-sm text-muted">
+        <p className="mb-4 text-xs text-muted">
           Everyone signs in with their own account and has their own watch
           history. The library and playlists are shared; each account decides
           whether others on the same device see its offline downloads.
