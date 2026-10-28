@@ -658,7 +658,7 @@ video.sub-large::cue {
   /* Player chrome uses leading-none; don't inherit that or glyphs clip. */
   line-height: 1.35;
   /* Lift above the timeline while chrome is visible; drop when it fades. */
-  transition: transform 300ms ease-out;
+  transition: transform 300ms var(--ease-fluid);
 }
 
 .subtitle-overlay-draggable {

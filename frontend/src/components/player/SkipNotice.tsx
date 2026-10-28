@@ -19,8 +19,12 @@ export default function SkipNoticeChip({
 }: Props) {
   return (
     <div
-      className={`ui-panel ui-panel-legible pointer-events-auto absolute right-3 z-8 flex cursor-auto items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 shadow-lg ring-1 ring-ink-600 transition-[bottom] duration-300 ease-out ${
-        isMini ? "bottom-2" : controlsVisible ? "bottom-18" : "bottom-3"
+      className={`ui-panel ui-panel-legible pointer-events-auto absolute right-3 z-8 flex cursor-auto items-center gap-2 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 shadow-lg ring-1 ring-ink-600 transition-[translate] duration-300 ease-fluid motion-reduce:transition-none ${
+        isMini
+          ? "bottom-2"
+          : controlsVisible
+            ? "bottom-3 -translate-y-15"
+            : "bottom-3"
       }`}
       role="status"
     >
