@@ -11,7 +11,8 @@ import type { ChannelRetention, RetentionLimits } from "../../../types";
 import { formatDate } from "../../../utils";
 import { Toggle } from "../../settings/ui";
 import { parseLimit, retentionPreviewLine } from "./channelSettingsText";
-import SettingsSection, { numberInput, primaryButton } from "./SettingsSection";
+import { button } from "../../../components/buttons";
+import SettingsSection, { numberInput } from "./SettingsSection";
 
 /** Upper bounds the API accepts (schemas.RetentionLimits). */
 const MAX_KEEP = 100_000;
@@ -261,7 +262,7 @@ function RetentionForm({
           type="button"
           onClick={submit}
           disabled={save.isPending || !dirty}
-          className={primaryButton}
+          className={button("primary")}
         >
           {save.isPending ? "Saving…" : "Save cleanup rule"}
         </button>

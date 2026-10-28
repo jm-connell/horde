@@ -4,6 +4,7 @@ import type { ChannelStat, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
 import { ChevronIcon } from "./icons";
+import { button } from "./buttons";
 
 interface DraftState {
   title: string;
@@ -336,7 +337,7 @@ export default function VideoEditForm({
             type="button"
             onClick={() => void loadCandidates()}
             disabled={candLoading}
-            className="ui-panel ui-interactive mt-3 w-full rounded-lg bg-ink-800 px-3 py-2 text-xs font-medium text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:opacity-50"
+            className={`${button("secondary", "xs")} mt-3 w-full`}
           >
             {candLoading
               ? "Generating…"
@@ -485,17 +486,14 @@ export default function VideoEditForm({
 
           <div className="flex justify-end gap-2">
             {onCancel && (
-              <button
-                onClick={onCancel}
-                className="ui-panel ui-interactive rounded-lg bg-ink-800 px-5 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-              >
+              <button onClick={onCancel} className={button("secondary")}>
                 Cancel
               </button>
             )}
             <button
               onClick={save}
               disabled={saving || !canSave}
-              className="ui-interactive rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+              className={button("primary")}
             >
               {saving ? "Saving…" : saveLabel}
             </button>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { bookmarkletHref } from "../shareTarget";
 import Collapse from "./Collapse";
 import { ChevronIcon } from "./icons";
+import { button } from "./buttons";
 
 /**
  * Unobtrusive help below the download form: how to send a link to Horde from
@@ -66,7 +67,7 @@ export default function SendLinksHelp() {
             <button
               type="button"
               onClick={() => void copy()}
-              className="ui-interactive rounded-lg bg-ink-800 px-3 py-1.5 font-medium text-gray-200 hover:bg-ink-700"
+              className={button("secondary", "sm")}
             >
               Copy bookmarklet
             </button>

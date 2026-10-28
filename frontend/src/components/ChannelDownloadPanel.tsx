@@ -18,6 +18,7 @@ import { youtubeThumbnailUrl } from "../utils";
 import ChannelDownloadEditModal from "./ChannelDownloadEditModal";
 import ThemedSelect from "./ThemedSelect";
 import { CloseIcon } from "./icons";
+import { button } from "./buttons";
 
 export default function ChannelDownloadPanel({
   defaultPreset,
@@ -229,7 +230,7 @@ export default function ChannelDownloadPanel({
                   <button
                     type="button"
                     onClick={() => onSetEditingId(item.tempId)}
-                    className="rounded-md bg-ink-800 px-2 py-1 text-xs text-gray-300 hover:bg-ink-700"
+                    className={button("secondary", "xs")}
                   >
                     Edit
                   </button>

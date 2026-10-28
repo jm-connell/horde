@@ -11,9 +11,9 @@ import type {
 import { INPUT, PANEL_BTN } from "./constants";
 import { KIND_HINTS, KIND_LABELS, URL_PLACEHOLDERS } from "./notificationKinds";
 import { Chip } from "./ui";
+import { button } from "../../components/buttons";
 
-const SAVE_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50";
+const SAVE_BTN = button("primary", "sm");
 
 export function TestResult({ result }: { result: NotificationTestResult }) {
   return result.ok ? (

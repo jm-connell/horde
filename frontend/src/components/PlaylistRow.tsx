@@ -45,6 +45,7 @@ import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
 import { CloseIcon, ExternalIcon } from "./icons";
+import { button } from "./buttons";
 
 export default function PlaylistRow({
   playlist,
@@ -520,7 +521,7 @@ export default function PlaylistRow({
                     type="button"
                     onClick={playAll}
                     disabled={playable.length === 0}
-                    className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+                    className={`${button("primary", "sm")} shrink-0`}
                   >
                     Play all
                   </button>
@@ -597,7 +598,7 @@ export default function PlaylistRow({
                     <button
                       type="button"
                       onClick={onDelete}
-                      className="shrink-0 rounded-lg border border-danger/40 px-3 py-1.5 text-sm text-danger hover:bg-danger/10"
+                      className={`${button("danger", "sm")} shrink-0`}
                     >
                       Delete
                     </button>

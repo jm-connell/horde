@@ -8,6 +8,7 @@ import type { HealthStats, StorageStats } from "../../../types";
 import { formatSize } from "../../../utils";
 import { clearHordeBrowserState } from "../../../setupStorage";
 import Collapse from "../../../components/Collapse";
+import { button } from "../../../components/buttons";
 
 export default function ResetHordePanel({
   storage,
@@ -154,7 +155,7 @@ export default function ResetHordePanel({
                       type="button"
                       onClick={close}
                       disabled={resetting}
-                      className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
+                      className={button("secondary")}
                     >
                       Cancel
                     </button>
@@ -162,7 +163,7 @@ export default function ResetHordePanel({
                       type="button"
                       onClick={() => void runReset()}
                       disabled={resetting || !canReset}
-                      className="rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
+                      className={button("dangerSolid")}
                     >
                       {resetting ? "Resetting…" : "Reset"}
                     </button>

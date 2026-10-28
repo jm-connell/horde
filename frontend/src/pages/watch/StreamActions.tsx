@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { MenuFlyout } from "../../components/MenuFlyout";
 import { MoreIcon } from "../../components/icons";
+import { button } from "../../components/buttons";
 
 /** The ••• row under a live or past stream (as under a library video). */
 export default function StreamActions({
@@ -20,7 +21,7 @@ export default function StreamActions({
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+          className={button("secondary")}
         >
           <MoreIcon />
         </button>

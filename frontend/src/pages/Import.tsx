@@ -25,6 +25,7 @@ import { formatSize } from "../utils";
 
 import { getJson, setJson } from "../storage";
 import { ChevronIcon } from "../components/icons";
+import { button } from "../components/buttons";
 const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
@@ -334,7 +335,7 @@ export default function Import() {
           disabled={scanning}
           aria-busy={scanning || undefined}
           onClick={() => void scanForNewFiles()}
-          className="ui-panel ui-interactive shrink-0 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`${button("secondary")} shrink-0`}
           title="Rescan the media folder for videos that are not in the library"
         >
           {scanning ? "Scanning…" : "Scan for new files"}
@@ -369,7 +370,7 @@ export default function Import() {
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="ui-panel ui-interactive mt-2 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+          className={`${button("secondary")} mt-2`}
         >
           Choose files
         </button>
@@ -471,7 +472,7 @@ export default function Import() {
                         }
                         load();
                       }}
-                      className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+                      className={button("secondary")}
                       title="Remove from the queue without importing. Scan for new files can pick it up again."
                     >
                       Skip
@@ -479,7 +480,7 @@ export default function Import() {
                     {can("delete_videos") && (
                       <button
                         onClick={() => void deleteVideoFile(v)}
-                        className="ui-panel ui-interactive rounded-lg border border-danger/40 bg-ink-900 px-4 py-2 text-sm text-danger ring-1 ring-ink-700 hover:bg-danger/10"
+                        className={button("danger")}
                       >
                         Delete
                       </button>
@@ -585,7 +586,7 @@ export default function Import() {
                                   <button
                                     type="button"
                                     onClick={() => void deleteVideoFile(v)}
-                                    className="rounded-sm border border-danger/40 px-3 py-1 text-xs text-danger hover:bg-danger/10"
+                                    className={button("danger", "xs")}
                                   >
                                     Delete
                                   </button>

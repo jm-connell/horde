@@ -21,9 +21,9 @@ import {
 } from "../../trash";
 import type { TrashItem } from "../../types";
 import { formatSize } from "../../utils";
-import { PANEL_BTN } from "./constants";
 import { useSettingsPage } from "./context";
 import { Section } from "./ui";
+import { button } from "../../components/buttons";
 
 const TRASH_TERMS = [
   "trash",
@@ -36,11 +36,9 @@ const TRASH_TERMS = [
   "delete forever",
 ];
 
-const SMALL_BTN = `${PANEL_BTN} px-2.5! py-1! text-xs!`;
-const DANGER_BTN =
-  "ui-interactive rounded-lg border border-danger/40 px-3 py-1.5 text-sm text-danger hover:border-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
-const DANGER_SMALL_BTN =
-  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
+const SMALL_BTN = button("secondary", "xs");
+const DANGER_BTN = button("danger", "sm");
+const DANGER_SMALL_BTN = button("danger", "xs");
 
 /**
  * Deleted videos waiting to be erased: how much they take, emptying the trash,

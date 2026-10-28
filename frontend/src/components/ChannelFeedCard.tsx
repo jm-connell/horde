@@ -27,6 +27,7 @@ import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 import { PlayIcon } from "./icons";
+import { button } from "./buttons";
 
 const maxResCache = new Map<string, string>();
 
@@ -466,7 +467,7 @@ export default function ChannelFeedCard({
                     onDownload();
                   }}
                   disabled={downloading}
-                  className="rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60"
+                  className={button("primary", "sm")}
                 >
                   {downloading ? "Downloading" : "Download"}
                 </button>

@@ -6,9 +6,9 @@ import { api } from "../api";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
 import { LockIcon } from "./playlistChrome";
+import { button } from "./buttons";
 
-const defaultButtonClass =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700";
+const defaultButtonClass = button("secondary");
 
 /** Adds a library video (`videoId`) or, from a stream's page, its link (`streamUrl`). */
 export default function AddToPlaylist({
@@ -135,7 +135,7 @@ export default function AddToPlaylist({
           />
           <button
             onClick={createAndAdd}
-            className="shrink-0 rounded-sm bg-accent px-2 py-1 text-xs font-semibold text-on-accent hover:bg-accent-soft"
+            className={`${button("primary", "xs")} shrink-0`}
           >
             Add
           </button>

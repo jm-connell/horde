@@ -7,6 +7,7 @@ import { useSettingsPage } from "../context";
 import { Section } from "../ui";
 import type { SystemState } from "../useSystemState";
 import type { UpdateTone } from "./updateView";
+import { button } from "../../../components/buttons";
 
 const TONE_CLASS: Record<UpdateTone, string> = {
   progress: "text-gray-200",
@@ -16,8 +17,7 @@ const TONE_CLASS: Record<UpdateTone, string> = {
   muted: "text-muted",
 };
 
-const PRIMARY_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50";
+const PRIMARY_BTN = button("primary", "sm");
 
 const SHELL_PATH = "/mnt/tank/dockge/stacks/horde";
 

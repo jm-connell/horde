@@ -25,6 +25,7 @@ import {
   providerLabel,
   readEndpointInput,
 } from "./settings/aiProviders";
+import { button } from "../components/buttons";
 
 const STEPS = [
   "welcome",
@@ -51,10 +52,8 @@ const STEP_TITLE: Record<Step, string> = {
 
 const STEP_MS = 300;
 
-const PRIMARY_BTN =
-  "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50";
-const GHOST_BTN =
-  "rounded-lg px-4 py-2 text-sm text-gray-400 hover:text-gray-200 disabled:opacity-50";
+const PRIMARY_BTN = button("primary");
+const GHOST_BTN = button("quiet");
 const HEIGHT_EASE =
   "transition-[height] duration-300 ease-fluid motion-reduce:transition-none";
 

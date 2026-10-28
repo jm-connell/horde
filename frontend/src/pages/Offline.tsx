@@ -16,6 +16,7 @@ import {
 import { offlineManager } from "../offline/manager";
 import HttpsHelp from "../components/HttpsHelp";
 import { formatDuration, formatSize } from "../utils";
+import { button } from "../components/buttons";
 
 function thumbUrl(item: OfflineItem): string {
   return item.videoId < 0
@@ -64,8 +65,7 @@ function useRemove() {
   };
 }
 
-const btn =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent";
+const btn = button("secondary", "sm");
 
 function DownloadingRow({
   item,
@@ -141,7 +141,7 @@ function DownloadingRow({
             </button>
           ) : null}
           <button
-            className={`${btn} border-danger/40! text-danger! hover:bg-danger/10!`}
+            className={button("danger", "sm")}
             onClick={() => onRemove(item)}
           >
             Remove

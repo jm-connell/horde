@@ -58,14 +58,16 @@ components:
     backgroundColor: "{colors.accent}"
     textColor: "{colors.on-accent}"
     rounded: "{rounded.lg}"
-    padding: "6px 12px"
+    padding: "8px 16px"
   button-primary-hover:
     backgroundColor: "{colors.accent-soft}"
   button-secondary:
-    backgroundColor: "{colors.ink-800}"
+    backgroundColor: "{colors.ink-900}"
     textColor: "{colors.text-body}"
     rounded: "{rounded.lg}"
     padding: "6px 12px"
+  button-secondary-hover:
+    borderColor: "{colors.accent}"
   panel:
     backgroundColor: "{colors.ink-900}"
     rounded: "{rounded.xl}"
@@ -235,11 +237,18 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 
 ## Components
 
-- **Buttons.** Primary: accent fill, `on-accent` text, semibold, `accent-soft` on
-  hover. Secondary: `ink-800` fill, `gray-200` text, `ink-700` on hover. Quiet:
-  text only, `text-muted` to `accent` on hover. All pressables scale to 0.97 on
-  press (80ms) when the button press setting is on, and get `ui-interactive` for
-  the user's hover motion.
+- **Buttons.** Take the classes from `button(variant, size)` in
+  `frontend/src/components/buttons.ts` and add only layout classes after it.
+  Primary: accent fill, `on-accent` text, medium weight, `accent-soft` on
+  hover; one per view. Secondary: `ui-panel` `ink-900` fill with a 1px `ink-700`
+  border, `gray-200` text, accent border on hover. Quiet: text only,
+  `text-muted` to `accent` on hover. Danger: `danger` outline and text,
+  `danger/10` fill on hover. Danger solid (the confirm of a destructive
+  dialog): `red-600` with white text. Sizes: `md` (px-4 py-2, dialogs and
+  forms), `sm` (px-3 py-1.5, settings rows and toolbars), `xs` (px-2.5 py-1,
+  12px, inline in lists). Disabled is 50% opacity. All pressables scale to
+  0.97 on press (80ms) when the button press setting is on, and get
+  `ui-interactive` for the user's hover motion.
 - **Video card.** Thumbnail with duration badge and a thin accent progress bar
   for watched position; title (two lines), channel and meta below. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount

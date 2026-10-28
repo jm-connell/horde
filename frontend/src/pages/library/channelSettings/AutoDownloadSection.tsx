@@ -6,11 +6,8 @@ import { PRESET_LABELS, PRESET_ORDER } from "../../../presets";
 import type { ChannelAutodownload } from "../../../types";
 import { Toggle } from "../../settings/ui";
 import type { AutodownloadPayload } from "../useChannelCatalog";
-import SettingsSection, {
-  fieldLabel,
-  numberInput,
-  primaryButton,
-} from "./SettingsSection";
+import { button } from "../../../components/buttons";
+import SettingsSection, { fieldLabel, numberInput } from "./SettingsSection";
 
 type PreviousMode = ChannelAutodownload["previous_mode"];
 
@@ -212,7 +209,7 @@ function AutoDownloadForm({
           type="button"
           onClick={() => onSave(payload)}
           disabled={saving || !dirty}
-          className={primaryButton}
+          className={button("primary")}
         >
           {saving ? "Saving…" : "Save automatic downloads"}
         </button>

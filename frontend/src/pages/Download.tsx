@@ -45,6 +45,7 @@ import PlaylistEntryList from "./download/PlaylistEntryList";
 import PlaylistModePicker from "./download/PlaylistModePicker";
 import { toastBulkSkips } from "./download/skips";
 import { ChevronIcon } from "../components/icons";
+import { button } from "../components/buttons";
 
 const ACTIVE_COLLAPSE_KEY = "horde.downloads.active-collapsed";
 
@@ -801,7 +802,7 @@ export default function Download() {
               !url.trim() ||
               (playlistMode !== "subscribe" && selectedUrls.size === 0)
             }
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${button("primary")} w-full`}
           >
             {importButtonLabel}
           </button>
@@ -809,7 +810,7 @@ export default function Download() {
           <button
             type="submit"
             disabled={submitting || !url.trim()}
-            className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${button("primary")} w-full`}
           >
             {submitting ? "Starting…" : downloadButtonLabel}
           </button>
@@ -873,7 +874,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => resumeQueue()}
-                  className="ui-interactive rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-on-accent hover:bg-accent-soft"
+                  className={button("primary", "xs")}
                 >
                   Resume all
                 </button>
@@ -881,7 +882,7 @@ export default function Download() {
                 <button
                   type="button"
                   onClick={() => pauseQueue()}
-                  className="ui-interactive rounded-lg bg-ink-800 px-3 py-1.5 text-xs font-medium text-gray-200 hover:bg-ink-700"
+                  className={button("secondary", "xs")}
                 >
                   Pause all
                 </button>

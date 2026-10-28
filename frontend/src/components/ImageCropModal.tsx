@@ -24,6 +24,7 @@ import {
   type CropTransform,
 } from "../utils/imageCrop";
 import { CloseIcon } from "./icons";
+import { button } from "./buttons";
 
 const INITIAL_TRANSFORM: CropTransform = {
   zoom: 1,
@@ -573,7 +574,7 @@ export default function ImageCropModal({
             type="button"
             disabled={!ready || busy}
             onClick={() => void confirm()}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+            className={button("primary")}
           >
             {busy ? "Saving…" : confirmLabel}
           </button>
@@ -589,7 +590,7 @@ export default function ImageCropModal({
             type="button"
             disabled={busy}
             onClick={onCancel}
-            className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700 disabled:opacity-50"
+            className={button("secondary")}
           >
             Cancel
           </button>

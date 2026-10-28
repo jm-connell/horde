@@ -29,6 +29,7 @@ import {
 import { describePage } from "./helpPage";
 import { CloseIcon } from "./icons";
 import TypingDots from "./TypingDots";
+import { button } from "./buttons";
 
 interface Props {
   /** Where the user dragged or resized it to; null until they do. */
@@ -41,8 +42,7 @@ interface Props {
   onClose: () => void;
 }
 
-const BUTTON =
-  "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40";
+const BUTTON = `${button("secondary", "sm")} shrink-0`;
 
 function useViewport() {
   const [size, setSize] = useState(() => ({

@@ -10,6 +10,7 @@ import { useOfflineDownloadAction } from "./OfflineDownloadButton";
 import type { Video } from "../types";
 import { effectiveSourceUrl, safeHref } from "../utils";
 import { CheckIcon, ExternalIcon, MoreIcon } from "./icons";
+import { button } from "./buttons";
 
 function sourceLinkLabel(video: Video): string {
   const platform = (video.platform || "").toLowerCase();
@@ -112,7 +113,7 @@ export default function VideoActionsMenu({
       <button
         ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
-        className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+        className={button("secondary")}
         title="More actions"
         aria-label="More actions"
         aria-haspopup="menu"

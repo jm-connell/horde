@@ -15,13 +15,13 @@ import type {
   AiWorkloadProfile,
 } from "../../types";
 import type { AiProcessAction, SettingsTab } from "./types";
+import { button } from "../../components/buttons";
 
 export const CHIP =
   "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm font-medium text-gray-300 transition-colors hover:border-accent hover:text-gray-100";
 export const CHIP_ACTIVE =
   "ui-panel ui-interactive rounded-lg border border-accent/50 bg-accent/15 px-3 py-2 text-sm font-medium text-accent transition-colors";
-export const PANEL_BTN =
-  "ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:cursor-not-allowed disabled:opacity-50";
+export const PANEL_BTN = button("secondary", "sm");
 export const INPUT =
   "ui-panel w-full max-w-md rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 /** Short values: numbers, filters, times. */

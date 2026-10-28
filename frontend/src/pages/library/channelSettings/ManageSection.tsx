@@ -7,10 +7,8 @@ import {
   showChannelIndexButton,
   type CatalogProgress,
 } from "../../libraryCatalogProgress";
-import SettingsSection, {
-  fieldLabel,
-  secondaryButton,
-} from "./SettingsSection";
+import { button } from "../../../components/buttons";
+import SettingsSection, { fieldLabel } from "./SettingsSection";
 
 const box = "rounded-lg border border-ink-700 bg-ink-950/50 p-4";
 
@@ -72,7 +70,7 @@ export default function ManageSection({
               <button
                 type="submit"
                 disabled={renaming || !trimmed || trimmed === channel}
-                className={secondaryButton}
+                className={button("secondary", "sm")}
               >
                 {renaming ? "Renaming…" : "Rename"}
               </button>
@@ -107,7 +105,7 @@ export default function ManageSection({
                     type="button"
                     onClick={onIndex}
                     disabled={indexing}
-                    className={secondaryButton}
+                    className={button("secondary", "sm")}
                   >
                     {indexing ? "Queuing…" : "Index channel"}
                   </button>

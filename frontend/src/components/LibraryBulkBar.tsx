@@ -6,6 +6,7 @@ import ConfirmDialog from "./ConfirmDialog";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import type { Playlist } from "../types";
 import { focusOnMount } from "../utils";
+import { button } from "./buttons";
 
 export default function LibraryBulkBar({
   selectedCount,
@@ -86,7 +87,7 @@ export default function LibraryBulkBar({
               }
               aria-haspopup="menu"
               aria-expanded={playlistOpen}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+              className={button("secondary", "sm")}
             >
               + Playlist
             </button>
@@ -127,7 +128,7 @@ export default function LibraryBulkBar({
                 onClick={onToggleNote}
                 aria-haspopup="dialog"
                 aria-expanded={bulkNoteOpen}
-                className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
+                className={button("secondary", "sm")}
               >
                 Add note
               </button>
@@ -158,7 +159,7 @@ export default function LibraryBulkBar({
                   <button
                     onClick={onSaveNote}
                     disabled={!bulkNote.trim()}
-                    className="mt-2 w-full rounded-lg bg-accent py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-40"
+                    className={`${button("primary", "sm")} mt-2 w-full`}
                   >
                     Apply to {selectedCount} video
                     {selectedCount === 1 ? "" : "s"}
@@ -173,17 +174,14 @@ export default function LibraryBulkBar({
             <button
               onClick={onRefreshMetadata}
               disabled={metadataSyncing}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent disabled:opacity-50"
+              className={button("secondary", "sm")}
             >
               {metadataSyncing ? "Syncing…" : "Resync metadata"}
             </button>
           )}
 
           {can("offline_download") && (
-            <button
-              onClick={onDownload}
-              className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-200 hover:border-accent"
-            >
+            <button onClick={onDownload} className={button("secondary", "sm")}>
               Download
             </button>
           )}
@@ -202,7 +200,7 @@ export default function LibraryBulkBar({
             <button
               type="button"
               onClick={() => setDeleteConfirmOpen(true)}
-              className="ui-panel ui-interactive rounded-lg border border-danger/40 bg-ink-900 px-3 py-1.5 text-sm text-danger hover:bg-danger/10"
+              className={button("danger", "sm")}
             >
               Delete
             </button>

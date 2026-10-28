@@ -2,6 +2,7 @@ import { backdropClick } from "../utils";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { button } from "./buttons";
 
 export type ConfirmOptions = {
   title: string;
@@ -89,7 +90,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onCancel}
             disabled={busy}
-            className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-300 hover:bg-ink-700 disabled:opacity-50"
+            className={button("secondary")}
           >
             {cancelLabel}
           </button>
@@ -97,11 +98,7 @@ export default function ConfirmDialog({
             type="button"
             onClick={onConfirm}
             disabled={busy}
-            className={
-              danger
-                ? "rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50"
-                : "rounded-lg bg-accent px-4 py-2 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:opacity-50"
-            }
+            className={button(danger ? "dangerSolid" : "primary")}
           >
             {confirmText}
           </button>

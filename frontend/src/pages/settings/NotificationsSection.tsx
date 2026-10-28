@@ -18,6 +18,7 @@ import { useSettingsPage } from "./context";
 import NotificationTargetForm, { TestResult } from "./NotificationTargetForm";
 import { KIND_LABELS } from "./notificationKinds";
 import { Section, Toggle } from "./ui";
+import { button } from "../../components/buttons";
 
 const TERMS = [
   "notifications",
@@ -31,9 +32,8 @@ const TERMS = [
   "failed download",
 ];
 
-const SMALL_BTN = `${PANEL_BTN} px-2.5! py-1! text-xs!`;
-const DANGER_SMALL_BTN =
-  "ui-interactive rounded-lg px-2.5 py-1 text-xs text-danger hover:bg-danger/10 disabled:cursor-not-allowed disabled:opacity-50";
+const SMALL_BTN = button("secondary", "xs");
+const DANGER_SMALL_BTN = button("danger", "xs");
 
 /** What a target sends, in words: "Download failed, Update failed". */
 function eventsSummary(

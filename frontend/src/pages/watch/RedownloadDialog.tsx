@@ -4,6 +4,7 @@ import { useFocusTrap } from "../../hooks/useFocusTrap";
 import type { Video } from "../../types";
 import { formatResolution } from "../../utils";
 import type { WatchActionsState } from "./useWatchActions";
+import { button } from "../../components/buttons";
 
 const PRESET_LABELS: Record<string, string> = {
   best: "Best available",
@@ -84,14 +85,14 @@ export default function RedownloadDialog({
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => actions.setRedownloadOpen(false)}
-                className="rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 hover:bg-ink-700"
+                className={button("secondary")}
               >
                 Cancel
               </button>
               <button
                 onClick={actions.onRedownload}
                 disabled={actions.redownloading}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:opacity-50"
+                className={button("primary")}
               >
                 {actions.redownloading ? "Starting…" : "Replace file"}
               </button>
