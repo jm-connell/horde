@@ -122,7 +122,7 @@ export default function ConnectionPane() {
             <code>host.docker.internal</code>; for another PC use its LAN
             address (e.g. <code>http://192.168.1.50:11434</code>). A bare{" "}
             <code>host:port</code> gets <code>http://</code> and{" "}
-            <code>/v1</code> added (no port: Ollama&apos;s 11434). See{" "}
+            <code>/v1</code> added (no port: Ollama’s 11434). See{" "}
             <a
               className="underline underline-offset-2 hover:text-gray-300"
               href="/wiki/ops/ai-setup/"

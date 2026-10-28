@@ -119,7 +119,7 @@ export default function UsersSection() {
                   </span>
                   {u.two_factor_enabled && (
                     <span
-                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-green-400"
+                      className="rounded-sm bg-ink-800 px-1.5 py-0.5 text-xs text-emerald-400"
                       title="Signs in with a code from an authenticator app"
                     >
                       Two-step
@@ -304,8 +304,8 @@ function UserEditor({
     <div className="mt-3 space-y-4 rounded-lg bg-ink-950/50 p-3">
       {isSelf ? (
         <p className="text-sm text-muted">
-          You can&apos;t remove your own administrator access or disable your
-          own account. Another administrator has to do it.
+          You can’t remove your own administrator access or disable your own
+          account. Another administrator has to do it.
         </p>
       ) : (
         <div>

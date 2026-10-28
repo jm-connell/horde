@@ -38,7 +38,7 @@ export default function AutoDownloadSection({
     <SettingsSection
       id="autodownload"
       title="Automatic downloads"
-      description="Download this channel's new uploads as they appear, and optionally some older ones."
+      description="Download this channel’s new uploads as they appear, and optionally some older ones."
       readOnlyNote={
         youtube && !editable
           ? "Changing this needs the Download permission."

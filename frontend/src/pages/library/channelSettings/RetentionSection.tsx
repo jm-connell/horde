@@ -61,7 +61,7 @@ export default function RetentionSection({ channel }: { channel: string }) {
     <SettingsSection
       id="retention"
       title="Clean up old videos"
-      description="Move this channel's older videos to the trash on a schedule, so it does not pile up. You can restore them from the trash."
+      description="Move this channel’s older videos to the trash on a schedule, so it does not pile up. You can restore them from the trash."
       readOnlyNote={
         editable ? null : "Changing this needs the Delete videos permission."
       }

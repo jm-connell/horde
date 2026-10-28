@@ -46,7 +46,7 @@ export class ApiError extends Error {
 
 /** Thrown without touching the network while the app is in offline mode. */
 export function offlineError(): ApiError {
-  return new ApiError("You're offline", { code: "offline", status: 0 });
+  return new ApiError("You’re offline", { code: "offline", status: 0 });
 }
 
 export function isOfflineError(err: unknown): boolean {

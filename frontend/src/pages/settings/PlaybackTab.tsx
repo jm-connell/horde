@@ -224,7 +224,7 @@ export default function PlaybackTab() {
         title="Offline mode"
         description={
           offlineMode && !net.manual
-            ? "On automatically: the server can't be reached. Turn off to retry now."
+            ? "On automatically: the server can’t be reached. Turn off to retry now."
             : net.reconnecting
               ? "Connecting…"
               : "Only show videos that have been saved for offline playback."

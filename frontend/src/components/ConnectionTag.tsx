@@ -78,7 +78,7 @@ export default function ConnectionTag({
           title={
             state.manual
               ? "Offline mode is on — tap to reconnect"
-              : "Can't reach the server — retrying automatically. Tap to retry now."
+              : "Can’t reach the server — retrying automatically. Tap to retry now."
           }
           aria-live="polite"
           className={`ui-interactive flex items-center gap-1.5 rounded-full border border-gray-600/60 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide whitespace-nowrap text-gray-400 hover:text-gray-200 ${
@@ -99,7 +99,7 @@ export default function ConnectionTag({
               popupAlign === "end" ? "right-0" : "left-1/2 -translate-x-1/2"
             } animate-[page-fade-in_200ms_ease-out] whitespace-nowrap rounded-md border border-gray-700 px-2 py-1 text-[11px] text-gray-300 shadow-lg`}
           >
-            Couldn't connect to the server
+            Couldn’t connect to the server
           </span>
         )}
       </span>

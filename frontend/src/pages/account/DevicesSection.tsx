@@ -83,7 +83,7 @@ export default function DevicesSection() {
         )}
       </div>
       <p className="mb-3 text-sm text-muted">
-        Browsers where your account is signed in. Sign out any you don&apos;t
+        Browsers where your account is signed in. Sign out any you don’t
         recognise.
       </p>
       {sessions === null ? (

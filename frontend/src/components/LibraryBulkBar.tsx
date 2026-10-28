@@ -151,7 +151,7 @@ export default function LibraryBulkBar({
                     value={bulkNote}
                     onChange={(e) => onNoteChange(e.target.value)}
                     rows={3}
-                    placeholder="Note to apply to all selected..."
+                    placeholder="Note to apply to all selected…"
                     className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                     ref={focusOnMount}
                   />
@@ -191,7 +191,7 @@ export default function LibraryBulkBar({
           {can("offline_download") && (
             <button
               onClick={onSaveFiles}
-              title="Save the video files to your device's downloads folder"
+              title="Save the video files to your device’s downloads folder"
               className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 text-sm text-gray-400 hover:border-accent hover:text-gray-200"
             >
               Save files

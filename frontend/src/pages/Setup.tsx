@@ -558,12 +558,12 @@ function WizardPanel({
             <Collapse open={aiChoice === "bundled"}>
               <div className="space-y-2 pt-2">
                 <p className="text-xs text-muted">
-                  Horde&apos;s compose file defines an optional Ollama
-                  container, but it is not installed or started by default. This
-                  command downloads the Ollama image the first time (a large
-                  download) and starts it next to Horde. Run it in a terminal on
-                  the server (SSH or the TrueNAS shell, not Dockge&apos;s Bash
-                  button), from the Horde folder that holds{" "}
+                  Horde’s compose file defines an optional Ollama container, but
+                  it is not installed or started by default. This command
+                  downloads the Ollama image the first time (a large download)
+                  and starts it next to Horde. Run it in a terminal on the
+                  server (SSH or the TrueNAS shell, not Dockge’s Bash button),
+                  from the Horde folder that holds{" "}
                   <span className="font-mono">docker-compose.yml</span>. If
                   Docker answers &ldquo;permission denied&rdquo;, put{" "}
                   <span className="font-mono">sudo</span> in front.

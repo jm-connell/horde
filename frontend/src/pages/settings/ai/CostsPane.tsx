@@ -21,7 +21,7 @@ export default function CostsPane() {
   return (
     <Section
       title="Costs"
-      description="Spend the provider reports for Horde's calls (summaries, chat, tags, embeddings). Only OpenRouter reports a cost per call."
+      description="Spend the provider reports for Horde’s calls (summaries, chat, tags, embeddings). Only OpenRouter reports a cost per call."
       hidden={
         !!q &&
         !match(
@@ -73,7 +73,7 @@ export default function CostsPane() {
         ))}
       </div>
       <p className="mt-2 max-w-2xl text-xs text-muted">
-        Totals are recorded locally from the provider's usage responses. They
+        Totals are recorded locally from the provider’s usage responses. They
         may differ slightly from its dashboard.
       </p>
 
@@ -124,8 +124,8 @@ export default function CostsPane() {
           </label>
         </div>
         <p className="text-xs text-muted">
-          Uses the rolling last 7 days total. Leave blank for no limit.
-          You&apos;ll get a toast and a banner when spend crosses this amount.
+          Uses the rolling last 7 days total. Leave blank for no limit. You’ll
+          get a toast and a banner when spend crosses this amount.
         </p>
         <div
           className={`flex max-w-2xl items-center gap-3 ${

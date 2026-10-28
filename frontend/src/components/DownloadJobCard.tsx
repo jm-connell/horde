@@ -55,7 +55,7 @@ import {
 } from "./downloadJobCardState";
 
 import { getItem, setItem } from "../storage";
-import { CheckIcon, CloseIcon } from "./icons";
+import { ArrowIcon, CheckIcon, CloseIcon } from "./icons";
 interface Props {
   job: DownloadJob;
   live?: ProgressEvent;
@@ -567,7 +567,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               onClick={onDismiss}
               className={
                 completed || failed || cancelled
-                  ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:border-ink-500 hover:bg-ink-700 hover:text-gray-200"
+                  ? "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-400 hover:bg-ink-700 hover:text-gray-200"
                   : "flex h-7 w-7 items-center justify-center rounded-md border border-ink-600 bg-ink-800 text-base leading-none text-gray-300 hover:border-red-500/60 hover:bg-red-500/10 hover:text-red-400"
               }
               title={
@@ -668,7 +668,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
                   rows={2}
-                  placeholder="Personal note about this video..."
+                  placeholder="Personal note about this video…"
                   className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                 />
               </div>
@@ -720,9 +720,9 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 <>
                   <Link
                     to={`/watch/${videoId}`}
-                    className="inline-block shrink-0 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
+                    className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-accent/15 px-2 py-1 text-xs sm:px-2.5 sm:py-1.5 sm:text-sm font-medium text-accent hover:bg-accent/25"
                   >
-                    Watch →
+                    Watch <ArrowIcon className="rotate-180" />
                   </Link>
                   {can("delete_videos") && (
                     <button
@@ -870,7 +870,7 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
               onChange={(e) => setDontAskAgain(e.target.checked)}
               className="rounded-sm border-ink-600"
             />
-            Don&apos;t ask again
+            Don’t ask again
           </label>
         </ConfirmDialog>
       ) : null}

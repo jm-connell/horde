@@ -40,7 +40,7 @@ Removed YouTube entries are **not** dropped from Horde. Video files are never de
 
 ## Add videos from the library
 
-Expand a playlist and click **Add Video**. The field searches downloaded titles and channels as you type; pick a result to append it. You can also paste a video URL: if it is already in the library it is added as is, otherwise it joins the playlist **without downloading** (see below). On a streamed video's watch page, **+ Playlist** beside the download button does the same.
+Expand a playlist and click **Add video**. The field searches downloaded titles and channels as you type; pick a result to append it. You can also paste a video URL: if it is already in the library it is added as is, otherwise it joins the playlist **without downloading** (see below). On a streamed video's watch page, **+ Playlist** beside the download button does the same.
 
 ## Downloaded and streamed videos
 
@@ -95,7 +95,7 @@ See [Video player](player.md) for queue vs related autoplay (queue wins; related
 Click a playlist row on `/playlists` to expand it (or open `/playlists?open=<id>`). From there you can:
 
 - Browse members in order (drag the grip on the left to reorder)
-- Add videos with **Add Video** (library search, or a link to add without downloading)
+- Add videos with **Add video** (library search, or a link to add without downloading)
 - **Download all** or **Remove from server** (see [Downloaded and streamed videos](#downloaded-and-streamed-videos))
 - Open any item in the [watch](watching.md) player
 - Remove items you no longer want in the list

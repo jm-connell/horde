@@ -22,7 +22,7 @@ test("a playlist is built, reordered, trimmed and deleted", async ({
   for (const title of ["Kiln fire", "Cedar Notes"]) {
     // The search box stays open after an add, ready for the next video.
     const opener = panel.getByRole("button", {
-      name: "Add Video",
+      name: "Add video",
       exact: true,
     });
     if ((await opener.getAttribute("aria-expanded")) === "false") {

@@ -17,7 +17,7 @@ const TONE_CLASS: Record<UpdateTone, string> = {
 };
 
 const PRIMARY_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50";
 
 const SHELL_PATH = "/mnt/tank/dockge/stacks/horde";
 
@@ -45,7 +45,7 @@ export function UpdateSetupHelp() {
           <ol className="list-decimal space-y-2 pl-5">
             <li>
               Open the TrueNAS shell (System → Shell) or SSH to the Docker host.
-              Not Dockge&apos;s Bash button: that shell is inside the container.
+              Not Dockge’s Bash button: that shell is inside the container.
             </li>
             <li>
               Run this, replacing the folder with the one you cloned Horde into.

@@ -70,7 +70,7 @@ export default function TwoFactorEnroll({
   if (codes) {
     return (
       <div>
-        <p className="mb-3 text-sm font-medium text-green-400" role="status">
+        <p className="mb-3 text-sm font-medium text-emerald-400" role="status">
           Two-step sign-in is on.
         </p>
         <RecoveryCodes username={username} codes={codes} />
@@ -103,7 +103,7 @@ export default function TwoFactorEnroll({
           className="mb-3 rounded-lg bg-white p-2"
         />
         <p className="mb-4 text-xs text-muted">
-          Can&apos;t scan? Type this key into the app instead:{" "}
+          Can’t scan? Type this key into the app instead:{" "}
           <code
             data-horde="totp-secret"
             className="select-all rounded-sm bg-ink-950 px-1.5 py-0.5 font-mono text-gray-100"

@@ -320,10 +320,11 @@ export default function JobsPane() {
             <div className="ui-panel mb-3 flex max-w-md rounded-lg border border-ink-700 bg-ink-900 p-0.5">
               <button
                 type="button"
+                aria-pressed={catchUpScope === "all_recent"}
                 onClick={() => setCatchUpScope("all_recent")}
                 className={
                   catchUpScope === "all_recent"
-                    ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-xs font-medium text-accent"
+                    ? "flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
                     : "flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200"
                 }
               >
@@ -331,10 +332,11 @@ export default function JobsPane() {
               </button>
               <button
                 type="button"
+                aria-pressed={catchUpScope === "all_full"}
                 onClick={() => setCatchUpScope("all_full")}
                 className={
                   catchUpScope === "all_full"
-                    ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-xs font-medium text-accent"
+                    ? "flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-xs font-medium text-accent"
                     : "flex-1 rounded-md px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200"
                 }
               >
@@ -365,7 +367,7 @@ export default function JobsPane() {
             >
               <svg
                 viewBox="0 0 24 24"
-                className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-out ${
+                className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-fluid ${
                   stepsOpen ? "" : "-rotate-90"
                 }`}
                 fill="none"

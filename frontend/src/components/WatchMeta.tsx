@@ -528,7 +528,7 @@ export default function WatchMeta({
               <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
                 <span>Description</span>
                 <ChevronIcon
-                  className={`transition-transform duration-200 ease-out ${settings.descriptionExpanded ? "rotate-180" : ""}`}
+                  className={`transition-transform duration-200 ease-fluid ${settings.descriptionExpanded ? "rotate-180" : ""}`}
                 />
               </span>
             </button>

@@ -6,6 +6,7 @@ import VideoEditForm from "../../components/VideoEditForm";
 import { useAuth } from "../../context/AuthContext";
 import type { Video } from "../../types";
 import type { WatchActionsState } from "./useWatchActions";
+import { ArrowIcon } from "../../components/icons";
 
 /** The edit form and the action row (back, playlist, offline, ••• menu) under a library video. */
 export default function WatchActions({
@@ -48,10 +49,11 @@ export default function WatchActions({
         <Link
           to="/"
           aria-label={isMobile ? "Back to library" : undefined}
-          className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
+          className="ui-panel ui-interactive inline-flex items-center gap-1.5 rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
         >
           {/* Phones: icon only, so the Download button fits the row. */}
-          {isMobile ? "←" : "← Back to library"}
+          <ArrowIcon />
+          {!isMobile && "Back to library"}
         </Link>
         {video.id > 0 && <AddToPlaylist videoId={video.id} />}
         {/* Phones get a dedicated button; desktop uses the ••• menu. */}

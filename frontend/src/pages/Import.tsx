@@ -337,7 +337,7 @@ export default function Import() {
           className="ui-panel ui-interactive shrink-0 rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700 disabled:cursor-not-allowed disabled:opacity-50"
           title="Rescan the media folder for videos that are not in the library"
         >
-          {scanning ? "Scanning…" : "Scan for New Files"}
+          {scanning ? "Scanning…" : "Scan for new files"}
         </button>
       </div>
 
@@ -472,7 +472,7 @@ export default function Import() {
                         load();
                       }}
                       className="ui-panel ui-interactive rounded-lg bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
-                      title="Remove from the queue without importing. Scan for New Files can pick it up again."
+                      title="Remove from the queue without importing. Scan for new files can pick it up again."
                     >
                       Skip
                     </button>
@@ -497,7 +497,7 @@ export default function Import() {
                 className="mb-4 flex items-center gap-2 text-sm font-medium text-gray-300 hover:text-accent"
               >
                 <ChevronIcon
-                  className={`transition-transform duration-200 ease-out ${showDuplicates ? "" : "-rotate-90"}`}
+                  className={`transition-transform duration-200 ease-fluid ${showDuplicates ? "" : "-rotate-90"}`}
                 />
                 <span>
                   Possible duplicates ({visibleGroups.length} group

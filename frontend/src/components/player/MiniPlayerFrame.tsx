@@ -1,4 +1,4 @@
-import { CloseIcon, PauseIcon, PlayIcon } from "../icons";
+import { CloseIcon, ExpandIcon, PauseIcon, PlayIcon } from "../icons";
 interface Props {
   title?: string;
   playing: boolean;
@@ -75,7 +75,7 @@ export default function MiniPlayerFrame({
           title="Expand"
           aria-label="Expand"
         >
-          ⤢
+          <ExpandIcon />
         </button>
         <button
           type="button"

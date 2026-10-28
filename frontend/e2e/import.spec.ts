@@ -11,7 +11,7 @@ test("import queue approves a dropped file into the library", async ({
     page.getByRole("button", { name: "Choose files" })
   ).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Scan for New Files" })
+    page.getByRole("button", { name: "Scan for new files" })
   ).toBeVisible();
   await expect(page.locator("input[value='Unreviewed drop']")).toBeVisible();
   await expect(

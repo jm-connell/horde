@@ -3,6 +3,7 @@ import type { ChannelStat } from "../types";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 import { focusOnMount } from "../utils";
 import ThemedSelect from "./ThemedSelect";
+import { UndoIcon } from "./icons";
 
 interface Props {
   value: string;
@@ -80,8 +81,9 @@ function SelectPicker({
           }}
           className="shrink-0 rounded-lg bg-ink-800 px-3 text-sm text-gray-300 hover:bg-ink-700"
           title="Choose from list"
+          aria-label="Choose from list"
         >
-          ↩
+          <UndoIcon />
         </button>
       </div>
     );

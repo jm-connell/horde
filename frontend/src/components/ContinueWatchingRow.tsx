@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Video } from "../types";
 import VideoCard from "./VideoCard";
-import { CloseIcon } from "./icons";
+import { ChevronIcon, CloseIcon } from "./icons";
 
 interface Props {
   videos: Video[];
@@ -106,7 +106,7 @@ export default function ContinueWatchingRow({
           aria-label="Scroll left"
           className={`${arrowClass} -left-3 hidden sm:block ${canScrollLeft ? "" : "invisible"}`}
         >
-          ‹
+          <ChevronIcon className="rotate-90" />
         </button>
         <button
           type="button"
@@ -116,7 +116,7 @@ export default function ContinueWatchingRow({
           aria-label="Scroll right"
           className={`${arrowClass} -right-3 hidden sm:block ${canScrollRight ? "" : "invisible"}`}
         >
-          ›
+          <ChevronIcon className="-rotate-90" />
         </button>
 
         <div

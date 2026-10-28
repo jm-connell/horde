@@ -13,8 +13,7 @@ export default function EnrollTwoFactorPage() {
     <AuthCard title="Set up two-step sign-in">
       <p className="mb-4 text-sm text-gray-400">
         An administrator requires a code from an authenticator app as well as a
-        password. It takes a minute, and you can&apos;t use Horde until it is
-        done.
+        password. It takes a minute, and you can’t use Horde until it is done.
       </p>
       <TwoFactorEnroll
         username={user?.username ?? ""}

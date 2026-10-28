@@ -119,7 +119,7 @@ export default function SponsorBlockSection() {
               >
                 <svg
                   viewBox="0 0 24 24"
-                  className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-out ${
+                  className={`h-3 w-3 shrink-0 transition-transform duration-200 ease-fluid ${
                     extrasOpen ? "" : "-rotate-90"
                   }`}
                   fill="none"

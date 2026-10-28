@@ -126,7 +126,7 @@ test("an admin cannot demote or disable their own account", async ({
   const self = rows.filter({ hasText: "(you)" });
   await self.getByRole("button", { name: "Edit admin" }).click();
   await expect(
-    self.getByText("You can't remove your own administrator access")
+    self.getByText("You can’t remove your own administrator access")
   ).toBeVisible();
   await expect(self.getByRole("radio", { name: "Member" })).toHaveCount(0);
   await expect(

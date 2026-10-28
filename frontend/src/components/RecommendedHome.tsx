@@ -14,6 +14,7 @@ import type {
   RecommendationsResponse,
   Video,
 } from "../types";
+import { ChevronIcon } from "./icons";
 
 const PAGE_SIZE = 24;
 
@@ -254,7 +255,7 @@ export default function RecommendedHome({
             className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
             aria-label="Scroll categories left"
           >
-            ‹
+            <ChevronIcon className="rotate-90" />
           </button>
         )}
         <div
@@ -286,7 +287,7 @@ export default function RecommendedHome({
             className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
             aria-label="Scroll categories right"
           >
-            ›
+            <ChevronIcon className="-rotate-90" />
           </button>
         )}
         {showForYou && (

@@ -108,7 +108,7 @@ export default function StorageSection({
           </span>
         </div>
       ) : (
-        <p className="text-sm text-muted">Calculating...</p>
+        <p className="text-sm text-muted">Calculating…</p>
       )}
       <div className="mt-4">
         <label

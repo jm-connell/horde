@@ -14,6 +14,7 @@ import AddToPlaylist from "../../components/AddToPlaylist";
 import StreamDownloadControl from "./StreamDownloadControl";
 import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
+import { ArrowIcon, ExternalIcon } from "../../components/icons";
 
 /** Title, channel, size/date/resolution line and (for a stream) the download control. */
 export default function WatchHeader({
@@ -61,9 +62,10 @@ export default function WatchHeader({
         {!isLibrary && (
           <Link
             to={backHref}
-            className="shrink-0 text-sm text-gray-400 hover:text-accent"
+            className="inline-flex shrink-0 items-center gap-1 text-sm text-gray-400 hover:text-accent"
           >
-            ← Back
+            <ArrowIcon />
+            Back
           </Link>
         )}
       </div>
@@ -130,9 +132,10 @@ export default function WatchHeader({
                 target="_blank"
                 rel="noreferrer"
                 title={`Open on ${originalLabel}`}
-                className="text-xs text-gray-400 hover:text-accent"
+                className="inline-flex items-center gap-0.5 text-xs text-gray-400 hover:text-accent"
               >
-                {originalLabel} ↗
+                {originalLabel}
+                <ExternalIcon />
               </a>
             )}
             {!isLive && (

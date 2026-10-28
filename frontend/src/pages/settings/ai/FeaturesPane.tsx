@@ -97,6 +97,7 @@ export default function FeaturesPane() {
                     <button
                       key={opt.value}
                       type="button"
+                      aria-pressed={selected}
                       onClick={() =>
                         void saveAi({ ai_chapters_mode: opt.value })
                       }
@@ -150,6 +151,7 @@ export default function FeaturesPane() {
                       <button
                         key={opt.value}
                         type="button"
+                        aria-pressed={selected}
                         onClick={() =>
                           void saveAi({ summary_length: opt.value })
                         }

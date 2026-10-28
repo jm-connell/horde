@@ -200,7 +200,7 @@ test("on a phone the control bar and stream details each stay on one line", asyn
   expect(
     Math.abs((await centerY(channel)) - (await centerY(download)))
   ).toBeLessThan(6);
-  const original = page.getByRole("link", { name: /^Source ↗$/ });
+  const original = page.getByRole("link", { name: /^Source$/ });
   expect(
     Math.abs((await centerY(channel)) - (await centerY(original)))
   ).toBeLessThan(6);
@@ -209,7 +209,7 @@ test("on a phone the control bar and stream details each stay on one line", asyn
 test("a streamed video links to its original page", async ({ page }) => {
   await mockStream(page);
   await page.goto(WATCH);
-  const original = page.getByRole("link", { name: /^Source ↗$/ });
+  const original = page.getByRole("link", { name: /^Source$/ });
   await expect(original).toHaveAttribute("href", STREAM_URL);
   await expect(original).toHaveAttribute("target", "_blank");
 });

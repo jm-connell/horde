@@ -159,7 +159,7 @@ export default function VideoAiPanel({
           <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
             <span>AI</span>
             <ChevronIcon
-              className={`transition-transform duration-200 ease-out ${expanded ? "rotate-180" : ""}`}
+              className={`transition-transform duration-200 ease-fluid ${expanded ? "rotate-180" : ""}`}
             />
           </span>
         </button>

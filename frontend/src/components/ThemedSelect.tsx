@@ -2,6 +2,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { MenuScroll } from "./MenuFlyout";
 import { FlipMenuPanel, useFlipMenu } from "../hooks/useFlipMenu";
+import { ChevronIcon } from "./icons";
 
 export interface ThemedSelectOption<T extends string = string> {
   value: T;
@@ -268,9 +269,7 @@ export default function ThemedSelect<T extends string>({
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-muted" aria-hidden>
-            ▾
-          </span>
+          <ChevronIcon className="text-muted" />
         </div>
       ) : (
         <button
@@ -302,9 +301,7 @@ export default function ThemedSelect<T extends string>({
               {selected.hint}
             </span>
           ) : null}
-          <span className="shrink-0 text-muted" aria-hidden>
-            ▾
-          </span>
+          <ChevronIcon className="text-muted" />
         </button>
       )}
       <FlipMenuPanel open={open} flip={flip} align={align}>

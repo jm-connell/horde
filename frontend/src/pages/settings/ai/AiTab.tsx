@@ -28,13 +28,14 @@ export default function AiTab({ paneState }: { paneState: AiPaneState }) {
             <button
               key={pane.id}
               type="button"
+              aria-pressed={active}
               onClick={() => {
                 setAiPane(pane.id);
                 setItem("horde.aiPane", pane.id);
               }}
               className={
                 active
-                  ? "flex-1 rounded-md bg-ink-800 px-3 py-1.5 text-sm font-medium text-accent"
+                  ? "flex-1 rounded-md bg-accent/15 px-3 py-1.5 text-sm font-medium text-accent"
                   : "flex-1 rounded-md px-3 py-1.5 text-sm font-medium text-gray-400 hover:text-gray-200"
               }
             >

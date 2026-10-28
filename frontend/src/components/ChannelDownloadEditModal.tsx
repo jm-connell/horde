@@ -134,7 +134,7 @@ export default function ChannelDownloadEditModal({
               value={item.notes}
               onChange={(e) => onSave({ notes: e.target.value })}
               rows={3}
-              placeholder="Personal note about this video..."
+              placeholder="Personal note about this video…"
               className="w-full rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
             />
           </div>

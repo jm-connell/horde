@@ -13,7 +13,7 @@ import { KIND_HINTS, KIND_LABELS, URL_PLACEHOLDERS } from "./notificationKinds";
 import { Chip } from "./ui";
 
 const SAVE_BTN =
-  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50";
+  "ui-interactive rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50";
 
 export function TestResult({ result }: { result: NotificationTestResult }) {
   return result.ok ? (

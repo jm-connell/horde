@@ -49,6 +49,7 @@
   --color-red-300: #fca5a5;
   --color-red-400: #f87171;
   --color-red-500: #ef4444;
+  --color-red-600: #dc2626;
   --color-red-900: #7f1d1d;
   --color-red-950: #450a0a;
   --color-amber-100: #fef3c7;
@@ -101,6 +102,14 @@
     transition-property: color, background-color, border-color;
     transition-duration: 150ms;
     transition-timing-function: ease-out;
+  }
+
+  /* Native checkboxes, radios and range fills take the theme accent, not
+     the browser's blue. */
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="range"] {
+    accent-color: rgb(var(--accent));
   }
 
   input::placeholder,

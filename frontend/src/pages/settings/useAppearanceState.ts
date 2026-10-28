@@ -69,7 +69,7 @@ export function useAppearanceState() {
   const deleteLibraryBackground = async (id: string) => {
     const ok = await confirm({
       title: "Delete this background?",
-      body: "The image is removed from your library and can't be restored.",
+      body: "The image is removed from your library and can’t be restored.",
       confirmLabel: "Delete",
       danger: true,
     });

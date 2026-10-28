@@ -16,7 +16,7 @@ const REQUIREMENTS: { value: TwoFactorRequirement; label: string }[] = [
 
 function Mark({ status }: { status: SecurityCheckItem["status"] }) {
   return status === "ok" ? (
-    <span className="text-green-400">
+    <span className="text-emerald-400">
       <CheckIcon />
       <span className="sr-only">Passed</span>
     </span>

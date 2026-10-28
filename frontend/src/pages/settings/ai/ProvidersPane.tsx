@@ -43,6 +43,7 @@ export default function ProvidersPane() {
                   <button
                     key={opt.value}
                     type="button"
+                    aria-pressed={selected}
                     disabled={locked}
                     onClick={() => void applyWorkload(opt.value)}
                     className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -91,7 +92,7 @@ export default function ProvidersPane() {
           )}
           {aiStatus && aiStatus.models_match_profile === false && (
             <p className="text-xs text-muted">
-              Ollama models differ from the workload&apos;s picks — re-apply a
+              Ollama models differ from the workload’s picks — re-apply a
               workload to reset them for the Ollama GPU.
             </p>
           )}

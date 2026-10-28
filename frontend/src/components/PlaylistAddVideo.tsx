@@ -263,7 +263,7 @@ export default function PlaylistAddVideo({
           aria-hidden
           className="invisible col-start-1 row-start-1 whitespace-nowrap px-3 py-1.5 text-sm"
         >
-          Add Video
+          Add video
         </span>
         <div className="col-span-2 col-start-1 row-start-1 w-0 min-w-full">
           <div className="overflow-x-clip">
@@ -278,19 +278,19 @@ export default function PlaylistAddVideo({
                 aria-hidden
                 className="invisible whitespace-nowrap px-3 py-1.5 text-sm"
               >
-                Add Video
+                Add video
               </span>
               <button
                 type="button"
                 tabIndex={open ? -1 : 0}
                 aria-expanded={open}
-                aria-label="Add Video"
+                aria-label="Add video"
                 onClick={() => setOpen(true)}
                 className={`absolute inset-0 z-1 flex items-center whitespace-nowrap px-3 text-sm text-gray-300 transition-opacity duration-200 ease-out hover:text-accent motion-reduce:transition-none ${
                   open ? "pointer-events-none opacity-0" : "opacity-100"
                 }`}
               >
-                Add Video
+                Add video
               </button>
               <input
                 ref={inputRef}

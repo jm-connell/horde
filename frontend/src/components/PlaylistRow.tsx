@@ -44,7 +44,7 @@ import {
 import { playlistEntryView } from "./playlistEntries";
 import PlaylistAddVideo from "./PlaylistAddVideo";
 import PlaylistVisibilityPicker from "./PlaylistVisibilityPicker";
-import { CloseIcon } from "./icons";
+import { CloseIcon, ExternalIcon } from "./icons";
 
 export default function PlaylistRow({
   playlist,
@@ -607,9 +607,10 @@ export default function PlaylistRow({
                       href={safeHref(playlist.source_url)}
                       target="_blank"
                       rel="noreferrer"
-                      className="shrink-0 text-sm text-accent hover:underline"
+                      className="inline-flex shrink-0 items-center gap-1 text-sm text-accent hover:underline"
                     >
-                      Source playlist ↗
+                      Source playlist
+                      <ExternalIcon />
                     </a>
                   )}
                 </div>
@@ -689,7 +690,7 @@ export default function PlaylistRow({
                           className={`relative w-20 shrink-0 overflow-hidden rounded-md ring-1 ${
                             selected
                               ? "ring-accent"
-                              : "ring-ink-700 hover:ring-ink-500"
+                              : "ring-ink-700 hover:ring-ink-600"
                           }`}
                         >
                           <PlaylistThumb
@@ -711,7 +712,7 @@ export default function PlaylistRow({
                       className={`flex aspect-video w-20 shrink-0 flex-col items-center justify-center rounded-md border border-dashed text-[10px] uppercase tracking-wide ${
                         playlist.has_custom_cover
                           ? "border-accent text-accent"
-                          : "border-ink-600 text-muted hover:border-ink-500 hover:text-gray-300"
+                          : "border-ink-600 text-muted hover:text-gray-300"
                       }`}
                     >
                       {playlist.has_custom_cover ? "Custom" : "Upload"}

@@ -9,6 +9,7 @@ import { MenuScroll } from "./MenuFlyout";
 import { useOfflineDownloadAction } from "./OfflineDownloadButton";
 import type { Video } from "../types";
 import { effectiveSourceUrl, safeHref } from "../utils";
+import { CheckIcon, ExternalIcon, MoreIcon } from "./icons";
 
 function sourceLinkLabel(video: Video): string {
   const platform = (video.platform || "").toLowerCase();
@@ -16,14 +17,14 @@ function sourceLinkLabel(video: Video): string {
     extractYouTubeId(video.source_url, video.file_path) ||
     platform.includes("youtube")
   ) {
-    return "Open on YouTube ↗";
+    return "Open on YouTube";
   }
   if (platform) {
     const name = platform.replace(/ie$/, "").replace(/_/g, " ");
     const pretty = name.charAt(0).toUpperCase() + name.slice(1);
-    return `Open on ${pretty} ↗`;
+    return `Open on ${pretty}`;
   }
-  return "Source link ↗";
+  return "Source link";
 }
 
 interface Props {
@@ -113,10 +114,11 @@ export default function VideoActionsMenu({
         onClick={() => setOpen((v) => !v)}
         className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-800 px-4 py-2 text-sm text-gray-200 ring-1 ring-ink-700 hover:bg-ink-700"
         title="More actions"
+        aria-label="More actions"
         aria-haspopup="menu"
         aria-expanded={open}
       >
-        •••
+        <MoreIcon />
       </button>
       {/* align left = panel extends to the right of the trigger */}
       <FlipMenuPanel
@@ -164,7 +166,10 @@ export default function VideoActionsMenu({
             aria-checked={settings.autoplayRelated}
             className={itemClass}
           >
-            Autoplay related {settings.autoplayRelated ? "✓" : ""}
+            Autoplay related{" "}
+            {settings.autoplayRelated && (
+              <CheckIcon className="align-[-0.125em]" />
+            )}
           </button>
           {can("use_ai") && (
             <button onClick={refreshTags} role="menuitem" className={itemClass}>
@@ -237,7 +242,8 @@ export default function VideoActionsMenu({
               role="menuitem"
               className={itemClass}
             >
-              {sourceLinkLabel(video)}
+              {sourceLinkLabel(video)}{" "}
+              <ExternalIcon className="align-[-0.125em]" />
             </a>
           )}
           {can("delete_videos") && (

@@ -126,7 +126,7 @@ export default function TrashSection() {
       title: "Delete forever?",
       body: `“${item.title}”${
         item.size_bytes ? ` (${formatSize(item.size_bytes)})` : ""
-      } will be permanently deleted. This can't be undone.`,
+      } will be permanently deleted. This can’t be undone.`,
       confirmLabel: "Delete forever",
       danger: true,
     });
@@ -150,7 +150,7 @@ export default function TrashSection() {
       title: "Empty the trash?",
       body: `Permanently delete ${videoCount(summary.count)} (${
         formatSize(summary.total_bytes) || "0 B"
-      })? This can't be undone.`,
+      })? This can’t be undone.`,
       confirmLabel: "Empty trash",
       danger: true,
     });

@@ -286,7 +286,7 @@ export default function OfflinePage({
         conn.status === "offline" ? (
           <div className="ui-panel mb-4 flex flex-wrap items-center gap-3 rounded-lg border border-ink-700 bg-ink-900 px-4 py-3">
             <p className="min-w-0 flex-1 text-sm text-gray-200">
-              You're offline — showing videos downloaded to this device.
+              You’re offline — showing videos downloaded to this device.
             </p>
             <button
               className={btn}
@@ -331,7 +331,7 @@ export default function OfflinePage({
       {snap.unsupported ? (
         <div className="ui-panel rounded-lg border border-amber-500/30 bg-ink-900 p-4">
           <p className="mb-2 font-medium text-gray-100">
-            Offline downloads aren&apos;t available on this connection
+            Offline downloads aren’t available on this connection
           </p>
           <HttpsHelp />
         </div>

@@ -35,7 +35,7 @@ export default function SendLinksHelp() {
         className="ui-interactive flex min-h-11 items-center gap-2 rounded-lg px-2 text-left text-gray-400 hover:text-gray-200"
       >
         <ChevronIcon
-          className={`transition-transform duration-200 ease-out ${open ? "" : "-rotate-90"}`}
+          className={`transition-transform duration-200 ease-fluid ${open ? "" : "-rotate-90"}`}
         />
         Send links from your browser
       </button>
@@ -60,7 +60,7 @@ export default function SendLinksHelp() {
           </p>
           <p>
             On a phone, copy the bookmarklet, save any bookmark, and paste it
-            into that bookmark's address.
+            into that bookmark’s address.
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <button
@@ -73,7 +73,7 @@ export default function SendLinksHelp() {
             {copied === "yes" && <span role="status">Copied.</span>}
             {copied === "failed" && (
               <span role="status">
-                Couldn't copy here (needs HTTPS). Select the text below.
+                Couldn’t copy here (needs HTTPS). Select the text below.
               </span>
             )}
           </div>

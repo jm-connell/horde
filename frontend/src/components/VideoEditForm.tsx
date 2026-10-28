@@ -3,6 +3,7 @@ import { api, thumbnailUrl } from "../api";
 import type { ChannelStat, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
+import { ChevronIcon } from "./icons";
 
 interface DraftState {
   title: string;
@@ -300,16 +301,18 @@ export default function VideoEditForm({
                   onClick={() => void showCandidate(candIndex - 1)}
                   className="absolute left-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-950/80 px-2 py-1 text-sm text-gray-100 hover:bg-ink-950"
                   title="Previous frame"
+                  aria-label="Previous frame"
                 >
-                  ‹
+                  <ChevronIcon className="rotate-90" />
                 </button>
                 <button
                   type="button"
                   onClick={() => void showCandidate(candIndex + 1)}
                   className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md bg-ink-950/80 px-2 py-1 text-sm text-gray-100 hover:bg-ink-950"
                   title="Next frame"
+                  aria-label="Next frame"
                 >
-                  ›
+                  <ChevronIcon className="-rotate-90" />
                 </button>
                 <span className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-sm bg-ink-950/80 px-2 py-0.5 text-[10px] text-gray-300">
                   {candIndex + 1} / {candidates.length}
@@ -356,7 +359,7 @@ export default function VideoEditForm({
               aria-label="Thumbnail URL"
               value={draft.thumbnail_url}
               onChange={(e) => set("thumbnail_url", e.target.value)}
-              placeholder="https://..."
+              placeholder="https://…"
               className={inputClass}
             />
           </div>
@@ -427,7 +430,7 @@ export default function VideoEditForm({
                 id={`${fieldId}-source_url`}
                 value={draft.source_url}
                 onChange={(e) => set("source_url", e.target.value)}
-                placeholder="https://..."
+                placeholder="https://…"
                 className={inputClass}
               />
             </div>
@@ -439,7 +442,7 @@ export default function VideoEditForm({
                 id={`${fieldId}-channel_url`}
                 value={draft.channel_url}
                 onChange={(e) => set("channel_url", e.target.value)}
-                placeholder="https://..."
+                placeholder="https://…"
                 className={inputClass}
               />
             </div>
@@ -473,7 +476,7 @@ export default function VideoEditForm({
               value={draft.notes}
               onChange={(e) => set("notes", e.target.value)}
               rows={2}
-              placeholder="Personal note about this video..."
+              placeholder="Personal note about this video…"
               className={`${inputClass} resize-y`}
             />
           </div>
@@ -494,7 +497,7 @@ export default function VideoEditForm({
               disabled={saving || !canSave}
               className="ui-interactive rounded-lg bg-accent px-5 py-2 text-sm font-semibold text-on-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {saving ? "Saving..." : saveLabel}
+              {saving ? "Saving…" : saveLabel}
             </button>
           </div>
         </div>
