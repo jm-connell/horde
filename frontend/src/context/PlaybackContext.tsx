@@ -447,6 +447,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setStream(null);
       setActiveStreamQuality(null);
       streamPosRef.current = 0;
+      streamBehindLiveRef.current = null;
       libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
         setQueue(withoutVideo(opts.queue, video.id));
@@ -462,6 +463,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
+    streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
     setStream(session);
     setQueue((q) => withoutStream(q, session.url));
@@ -515,6 +517,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
+    streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);

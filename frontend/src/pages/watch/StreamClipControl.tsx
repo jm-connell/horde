@@ -25,7 +25,11 @@ function markLabel(mark: ClipMark): string {
     : formatTimestamp(mark.sec);
 }
 
-/** One end of the clip: the time it is set to and a button to take the playhead's. */
+/**
+ * One end of the clip: the time it is set to and a button to take the
+ * playhead's. The typed text is its own: the parent remounts the field (a new
+ * `key`) when the button sets the time, so typing is never rewritten.
+ */
 function MarkField({
   label,
   mark,
@@ -34,19 +38,14 @@ function MarkField({
   onUseCurrent,
 }: {
   label: string;
-  mark: ClipMark;
+  /** Null while the typed text is not a time. */
+  mark: ClipMark | null;
   live: boolean;
   onChange: (mark: ClipMark | null) => void;
   onUseCurrent: () => void;
 }) {
   const id = useId();
-  const [text, setText] = useState(markLabel(mark));
-  const [shown, setShown] = useState(mark);
-  if (shown !== mark) {
-    // The playhead button moved it: show the new time.
-    setShown(mark);
-    setText(markLabel(mark));
-  }
+  const [text, setText] = useState(() => (mark ? markLabel(mark) : ""));
   return (
     <div className="mb-4">
       <label htmlFor={id} className="mb-1 block text-sm text-gray-300">
@@ -55,7 +54,7 @@ function MarkField({
       <div className="flex items-center gap-2">
         {live ? (
           <output id={id} className="flex-1 text-sm text-gray-100 tabular-nums">
-            {markLabel(mark)}
+            {mark ? markLabel(mark) : "–"}
           </output>
         ) : (
           <input
@@ -110,6 +109,9 @@ function ClipDialog({
   const [start, setStart] = useState<ClipMark | null>(() =>
     end ? back(end) : null
   );
+  // Bumped when "Use current time" sets an end, to show its new time.
+  const [startRev, setStartRev] = useState(0);
+  const [endRev, setEndRev] = useState(0);
   const [busy, setBusy] = useState(false);
   const length = start && end ? clipLength(start, end) : NaN;
   const valid = Number.isFinite(length) && length >= 1;
@@ -156,28 +158,34 @@ function ClipDialog({
             void save();
           }}
         >
-          {start && (
-            <MarkField
-              label="Start"
-              mark={start}
-              live={live}
-              onChange={setStart}
-              onUseCurrent={() => setStart(current())}
-            />
-          )}
-          {end && (
-            <MarkField
-              label="End"
-              mark={end}
-              live={live}
-              onChange={setEnd}
-              onUseCurrent={() => setEnd(current())}
-            />
-          )}
+          <MarkField
+            key={`start-${startRev}`}
+            label="Start"
+            mark={start}
+            live={live}
+            onChange={setStart}
+            onUseCurrent={() => {
+              setStart(current());
+              setStartRev((n) => n + 1);
+            }}
+          />
+          <MarkField
+            key={`end-${endRev}`}
+            label="End"
+            mark={end}
+            live={live}
+            onChange={setEnd}
+            onUseCurrent={() => {
+              setEnd(current());
+              setEndRev((n) => n + 1);
+            }}
+          />
           <p className="mb-5 text-xs text-muted" aria-live="polite">
             {valid
               ? `Length ${formatTimestamp(length)}`
-              : "The end has to come at least a second after the start."}
+              : start && end
+                ? "The end has to come at least a second after the start."
+                : "Enter times as h:mm:ss."}
           </p>
           <div className="flex justify-end gap-2">
             <button

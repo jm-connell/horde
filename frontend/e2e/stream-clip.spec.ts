@@ -85,7 +85,13 @@ test("the clip dialog refuses an end before the start", async ({ page }) => {
   await page.getByRole("button", { name: "More stream actions" }).click();
   await page.getByRole("menuitem", { name: "Save a clip…" }).click();
   const dialog = page.getByRole("dialog", { name: "Save a clip" });
-  await dialog.getByLabel("Start").fill("5:00");
+  // Typed key by key, and cleared on the way: the field keeps what is typed.
+  const startField = dialog.getByLabel("Start");
+  await startField.fill("");
+  await expect(startField).toBeVisible();
+  await expect(dialog.getByText("Enter times as h:mm:ss.")).toBeVisible();
+  await startField.pressSequentially("5:00");
+  await expect(startField).toHaveValue("5:00");
   await dialog.getByLabel("End").fill("4:00");
   await expect(
     dialog.getByText("The end has to come at least a second after the start.")

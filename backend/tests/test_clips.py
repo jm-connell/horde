@@ -359,3 +359,76 @@ def test_a_clip_from_before_the_dvr_window_fails_clearly(tmp_path, monkeypatch):
             cancel=threading.Event(),
             on_progress=lambda _p: None,
         )
+
+
+# --- regressions from review -----------------------------------------------------
+
+
+def test_infinite_clip_ends_are_refused(client, queued):
+    resp = client.post(
+        "/api/downloads/clips",
+        content=(
+            f'{{"url": "{URL}", "title": "T", '
+            '"start_sec": Infinity, "end_sec": Infinity}'
+        ),
+        headers={"Content-Type": "application/json"},
+    )
+    assert resp.status_code == 422
+    assert queued == []
+
+
+def test_clips_under_a_second_apart_get_their_own_file():
+    base = make_info(YT, "Stream")
+    assert clips.clip_info(base, 10, 40)["id"] != clips.clip_info(base, 10.5, 40)["id"]
+
+
+def test_a_failed_live_clip_is_not_cut_again_for_each_format(
+    init_db, fake, monkeypatch
+):
+    fake.add(URL, make_info(YT, "Live now", is_live=True, live_status="is_live"))
+    calls: list[int] = []
+
+    def failing_cut(*_a, **_k):
+        calls.append(1)
+        raise clips.ClipUnavailable("That part of the stream is no longer available")
+
+    monkeypatch.setattr(clips, "download_live_clip", failing_cut)
+    job_id = _add_clip_job(init_db, 10, 40)
+    run_job_inline(job_id)
+
+    assert calls == [1]
+    with Session(init_db["engine"]) as s:
+        job = s.get(DownloadJob, job_id)
+        assert job is not None and job.status == JobStatus.error
+
+
+def test_a_clip_of_a_stream_still_processing_fails_clearly(init_db, fake):
+    fake.add(URL, make_info(YT, "Just ended", live_status="post_live"))
+    job_id = _add_clip_job(init_db, 10, 40)
+    run_job_inline(job_id)
+
+    assert fake.downloads == []
+    with Session(init_db["engine"]) as s:
+        job = s.get(DownloadJob, job_id)
+        assert job is not None and job.status == JobStatus.error
+        assert "still processing" in (job.error or "")
+
+
+def test_a_segment_that_fails_once_is_fetched_again(monkeypatch):
+    attempts: list[int] = []
+
+    def flaky(url: str, *, max_bytes: int, headers=None, **_k):
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise url_safety.UrlFetchError("Server answered 503")
+        return url_safety.FetchResult(b"seg", "video/mp2t", url)
+
+    monkeypatch.setattr(clips, "fetch_bytes", flaky)
+    body = clips._fetch_segment(
+        "https://rr1.googlevideo.com/sq/{sq}/x.ts",
+        {},
+        7,
+        first=False,
+        cancel=threading.Event(),
+    )
+    assert (body, len(attempts)) == (b"seg", 2)

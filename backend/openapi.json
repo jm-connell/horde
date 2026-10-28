@@ -3772,6 +3772,7 @@
           "end_behind_live_sec": {
             "anyOf": [
               {
+                "maximum": 10000000.0,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -3784,6 +3785,7 @@
           "end_sec": {
             "anyOf": [
               {
+                "maximum": 10000000.0,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -3801,6 +3803,7 @@
           "start_behind_live_sec": {
             "anyOf": [
               {
+                "maximum": 10000000.0,
                 "minimum": 0.0,
                 "type": "number"
               },
@@ -3813,6 +3816,7 @@
           "start_sec": {
             "anyOf": [
               {
+                "maximum": 10000000.0,
                 "minimum": 0.0,
                 "type": "number"
               },

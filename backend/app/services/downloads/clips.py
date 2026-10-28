@@ -37,6 +37,7 @@ MAX_CLIP_SEC = 6 * 3600.0
 _MAX_PLAYLIST_BYTES = 4 * 1024 * 1024
 _MAX_SEGMENT_BYTES = 64 * 1024 * 1024
 _FFMPEG_TIMEOUT_SEC = 30 * 60
+_SEGMENT_ATTEMPTS = 3
 
 
 class ClipUnavailable(RuntimeError):
@@ -55,6 +56,11 @@ def clip_suffix(start: float, end: float) -> str:
     return f"(clip {clock_label(start)}–{clock_label(end)})"
 
 
+def _id_num(sec: float) -> str:
+    """``12``, ``12.5``: clips under a second apart still get their own file."""
+    return f"{sec:.3f}".rstrip("0").rstrip(".")
+
+
 def clip_info(info: dict[str, Any], start: float, end: float) -> dict[str, Any]:
     """``info`` rewritten to describe the clip instead of the whole video."""
     out = dict(info)
@@ -68,7 +74,7 @@ def clip_info(info: dict[str, Any], start: float, end: float) -> dict[str, Any]:
     out["fulltitle"] = title
     # Not an 11-character YouTube id, so neither the file name nor the row
     # derives one (services/youtube_id.py).
-    out["id"] = f"{original_id}-clip-{int(start)}-{int(end)}"
+    out["id"] = f"{original_id}-clip-{_id_num(start)}-{_id_num(end)}"
     out["duration"] = max(0.0, end - start)
     for key in (
         "webpage_url",
@@ -137,6 +143,31 @@ def _segment_range(
     return template, first, last, target
 
 
+def _fetch_segment(
+    template: str,
+    headers: dict[str, str],
+    sq: int,
+    *,
+    first: bool,
+    cancel: threading.Event,
+) -> bytes:
+    """One segment, retried a couple of times (a CDN edge can blip mid-clip)."""
+    for attempt in range(_SEGMENT_ATTEMPTS):
+        try:
+            return _fetch(hls.fill_template(template, sq), headers, _MAX_SEGMENT_BYTES)
+        except UrlFetchError as exc:
+            if attempt == _SEGMENT_ATTEMPTS - 1:
+                if first:
+                    raise ClipUnavailable(
+                        "That part of the stream is no longer available"
+                    ) from exc
+                raise
+            logger.debug("live clip segment %s failed; retrying", sq, exc_info=True)
+            if cancel.wait(attempt + 1):
+                raise DownloadCancelled() from exc
+    raise AssertionError("unreachable")
+
+
 def _fetch_segments(
     template: str,
     headers: dict[str, str],
@@ -155,16 +186,9 @@ def _fetch_segments(
         for i, sq in enumerate(range(first, last + 1)):
             if cancel.is_set():
                 raise DownloadCancelled()
-            try:
-                out.write(
-                    _fetch(hls.fill_template(template, sq), headers, _MAX_SEGMENT_BYTES)
-                )
-            except UrlFetchError as exc:
-                if i == 0:
-                    raise ClipUnavailable(
-                        "That part of the stream is no longer available"
-                    ) from exc
-                raise
+            out.write(
+                _fetch_segment(template, headers, sq, first=i == 0, cancel=cancel)
+            )
             on_progress(lo + span * (i + 1) / count)
 
 
@@ -202,26 +226,27 @@ def download_live_clip(
         share=video_share,
     )
     if source.audio_url is not None:
-        audio_template, _a_first, _a_last, _t = _segment_range(
+        audio_template, _a_first, audio_last, _t = _segment_range(
             source.audio_url, source.audio_headers, start, end
         )
         _fetch_segments(
             audio_template,
             source.audio_headers,
             first,
-            last,
+            # The audio playlist can be a segment behind the video near live.
+            min(last, audio_last),
             audio_aac,
             cancel=cancel,
             on_progress=on_progress,
             share=(60.0, 30.0),
         )
-    offset = max(0.0, start - first * target)
-    cmd = [ffmpeg_bin(), "-y", "-v", "error", "-i", str(video_ts)]
+    # Seek on the inputs: with stream copy the cut then starts on a keyframe
+    # instead of on frames that cannot be decoded.
+    seek = ["-ss", f"{max(0.0, start - first * target):.3f}"]
+    cmd = [ffmpeg_bin(), "-y", "-v", "error", *seek, "-i", str(video_ts)]
     if has_audio:
-        cmd += ["-i", str(audio_aac), "-map", "0:v:0", "-map", "1:a:0"]
+        cmd += [*seek, "-i", str(audio_aac), "-map", "0:v:0", "-map", "1:a:0"]
     cmd += [
-        "-ss",
-        f"{offset:.3f}",
         "-t",
         f"{max(0.1, end - start):.3f}",
         "-c",

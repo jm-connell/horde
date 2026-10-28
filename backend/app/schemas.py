@@ -254,10 +254,14 @@ class ClipCreate(BaseModel):
     url: str = Field(min_length=1, max_length=4000)
     title: str | None = Field(default=None, max_length=500)
     quality_preset: str = "best"
-    start_sec: float | None = Field(default=None, ge=0)
-    end_sec: float | None = Field(default=None, ge=0)
-    start_behind_live_sec: float | None = Field(default=None, ge=0)
-    end_behind_live_sec: float | None = Field(default=None, ge=0)
+    start_sec: float | None = Field(default=None, ge=0, le=1e7, allow_inf_nan=False)
+    end_sec: float | None = Field(default=None, ge=0, le=1e7, allow_inf_nan=False)
+    start_behind_live_sec: float | None = Field(
+        default=None, ge=0, le=1e7, allow_inf_nan=False
+    )
+    end_behind_live_sec: float | None = Field(
+        default=None, ge=0, le=1e7, allow_inf_nan=False
+    )
 
 
 class DownloadBulkCreate(BaseModel):

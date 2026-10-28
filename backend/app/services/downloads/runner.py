@@ -135,6 +135,8 @@ class DownloadRun:
         self.base_opts: dict[str, Any] = {}
         self.fmt = ""
         self.handed_off = False
+        #: A clip being cut from a live broadcast (no yt-dlp format retries).
+        self.live_clip = False
         self.act: activity.ActivityHandle
 
     # -- the run ---------------------------------------------------------------
@@ -250,6 +252,10 @@ class DownloadRun:
             except MembersOnlyError, DownloadHeld:
                 raise
             except Exception as exc:
+                if self.live_clip:
+                    # Another format selector would cut the same segments again.
+                    self.last_exc = exc
+                    raise
                 if is_disk_full_error(exc):
                     # Another format needs the same space: end the job now.
                     self.last_exc = exc
@@ -293,11 +299,19 @@ class DownloadRun:
         self.metadata_info = merge_info(self.metadata_info, fetched)
         self.info = self.metadata_info
         clip = self.spec.clip
-        if clip is not None and fetched_info is not None and is_live_info(fetched_info):
-            self._download_live_clip(fetched_info, *clip)
-            return _Outcome.FOUND
-        if clip is None:
-            self._hold_if_too_big()
+        if clip is not None and fetched_info is not None:
+            if fetched_info.get("live_status") == "post_live":
+                # The recording is still being processed: until then YouTube
+                # serves only its last hours, on a timeline of their own.
+                raise clips.ClipUnavailable(
+                    "YouTube is still processing this stream. Retry the clip "
+                    "once the recording is available."
+                )
+            if is_live_info(fetched_info):
+                self.live_clip = True
+                self._download_live_clip(fetched_info, *clip)
+                return _Outcome.FOUND
+        self._hold_if_too_big()
         ydl_opts = self._download_opts(ydl_opts, fmt)
         self._download(ydl_opts)
         found = self.final_path is not None and self.final_path.exists()
@@ -310,6 +324,12 @@ class DownloadRun:
         estimate = estimate_download_bytes(self.metadata_info, self.spec.quality_preset)
         if not estimate:
             return
+        clip = self.spec.clip
+        if clip is not None:
+            duration = self.metadata_info.get("duration")
+            if not duration:
+                return
+            estimate = int(estimate * min(1.0, (clip[1] - clip[0]) / float(duration)))
         hold = self.queue.hold_for_size(self.spec.job_id, estimate)
         if hold is not None:
             raise DownloadHeld(hold.reason)
