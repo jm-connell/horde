@@ -4,7 +4,7 @@ Horde asks everyone to sign in. There is one **administrator** (the first accoun
 
 ## First run and upgrades
 
-- **New install:** the first screen is *Create the admin account*, the first step of the setup wizard. Choose a username and a password of at least 8 characters.
+- **New install:** the first screen is *Create the admin account*, the first step of the setup wizard. Choose a username and a password.
 - **Existing install (upgrading from a version without accounts):** the first visit after the upgrade shows the same screen. Creating the account is required, and it takes over what used to be the one shared profile:
     - the watch history and resume positions of every video,
     - your saved look and layout (the `ui` settings),
@@ -79,7 +79,7 @@ The server refuses any change that would leave **no enabled administrator** (`co
 
 ## Passwords and sessions
 
-- Passwords are stored as salted **scrypt** hashes (`n=2^15, r=8, p=1`), never in clear. Minimum 8 characters, no composition rules, and not equal to the username.
+- Passwords are stored as salted **scrypt** hashes (`n=2^15, r=8, p=1`), never in clear. Any non-empty password is accepted: no minimum length or composition rules. The password forms show a strength meter as advice only.
 - Signing in sets an `HttpOnly`, `SameSite=Lax` cookie `horde_session` (`Secure` over HTTPS). Only a hash of the token is stored. A session lasts 30 days from its last use.
 - Changing your own password signs out your other browsers. Signing out deletes the session.
 - **Signed-in devices.** *Account settings → Signed-in devices* lists your browsers (a device label such as "Safari on iPhone", its address, when it was last active and when it signed in; sessions that have expired are not listed). **Sign out** ends one, and **Sign out all other devices** keeps only the one you are using. Ending a session takes effect on that browser's next request, and its open event streams end within about 15 seconds, the same as after a password reset. The device label is read from the browser's `User-Agent`, so an installed app looks like its browser. Administrators see the same list for any user (*Users → Edit → Signed-in devices*) and can end one session or **Sign out everywhere**. API: `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`, `POST /api/auth/sessions/revoke-others`, and for administrators `GET /api/users/{id}/sessions`, `DELETE /api/users/{id}/sessions` and `DELETE /api/users/{id}/sessions/{session_id}`. The last-seen time is updated at most every five minutes, so "Active" can lag by that much. Signing a device out does not cancel the signed media links (`?mt=`, see below) already handed to a cast receiver: they keep working for up to 12 hours, for that one video. Change your password to end them too.

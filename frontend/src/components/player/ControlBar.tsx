@@ -3,6 +3,8 @@ import { formatDuration, formatTimestamp, type Chapter } from "../../utils";
 import type { QualityChoice } from "../videoPlayerQuality";
 import type { StreamType, ViewMode } from "../videoPlayerTypes";
 import FullscreenButton from "./FullscreenButton";
+import type { Storyboard } from "../../types";
+import type { ClipBarRange } from "./clipMarkers";
 import QualityMenu from "./QualityMenu";
 import ScrubBar from "./ScrubBar";
 import SpeedMenu from "./SpeedMenu";
@@ -28,6 +30,7 @@ interface Props {
   // Seek bar
   scrubberRef: RefObject<HTMLDivElement | null>;
   videoId?: number;
+  storyboard?: Storyboard | null;
   chapters: Chapter[];
   hoveredChapter: Chapter | null;
   onHoverChapter: (startSec: number | null) => void;
@@ -67,6 +70,9 @@ interface Props {
   onToggleFullscreen: () => void;
   /** A live stream: the time readout becomes a LIVE / jump-to-live control. */
   live?: LiveControl | null;
+  /** The clip being picked, drawn on the seek bar. */
+  clipRange?: ClipBarRange | null;
+  onClipMove?: (which: "start" | "end", sec: number) => void;
 }
 
 export interface LiveControl {
@@ -91,6 +97,7 @@ export default function ControlBar({
   onInteractionEnd,
   scrubberRef,
   videoId,
+  storyboard = null,
   chapters,
   hoveredChapter,
   onHoverChapter,
@@ -125,6 +132,8 @@ export default function ControlBar({
   isNativeFullscreen,
   onToggleFullscreen,
   live = null,
+  clipRange = null,
+  onClipMove,
 }: Props) {
   const activeChapter =
     chapters.length > 0 ? activeChapterAt(chapters, current) : null;
@@ -140,6 +149,7 @@ export default function ControlBar({
       <ScrubBar
         scrubberRef={scrubberRef}
         videoId={videoId}
+        storyboard={storyboard}
         current={current}
         duration={duration}
         chapters={chapters}
@@ -153,6 +163,8 @@ export default function ControlBar({
         }
         onInteractionStart={onInteractionStart}
         onInteractionEnd={onInteractionEnd}
+        clipRange={clipRange}
+        onClipMove={onClipMove}
       />
       {ccNotice && (
         <div className="absolute left-4 top-4 rounded-lg bg-black/70 px-3 py-1.5 text-xs text-white">

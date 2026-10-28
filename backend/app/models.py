@@ -227,6 +227,10 @@ class DownloadJob(SQLModel, table=True):
     file_size: int | None = None
     height_px: int | None = None
     created_at: datetime = Field(default_factory=utcnow)
+    # A clip: only this part of the video, in seconds from the start of the
+    # broadcast. Saved as its own library video (services/downloads/clips.py).
+    clip_start_sec: float | None = None
+    clip_end_sec: float | None = None
 
 
 class PlaylistSource(str, Enum):

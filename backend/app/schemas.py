@@ -242,6 +242,28 @@ class DownloadCreate(BaseModel):
     playlist_id: int | None = None
 
 
+class ClipCreate(BaseModel):
+    """Save part of a video (a live or finished stream) as its own library video.
+
+    A finished stream gives ``start_sec`` / ``end_sec`` (its own timeline). A
+    stream that is still live gives how far behind the live edge each end is
+    (``start_behind_live_sec`` > ``end_behind_live_sec``), measured when the
+    request is sent; the server turns those into broadcast times.
+    """
+
+    url: str = Field(min_length=1, max_length=4000)
+    title: str | None = Field(default=None, max_length=500)
+    quality_preset: str = "best"
+    start_sec: float | None = Field(default=None, ge=0, le=1e7, allow_inf_nan=False)
+    end_sec: float | None = Field(default=None, ge=0, le=1e7, allow_inf_nan=False)
+    start_behind_live_sec: float | None = Field(
+        default=None, ge=0, le=1e7, allow_inf_nan=False
+    )
+    end_behind_live_sec: float | None = Field(
+        default=None, ge=0, le=1e7, allow_inf_nan=False
+    )
+
+
 class DownloadBulkCreate(BaseModel):
     urls: list[str] = Field(max_length=MAX_BULK_ITEMS)
     quality_preset: str = "best"
@@ -269,6 +291,22 @@ class DownloadPreview(BaseModel):
     preset_sizes: dict[str, int] = {}
 
 
+class StoryboardRead(BaseModel):
+    """Seek-preview sprite sheets hosted by YouTube (a finished video only).
+
+    Tile ``i`` (``floor(t / interval_sec)``, up to ``count - 1``) is on sheet
+    ``i // (columns * rows)``, row-major within it.
+    """
+
+    tile_width: int
+    tile_height: int
+    columns: int
+    rows: int
+    interval_sec: float
+    count: int
+    sheets: list[str]
+
+
 class StreamPreviewMeta(BaseModel):
     id: str | None = None
     title: str | None = None
@@ -287,6 +325,8 @@ class StreamPreviewMeta(BaseModel):
     is_live: bool = False
     #: A recording of a finished live stream (often hours long).
     was_live: bool = False
+    #: YouTube's thumbnails for scrubbing; None for live or when there are none.
+    storyboard: StoryboardRead | None = None
 
 
 class StreamAiRead(BaseModel):
@@ -348,6 +388,9 @@ class DownloadJobRead(BaseModel):
     playlist_id: int | None = None
     #: Why a queued job is not starting: it is waiting for disk space.
     held_reason: str | None = None
+    #: A clip: the part of the video kept, in seconds from its start.
+    clip_start_sec: float | None = None
+    clip_end_sec: float | None = None
 
     @field_validator("destination", mode="before")
     @classmethod

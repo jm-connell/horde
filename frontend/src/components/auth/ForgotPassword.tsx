@@ -155,7 +155,8 @@ export default function ForgotPassword({
         value={next}
         onChange={setNext}
         autoComplete="new-password"
-        hint="At least 8 characters. Every other browser is signed out."
+        hint="Every other browser is signed out."
+        strength
       />
       <Field
         label="Repeat new password"

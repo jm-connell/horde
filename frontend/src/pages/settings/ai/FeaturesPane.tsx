@@ -17,7 +17,6 @@ export default function FeaturesPane() {
     <Section
       first
       title="Features"
-      description="Toggle individual AI jobs."
       hidden={
         !match(
           "features",
@@ -42,7 +41,7 @@ export default function FeaturesPane() {
       <div className="space-y-3">
         <SettingRow
           title="Use subtitles in search indexes"
-          description="Include caption text to improve semantic search, related videos, and category matching."
+          description="Caption text feeds search, related videos and categories."
           hidden={!!q && !match("subtitles", "embeddings", "search indexes")}
           control={
             <Toggle
@@ -53,7 +52,7 @@ export default function FeaturesPane() {
         />
         <SettingRow
           title="AI video summaries"
-          description="Generated after download when captions are available. Uses OpenRouter when connected; otherwise Ollama (recommend ≥6GB VRAM). Regenerate anytime on Watch."
+          description="Needs captions."
           hidden={!!q && !match("summary", "summarize", "captions", "watch")}
           control={
             <Toggle
@@ -64,7 +63,7 @@ export default function FeaturesPane() {
         />
         <SettingRow
           title="AI video chapters"
-          description="When a description has no timestamps, generate chapter markers from captions. Skips videos under 3 minutes and lyric-heavy captions."
+          description="Only for videos without timestamps in the description."
           hidden={
             !!q &&
             !match("chapters", "timestamps", "captions", "watch", "transcript")
@@ -79,7 +78,6 @@ export default function FeaturesPane() {
         {aiDraft.ai_chapters && (
           <SettingRow
             title="Generate chapters"
-            description="On download queues a job after captions are ready. Watch page only generates when you click the button on a video."
             hidden={
               !!q &&
               !match(
@@ -118,7 +116,6 @@ export default function FeaturesPane() {
         )}
         <SettingRow
           title="AI video chat"
-          description="Ask the video questions on the Watch page using its metadata, description, and captions. Larger GPUs auto-upgrade to bigger chat models."
           hidden={
             !!q && !match("chat", "ask", "conversation", "watch", "captions")
           }
@@ -132,7 +129,6 @@ export default function FeaturesPane() {
         {aiDraft.ai_summaries && (
           <SettingRow
             title="Summary length"
-            description="Short ≈75–120 words, medium ≈200–280, long ≈300–400. Regenerate after changing."
             hidden={
               !!q &&
               !match(
@@ -174,7 +170,7 @@ export default function FeaturesPane() {
         )}
         <SettingRow
           title="Category match strictness"
-          description="Minimum similarity for videos under a category chip. Higher = fewer, tighter matches; lower = fuller, noisier shelves."
+          description="Higher means fewer, closer matches."
           hidden={
             !!q &&
             !match("category", "categories", "strictness", "match", "score")
@@ -210,7 +206,7 @@ export default function FeaturesPane() {
         />
         <SettingRow
           title="Enrich tags with LLM"
-          description="Suggest tags from title, channel, and description after download (subtitles optional). Skipped if you edit tags manually. Summaries still require captions."
+          description="Skips videos whose tags you edited."
           hidden={!!q && !match("enrich tags", "llm")}
           control={
             <Toggle
@@ -222,7 +218,6 @@ export default function FeaturesPane() {
         {aiDraft.enrich_tags && (
           <SettingRow
             title="Re-check tags after"
-            description="Unlocked videos whose tags haven’t been reviewed in this many days get another pass during Enrich missing tags / scheduled sweeps."
             hidden={!!q && !match("re-check tags", "rescan", "tag days")}
             control={
               <div className="flex items-center gap-2">
@@ -259,7 +254,7 @@ export default function FeaturesPane() {
         )}
         <SettingRow
           title="AI duplicate confirmation"
-          description="Score heuristic duplicate groups in Import."
+          description="Checks likely duplicates on the Import page."
           hidden={!!q && !match("duplicate", "confirmation")}
           control={
             <Toggle

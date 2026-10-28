@@ -27,6 +27,7 @@ import SubtitleOverlay from "./SubtitleOverlay";
 import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
+import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -45,6 +46,7 @@ export default function VideoPlayer({
   live = false,
   progressiveFallbackSrc: progressiveFallbackProp,
   videoId,
+  storyboard = null,
   mimeType = "video/mp4",
   poster = null,
   mode,
@@ -64,6 +66,8 @@ export default function VideoPlayer({
   onVolumeChange,
   initialPosition = 0,
   onProgress,
+  onLiveBehind,
+  clipMarkers = null,
   chapters = [],
   sponsorSegments = [],
   sponsorShowNotice = true,
@@ -475,9 +479,22 @@ export default function VideoPlayer({
     else if (liveWindow) seekTo(liveWindow.end);
     videoRef.current?.play().catch(() => undefined);
   }, [liveWindow, seekTo]);
+  const liveBehind = liveWindow ? behindLive(liveWindow, current) : null;
+  useEffect(() => {
+    if (liveBehind != null) onLiveBehind?.(liveBehind);
+  }, [liveBehind, onLiveBehind]);
+  const clipRange = clipMarkers
+    ? clipBarRange(clipMarkers, liveWindow, Date.now())
+    : null;
+  const onClipMove = clipMarkers?.onMove
+    ? (which: "start" | "end", barSec: number) => {
+        const mark = clipMarkAtBar(barSec, live, liveWindow, Date.now());
+        if (mark) clipMarkers.onMove?.(which, mark);
+      }
+    : undefined;
   const liveControl = live
     ? {
-        behindSec: liveWindow ? behindLive(liveWindow, current) : 0,
+        behindSec: liveBehind ?? 0,
         isLive: liveWindow?.isLive ?? true,
         onGoLive: goLive,
       }
@@ -616,10 +633,13 @@ export default function VideoPlayer({
             duration={live ? barDuration : duration}
             seekTo={live ? barSeekTo : seekTo}
             live={liveControl}
+            clipRange={clipRange}
+            onClipMove={onClipMove}
             onInteractionStart={onControlsInteractionStart}
             onInteractionEnd={onControlsInteractionEnd}
             scrubberRef={scrubberRef}
             videoId={videoId}
+            storyboard={storyboard}
             chapters={chapters}
             hoveredChapter={hoveredChapter}
             onHoverChapter={setHoveredChapterSec}

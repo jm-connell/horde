@@ -4,6 +4,7 @@ import type { SubtitleSize } from "../hooks/useSettings";
 import type { SponsorSegment } from "../hooks/useSponsorBlock";
 import type { SponsorBlockSkipMode } from "../sponsorBlock";
 import type { Chapter } from "../utils";
+import type { Storyboard } from "../types";
 
 export type ViewMode = "standard" | "theater" | "windowed";
 
@@ -24,6 +25,22 @@ export interface UpNext {
   note?: string | null;
 }
 
+/**
+ * One end of a clip being picked. A finished stream is marked on its own
+ * timeline; a live one at a wall-clock instant, because "how far behind live"
+ * changes every second while the clip is being picked.
+ */
+export type ClipMark =
+  { kind: "time"; sec: number } | { kind: "live"; atMs: number };
+
+/** The clip being picked, drawn on the seek bar (either end may be unset). */
+export interface ClipMarkers {
+  start: ClipMark | null;
+  end: ClipMark | null;
+  /** An end was dragged (or nudged with the keyboard) on the seek bar. */
+  onMove?: (which: "start" | "end", mark: ClipMark) => void;
+}
+
 export interface VideoPlayerProps {
   src: string;
   /** Progressive local/remote file (default) or adaptive DASH manifest. */
@@ -40,6 +57,8 @@ export interface VideoPlayerProps {
    */
   progressiveFallbackSrc?: string;
   videoId?: number;
+  /** A stream's YouTube storyboard: seek previews without local sprites. */
+  storyboard?: Storyboard | null;
   mimeType?: string;
   poster?: string | null;
   mode: ViewMode;
@@ -59,6 +78,10 @@ export interface VideoPlayerProps {
   onVolumeChange?: (volume: number) => void;
   initialPosition?: number;
   onProgress?: (sec: number) => void;
+  /** The clip being picked, shown on the seek bar (playback is not moved). */
+  clipMarkers?: ClipMarkers | null;
+  /** Live: how many seconds behind the live edge the playhead is, as it changes. */
+  onLiveBehind?: (sec: number) => void;
   chapters?: Chapter[];
   sponsorSegments?: SponsorSegment[];
   sponsorShowNotice?: boolean;

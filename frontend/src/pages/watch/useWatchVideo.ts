@@ -161,6 +161,7 @@ export function useWatchVideo({
       channelParam: channelParam || source.meta.channel,
       subtitles: source.meta.is_live ? [] : (source.meta.subtitles ?? []),
       liveVideoId: source.meta.is_live ? (source.meta.id ?? null) : null,
+      storyboard: source.meta.storyboard ?? null,
     });
   }, [source, channelParam, playStream]);
 

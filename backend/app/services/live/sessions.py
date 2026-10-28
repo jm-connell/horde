@@ -205,6 +205,35 @@ def _variants_from_info(info: dict[str, Any]) -> dict[str, _Upstream]:
     return out
 
 
+@dataclass(frozen=True)
+class ClipSource:
+    """Where to read a live broadcast's segments from, for cutting a clip."""
+
+    video_url: str
+    video_headers: dict[str, str]
+    audio_url: str | None = None
+    audio_headers: dict[str, str] = field(default_factory=dict)
+
+
+def clip_source(info: dict[str, Any]) -> ClipSource:
+    """The tallest video variant (and its audio rendition) of a live broadcast.
+
+    Raises LiveNotAvailable when the video is not live or has no HLS stream.
+    """
+    upstreams = list(_variants_from_info(info).values())
+    video = max(
+        (u for u in upstreams if not u.audio),
+        key=lambda u: (u.info.height or 0, u.info.bandwidth),
+    )
+    audio = next((u for u in upstreams if u.audio), None)
+    return ClipSource(
+        video_url=video.url,
+        video_headers=video.headers,
+        audio_url=audio.url if audio else None,
+        audio_headers=audio.headers if audio else {},
+    )
+
+
 def url_expiry(url: str) -> float | None:
     """The ``expire`` timestamp a googlevideo URL carries (path or query)."""
     match = _EXPIRE_PATH_RE.search(url)
@@ -326,6 +355,25 @@ class LiveSession:
     def _window_segments(self, target: float) -> int:
         count = int(self._dvr_window_sec / max(1.0, target or 5.0))
         return min(count, _MAX_WINDOW_SEGMENTS)
+
+    def broadcast_seconds(self, behind_live_sec: float) -> float | None:
+        """Seconds from the start of the broadcast of a playhead this far behind live.
+
+        YouTube numbers a broadcast's segments from 0, so segment ``sq`` starts
+        ``sq * target`` seconds in. The player's live edge sits three target
+        durations before the end of the newest segment (the HLS default hold-back
+        Shaka uses). None until a playlist has been read.
+        """
+        heads = [
+            (v.head_sq, v.target_duration)
+            for v in self.variants.values()
+            if not v.upstream.audio and v.head_sq is not None and v.target_duration
+        ]
+        if not heads:
+            return None
+        head, target = max(heads)
+        live_edge = (head + 1) * target - 3 * target
+        return max(0.0, live_edge - max(0.0, behind_live_sec))
 
     # --- playlists ---------------------------------------------------------
 
@@ -680,6 +728,10 @@ class LiveSessionManager:
 
     def sessions(self) -> list[LiveSession]:
         return list(self._sessions.values())
+
+    def get(self, video_id: str) -> LiveSession | None:
+        """The open session for ``video_id`` (somebody is watching it), if any."""
+        return self._sessions.get(video_id)
 
     def _evict(self) -> None:
         now = self._clock()

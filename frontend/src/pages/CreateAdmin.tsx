@@ -6,11 +6,8 @@ import {
   Field,
   FormError,
 } from "../components/auth/AuthForm";
-import ShareDownloadsField from "../components/auth/ShareDownloadsField";
 import { clearLocalSettings } from "../hooks/useSettings";
 import { deviceAccounts } from "../offline/accounts";
-
-const MIN_LENGTH = 8;
 
 /**
  * First visit: nobody can sign in yet, so the visitor creates the administrator.
@@ -27,17 +24,12 @@ export default function CreateAdminPage({
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [repeat, setRepeat] = useState("");
-  const [share, setShare] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (busy) return;
-    if (password.length < MIN_LENGTH) {
-      setError(`Use at least ${MIN_LENGTH} characters for the password.`);
-      return;
-    }
     if (password !== repeat) {
       setError("The two passwords don’t match.");
       return;
@@ -45,11 +37,7 @@ export default function CreateAdminPage({
     setBusy(true);
     setError(null);
     try {
-      const { user } = await api.bootstrapAdmin(
-        username.trim(),
-        password,
-        share
-      );
+      const { user } = await api.bootstrapAdmin(username.trim(), password);
       await deviceAccounts.record(user, password);
       clearLocalSettings();
       await onCreated();
@@ -85,7 +73,7 @@ export default function CreateAdminPage({
           value={password}
           onChange={setPassword}
           autoComplete="new-password"
-          hint={`At least ${MIN_LENGTH} characters.`}
+          strength
         />
         <Field
           label="Repeat password"
@@ -94,7 +82,6 @@ export default function CreateAdminPage({
           onChange={setRepeat}
           autoComplete="new-password"
         />
-        <ShareDownloadsField checked={share} onChange={setShare} own />
         <FormError message={error} />
         <button type="submit" disabled={busy} className={AUTH_PRIMARY}>
           {busy ? "Creating…" : "Create account"}

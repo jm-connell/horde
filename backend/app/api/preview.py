@@ -417,6 +417,7 @@ def preview_meta(
         subtitles=meta.get("subtitles") or [],
         is_live=bool(meta.get("is_live")),
         was_live=bool(meta.get("was_live")),
+        storyboard=meta.get("storyboard"),
     )
 
 

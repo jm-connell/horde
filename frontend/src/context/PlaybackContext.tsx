@@ -23,6 +23,7 @@ import {
   thumbnailUrl,
 } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
+import type { ClipMarkers } from "../components/videoPlayerTypes";
 import { loadSettings, useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSponsorBlock } from "../hooks/useSponsorBlock";
@@ -41,7 +42,7 @@ import {
   miniPlayerHostInsets,
   type MiniPos,
 } from "../utils/miniPlayerLayout";
-import type { SubtitleTrack, Video } from "../types";
+import type { Storyboard, SubtitleTrack, Video } from "../types";
 import {
   isQueuedStream,
   type QueueEntry,
@@ -77,6 +78,8 @@ export interface StreamSession {
   subtitles?: SubtitleTrack[];
   /** YouTube video id of a broadcast that is live: play `/api/live` HLS. */
   liveVideoId?: string | null;
+  /** YouTube's seek-preview sheets (finished videos only). */
+  storyboard?: Storyboard | null;
 }
 
 export type MiniPlayerRect = {
@@ -120,6 +123,10 @@ export interface PlaybackActions {
   playStream: (session: StreamSession) => void;
   /** Latest stream playback position (seconds). */
   getStreamPosition: () => number;
+  /** Live stream: seconds the playhead is behind the live edge (null if not live). */
+  getStreamBehindLive: () => number | null;
+  /** Show the clip being picked on the stream's seek bar (null hides it). */
+  setClipMarkers: (markers: ClipMarkers | null) => void;
   /** Latest library playback position (seconds). */
   getCurrentPosition: () => number;
   addToQueue: (entry: QueueEntry) => void;
@@ -190,6 +197,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const miniPosLiveRef = useRef<MiniPos | null>(null);
   const [miniCornerAnchor, setMiniCornerAnchor] = useState(true);
   const streamPosRef = useRef(0);
+  const streamBehindLiveRef = useRef<number | null>(null);
+  const [clipMarkers, setClipMarkers] = useState<ClipMarkers | null>(null);
   const libraryPosRef = useRef(0);
   const recentWatchedRef = useRef<number[]>([]);
   const currentRef = useRef<Video | null>(null);
@@ -444,6 +453,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       setStream(null);
       setActiveStreamQuality(null);
       streamPosRef.current = 0;
+      streamBehindLiveRef.current = null;
       libraryPosRef.current = video.last_position_sec || 0;
       if (opts?.queue) {
         setQueue(withoutVideo(opts.queue, video.id));
@@ -459,12 +469,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
+    streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
     setStream(session);
     setQueue((q) => withoutStream(q, session.url));
   }, []);
 
   const getStreamPosition = useCallback(() => streamPosRef.current, []);
+  const getStreamBehindLive = useCallback(
+    () => (streamRef.current?.liveVideoId ? streamBehindLiveRef.current : null),
+    []
+  );
+  const handleLiveBehind = useCallback((sec: number) => {
+    streamBehindLiveRef.current = sec;
+  }, []);
   const getCurrentPosition = useCallback(() => libraryPosRef.current, []);
 
   const addToQueue = useCallback((entry: QueueEntry) => {
@@ -505,6 +523,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setMediaSuspended(false);
     setActiveStreamQuality(null);
     streamPosRef.current = 0;
+    streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
     setDock(null);
     setMiniPos(null);
@@ -749,6 +768,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playVideo,
       playStream,
       getStreamPosition,
+      getStreamBehindLive,
+      setClipMarkers,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -766,6 +787,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       playVideo,
       playStream,
       getStreamPosition,
+      getStreamBehindLive,
+      setClipMarkers,
       getCurrentPosition,
       addToQueue,
       playNext,
@@ -964,6 +987,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
+        clipMarkers={clipMarkers}
       />
     ) : stream != null ? (
       <VideoPlayer
@@ -1005,6 +1029,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onProgress={(sec) => {
           streamPosRef.current = sec;
         }}
+        onLiveBehind={handleLiveBehind}
+        clipMarkers={clipMarkers}
+        storyboard={stream.storyboard ?? null}
         chapters={
           streamChaptersOverride?.url === stream.url
             ? streamChaptersOverride.chapters

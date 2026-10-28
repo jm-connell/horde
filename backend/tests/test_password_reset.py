@@ -88,7 +88,7 @@ def test_a_wrong_code_is_refused_and_does_not_change_the_password(anon_client, a
 def test_a_weak_password_keeps_the_code_usable(anon_client, ask):
     code = ask("member")
     assert code is not None
-    weak = _reset(anon_client, "member", code, "short")
+    weak = _reset(anon_client, "member", code, "")
     assert weak.status_code == 400
     assert weak.json()["code"] == "weak_password"
     assert _reset(anon_client, "member", code).status_code == 200

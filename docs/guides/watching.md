@@ -65,13 +65,24 @@ Redownload (“Change resolution”) and auto-replace of the same YouTube id kee
 
 ## Watch overflow menu
 
-On library videos, **•••** includes edit, notes, **Change resolution**, normalize volume, download file, open source (labeled **Open on YouTube** / site when known), and delete.
+On library videos, **•••** includes edit, notes, **Change resolution**, **Save a clip…** (YouTube videos; see [Clips](#clips-of-a-stream)), normalize volume, download file, open source (labeled **Open on YouTube** / site when known), and delete.
 
 ## Stream → library handoff
 
 While watching a **stream preview** (`/watch?url=…`), you can start a download at the chosen quality. You can change that resolution while the download is still queued or in progress (progress is discarded and the job restarts). When the download **completes**, Horde hands off to the new library item so playback continues from the local file (keeping your place where possible) instead of the temporary stream. The player remounts for that switch so Shaka’s DASH MediaSource is not reused on the file URL.
 
 On the watch page you’ll also see messaging about downloading at the selected resolution and preserving title, notes, and other metadata.
+
+## Clips of a stream
+
+On a **live** or **past** YouTube stream, and on a **downloaded** video that came from YouTube, the **•••** button under the description has **Save a clip…**. For a downloaded video the clip is still fetched from YouTube, at the same times as your copy (a copy that is not the whole video, such as one recorded part-way into a live stream, may not line up). The page scrolls back up to the video and the clip picker opens right under it, so you keep watching while you choose. Pick the start and end (**Use current time** takes the player's position; on a past stream you can also type `h:mm:ss`), then **Save clip**. While the picker is open the chosen start and end are marked on the seek bar (amber handles and the span between them); playback is not moved there. Drag a handle to move that end, and the time in the picker follows; a focused handle also moves with the arrow keys (1 s, or 10 s with Shift). It needs the *download* permission.
+
+The clip is downloaded on its own and saved to your library as a **separate video**, titled like *Stream title (clip 1:02:03–1:05:00)*, with a line at the top of its description saying what it was cut from. It is not treated as a copy of the full stream: you can save several clips of one stream, and still download the whole stream as well. A clip has no source link, so it has no subtitles, SponsorBlock segments or **Change resolution**.
+
+- **Past streams** are cut by yt-dlp on the nearest keyframes, so a clip can start or end a second or two away from the times you picked.
+- **Live streams** are cut from the broadcast's own segments while it is still live. You can clip as far back as the player lets you scrub (the DVR window); the positions are matched to the broadcast's timeline from the player's distance behind live, so they can be off by a few seconds. Play the stream before saving a clip of it. If the stream ends before the clip runs, it is cut from the finished video instead; while YouTube is still processing the recording the clip fails with a message, and **Retry** on the Download page tries again later.
+
+The API is `POST /api/downloads/clips` with `url` and either `start_sec`/`end_sec` (a past stream's own timeline) or `start_behind_live_sec`/`end_behind_live_sec` (live). Clips are at most 6 hours long.
 
 ## Chapters, subtitles, casting
 

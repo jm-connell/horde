@@ -24,7 +24,6 @@ SCRYPT_DKLEN = 64
 SALT_BYTES = 16
 SCHEME = "scrypt"
 
-MIN_PASSWORD_LENGTH = 8
 #: Generous cap; it only exists so a request cannot make us hash megabytes.
 MAX_PASSWORD_LENGTH = 1024
 
@@ -107,15 +106,11 @@ def needs_rehash(stored: str) -> bool:
     return parsed is None or parsed[0] != CURRENT_PARAMS
 
 
-def validate_password(password: str, username: str) -> None:
-    """Minimum length, no composition rules, and not the username."""
-    if len(password) < MIN_PASSWORD_LENGTH:
-        raise PasswordPolicyError(
-            f"Password must be at least {MIN_PASSWORD_LENGTH} characters"
-        )
+def validate_password(password: str) -> None:
+    """Any non-empty password: the owner decides how strong it is."""
+    if not password:
+        raise PasswordPolicyError("Password must not be empty")
     if len(password) > MAX_PASSWORD_LENGTH:
         raise PasswordPolicyError(
             f"Password must be at most {MAX_PASSWORD_LENGTH} characters"
         )
-    if password.strip().lower() == username.strip().lower():
-        raise PasswordPolicyError("Password must not be the same as the username")

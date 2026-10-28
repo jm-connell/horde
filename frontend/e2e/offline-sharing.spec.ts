@@ -106,7 +106,9 @@ async function saveForOffline(page: Page, id: number) {
 
 async function setSharing(page: Page, share: boolean, password?: string) {
   await page.goto("/account");
-  const box = page.getByLabel("Share my downloads with other accounts");
+  const box = page.getByLabel(
+    "Let other accounts on a shared device watch videos I save there"
+  );
   await expect(box).toBeVisible();
   if (share) {
     await box.click();
@@ -347,7 +349,9 @@ test.describe("sharing offline downloads between accounts", () => {
 
   test("turning sharing off asks for the right password", async ({ page }) => {
     await page.goto("/account");
-    const box = page.getByLabel("Share my downloads with other accounts");
+    const box = page.getByLabel(
+      "Let other accounts on a shared device watch videos I save there"
+    );
     await box.uncheck();
     await page.getByLabel("Your password").fill("wrong-password");
     await page
@@ -365,7 +369,9 @@ test.describe("sharing offline downloads between accounts", () => {
     await page.getByRole("button", { name: "Add a user" }).click();
     await page.getByLabel("Username").fill("kid");
     await page.getByLabel("Password", { exact: true }).fill("kid-password-1");
-    const box = page.getByLabel("Share this account’s downloads");
+    const box = page.getByLabel(
+      "Let other accounts on a shared device watch videos this account saves"
+    );
     await expect(box).toBeChecked();
     await box.uncheck();
     await page.getByRole("button", { name: "Add user" }).click();
@@ -373,7 +379,9 @@ test.describe("sharing offline downloads between accounts", () => {
 
     const row = page.locator("[data-horde='user-row']", { hasText: "kid" });
     await row.getByRole("button", { name: "Edit kid" }).click();
-    const edit = row.getByLabel("Share this account’s downloads");
+    const edit = row.getByLabel(
+      "Let other accounts on a shared device watch videos this account saves"
+    );
     await expect(edit).not.toBeChecked();
     await edit.click();
     await expect(page.getByText("kid’s downloads are shared")).toBeVisible();

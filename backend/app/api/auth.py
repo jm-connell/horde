@@ -460,7 +460,7 @@ def reset_password(
     with _begin(request, f"reset:{norm}", known=user is not None) as attempt:
         # Refuse a weak password before using the code, so it can be retried. Run
         # for every name, known or not, so the answer does not reveal accounts.
-        accounts.check_password_policy(payload.new_password, payload.username.strip())
+        accounts.check_password_policy(payload.new_password)
         # Take the hashing slot first: a busy server must not burn the code.
         with runtime.hashing.slot(made_up=user is None):
             # One step under a lock: a code works for exactly one request.

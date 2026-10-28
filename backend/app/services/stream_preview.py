@@ -628,6 +628,49 @@ def _segment_base_xml(rep: dict[str, Any]) -> list[str]:
     ]
 
 
+#: More sheets than this is not a storyboard we want the browser to page through.
+_MAX_STORYBOARD_SHEETS = 2000
+
+
+def _storyboard(info: dict[str, Any]) -> dict[str, Any] | None:
+    """YouTube's seek-preview sprite sheets for a finished video, if it has them.
+
+    yt-dlp lists them as ``storyboard`` formats: each fragment is one sheet of
+    ``columns`` x ``rows`` tiles, frames evenly spread at ``fps`` per second.
+    The sharpest one is kept. A live broadcast has none.
+    """
+    duration = info.get("duration")
+    best: dict[str, Any] | None = None
+    for fmt in info.get("formats") or []:
+        if not isinstance(fmt, dict) or fmt.get("format_note") != "storyboard":
+            continue
+        fragments = fmt.get("fragments") or []
+        sheets = [f.get("url") for f in fragments if isinstance(f, dict)]
+        if (
+            not sheets
+            or len(sheets) > _MAX_STORYBOARD_SHEETS
+            or not all(isinstance(u, str) and u.startswith("https://") for u in sheets)
+            or not all(
+                fmt.get(k) for k in ("width", "height", "columns", "rows", "fps")
+            )
+        ):
+            continue
+        if best is None or int(fmt["width"]) > int(best["width"]):
+            best = {**fmt, "sheets": sheets}
+    if best is None or not duration:
+        return None
+    fps = float(best["fps"])
+    return {
+        "tile_width": int(best["width"]),
+        "tile_height": int(best["height"]),
+        "columns": int(best["columns"]),
+        "rows": int(best["rows"]),
+        "interval_sec": 1.0 / fps,
+        "count": max(1, round(fps * float(duration))),
+        "sheets": best["sheets"],
+    }
+
+
 def extract_stream_preview_meta(url: str) -> dict[str, Any]:
     """Metadata for the in-app preview page (includes description for chapters)."""
     info = _extract_preview_info(url)
@@ -667,6 +710,7 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "is_live": info.get("is_live") is True or info.get("live_status") == "is_live",
         "was_live": info.get("was_live") is True
         or info.get("live_status") in ("was_live", "post_live"),
+        "storyboard": _storyboard(info),
     }
 
 

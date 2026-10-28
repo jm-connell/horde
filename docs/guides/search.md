@@ -10,20 +10,20 @@ On a **channel page**, the box in the header searches that channel’s **indexed
 
 ## Result sections
 
-Matches are grouped into up to four sections. The first three always appear while you are searching (empty sections keep a short message). **On YouTube** appears once YouTube search is on, the query has settled, and Horde has live hits.
+Matches are grouped into up to four sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|
-| **In your library** | Videos already downloaded / approved into your library | No matching videos found in library |
-| **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matching videos from indexed channels |
-| **On YouTube** | Live YouTube video search (not limited to channels you already follow) | Hidden when empty |
-| **Other videos in library** | Downloaded library videos that did not match the query | No other videos in library |
+| **In your library** | Videos already downloaded / approved into your library | Nothing in your library matches. |
+| **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
+| **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
+| **Rest of your library** | Downloaded library videos that did not match the query | No other videos in your library. |
 
 Each section heading has a **▼** control to collapse or expand that group. **On YouTube** includes **Load more** at the bottom of the grid when another page of live hits is available.
 
 Catalog rows come from background [channel catalog indexing](channels.md). You can stream a preview or queue a download without leaving search. **On YouTube** cards use the same feed layout (thumbnail, duration, channel, date, views, Download). Click a channel name to open that creator in Horde. Changing the typed query hides live hits until the new query settles (or you press Enter).
 
-While YouTube search is in flight, a quiet **Loading YouTube results…** line appears. Live hits are not written into channel catalogs; opening or downloading a result starts indexing as usual.
+Live hits are not written into channel catalogs; opening or downloading a result starts indexing as usual.
 
 !!! tip "Empty catalog section"
     If **Available to stream** always shows the empty message, catalogs may still be indexing, disabled, or the channel hasn’t been opened/downloaded yet. See [Channels](channels.md) and [Library settings](../settings/library.md).

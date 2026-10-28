@@ -52,17 +52,15 @@ def test_old_parameters_still_verify_and_ask_for_rehash():
     )
 
 
-@pytest.mark.parametrize(
-    ("password", "username"),
-    [("short", "alice"), ("Alice1234", "alice1234"), ("x" * 2000, "alice")],
-)
-def test_password_policy_rejects(password, username):
+@pytest.mark.parametrize("password", ["", "x" * 2000])
+def test_password_policy_rejects(password):
     with pytest.raises(passwords.PasswordPolicyError):
-        passwords.validate_password(password, username)
+        passwords.validate_password(password)
 
 
-def test_password_policy_has_no_composition_rules():
-    passwords.validate_password("alllowercase", "alice")
+@pytest.mark.parametrize("password", ["a", "alllowercase", "alice"])
+def test_password_policy_has_no_length_or_composition_rules(password):
+    passwords.validate_password(password)
 
 
 # --- limiter -----------------------------------------------------------------
@@ -171,7 +169,7 @@ def test_usernames_are_case_insensitive_and_validated(session):
     with pytest.raises(accounts.InvalidUsername):
         accounts.create_user(session, "has space", "password-two")
     with pytest.raises(accounts.WeakPassword):
-        accounts.create_user(session, "bob", "short")
+        accounts.create_user(session, "bob", "")
     assert accounts.get_by_username(session, "ALICE").username == "Alice"
 
 

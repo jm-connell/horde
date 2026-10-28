@@ -104,6 +104,7 @@ GATES: dict[tuple[str, str], str] = {
         (m, p): "download"
         for m, p in [
             ("GET", "/api/downloads/preview"),
+            ("POST", "/api/downloads/clips"),
             ("PATCH", "/api/downloads/{job_id}"),
             ("POST", "/api/downloads/{job_id}/retry"),
             ("POST", "/api/downloads/{job_id}/quality"),

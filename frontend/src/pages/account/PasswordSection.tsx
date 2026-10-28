@@ -63,7 +63,8 @@ export default function PasswordSection() {
           value={next}
           onChange={setNext}
           autoComplete="new-password"
-          hint="At least 8 characters. Your other browsers are signed out."
+          hint="Your other browsers are signed out."
+          strength
         />
         <Field
           label="Repeat new password"
