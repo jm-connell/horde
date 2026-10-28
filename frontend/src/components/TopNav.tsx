@@ -488,7 +488,10 @@ export default function TopNav() {
               data-nav-right="desktop"
               className="ml-auto flex shrink-0 pl-4 empty:hidden"
             >
-              <ConnectionTag popupAlign="end" />
+              {/* Spacing lives on a wrapper that collapses while online. */}
+              <div className="mr-3 flex empty:hidden">
+                <ConnectionTag popupAlign="end" />
+              </div>
               <div
                 data-horde="nav-search"
                 className="relative mr-2 w-44 self-center xl:w-60"
