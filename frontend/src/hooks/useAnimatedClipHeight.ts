@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from "react";
 
-export const CLIP_DURATION_MS = 400;
+export const CLIP_DURATION_MS = 280;
 export const CLIP_EASING = "cubic-bezier(0.22, 1, 0.36, 1)";
 
 export function remPx(rem: number): number {
