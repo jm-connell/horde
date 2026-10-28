@@ -298,7 +298,9 @@ export default function Download() {
     }
     const approx = formatApproxSize(selectedPresetSize);
     if (toDevice) {
-      return approx ? `Download to client (${approx})` : "Download to client";
+      return approx
+        ? `Download to this device (${approx})`
+        : "Download to this device";
     }
     return approx ? `Download (${approx})` : "Download";
   }, [submitting, selectedPresetSize, toDevice, isBulkList, urlList.length]);
@@ -781,7 +783,7 @@ export default function Download() {
                     : "border-ink-700 bg-ink-950 text-gray-300 hover:border-ink-600"
                 }`}
               >
-                Direct download to client
+                Save to this device
               </button>
             </div>
             {toDevice && (
