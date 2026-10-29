@@ -23,7 +23,8 @@ Right after you create the admin account, a short **setup wizard** runs (on a ne
 3. **Playback compatibility**: which devices can play your library. The default, **AV1 only**, needs no GPU and plays in current Chrome, Firefox and Edge; some Apple devices and older TVs cannot play AV1 and need one of the H.264 options. The step shows your GPU/encoder and whether *this* device can play AV1. Unsure? Keep the default ([details](../guides/downloads.md#compatibility-codecs)).
 4. **Look**: a color palette.
 5. **AI (optional)**: **Skip for now**, **Connect a provider** (paste an API key from a cloud provider such as OpenRouter, OpenAI, Gemini or Groq, or the address of an AI server you run), or **Run Ollama for me** (the bundled Ollama container, started with one command on the server). See [AI setup](../ops/ai-setup.md).
-6. **You’re set**: opens **Downloads** when the library is empty, or the library when it already has videos.
+6. **YouTube history (optional)**: import your YouTube watch history, subscriptions and playlists from a Google Takeout export, for your account ([how](../guides/youtube-history.md)). Others can import their own later in Settings → Library.
+7. **You’re set**: opens **Downloads** when the library is empty, or the library when it already has videos.
 
 Installs that were already set up before the wizard existed are not sent through it.
 

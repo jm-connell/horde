@@ -101,6 +101,12 @@ Create your own lists, import a YouTube playlist in one shot, or **subscribe** s
 
 Full guide: [Playlists](guides/playlists.md).
 
+## YouTube history
+
+Import your YouTube watch history, subscriptions and playlists from a Google Takeout export, each person for their own account. Videos you watched on YouTube get a **Watched** badge on channel pages and count as seen in **For you**, the channels you watch there steer recommendations (recent viewing far more than old, with the odd **Throwback**), and the Download page suggests what you rewatch most. Import a newer export any time; only new views are added.
+
+Full guide: [YouTube history](guides/youtube-history.md).
+
 ## Optional AI
 
 Turn the archive into something you can actually ask questions of. Use any OpenAI-compatible provider: a cloud one such as **OpenRouter** (often cheaper and lower maintenance for this app), a server you run such as **Ollama** or LM Studio, or a cloud model for chat with local embeddings.

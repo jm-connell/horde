@@ -132,6 +132,10 @@ Progress also appears under [System → Background activity](system.md#backgroun
 
 Writes `.nfo` files and thumbnails next to your videos so Jellyfin, Kodi or Plex show proper titles, descriptions and artwork when pointed at the same folder. Turning it on starts a background backfill of the whole library (progress under Background activity); turning it off leaves the files. **Remove sidecar files** (available once the setting is off) deletes them. Administrators only; a member's `GET /api/settings` shows `false`. What is written and how to set up each server: [Media servers](../guides/media-servers.md).
 
+## YouTube history
+
+Everyone has it, for their own account. The line sums up your imported YouTube history (views, videos, the period it covers and when you last imported). **Import from Google Takeout** (**Import a newer export** once you have one) opens the import dialog; **Forget** deletes the imported views after a confirm. **Include YouTube in History stats** (`historyIncludeYoutube`, off) counts those views in the [History stats](../guides/history.md#youtube-views-in-the-stats). Details: [YouTube history](../guides/youtube-history.md).
+
 ## Trash
 
 Shown to anyone with the `delete_videos` permission (and administrators). The summary line gives the number of videos in the [trash](../guides/library.md#trash), their size and how many days the trash keeps them (`HORDE_TRASH_DAYS`; with `0` it says deletes are permanent). **Empty trash** erases everything after a confirm. **Show videos in the trash** opens the list: thumbnail, title, channel, size, who deleted it and when, and the days left, with **Restore** and **Delete forever** per video. A restore that would collide with the library (the same video downloaded again, or a download of it running) is refused with the reason.

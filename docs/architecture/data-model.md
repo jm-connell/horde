@@ -46,8 +46,9 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |
 | `user_video_state` | **Per-user** watch position and last-watched time, keyed `(user_id, video_id)`. Read and written only through `services/user_state.py` |
 | `user_settings` | **Per-user** UI preferences (`ui_json`); server-wide settings stay in `app_settings.json` |
+| `youtube_watch_events` | **Per-user** YouTube views imported from Google Takeout: `yt_id`, `watched_at`, title and channel as exported; unique `(user_id, yt_id, watched_at)` so re-imports add only new views. Never part of History ([YouTube history](../guides/youtube-history.md), [ADR 0019](../adr/0019-youtube-history-from-takeout.md)) |
 
-`user_sessions`, `user_video_state`, `user_settings` and `video_ai_chat_messages.user_id` reference `users` with `ON DELETE CASCADE`, so deleting a person removes their sessions, history, preferences and chats and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
+`user_sessions`, `user_video_state`, `user_settings`, `youtube_watch_events` and `video_ai_chat_messages.user_id` reference `users` with `ON DELETE CASCADE`, so deleting a person removes their sessions, history, preferences and chats and leaves the videos. The legacy `videos.last_position_sec` / `last_watched_at` columns are unused; the first admin adopts them. Which data is shared and which is per user is summarised in the [architecture map](../design/architecture.md#data-model-and-ownership).
 
 ## Schema lifecycle
 

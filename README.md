@@ -44,6 +44,8 @@ Interactive API reference: `/docs`.
   watch with rewind (4 hours by default).
 - **Playlists**: your own lists, imported YouTube playlists, or subscribed
   playlists that pick up new videos as they are added.
+- **YouTube history**: import your watch history, subscriptions and playlists
+  from Google Takeout to mark what you have seen and shape recommendations.
 - **Accounts**: one administrator plus members, each with their own watch
   history, AI chats and appearance; members get only the permissions the admin
   grants. Optional two-step sign-in.

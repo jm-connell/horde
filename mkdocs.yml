@@ -67,6 +67,7 @@ nav:
       - Import & review: guides/import-review.md
       - Playlists: guides/playlists.md
       - History & continue watching: guides/history.md
+      - YouTube history (Takeout): guides/youtube-history.md
       - Offline & installed app: guides/offline.md
       - Media servers: guides/media-servers.md
       - AI features: guides/ai-features.md
@@ -125,6 +126,7 @@ nav:
       - 0016 Two-step sign-in: adr/0016-two-step-sign-in.md
       - 0017 OpenAI-compatible AI provider: adr/0017-openai-compatible-provider.md
       - 0018 Ask about Horde retrieval: adr/0018-help-chat-retrieval.md
+      - 0019 YouTube history from Takeout: adr/0019-youtube-history-from-takeout.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
