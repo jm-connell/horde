@@ -95,6 +95,8 @@ These are **top-level** keys (not the `ui` blob). The whole section is server-wi
 | Max indexed videos per channel | `channel_catalog_max_videos` | `1000` | 100–5000 |
 | YouTube results in channel search | `direct_youtube_search` | `true` | boolean |
 | YouTube results in library search | `youtube_video_search` | `true` | boolean |
+| Recommended+ looks on YouTube | `discovery_enabled` | `true` | boolean |
+| Recommendations learn from the household | `discovery_household` | `true` | boolean |
 
 When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
@@ -103,6 +105,10 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 **YouTube results in channel search** (YouTube-linked channel pages only) also queries YouTube’s in-channel search and adds matches that are not already on screen. Combined results follow the channel page **Recent / Popular** sort. Search text is sent to YouTube. Each channel can override this default with the **YT** control in its search box.
 
 **YouTube results in library search** is the **YT** control inside the main search bar: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page setting above.
+
+**Recommended+ looks on YouTube**: every few hours, for each person who opened Recommended+ in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: Recommended+ shows only your library and indexed channels.
+
+**Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended+. Nobody is shown who watched what.
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

@@ -253,6 +253,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   for watched position; title (two lines), channel and meta below. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
+- **Recommendation source marks.** In Recommended+, when **Sources** is on, a
+  1px outline over each card says where it comes from: solid `success` (in the
+  library), solid `muted` (a followed channel), dashed `accent` (any other
+  channel: new, not yours yet). A dot of the same kind leads the reason line
+  under the card, and a legend sits above the grid, so color is never the only
+  tell. Off on phones' edge-to-edge cards (the dot stays).
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a

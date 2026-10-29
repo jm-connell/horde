@@ -10,7 +10,7 @@ The Library is Horde’s home screen: a video grid (or channel feed), channel si
 | **Main grid** | Your library videos (home) or a channel feed |
 | **Toolbar** | Sort, select mode, layout toggles (search is in the nav bar, on every page; see [Search](search.md)) |
 | **Continue watching** | Row of in-progress videos (home only) |
-| **Home tabs** | **Library** / **Recommended** when AI is ready |
+| **Home tabs** | **Library** / **Recommended** / **Recommended+** |
 
 On a channel page, the main area switches to that channel’s feed (downloaded videos, and optionally undownloaded catalog entries). See [Channels](channels.md).
 
@@ -100,14 +100,17 @@ On the home Library tab (not Recommended, not a channel page), Horde shows a **C
 !!! note "Window vs expiry"
     The continue-watching list uses a fixed backend window of **7 days** (not user-configurable). Separate from that, [progress expiry](history.md) (`progress_expiry_days`, default **14**) clears stale `last_position_sec` values.
 
-## Library vs Recommended
+## Library, Recommended and Recommended+
 
-When AI providers are ready and recommendation categories exist, the home page shows two tabs:
+The home page has three tabs:
 
-- **Library** — your normal grid, tags, continue watching, and search results.
-- **Recommended** — category shelves of suggestions based on embeddings and watch history, in recommendation order (no sort control).
+- **Library**: your normal grid, tags, continue watching, and search results.
+- **Recommended**: "For you" from your library and the uploads of every channel you have indexed (turn off **Include not downloaded** for the library alone), plus category shelves when AI is set up. It works without AI, ranked from your watch history.
+- **Recommended+**: the place to browse when you don't know what to watch. It mixes four kinds of picks: new uploads from channels you follow or watch a lot, more like what you have watched lately, videos from channels you have never watched (found on YouTube in the background), and the odd throwback to something you used to watch. A **Channels you might like** row suggests channels to follow; following one also indexes its uploads.
 
-See [AI features](ai-features.md) for setup and what powers Recommended.
+On a Recommended+ card, the line under it says why it is there, and the **⋯** menu offers **Not interested** and **Don't recommend** the channel (with Undo). Account settings → **Hidden from recommendations** lists them and can take them back. **Sources** outlines each card by where it comes from: a solid green outline for a video in your library, a solid grey one for a channel you follow, a dashed accent one for any other channel (with a matching dot before the reason); turn it off for plain cards. **Refresh** reshuffles the less certain picks and asks for new videos (at most every 20 minutes).
+
+Videos you watch without downloading count too: Recommended+ learns from them and stops suggesting them. Looking on YouTube can be turned off in [Settings → Library](../settings/library.md); the feed then comes from your library and indexed channels. How it works: [ADR 0019](../adr/0019-recommended-plus.md).
 
 ## Channel sidebar
 
