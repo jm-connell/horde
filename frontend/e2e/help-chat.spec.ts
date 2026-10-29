@@ -77,6 +77,8 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   await input.fill("How do I set up AI?");
   await input.press("Enter");
   await expect(panel.getByText("Settings → AI")).toBeVisible();
+  // The box keeps focus, so the next question needs no click.
+  await expect(input).toBeFocused();
   await expect(panel.locator("pre")).toHaveText(
     "OLLAMA_URL=http://ollama:11434"
   );
@@ -176,4 +178,5 @@ test("Ask about Horde shows the server's reason when no AI is set up", async ({
   // The e2e server has no AI provider; the real route answers with an error event.
   await expect(panel.getByRole("alert")).toHaveText(/\S/);
   await expect(panel.getByText("Looking it up")).toBeHidden();
+  await expect(input).toBeFocused();
 });

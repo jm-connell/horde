@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from dataclasses import dataclass, field
 from typing import Any, Literal
 from urllib.parse import urlparse
@@ -60,6 +61,28 @@ def format_provider_error(exc: BaseException) -> str:
     if kind == "unknown":
         return message
     return f"{message} ({kind})"
+
+
+def _retry_after_sec(resp: httpx.Response) -> float | None:
+    """The response's ``Retry-After`` in seconds, when it is a number."""
+    try:
+        return max(0.0, float(resp.headers.get("retry-after", "")))
+    except ValueError:
+        return None
+
+
+def _error_detail(resp: httpx.Response) -> str:
+    """The provider's own error message (OpenRouter names the upstream cause)."""
+    try:
+        err = resp.json().get("error")
+    except ValueError, AttributeError:
+        return resp.text[:300] or f"HTTP {resp.status_code}"
+    if isinstance(err, dict):
+        meta = err.get("metadata") or {}
+        raw = meta.get("raw") if isinstance(meta, dict) else None
+        msg = str(err.get("message") or "")
+        return f"{msg}: {raw}"[:300] if raw else msg[:300]
+    return str(err)[:300]
 
 
 ChatFormat = str | dict[str, Any] | None
@@ -165,6 +188,11 @@ _PING_TIMEOUT = httpx.Timeout(3.0, connect=2.0)
 _DETECT_TIMEOUT = httpx.Timeout(0.6, connect=0.4)
 _NEGATIVE_CACHE_SEC = 30.0
 _OLLAMA_PROBE_SEC = 300.0
+#: Waits before re-sending a chat stream the provider answered with 429.
+#: Hosted models get rate limited upstream for a second or two at a time.
+_RATE_LIMIT_BACKOFF_SEC = (1.0, 2.0, 4.0)
+#: A ``Retry-After`` longer than this is not waited out: the user sees the error.
+_RATE_LIMIT_MAX_WAIT_SEC = 10.0
 _MODEL_CACHE_SEC = 30.0
 
 _pull_lock = threading.Lock()
@@ -541,6 +569,34 @@ class OpenAICompatProvider:
             invalidate_resolved_url()
             raise
 
+    def _send_retrying_429(
+        self, client: httpx.Client, payload: dict[str, Any]
+    ) -> httpx.Response:
+        """POST a streaming chat request, waiting out short 429s.
+
+        Nothing has been streamed when a 429 arrives, so sending again is safe.
+        Returns the last response, which the caller must close.
+        """
+        for wait in (*_RATE_LIMIT_BACKOFF_SEC, None):
+            request = client.build_request("POST", "/chat/completions", json=payload)
+            resp = client.send(request, stream=True)
+            if resp.status_code != 429:
+                return resp
+            resp.read()
+            retry_after = _retry_after_sec(resp)
+            if retry_after is not None and wait is not None:
+                wait = retry_after if retry_after <= _RATE_LIMIT_MAX_WAIT_SEC else None
+            logger.warning(
+                "AI provider rate limited a chat (%s); %s",
+                _error_detail(resp),
+                f"retrying in {wait:g}s" if wait is not None else "giving up",
+            )
+            if wait is None:
+                return resp
+            resp.close()
+            time.sleep(wait)
+        raise AssertionError("unreachable")
+
     def chat_stream(
         self,
         prompt: str,
@@ -574,7 +630,7 @@ class OpenAICompatProvider:
         try:
             with (
                 self._client(timeout=req_timeout) as client,
-                client.stream("POST", "/chat/completions", json=payload) as resp,
+                closing(self._send_retrying_429(client, payload)) as resp,
             ):
                 resp.raise_for_status()
                 for line in resp.iter_lines():
