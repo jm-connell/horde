@@ -482,9 +482,9 @@ class DiscoverItemRead(BaseModel):
     video: VideoRead | None = None
     stream: ChannelFeedEntry | None = None
     reason: DiscoverReasonRead
-    #: library (downloaded), followed (a followed channel's video, not
-    #: downloaded) or unfollowed (any other channel's).
-    source: Literal["library", "followed", "unfollowed"]
+    #: library (downloaded), channels (not downloaded, from a channel the user
+    #: follows or that is indexed) or new (from any other channel).
+    source: Literal["library", "channels", "new"]
 
 
 class DiscoverStatusRead(BaseModel):

@@ -161,7 +161,9 @@ def discover_feed(
                     key=c.key,
                     stream=_entry(c),
                     reason=reason,
-                    source="followed" if item.followed else "unfollowed",
+                    source="channels"
+                    if item.followed or c.pool == "catalog"
+                    else "new",
                 )
             )
     feedback.record_shown(session, user.id, (i.key for i in items))

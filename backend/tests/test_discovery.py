@@ -257,9 +257,9 @@ def test_feed_mixes_followed_uploads_similar_and_new_channels(
     items = _items(client)
     by_key = {i["key"]: i for i in items}
     assert by_key["labnewupl01"]["reason"]["text"] == "New from Lab"
-    assert by_key["labnewupl01"]["source"] == "followed"
+    assert by_key["labnewupl01"]["source"] == "channels"
     assert by_key["newlabvid01"]["reason"]["kind"] == "new_channel"
-    assert by_key["newlabvid01"]["source"] == "unfollowed"
+    assert by_key["newlabvid01"]["source"] == "new"
     assert by_key["newcookvid1"]["reason"]["kind"] == "new_channel"
     order = [i["key"] for i in items]
     # Relevant picks come before the unrelated one, which only fills the end.

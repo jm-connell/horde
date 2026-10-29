@@ -4132,8 +4132,8 @@
           "source": {
             "enum": [
               "library",
-              "followed",
-              "unfollowed"
+              "channels",
+              "new"
             ],
             "title": "Source",
             "type": "string"

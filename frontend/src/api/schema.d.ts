@@ -5126,7 +5126,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "library" | "followed" | "unfollowed";
+            source: "library" | "channels" | "new";
             stream?: components["schemas"]["ChannelFeedEntry"] | null;
             video?: components["schemas"]["VideoRead"] | null;
         };

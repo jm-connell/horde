@@ -266,12 +266,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended+, when **Sources** is on, a
-  1px outline over each card says where it comes from: solid `success` (in the
-  library), solid `muted` (a followed channel), dashed `accent` (any other
-  channel: new, not yours yet); square on phones' edge-to-edge cards. A legend
-  of dots sits above the grid, and each pair differs in color or line style, so
-  color is never the only tell. Why a card is there is its hover title, not a
-  line under it.
+  1px accent outline over each card says where it comes from: solid `accent`
+  (downloaded), `accent/35` (not downloaded, from a channel the user follows or
+  has indexed), none (a channel new to them). Square on phones' edge-to-edge
+  cards. A legend of dots sits above the grid. Only the theme's accent, so the
+  marks follow every theme; why a card is there is its hover title, not a line
+  under it.
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a

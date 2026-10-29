@@ -27,30 +27,31 @@ const STATUS_POLL_MAX = 40;
 type Source = DiscoverItem["source"];
 
 /**
- * Where a card comes from, when source marks are on: a downloaded video gets a
- * solid success outline ("you have it"), a followed channel's a solid neutral
- * one (familiar), any other channel's a dashed accent one (new, not yours
- * yet). Each pair differs in color or in line style, so the color is never
- * the only tell, and the legend above the feed spells them out.
+ * Where a card comes from, when source marks are on, in the theme's accent: a
+ * downloaded video gets a solid accent outline, one from a channel the user
+ * follows or has indexed a faded one, and one from a channel new to them none
+ * (the plain card). The legend above the feed spells them out.
  */
-const SOURCE: Record<Source, { label: string; outline: string; dot: string }> =
-  {
-    library: {
-      label: "In your library",
-      outline: "border border-success/55",
-      dot: "bg-success",
-    },
-    followed: {
-      label: "From a channel you follow",
-      outline: "border border-muted/60",
-      dot: "bg-muted",
-    },
-    unfollowed: {
-      label: "From a channel you don't follow",
-      outline: "border border-dashed border-accent/60",
-      dot: "ring-1 ring-inset ring-accent",
-    },
-  };
+const SOURCE: Record<
+  Source,
+  { label: string; outline: string | null; dot: string }
+> = {
+  library: {
+    label: "Downloaded",
+    outline: "border border-accent",
+    dot: "bg-accent",
+  },
+  channels: {
+    label: "From your channels",
+    outline: "border border-accent/35",
+    dot: "bg-accent/35",
+  },
+  new: {
+    label: "New to you",
+    outline: null,
+    dot: "ring-1 ring-inset ring-muted",
+  },
+};
 
 function SourceDot({ source }: { source: Source }) {
   return (
@@ -360,7 +361,7 @@ export default function DiscoverHome({
             onChannelClick={onChannelClick}
           />
         ) : null}
-        {marks && (
+        {marks && SOURCE[item.source].outline && (
           <span
             aria-hidden="true"
             className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}

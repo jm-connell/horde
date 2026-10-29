@@ -54,16 +54,14 @@ test("Recommended+ mixes the library with videos found on YouTube", async ({
   await expect(page.getByText(FOUND)).toBeVisible();
 });
 
-test("source marks tell library, followed and other channels apart", async ({
+test("source marks tell downloaded, your channels and new apart", async ({
   page,
 }) => {
   await openRecommendedPlus(page);
   const legend = page.getByRole("list", { name: "What the outlines mean" });
   await expect(legend).toBeVisible();
   const found = page.locator(`[data-rec-key="discover001"]`);
-  await expect(
-    found.getByText("From a channel you don't follow.")
-  ).toBeAttached();
+  await expect(found.getByText("New to you.")).toBeAttached();
 
   const sources = page.getByRole("button", { name: "Sources" });
   await expect(sources).toHaveAttribute("aria-pressed", "true");
