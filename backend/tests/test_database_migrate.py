@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0019_download_clips"
+HEAD = "0020_recommended_plus"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1004,6 +1004,12 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             ALTER TABLE users DROP COLUMN totp_last_step;
             ALTER TABLE users DROP COLUMN totp_enabled_at;
             ALTER TABLE users DROP COLUMN totp_secret;
+            DROP TABLE user_stream_state;
+            DROP TABLE discovery_hits;
+            DROP TABLE discovery_videos;
+            DROP TABLE discovery_state;
+            DROP TABLE rec_feedback;
+            DROP TABLE rec_impressions;
             DROP TABLE user_watch_time;
             DROP TABLE trash_entries;
             DROP TABLE channel_retention;

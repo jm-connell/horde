@@ -838,3 +838,144 @@ class ChannelFollow(SQLModel, table=True):
     source: str = Field(default="manual")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class UserStreamState(SQLModel, table=True):
+    """One user's watch of a video they streamed without downloading it.
+
+    Written by the player through ``services/discovery/history.py``. Recommendations
+    read it the way they read ``user_video_state``: as taste, and to leave out what
+    the user already watched. Keyed by the YouTube id, so a later download of the
+    same video is recognised.
+    """
+
+    __tablename__ = "user_stream_state"
+    __table_args__ = (
+        Index("ix_user_stream_state_user_watched", "user_id", "last_watched_at"),
+    )
+
+    user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
+    yt_id: str = Field(primary_key=True)
+    url: str
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    duration_sec: float | None = None
+    #: The furthest point reached, so a rewatch from the start keeps what was seen.
+    watched_sec: float = 0.0
+    last_watched_at: datetime = Field(default_factory=utcnow)
+    finished_at: datetime | None = None
+
+
+class DiscoveryVideo(SQLModel, table=True):
+    """A YouTube video found outside the library and the channel catalogs.
+
+    The Recommended+ gatherer (``services/discovery/gather.py``) fills it from
+    YouTube searches and "up next" lists; ``discovery_hits`` says for whom and why.
+    Rows no hit points at any more are deleted.
+    """
+
+    __tablename__ = "discovery_videos"
+    __table_args__ = (_AUTOINCREMENT,)
+
+    id: int | None = Field(default=None, primary_key=True)
+    yt_id: str = Field(index=True, unique=True)
+    url: str
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = Field(default=None, index=True)
+    duration: float | None = None
+    view_count: int | None = None
+    #: ISO date when known (search results only give "3 weeks ago").
+    published_at: str | None = None
+    published_label: str | None = None
+    thumbnail_url: str | None = None
+    #: The snippet YouTube shows in search results (not the full description).
+    description: str | None = None
+    live_status: str | None = None
+    found_at: datetime = Field(default_factory=utcnow)
+    #: The text embedded for scoring (empty until the gatherer embeds it).
+    embed_model: str = ""
+    embed_dim: int = 0
+    vector: bytes = Field(default=b"")
+
+
+class DiscoveryHit(SQLModel, table=True):
+    """Why a discovered video is a candidate for one user."""
+
+    __tablename__ = "discovery_hits"
+    __table_args__ = (
+        UniqueConstraint("user_id", "discovery_video_id", "source"),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    discovery_video_id: int = Field(
+        foreign_key="discovery_videos.id", index=True, ondelete="CASCADE"
+    )
+    #: search (a query built from the user's interests) | related (a video's up next)
+    source: str
+    #: The query, or the YouTube id of the watched video it was related to.
+    seed: str
+    #: The watched video's title (related), for "Because you watched ...".
+    seed_title: str | None = None
+    #: recent | throwback: which part of the history the seed came from.
+    era: str = "recent"
+    #: Position in the source's results (0 = first).
+    rank: int = 0
+    found_at: datetime = Field(default_factory=utcnow)
+
+
+class DiscoveryState(SQLModel, table=True):
+    """Per user: when Recommended+ last looked outside, and what it asked."""
+
+    __tablename__ = "discovery_state"
+
+    user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
+    #: The user last opened Recommended+ (only active users are gathered for).
+    last_viewed_at: datetime | None = None
+    last_run_at: datetime | None = None
+    #: A refresh the user asked for, picked up by the next worker pass.
+    requested_at: datetime | None = None
+    last_error: str | None = None
+    #: JSON {query or seed id: ISO time it last ran}, so nothing repeats too soon.
+    asked_json: str = Field(default="{}")
+
+
+class RecFeedback(SQLModel, table=True):
+    """What a user told recommendations to leave out.
+
+    ``kind``: ``video`` (key: YouTube id, or ``video:<id>`` for a library video
+    without one), ``channel`` (key: normalized channel URL, or ``name:<lowercased
+    name>``) or ``suggestion`` (a suggested channel dismissed, same keys as channel).
+    """
+
+    __tablename__ = "rec_feedback"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "kind", "key", name="uq_rec_feedback_user_kind_key"
+        ),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    kind: str
+    key: str
+    #: What the user saw (a title or channel name), for the list in Account.
+    label: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class RecImpression(SQLModel, table=True):
+    """How often a recommendation was shown to a user without being watched."""
+
+    __tablename__ = "rec_impressions"
+
+    user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
+    #: Same keys as ``rec_feedback`` videos.
+    key: str = Field(primary_key=True)
+    #: Separate visits it was shown on (shows within an hour count once).
+    shown_count: int = 0
+    last_shown_at: datetime = Field(default_factory=utcnow)
