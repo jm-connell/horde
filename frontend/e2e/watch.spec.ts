@@ -160,6 +160,40 @@ test("theater mode keeps the nav brand off the window edge", async ({
   await expect(row).toHaveCSS("padding-right", "24px");
 });
 
+test("the player stays just under the nav when the safe-area inset changes", async ({
+  page,
+}) => {
+  // iOS changes env(safe-area-inset-top) after load (PWA launch, rotation,
+  // leaving fullscreen); the space under the fixed nav must follow it.
+  const cdp = await page.context().newCDPSession(page);
+  const setInset = (top: number) =>
+    cdp.send("Emulation.setSafeAreaInsetsOverride", {
+      insets: { top, topMax: top },
+    });
+  await setInset(59);
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const video = page.locator("video").first();
+  await expect(video).toBeVisible();
+  const gap = () =>
+    page.evaluate(() => {
+      const nav = document.querySelector("[data-horde='nav']");
+      const v = document.querySelector("video");
+      if (!nav || !v) return NaN;
+      return Math.round(
+        v.getBoundingClientRect().top - nav.getBoundingClientRect().bottom
+      );
+    });
+  // The page's own top padding.
+  const expected = 24;
+  await expect.poll(gap).toBe(expected);
+  for (const top of [0, 118, 59]) {
+    await setInset(top);
+    await expect.poll(gap).toBe(expected);
+  }
+});
+
 test("the description box keeps a readable width on a wide window", async ({
   page,
 }) => {

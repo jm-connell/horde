@@ -89,7 +89,11 @@ export default function TopNav() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [useHamburger, setUseHamburger] = useState(false);
   const [navHidden, setNavHidden] = useState(false);
-  const [navH, setNavH] = useState(56);
+  // The bar's height below the safe-area inset. The inset itself is added in
+  // CSS (`navOffset`): iOS changes it after load (launch, rotation, leaving
+  // fullscreen) without resizing the header's content box, so a measured
+  // total went stale and left a gap or put the nav over the page.
+  const [barH, setBarH] = useState(56);
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const { resetHome } = useHomeReset();
@@ -139,6 +143,8 @@ export default function TopNav() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const desktopSearchRef = useRef<HTMLInputElement>(null);
   const lastScrollY = useRef(0);
+
+  const navOffset = `calc(env(safe-area-inset-top) + ${barH}px)`;
 
   const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
 
@@ -252,7 +258,13 @@ export default function TopNav() {
   useLayoutEffect(() => {
     const el = headerRef.current;
     if (!el) return;
-    const measure = () => setNavH(el.offsetHeight);
+    const measure = () =>
+      setBarH(
+        Math.max(
+          0,
+          el.offsetHeight - parseFloat(getComputedStyle(el).paddingTop)
+        )
+      );
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -657,7 +669,7 @@ export default function TopNav() {
           <nav
             ref={menuPanelRef}
             className="fixed inset-x-0 z-40"
-            style={{ top: navH }}
+            style={{ top: navOffset }}
           >
             <Collapse
               open={menuShown}
@@ -705,7 +717,7 @@ export default function TopNav() {
           </nav>
         </>
       )}
-      <div aria-hidden className="shrink-0" style={{ height: navH }} />
+      <div aria-hidden className="shrink-0" style={{ height: navOffset }} />
     </>
   );
 }
