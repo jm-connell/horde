@@ -21,12 +21,13 @@ import { previewResumeFor } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
 import { watchHref } from "../utils/watchHref";
 import CardPreviewVideo from "./CardPreviewVideo";
+import CardCopy, { type CardFact } from "./CardCopy";
 import CardTitle from "./CardTitle";
 import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
-import { PlayIcon } from "./icons";
+import { CheckIcon, DownloadIcon, PlayIcon } from "./icons";
 import { button } from "./buttons";
 
 const maxResCache = new Map<string, string>();
@@ -73,84 +74,81 @@ function likeRatioTitle(
   return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
 }
 
-function FeedMetaRow({
-  channelName,
+/** The facts under a grid card's title: when, views, likes. */
+function feedFacts(entry: ChannelFeedEntry): CardFact[] {
+  const facts: CardFact[] = [];
+  const dateLabel = formatPublishedAt(
+    entry.published_at,
+    entry.published_label
+  );
+  if (dateLabel) facts.push({ text: dateLabel });
+  if (entry.view_count != null) {
+    facts.push({ text: formatViewCount(entry.view_count) });
+  }
+  const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
+  if (likeLabel) {
+    facts.push({
+      text: likeLabel,
+      title: likeRatioTitle(entry.like_count, entry.dislike_count),
+    });
+  }
+  return facts;
+}
+
+/**
+ * The end of a grid card's last details line: the resolution, then the state
+ * or the action (live, upcoming, downloaded, or a small download button).
+ */
+function FeedTrailing({
   entry,
   maxRes,
   inLibrary,
   downloading,
   onDownload,
-  onChannelClick,
 }: {
-  channelName: string;
   entry: ChannelFeedEntry;
   maxRes: string;
   inLibrary: boolean;
   downloading?: boolean;
   onDownload: () => void;
-  onChannelClick?: () => void;
 }) {
   const { can } = useAuth();
-  const dateLabel = formatPublishedAt(
-    entry.published_at,
-    entry.published_label
-  );
-  const views =
-    entry.view_count != null ? formatViewCount(entry.view_count) : "";
-  const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
-  const stats = joinDotList([dateLabel, views, likeLabel]);
-  const likeTip = likeRatioTitle(entry.like_count, entry.dislike_count);
-  return (
-    // Phones put the download button beside the channel and stats lines
-    // instead of on a line of its own.
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 sm:grid-cols-1">
-      <FeedChannelName
-        name={channelName}
-        onChannelClick={onChannelClick}
-        className="min-w-0 truncate text-xs leading-4 text-gray-400"
-      />
-      <span
-        className={`block min-h-4 min-w-0 truncate text-xs leading-4 text-muted ${
-          stats ? "" : "max-sm:hidden"
-        }`}
-        title={
-          likeTip
-            ? `${stats}${stats ? " · " : ""}${likeTip}`
-            : stats || undefined
-        }
-      >
-        {stats || "\u00a0"}
+  const state =
+    entry.live_status === "is_live" ? (
+      <LiveNowLabel />
+    ) : entry.live_status === "is_upcoming" ? (
+      <UpcomingLabel />
+    ) : inLibrary ? (
+      <span className="text-success" title="Downloaded">
+        <CheckIcon className="text-sm" />
+        <span className="sr-only">Downloaded</span>
       </span>
-      <div className="flex h-6 min-w-0 items-center gap-2 max-sm:col-start-2 max-sm:row-span-2 max-sm:row-start-1 max-sm:self-center">
-        {entry.live_status === "is_live" ? (
-          <LiveNowLabel />
-        ) : entry.live_status === "is_upcoming" ? (
-          <UpcomingLabel />
-        ) : inLibrary ? (
-          <span className="text-xs font-medium leading-none text-success">
-            Downloaded
-          </span>
-        ) : can("download") ? (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDownload();
-            }}
-            disabled={downloading}
-            className="h-6 shrink-0 rounded-sm bg-accent px-2.5 text-xs font-medium leading-none text-on-accent hover:bg-accent-soft disabled:opacity-60"
-          >
-            {downloading ? "Downloading" : "Download"}
-          </button>
-        ) : null}
-        {maxRes ? (
-          <span className="ml-auto shrink-0 text-[10px] font-medium text-muted max-sm:order-first">
-            {maxRes}
-          </span>
-        ) : null}
-      </div>
-    </div>
+    ) : can("download") ? (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onDownload();
+        }}
+        disabled={downloading}
+        aria-label={downloading ? "Downloading" : "Download"}
+        title={downloading ? "Downloading" : "Download"}
+        // A 16px line holds a 20px button: the margins keep the line's height,
+        // and the ::after widens what a finger can hit.
+        className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60"
+      >
+        <DownloadIcon className="text-sm" />
+      </button>
+    ) : null;
+  if (!maxRes && !state) return null;
+  return (
+    <>
+      {maxRes ? (
+        <span className="text-[10px] font-medium text-muted">{maxRes}</span>
+      ) : null}
+      {state}
+    </>
   );
 }
 
@@ -502,30 +500,30 @@ export default function ChannelFeedCard({
           previewActive={previewActive}
           queueEntry={queueEntry}
         />
-        <div
-          className={`flex flex-col gap-1 p-3 transition-colors duration-200 ${
+        <CardCopy
+          title={titleText}
+          channel={channelName}
+          renderChannel={(className) => (
+            <FeedChannelName
+              name={channelName}
+              onChannelClick={handleChannelClick}
+              className={className}
+            />
+          )}
+          facts={feedFacts(entry)}
+          trailing={
+            <FeedTrailing
+              entry={entry}
+              maxRes={maxRes}
+              inLibrary={inLibrary}
+              downloading={downloading}
+              onDownload={onDownload}
+            />
+          }
+          className={`transition-colors duration-200 ${
             previewActive ? "max-sm:bg-accent/10" : ""
           }`}
-        >
-          <CardTitle
-            text={titleText}
-            className="line-clamp-2 overflow-hidden sm:min-h-10 wrap-break-word text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
-            style={{
-              display: "-webkit-box",
-              WebkitBoxOrient: "vertical",
-              WebkitLineClamp: 2,
-            }}
-          />
-          <FeedMetaRow
-            channelName={channelName}
-            entry={entry}
-            maxRes={maxRes}
-            inLibrary={inLibrary}
-            downloading={downloading}
-            onDownload={onDownload}
-            onChannelClick={handleChannelClick}
-          />
-        </div>
+        />
       </div>
     );
 

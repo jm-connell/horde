@@ -3,19 +3,19 @@ import { streamUrl, thumbnailUrl } from "../api";
 import { usePlaybackSession } from "../context/PlaybackContext";
 import { useCardPreview } from "../hooks/useCardPreview";
 import { useSettings } from "../hooks/useSettings";
-import { useCardCopyLayout } from "../hooks/useCardCopyLayout";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
 import type { Video } from "../types";
 import {
   formatDate,
   formatDuration,
   formatResolution,
+  formatSize,
   formatViewCount,
 } from "../utils";
 import { previewResumeFor, previewStartSec } from "../utils/cardPreview";
 import { setWatchResume } from "../utils/watchHandoff";
+import CardCopy, { type CardFact } from "./CardCopy";
 import CardPreviewVideo from "./CardPreviewVideo";
-import CardTitle from "./CardTitle";
 import FadeImage from "./FadeImage";
 import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
@@ -92,21 +92,19 @@ export default function VideoCard({
       : "";
   const matchTip = visibleMatchReasonTip(video.match_reason, searchQuery);
   const viewLabel =
-    showViewCount && video.view_count !== null
-      ? formatViewCount(video.view_count)
-      : "";
-  const hasSecondaryMeta = Boolean(dateLabel || viewLabel);
-  const {
-    detailsRef,
-    sizerRef,
-    combinedSizerRef,
-    stacked,
-    titleLines,
-    titleNeeded,
-  } = useCardCopyLayout(
-    video.title,
-    Boolean(video.channel && hasSecondaryMeta)
-  );
+    video.view_count !== null ? formatViewCount(video.view_count) : "";
+  // Always: the publish date (when card dates are on) and the views when the
+  // list is about them. Optional, only to fill spare lines in a taller row
+  // (see cardCopyPlan): the views, when it was added, its size.
+  const facts: CardFact[] = [];
+  if (dateLabel) facts.push({ text: dateLabel });
+  if (viewLabel && showViewCount) facts.push({ text: viewLabel });
+  const required = facts.length;
+  if (viewLabel && !showViewCount) facts.push({ text: viewLabel });
+  const added = settings.showCardDates ? formatDate(video.added_at) : "";
+  if (added) facts.push({ text: `Added ${added}` });
+  const size = formatSize(video.file_size);
+  if (size) facts.push({ text: size });
 
   const handleClick = (e: React.MouseEvent) => {
     if (selectable) {
@@ -128,7 +126,7 @@ export default function VideoCard({
         "sm:h-full sm:rounded-xl sm:bg-ink-900 sm:ring-1",
         selected ? "sm:ring-accent" : "sm:ring-ink-700 sm:hover:ring-accent/60",
       ].join(" ")
-    : `ui-card ui-card-enter group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
+    : `ui-card ui-card-enter group flex h-full flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${
         selected ? "ring-accent" : "hover:ring-accent/60"
       }`;
 
@@ -219,104 +217,27 @@ export default function VideoCard({
           }
         />
       </div>
-      <div
-        ref={detailsRef}
-        className={`relative flex min-h-0 flex-1 flex-col gap-1 p-3 transition-colors duration-200 ${
-          previewActive ? "max-sm:bg-accent/10" : ""
-        }`}
-      >
-        <span
-          ref={sizerRef}
-          aria-hidden
-          className="pointer-events-none invisible absolute inset-x-3 top-3 -z-10 wrap-break-word text-sm font-semibold leading-5"
-        >
-          {video.title}
-        </span>
-        <span
-          ref={combinedSizerRef}
-          aria-hidden
-          className="pointer-events-none invisible absolute left-3 top-3 -z-10 flex w-max items-center gap-x-2 text-xs leading-4"
-        >
-          {video.channel ? (
-            <span className="shrink-0 whitespace-nowrap">{video.channel}</span>
-          ) : null}
-          {dateLabel ? (
-            <span className="shrink-0 whitespace-nowrap">{dateLabel}</span>
-          ) : null}
-          {viewLabel ? (
-            <span className="shrink-0 whitespace-nowrap">{viewLabel}</span>
-          ) : null}
-          {resolution ? (
-            <span className="shrink-0 whitespace-nowrap text-[10px] font-medium">
+      <CardCopy
+        title={video.title}
+        channel={video.channel}
+        renderChannel={(className) =>
+          video.channel ? (
+            <CardChannelName channel={video.channel} className={className} />
+          ) : null
+        }
+        facts={facts}
+        required={required}
+        trailing={
+          resolution ? (
+            <span className="text-[10px] font-medium text-muted">
               {resolution}
             </span>
-          ) : null}
-        </span>
-        <CardTitle
-          text={video.title}
-          truncated={titleNeeded > titleLines}
-          className="min-h-0 flex-1 overflow-hidden wrap-break-word text-sm font-semibold leading-5 text-gray-100 group-hover:text-accent"
-          style={{
-            display: "-webkit-box",
-            WebkitBoxOrient: "vertical",
-            WebkitLineClamp: titleLines,
-            minHeight: titleLines <= 1 ? "1.25rem" : "2.5rem",
-          }}
-        />
-        <div className="flex shrink-0 flex-col gap-1">
-          {stacked ? (
-            <>
-              <div className="flex min-w-0 flex-wrap items-center gap-x-2">
-                {dateLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-muted">
-                    {dateLabel}
-                  </span>
-                ) : null}
-                {viewLabel ? (
-                  <span className="shrink-0 text-xs leading-4 text-muted">
-                    {viewLabel}
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex min-w-0 items-start gap-2">
-                <CardChannelName
-                  channel={video.channel!}
-                  className="min-w-0 wrap-break-word text-xs leading-4 text-gray-400 hover:text-accent"
-                />
-                {resolution ? (
-                  <span className="ml-auto shrink-0 pt-0.5 text-[10px] font-medium text-muted">
-                    {resolution}
-                  </span>
-                ) : null}
-              </div>
-            </>
-          ) : (
-            <div className="flex min-w-0 items-center gap-x-2">
-              {video.channel ? (
-                <CardChannelName
-                  channel={video.channel}
-                  className="shrink-0 whitespace-nowrap text-xs leading-4 text-gray-400 hover:text-accent"
-                />
-              ) : null}
-              {dateLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
-                  {dateLabel}
-                </span>
-              ) : null}
-              {viewLabel ? (
-                <span className="shrink-0 whitespace-nowrap text-xs leading-4 text-muted">
-                  {viewLabel}
-                </span>
-              ) : null}
-              {resolution ? (
-                <span className="ml-auto shrink-0 whitespace-nowrap text-[10px] font-medium text-muted">
-                  {resolution}
-                </span>
-              ) : null}
-            </div>
-          )}
-        </div>
-      </div>
+          ) : null
+        }
+        className={`transition-colors duration-200 ${
+          previewActive ? "max-sm:bg-accent/10" : ""
+        }`}
+      />
     </Link>
   );
 }

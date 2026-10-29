@@ -250,7 +250,16 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   0.97 on press (80ms) when the button press setting is on, and get
   `ui-interactive` for the user's hover motion.
 - **Video card.** Thumbnail with duration badge and a thin accent progress bar
-  for watched position; title (two lines), channel and meta below. "+ Queue"
+  for watched position; title (one or two lines), channel and facts below.
+  Every grid card's text is laid out by `CardCopy` (`components/cardCopyPlan.ts`)
+  in 1.25rem lines (a title line, or a 1rem details line with its gap). A card
+  asks its row for its title plus the fewest details lines that show every
+  detail whole; the row takes its tallest card. A card with spare lines splits
+  its details (channel; date · views; likes) and then adds optional facts
+  (on library cards: views, date added, size), a whole line at a time, so text
+  sits right under the title with no gap. Resolution and the state or action
+  (a small accent download icon, a success check when downloaded, Live,
+  Upcoming) end the last details line and never take a line of their own. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended+, when **Sources** is on, a
