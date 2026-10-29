@@ -1,6 +1,9 @@
 import { useState } from "react";
 import TakeoutImportDialog from "../../components/takeout/TakeoutImportDialog";
-import { TakeoutStatsToggle } from "../../components/takeout/TakeoutImport";
+import {
+  OneTimeImportNotice,
+  TakeoutStatsToggle,
+} from "../../components/takeout/TakeoutImport";
 import { button } from "../../components/buttons";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
@@ -82,6 +85,9 @@ export default function YoutubeHistorySection() {
           )}
         </span>
       </div>
+      {views > 0 && (
+        <OneTimeImportNotice asOf={dateLabel(summary?.last_watched_at)} />
+      )}
       <TakeoutStatsToggle />
       {open && <TakeoutImportDialog onClose={() => setOpen(false)} />}
     </div>

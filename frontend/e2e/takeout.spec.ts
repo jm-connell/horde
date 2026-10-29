@@ -82,6 +82,10 @@ test("imports a Takeout export and lets the user pick what to keep", async ({
   page,
 }) => {
   const dialog = await openImport(page);
+  // Before and after: it is a snapshot, refreshed only by importing again.
+  await expect(
+    dialog.getByText("A one-time copy, not a live connection.")
+  ).toBeVisible();
   await dialog.getByLabel("Choose export").setInputFiles(exportFiles());
   await dialog.getByRole("button", { name: "Import", exact: true }).click();
 
@@ -117,6 +121,9 @@ test("imports a Takeout export and lets the user pick what to keep", async ({
   );
   expect(follows.map((f) => f.channel_name)).not.toContain("Wheel Days");
   await expect(page.getByText(/4 views of 2 videos/)).toBeVisible();
+  await expect(
+    page.getByText("A one-time copy, not a live connection.")
+  ).toBeVisible();
 
   // Re-importing the same export adds nothing twice.
   const again = await openImport(page);

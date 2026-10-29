@@ -2,6 +2,9 @@
 
 Bring what you watched, subscribed to and saved on YouTube into Horde. Google does not let other apps read your YouTube history, so it comes from a **Google Takeout** export: a .zip of your own data that you download from Google and upload to Horde.
 
+!!! note "A one-time copy, not a live connection"
+    Horde never signs in to YouTube. An import copies what the export holds, as of the day you made it; what you watch on YouTube afterwards only reaches Horde with the next import. To bring Horde up to date, export again and import the new file (only views it doesn't have yet are added). The import dialog and Settings say the same.
+
 Everything you import belongs to **your account only**. Another person on the same Horde imports their own; nobody sees anyone else's.
 
 ## Export from Google

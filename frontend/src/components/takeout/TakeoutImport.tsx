@@ -23,6 +23,17 @@ function plural(n: number, word: string): string {
   return `${n.toLocaleString()} ${word}${n === 1 ? "" : "s"}`;
 }
 
+function monthDay(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function monthYear(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
@@ -51,6 +62,24 @@ export function TakeoutStatsToggle() {
         }
       />
     </label>
+  );
+}
+
+/**
+ * Takeout is a snapshot: say so wherever an import starts or ends, so nobody
+ * expects Horde to keep up with YouTube on its own.
+ */
+export function OneTimeImportNotice({ asOf }: { asOf?: string | null }) {
+  return (
+    <p className="rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-xs text-gray-300">
+      <span className="font-medium text-gray-100">
+        A one-time copy, not a live connection.
+      </span>{" "}
+      Horde never signs in to YouTube, so it won’t see what you watch there
+      {asOf ? ` after ${asOf}` : " after the export"}. To bring it up to date,
+      export from Google Takeout again and import the new file; only views Horde
+      doesn’t have yet are added.
+    </p>
   );
 }
 
@@ -165,6 +194,7 @@ export default function TakeoutImport({
     const uploading = stage.kind === "uploading";
     return (
       <div className="space-y-4">
+        <OneTimeImportNotice />
         <Steps />
         <div className="flex flex-wrap items-center gap-3">
           <label
@@ -247,6 +277,9 @@ export default function TakeoutImport({
               }.`
             : "Done. Nothing else to import."}
         </p>
+        <OneTimeImportNotice
+          asOf={monthDay(stage.result.history.last_watched_at)}
+        />
         <div className="flex flex-wrap gap-2">
           {onFinished && (
             <button
