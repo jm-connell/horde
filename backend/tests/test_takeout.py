@@ -575,8 +575,9 @@ def test_profile_weighs_recent_views_far_above_old_ones(session, admin_user):
     )
     found = history.profile(session, admin_user.id, NOW)
     by_name = {c.name: c.recent for c in found.channels.values()}
-    assert by_name["New"] == pytest.approx(1.0)
-    assert by_name["Old"] == pytest.approx(0.125)  # three half-lives
+    # Views count per day (from its noon), so within a day of the exact weight.
+    assert by_name["New"] == pytest.approx(1.0, abs=0.025)
+    assert by_name["Old"] == pytest.approx(0.125, abs=0.005)  # three half-lives
 
 
 # --- History stats ----------------------------------------------------------------
@@ -623,3 +624,127 @@ def test_the_import_route_takes_large_uploads():
 
     assert body_limit_for("POST", "/api/takeout/import") > DEFAULT_BODY_LIMIT
     assert body_limit_for("POST", "/api/takeout/import") >= uploads.TAKEOUT_MAX_BYTES
+
+
+# --- regressions from review ---------------------------------------------------
+
+
+def test_a_decompression_bomb_is_refused_without_unpacking(client):
+    bomb = io.BytesIO()
+    with zipfile.ZipFile(bomb, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            f"{ROOT}/history/watch-history.json", b"[" + b" " * 50_000_000 + b"]"
+        )
+    resp = _upload(client, bomb.getvalue())
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "takeout_unreadable"
+
+
+@pytest.mark.parametrize(
+    "files",
+    [
+        # One CSV field over the csv module's limit.
+        {
+            f"{ROOT}/subscriptions/subscriptions.csv": 'Channel Id,Channel Url,Channel Title\nUC,"'
+            + "x" * 200_000
+            + '",T\n'
+        },
+        # Nesting deeper than the JSON parser recurses.
+        {f"{ROOT}/history/watch-history.json": "[" * 100_000 + "]" * 100_000},
+    ],
+)
+def test_malformed_files_are_a_clear_error_not_a_crash(client, files):
+    resp = _upload(client, _zip(files))
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "takeout_unreadable"
+
+
+def test_the_same_view_from_json_and_html_is_stored_once(client):
+    when = datetime(2024, 3, 1, 18, 2, 3, 789000, tzinfo=UTC)
+    _upload(client, _export([_view("qqqqqqqqqq1", when, title="Kiln build")]))
+    html = """<div class="outer-cell"><div class="header-cell"><p>YouTube</p></div>
+      <div class="content-cell">Watched <a href="https://www.youtube.com/watch?v=qqqqqqqqqq1">Kiln build</a><br>
+      Mar 1, 2024, 1:02:03 PM EST<br></div></div>"""
+    resp = client.post(
+        "/api/takeout/import",
+        files=[("files", ("watch-history.html", html.encode(), "text/html"))],
+    ).json()
+    assert (resp["views_in_file"], resp["new_views"]) == (1, 0)
+
+
+def test_html_dates_with_offsets_are_read_and_unknown_zones_skipped():
+    def one(date: str) -> tuple[list, int]:
+        html = f"""<div class="outer-cell"><p>YouTube</p><div>Watched
+          <a href="https://www.youtube.com/watch?v=rrrrrrrrrr1">T</a><br>{date}<br></div></div>"""
+        data = read_export([("watch-history.html", io.BytesIO(html.encode()))])
+        return [v.watched_at for v in data.views], data.skipped_views
+
+    assert one("Mar 1, 2024, 1:02:03 PM GMT+05:30") == (
+        [datetime(2024, 3, 1, 7, 32, 3, tzinfo=UTC)],
+        0,
+    )
+    assert one("Mar 1, 2024, 1:02:03 PM IST") == (
+        [datetime(2024, 3, 1, 7, 32, 3, tzinfo=UTC)],
+        0,
+    )
+    assert one("Mar 1, 2024, 1:02:03 PM PHT") == ([], 1)
+
+
+def test_stats_with_the_switch_but_no_youtube_views_are_unchanged(
+    client, add_video, admin_user, session
+):
+    from app.models import UserWatchTime
+
+    long = add_video(title="Long", channel="Long watch")
+    short = [add_video(title=f"S{i}", channel="Many short") for i in range(2)]
+    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    for video, seconds in [(long, 3000.0), (short[0], 10.0), (short[1], 10.0)]:
+        session.add(
+            UserWatchTime(
+                user_id=admin_user.id,
+                video_id=video.id,
+                channel=video.channel,
+                hour_start=hour,
+                seconds=seconds,
+                finished=0,
+            )
+        )
+    session.commit()
+
+    def stats(include: bool) -> dict:
+        return client.get(
+            "/api/history/stats",
+            params={
+                "range": "7d",
+                "tz": "UTC",
+                "include_youtube": str(include).lower(),
+            },
+        ).json()
+
+    plain, switched = stats(False), stats(True)
+    assert switched["includes_youtube"] is False
+    assert switched["channels"] == plain["channels"]
+    assert [c["name"] for c in plain["channels"]] == ["Long watch", "Many short"]
+
+
+def test_a_long_playlist_title_is_found_again(client, session):
+    choice = {"title": "T" * 250, "video_ids": ["ssssssssss1"]}
+    first = client.post("/api/takeout/apply", json={"playlists": [choice]}).json()
+    again = client.post(
+        "/api/takeout/apply",
+        json={"playlists": [{**choice, "video_ids": ["ssssssssss1", "ssssssssss2"]}]},
+    ).json()
+    assert (first["playlists_created"], again["playlists_created"]) == (1, 0)
+    assert again["videos_added"] == 1
+
+
+def test_recommendations_follow_a_forget_at_once(client, add_video):
+    add_video(title="Other")
+    # Newest, so it leads the unscored shelf unless it counts as watched.
+    add_video(title="Seen on YouTube", yt_id="tttttttttt1")
+    _upload(client, _export([_view("tttttttttt1", NOW)]))
+    assert [t for _k, t, _r in _for_you(client)] == ["Other", "Seen on YouTube"]
+
+    client.delete("/api/takeout/history")
+    # The cached profile is keyed by the history, so the next page sees the change.
+    assert [t for _k, t, _r in _for_you(client)] == ["Seen on YouTube", "Other"]

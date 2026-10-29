@@ -36,8 +36,16 @@ from ..url_clean import youtube_video_id
 
 logger = logging.getLogger(__name__)
 
-#: Largest single file read out of an export (a decade of history is ~100 MB).
-MAX_MEMBER_BYTES = 512 * 1024 * 1024
+#: Largest watch history file read (JSON; a decade of heavy viewing is ~100 MB).
+#: Parsing takes several times this in memory, so it stays well below RAM sizes.
+MAX_HISTORY_BYTES = 160 * 1024 * 1024
+#: Largest CSV read (subscriptions, one playlist): far above any real one.
+MAX_CSV_BYTES = 16 * 1024 * 1024
+#: Everything read from one import together.
+MAX_TOTAL_BYTES = 320 * 1024 * 1024
+#: A member that unpacks to more than this many times its packed size is not a
+#: Takeout file (text compresses about 10x) but a decompression bomb.
+MAX_COMPRESSION_RATIO = 100
 _YT_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 #: Prefixes Takeout puts before a title in English exports ("Watched <title>").
 _TITLE_PREFIXES = ("Watched ", "Watched\xa0")
@@ -80,6 +88,9 @@ class TakeoutData:
     playlists: list[TakeoutPlaylist] = field(default_factory=list)
     #: Whether a watch history file was found at all (it can be empty).
     found_history: bool = False
+    #: Views of videos whose time could not be read (an HTML date in a format
+    #: or time zone Horde does not know). Removed videos and ads are not counted.
+    skipped_views: int = 0
 
 
 # --- entry point --------------------------------------------------------------
@@ -88,22 +99,23 @@ class TakeoutData:
 def read_export(files: list[tuple[str, IO[bytes]]]) -> TakeoutData:
     """Everything Horde reads from ``(file name, binary file)`` pairs."""
     reader = _Reader()
-    for name, handle in files:
-        lower = name.lower()
-        if lower.endswith(".zip") or zipfile.is_zipfile(handle):
-            handle.seek(0)
-            reader.read_zip(name, handle)
-        else:
-            handle.seek(0)
-            reader.read_member(name, _read_capped(handle, name))
+    try:
+        for name, handle in files:
+            lower = name.lower()
+            if lower.endswith(".zip") or zipfile.is_zipfile(handle):
+                handle.seek(0)
+                reader.read_zip(name, handle)
+            elif _wanted(name):
+                handle.seek(0)
+                limit = reader.member_limit(name)
+                data = handle.read(limit + 1)
+                if len(data) > limit:
+                    raise TakeoutError(f"{name} is too large to read")
+                reader.read_member(name, data)
+    except (csv.Error, RecursionError, UnicodeDecodeError) as exc:
+        # Malformed or hostile files: oversized CSV fields, absurd nesting.
+        raise TakeoutError("Part of this export could not be read") from exc
     return reader.finish()
-
-
-def _read_capped(handle: IO[bytes], name: str) -> bytes:
-    data = handle.read(MAX_MEMBER_BYTES + 1)
-    if len(data) > MAX_MEMBER_BYTES:
-        raise TakeoutError(f"{name} is too large to read")
-    return data
 
 
 class _Reader:
@@ -114,6 +126,13 @@ class _Reader:
         self.index: list[TakeoutPlaylist] = []
         self.video_files: list[tuple[str, list[str]]] = []
         self.old_layout: list[TakeoutPlaylist] = []
+        self.read_bytes = 0
+
+    def member_limit(self, path: str) -> int:
+        """How much of this file may still be read (the per-kind and total caps)."""
+        lower = PurePosixPath(path.replace("\\", "/")).name.lower()
+        kind = MAX_CSV_BYTES if lower.endswith(".csv") else MAX_HISTORY_BYTES
+        return max(0, min(kind, MAX_TOTAL_BYTES - self.read_bytes))
 
     def read_zip(self, name: str, handle: IO[bytes]) -> None:
         try:
@@ -124,8 +143,12 @@ class _Reader:
             for info in archive.infolist():
                 if info.is_dir() or not _wanted(info.filename):
                     continue
-                if info.file_size > MAX_MEMBER_BYTES:
+                if info.file_size > self.member_limit(info.filename):
                     raise TakeoutError(f"{info.filename} is too large to read")
+                if info.file_size > MAX_COMPRESSION_RATIO * max(
+                    info.compress_size, 1024
+                ):
+                    raise TakeoutError(f"{info.filename} is not a Takeout file")
                 try:
                     raw = archive.read(info)
                 except (zipfile.BadZipFile, OSError, EOFError) as exc:
@@ -135,14 +158,18 @@ class _Reader:
                 self.read_member(info.filename, raw)
 
     def read_member(self, path: str, raw: bytes) -> None:
+        self.read_bytes += len(raw)
         base = PurePosixPath(path.replace("\\", "/")).name
         lower = base.lower()
-        if lower == "watch-history.json":
+        if lower in ("watch-history.json", "watch-history.html"):
             self.data.found_history = True
-            self.data.views.extend(_history_json(raw, path))
-        elif lower == "watch-history.html":
-            self.data.found_history = True
-            self.data.views.extend(_history_html(raw))
+            views, skipped = (
+                _history_json(raw, path)
+                if lower.endswith(".json")
+                else _history_html(raw)
+            )
+            self.data.views.extend(views)
+            self.data.skipped_views += skipped
         elif lower.endswith(".csv"):
             self._csv(base, raw)
 
@@ -280,7 +307,8 @@ def _clean_title(title: str | None, url: str | None) -> str | None:
     return text
 
 
-def _history_json(raw: bytes, path: str) -> list[WatchView]:
+def _history_json(raw: bytes, path: str) -> tuple[list[WatchView], int]:
+    """The views in ``watch-history.json``, and how many had no readable time."""
     try:
         items = json.loads(raw.decode("utf-8-sig"))
     except (UnicodeDecodeError, ValueError) as exc:
@@ -288,14 +316,22 @@ def _history_json(raw: bytes, path: str) -> list[WatchView]:
     if not isinstance(items, list):
         raise TakeoutError(f"{path} is not a YouTube watch history")
     views: list[WatchView] = []
+    skipped = 0
     for item in items:
         view = _json_view(item)
-        if view is not None:
+        if isinstance(view, WatchView):
             views.append(view)
-    return views
+        elif view == _NO_TIME:
+            skipped += 1
+    return views, skipped
 
 
-def _json_view(item: Any) -> WatchView | None:
+#: ``_json_view``'s answer for a video view whose time cannot be read.
+_NO_TIME = "no time"
+
+
+def _json_view(item: Any) -> WatchView | str | None:
+    """The view, ``_NO_TIME``, or None for what is not a video view at all."""
     if not isinstance(item, dict):
         return None
     # YouTube Music plays and ads are in the same file; neither is a video watched.
@@ -312,7 +348,7 @@ def _json_view(item: Any) -> WatchView | None:
         return None  # a removed video: no link
     stamp = _parse_iso(item.get("time"))
     if stamp is None:
-        return None
+        return _NO_TIME
     channel = channel_url = None
     subtitles = item.get("subtitles")
     if isinstance(subtitles, list) and subtitles and isinstance(subtitles[0], dict):
@@ -346,7 +382,7 @@ _ZONES = {
     "GMT": 0,
     "WET": 0,
     "BST": 1,
-    "IST": 1,
+    "IST": 5.5,  # India; Takeout's English exports use it for India Standard Time
     "CET": 1,
     "WEST": 1,
     "CEST": 2,
@@ -385,17 +421,19 @@ _HTML_FORMATS = (
 
 def _parse_html_date(text: str) -> datetime | None:
     clean = re.sub(r"[ \xa0\s]+", " ", text).strip()
-    zone = UTC
-    match = re.match(r"^(.*?)\s+([A-Z]{2,5}|UTC[+-]\d{1,2}(?::\d\d)?)$", clean)
+    zone: timezone = UTC
+    match = re.match(r"^(.*?)\s+([A-Z]{2,5}|(?:UTC|GMT)[+-]\d{1,2}(?::\d\d)?)$", clean)
     if match:
         clean, abbr = match.group(1), match.group(2)
-        offset_match = re.match(r"^UTC([+-])(\d{1,2})(?::(\d\d))?$", abbr)
+        offset_match = re.match(r"^(?:UTC|GMT)([+-])(\d{1,2})(?::(\d\d))?$", abbr)
         if offset_match:
             sign = 1 if offset_match.group(1) == "+" else -1
             minutes = int(offset_match.group(2)) * 60 + int(offset_match.group(3) or 0)
             zone = timezone(sign * timedelta(minutes=minutes))
         elif abbr in _ZONES:
             zone = timezone(timedelta(hours=_ZONES[abbr]))
+        else:
+            return None  # a zone we cannot place: better skipped than hours off
     for fmt in _HTML_FORMATS:
         try:
             return datetime.strptime(clean, fmt).replace(tzinfo=zone).astimezone(UTC)
@@ -410,6 +448,7 @@ class _HistoryHtml(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.views: list[WatchView] = []
+        self.skipped = 0
         self._divs: list[bool] = []  # per open div: is it an outer cell?
         self._entry: dict[str, Any] | None = None
         self._href: str | None = None
@@ -461,6 +500,7 @@ class _HistoryHtml(HTMLParser):
             (d for d in (_parse_html_date(t) for t in reversed(texts)) if d), None
         )
         if stamp is None:
+            self.skipped += 1
             return
         channel = next(
             ((h, t) for h, t in links if "/channel/" in h or "/@" in h), None
@@ -478,8 +518,9 @@ class _HistoryHtml(HTMLParser):
         )
 
 
-def _history_html(raw: bytes) -> list[WatchView]:
+def _history_html(raw: bytes) -> tuple[list[WatchView], int]:
+    """The views in ``watch-history.html``, and how many had no readable time."""
     parser = _HistoryHtml()
     parser.feed(raw.decode("utf-8", errors="replace"))
     parser.close()
-    return parser.views
+    return parser.views, parser.skipped

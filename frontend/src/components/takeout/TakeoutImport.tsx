@@ -382,6 +382,13 @@ function HistorySummary({ result }: { result: TakeoutImportResult }) {
         {since ? ` since ${since}` : ""}. They’re marked as watched on channel
         pages and shape your recommendations; they don’t appear in History.
       </p>
+      {result.views_skipped > 0 && (
+        <p className="mt-1 text-xs text-warning">
+          {plural(result.views_skipped, "view")} left out: their date is in a
+          format or time zone Horde can’t read. Exporting history as JSON avoids
+          this.
+        </p>
+      )}
     </div>
   );
 }

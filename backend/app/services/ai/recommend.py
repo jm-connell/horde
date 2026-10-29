@@ -440,7 +440,7 @@ class _YoutubeTaste:
 
 
 def _youtube_taste(session: Session, user_id: int) -> _YoutubeTaste:
-    found = takeout_history.profile(session, user_id)
+    found = takeout_history.cached_profile(session, user_id)
     out = _YoutubeTaste(found)
     top = max((c.recent for c in found.channels.values()), default=0.0)
     for channel in found.channels.values():
@@ -652,9 +652,8 @@ def _ranked_for_you_ids(
     watched = [video.id for video, _state in history if video.id is not None]
     # Videos watched on YouTube count as watched too, after Horde's own.
     seen = set(watched)
-    for yt_id, _when in yt.profile.recent_videos:
-        vid = library_by_yt.get(yt_id)
-        if vid is not None and vid not in seen:
+    for yt_id, vid in library_by_yt.items():
+        if yt_id in yt.profile.watched and vid not in seen:
             watched.append(vid)
             seen.add(vid)
     watched_set = set(watched)
@@ -678,7 +677,13 @@ def _ranked_for_you_ids(
     uploads: dict[int, _Upload] = {}
     followed_uploads: set[int] = set()
     if include_streams:
-        downloaded = {row[3] for row in library_rows if row[3]} | yt.profile.watched
+        downloaded = {row[3] for row in library_rows if row[3]}
+        if not yt.empty:
+            # Only the indexed videos watched on YouTube: the channel listing
+            # reads past every id it is told to leave out.
+            downloaded |= yt.profile.watched & set(
+                session.exec(select(ChannelCatalogVideo.yt_id)).all()
+            )
         watched_there = (
             _youtube_channel_catalogs(session, yt, followed) if not yt.empty else set()
         )

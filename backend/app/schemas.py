@@ -591,6 +591,9 @@ class TakeoutImportResult(BaseModel):
     views_in_file: int
     #: Views not imported before (re-importing an export adds only these).
     new_views: int
+    #: Views left out because their time could not be read (HTML exports in
+    #: an unknown date format or time zone).
+    views_skipped: int = 0
     history: TakeoutHistorySummary
     subscriptions: list[TakeoutSubscription]
     playlists: list[TakeoutPlaylistRead]

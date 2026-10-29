@@ -19,7 +19,9 @@ Horde's history (`user_video_state`) is keyed by library video and feeds History
 ## Consequences
 
 - The history is as fresh as the last export; there is no background sync.
-- HTML exports (Takeout's default) are parsed best-effort: dates are localised, so only English dates are reliable, and a view imported once from JSON and once from HTML can be stored twice (different rounding).
+- The throwback draw changes at midnight UTC, so a shelf paged across it can see one reshuffle.
+- HTML exports (Takeout's default) are parsed best-effort: dates are localised, so only English dates are reliable; a view whose time zone is unknown is left out (and counted) rather than filed hours off. Times are stored to the second so JSON and HTML imports of one view match.
+- Parsing happens in memory, so the import caps what it reads (160 MB of history, 16 MB per CSV, 320 MB in all, no member packed more than 100:1). Views are inserted in chunks, each committed, so a big import never holds SQLite's write lock for long.
 - Playlists from Takeout carry only video ids; titles come from what Horde already knows (library, channel index, the history), else the entry has none until downloaded.
-- For you reads the user's whole imported history on each request (one indexed query); fine for a home server's history sizes, a cache on the `AppContext` would be the next step if it is not.
+- For you folds the history in SQL (views per channel and day, per month past six months) and keeps the result per user in `ctx.caches` until the history changes or ten minutes pass; the first request after an import of a very large history takes about a second.
 - Imported views outlive the videos and are deleted with the account or by **Forget**; a factory reset keeps them (they belong to accounts, which a reset keeps).

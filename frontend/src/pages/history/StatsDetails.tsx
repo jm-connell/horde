@@ -109,7 +109,7 @@ function channelAmount(stats: HistoryStats, channel: HistoryStatsChannel) {
     parts.push(
       `${channel.youtube_views.toLocaleString()} YouTube view${channel.youtube_views === 1 ? "" : "s"}`
     );
-  return parts.join(" · ");
+  return parts.join(" · ") || formatWatchTime(0);
 }
 
 function TopChannels({ stats }: { stats: HistoryStats }) {

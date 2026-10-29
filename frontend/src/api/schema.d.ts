@@ -6837,6 +6837,11 @@ export interface components {
             subscriptions: components["schemas"]["TakeoutSubscription"][];
             /** Views In File */
             views_in_file: number;
+            /**
+             * Views Skipped
+             * @default 0
+             */
+            views_skipped: number;
         };
         /** TakeoutPlaylistChoice */
         TakeoutPlaylistChoice: {

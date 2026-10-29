@@ -20,11 +20,11 @@ Open **Settings → Library → YouTube history → Import from Google Takeout**
 3. **Playlists** are listed the same way. Each ticked one becomes a **private** playlist of yours. Videos you have downloaded are linked to the library copy; the rest [play from YouTube](playlists.md) until you download them. Takeout lists only video ids, so a video Horde knows nothing about yet shows without a title.
 4. **Import selected** follows the channels and copies the playlists.
 
-Upload limit: 4 GB per import, 512 MB for any single file inside the export.
+Limits: 4 GB per upload; Horde reads at most 160 MB of watch history (a decade of heavy viewing is about 100 MB as JSON), 16 MB per CSV and 320 MB in all, and refuses a file that unpacks to more than 100 times its packed size. Views whose date it cannot read (an HTML export in a format or time zone it does not know) are left out, and the import says how many.
 
 ### Importing again later
 
-Keep using YouTube and Horde side by side, then import a newer export whenever you like. Horde stores each view once (by video and the time you watched it), so the views it already has are skipped and only the new ones are added. A playlist you imported before is found again and only gains the videos it lacks; it is never duplicated. Mixing a JSON export with an HTML one can count some views twice, because the two formats round times differently.
+Keep using YouTube and Horde side by side, then import a newer export whenever you like. Horde stores each view once (by video and the time you watched it), so the views it already has are skipped and only the new ones are added. A playlist you imported before is found again and only gains the videos it lacks; it is never duplicated. Times are kept to the second, so a view imported once from JSON and again from HTML is still stored once, as long as the HTML date is in a time zone Horde knows.
 
 ## What Horde does with it
 

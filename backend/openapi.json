@@ -9236,6 +9236,11 @@
           "views_in_file": {
             "title": "Views In File",
             "type": "integer"
+          },
+          "views_skipped": {
+            "default": 0,
+            "title": "Views Skipped",
+            "type": "integer"
           }
         },
         "required": [

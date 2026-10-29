@@ -75,6 +75,11 @@ def follow_channels(
     return added
 
 
+def _name(playlist: TakeoutPlaylist) -> str:
+    """The name the Horde copy gets (``Playlist.name`` is matched on it later)."""
+    return playlist.title.strip()[:200] or "YouTube playlist"
+
+
 def find_playlist(
     session: Session, user_id: int, playlist: TakeoutPlaylist
 ) -> Playlist | None:
@@ -86,7 +91,7 @@ def find_playlist(
         )
     else:
         query = query.where(
-            Playlist.name == playlist.title,
+            Playlist.name == _name(playlist),
             col(Playlist.description) == IMPORTED_DESCRIPTION,
         )
     return session.exec(query.order_by(col(Playlist.id))).first()
@@ -131,7 +136,7 @@ def import_playlist(
     if row is None:
         session.execute(sa_update(Playlist).values(position=Playlist.position + 1))
         row = Playlist(
-            name=playlist.title[:200] or "YouTube playlist",
+            name=_name(playlist),
             description=IMPORTED_DESCRIPTION,
             source_type=PlaylistSource.user,
             source_url=playlist_url(playlist.playlist_id)

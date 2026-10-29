@@ -124,6 +124,7 @@ def import_takeout(
         found_history=data.found_history,
         views_in_file=stored.views_in_file,
         new_views=stored.new_views,
+        views_skipped=data.skipped_views,
         history=_summary(session, user.id),
         subscriptions=[
             TakeoutSubscription(
