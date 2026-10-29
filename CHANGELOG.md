@@ -7,19 +7,119 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- AI chats (Ask about Horde and video chat) no longer fail on a brief rate
+  limit from the AI provider: a 429 before the answer starts is retried after
+  1, 2 and 4 seconds (or the provider's `Retry-After`, up to 10 seconds), and
+  the provider's own reason is logged.
+- Ask about Horde keeps the question box focused after sending, so the next
+  question needs no click.
+- Channel catalog refreshes no longer queue an embedding job for every
+  catalog video, only for those whose title or description changed. Completed
+  AI jobs are deleted after 7 days instead of being kept forever (the first
+  run on an existing install clears the backlog).
+
+## [1.2.0] - 2026-10-29
+
+Save part of a stream or video as a clip, ask Horde how to do something from
+inside the app, and rebind every player hotkey. The interface gets a design
+and motion pass, and phones get a player that taps like YouTube's.
+
+### Upgrade notes
+
+- **One database migration** (`0019_download_clips`) runs on its own at
+  startup. It only adds two columns to `download_jobs`; Horde backs the
+  database up first, as for every migration. Rolling back to 1.1.x needs
+  `update.sh --rollback` or a restored backup (the older version refuses a
+  database it does not know).
+- **Passwords are no longer checked for length.** Any non-empty password is
+  accepted (the 8-character minimum and the "not the username" rule are gone);
+  new-password fields show a strength meter as advice instead. Existing
+  passwords are unchanged. If Horde is reachable from the internet, choose
+  strong passwords yourself (see
+  [Internet exposure](docs/ops/internet-exposure.md)).
+- Accounts that never changed them get the new defaults: the **Oxanium** UI
+  font and the **underline** nav indicator. Pick Inter or the liquid indicator
+  under Settings → Appearance to go back.
+- The **Autoplay the next part** setting is gone: with **Autoplay related** on,
+  the next part of a series now plays first, then a related video. The separate
+  phone-only preview toggle is folded into **Autoplay previews on hover**.
+- The image is about 5 MB larger: it carries the docs' Markdown and the
+  frontend source under `/app/source` for Ask about Horde.
+
 ### Added
 
+- **Clips.** "Save a clip…" in the ••• menu under a live stream, a past stream
+  or a downloaded YouTube video saves just that part as its own library video.
+  The picker opens under the player; drag the start and end handles on the seek
+  bar (arrow keys move a focused handle) with a frame preview while dragging.
+  A live clip is cut from the stream's DVR window. Several clips of one video
+  can sit side by side, and a clip is never mistaken for the full video.
+  API: `POST /api/downloads/clips`. See [Clips](docs/guides/watching.md#clips-of-a-stream).
+- **Seek previews for streamed videos** from YouTube's storyboards, when
+  there are no local sprites (not for broadcasts that are still live).
 - **Ask about Horde**: a chat panel, opened from the new footer, that answers
   questions about using, setting up and troubleshooting Horde from the docs and
   source code shipped with your version, with links to the pages and files it
   used. It floats in the corner (drag and resize it like the mini player),
   stays open across pages and tells the model which page you are on. It uses
-  the configured chat model (local or cloud) and the `use_ai` permission.
-  The image now carries the docs' Markdown and the frontend source under
-  `/app/source` for it (about 5 MB).
+  the configured chat model (local or cloud) and the `use_ai` permission. See
+  [ADR 0018](docs/adr/0018-help-chat-retrieval.md).
 - **Footer** on every page with Ask about Horde, the docs, the GitHub issue
   tracker and the source. It replaces the "Report it on GitHub" line at the
   bottom of Settings.
+- **Rebindable hotkeys.** Settings → Playback → Hotkeys lists every shortcut;
+  click one and press a new key. A new `/` hotkey focuses the search bar
+  from any page. See [Keyboard shortcuts](docs/reference/keyboard-shortcuts.md).
+- A **YouTube ↗** link on streamed watch pages, back to the original video.
+- AI answers render code blocks, headings and links.
+
+### Changed
+
+- **Phone player**: a tap shows or hides the controls and a large centre
+  button plays and pauses, like YouTube; captions scale with the picture and
+  stay centred.
+- **Touch screens** lose the website tells: no tap flash or double-tap delay,
+  no zoom when a text field is focused, and screens fit under the URL bar. The
+  phone status bar follows the chosen theme.
+- **Search** sections have counts and a note on where results come from, with
+  chips at the top to jump to each; YouTube results show "Searching…" from the
+  first keystroke instead of popping in late.
+- **Settings** are trimmed: less subtext, the palette list is grouped into Dark
+  and Light, and a few options are renamed ("Max indexed videos per channel",
+  "YouTube results in channel search", "YouTube results in library search").
+- **Design pass**: status colours use new danger, warning and success theme
+  roles, buttons share one style, text-character icons are SVG icons, and text
+  on accent buttons stays readable on light themes (a new `--on-accent` role,
+  also for custom CSS). `PRODUCT.md` and `DESIGN.md` describe the design system.
+- **Motion**: toasts, dialogs, the channel settings sheet, the bulk actions bar,
+  the Up next queue and new download jobs animate in and out; the liquid nav
+  indicator pours into the clicked item; "+ Queue" briefly reads "Queued".
+  Reduced-motion users keep fades and colour feedback without movement.
+- Oxanium ships with Horde, so the default font needs no request to Google.
+- The animated background keeps running in theater mode.
+- The Download page says "Save to this device" instead of "client".
+- Download sharing is no longer asked during admin account creation; it stays
+  under Account settings.
+- yt-dlp 2026.10.26.
+
+### Fixed
+
+- A redownloaded or replaced video could show seek previews from the old file;
+  browsers now also revalidate sprite sheets instead of caching them for days.
+- A missing video file no longer shows "This device couldn't play the AV1
+  video"; the compatibility prompt appears only when the device cannot decode
+  the original.
+- The "Preparing for Safari" gate no longer flashes on files that are already
+  prepared.
+- Chapter markers past the end of a trimmed video are no longer drawn (or
+  focusable) on the seek bar.
+- Download cards show "No preview" instead of a broken image and wrap long
+  errors; long playlist and queue titles can be read in full.
+- Text fields on phones no longer shrink below a large font-size setting.
+- The backend no longer crashes at startup in development when the frontend
+  has not been built.
 
 ## [1.1.1] - 2026-10-26
 
@@ -674,7 +774,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.1.1...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.0...main
+[1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jm-connell/horde/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jm-connell/horde/compare/v1.0.3...v1.1.0
 [1.0.3]: https://github.com/jm-connell/horde/compare/v1.0.2...v1.0.3

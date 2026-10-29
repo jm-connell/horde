@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime, timedelta
 
-from sqlalchemy import func
+from sqlalchemy import delete, func
 from sqlmodel import Session, col, select
 
 from ...context import current, get_engine
+from ...database import rowcount
 from ...logging_config import FailureLog, job_context
 from ...models import (
     AiJob,
@@ -740,6 +742,26 @@ def clear_failed_jobs(*, keep_days: int = 0) -> int:
     return deleted
 
 
+#: Completed jobs stay listed this long, then are deleted. Catalog refreshes
+#: and backlog sweeps create thousands a day, and nothing reads old ones.
+COMPLETED_JOB_KEEP_DAYS = 7
+_PRUNE_EVERY_SEC = 3600.0
+
+
+def prune_completed_jobs(*, keep_days: int = COMPLETED_JOB_KEEP_DAYS) -> int:
+    """Delete completed jobs last updated more than ``keep_days`` ago."""
+    cutoff = utcnow() - timedelta(days=keep_days)
+    with Session(get_engine()) as session:
+        res = session.execute(
+            delete(AiJob).where(
+                col(AiJob.status) == AiJobStatus.completed,
+                col(AiJob.updated_at) < cutoff,
+            )
+        )
+        session.commit()
+    return rowcount(res)
+
+
 def current_job_info() -> dict | None:
     with Session(get_engine()) as session:
         job = session.exec(
@@ -1126,9 +1148,15 @@ def _maybe_run_daily() -> None:
 
 def _timer_loop(worker: BackgroundWorker) -> None:
     failures = FailureLog(logger, "AI timer loop error")
+    last_prune: float | None = None
     while not worker.stopping:
         pause = 60.0
         try:
+            if last_prune is None or time.monotonic() - last_prune >= _PRUNE_EVERY_SEC:
+                last_prune = time.monotonic()
+                pruned = prune_completed_jobs()
+                if pruned:
+                    logger.info("Deleted %d completed AI jobs", pruned)
             # A migrated install still looking for its Ollama; a no-op otherwise.
             finish_legacy_ollama_detect()
             ai = app_settings.ai_settings()
