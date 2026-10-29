@@ -15,6 +15,10 @@ All notable changes to Horde are documented here. The format follows
   the provider's own reason is logged.
 - Ask about Horde keeps the question box focused after sending, so the next
   question needs no click.
+- Channel catalog refreshes no longer queue an embedding job for every
+  catalog video, only for those whose title or description changed. Completed
+  AI jobs are deleted after 7 days instead of being kept forever (the first
+  run on an existing install clears the backlog).
 
 ## [1.2.0] - 2026-10-29
 
