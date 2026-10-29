@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useSettings } from "../../hooks/useSettings";
 import { useApplyTakeout, useImportTakeout } from "../../queries/takeout";
 import type {
@@ -94,7 +94,6 @@ export default function TakeoutImport({
   /** Called after the last step, with nothing left to do. */
   onFinished?: () => void;
 }) {
-  const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [stage, setStage] = useState<Stage>({ kind: "pick" });
@@ -168,19 +167,20 @@ export default function TakeoutImport({
       <div className="space-y-4">
         <Steps />
         <div className="flex flex-wrap items-center gap-3">
-          <label htmlFor={inputId} className={button("secondary", "sm")}>
+          <label
+            className={`${button("secondary", "sm")} cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent`}
+          >
             {files.length > 0 ? "Choose other files" : "Choose export"}
+            <input
+              ref={inputRef}
+              type="file"
+              multiple
+              accept={ACCEPT}
+              disabled={uploading}
+              className="sr-only"
+              onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+            />
           </label>
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="file"
-            multiple
-            accept={ACCEPT}
-            disabled={uploading}
-            className="sr-only"
-            onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
-          />
           <span className="min-w-0 flex-1 truncate text-xs text-muted">
             {files.length === 0
               ? "No file chosen"
