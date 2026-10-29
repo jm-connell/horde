@@ -5,6 +5,7 @@ import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
+import DiscoverHome from "../components/DiscoverHome";
 import RecommendedHome from "../components/RecommendedHome";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
@@ -68,7 +69,9 @@ function OnlineLibrary() {
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;
-  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
+  // Either recommendations tab: they render their own data and order.
+  const onRecommendedTab =
+    showHomeTabs && (homeTab === "recommended" || homeTab === "discover");
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
@@ -337,13 +340,7 @@ function OnlineLibrary() {
         )}
 
         <div
-          key={
-            onChannelPage
-              ? "feed"
-              : onRecommendedTab
-                ? "recommended"
-                : "library"
-          }
+          key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"
         >
           {onChannelPage ? (
@@ -365,7 +362,14 @@ function OnlineLibrary() {
               }
             />
           ) : onRecommendedTab && !debouncedSearch ? (
-            <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
+            homeTab === "discover" ? (
+              <DiscoverHome
+                sidebarCollapsed={settings.sidebarCollapsed}
+                onChannelClick={channelNav.openFeedChannel}
+              />
+            ) : (
+              <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
+            )
           ) : loading ? (
             <LoadingIndicator />
           ) : !debouncedSearch && videos.length === 0 ? (

@@ -328,12 +328,13 @@ test("the Recommended tab works without AI", async ({ page }) => {
   await page.getByRole("button", { name: "Recommended", exact: true }).click();
   // Ranked from the watch history alone: the library's videos are listed.
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
+  // Indexed channels' uploads are in by default (Recommended = library + catalogs).
   const streams = page.getByRole("button", { name: "Include not downloaded" });
-  await expect(streams).toHaveAttribute("aria-pressed", "false");
+  await expect(streams).toHaveAttribute("aria-pressed", "true");
   await streams.click();
-  await expect(streams).toHaveAttribute("aria-pressed", "true");
+  await expect(streams).toHaveAttribute("aria-pressed", "false");
   await page.reload();
-  await expect(streams).toHaveAttribute("aria-pressed", "true");
+  await expect(streams).toHaveAttribute("aria-pressed", "false");
 });
 
 test("on a phone a feed card does not reserve a second title line", async ({

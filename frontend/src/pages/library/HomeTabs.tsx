@@ -34,7 +34,7 @@ function TabButton({
   );
 }
 
-/** Library / Recommended switch at the top of the home page. */
+/** Library / Recommended / Recommended+ switch at the top of the home page. */
 export default function HomeTabs({
   homeTab,
   navIndicator,
@@ -61,6 +61,13 @@ export default function HomeTabs({
         tab="recommended"
         current={homeTab}
         label="Recommended"
+        navIndicator={navIndicator}
+        onSelect={onSelect}
+      />
+      <TabButton
+        tab="discover"
+        current={homeTab}
+        label="Recommended+"
         navIndicator={navIndicator}
         onSelect={onSelect}
       />
