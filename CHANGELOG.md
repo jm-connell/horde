@@ -40,6 +40,8 @@ All notable changes to Horde are documented here. The format follows
   changes the status-bar area after load (opening the installed app, rotating,
   leaving fullscreen): no more empty band above the video on iPhone, and the
   bar no longer covers the top of the video on iPad.
+- On phones and narrow windows, "AI generated chapters" and its Regenerate
+  button sit right above the chapter list instead of above the description.
 - AI chats (Ask about Horde and video chat) no longer fail on a brief rate
   limit from the AI provider: a 429 before the answer starts is retried after
   1, 2 and 4 seconds (or the provider's `Retry-After`, up to 10 seconds), and

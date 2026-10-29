@@ -168,7 +168,18 @@ test("AI chapters generated for a stream replace the empty chapter list", async 
   await expect(page.getByRole("button", { name: /Summit push/ })).toBeVisible();
   // The player's control bar shows the current chapter too.
   await expect(page.getByText("· Trailhead")).toBeVisible();
-  await expect(page.getByText(/AI generated chapters/)).toBeVisible();
+  const note = page.getByText(/AI generated chapters/);
+  await expect(note).toBeVisible();
+  // The note labels the chapters: right over their list whether the list
+  // sits beside the description (wide) or under it (phone).
+  const noteBox = await note.boundingBox();
+  const listBox = await page
+    .getByRole("button", { name: /Trailhead/ })
+    .boundingBox();
+  expect(noteBox && listBox).toBeTruthy();
+  const gap = listBox!.y - (noteBox!.y + noteBox!.height);
+  expect(gap).toBeGreaterThan(0);
+  expect(gap).toBeLessThan(40);
 });
 
 test("on a phone the control bar and stream details each stay on one line", async ({

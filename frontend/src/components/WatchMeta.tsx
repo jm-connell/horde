@@ -1,4 +1,10 @@
-import { useRef, useState, type CSSProperties, type Ref } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type Ref,
+} from "react";
 import { Link } from "react-router-dom";
 import ChaptersList from "./ChaptersList";
 import Collapse from "./Collapse";
@@ -26,6 +32,8 @@ const MIN_DESCRIPTION_REM = 20;
 const MIN_CHAPTERS_REM = 12;
 /** The 1rem gutter between them, which holds the split handle. */
 const SPLIT_GUTTER_REM = 1;
+/** Tailwind's `lg`, where the description and chapters sit side by side. */
+const TWO_COLUMN_QUERY = "(min-width: 1024px)";
 
 /** Jump back so the description box sits just under the sticky nav. */
 function scrollToBoxTop(box: HTMLElement) {
@@ -156,6 +164,15 @@ export default function WatchMeta({
   const [settings, updateSettings] = useSettings();
   const [extrasOpen, setExtrasOpen] = useState(false);
   const [boxExpanded, setBoxExpanded] = useState(false);
+  const [wide, setWide] = useState(
+    () => window.matchMedia(TWO_COLUMN_QUERY).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(TWO_COLUMN_QUERY);
+    const onChange = () => setWide(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
   const [tagDraft, setTagDraft] = useState("");
   const isMobile = useIsMobile();
 
@@ -399,6 +416,48 @@ export default function WatchMeta({
     chapterGenerate?.onGenerate(force);
   };
 
+  const showChapterActions = showGenerateHeader || showAiChapterChrome;
+  // The AI note and (re)generate buttons label the chapters. When the
+  // chapters stack under the description they go right over the list; in
+  // the two-column layout the header row's right end is already over them.
+  const actionsOverList =
+    showChapterActions &&
+    chapters.length > 0 &&
+    showDescriptionPanel &&
+    !(metaSideBySide && wide);
+  const chapterActions = showChapterActions ? (
+    <div className="flex shrink-0 items-center gap-2">
+      {showAiChapterChrome && (
+        <p className="text-[10px] leading-none text-muted">
+          AI generated chapters (experimental)
+        </p>
+      )}
+      {showGenerateHeader && chapterGenerate && (
+        <SubtleActionButton
+          disabled={chapterGenerate.generating}
+          onClick={() => runChapterAction(false)}
+        >
+          {chapterGenerate.generating ? "Generating…" : "Generate chapters"}
+        </SubtleActionButton>
+      )}
+      {chapterGenerate?.hasExisting && (
+        <SubtleActionButton
+          disabled={chapterGenerate.generating}
+          onClick={() => runChapterAction(true)}
+        >
+          {chapterGenerate.generating ? "Generating…" : "Regenerate"}
+        </SubtleActionButton>
+      )}
+    </div>
+  ) : null;
+  const chapterError =
+    chapterGenerate?.error &&
+    (showGenerateHeader || chapterGenerate.hasExisting) ? (
+      <p className="pb-1 text-right text-[10px] text-warning">
+        {chapterGenerate.error}
+      </p>
+    ) : null;
+
   const metaBody = (
     <div
       ref={gridRef}
@@ -497,18 +556,28 @@ export default function WatchMeta({
           />
         ))}
       {chapters.length > 0 && (
-        <ChaptersList
-          chapters={chapters}
-          expanded={boxExpanded}
-          collapsedRem={collapsedRem}
-          resize={heightResize}
-        />
+        <div className="min-w-0">
+          {actionsOverList && (
+            <div
+              className={`flex flex-col items-end ${metaSideBySide ? "pb-2" : "py-2"}`}
+            >
+              {chapterActions}
+              {chapterError}
+            </div>
+          )}
+          <ChaptersList
+            chapters={chapters}
+            expanded={boxExpanded}
+            collapsedRem={collapsedRem}
+            resize={heightResize}
+          />
+        </div>
       )}
     </div>
   );
 
   const headerRow =
-    showDescriptionText || showGenerateHeader || showAiChapterChrome ? (
+    showDescriptionText || (showChapterActions && !actionsOverList) ? (
       <div>
         <div
           className={`flex flex-wrap items-center gap-x-3 gap-y-1 py-2 ${
@@ -533,40 +602,9 @@ export default function WatchMeta({
               </span>
             </button>
           )}
-          {(showGenerateHeader || showAiChapterChrome) && (
-            <div className="flex shrink-0 items-center gap-2">
-              {showAiChapterChrome && (
-                <p className="text-[10px] leading-none text-muted">
-                  AI generated chapters (experimental)
-                </p>
-              )}
-              {showGenerateHeader && chapterGenerate && (
-                <SubtleActionButton
-                  disabled={chapterGenerate.generating}
-                  onClick={() => runChapterAction(false)}
-                >
-                  {chapterGenerate.generating
-                    ? "Generating…"
-                    : "Generate chapters"}
-                </SubtleActionButton>
-              )}
-              {chapterGenerate?.hasExisting && (
-                <SubtleActionButton
-                  disabled={chapterGenerate.generating}
-                  onClick={() => runChapterAction(true)}
-                >
-                  {chapterGenerate.generating ? "Generating…" : "Regenerate"}
-                </SubtleActionButton>
-              )}
-            </div>
-          )}
+          {!actionsOverList && chapterActions}
         </div>
-        {chapterGenerate?.error &&
-          (showGenerateHeader || chapterGenerate.hasExisting) && (
-            <p className="pb-1 text-right text-[10px] text-warning">
-              {chapterGenerate.error}
-            </p>
-          )}
+        {!actionsOverList && chapterError}
       </div>
     ) : null;
 
