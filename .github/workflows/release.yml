@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a tag like v1.2.3 publishes a multi-arch image to GHCR and creates a
-# GitHub Release with generated notes. See docs/development/release-process.md.
+# GitHub Release whose notes are the tag's CHANGELOG.md section followed by
+# the generated list of merged pull requests. See docs/development/release-process.md.
 
 on:
   push:
@@ -37,6 +38,14 @@ jobs:
             echo "::error::${GITHUB_REF_NAME} is not on main; release tags must be cut from main."
             exit 1
           fi
+
+      # Before the build, so a missing CHANGELOG section stops the release early.
+      - name: Release notes from CHANGELOG.md
+        run: |
+          {
+            python3 scripts/release_notes.py "${GITHUB_REF_NAME}" "${GITHUB_REPOSITORY}"
+            printf '\n**Image:** `%s:%s`\n' "${IMAGE}" "${GITHUB_REF_NAME#v}"
+          } > "${RUNNER_TEMP}/notes.md"
 
       - name: CI and Image workflows must be green on the tagged commit
         env:
@@ -109,5 +118,4 @@ jobs:
           if [[ "${GITHUB_REF_NAME}" == *-* ]]; then
             flags+=(--prerelease)
           fi
-          notes=$'Image: `ghcr.io/jm-connell/horde:'"${GITHUB_REF_NAME#v}"$'`\n\nSee CHANGELOG.md for upgrade notes.'
-          gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --notes "${notes}"
+          gh release create "${GITHUB_REF_NAME}" "${flags[@]}" --notes "$(cat "${RUNNER_TEMP}/notes.md")"

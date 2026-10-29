@@ -6,7 +6,7 @@ Horde uses [Semantic Versioning](https://semver.org/). A release is a git tag
 ## Cutting a release
 
 1. Make sure `main` is green (CI, Image, Security) and contains everything you want to ship.
-2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty `## [Unreleased]` above it, and update the comparison links at the bottom. Commit with a message like `Release X.Y.Z` and merge it to `main`.
+2. In `CHANGELOG.md`, rename `## [Unreleased]` to `## [X.Y.Z] - YYYY-MM-DD`, add a fresh empty `## [Unreleased]` above it, and update the comparison links at the bottom. Commit with a message like `Release X.Y.Z` and merge it to `main`. This section becomes the release page, so write it for users: what is new, what changed and anything to do when upgrading. Preview it with `python3 scripts/release_notes.py vX.Y.Z jm-connell/horde`.
 3. Tag that commit and push the tag:
 
    ```bash
@@ -21,8 +21,8 @@ Horde uses [Semantic Versioning](https://semver.org/). A release is a git tag
    - builds `linux/amd64` and `linux/arm64`,
    - pushes `ghcr.io/jm-connell/horde:X.Y.Z`, `:X.Y`, `:sha-<commit>` and `:latest`,
    - bakes `HORDE_VERSION=X.Y.Z` into the image (environment, `/app/BUILD_INFO`, OCI labels),
-   - creates the GitHub Release with generated notes.
-5. Check that the release page shows the notes, the package appears under *Packages*, and `docker run --rm ghcr.io/jm-connell/horde:X.Y.Z cat /app/BUILD_INFO` shows the version. The first push creates the package as private; make it public (*Package settings → Change visibility*) so users can pull without logging in.
+   - creates the GitHub Release: the tag's `CHANGELOG.md` section (wrapped lines joined, repository links pointed at the tag), the image name, then GitHub's generated list of merged pull requests. A stable tag with no `## [X.Y.Z]` section stops the workflow before the build.
+5. Check that the release page shows the CHANGELOG notes, the package appears under *Packages*, and `docker run --rm ghcr.io/jm-connell/horde:X.Y.Z cat /app/BUILD_INFO` shows the version. The first push creates the package as private; make it public (*Package settings → Change visibility*) so users can pull without logging in.
 
 !!! note "Mistakes"
     Never move or reuse a published tag. Fix forward with a new patch release. If a release is broken, publish the fix and mark the broken GitHub Release as a pre-release or delete it; the image tag `latest` moves with the next release.
