@@ -206,7 +206,10 @@ function FeedThumbnail({
   const previewing = previewActive && Boolean(previewSrc);
 
   return (
-    <div className={`relative ${className}`}>
+    // min-h-0: in the card's flex column an aspect-ratio box would otherwise
+    // grow to its image's own shape (YouTube's 4:3 live thumbnails, with
+    // black bars baked in) instead of staying 16:9 and cropping it.
+    <div className={`relative min-h-0 ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-ink-800/60">
         <div
           className={`relative h-full w-full transition-[scale,filter] duration-200 sm:group-hover:scale-105 ${

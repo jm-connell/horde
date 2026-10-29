@@ -113,3 +113,33 @@ test("a live channel leads with its broadcast and lists its streams", async ({
   // Queued: the download panel lists it beside the card.
   await expect(page.getByText(pastStream.title)).toHaveCount(2);
 });
+
+test("a live card's 4:3 thumbnail is cropped to the same 16:9 as its neighbours", async ({
+  page,
+}) => {
+  await stubYoutubeChannel(page);
+  // YouTube's live thumbnail is 4:3 with black bars baked in; uploads are 16:9.
+  await page.route("https://i.ytimg.com/**", (route) => {
+    const live = route.request().url().includes("_live");
+    const [w, h] = live ? [480, 360] : [320, 180];
+    return route.fulfill({
+      contentType: "image/svg+xml",
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><rect width="${w}" height="${h}" fill="#345"/></svg>`,
+    });
+  });
+  await page.goto("/?channel=Kiln");
+
+  const liveImage = page
+    .locator("[data-horde='feed-card']")
+    .first()
+    .locator("img")
+    .first();
+  const uploadImage = feedCard(page, upload.title).locator("img").first();
+  await expect(liveImage).toBeVisible();
+  await expect(uploadImage).toBeVisible();
+  const live = await liveImage.boundingBox();
+  const other = await uploadImage.boundingBox();
+  expect(live && other).toBeTruthy();
+  expect(Math.abs(live!.height - other!.height)).toBeLessThan(2);
+  expect(live!.width / live!.height).toBeCloseTo(16 / 9, 1);
+});
