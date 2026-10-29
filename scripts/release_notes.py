@@ -22,8 +22,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 _SECTION = re.compile(r"^## \[")
 _LINK_DEF = re.compile(r"^\[[^\]]+\]: ")
-_BLOCK_START = re.compile(r"^(#{1,6} |- |\* |\d+\. |```|>|\|)")
-_RELATIVE_LINK = re.compile(r"\]\((?!https?://|#|mailto:)([^)\s]+)\)")
+_BLOCK_START = re.compile(r"^(#{1,6} |- |\* |\d+\. |```|~~~|>|\|)")
+_RELATIVE_LINK = re.compile(r"\]\((?!https?://|#|mailto:)/?([^)\s]+)\)")
 
 
 def section(changelog: str, version: str) -> list[str] | None:
@@ -46,7 +46,7 @@ def unwrap(lines: list[str]) -> list[str]:
     out: list[str] = []
     in_fence = False
     for line in lines:
-        if line.startswith("```"):
+        if line.lstrip().startswith(("```", "~~~")):
             in_fence = not in_fence
             out.append(line)
             continue
@@ -54,7 +54,7 @@ def unwrap(lines: list[str]) -> list[str]:
             not in_fence
             and out
             and out[-1].strip()
-            and not out[-1].startswith(("#", "```"))
+            and not out[-1].lstrip().startswith(("#", "```", "~~~"))
             and line.strip()
             and not _BLOCK_START.match(line.lstrip())
         )

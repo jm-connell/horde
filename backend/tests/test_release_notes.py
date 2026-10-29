@@ -30,7 +30,12 @@ Clips and a help chat.
 
 - Clips.
   Several per video.
-- Help chat.
+- Help chat. Roll back with:
+  ```bash
+  bash update.sh
+  --rollback
+  ```
+  or see [the docs](/docs/index.md).
 
 ## [1.1.1] - 2026-10-26
 
@@ -67,7 +72,12 @@ def test_prints_only_the_tagged_section_with_lines_joined(tmp_path):
         "### Added\n"
         "\n"
         "- Clips. Several per video.\n"
-        "- Help chat.\n"
+        "- Help chat. Roll back with:\n"
+        "  ```bash\n"
+        "  bash update.sh\n"
+        "  --rollback\n"
+        "  ```\n"
+        "  or see [the docs](https://github.com/o/r/blob/v1.2.0/docs/index.md).\n"
     )
 
 
