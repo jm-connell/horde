@@ -13,6 +13,9 @@ export const queryKeys = {
     ai: (url: string) => ["preview", "ai", url] as const,
     related: (url: string) => ["preview", "related", url] as const,
   },
+  discover: {
+    status: ["discover", "status"] as const,
+  },
   ai: {
     status: ["ai", "status"] as const,
     costs: ["ai", "costs"] as const,

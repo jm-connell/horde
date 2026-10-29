@@ -256,9 +256,10 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 - **Recommendation source marks.** In Recommended+, when **Sources** is on, a
   1px outline over each card says where it comes from: solid `success` (in the
   library), solid `muted` (a followed channel), dashed `accent` (any other
-  channel: new, not yours yet). A dot of the same kind leads the reason line
-  under the card, and a legend sits above the grid, so color is never the only
-  tell. Off on phones' edge-to-edge cards (the dot stays).
+  channel: new, not yours yet); square on phones' edge-to-edge cards. A legend
+  of dots sits above the grid, and each pair differs in color or line style, so
+  color is never the only tell. Why a card is there is its hover title, not a
+  line under it.
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a

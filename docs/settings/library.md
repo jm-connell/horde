@@ -106,7 +106,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **YouTube results in library search** is the **YT** control inside the main search bar: when it is highlighted, the home search box queries YouTube for videos that are not already in your library or catalogs after you pause typing (or immediately on Enter). The same setting is in Settings → Library. Search text is sent to YouTube. This is not the channel-page setting above.
 
-**Recommended+ looks on YouTube**: every few hours, for each person who opened Recommended+ in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: Recommended+ shows only your library and indexed channels.
+**Recommended+ looks on YouTube**: every few hours, for each person who opened Recommended+ in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: the Recommended+ tab is hidden (Recommended covers your library and indexed channels).
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended+. Nobody is shown who watched what.
 

@@ -30,8 +30,8 @@ type Source = DiscoverItem["source"];
  * Where a card comes from, when source marks are on: a downloaded video gets a
  * solid success outline ("you have it"), a followed channel's a solid neutral
  * one (familiar), any other channel's a dashed accent one (new, not yours
- * yet). Each pair differs in color or in line style, and a dot of the same
- * kind leads the reason line, so the color is never the only tell.
+ * yet). Each pair differs in color or in line style, so the color is never
+ * the only tell, and the legend above the feed spells them out.
  */
 const SOURCE: Record<Source, { label: string; outline: string; dot: string }> =
   {
@@ -340,44 +340,32 @@ export default function DiscoverHome({
     return (
       <div
         key={item.key}
-        // On phones the divider goes under the reason line, not between the
-        // card and its reason.
-        className="group/rec relative flex flex-col max-sm:border-b max-sm:border-ink-700"
+        className="group/rec relative"
         data-rec-key={item.key}
+        // Why it is here, on hover; the outline already says where it is from.
+        title={item.reason.detail ?? item.reason.text}
       >
-        {/* Grows to the row, so every card in a row is one height. */}
-        <div className="relative flex-1 max-sm:[&>*]:border-b-0!">
-          {item.video ? (
-            <VideoCard video={item.video} layout="feed" />
-          ) : item.stream ? (
-            <ChannelFeedCard
-              entry={item.stream}
-              channelName={item.stream.channel || "Unknown channel"}
-              layout="grid"
-              inLibrary={false}
-              onDownload={() => item.stream && downloadStream(item.stream)}
-              downloading={downloading.has(item.stream.url)}
-              skipRemotePreview
-              onChannelClick={onChannelClick}
-            />
-          ) : null}
-          {marks && (
-            <span
-              aria-hidden="true"
-              className={`pointer-events-none absolute inset-0 rounded-xl max-sm:hidden ${SOURCE[item.source].outline}`}
-            />
-          )}
-        </div>
-        <p
-          className="flex items-center gap-1.5 px-1 pt-1.5 text-xs text-muted max-sm:px-3 max-sm:pb-3"
-          title={item.reason.detail ?? item.reason.text}
-        >
-          {marks && <SourceDot source={item.source} />}
-          {marks && (
-            <span className="sr-only">{SOURCE[item.source].label}.</span>
-          )}
-          <span className="truncate">{item.reason.text}</span>
-        </p>
+        {marks && <span className="sr-only">{SOURCE[item.source].label}.</span>}
+        {item.video ? (
+          <VideoCard video={item.video} layout="feed" />
+        ) : item.stream ? (
+          <ChannelFeedCard
+            entry={item.stream}
+            channelName={item.stream.channel || "Unknown channel"}
+            layout="grid"
+            inLibrary={false}
+            onDownload={() => item.stream && downloadStream(item.stream)}
+            downloading={downloading.has(item.stream.url)}
+            skipRemotePreview
+            onChannelClick={onChannelClick}
+          />
+        ) : null}
+        {marks && (
+          <span
+            aria-hidden="true"
+            className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
+          />
+        )}
         <RecMenu
           channel={channel.name || null}
           onNotInterested={() => notInterested(item)}

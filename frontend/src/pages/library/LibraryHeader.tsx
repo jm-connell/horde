@@ -15,6 +15,7 @@ export default function LibraryHeader({
   onRecommendedTab,
   homeTab,
   onHomeTab,
+  showDiscover,
   hasTags,
   showTags,
   onToggleTags,
@@ -27,6 +28,7 @@ export default function LibraryHeader({
   onRecommendedTab: boolean;
   homeTab: HomeTab;
   onHomeTab: (tab: HomeTab) => void;
+  showDiscover: boolean;
   hasTags: boolean;
   showTags: boolean;
   /** Called with `true` when the click should also switch to the library tab. */
@@ -53,6 +55,7 @@ export default function LibraryHeader({
           homeTab={homeTab}
           navIndicator={settings.navIndicator}
           onSelect={onHomeTab}
+          showDiscover={showDiscover}
         />
       )}
       {isHome && hasTags && (

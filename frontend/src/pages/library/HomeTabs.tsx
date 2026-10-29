@@ -39,10 +39,13 @@ export default function HomeTabs({
   homeTab,
   navIndicator,
   onSelect,
+  showDiscover,
 }: {
   homeTab: HomeTab;
   navIndicator: NavIndicator;
   onSelect: (tab: HomeTab) => void;
+  /** Recommended+ is offered only while it may look on YouTube. */
+  showDiscover: boolean;
 }) {
   return (
     <LiquidNav
@@ -64,13 +67,15 @@ export default function HomeTabs({
         navIndicator={navIndicator}
         onSelect={onSelect}
       />
-      <TabButton
-        tab="discover"
-        current={homeTab}
-        label="Recommended+"
-        navIndicator={navIndicator}
-        onSelect={onSelect}
-      />
+      {showDiscover && (
+        <TabButton
+          tab="discover"
+          current={homeTab}
+          label="Recommended+"
+          navIndicator={navIndicator}
+          onSelect={onSelect}
+        />
+      )}
     </LiquidNav>
   );
 }

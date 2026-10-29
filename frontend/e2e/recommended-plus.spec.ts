@@ -1,9 +1,29 @@
+import type { Page } from "@playwright/test";
 import { expect, test } from "./fixtures";
 
 /** The seed's discovered videos (backend/app/e2e_seed.py E2E_DISCOVERED). */
 const FOUND = "Night sky timelapse from a lighthouse";
 
-async function openRecommendedPlus(page: import("@playwright/test").Page) {
+/**
+ * The browser suite keeps YouTube search off, which hides Recommended+; report
+ * it on (nothing here reaches YouTube: there is no gatherer offline).
+ */
+async function lookingOnYoutube(page: Page) {
+  await page.route(/\/api\/discover\/status$/, async (route) => {
+    let response;
+    let status: Record<string, unknown>;
+    try {
+      response = await route.fetch();
+      status = await response.json();
+    } catch {
+      return; // the page closed while a status read was in flight
+    }
+    await route.fulfill({ response, json: { ...status, enabled: true } });
+  });
+}
+
+async function openRecommendedPlus(page: Page) {
+  await lookingOnYoutube(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Recommended+", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
@@ -15,18 +35,17 @@ test("Recommended+ mixes the library with videos found on YouTube", async ({
   await openRecommendedPlus(page);
   // Found videos come from channels the admin never watched.
   const card = page.locator(`[data-rec-key="discover001"]`);
-  await expect(card.getByText("New channel for you")).toBeVisible();
+  // Why it is there: on hover, not as a line under every card.
+  await expect(card).toHaveAttribute("title", "New channel for you");
   // Library videos are in the same feed.
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
   // Library and found cards in one row are one height.
-  const boxes = await page
-    .locator("[data-rec-key] > div:first-child")
-    .evaluateAll((els) =>
-      els.map((el) => {
-        const r = el.getBoundingClientRect();
-        return { top: Math.round(r.top), height: Math.round(r.height) };
-      })
-    );
+  const boxes = await page.locator("[data-rec-key]").evaluateAll((els) =>
+    els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { top: Math.round(r.top), height: Math.round(r.height) };
+    })
+  );
   const firstRow = boxes.filter((b) => b.top === boxes[0].top);
   expect(firstRow.length).toBeGreaterThan(1);
   expect(new Set(firstRow.map((b) => b.height)).size).toBe(1);
@@ -54,6 +73,26 @@ test("source marks tell library, followed and other channels apart", async ({
   await page.reload();
   await expect(page.getByText(FOUND)).toBeVisible();
   await expect(sources).toHaveAttribute("aria-pressed", "false");
+});
+
+test("Recommended+ is hidden while looking on YouTube is off", async ({
+  page,
+}) => {
+  // The suite's settings keep YouTube search off.
+  await page.addInitScript(() =>
+    localStorage.setItem("horde.home.tab", "discover")
+  );
+  await page.goto("/");
+  await expect(
+    page.getByRole("button", { name: "Recommended", exact: true })
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Recommended+", exact: true })
+  ).toHaveCount(0);
+  // Someone who was on it lands on Recommended.
+  await expect(
+    page.getByRole("button", { name: "Include not downloaded" })
+  ).toBeVisible();
 });
 
 test("not interested removes a video, and undo brings it back", async ({

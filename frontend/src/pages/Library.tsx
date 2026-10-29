@@ -13,6 +13,8 @@ import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss"
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
+import { useDiscoverStatus } from "../queries/status";
+import type { HomeTab } from "./libraryStorage";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
@@ -56,7 +58,14 @@ function OnlineLibrary() {
     handleSortChange,
     toggleOrder,
   } = useLibraryQuery(settings, update);
-  const { homeTab, setHomeTab } = useHomeTab(search);
+  const { homeTab: storedHomeTab, setHomeTab } = useHomeTab(search);
+  // With looking on YouTube off, Recommended+ would show what Recommended
+  // shows: the tab goes, and anyone on it lands on Recommended.
+  const discoverEnabled = useDiscoverStatus().data?.enabled;
+  const homeTab: HomeTab =
+    storedHomeTab === "discover" && discoverEnabled === false
+      ? "recommended"
+      : storedHomeTab;
 
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
@@ -285,6 +294,7 @@ function OnlineLibrary() {
             onRecommendedTab={onRecommendedTab}
             homeTab={homeTab}
             onHomeTab={setHomeTab}
+            showDiscover={discoverEnabled !== false}
             hasTags={hasTags}
             showTags={showTags}
             onToggleTags={toggleTagsFromHeader}
