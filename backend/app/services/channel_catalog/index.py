@@ -12,6 +12,7 @@ from sqlmodel import Session, col, func, select
 from ...context import get_engine
 from ...models import (
     ChannelCatalog,
+    ChannelCatalogEmbedding,
     ChannelCatalogStatus,
     ChannelCatalogVideo,
     require_id,
@@ -35,6 +36,7 @@ from ..ytdlp_common import (
     is_skippable_catalog_kind,
     youtube_extractor_args,
 )
+from .documents import catalog_content_hash
 from .runtime import (
     _DESC_LIMIT,
     _MAX_DESC_CHARS,
@@ -423,10 +425,26 @@ def _enqueue_catalog_embeds(catalog_id: int) -> None:
                 .where(ChannelCatalogVideo.position < _DESC_LIMIT)
                 .order_by(col(ChannelCatalogVideo.position).asc())
             ).all()
+            # A refresh re-reads every video; only queue the ones whose text
+            # changed since they were embedded (the job would skip the rest).
+            embedded = dict(
+                session.exec(
+                    select(
+                        ChannelCatalogEmbedding.catalog_video_id,
+                        ChannelCatalogEmbedding.content_hash,
+                    ).where(
+                        col(ChannelCatalogEmbedding.catalog_video_id).in_(
+                            [row.id for row in rows]
+                        )
+                    )
+                ).all()
+            )
             for row in rows:
                 if row.id is None:
                     continue
                 if not (row.title or row.description):
+                    continue
+                if embedded.get(row.id) == catalog_content_hash(row):
                     continue
                 ai_worker.enqueue_job(
                     AiJobKind.embed_catalog_video,

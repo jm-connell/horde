@@ -90,6 +90,7 @@ The loop itself ticks about hourly; playlist membership is cheap compared to per
 | Retries | Up to **3** attempts; backoff `run_after` ≈ **2 × attempts** minutes |
 | Pause | Settings `ai.paused` or the AI weekly budget hard stop |
 | Schedule | `on_download` enqueue (plus idle catch-up of missing search indexes) vs timed sweeps |
+| Cleanup | The timer deletes **completed** jobs older than 7 days, hourly; failed and cancelled ones stay for retry and review |
 
 Design note: [Single-flight AI](../design/single-flight-ai.md).
 
@@ -107,7 +108,7 @@ flat  →  descriptions  →  embed  →  ready
 
 1. **flat** — paginated channel upload list  
 2. **descriptions** — fill descriptions for newest window  
-3. **embed** — enqueue `embed_catalog_video` jobs for the AI worker  
+3. **embed** — enqueue `embed_catalog_video` jobs for the AI worker, only for videos whose title or description changed since they were embedded  
 
 Members-only, age-restricted, and private IDs go to `channel_catalog_skips`. Runtime status (current channel, phase, counts, last skip/error) is exposed for the Settings/Channels UI.
 
