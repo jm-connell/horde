@@ -229,6 +229,40 @@ def latest_details(
 # --- what recommendations read ------------------------------------------------
 
 
+@dataclass(frozen=True)
+class RecentVideo:
+    """A video watched on YouTube, its newest view first."""
+
+    yt_id: str
+    last_watched_at: datetime
+    views: int
+    title: str | None
+    channel: str | None
+    channel_url: str | None
+
+
+def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentVideo]:
+    """The ``limit`` videos watched on YouTube most lately, one row each."""
+    last = func.max(col(YoutubeWatchEvent.watched_at))
+    rows = session.execute(
+        sa_select(col(YoutubeWatchEvent.yt_id), last, func.count())
+        .where(col(YoutubeWatchEvent.user_id) == user_id)
+        .group_by(col(YoutubeWatchEvent.yt_id))
+        .order_by(last.desc())
+        .limit(limit)
+    ).all()
+    details = latest_details(session, user_id, [str(r[0]) for r in rows])
+    out = []
+    for yt_id, when, views in rows:
+        title, channel, channel_url = details.get(str(yt_id), (None, None, None))
+        out.append(
+            RecentVideo(
+                str(yt_id), as_utc(when), int(views), title, channel, channel_url
+            )
+        )
+    return out
+
+
 @dataclass
 class ChannelTaste:
     """One channel the user watches on YouTube."""

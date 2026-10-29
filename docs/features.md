@@ -117,7 +117,8 @@ Turn the archive into something you can actually ask questions of. Use any OpenA
 |---------|--------|
 | Hybrid search (keyword + embeddings) | Embed indexes |
 | Related videos on Watch | Embeddings |
-| Recommended home tab | Embeddings + categories |
+| Recommended category shelves | Embeddings + categories |
+| Recommended+ (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |
 | Summaries, chapters, chat, tag enrich | Chat LLM |
 | Duplicate help on Import | Chat (optional embed similarity) |
 

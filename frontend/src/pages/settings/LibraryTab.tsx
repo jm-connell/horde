@@ -8,6 +8,7 @@ import {
   CHANNEL_SORT_OPTIONS,
   DIRECT_YOUTUBE_SEARCH_TIP,
   YOUTUBE_VIDEO_SEARCH_TIP,
+  DISCOVERY_TIP,
   INPUT_COMPACT,
   MEDIA_SERVER_TERMS,
   METADATA_INTERVAL_TIP,
@@ -417,6 +418,41 @@ export default function LibraryTab() {
                   }
                 />
               </div>
+            }
+          />
+          <SettingRow
+            title="Recommended+ looks on YouTube"
+            description="Recommended+ searches YouTube for videos and channels new to each person, built from what they watch. Needs YouTube results in library search."
+            control={
+              <div className="flex items-center gap-2">
+                <HelpTip text={DISCOVERY_TIP} />
+                <Toggle
+                  checked={appSettings?.discovery_enabled ?? true}
+                  onChange={() =>
+                    void saveCatalogSettings({
+                      discovery_enabled: !(
+                        appSettings?.discovery_enabled ?? true
+                      ),
+                    })
+                  }
+                />
+              </div>
+            }
+          />
+          <SettingRow
+            title="Recommendations learn from the household"
+            description="Recommended+ gives a small lift to library videos that people here with similar taste liked. It never says who watched what."
+            control={
+              <Toggle
+                checked={appSettings?.discovery_household ?? true}
+                onChange={() =>
+                  void saveCatalogSettings({
+                    discovery_household: !(
+                      appSettings?.discovery_household ?? true
+                    ),
+                  })
+                }
+              />
             }
           />
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">

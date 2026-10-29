@@ -446,7 +446,9 @@ export default function HelpChatPanel({
           }}
           rows={2}
           maxLength={4000}
-          disabled={sending}
+          // Read-only, not disabled: disabling drops focus, and the user
+          // would have to click back in for the next question.
+          readOnly={sending}
           placeholder="Ask about Horde…"
           className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-base text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden md:text-sm"
         />

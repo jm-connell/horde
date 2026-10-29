@@ -1417,3 +1417,26 @@ class HelpChatRequest(BaseModel):
     history: list[HelpChatTurn] = Field(default_factory=list, max_length=24)
     #: Where the user is in the app, e.g. "Settings, AI tab (/settings?tab=ai)".
     page: str | None = Field(default=None, max_length=300)
+
+
+class StreamWatchWrite(BaseModel):
+    """How far the user got in a video they streamed without downloading it."""
+
+    url: str = Field(min_length=1, max_length=500)
+    title: str | None = Field(default=None, max_length=500)
+    channel: str | None = Field(default=None, max_length=200)
+    channel_url: str | None = Field(default=None, max_length=500)
+    position_sec: float = Field(ge=0, le=7 * 86400)
+    duration_sec: float | None = Field(default=None, ge=0, le=7 * 86400)
+    finished: bool = False
+
+
+class RecFeedbackWrite(BaseModel):
+    """``video``: leave this video out. ``channel``: leave the channel out.
+    ``suggestion``: stop suggesting the channel (its videos may still show)."""
+
+    kind: Literal["video", "channel", "suggestion"]
+    #: The video's key, or the channel's URL (may be empty when only its name,
+    #: ``label``, is known).
+    key: str = Field(default="", max_length=500)
+    label: str | None = Field(default=None, max_length=300)

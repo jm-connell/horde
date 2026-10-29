@@ -1,5 +1,5 @@
 /**
- * Small inline icons that replace text glyphs (✕ ▼ ✓ ⠿ ▶ ❚❚ ← ↗ ••• ⤢ ↩). Text glyphs
+ * Small inline icons that replace text glyphs (✕ ▼ ✓ ⠿ ▶ ❚❚ ← ↗ ••• ⤢ ↩ ⤓). Text glyphs
  * change shape and weight with the user's font choice; these do not. They
  * size to the surrounding text (1em) and take its color, so they drop in
  * where the glyph was. All are decorative (aria-hidden): the button or label
@@ -61,6 +61,24 @@ export function CheckIcon({ className = "" }: { className?: string }) {
       aria-hidden
     >
       <path d="M3.5 8.5l3 3 6-7" />
+    </svg>
+  );
+}
+
+/** ⤓: download (an arrow onto a line). */
+export function DownloadIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" />
     </svg>
   );
 }

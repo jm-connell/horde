@@ -7,17 +7,18 @@ seed or per category.
 
 "For you" also works without AI: then it ranks by what the watch history says
 about channels and tags (``_taste``), plus followed channels and freshness. It
-can also take in uploads of followed channels that are indexed but not
-downloaded (``include_streams``); they are scored on the same scale as the
-library (embeddings when AI is on, the taste otherwise) and merged in.
+can also take in uploads of indexed channels that are not downloaded
+(``include_streams``): every catalog, followed ones boosted. They are scored on
+the same scale as the library (embeddings when AI is on, the taste otherwise)
+and merged in. Videos the user streamed count as watched, "not interested" and
+blocked channels are left out, and a video shown on many visits without being
+watched sinks (``discovery.feedback``).
 
 A YouTube watch history imported from Google Takeout (``services/takeout``)
 feeds it too: those videos count as watched, the channels watched there lift
-their videos (recent views far more than old ones), the newest of those views
-seed the AI scores, and indexed uploads of those channels join the
-not-downloaded picks even when the user does not follow them. Now and then a
-"throwback" pick brings back a channel (or, with AI, a topic) the user watched
-months ago but not lately.
+their videos (recent views far more than old ones), and the newest of those
+views seed the AI scores. Now and then a "throwback" pick brings back a channel
+(or, with AI, a topic) the user watched months ago but not lately.
 """
 
 from __future__ import annotations
@@ -36,6 +37,7 @@ from ...models import (
     ChannelCatalog,
     ChannelCatalogEmbedding,
     ChannelCatalogVideo,
+    UserStreamState,
     UserVideoState,
     Video,
     VideoTag,
@@ -44,6 +46,8 @@ from ...models import (
 )
 from .. import app_settings, follows
 from ..channel_catalog import query as catalog_query
+from ..discovery import feedback
+from ..discovery.history import library_key
 from ..takeout import history as takeout_history
 from . import embeddings, vector_index
 from .provider import get_embed_provider
@@ -79,6 +83,7 @@ FRESH_HALF_LIFE_DAYS = 30.0
 # Undownloaded uploads considered per followed channel (its newest ones).
 STREAMS_PER_CHANNEL = 30
 
+
 # The imported YouTube history (services/takeout/history.py).
 #: How much a channel watched on YouTube lifts its videos' AI scores (times 0..1).
 YT_CHANNEL_BOOST = 0.06
@@ -87,8 +92,6 @@ YT_TASTE_SHARE = 0.8
 #: The newest YouTube watches that seed AI "For you", and how much each counts.
 YT_SEEDS = 30
 YT_SEED_WEIGHT = 0.8
-#: Unfollowed channels watched on YouTube whose indexed uploads are suggested.
-YT_UPLOAD_CHANNELS = 12
 #: One throwback pick in this many, at most this many in the whole shelf.
 THROWBACK_EVERY = 20
 THROWBACK_MAX = 4
@@ -364,16 +367,15 @@ def _taste_score(
 class _Upload:
     row: ChannelCatalogVideo
     channel: str
-    #: The indexed channel's URL (to match it against the YouTube history).
-    channel_url: str | None = None
+    #: The catalog's channel URL.
+    url: str = ""
 
 
-def _channel_uploads(
-    session: Session, channel_urls: set[str], downloaded: set[str]
-) -> list[_Upload]:
-    """Newest indexed, not-downloaded uploads of these channels."""
+def _catalog_uploads(session: Session, downloaded: set[str]) -> list[_Upload]:
+    """Newest indexed, not-downloaded uploads of every indexed channel."""
     out: list[_Upload] = []
-    for url in sorted(channel_urls):
+    urls = session.exec(select(ChannelCatalog.channel_url)).all()
+    for url in sorted(urls):
         rows, name = catalog_query.visible_channel_videos(
             session, url, limit=STREAMS_PER_CHANNEL, exclude_yt_ids=downloaded
         )
@@ -459,32 +461,6 @@ def _youtube_taste(session: Session, user_id: int) -> _YoutubeTaste:
             if name:
                 out.throwback_names.add(name)
     return out
-
-
-def _youtube_channel_catalogs(
-    session: Session, yt: _YoutubeTaste, followed: set[str]
-) -> set[str]:
-    """Indexed channels the user watches on YouTube but does not follow.
-
-    The ones watched most lately, plus a few throwback channels so their
-    uploads can be picked too.
-    """
-    pulls: list[tuple[float, str]] = []
-    throwbacks: list[str] = []
-    for url, name in session.exec(
-        select(ChannelCatalog.channel_url, ChannelCatalog.channel_name)
-    ).all():
-        if follows.normalize_channel_url(url) in followed:
-            continue
-        pull = yt.pull(url, name)
-        if pull > 0:
-            pulls.append((pull, url))
-        if yt.is_throwback(url, name):
-            throwbacks.append(url)
-    pulls.sort(reverse=True)
-    return {url for _pull, url in pulls[:YT_UPLOAD_CHANNELS]} | set(
-        sorted(throwbacks)[:THROWBACK_MAX]
-    )
 
 
 def _youtube_vectors(
@@ -619,10 +595,9 @@ def _ranked_for_you_ids(
     With AI, seeds are the most recent watches, weighted by recency and by how
     much of each the user watched; without it, the taste (``_taste``) scores
     instead. Already-watched videos are never scored; they go last so infinite
-    scroll can still page through the whole library. The imported YouTube
-    history joins in (see the module docstring).
+    scroll can still page through the whole library.
 
-    Library videos are listed by id; with ``include_streams``, an indexed
+    Library videos are listed by id; with ``include_streams``, a followed
     channel's upload by the negated id of its catalog row (the second value
     maps those keys to the uploads). The third value marks throwback picks.
     """
@@ -651,11 +626,11 @@ def _ranked_for_you_ids(
     }
     watched = [video.id for video, _state in history if video.id is not None]
     # Videos watched on YouTube count as watched too, after Horde's own.
-    seen = set(watched)
+    listed = set(watched)
     for yt_id, vid in library_by_yt.items():
-        if yt_id in yt.profile.watched and vid not in seen:
+        if yt_id in yt.profile.watched and vid not in listed:
             watched.append(vid)
-            seen.add(vid)
+            listed.add(vid)
     watched_set = set(watched)
 
     channels = {
@@ -674,6 +649,12 @@ def _ranked_for_you_ids(
         and row[2]
         and follows.normalize_channel_url(row[2]) in followed
     }
+    excluded = feedback.exclusions(session, user_id)
+    streamed = set(
+        session.exec(
+            select(UserStreamState.yt_id).where(UserStreamState.user_id == user_id)
+        ).all()
+    )
     uploads: dict[int, _Upload] = {}
     followed_uploads: set[int] = set()
     if include_streams:
@@ -684,19 +665,35 @@ def _ranked_for_you_ids(
             downloaded |= yt.profile.watched & set(
                 session.exec(select(ChannelCatalogVideo.yt_id)).all()
             )
-        watched_there = (
-            _youtube_channel_catalogs(session, yt, followed) if not yt.empty else set()
+        for upload in _catalog_uploads(session, downloaded | streamed):
+            key = -require_id(upload.row)
+            if excluded.blocks(upload.row.yt_id, upload.url, upload.channel):
+                continue
+            uploads[key] = upload
+            channels[key] = upload.channel
+            channel_urls[key] = upload.url
+            if follows.normalize_channel_url(upload.url) in followed:
+                followed_uploads.add(key)
+    # Leave out what the user said no to (the key lookups mirror discovery's).
+    blocked = {
+        int(row[0])
+        for row in library_rows
+        if row[0] is not None
+        and excluded.blocks(
+            library_key(row[0], row[3]), row[2], channels.get(int(row[0]))
         )
-        for urls, is_followed in ((followed, True), (watched_there, False)):
-            for upload in _channel_uploads(session, urls, downloaded):
-                key = -require_id(upload.row)
-                if key in uploads:
-                    continue
-                uploads[key] = upload
-                channels[key] = upload.channel
-                channel_urls[key] = upload.channel_url
-                if is_followed:
-                    followed_uploads.add(key)
+    }
+    for vid in blocked:
+        channels.pop(vid, None)
+    item_keys = {
+        int(row[0]): library_key(row[0], row[3])
+        for row in library_rows
+        if row[0] is not None
+    }
+    item_keys.update({key: u.row.yt_id for key, u in uploads.items()})
+    # Streamed in full or in part: watched, like a library watch.
+    watched_set |= {vid for vid, key in item_keys.items() if key in streamed}
+    visits = feedback.earlier_visits(session, user_id)
 
     def pull(key: int) -> float:
         return (
@@ -793,6 +790,13 @@ def _ranked_for_you_ids(
             if value is not None:
                 scored[key] = value
 
+    for key in list(scored):
+        if key not in channels:
+            del scored[key]
+            continue
+        seen = visits.get(item_keys.get(key, ""), 0)
+        if seen:
+            scored[key] -= feedback.impression_penalty(seen)
     ranked = _diversify(scored, channels)
     ranked_set = set(ranked)
     # Then the unscored, unwatched rest by recency, then what the user has seen.

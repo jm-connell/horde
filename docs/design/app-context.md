@@ -12,6 +12,7 @@ It holds the things that used to be import-time constants and singletons:
 | `notifier` | The outgoing-notification queue and its delivery worker ([Notifications](../ops/notifications.md)) |
 | `sidecars` | The queue of library-wide jobs for the optional Jellyfin / Kodi / Plex files and its worker ([Media servers](../guides/media-servers.md)) |
 | `watch_refs` | The previous progress save of recently watched videos (a bounded LRU), which watch-time counting compares each save with ([History](../guides/history.md#how-watch-time-is-counted)) |
+| `discovery` | Recommended+ (`DiscoveryRuntime`): the gatherer's worker, back-off and hourly request log, the stacked catalog/discovered vector matrix, and ranked feeds cached for paging ([ADR 0019](../adr/0019-recommended-plus.md)) |
 | `auth` | The app's `AuthRuntime` (copied from `app.state.auth`) |
 | `ai` | `AiRuntimeState`: the AI worker's wake event and "blocked" reason |
 | `caches` | Request-path caches (`search_cache`, `duplicate_groups`), built by `install_caches`; `app.state` aliases them for the routers |

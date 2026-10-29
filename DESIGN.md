@@ -250,9 +250,28 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   0.97 on press (80ms) when the button press setting is on, and get
   `ui-interactive` for the user's hover motion.
 - **Video card.** Thumbnail with duration badge and a thin accent progress bar
-  for watched position; title (two lines), channel and meta below. "+ Queue"
+  for watched position; title (one or two lines), channel and facts below.
+  Every grid card's text is laid out by `CardCopy` (`components/cardCopyPlan.ts`)
+  in 1.25rem lines (a title line, or a 1rem details line with its gap). A card
+  asks its row for its title plus the fewest details lines that show every
+  detail whole; the row takes its tallest card. A card with spare lines fills
+  them a whole line at a time: it splits its details (channel; date · views;
+  likes), then moves the resolution to a line of its own, then adds optional
+  facts (library cards: views, date added, size; downloaded channel videos:
+  "In your library"). The lines run from just under the title to the bottom of
+  the card, and anything that cannot be filled is spread evenly between them,
+  so there is never a gap under the title or at the bottom. The action (a small
+  accent download icon, a success check when downloaded, Live, Upcoming)
+  always sits at the bottom right, never on a line of its own. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
+- **Recommendation source marks.** In Recommended+, when **Sources** is on, a
+  1px accent outline over each card says where it comes from: solid `accent`
+  (downloaded), `accent/35` (not downloaded, from a channel the user follows or
+  has indexed), none (a channel new to them). Square on phones' edge-to-edge
+  cards. A legend of dots sits above the grid. Only the theme's accent, so the
+  marks follow every theme; why a card is there is its hover title, not a line
+  under it.
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a

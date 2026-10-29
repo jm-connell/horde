@@ -47,6 +47,8 @@ export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =
 export const YOUTUBE_VIDEO_SEARCH_TIP =
   "When on, the main search bar also shows videos from all of YouTube that are not already in your library or catalogs. Search text is sent to YouTube. Results load after you pause typing, or immediately if you press Enter. The YT control in the search bar toggles the same setting.";
 export const YOUTUBE_VIDEO_SEARCH_HEADER_TIP = "Toggle YouTube search results";
+export const DISCOVERY_TIP =
+  "Every few hours, for people who opened Recommended+ lately, Horde makes a few YouTube searches built from their interests and reads the up next list of videos they liked (at most 7 calls a person, 20 seconds apart and 30 an hour in all, behind anything you are doing). The search words are sent to YouTube. If YouTube pushes back, Horde waits before asking again.";
 export const METADATA_INTERVAL_TIP =
   "How often Horde refreshes library video metadata and re-queues stale channel catalogs for a full index pass.";
 

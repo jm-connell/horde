@@ -32,6 +32,7 @@ from sqlmodel import Session
 if TYPE_CHECKING:
     from .services.ai.state import AiRuntimeState
     from .services.auth.runtime import AuthRuntime
+    from .services.discovery.runtime import DiscoveryRuntime
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
     from .services.live.runtime import LiveRuntime
@@ -129,6 +130,8 @@ class AppContext:
     sidecars: SidecarJobs = field(default_factory=lambda: _new_sidecars())
     #: The previous progress save of recently watched videos (services/watch_stats).
     watch_refs: WatchRefs = field(default_factory=lambda: _new_watch_refs())
+    #: Recommended+: the gatherer's back-off, the vector matrix, ranked feeds.
+    discovery: DiscoveryRuntime = field(default_factory=lambda: _new_discovery())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -168,6 +171,12 @@ def _new_watch_refs() -> WatchRefs:
     from .services.watch_stats import WatchRefs
 
     return WatchRefs()
+
+
+def _new_discovery() -> DiscoveryRuntime:
+    from .services.discovery.runtime import DiscoveryRuntime
+
+    return DiscoveryRuntime()
 
 
 def _new_registry() -> WorkerRegistry:

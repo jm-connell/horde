@@ -748,3 +748,66 @@ def test_recommendations_follow_a_forget_at_once(client, add_video):
     client.delete("/api/takeout/history")
     # The cached profile is keyed by the history, so the next page sees the change.
     assert [t for _k, t, _r in _for_you(client)] == ["Seen on YouTube", "Other"]
+
+
+# --- Recommended+ -------------------------------------------------------------------
+
+
+def _discover_items(client) -> dict[str, dict]:
+    body = client.get("/api/discover/feed", params={"limit": 60}).json()
+    return {i["key"]: i for i in body["items"]}
+
+
+def test_recommended_plus_learns_from_youtube_views(client, session, admin_user):
+    from app.models import DiscoveryHit, DiscoveryVideo
+    from app.services.discovery.history import watches
+
+    url = "https://www.youtube.com/@pots"
+    _catalog(session, url, "Pots", ["uuuuuuuuuu1", "uuuuuuuuuu2"])
+    for yt_id in ("seenonyt001", "notseen0001"):
+        row = DiscoveryVideo(
+            yt_id=yt_id,
+            url=f"https://www.youtube.com/watch?v={yt_id}",
+            title=yt_id,
+            channel="Elsewhere",
+            channel_url="https://www.youtube.com/@elsewhere",
+        )
+        session.add(row)
+        session.commit()
+        session.add(
+            DiscoveryHit(
+                user_id=admin_user.id,
+                discovery_video_id=row.id,
+                source="search",
+                seed="q",
+            )
+        )
+    session.commit()
+    # Watched a lot lately on YouTube, never followed in Horde.
+    views = [
+        _view(
+            f"vvvvvvvvv{i:02d}",
+            NOW - timedelta(days=i),
+            channel="Pots",
+            channel_url=url,
+        )
+        for i in range(4)
+    ] + [
+        _view("uuuuuuuuuu2", NOW, channel="Pots", channel_url=url),
+        _view("seenonyt001", NOW),
+    ]
+    _upload(client, _export(views))
+
+    assert {w.yt_id for w in watches(session, admin_user.id)} >= {
+        "uuuuuuuuuu2",
+        "seenonyt001",
+    }
+    # Other accounts' imports never join a household pool.
+    assert watches(session, admin_user.id, include_youtube=False) == []
+
+    items = _discover_items(client)
+    # What was watched on YouTube is not suggested again...
+    assert "seenonyt001" not in items and "uuuuuuuuuu2" not in items
+    assert "notseen0001" in items
+    # ...and a channel watched there a lot counts like a followed one.
+    assert items["uuuuuuuuuu1"]["reason"]["kind"] == "subscription"

@@ -19,7 +19,7 @@ import { ChevronIcon } from "./icons";
 const PAGE_SIZE = 24;
 
 /**
- * One card: a library video, or a followed channel's upload not downloaded.
+ * One card: a library video, or an indexed channel's upload not downloaded.
  * `throwback`: picked from a channel or topic watched months ago on YouTube.
  */
 type RecItem = { key: string; throwback: boolean } & (
@@ -320,7 +320,7 @@ export default function RecommendedHome({
             onClick={() =>
               updateSettings({ recommendStreams: !includeStreams })
             }
-            title="Also suggest uploads from channels you follow that are not downloaded (channels you have indexed)"
+            title="Also suggest uploads that are not downloaded from channels you have indexed"
             className={chipClass(includeStreams)}
           >
             Include not downloaded
@@ -358,7 +358,7 @@ export default function RecommendedHome({
         <>
           <div className={gridClass}>
             {feedVideos.map((item) => (
-              <div key={item.key} className="relative">
+              <div key={item.key} className="relative grid">
                 {item.video ? (
                   <VideoCard video={item.video} layout="feed" />
                 ) : (

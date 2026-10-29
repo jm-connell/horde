@@ -193,6 +193,11 @@ CONDITIONAL = {
 #: watching needs, e.g. Safari), so they stay open; removing a file is gated.
 OPEN_MUTATIONS = {
     ("PATCH", "/api/videos/{video_id}/progress"),  # your own history
+    ("POST", "/api/discover/history"),  # your own history (streamed videos)
+    # Your own Recommended+: feedback, and a refresh (rate limited per user).
+    ("POST", "/api/discover/feedback"),
+    ("DELETE", "/api/discover/feedback/{feedback_id}"),
+    ("POST", "/api/discover/refresh"),
     ("POST", "/api/videos/{video_id}/compat"),  # playback compatibility copies
     ("POST", "/api/videos/{video_id}/compat/safari"),
     ("POST", "/api/videos/{video_id}/sprites/generate"),  # seek previews

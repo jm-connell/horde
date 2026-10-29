@@ -6,8 +6,8 @@ Kept apart from ``user_video_state``: these views never show in History.
 Deleting the account deletes them. A new table only: ``videos`` is not rebuilt,
 so the tag and full-text triggers are untouched.
 
-Revision ID: 0020_youtube_watch_events
-Revises: 0019_download_clips
+Revision ID: 0021_youtube_watch_events
+Revises: 0020_recommended_plus
 """
 
 from collections.abc import Sequence
@@ -15,8 +15,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0020_youtube_watch_events"
-down_revision: str | None = "0019_download_clips"
+revision: str = "0021_youtube_watch_events"
+down_revision: str | None = "0020_recommended_plus"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

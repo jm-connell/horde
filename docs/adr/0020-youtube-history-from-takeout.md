@@ -1,4 +1,4 @@
-# 0019. YouTube history comes from Takeout and is kept apart from Horde's own
+# 0020. YouTube history comes from Takeout and is kept apart from Horde's own
 
 Status: Accepted
 
@@ -10,9 +10,9 @@ Horde's history (`user_video_state`) is keyed by library video and feeds History
 
 ## Decision
 
-- **Takeout upload, per account.** `POST /api/takeout/import` reads the export (zip parts or loose files; `services/takeout/parse.py`) and stores each view in `youtube_watch_events` (migration `0020_youtube_watch_events`) under the uploading account, keyed by YouTube id. Subscriptions and playlists are only listed back; `POST /api/takeout/apply` follows and copies the ones the user ticks, as that user's follows and private playlists.
+- **Takeout upload, per account.** `POST /api/takeout/import` reads the export (zip parts or loose files; `services/takeout/parse.py`) and stores each view in `youtube_watch_events` (migration `0021_youtube_watch_events`) under the uploading account, keyed by YouTube id. Subscriptions and playlists are only listed back; `POST /api/takeout/apply` follows and copies the ones the user ticks, as that user's follows and private playlists.
 - **One row per view, unique on (user, video, time watched).** Re-importing a newer export that overlaps an earlier one adds only the new views (`INSERT ... ON CONFLICT DO NOTHING`); counting views per video is what makes rewatch counts possible.
-- **Kept apart from `user_video_state`.** The views never touch History, Continue watching, resume or retention. Readers opt in: For you (`recommend.py`), the channel feed endpoints (`youtube_watched`), the Download page's rewatched list and, behind a per-account switch, the History stats.
+- **Kept apart from `user_video_state`.** The views never touch History, Continue watching, resume or retention. Readers opt in: For you (`recommend.py`), Recommended+ (through `discovery.history.watches`, the one history it reads; other accounts' imports never join its household pooling), the channel feed endpoints (`youtube_watched`), the Download page's rewatched list and, behind a per-account switch, the History stats.
 - **Views, never time.** Takeout does not say how long a video played, so the stats count YouTube views toward videos, days, channels and the weekday × hour grid, and never toward watch time.
 - **Recency first.** A channel's pull from YouTube views halves every 30 days, so taste follows what the user watches now. Throwbacks bring back channels watched a lot 6+ months ago, one pick in twenty, moved up only, drawn once per user and day so paging sees one order.
 

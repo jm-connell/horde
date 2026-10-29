@@ -36,7 +36,8 @@ The imported views never appear in **History** or **Continue watching**; those s
 | Where | What changes |
 |-------|--------------|
 | **Channel pages and searches** | Videos you watched on YouTube carry a **Watched** badge. |
-| **Recommended → For you** | Videos you watched on YouTube count as watched (they move to the end). Channels you watch there lift their videos, recent viewing far more than old: a channel's pull halves every 30 days. With AI, your latest YouTube views also seed the content matching. With **Include not downloaded**, indexed uploads of channels you watch on YouTube are suggested even if you don't follow them. |
+| **Recommended → For you** | Videos you watched on YouTube count as watched (they move to the end). Channels you watch there lift their videos, recent viewing far more than old: a channel's pull halves every 30 days. With AI, your latest YouTube views also seed the content matching. Not-downloaded uploads from indexed channels you watch on YouTube rise the same way. |
+| **Recommended+** | Your YouTube views count as watch history there too: what you watched is not suggested again, channels you watch a lot on YouTube count like ones you follow ("New from …"), the searches it runs on YouTube start from what you watch, and its throwbacks can bring back channels you watched there long ago. |
 | **Throwbacks** | About one pick in twenty, marked **Throwback**, comes from a channel you watched a lot over six months ago and hardly since (with AI, also from a topic you watched back then). The pick changes daily. |
 | **Download page** | **Watched often on YouTube**, folded under the download form, lists videos you watched at least twice there that you have not downloaded, most-watched first, each with a **Download** button. |
 | **History stats** | Off by default. Turn on **Include YouTube in History stats** (in Settings, or in the import dialog) to count YouTube views too. See below. |
@@ -66,7 +67,7 @@ Takeout records **when** you watched, not **for how long**, so YouTube views nev
 | `GET` | `/api/takeout/rewatched` | Videos watched at least twice, not in the library (`{items, next_cursor}`). |
 | `GET` | `/api/history/stats?include_youtube=true` | Stats with YouTube views. |
 
-Why the history is stored apart from Horde's own: [ADR 0019](../adr/0019-youtube-history-from-takeout.md).
+Why the history is stored apart from Horde's own: [ADR 0020](../adr/0020-youtube-history-from-takeout.md).
 
 ## Related
 

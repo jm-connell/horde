@@ -5,6 +5,7 @@ import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
+import DiscoverHome from "../components/DiscoverHome";
 import RecommendedHome from "../components/RecommendedHome";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
@@ -12,6 +13,8 @@ import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss"
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
+import { useDiscoverStatus } from "../queries/status";
+import type { HomeTab } from "./libraryStorage";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
@@ -55,7 +58,14 @@ function OnlineLibrary() {
     handleSortChange,
     toggleOrder,
   } = useLibraryQuery(settings, update);
-  const { homeTab, setHomeTab } = useHomeTab(search);
+  const { homeTab: storedHomeTab, setHomeTab } = useHomeTab(search);
+  // With looking on YouTube off, Recommended+ would show what Recommended
+  // shows: the tab goes, and anyone on it lands on Recommended.
+  const discoverEnabled = useDiscoverStatus().data?.enabled;
+  const homeTab: HomeTab =
+    storedHomeTab === "discover" && discoverEnabled === false
+      ? "recommended"
+      : storedHomeTab;
 
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
@@ -68,7 +78,9 @@ function OnlineLibrary() {
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;
-  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
+  // Either recommendations tab: they render their own data and order.
+  const onRecommendedTab =
+    showHomeTabs && (homeTab === "recommended" || homeTab === "discover");
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
@@ -282,6 +294,7 @@ function OnlineLibrary() {
             onRecommendedTab={onRecommendedTab}
             homeTab={homeTab}
             onHomeTab={setHomeTab}
+            showDiscover={discoverEnabled !== false}
             hasTags={hasTags}
             showTags={showTags}
             onToggleTags={toggleTagsFromHeader}
@@ -337,13 +350,7 @@ function OnlineLibrary() {
         )}
 
         <div
-          key={
-            onChannelPage
-              ? "feed"
-              : onRecommendedTab
-                ? "recommended"
-                : "library"
-          }
+          key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"
         >
           {onChannelPage ? (
@@ -365,7 +372,14 @@ function OnlineLibrary() {
               }
             />
           ) : onRecommendedTab && !debouncedSearch ? (
-            <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
+            homeTab === "discover" ? (
+              <DiscoverHome
+                sidebarCollapsed={settings.sidebarCollapsed}
+                onChannelClick={channelNav.openFeedChannel}
+              />
+            ) : (
+              <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
+            )
           ) : loading ? (
             <LoadingIndicator />
           ) : !debouncedSearch && videos.length === 0 ? (

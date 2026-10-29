@@ -8,6 +8,7 @@ import re
 import socket
 import threading
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -818,6 +819,35 @@ def _release_extract_gate() -> None:
             waiter.set()
             return
         _extract_held = False
+
+
+def call_gated[T](
+    fn: Callable[[], T], *, url: str, priority: int = EXTRACT_PRIORITY_BACKGROUND
+) -> T:
+    """Run ``fn``, a YouTube request that is not an ``extract_info``, under the gate.
+
+    It waits its turn and keeps the same spacing as every extract, and a failure is
+    classified and remembered for /api/health like an extract's.
+    """
+    global _last_extract_at
+    ensure_plugins_loaded()
+    _acquire_extract_gate(priority)
+    try:
+        with _extract_gate_lock:
+            wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
+        if wait > 0:
+            time.sleep(wait)
+        try:
+            return fn()
+        except Exception as exc:
+            kind, message = classify_ytdlp_error(exc, url=url)
+            record_extract_failure(kind, message, url=url)
+            raise
+        finally:
+            with _extract_gate_lock:
+                _last_extract_at = time.time()
+    finally:
+        _release_extract_gate()
 
 
 def ensure_plugins_loaded() -> None:

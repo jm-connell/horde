@@ -108,6 +108,80 @@ def test_openrouter_reports_cost_into_the_ledger(session, serve_ai):
     assert [(r.kind, r.cost) for r in rows] == [("summary", 0.0012)]
 
 
+def _rate_limited_then(stream_body: str, *, limited: int, retry_after=None):
+    """A chat endpoint that answers 429 ``limited`` times, then streams."""
+    calls: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(request)
+        if len(calls) <= limited:
+            headers = {"Retry-After": retry_after} if retry_after else {}
+            err = {"message": "Provider returned error", "metadata": {"raw": "busy"}}
+            return httpx.Response(429, json={"error": err}, headers=headers)
+        return httpx.Response(200, text=stream_body)
+
+    return handler, calls
+
+
+_STREAM = (
+    'data: {"choices": [{"delta": {"content": "hi"}}]}\n\n'
+    'data: {"choices": [{"delta": {"content": " there"}}]}\n\n'
+    "data: [DONE]\n\n"
+)
+
+
+def test_chat_stream_waits_out_a_short_rate_limit(
+    session, serve_ai, monkeypatch, caplog
+):
+    """A 429 before any token is sent again after a backoff, not shown to the user."""
+    handler, calls = _rate_limited_then(_STREAM, limited=2)
+    serve_ai(handler)
+    sleeps: list[float] = []
+    monkeypatch.setattr(provider.time, "sleep", sleeps.append)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+
+    assert "".join(llm.chat_stream("hi", "google/x")) == "hi there"
+    assert len(calls) == 3
+    assert sleeps == [1.0, 2.0]
+    # The provider's reason reaches the log, so a recurring limit can be explained.
+    assert "Provider returned error: busy" in caplog.text
+
+
+def test_chat_stream_gives_up_on_a_long_rate_limit(session, serve_ai, monkeypatch):
+    """A Retry-After past the cap is not waited out; the 429 is raised at once."""
+    handler, calls = _rate_limited_then(_STREAM, limited=9, retry_after="60")
+    serve_ai(handler)
+    sleeps: list[float] = []
+    monkeypatch.setattr(provider.time, "sleep", sleeps.append)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+
+    try:
+        list(llm.chat_stream("hi", "google/x"))
+    except httpx.HTTPStatusError as exc:
+        assert exc.response.status_code == 429
+    else:
+        raise AssertionError("expected the 429 to be raised")
+    assert len(calls) == 1
+    assert sleeps == []
+
+
+def test_chat_stream_stops_retrying_after_the_backoff_runs_out(
+    session, serve_ai, monkeypatch
+):
+    handler, calls = _rate_limited_then(_STREAM, limited=9)
+    serve_ai(handler)
+    monkeypatch.setattr(provider.time, "sleep", lambda _s: None)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+
+    try:
+        list(llm.chat_stream("hi", "google/x"))
+    except httpx.HTTPStatusError as exc:
+        assert exc.response.status_code == 429
+    else:
+        raise AssertionError("expected the 429 to be raised")
+    assert len(calls) == len(provider._RATE_LIMIT_BACKOFF_SEC) + 1
+
+
 def test_embeddings_can_use_their_own_endpoint(session, serve_ai):
     server = FakeServer()
     serve_ai(server)

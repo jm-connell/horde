@@ -19,6 +19,7 @@ from .api import (
     backgrounds,
     channels,
     compat,
+    discover,
     downloads,
     follows,
     fonts,
@@ -174,6 +175,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         trash as trash_svc,
     )
     from .services.ai import worker as ai_worker
+    from .services.discovery import gather as discovery_gather
     from .services.live import directory as live_directory
     from .services.metadata_sync import create_sync_worker
     from .services.sprites import sprite_pool
@@ -206,6 +208,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         registry.start(ctx.live.poller)
     registry.start(subtitle_retry.create_worker())
     registry.start(stream_ai.create_worker())
+    registry.start(discovery_gather.create_worker(ctx.discovery))
     registry.start(job_metadata.create_worker())
     registry.start(trash_svc.create_worker())
     registry.start(channel_retention.create_worker())
@@ -555,6 +558,7 @@ def include_api(target: FastAPI) -> None:
         preview,
         stream_ai_api,
         follows,
+        discover,
         live,
         review,
         playlists,
