@@ -7,6 +7,15 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- AI chats (Ask about Horde and video chat) no longer fail on a brief rate
+  limit from the AI provider: a 429 before the answer starts is retried after
+  1, 2 and 4 seconds (or the provider's `Retry-After`, up to 10 seconds), and
+  the provider's own reason is logged.
+- Ask about Horde keeps the question box focused after sending, so the next
+  question needs no click.
+
 ## [1.2.0] - 2026-10-29
 
 Save part of a stream or video as a clip, ask Horde how to do something from
