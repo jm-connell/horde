@@ -838,3 +838,33 @@ class ChannelFollow(SQLModel, table=True):
     source: str = Field(default="manual")
     created_at: datetime = Field(default_factory=utcnow)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+class YoutubeWatchEvent(SQLModel, table=True):
+    """One view in a user's YouTube watch history, read from a Google Takeout export.
+
+    Kept apart from ``user_video_state`` (Horde's own history): these views never
+    show in History or Continue watching. Recommendations, channel pages, the
+    Download page and (when the user opts in) the History stats read them
+    (``services/takeout/history.py``). One row per view, so importing an export
+    that overlaps an earlier one only adds the views that are new.
+    """
+
+    __tablename__ = "youtube_watch_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id", "yt_id", "watched_at", name="uq_youtube_watch_events_view"
+        ),
+        Index("ix_youtube_watch_events_user_watched", "user_id", "watched_at"),
+        Index("ix_youtube_watch_events_user_yt", "user_id", "yt_id"),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", ondelete="CASCADE")
+    yt_id: str
+    watched_at: datetime
+    title: str | None = None
+    channel: str | None = None
+    # Normalized (services/follows.normalize_channel_url).
+    channel_url: str | None = None
+    imported_at: datetime = Field(default_factory=utcnow)
