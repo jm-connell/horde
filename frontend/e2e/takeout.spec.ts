@@ -72,8 +72,11 @@ function exportFiles() {
 
 async function openImport(page: Page) {
   await page.goto("/settings?tab=library");
+  // Once something is imported the button offers a newer export instead.
   await page
-    .getByRole("button", { name: "Import from Google Takeout" })
+    .getByRole("button", {
+      name: /^(Import from Google Takeout|Import a newer export)$/,
+    })
     .click();
   return page.getByRole("dialog", { name: "Import from Google Takeout" });
 }
