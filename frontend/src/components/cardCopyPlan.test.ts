@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { groupDetails, planCopy, type CopyMeasures } from "./cardCopyPlan";
 
-/** A 240px card: channel 80px, facts 70px each, " · " 10px. */
+/** A 240px card: channel 80px, facts 70 and 60px, " · " 10px, "1080p" 24px. */
 function card(over: Partial<CopyMeasures> = {}): CopyMeasures {
   return {
     titleNeeded: 1,
@@ -11,7 +11,9 @@ function card(over: Partial<CopyMeasures> = {}): CopyMeasures {
     factWidths: [70, 60],
     required: 2,
     sepWidth: 10,
-    trailingWidth: 0,
+    resWidth: 0,
+    actionWidth: 0,
+    endGap: 8,
     ...over,
   };
 }
@@ -36,10 +38,11 @@ describe("planCopy", () => {
     expect(planCopy(card())).toMatchObject({
       titleLines: 1,
       lines: [["c", 0, 1]],
+      resTrailing: true,
       naturalUnits: 2,
     });
-    // With a 40px download button the line no longer fits: two lines.
-    expect(planCopy(card({ trailingWidth: 40 }))).toMatchObject({
+    // A 28px download button leaves too little room on that line: two lines.
+    expect(planCopy(card({ actionWidth: 28 }))).toMatchObject({
       lines: [["c"], [0, 1]],
       naturalUnits: 3,
     });
@@ -50,34 +53,48 @@ describe("planCopy", () => {
   });
 
   it("splits the details to fill a taller row", () => {
-    // Its row is four units tall (a neighbour has a two-line title and two lines).
-    expect(planCopy(card({ units: 4 }))).toMatchObject({
-      lines: [["c"], [0], [1]],
-      naturalUnits: 2,
-    });
     expect(planCopy(card({ units: 3 })).lines).toEqual([["c"], [0, 1]]);
+    expect(planCopy(card({ units: 4 })).lines).toEqual([["c"], [0], [1]]);
   });
 
-  it("brings in optional facts only to fill whole lines", () => {
-    const sparse = card({ factWidths: [70, 60], required: 1 });
-    // Natural: channel and the required date on one line; views stay hidden.
+  it("then gives the resolution its own bottom line, beside the action", () => {
+    const sparse = card({ factWidths: [], required: 0, resWidth: 24 });
     expect(planCopy(sparse)).toMatchObject({
+      lines: [["c"]],
+      resTrailing: true,
+      naturalUnits: 2,
+    });
+    expect(planCopy({ ...sparse, units: 3 })).toMatchObject({
+      lines: [["c"], ["r"]],
+      resTrailing: false,
+    });
+  });
+
+  it("brings in optional facts only after that, a whole line at a time", () => {
+    const library = card({ factWidths: [70, 60], required: 1, resWidth: 24 });
+    // Natural: channel and the required date; views stay hidden.
+    expect(planCopy(library)).toMatchObject({
       lines: [["c", 0]],
       naturalUnits: 2,
     });
-    expect(planCopy({ ...sparse, units: 3 }).lines).toEqual([["c"], [0]]);
-    expect(planCopy({ ...sparse, units: 4 }).lines).toEqual([["c"], [0], [1]]);
+    expect(planCopy({ ...library, units: 3 }).lines).toEqual([["c"], [0]]);
+    expect(planCopy({ ...library, units: 4 }).lines).toEqual([
+      ["c"],
+      [0],
+      ["r"],
+    ]);
+    expect(planCopy({ ...library, units: 5 }).lines).toEqual([
+      ["c"],
+      [0],
+      [1],
+      ["r"],
+    ]);
   });
 
-  it("keeps the trailing status on a line even without details", () => {
+  it("keeps the action on a line even without details", () => {
     expect(
       planCopy(
-        card({
-          channelWidth: 0,
-          factWidths: [],
-          required: 0,
-          trailingWidth: 30,
-        })
+        card({ channelWidth: 0, factWidths: [], required: 0, actionWidth: 30 })
       )
     ).toMatchObject({ lines: [[]], naturalUnits: 2 });
   });

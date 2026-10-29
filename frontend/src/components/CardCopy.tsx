@@ -47,15 +47,17 @@ function useNode<T extends HTMLElement>(): [
 
 /**
  * The text under a grid card's thumbnail: a title of one or two lines, then
- * the channel and facts (date, views, ...), with ``trailing`` (resolution,
- * download, live) at the end of the last line. ``cardCopyPlan`` decides the
+ * the channel and facts (date, views, ...), the resolution, and ``action``
+ * (download, a check, live) at the bottom right. ``cardCopyPlan`` decides the
  * lines; see there for the rules.
  *
  * The card claims its natural height only (an invisible spacer), so a row is
- * as tall as its tallest card's natural text. The text is drawn on top, and a
- * card in a taller row spreads it over the spare lines; that never changes
- * the card's own height, so rows cannot grow from it. The box must be the
- * card's growing part (``flex-1`` in an ``h-full`` card) to see its row.
+ * as tall as its tallest card's natural text. The text is drawn on top over
+ * the whole box: a card in a taller row fills the spare lines, and the lines
+ * are spread from the top to the bottom of the box, so the last one (and the
+ * action) always sits at the bottom and nothing is left empty below it. That
+ * never changes the card's own height, so rows cannot grow from it. The box
+ * must be the card's growing part (``flex-1`` in an ``h-full`` card).
  */
 export default function CardCopy({
   title,
@@ -63,7 +65,8 @@ export default function CardCopy({
   renderChannel,
   facts,
   required = facts.length,
-  trailing,
+  resolution,
+  action,
   className = "",
 }: {
   title: string;
@@ -73,14 +76,17 @@ export default function CardCopy({
   facts: CardFact[];
   /** Facts from this index on are optional: shown only to fill spare lines. */
   required?: number;
-  trailing?: ReactNode;
+  /** "1080p": at the end of the last line, or its own line to fill a row. */
+  resolution?: string | null;
+  /** Always at the bottom right: download, downloaded, live. */
+  action?: ReactNode;
   /** Classes for the box (padding, background). */
   className?: string;
 }) {
   const [box, boxRef] = useNode<HTMLDivElement>();
   const [titleSizer, titleSizerRef] = useNode<HTMLSpanElement>();
   const [sizers, sizersRef] = useNode<HTMLDivElement>();
-  const [trail, trailRef] = useNode<HTMLSpanElement>();
+  const [actionEl, actionRef] = useNode<HTMLSpanElement>();
   const [measures, setMeasures] = useState({
     titleNeeded: 1,
     units: 0,
@@ -88,7 +94,9 @@ export default function CardCopy({
     channelWidth: 0,
     factWidths: [] as number[],
     sepWidth: 0,
-    trailingWidth: 0,
+    resWidth: 0,
+    actionWidth: 0,
+    endGap: 0,
   });
 
   const factKey = facts.map((f) => f.text).join("\n");
@@ -115,7 +123,9 @@ export default function CardCopy({
         channelWidth: channel ? widthOf("[data-sizer='c']") : 0,
         factWidths: facts.map((_, i) => widthOf(`[data-sizer='${i}']`)),
         sepWidth: widthOf("[data-sizer='sep']"),
-        trailingWidth: trail ? trail.getBoundingClientRect().width : 0,
+        resWidth: resolution ? widthOf("[data-sizer='r']") : 0,
+        actionWidth: actionEl ? actionEl.getBoundingClientRect().width : 0,
+        endGap: 0.5 * remPx(),
       };
       setMeasures((prev) =>
         JSON.stringify(prev) === JSON.stringify(next) ? prev : next
@@ -126,19 +136,24 @@ export default function CardCopy({
     ro.observe(box);
     ro.observe(titleSizer);
     ro.observe(sizers);
-    if (trail) ro.observe(trail);
+    if (actionEl) ro.observe(actionEl);
     void document.fonts?.ready.then(() => {
       if (box.isConnected) measure();
     });
     return () => ro.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- facts are compared by text (factKey); a new array with the same text needs no new measure
-  }, [box, titleSizer, sizers, trail, channel, factKey, title]);
+  }, [box, titleSizer, sizers, actionEl, channel, resolution, factKey, title]);
 
   const plan = planCopy({ ...measures, required });
   const last = plan.lines.length - 1;
 
+  const res = (
+    <span className="text-[10px] font-medium text-muted">{resolution}</span>
+  );
   const item = (it: CopyItem) =>
-    it === "c" ? (
+    it === "r" ? (
+      res
+    ) : it === "c" ? (
       renderChannel ? (
         renderChannel("text-gray-400 hover:text-accent")
       ) : (
@@ -177,8 +192,15 @@ export default function CardCopy({
           <span key={i} data-sizer={i} data-text={f.text} />
         ))}
         <span data-sizer="sep" data-text={SEP} />
+        {resolution ? (
+          <span
+            data-sizer="r"
+            data-text={resolution}
+            className="text-[10px] font-medium"
+          />
+        ) : null}
       </div>
-      <div className="absolute inset-x-3 top-3 flex flex-col gap-1">
+      <div className="absolute inset-3 flex flex-col justify-between gap-1">
         <CardTitle
           text={title}
           truncated={plan.titleLines < measures.titleNeeded}
@@ -207,12 +229,17 @@ export default function CardCopy({
                 </Fragment>
               ))}
             </span>
-            {i === last && trailing ? (
+            {i === last && plan.resTrailing && resolution ? (
+              <span className="ml-auto shrink-0 pl-2">{res}</span>
+            ) : null}
+            {i === last && action ? (
               <span
-                ref={trailRef}
-                className="ml-auto flex shrink-0 items-center gap-2 pl-2"
+                ref={actionRef}
+                className={`flex shrink-0 items-center pl-2 ${
+                  plan.resTrailing && resolution ? "" : "ml-auto"
+                }`}
               >
-                {trailing}
+                {action}
               </span>
             ) : null}
           </div>

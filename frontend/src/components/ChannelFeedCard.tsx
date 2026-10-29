@@ -74,8 +74,11 @@ function likeRatioTitle(
   return `${likes.toLocaleString()} likes · ${dislikes.toLocaleString()} dislikes (YouTube)`;
 }
 
-/** The facts under a grid card's title: when, views, likes. */
-function feedFacts(entry: ChannelFeedEntry): CardFact[] {
+/**
+ * The facts under a grid card's title: when, views, likes, and (optional, to
+ * fill a taller row) that it is in the library.
+ */
+function feedFacts(entry: ChannelFeedEntry, inLibrary: boolean): CardFact[] {
   const facts: CardFact[] = [];
   const dateLabel = formatPublishedAt(
     entry.published_at,
@@ -92,63 +95,54 @@ function feedFacts(entry: ChannelFeedEntry): CardFact[] {
       title: likeRatioTitle(entry.like_count, entry.dislike_count),
     });
   }
+  if (inLibrary) facts.push({ text: "In your library" });
   return facts;
 }
 
 /**
- * The end of a grid card's last details line: the resolution, then the state
- * or the action (live, upcoming, downloaded, or a small download button).
+ * The bottom right of a grid card: its state or action (live, upcoming,
+ * downloaded, or a small download button).
  */
-function FeedTrailing({
+function FeedAction({
   entry,
-  maxRes,
   inLibrary,
   downloading,
   onDownload,
 }: {
   entry: ChannelFeedEntry;
-  maxRes: string;
   inLibrary: boolean;
   downloading?: boolean;
   onDownload: () => void;
 }) {
   const { can } = useAuth();
-  const state =
-    entry.live_status === "is_live" ? (
-      <LiveNowLabel />
-    ) : entry.live_status === "is_upcoming" ? (
-      <UpcomingLabel />
-    ) : inLibrary ? (
+  if (entry.live_status === "is_live") return <LiveNowLabel />;
+  if (entry.live_status === "is_upcoming") return <UpcomingLabel />;
+  if (inLibrary) {
+    return (
       <span className="text-success" title="Downloaded">
         <CheckIcon className="text-sm" />
         <span className="sr-only">Downloaded</span>
       </span>
-    ) : can("download") ? (
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          onDownload();
-        }}
-        disabled={downloading}
-        aria-label={downloading ? "Downloading" : "Download"}
-        title={downloading ? "Downloading" : "Download"}
-        // A 16px line holds a 20px button: the margins keep the line's height,
-        // and the ::after widens what a finger can hit.
-        className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60"
-      >
-        <DownloadIcon className="text-sm" />
-      </button>
-    ) : null;
-  if (!maxRes && !state) return null;
+    );
+  }
+  if (!can("download")) return null;
   return (
-    <>
-      {maxRes ? (
-        <span className="text-[10px] font-medium text-muted">{maxRes}</span>
-      ) : null}
-      {state}
-    </>
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onDownload();
+      }}
+      disabled={downloading}
+      aria-label={downloading ? "Downloading" : "Download"}
+      title={downloading ? "Downloading" : "Download"}
+      // A 16px line holds a 20px button: the margins keep the line's height,
+      // and the ::after widens what a finger can hit.
+      className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60"
+    >
+      <DownloadIcon className="text-sm" />
+    </button>
   );
 }
 
@@ -510,11 +504,12 @@ export default function ChannelFeedCard({
               className={className}
             />
           )}
-          facts={feedFacts(entry)}
-          trailing={
-            <FeedTrailing
+          facts={feedFacts(entry, inLibrary)}
+          required={feedFacts(entry, false).length}
+          resolution={maxRes}
+          action={
+            <FeedAction
               entry={entry}
-              maxRes={maxRes}
               inLibrary={inLibrary}
               downloading={downloading}
               onDownload={onDownload}

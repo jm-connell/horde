@@ -254,12 +254,15 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   Every grid card's text is laid out by `CardCopy` (`components/cardCopyPlan.ts`)
   in 1.25rem lines (a title line, or a 1rem details line with its gap). A card
   asks its row for its title plus the fewest details lines that show every
-  detail whole; the row takes its tallest card. A card with spare lines splits
-  its details (channel; date · views; likes) and then adds optional facts
-  (on library cards: views, date added, size), a whole line at a time, so text
-  sits right under the title with no gap. Resolution and the state or action
-  (a small accent download icon, a success check when downloaded, Live,
-  Upcoming) end the last details line and never take a line of their own. "+ Queue"
+  detail whole; the row takes its tallest card. A card with spare lines fills
+  them a whole line at a time: it splits its details (channel; date · views;
+  likes), then moves the resolution to a line of its own, then adds optional
+  facts (library cards: views, date added, size; downloaded channel videos:
+  "In your library"). The lines run from just under the title to the bottom of
+  the card, and anything that cannot be filled is spread evenly between them,
+  so there is never a gap under the title or at the bottom. The action (a small
+  accent download icon, a success check when downloaded, Live, Upcoming)
+  always sits at the bottom right, never on a line of its own. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended+, when **Sources** is on, a

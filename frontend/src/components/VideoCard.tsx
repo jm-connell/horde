@@ -227,13 +227,7 @@ export default function VideoCard({
         }
         facts={facts}
         required={required}
-        trailing={
-          resolution ? (
-            <span className="text-[10px] font-medium text-muted">
-              {resolution}
-            </span>
-          ) : null
-        }
+        resolution={resolution}
         className={`transition-colors duration-200 ${
           previewActive ? "max-sm:bg-accent/10" : ""
         }`}
