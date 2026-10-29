@@ -124,7 +124,8 @@ export default function VideoCard({
         "ui-card ui-card-enter video-card--feed group flex flex-col overflow-hidden transition-colors",
         "max-sm:rounded-none max-sm:bg-transparent max-sm:shadow-none max-sm:ring-0",
         "max-sm:border-b max-sm:border-ink-700 max-sm:last:border-b-0",
-        "sm:rounded-xl sm:bg-ink-900 sm:ring-1",
+        // Fill the grid cell, so cards in a row are one height.
+        "sm:h-full sm:rounded-xl sm:bg-ink-900 sm:ring-1",
         selected ? "sm:ring-accent" : "sm:ring-ink-700 sm:hover:ring-accent/60",
       ].join(" ")
     : `ui-card ui-card-enter group flex flex-col overflow-hidden rounded-xl bg-ink-900 ring-1 ring-ink-700 transition-colors ${

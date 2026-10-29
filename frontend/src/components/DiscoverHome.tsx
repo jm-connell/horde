@@ -340,10 +340,13 @@ export default function DiscoverHome({
     return (
       <div
         key={item.key}
-        className="group/rec relative"
+        // On phones the divider goes under the reason line, not between the
+        // card and its reason.
+        className="group/rec relative flex flex-col max-sm:border-b max-sm:border-ink-700"
         data-rec-key={item.key}
       >
-        <div className="relative">
+        {/* Grows to the row, so every card in a row is one height. */}
+        <div className="relative flex-1 max-sm:[&>*]:border-b-0!">
           {item.video ? (
             <VideoCard video={item.video} layout="feed" />
           ) : item.stream ? (

@@ -18,6 +18,18 @@ test("Recommended+ mixes the library with videos found on YouTube", async ({
   await expect(card.getByText("New channel for you")).toBeVisible();
   // Library videos are in the same feed.
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
+  // Library and found cards in one row are one height.
+  const boxes = await page
+    .locator("[data-rec-key] > div:first-child")
+    .evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { top: Math.round(r.top), height: Math.round(r.height) };
+      })
+    );
+  const firstRow = boxes.filter((b) => b.top === boxes[0].top);
+  expect(firstRow.length).toBeGreaterThan(1);
+  expect(new Set(firstRow.map((b) => b.height)).size).toBe(1);
   // The tab is remembered.
   await page.reload();
   await expect(page.getByText(FOUND)).toBeVisible();
