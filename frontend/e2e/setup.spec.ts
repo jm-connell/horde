@@ -103,6 +103,28 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   ).toBeVisible();
   await page.getByRole("button", { name: "Skip", exact: true }).click();
 
+  // YouTube history is optional and lands on the new administrator's account.
+  await expect(
+    page.getByRole("heading", { name: "YouTube history (optional)" })
+  ).toBeVisible();
+  await page.getByLabel("Choose export").setInputFiles({
+    name: "watch-history.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(
+      JSON.stringify([
+        {
+          header: "YouTube",
+          title: "Watched First video",
+          titleUrl: "https://www.youtube.com/watch?v=wizard00001",
+          time: "2024-05-01T10:00:00.000Z",
+        },
+      ])
+    ),
+  });
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await expect(page.getByText("1 new view")).toBeVisible();
+  await page.getByRole("button", { name: "Done" }).click();
+
   await expect(page.getByRole("heading", { name: /You.re set/ })).toBeVisible();
   // The UI syncs settings to the server on a short debounce, so wait for the
   // server state instead of reading it once.

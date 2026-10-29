@@ -37,6 +37,7 @@ import { playlistsApi } from "./api/playlists";
 import { reviewApi } from "./api/review";
 import { settingsApi } from "./api/settings";
 import { systemApi } from "./api/system";
+import { takeoutApi } from "./api/takeout";
 import { trashApi } from "./api/trash";
 import { videosApi } from "./api/videos";
 
@@ -54,4 +55,5 @@ export const api = {
   ...reviewApi,
   ...downloadsApi,
   ...playlistsApi,
+  ...takeoutApi,
 };

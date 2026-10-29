@@ -63,6 +63,7 @@ function videoToFeedEntry(v: Video): ChannelFeedEntry {
     like_count: null,
     dislike_count: null,
     match_reason: v.match_reason ?? null,
+    youtube_watched: false,
   };
 }
 

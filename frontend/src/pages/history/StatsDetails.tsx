@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
-import type { HistoryStats, HistoryStatsRange } from "../../types";
+import type {
+  HistoryStats,
+  HistoryStatsChannel,
+  HistoryStatsRange,
+} from "../../types";
 import { formatSize } from "../../utils";
 import HourHeatmap from "./HourHeatmap";
 import {
@@ -13,6 +17,11 @@ import {
   rangePhrase,
 } from "./statsFormat";
 import WatchTimeChart from "./WatchTimeChart";
+
+/** A week of hours without watch time (only YouTube views to show). */
+const EMPTY_HOURS: number[][] = Array.from({ length: 7 }, () =>
+  Array<number>(24).fill(0)
+);
 
 export function ChannelInitial({
   name,
@@ -93,8 +102,21 @@ function RangeSwitch({
   );
 }
 
+function channelAmount(stats: HistoryStats, channel: HistoryStatsChannel) {
+  const parts = [];
+  if (channel.seconds > 0) parts.push(formatWatchTime(channel.seconds));
+  if (stats.includes_youtube && channel.youtube_views > 0)
+    parts.push(
+      `${channel.youtube_views.toLocaleString()} YouTube view${channel.youtube_views === 1 ? "" : "s"}`
+    );
+  return parts.join(" · ");
+}
+
 function TopChannels({ stats }: { stats: HistoryStats }) {
-  const top = stats.channels[0]?.seconds ?? 0;
+  // With YouTube views (no time), channels rank by videos watched.
+  const measure = (c: HistoryStatsChannel) =>
+    stats.includes_youtube ? c.videos : c.seconds;
+  const top = stats.channels[0] ? measure(stats.channels[0]) : 0;
   if (stats.channels.length === 0)
     return <Empty>No channels {rangePhrase(stats.range)}.</Empty>;
   return (
@@ -110,7 +132,7 @@ function TopChannels({ stats }: { stats: HistoryStats }) {
               <span className="flex items-baseline justify-between gap-2 text-sm">
                 <span className="truncate text-gray-200">{channel.name}</span>
                 <span className="shrink-0 tabular-nums text-muted">
-                  {formatWatchTime(channel.seconds)}
+                  {channelAmount(stats, channel)}
                 </span>
               </span>
               <span
@@ -120,7 +142,7 @@ function TopChannels({ stats }: { stats: HistoryStats }) {
                 <span
                   className="block h-full rounded-full bg-accent"
                   style={{
-                    width: `${top > 0 ? (channel.seconds / top) * 100 : 0}%`,
+                    width: `${top > 0 ? (measure(channel) / top) * 100 : 0}%`,
                   }}
                 />
               </span>
@@ -241,6 +263,13 @@ export default function StatsDetails({
             watched · {totals.active_days} active day
             {totals.active_days === 1 ? "" : "s"} · {totals.videos_started}{" "}
             video{totals.videos_started === 1 ? "" : "s"} started
+            {stats.includes_youtube && totals.youtube_views > 0 && (
+              <>
+                {" "}
+                · {totals.youtube_views.toLocaleString()} YouTube view
+                {totals.youtube_views === 1 ? "" : "s"}
+              </>
+            )}
             {stats.best_day && (
               <>
                 {" "}
@@ -287,8 +316,11 @@ export default function StatsDetails({
             aside="by weekday and hour"
             className="lg:col-span-2"
           >
-            {stats.hours ? (
-              <HourHeatmap hours={stats.hours} />
+            {stats.hours || stats.youtube_hours ? (
+              <HourHeatmap
+                hours={stats.hours ?? EMPTY_HOURS}
+                youtubeViews={stats.youtube_hours}
+              />
             ) : (
               <Empty>Nothing watched {rangePhrase(stats.range)}.</Empty>
             )}

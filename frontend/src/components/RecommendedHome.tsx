@@ -18,25 +18,48 @@ import { ChevronIcon } from "./icons";
 
 const PAGE_SIZE = 24;
 
-/** One card: a library video, or a followed channel's upload not downloaded. */
-type RecItem =
-  | { key: string; video: Video; stream?: undefined }
-  | { key: string; video?: undefined; stream: ChannelFeedEntry };
+/**
+ * One card: a library video, or a followed channel's upload not downloaded.
+ * `throwback`: picked from a channel or topic watched months ago on YouTube.
+ */
+type RecItem = { key: string; throwback: boolean } & (
+  | { video: Video; stream?: undefined }
+  | { video?: undefined; stream: ChannelFeedEntry }
+);
 
 function recItems(data: RecommendationsResponse): RecItem[] {
   return data.sections.flatMap((section) =>
     (section.items ?? []).flatMap((item): RecItem[] =>
       item.video
-        ? [{ key: `v${item.video.id}`, video: item.video }]
+        ? [
+            {
+              key: `v${item.video.id}`,
+              video: item.video,
+              throwback: item.reason === "throwback",
+            },
+          ]
         : item.stream
           ? [
               {
                 key: `s${item.stream.id ?? item.stream.url}`,
                 stream: item.stream,
+                throwback: item.reason === "throwback",
               },
             ]
           : []
     )
+  );
+}
+
+/** Marks a pick from something the user watched months ago on YouTube. */
+function ThrowbackBadge() {
+  return (
+    <span
+      className="pointer-events-none absolute top-2 left-2 z-30 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white ring-1 ring-white/20 max-sm:left-5"
+      title="From a channel or topic you watched months ago on YouTube"
+    >
+      Throwback
+    </span>
   );
 }
 
@@ -334,22 +357,24 @@ export default function RecommendedHome({
       ) : (
         <>
           <div className={gridClass}>
-            {feedVideos.map((item) =>
-              item.video ? (
-                <VideoCard key={item.key} video={item.video} layout="feed" />
-              ) : (
-                <ChannelFeedCard
-                  key={item.key}
-                  entry={item.stream}
-                  channelName={item.stream.channel || "Unknown channel"}
-                  layout="grid"
-                  inLibrary={false}
-                  onDownload={() => downloadStream(item.stream)}
-                  downloading={downloading.has(item.stream.url)}
-                  skipRemotePreview
-                />
-              )
-            )}
+            {feedVideos.map((item) => (
+              <div key={item.key} className="relative">
+                {item.video ? (
+                  <VideoCard video={item.video} layout="feed" />
+                ) : (
+                  <ChannelFeedCard
+                    entry={item.stream}
+                    channelName={item.stream.channel || "Unknown channel"}
+                    layout="grid"
+                    inLibrary={false}
+                    onDownload={() => downloadStream(item.stream)}
+                    downloading={downloading.has(item.stream.url)}
+                    skipRemotePreview
+                  />
+                )}
+                {item.throwback && <ThrowbackBadge />}
+              </div>
+            ))}
           </div>
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}

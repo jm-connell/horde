@@ -203,6 +203,8 @@ export interface Settings {
   aiExpanded: boolean;
   /** History page stats band showing its details (charts) or only the tiles. */
   historyStatsExpanded: boolean;
+  /** History stats also count the imported YouTube history (views, never time). */
+  historyIncludeYoutube: boolean;
   showRelatedVideos: boolean;
   /**
    * When true, show an up-next countdown after a video ends (the queue still

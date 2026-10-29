@@ -33,6 +33,7 @@ function entry(
     library_height_px: extra.library_height_px ?? null,
     max_height: extra.max_height ?? null,
     match_reason: extra.match_reason ?? { source: "title" },
+    youtube_watched: extra.youtube_watched ?? false,
   };
 }
 
