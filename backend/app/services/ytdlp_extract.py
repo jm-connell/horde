@@ -17,6 +17,7 @@ from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     QuietYtdlpLogger,
+    call_gated,
     classify_ytdlp_error,
     cookie_configured,
     extract_has_media,
@@ -900,6 +901,143 @@ def search_youtube_videos(
     ):
         has_more = True
     return {"entries": page, "has_more": has_more}
+
+
+#: YouTube's "upload date: this year" search filter, encoded the way the
+#: results URL carries it (yt-dlp passes ``sp`` through as the search params).
+_SEARCH_THIS_YEAR = "EgIIBQ%253D%253D"
+
+
+def _discovery_entry(raw: dict[str, Any]) -> dict[str, Any] | None:
+    mapped = _map_flat_video_entry(raw)
+    if mapped is None or not mapped.get("id"):
+        return None
+    if mapped.get("live_status") in ("is_live", "is_upcoming"):
+        return None
+    description = raw.get("description")
+    mapped["description"] = str(description)[:1000] if description else None
+    if not mapped.get("channel_url") and raw.get("channel_url"):
+        mapped["channel_url"] = str(raw["channel_url"])
+    return mapped
+
+
+def search_youtube_for_discovery(
+    query: str, *, this_year: bool, limit: int = 20
+) -> list[dict[str, Any]]:
+    """One page of YouTube's video search for Recommended+ (no Shorts, no live).
+
+    Raises on failure: the gatherer backs off on a bot check or rate limit, so
+    errors must reach it. ``limit`` stays within the first results page, so this
+    is a single request.
+    """
+    import urllib.parse
+
+    q = (query or "").strip()
+    url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote(q)
+    if this_year:
+        url += "&sp=" + _SEARCH_THIS_YEAR
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "playlistend": limit,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
+    info = _as_info(
+        extract_info_gated(
+            url,
+            opts,
+            cache_key=f"discovery-search:v1:{url}:{limit}",
+            cookie_retry=False,
+            priority=EXTRACT_PRIORITY_BACKGROUND,
+        )
+    )
+    out: list[dict[str, Any]] = []
+    for raw in info.get("entries") or []:
+        if isinstance(raw, dict) and (entry := _discovery_entry(raw)):
+            out.append(entry)
+    return out
+
+
+def parse_up_next(ie: Any, response: dict[str, Any]) -> list[dict[str, Any]]:
+    """The videos in a ``/youtubei/v1/next`` response's up next column.
+
+    ``ie`` is a yt-dlp ``YoutubeTabIE``: its renderer parsers read both the
+    current ``lockupViewModel`` cards and the older ``compactVideoRenderer`` ones,
+    and follow YouTube's changes with each yt-dlp release.
+    """
+    results = (
+        ((response.get("contents") or {}).get("twoColumnWatchNextResults") or {})
+        .get("secondaryResults", {})
+        .get("secondaryResults", {})
+        .get("results")
+    ) or []
+    items: list[Any] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        section = item.get("itemSectionRenderer")
+        if isinstance(section, dict):
+            items.extend(section.get("contents") or [])
+        else:
+            items.append(item)
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        raw: dict[str, Any] | None = None
+        try:
+            if isinstance(item.get("lockupViewModel"), dict):
+                raw = ie._extract_lockup_view_model(item["lockupViewModel"])
+            elif isinstance(item.get("compactVideoRenderer"), dict):
+                raw = ie._extract_video(item["compactVideoRenderer"])
+        except Exception:
+            logger.debug("skipped an up next card yt-dlp could not read", exc_info=True)
+            continue
+        if not raw or str(raw.get("ie_key") or "") != "Youtube":
+            continue
+        entry = _discovery_entry(raw)
+        if entry is None or entry["id"] in seen:
+            continue
+        seen.add(entry["id"])
+        out.append(entry)
+    return out
+
+
+def youtube_up_next(yt_id: str) -> list[dict[str, Any]]:
+    """The up next list YouTube shows beside a video (one ``next`` request).
+
+    yt-dlp does not extract it, so this calls YouTube's ``next`` endpoint through
+    yt-dlp's own client (headers, context and retries) under the extract gate.
+    Raises on failure, like ``search_youtube_for_discovery``.
+    """
+    import yt_dlp
+    from yt_dlp.extractor.youtube import YoutubeTabIE
+
+    url = f"https://www.youtube.com/watch?v={yt_id}"
+
+    def fetch() -> list[dict[str, Any]]:
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": QuietYtdlpLogger(),
+            "extractor_args": youtube_extractor_args(),
+        }
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            ie = ydl.get_info_extractor(YoutubeTabIE.ie_key())
+            ie.initialize()
+            response = ie._extract_response(
+                item_id=yt_id,
+                query={"videoId": yt_id},
+                ep="next",
+                check_get_keys="contents",
+            )
+            return parse_up_next(ie, response if isinstance(response, dict) else {})
+
+    return call_gated(fetch, url=url)
 
 
 def search_youtube_channels(query: str, *, limit: int = 8) -> list[dict[str, Any]]:

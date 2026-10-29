@@ -225,6 +225,10 @@ DEFAULTS: dict[str, Any] = {
     "channel_catalog_max_videos": 1000,
     "direct_youtube_search": True,
     "youtube_video_search": True,
+    # Recommended+ (services/discovery): look for videos on YouTube, and let what
+    # others here with similar taste liked nudge the ranking.
+    "discovery_enabled": True,
+    "discovery_household": True,
     "download_queue_paused": False,
     # Where outgoing notifications go (services/notifications/targets.py).
     "notification_targets": [],

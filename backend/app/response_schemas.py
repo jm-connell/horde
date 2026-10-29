@@ -460,3 +460,85 @@ class FontRead(BaseModel):
 
 class FontList(BaseModel):
     items: list[FontRead]
+
+
+# --- Recommended+ ------------------------------------------------------------
+
+
+class DiscoverReasonRead(BaseModel):
+    #: subscription | similar | new_channel | throwback | library
+    kind: str
+    text: str
+    #: A longer why (``Because you watched ...``) for a tooltip.
+    detail: str | None = None
+
+
+class DiscoverItemRead(BaseModel):
+    """A library video (``video``) or a video that is not downloaded (``stream``)."""
+
+    #: The YouTube id, or ``video:<id>`` for a library video without one. Feedback
+    #: and impressions name the item by it.
+    key: str
+    video: VideoRead | None = None
+    stream: ChannelFeedEntry | None = None
+    reason: DiscoverReasonRead
+    #: library (downloaded), followed (a followed channel's video, not
+    #: downloaded) or unfollowed (any other channel's).
+    source: Literal["library", "followed", "unfollowed"]
+
+
+class DiscoverStatusRead(BaseModel):
+    #: Recommended+ may ask YouTube for videos (its switch and video search are on).
+    enabled: bool
+    #: The gatherer is working for this user right now, or will on its next pass.
+    gathering: bool
+    last_run_at: str | None = None
+    #: Videos found outside the library and the catalogs for this user.
+    found: int
+    #: Too little watch history: the feed leans on the household and the library.
+    cold: bool
+    #: YouTube pushed back; the gatherer is waiting before it asks again.
+    backing_off: bool
+
+
+class DiscoverFeedRead(BaseModel):
+    items: list[DiscoverItemRead]
+    next_cursor: str | None = None
+    status: DiscoverStatusRead
+
+
+class SuggestedChannelRead(BaseModel):
+    name: str
+    url: str
+    reason: str | None = None
+    #: Some of its videos the feed picked.
+    videos: list[ChannelFeedEntry]
+    #: Its catalog is indexed already (following adds its uploads at once).
+    indexed: bool
+
+
+class SuggestedChannelsRead(BaseModel):
+    items: list[SuggestedChannelRead]
+
+
+class RecFeedbackRead(BaseModel):
+    id: int
+    kind: str
+    key: str
+    label: str | None = None
+    created_at: str
+
+
+class RecFeedbackListRead(BaseModel):
+    items: list[RecFeedbackRead]
+
+
+class DiscoverRefreshRead(BaseModel):
+    queued: bool
+    detail: str
+
+
+class StreamWatchRead(BaseModel):
+    yt_id: str
+    watched_sec: float
+    finished: bool

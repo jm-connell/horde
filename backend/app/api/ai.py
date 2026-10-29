@@ -34,6 +34,8 @@ from ..services.ai.provider import (
     test_connection,
 )
 from ..services.auth.accounts import AuthUser
+from ..services.discovery import feedback
+from ..services.discovery.history import library_key
 from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
@@ -537,7 +539,7 @@ def ai_recommendations(
     offset: int = Query(default=0, ge=0),
     include_streams: bool = Query(
         default=False,
-        description="Mix in followed channels' indexed uploads that are not downloaded.",
+        description="Mix in indexed channels' uploads that are not downloaded.",
     ),
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
@@ -601,6 +603,16 @@ def ai_recommendations(
                     )
                 }
             )
+    feedback.record_shown(
+        session,
+        user.id,
+        [
+            library_key(i.video.id, i.video.youtube_id)
+            for i in page.items
+            if i.video is not None
+        ]
+        + [i.stream.yt_id for i in page.items if i.stream is not None],
+    )
     return {
         "categories": recommend.list_categories(session) if ai_ready else [],
         "sections": [
