@@ -4,6 +4,7 @@ import DownloadsSection from "./account/DownloadsSection";
 import PasswordSection from "./account/PasswordSection";
 import TwoFactorSection from "./account/TwoFactorSection";
 import ProfileSection from "./account/ProfileSection";
+import RecommendationsSection from "./account/RecommendationsSection";
 import UsersSection from "./account/UsersSection";
 
 /**
@@ -27,6 +28,9 @@ export default function Account() {
         </div>
         <div className="border-t border-ink-700 pt-6">
           <DownloadsSection />
+        </div>
+        <div className="border-t border-ink-700 pt-6">
+          <RecommendationsSection />
         </div>
         <div className="border-t border-ink-700 pt-6">
           <DevicesSection />

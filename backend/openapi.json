@@ -1887,6 +1887,16 @@
             "title": "Direct Youtube Search",
             "type": "boolean"
           },
+          "discovery_enabled": {
+            "default": true,
+            "title": "Discovery Enabled",
+            "type": "boolean"
+          },
+          "discovery_household": {
+            "default": true,
+            "title": "Discovery Household",
+            "type": "boolean"
+          },
           "max_library_bytes": {
             "anyOf": [
               {
@@ -1995,6 +2005,28 @@
               }
             ],
             "title": "Direct Youtube Search"
+          },
+          "discovery_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovery Enabled"
+          },
+          "discovery_household": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discovery Household"
           },
           "max_library_bytes": {
             "anyOf": [
@@ -4054,6 +4086,176 @@
           }
         },
         "title": "ConvertLibraryRequest",
+        "type": "object"
+      },
+      "DiscoverFeedRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "status": {
+            "$ref": "#/components/schemas/DiscoverStatusRead"
+          }
+        },
+        "required": [
+          "items",
+          "status"
+        ],
+        "title": "DiscoverFeedRead",
+        "type": "object"
+      },
+      "DiscoverItemRead": {
+        "description": "A library video (``video``) or a video that is not downloaded (``stream``).",
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/DiscoverReasonRead"
+          },
+          "source": {
+            "enum": [
+              "library",
+              "channels",
+              "new"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "stream": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelFeedEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "reason",
+          "source"
+        ],
+        "title": "DiscoverItemRead",
+        "type": "object"
+      },
+      "DiscoverReasonRead": {
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "DiscoverReasonRead",
+        "type": "object"
+      },
+      "DiscoverRefreshRead": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queued",
+          "detail"
+        ],
+        "title": "DiscoverRefreshRead",
+        "type": "object"
+      },
+      "DiscoverStatusRead": {
+        "properties": {
+          "backing_off": {
+            "title": "Backing Off",
+            "type": "boolean"
+          },
+          "cold": {
+            "title": "Cold",
+            "type": "boolean"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "found": {
+            "title": "Found",
+            "type": "integer"
+          },
+          "gathering": {
+            "title": "Gathering",
+            "type": "boolean"
+          },
+          "last_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Run At"
+          }
+        },
+        "required": [
+          "enabled",
+          "gathering",
+          "found",
+          "cold",
+          "backing_off"
+        ],
+        "title": "DiscoverStatusRead",
         "type": "object"
       },
       "DiskUsage": {
@@ -7865,6 +8067,98 @@
         "title": "ReauthRequest",
         "type": "object"
       },
+      "RecFeedbackListRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecFeedbackRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecFeedbackListRead",
+        "type": "object"
+      },
+      "RecFeedbackRead": {
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "key",
+          "created_at"
+        ],
+        "title": "RecFeedbackRead",
+        "type": "object"
+      },
+      "RecFeedbackWrite": {
+        "description": "``video``: leave this video out. ``channel``: leave the channel out.\n``suggestion``: stop suggesting the channel (its videos may still show).",
+        "properties": {
+          "key": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Key",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "video",
+              "channel",
+              "suggestion"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "RecFeedbackWrite",
+        "type": "object"
+      },
       "RecommendationItemRead": {
         "description": "A library video (``video``) or an upload that is not downloaded (``stream``).",
         "properties": {
@@ -8717,6 +9011,106 @@
         "title": "StreamRelatedPage",
         "type": "object"
       },
+      "StreamWatchRead": {
+        "properties": {
+          "finished": {
+            "title": "Finished",
+            "type": "boolean"
+          },
+          "watched_sec": {
+            "title": "Watched Sec",
+            "type": "number"
+          },
+          "yt_id": {
+            "title": "Yt Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "yt_id",
+          "watched_sec",
+          "finished"
+        ],
+        "title": "StreamWatchRead",
+        "type": "object"
+      },
+      "StreamWatchWrite": {
+        "description": "How far the user got in a video they streamed without downloading it.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "duration_sec": {
+            "anyOf": [
+              {
+                "maximum": 604800.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Sec"
+          },
+          "finished": {
+            "default": false,
+            "title": "Finished",
+            "type": "boolean"
+          },
+          "position_sec": {
+            "maximum": 604800.0,
+            "minimum": 0.0,
+            "title": "Position Sec",
+            "type": "number"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "url",
+          "position_sec"
+        ],
+        "title": "StreamWatchWrite",
+        "type": "object"
+      },
       "SubtitleTrack": {
         "properties": {
           "auto": {
@@ -8733,6 +9127,64 @@
           "lang"
         ],
         "title": "SubtitleTrack",
+        "type": "object"
+      },
+      "SuggestedChannelRead": {
+        "properties": {
+          "indexed": {
+            "title": "Indexed",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "videos": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelFeedEntry"
+            },
+            "title": "Videos",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "url",
+          "videos",
+          "indexed"
+        ],
+        "title": "SuggestedChannelRead",
+        "type": "object"
+      },
+      "SuggestedChannelsRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SuggestedChannelRead"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "SuggestedChannelsRead",
         "type": "object"
       },
       "SystemActivityRead": {
@@ -11277,13 +11729,13 @@
             }
           },
           {
-            "description": "Mix in followed channels' indexed uploads that are not downloaded.",
+            "description": "Mix in indexed channels' uploads that are not downloaded.",
             "in": "query",
             "name": "include_streams",
             "required": false,
             "schema": {
               "default": false,
-              "description": "Mix in followed channels' indexed uploads that are not downloaded.",
+              "description": "Mix in indexed channels' uploads that are not downloaded.",
               "title": "Include Streams",
               "type": "boolean"
             }
@@ -13868,6 +14320,441 @@
         "summary": "Compat Summary",
         "tags": [
           "compat"
+        ]
+      }
+    },
+    "/api/discover/channels": {
+      "get": {
+        "description": "Channels new to the user that their Recommended+ feed leans on most.",
+        "operationId": "discover_channels_api_discover_channels_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "seed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMaximum": 2147483648,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Seed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuggestedChannelsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Discover Channels",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/feed": {
+      "get": {
+        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). Each page counts as shown for its videos.",
+        "operationId": "discover_feed_api_discover_feed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 24,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "description": "Ordering seed; a new one reshuffles the less certain picks.",
+            "in": "query",
+            "name": "seed",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "exclusiveMaximum": 2147483648,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Ordering seed; a new one reshuffles the less certain picks.",
+              "title": "Seed"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverFeedRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Discover Feed",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/feedback": {
+      "get": {
+        "description": "What the user asked recommendations to leave out, newest first.",
+        "operationId": "list_feedback_api_discover_feedback_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecFeedbackListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Feedback",
+        "tags": [
+          "discover"
+        ]
+      },
+      "post": {
+        "description": "Not interested in a video, don't recommend a channel, or hide a suggestion.\n\nFor the channel kinds ``key`` is the channel URL (may be empty) and ``label``\nits name; they are stored in normalized form.",
+        "operationId": "add_feedback_api_discover_feedback_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecFeedbackWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecFeedbackRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add Feedback",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/feedback/{feedback_id}": {
+      "delete": {
+        "description": "Undo one piece of feedback.",
+        "operationId": "remove_feedback_api_discover_feedback__feedback_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "feedback_id",
+            "required": true,
+            "schema": {
+              "title": "Feedback Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecFeedbackRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Feedback",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/history": {
+      "post": {
+        "description": "Note how far the user got in a video they streamed without downloading.",
+        "operationId": "record_stream_watch_api_discover_history_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StreamWatchWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamWatchRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Record Stream Watch",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/refresh": {
+      "post": {
+        "description": "Look for new videos on YouTube soon (at most every 20 minutes per user).",
+        "operationId": "discover_refresh_api_discover_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverRefreshRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Discover Refresh",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/status": {
+      "get": {
+        "description": "Whether the gatherer is working for this user (the page polls this).",
+        "operationId": "discover_status_api_discover_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverStatusRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Discover Status",
+        "tags": [
+          "discover"
         ]
       }
     },

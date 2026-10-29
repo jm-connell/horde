@@ -122,6 +122,10 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
+    # Recommended+ looks for videos on YouTube (needs youtube_video_search too).
+    discovery_enabled: bool = True
+    # Recommended+ leans a little on what others here with similar taste liked.
+    discovery_household: bool = True
     # Downloads wait once the library takes this many bytes; null = no limit.
     max_library_bytes: int | None = None
     # Write Jellyfin / Kodi / Plex files (.nfo, -thumb.jpg) beside the media.
@@ -146,6 +150,8 @@ class AppSettingsUpdate(BaseModel):
     )
     direct_youtube_search: bool | None = None
     youtube_video_search: bool | None = None
+    discovery_enabled: bool | None = None
+    discovery_household: bool | None = None
     # null (or 0) removes the limit.
     max_library_bytes: int | None = Field(
         default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
@@ -298,6 +304,8 @@ def _settings_read(
         ),
         direct_youtube_search=app_settings.direct_youtube_search_system(data),
         youtube_video_search=app_settings.youtube_video_search_system(data),
+        discovery_enabled=bool(data.get("discovery_enabled", True)),
+        discovery_household=bool(data.get("discovery_household", True)),
         max_library_bytes=app_settings.clamp_max_library_bytes(
             data.get("max_library_bytes")
         ),
@@ -368,6 +376,10 @@ def update_settings(
         updates["direct_youtube_search"] = bool(payload.direct_youtube_search)
     if payload.youtube_video_search is not None:
         updates["youtube_video_search"] = bool(payload.youtube_video_search)
+    if payload.discovery_enabled is not None:
+        updates["discovery_enabled"] = bool(payload.discovery_enabled)
+    if payload.discovery_household is not None:
+        updates["discovery_household"] = bool(payload.discovery_household)
     if "max_library_bytes" in payload.model_fields_set:
         updates["max_library_bytes"] = app_settings.clamp_max_library_bytes(
             payload.max_library_bytes

@@ -40,6 +40,7 @@ EXPECTED_WORKERS = {
     "live-poller",
     "subtitle-retry",
     "stream-ai",
+    "discovery",
     "job-metadata",
     "trash-purge",
     "channel-retention",

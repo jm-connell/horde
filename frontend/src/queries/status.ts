@@ -47,6 +47,15 @@ export function useAiStatus(opts: PollOptions = {}) {
   });
 }
 
+/** Recommended+: whether it may look on YouTube (the tab hides when not). */
+export function useDiscoverStatus(opts: PollOptions = {}) {
+  return useQuery({
+    queryKey: queryKeys.discover.status,
+    queryFn: ({ signal }) => api.getDiscoverStatus({ signal }),
+    ...statusOptions(opts),
+  });
+}
+
 export function useSystemStats(opts: PollOptions = {}) {
   return useQuery({
     queryKey: queryKeys.system.stats,

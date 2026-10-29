@@ -7,6 +7,33 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Recommended+**, a third home tab for when you don't know what to watch:
+  new uploads from your channels, more like what you've watched lately,
+  channels you've never watched (found on YouTube in the background) and the
+  odd throwback, mixed into one feed. Cards have "Not interested" and "Don't
+  recommend this channel" (with Undo, and listed in Account settings), a
+  "Channels you might like" row, and optional outlines in your accent color
+  for downloaded, your channels and new. The background search is gentle:
+  only for people who opened the tab lately, at most 7 YouTube calls a person
+  every 6 hours, 20 seconds apart and 30 an hour in all, pausing when YouTube
+  pushes back. It can be turned off in Settings → Library, which hides the tab.
+- Videos you watch without downloading now count as watch history for
+  recommendations.
+
+### Changed
+
+- Recommended now includes not-downloaded uploads from every indexed channel
+  by default, not only followed ones, and honours "not interested".
+- Video cards in every grid line up: cards in a row are one height, the text
+  starts right under the title, details spread over spare lines instead of
+  leaving gaps, and the download button is a small icon at the bottom right.
+
+### Upgrade notes
+
+- A database migration (`0020_recommended_plus`) adds new tables only.
+
 ### Fixed
 
 - AI chats (Ask about Horde and video chat) no longer fail on a brief rate

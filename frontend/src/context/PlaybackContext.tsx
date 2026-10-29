@@ -64,6 +64,10 @@ import {
   withPlayingPosition,
 } from "./playback/helpers";
 import { useProgressSaver } from "../hooks/useProgressSaver";
+import {
+  useStreamWatchReporter,
+  type WatchedStream,
+} from "../hooks/useStreamWatchReporter";
 import { useAccountPosition } from "../hooks/useAccountPosition";
 import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 export interface StreamSession {
@@ -80,6 +84,20 @@ export interface StreamSession {
   liveVideoId?: string | null;
   /** YouTube's seek-preview sheets (finished videos only). */
   storyboard?: Storyboard | null;
+  /** For the user's stream history (Recommended+). */
+  durationSec?: number | null;
+  channelUrl?: string | null;
+}
+
+function watchedStream(stream: StreamSession): WatchedStream {
+  return {
+    url: stream.url,
+    title: stream.title,
+    channel: stream.channel,
+    channelUrl: stream.channelUrl,
+    durationSec: stream.durationSec,
+    live: Boolean(stream.liveVideoId),
+  };
 }
 
 export type MiniPlayerRect = {
@@ -254,6 +272,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     livePositionRef: libraryPosRef,
   });
   const progressSaver = useProgressSaver(noteSaved);
+  const streamWatch = useStreamWatchReporter();
+  // A stream's last position is sent when another one (or a library video) starts.
+  useEffect(() => () => streamWatch.flush(), [stream?.url, streamWatch]);
 
   useEffect(() => {
     setJson(QUEUE_KEY, queue, "session");
@@ -632,8 +653,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
     if (stream) {
-      // A not-downloaded video saves no progress and has no related up-next,
-      // but the queue still moves on.
+      // A not-downloaded video goes to the stream history, has no related
+      // up-next, and the queue still moves on.
+      streamWatch.finish(watchedStream(stream));
       if (queueRef.current.length > 0) advance();
       return;
     }
@@ -693,6 +715,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     current,
     stream,
     progressSaver,
+    streamWatch,
     advance,
     startUpNextCountdown,
     settings.autoplayRelated,
@@ -1028,6 +1051,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onVolumeChange={(v) => updateSettings({ volume: v })}
         onProgress={(sec) => {
           streamPosRef.current = sec;
+          streamWatch.report(watchedStream(stream), sec);
         }}
         onLiveBehind={handleLiveBehind}
         clipMarkers={clipMarkers}

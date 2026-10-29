@@ -1074,6 +1074,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Channels
+         * @description Channels new to the user that their Recommended+ feed leans on most.
+         */
+        get: operations["discover_channels_api_discover_channels_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/feed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Feed
+         * @description One page of the Recommended+ feed.
+         *
+         *     The first page also tells the gatherer this user is active (it starts at once
+         *     the first time). Each page counts as shown for its videos.
+         */
+        get: operations["discover_feed_api_discover_feed_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Feedback
+         * @description What the user asked recommendations to leave out, newest first.
+         */
+        get: operations["list_feedback_api_discover_feedback_get"];
+        put?: never;
+        /**
+         * Add Feedback
+         * @description Not interested in a video, don't recommend a channel, or hide a suggestion.
+         *
+         *     For the channel kinds ``key`` is the channel URL (may be empty) and ``label``
+         *     its name; they are stored in normalized form.
+         */
+        post: operations["add_feedback_api_discover_feedback_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/feedback/{feedback_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Feedback
+         * @description Undo one piece of feedback.
+         */
+        delete: operations["remove_feedback_api_discover_feedback__feedback_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record Stream Watch
+         * @description Note how far the user got in a video they streamed without downloading.
+         */
+        post: operations["record_stream_watch_api_discover_history_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover Refresh
+         * @description Look for new videos on YouTube soon (at most every 20 minutes per user).
+         */
+        post: operations["discover_refresh_api_discover_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Discover Status
+         * @description Whether the gatherer is working for this user (the page polls this).
+         */
+        get: operations["discover_status_api_discover_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads": {
         parameters: {
             query?: never;
@@ -4132,6 +4282,16 @@ export interface components {
              * @default true
              */
             direct_youtube_search: boolean;
+            /**
+             * Discovery Enabled
+             * @default true
+             */
+            discovery_enabled: boolean;
+            /**
+             * Discovery Household
+             * @default true
+             */
+            discovery_household: boolean;
             /** Max Library Bytes */
             max_library_bytes?: number | null;
             /**
@@ -4181,6 +4341,10 @@ export interface components {
             channel_catalog_max_videos?: number | null;
             /** Direct Youtube Search */
             direct_youtube_search?: boolean | null;
+            /** Discovery Enabled */
+            discovery_enabled?: boolean | null;
+            /** Discovery Household */
+            discovery_household?: boolean | null;
             /** Max Library Bytes */
             max_library_bytes?: number | null;
             /** Media Server Sidecars */
@@ -4941,6 +5105,61 @@ export interface components {
              * @default false
              */
             confirm: boolean;
+        };
+        /** DiscoverFeedRead */
+        DiscoverFeedRead: {
+            /** Items */
+            items: components["schemas"]["DiscoverItemRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            status: components["schemas"]["DiscoverStatusRead"];
+        };
+        /**
+         * DiscoverItemRead
+         * @description A library video (``video``) or a video that is not downloaded (``stream``).
+         */
+        DiscoverItemRead: {
+            /** Key */
+            key: string;
+            reason: components["schemas"]["DiscoverReasonRead"];
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "library" | "channels" | "new";
+            stream?: components["schemas"]["ChannelFeedEntry"] | null;
+            video?: components["schemas"]["VideoRead"] | null;
+        };
+        /** DiscoverReasonRead */
+        DiscoverReasonRead: {
+            /** Detail */
+            detail?: string | null;
+            /** Kind */
+            kind: string;
+            /** Text */
+            text: string;
+        };
+        /** DiscoverRefreshRead */
+        DiscoverRefreshRead: {
+            /** Detail */
+            detail: string;
+            /** Queued */
+            queued: boolean;
+        };
+        /** DiscoverStatusRead */
+        DiscoverStatusRead: {
+            /** Backing Off */
+            backing_off: boolean;
+            /** Cold */
+            cold: boolean;
+            /** Enabled */
+            enabled: boolean;
+            /** Found */
+            found: number;
+            /** Gathering */
+            gathering: boolean;
+            /** Last Run At */
+            last_run_at?: string | null;
         };
         /** DiskUsage */
         DiskUsage: {
@@ -6236,6 +6455,43 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** RecFeedbackListRead */
+        RecFeedbackListRead: {
+            /** Items */
+            items: components["schemas"]["RecFeedbackRead"][];
+        };
+        /** RecFeedbackRead */
+        RecFeedbackRead: {
+            /** Created At */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Key */
+            key: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label?: string | null;
+        };
+        /**
+         * RecFeedbackWrite
+         * @description ``video``: leave this video out. ``channel``: leave the channel out.
+         *     ``suggestion``: stop suggesting the channel (its videos may still show).
+         */
+        RecFeedbackWrite: {
+            /**
+             * Key
+             * @default
+             */
+            key: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "video" | "channel" | "suggestion";
+            /** Label */
+            label?: string | null;
+        };
         /**
          * RecommendationItemRead
          * @description A library video (``video``) or an upload that is not downloaded (``stream``).
@@ -6566,6 +6822,38 @@ export interface components {
             /** Next Cursor */
             next_cursor?: string | null;
         };
+        /** StreamWatchRead */
+        StreamWatchRead: {
+            /** Finished */
+            finished: boolean;
+            /** Watched Sec */
+            watched_sec: number;
+            /** Yt Id */
+            yt_id: string;
+        };
+        /**
+         * StreamWatchWrite
+         * @description How far the user got in a video they streamed without downloading it.
+         */
+        StreamWatchWrite: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Duration Sec */
+            duration_sec?: number | null;
+            /**
+             * Finished
+             * @default false
+             */
+            finished: boolean;
+            /** Position Sec */
+            position_sec: number;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+        };
         /** SubtitleTrack */
         SubtitleTrack: {
             /**
@@ -6575,6 +6863,24 @@ export interface components {
             auto: boolean;
             /** Lang */
             lang: string;
+        };
+        /** SuggestedChannelRead */
+        SuggestedChannelRead: {
+            /** Indexed */
+            indexed: boolean;
+            /** Name */
+            name: string;
+            /** Reason */
+            reason?: string | null;
+            /** Url */
+            url: string;
+            /** Videos */
+            videos: components["schemas"]["ChannelFeedEntry"][];
+        };
+        /** SuggestedChannelsRead */
+        SuggestedChannelsRead: {
+            /** Items */
+            items: components["schemas"]["SuggestedChannelRead"][];
         };
         /** SystemActivityRead */
         SystemActivityRead: {
@@ -7667,7 +7973,7 @@ export interface operations {
                 category?: string | null;
                 limit?: number;
                 offset?: number;
-                /** @description Mix in followed channels' indexed uploads that are not downloaded. */
+                /** @description Mix in indexed channels' uploads that are not downloaded. */
                 include_streams?: boolean;
             };
             header?: never;
@@ -9629,6 +9935,327 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompatSummaryRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discover_channels_api_discover_channels_get: {
+        parameters: {
+            query?: {
+                seed?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuggestedChannelsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discover_feed_api_discover_feed_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                /** @description Ordering seed; a new one reshuffles the less certain picks. */
+                seed?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverFeedRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_feedback_api_discover_feedback_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecFeedbackListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_feedback_api_discover_feedback_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecFeedbackWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecFeedbackRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_feedback_api_discover_feedback__feedback_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                feedback_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecFeedbackRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    record_stream_watch_api_discover_history_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StreamWatchWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamWatchRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discover_refresh_api_discover_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverRefreshRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discover_status_api_discover_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscoverStatusRead"];
                 };
             };
             /** @description Validation error */

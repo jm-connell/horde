@@ -7,9 +7,12 @@ seed or per category.
 
 "For you" also works without AI: then it ranks by what the watch history says
 about channels and tags (``_taste``), plus followed channels and freshness. It
-can also take in uploads of followed channels that are indexed but not
-downloaded (``include_streams``); they are scored on the same scale as the
-library (embeddings when AI is on, the taste otherwise) and merged in.
+can also take in uploads of indexed channels that are not downloaded
+(``include_streams``): every catalog, followed ones boosted. They are scored on
+the same scale as the library (embeddings when AI is on, the taste otherwise)
+and merged in. Videos the user streamed count as watched, "not interested" and
+blocked channels are left out, and a video shown on many visits without being
+watched sinks (``discovery.feedback``).
 """
 
 from __future__ import annotations
@@ -24,8 +27,10 @@ from sqlmodel import Session, col, select
 
 from ...models import (
     AiCategory,
+    ChannelCatalog,
     ChannelCatalogEmbedding,
     ChannelCatalogVideo,
+    UserStreamState,
     UserVideoState,
     Video,
     VideoTag,
@@ -34,6 +39,8 @@ from ...models import (
 )
 from .. import app_settings, follows
 from ..channel_catalog import query as catalog_query
+from ..discovery import feedback
+from ..discovery.history import library_key
 from . import embeddings, vector_index
 from .provider import get_embed_provider
 
@@ -322,14 +329,15 @@ def _taste_score(
 class _Upload:
     row: ChannelCatalogVideo
     channel: str
+    #: The catalog's channel URL.
+    url: str = ""
 
 
-def _followed_uploads(
-    session: Session, followed: set[str], downloaded: set[str]
-) -> list[_Upload]:
-    """Newest indexed, not-downloaded uploads of the channels the user follows."""
+def _catalog_uploads(session: Session, downloaded: set[str]) -> list[_Upload]:
+    """Newest indexed, not-downloaded uploads of every indexed channel."""
     out: list[_Upload] = []
-    for url in sorted(followed):
+    urls = session.exec(select(ChannelCatalog.channel_url)).all()
+    for url in sorted(urls):
         rows, name = catalog_query.visible_channel_videos(
             session, url, limit=STREAMS_PER_CHANNEL, exclude_yt_ids=downloaded
         )
@@ -337,7 +345,7 @@ def _followed_uploads(
             # Live and upcoming broadcasts have their own row on the home page.
             if row.live_status in ("is_live", "is_upcoming"):
                 continue
-            out.append(_Upload(row, (name or "").strip()))
+            out.append(_Upload(row, (name or "").strip(), url))
     return out
 
 
@@ -410,12 +418,44 @@ def _ranked_for_you_ids(
         and row[2]
         and follows.normalize_channel_url(row[2]) in followed
     }
+    excluded = feedback.exclusions(session, user_id)
+    streamed = set(
+        session.exec(
+            select(UserStreamState.yt_id).where(UserStreamState.user_id == user_id)
+        ).all()
+    )
     uploads: dict[int, _Upload] = {}
-    if include_streams and followed:
+    followed_uploads: set[int] = set()
+    if include_streams:
         downloaded = {row[3] for row in library_rows if row[3]}
-        for upload in _followed_uploads(session, followed, downloaded):
-            uploads[-require_id(upload.row)] = upload
-            channels[-require_id(upload.row)] = upload.channel
+        for upload in _catalog_uploads(session, downloaded | streamed):
+            key = -require_id(upload.row)
+            if excluded.blocks(upload.row.yt_id, upload.url, upload.channel):
+                continue
+            uploads[key] = upload
+            channels[key] = upload.channel
+            if follows.normalize_channel_url(upload.url) in followed:
+                followed_uploads.add(key)
+    # Leave out what the user said no to (the key lookups mirror discovery's).
+    blocked = {
+        int(row[0])
+        for row in library_rows
+        if row[0] is not None
+        and excluded.blocks(
+            library_key(row[0], row[3]), row[2], channels.get(int(row[0]))
+        )
+    }
+    for vid in blocked:
+        channels.pop(vid, None)
+    item_keys = {
+        int(row[0]): library_key(row[0], row[3])
+        for row in library_rows
+        if row[0] is not None
+    }
+    item_keys.update({key: u.row.yt_id for key, u in uploads.items()})
+    # Streamed in full or in part: watched, like a library watch.
+    watched_set |= {vid for vid, key in item_keys.items() if key in streamed}
+    visits = feedback.earlier_visits(session, user_id)
 
     scored: dict[int, float] = {}
     # Without AI, or before any watch has vectors, the taste ranks instead.
@@ -457,7 +497,7 @@ def _ranked_for_you_ids(
             )
             keys, matrix = _upload_vectors(session, uploads, seeds.shape[1])
             if keys:
-                score_rows(keys, matrix @ seeds.T, lambda _key: True)
+                score_rows(keys, matrix @ seeds.T, followed_uploads.__contains__)
     else:
         now = datetime.now(UTC)
         taste = _taste(session, history)
@@ -487,12 +527,19 @@ def _ranked_for_you_ids(
                 taste,
                 upload.channel,
                 [],
-                True,
+                key in followed_uploads,
                 _fresh(_published(upload.row.published_at), now),
             )
             if value is not None:
                 scored[key] = value
 
+    for key in list(scored):
+        if key not in channels:
+            del scored[key]
+            continue
+        seen = visits.get(item_keys.get(key, ""), 0)
+        if seen:
+            scored[key] -= feedback.impression_penalty(seen)
     ranked = _diversify(scored, channels)
     ranked_set = set(ranked)
     # Then the unscored, unwatched rest by recency, then what the user has seen.

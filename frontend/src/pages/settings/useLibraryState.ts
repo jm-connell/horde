@@ -75,6 +75,8 @@ export function useLibraryState() {
         | "metadata_sync_interval_hours"
         | "direct_youtube_search"
         | "youtube_video_search"
+        | "discovery_enabled"
+        | "discovery_household"
       >
     >
   ) => {
