@@ -32,6 +32,7 @@ One connection to any OpenAI-compatible endpoint serves chat, and embeddings unl
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
 | Chat model | `chat_model` | `""` | Summaries, chapters, chat, tags, categories, duplicates. A list when the server lists its models (OpenRouter rows show USD per 1M tokens and Budget / Best presets), otherwise typed |
+| Assistant model | `help_model` | `""` | The model Ask about Horde uses; empty = the chat model. Pick a stronger one for better answers and CSS without paying more for summaries and tags |
 | Embedding model | `embed_model` | `""` | Semantic search, related videos, category shelves. Empty = those stay off. Changing it offers to rebuild the indexes |
 | Use a different server for embeddings | `embed_base_url`, `embed_api_key` | `""` | Empty = embeddings use the chat connection. For providers without `/v1/embeddings` (Groq, DeepSeek, Anthropic) |
 | Show costs in Watch | `show_costs` | `false` | Only shown when the provider reports cost (OpenRouter) |

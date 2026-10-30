@@ -38,6 +38,25 @@ All notable changes to Horde are documented here. The format follows
 - A live stream you left (screen off, another app) reconnects when you come
   back a minute or more later and plays on from where you left it in the live
   timeline, as if paused there.
+- **Ask about Horde does more than answer.** It links settings and pages
+  (following one opens the right tab, scrolls to the setting and rings it),
+  offers to change safe settings for you with an **Apply** button and
+  **Undo** (riskier ones, such as AI keys, accounts and the storage limit,
+  it only links to), and with **Use my data** on answers about your own
+  downloads, history, playlists and library, sending only what a question
+  needs and asking first when the AI is a cloud service. It offers to
+  download a link you give it or build a playlist from videos it found, and
+  writes custom CSS you preview for 20 seconds before keeping it. Each
+  opening suggests three questions, starting with **What can you do?**
+- An optional **Assistant model** (Settings → AI → Models) gives Ask about
+  Horde a stronger model than summaries and tags use. The assistant knows
+  roughly how capable its model is and says when a bigger one would write
+  better CSS.
+- Settings links can point at one setting: `/settings?tab=appearance&find=background`
+  scrolls to it and highlights it.
+- `?nocss` on any address loads Horde without your custom CSS for that tab,
+  with a notice and a button to turn it back on, so a stylesheet that hides
+  the page can always be fixed.
 
 ### Changed
 

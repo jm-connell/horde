@@ -291,7 +291,17 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
   corner like the mini player, and becomes a bottom sheet on phones. Escape
-  closes it while focus is inside; the page behind stays usable.
+  closes it while focus is inside; the page behind stays usable. Its replies
+  link settings, pages and videos as small inline chips (`ink-950` fill,
+  `ink-700` border, accent text), and put each offered action (Apply a
+  setting, Download, Make playlist, Preview CSS) in a card under the reply
+  with one primary button; a done card shows a `success` check and Undo.
+- **Found setting.** A link that points at one setting (`?find=`) scrolls it
+  to the middle of the screen, focuses it and rings it with a 2px accent
+  outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
+- **CSS preview bar.** While CSS from the assistant is on trial, a bar is
+  pinned top-centre (inline position and the top z-index, so the CSS being
+  tried cannot hide it) with a countdown, **Keep** and **Revert**.
 - **Progress.** Full-width fill moved with `translateX`, linear, on an `ink-700`
   or `ink-800` track; accent for downloads, sky for background jobs, red on
   failure.

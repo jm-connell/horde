@@ -30,7 +30,11 @@ When enabled, Settings includes a collapsed **Selector reference** next to the C
 Cap: **64 000** characters. `</style` sequences are neutralized so the payload cannot break out of the style tag.
 
 !!! warning "You can hide the UI"
-    Custom CSS runs in your own account. A rule like `* { display: none }` will hide Settings too. Turn **Enable custom CSS** off if you can still reach Settings, clear the box, or ask an administrator, or as a last resort remove your row from the `user_settings` table, and refresh.
+    Custom CSS runs in your own account. A rule like `* { display: none }` will hide Settings too. Open Horde with `?nocss` on the address (for example `http://horde:8080/settings?nocss`): custom CSS stays off in that tab, a notice says so, and you can fix or clear the box, then **Turn it back on**.
+
+## Let the assistant write it
+
+Not a CSS person? Describe the change to [Ask about Horde](../guides/ai-features.md#custom-css) ("rounder video cards", "hide the channel sidebar"). It writes CSS against the variables and hooks below, and **Preview** puts it on the page for 20 seconds: **Keep** adds it to your stylesheet, **Revert**, **Escape** or waiting removes it. Larger models write much better CSS; see [which model it uses](../guides/ai-features.md#which-model-it-uses).
 
 ## CSS variables
 

@@ -97,7 +97,7 @@ Changing the embed model invalidates compatibility — reindex so all rows share
 | **Hybrid search** | Keyword + embedding similarity over library (and catalog) vectors |
 | **Recommend** | Category chips + "For you" + related videos ([below](#recommendations)) |
 | **Chat RAG** | Retrieve relevant chunks, stream assistant reply (SSE) |
-| **Ask about Horde** | BM25 over the shipped docs and source (`services/ai/help_chat.py`, built in memory on first use), `POST /api/ai/help/chat` streams the reply; nothing stored ([ADR 0018](../adr/0018-help-chat-retrieval.md)) |
+| **Ask about Horde** | BM25 over the shipped docs and source (`services/ai/help_chat.py`, built in memory on first use), `POST /api/ai/help/chat` streams the reply; nothing stored ([ADR 0018](../adr/0018-help-chat-retrieval.md)). Links and actions are `[[...]]` tokens checked against `help_catalog.json` (served at `GET /api/ai/help/catalog`) and applied by the client only on a click; `help_data.py` adds the user's own data when allowed, `help_model.py` the model's strength ([ADR 0021](../adr/0021-help-chat-acts-through-confirmed-tokens.md)) |
 | **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#costs-and-the-weekly-budget)) |
 
 ## Recommendations

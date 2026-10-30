@@ -26,6 +26,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0018](0018-help-chat-retrieval.md) | Ask about Horde answers from shipped docs and source by keyword retrieval | Accepted |
 | [0019](0019-recommended-plus.md) | Recommended+: a mixed feed of four kinds of picks, fed by a slow YouTube gatherer | Accepted |
 | [0020](0020-youtube-history-from-takeout.md) | YouTube history comes from Takeout and is kept apart from Horde's own | Accepted |
+| [0021](0021-help-chat-acts-through-confirmed-tokens.md) | Ask about Horde links and acts through tokens the user confirms | Accepted |
 
 ## Writing a new record
 

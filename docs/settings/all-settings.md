@@ -47,6 +47,7 @@ Related constants: catalog description limit for newest uploads ≈ 200 (`CHANNE
 | `base_url` | `""` | string | OpenAI-compatible URL; bare `http://host:port` gets `/v1` | AI |
 | `api_key` | `""` | string | Secret; read back masked | AI |
 | `chat_model` | `""` | string | | AI |
+| `help_model` | `""` | string | Ask about Horde's model; empty = `chat_model` | AI |
 | `embed_base_url` | `""` | string | Empty = use `base_url` | AI |
 | `embed_api_key` | `""` | string | Secret; read back masked | AI |
 | `embed_model` | `""` | string | Empty = no embeddings | AI |
@@ -171,6 +172,7 @@ These are updated from the shell/player rather than dedicated Settings rows, but
 | `chaptersExpanded` | `true` | bool | Watch chapters panel | UI blob |
 | `descriptionExpanded` | `true` | bool | Watch description panel | UI blob |
 | `aiExpanded` | `true` | bool | Watch AI panel open/closed | UI blob |
+| `helpChatData` | `"off"` | string | `off` \| `local` \| `cloud`: what Ask about Horde may read of this user's data (**Use my data**); `local` covers only a provider on the local network | UI blob |
 
 ---
 
