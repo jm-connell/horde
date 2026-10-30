@@ -300,8 +300,9 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   to the middle of the screen, focuses it and rings it with a 2px accent
   outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
 - **CSS preview bar.** While CSS from the assistant is on trial, a bar is
-  pinned top-centre (inline position and the top z-index, so the CSS being
-  tried cannot hide it) with a countdown, **Keep** and **Revert**.
+  pinned top-centre (inline position and the top z-index, so ordinary rules
+  in the CSS being tried do not move it) with a countdown, **Keep** and
+  **Revert**; the countdown and Escape still revert CSS that hides it.
 - **Progress.** Full-width fill moved with `translateX`, linear, on an `ink-700`
   or `ink-800` track; accent for downloads, sky for background jobs, red on
   failure.
