@@ -138,7 +138,9 @@ test("the AI summary cannot be dragged taller than its text", async ({
   await page.getByRole("button", { name: "Generate summary" }).click();
   const content = page.locator("[data-horde='ai-summary-content']");
   const body = page.locator("[data-horde='ai-summary-body']");
-  await expect(content).toBeVisible();
+  // The box shows "Generating summary" until the response lands; measure the
+  // text, not the placeholder.
+  await expect(content).toContainText("Paragraph 6");
   const contentHeight = (await content.boundingBox())!.height;
   expect(contentHeight).toBeGreaterThan(160);
 
