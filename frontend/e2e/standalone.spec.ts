@@ -83,6 +83,57 @@ test("a short or vertical edge swipe stays on the page", async ({ page }) => {
   await expect(page).toHaveURL(/\/watch\//);
 });
 
+test("dragging the scrub bar from its left end seeks, not goes back", async ({
+  page,
+}) => {
+  await openFirstVideo(page);
+  const bar = page.getByRole("slider", { name: "Seek" }).locator("..");
+  const box = await bar.boundingBox();
+  // On a phone the bar starts inside the edge zone.
+  expect(box!.x).toBeLessThan(24);
+  const x = box!.x + 1;
+  const y = box!.y + box!.height / 2;
+  // Tap the picture until the controls are up and the bar is under the finger.
+  await expect
+    .poll(async () => {
+      const onBar = await page.evaluate(
+        ([x, y]) => document.elementFromPoint(x, y)?.tagName !== "VIDEO",
+        [x, y]
+      );
+      if (!onBar) await page.touchscreen.tap(195, y - 60);
+      return onBar;
+    })
+    .toBe(true);
+  const cdp = await page.context().newCDPSession(page);
+  await drag(cdp, [[x, y], ...rightwards(x, 200, y)]);
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/watch\//);
+});
+
+test("a second finger cancels an edge swipe", async ({ page }) => {
+  await openFirstVideo(page);
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (
+    type: "touchStart" | "touchMove" | "touchEnd",
+    touchPoints: { x: number; y: number; id: number }[]
+  ) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints });
+  await touch("touchStart", [{ x: 4, y: 760, id: 1 }]);
+  for (const [x, y] of rightwards(4, 150, 760)) {
+    await touch("touchMove", [{ x, y, id: 1 }]);
+  }
+  // A tap with another finger while the first is held past the threshold.
+  await touch("touchStart", [
+    { x: 150, y: 760, id: 1 },
+    { x: 300, y: 400, id: 2 },
+  ]);
+  await touch("touchEnd", [{ x: 150, y: 760, id: 1 }]);
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/watch\//);
+  await touch("touchEnd", []);
+  await page.waitForTimeout(300);
+  await expect(page).toHaveURL(/\/watch\//);
+});
+
 test("the first page of the app has nothing to swipe back to", async ({
   page,
 }) => {
@@ -127,8 +178,14 @@ test("the installed app on a phone has a bottom tab bar", async ({ page }) => {
   );
 
   // The current tab again scrolls back to the top.
-  await page.evaluate(() => window.scrollTo(0, 400));
-  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        window.scrollTo(0, 400); // again until the page has loaded its length
+        return window.scrollY;
+      })
+    )
+    .toBe(400);
   await tabs.getByRole("link", { name: "History" }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 

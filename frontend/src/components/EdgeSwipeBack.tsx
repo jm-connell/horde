@@ -22,15 +22,30 @@ function canGoBack(): boolean {
   return typeof idx === "number" && idx > 0;
 }
 
-/** Sliders and the video own their drags; a dialog or fullscreen covers the
- *  page that would be left. */
+/** Touches the page would lose to a swipe: anything that takes horizontal
+ *  drags itself (sliders, the scrub bar, resize handles and other surfaces
+ *  that turn off panning with `touch-action`), a row scrolled away from its
+ *  start, and fixed layers over the page (mini player, sheets, bars). A
+ *  dialog or fullscreen covers the page that would be left. */
 function blocksSwipe(target: EventTarget | null): boolean {
   if (document.fullscreenElement) return true;
   if (document.querySelector('[aria-modal="true"]')) return true;
-  return (
-    target instanceof Element &&
-    target.closest("video, input, textarea, select, [role='slider']") !== null
-  );
+  for (
+    let el = target instanceof Element ? target : null;
+    el && el !== document.body;
+    el = el.parentElement
+  ) {
+    if (el.matches("video, input, textarea, select, [role='slider']")) {
+      return true;
+    }
+    const style = getComputedStyle(el);
+    const pan = style.touchAction;
+    if (pan !== "auto" && pan !== "manipulation" && !pan.includes("pan-x")) {
+      return true;
+    }
+    if (style.position === "fixed" || el.scrollLeft > 0) return true;
+  }
+  return false;
 }
 
 /**
@@ -56,6 +71,10 @@ export default function EdgeSwipeBack() {
     };
 
     const onStart = (e: TouchEvent) => {
+      if (start) {
+        reset(); // a second finger: not a swipe
+        return;
+      }
       const t = e.touches[0];
       if (e.touches.length !== 1 || t.clientX > EDGE_PX) return;
       if (!canGoBack() || blocksSwipe(e.target)) return;
@@ -84,8 +103,11 @@ export default function EdgeSwipeBack() {
       setDrag({ dx: Math.max(0, dx), y: t.clientY });
     };
 
-    const onEnd = () => {
-      const commit = claimed && dx >= COMMIT_PX;
+    const onEnd = (e: TouchEvent) => {
+      if (!start) return;
+      const id = start.id;
+      if (![...e.changedTouches].some((t) => t.identifier === id)) return;
+      const commit = claimed && dx >= COMMIT_PX && e.touches.length === 0;
       reset();
       if (commit) navigate(-1);
     };
