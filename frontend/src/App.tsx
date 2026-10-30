@@ -27,6 +27,7 @@ import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import AppFooter from "./components/AppFooter";
 import BackgroundEffect from "./components/BackgroundEffect";
+import BottomTabBar from "./components/BottomTabBar";
 import EdgeSwipeBack from "./components/EdgeSwipeBack";
 import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
@@ -200,6 +201,7 @@ function AppShell() {
       <TopNav />
       <AppRoutes />
       <AppFooter />
+      <BottomTabBar />
       <HelpChatHost />
       <EdgeSwipeBack />
     </div>

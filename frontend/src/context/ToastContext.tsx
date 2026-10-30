@@ -192,7 +192,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2">
+      <div className="pointer-events-none fixed bottom-[calc(1rem+var(--horde-bottom-bar,0px))] right-4 z-50 flex max-w-[calc(100vw-2rem)] flex-col items-end gap-2">
         <div
           role="status"
           aria-live="polite"

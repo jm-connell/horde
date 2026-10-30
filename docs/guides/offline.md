@@ -21,6 +21,21 @@ On Android, the installed app also appears in the share sheet, so you can
 share a video link straight to Horde's Download page; see
 [Sending links to Horde](downloads.md#sending-links).
 
+The installed app behaves more like a native app than a browser tab:
+
+- On a phone, the main pages (Home, Playlists, History, Download, and
+  Offline when you have downloads) are tabs along the bottom of the screen.
+  Tap the current tab to jump back to the top. Everything else is still in
+  the menu at the top right.
+- On iPhone and iPad, swipe right from the left edge of the screen to go
+  back, since apps added to the Home Screen have no back button.
+- The page doesn't bounce or pull to refresh past its ends, pinching doesn't
+  zoom the whole interface (use **Settings → Appearance → Font size** for larger
+  text), and long-pressing a link or thumbnail doesn't select text or open a
+  link preview.
+
+A browser tab keeps the browser's usual behaviour.
+
 After the first visit, the UI (scripts, styles, icons) is cached by a service
 worker. Later launches don't re-download it, even on a slow connection;
 new versions are fetched in the background but never swapped in under you:

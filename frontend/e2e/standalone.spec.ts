@@ -105,4 +105,49 @@ test("a browser tab has no edge swipe", async ({ page }) => {
   await drag(cdp, [[4, 760], ...rightwards(4, 200, 760)]);
   await page.waitForTimeout(300);
   await expect(page).toHaveURL(/\/watch\//);
+  await expect(page.getByRole("navigation", { name: "Tabs" })).toHaveCount(0);
+});
+
+test("the installed app on a phone has a bottom tab bar", async ({ page }) => {
+  await launch(page, "/");
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await expect(tabs.getByRole("link")).toHaveText([
+    "Home",
+    "Playlists",
+    "History",
+    "Download",
+  ]);
+  await tabs.getByRole("link", { name: "History" }).click();
+  await expect(
+    page.getByRole("heading", { name: "History", level: 1 })
+  ).toBeVisible();
+  await expect(tabs.getByRole("link", { name: "History" })).toHaveAttribute(
+    "aria-current",
+    "page"
+  );
+
+  // The current tab again scrolls back to the top.
+  await page.evaluate(() => window.scrollTo(0, 400));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(400);
+  await tabs.getByRole("link", { name: "History" }).click();
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+
+  // The page ends above the bar: its last line is not hidden behind it.
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  const footer = await page.getByRole("link", { name: "Docs" }).boundingBox();
+  const bar = await tabs.boundingBox();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(bar!.y);
+});
+
+test("the tab bar steps aside for the keyboard", async ({ page }) => {
+  await launch(page, "/");
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await expect(tabs).not.toHaveClass(/translate-y-full/);
+  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(
+    page.getByRole("searchbox", { name: "Search library" })
+  ).toBeFocused();
+  await expect(tabs).toHaveClass(/translate-y-full/);
+  await page.getByRole("button", { name: "Close search" }).click();
+  await expect(tabs).not.toHaveClass(/translate-y-full/);
 });
