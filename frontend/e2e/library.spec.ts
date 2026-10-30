@@ -50,6 +50,35 @@ test("home shows the library, continue watching, tags, and search", async ({
   ).toBeVisible();
 });
 
+test("a new search starts at the top of the page", async ({ page }) => {
+  const { width } = page.viewportSize() ?? { width: 1280 };
+  await page.setViewportSize({ width, height: 420 });
+  await page.goto("/");
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+  // To the bottom, then back up a little: the way back brings back a nav that
+  // hid on the way down (each scroll its own frame, so neither is merged).
+  await page.evaluate(async () => {
+    const frame = () => new Promise((r) => requestAnimationFrame(() => r(0)));
+    window.scrollTo(0, document.body.scrollHeight);
+    await frame();
+    await frame();
+    window.scrollBy(0, -40);
+    await frame();
+    await frame();
+  });
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY))
+    .toBeGreaterThan(100);
+  const box = page
+    .getByPlaceholder("Search", { exact: true })
+    .locator("visible=true");
+  if (!(await box.count())) {
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+  }
+  await box.fill("Harbor");
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+});
+
 test("channel page filters the local feed and switches layout", async ({
   page,
 }) => {

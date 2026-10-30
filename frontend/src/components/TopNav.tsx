@@ -309,12 +309,19 @@ export default function TopNav() {
   // Search lives in the nav on every page; results are the home page's, so
   // typing anywhere else, or on a `?channel=` page, goes home (Library closes a
   // channel opened from the sidebar itself). A tag filter on home is kept.
+  // New results start at the top, however far down the page was scrolled.
   const onSearchInput = (value: string) => {
     setSearch(value);
     const onHome =
       location.pathname === "/" &&
       !new URLSearchParams(location.search).has("channel");
     if (!onHome) navigate("/");
+    window.scrollTo({ top: 0 });
+  };
+
+  const onSearchEnter = () => {
+    commitSearch();
+    window.scrollTo({ top: 0 });
   };
 
   // The "Focus search" hotkey, on every page. No dependency list: it reads
@@ -516,7 +523,7 @@ export default function TopNav() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      commitSearch();
+                      onSearchEnter();
                     } else if (e.key === "Escape") {
                       e.currentTarget.blur();
                     }
@@ -548,7 +555,7 @@ export default function TopNav() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        commitSearch();
+                        onSearchEnter();
                       }
                     }}
                     placeholder="Search"
