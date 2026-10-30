@@ -53,9 +53,10 @@ All notable changes to Horde are documented here. The format follows
   (following one opens the right tab, scrolls to the setting and rings it),
   offers to change safe settings for you with an **Apply** button and
   **Undo** (riskier ones, such as AI keys, accounts and the storage limit,
-  it only links to), and with **Use my data** on answers about your own
-  downloads, history, playlists and library, sending only what a question
-  needs and asking first when the AI is a cloud service. It offers to
+  it only links to), and with **Use my data** on (Settings → Library)
+  answers about your own downloads, history, playlists and library, sending
+  only what a question needs, and to a cloud AI only if you allow that
+  there. It offers to
   download a link you give it or build a playlist from videos it found, and
   writes custom CSS you preview for 20 seconds before keeping it. Each
   opening suggests three questions, starting with **What can you do?**

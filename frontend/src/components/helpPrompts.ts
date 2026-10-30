@@ -107,7 +107,7 @@ export function capabilitiesAnswer(opts: {
     "- **Answer questions** about using, setting up and fixing Horde, from this server's own docs. Try “Why would a download fail?”",
     "- **Take you to any setting** and highlight it, like [[setting:background-effect]].",
     "- **Change settings for you**: ask “Make the text bigger” and you get an Apply button (with Undo). Riskier ones, like AI keys, accounts and storage, I only link to.",
-    "- **Look at your own data** when **Use my data** is on (top of this chat): downloads, library, history and playlists. Try “Why did my last download fail?” or “What should I watch next?”",
+    "- **Look at your own data** when you turn on [[setting:help-data]] in Settings: downloads, library, history and playlists. Try “Why did my last download fail?” or “What should I watch next?”",
     canDownload
       ? "- **Download links and build playlists**: send me a link, or ask for a playlist of videos I found. You confirm each one."
       : "- **Build playlists** from videos I find for you. You confirm each one.",
