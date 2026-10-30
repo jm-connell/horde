@@ -15,6 +15,7 @@ from sqlmodel import Session, col, select
 
 from ...models import UserStreamState, UserVideoState, Video, as_utc, utcnow
 from ..follows import normalize_channel_url
+from ..takeout import history as takeout_history
 from ..url_clean import youtube_video_id
 
 #: A stream counts as finished from here on (the library player's rule too).
@@ -125,10 +126,26 @@ def stream_engagement(row: UserStreamState) -> float:
     return library_engagement(row.watched_sec or 1.0, row.duration_sec)
 
 
+#: How much a YouTube view (from a Takeout import) says about taste: Takeout
+#: does not record how far it played, so one view counts like a part-watch
+#: and a video watched again like a finished one.
+YOUTUBE_ENGAGEMENT = 0.7
+YOUTUBE_REWATCH_ENGAGEMENT = 1.0
+
+
 def watches(
-    session: Session, user_id: int, *, limit: int = HISTORY_LIMIT
+    session: Session,
+    user_id: int,
+    *,
+    limit: int = HISTORY_LIMIT,
+    include_youtube: bool = True,
 ) -> list[Watch]:
-    """The user's watches, newest first; a video watched both ways counts once."""
+    """The user's watches, newest first; a video watched both ways counts once.
+
+    Includes the YouTube history the user imported from Takeout unless
+    ``include_youtube`` is off (other people's histories pooled for the
+    household stay Horde-only: an import is for its own account).
+    """
     out: list[Watch] = []
     for video, state in session.exec(
         select(Video, UserVideoState)
@@ -178,5 +195,25 @@ def watches(
                 finished=row.finished_at is not None,
             )
         )
+    if include_youtube:
+        seen = {w.key for w in out}
+        for viewed in takeout_history.recent_videos(session, user_id, limit=limit):
+            if viewed.yt_id in seen:
+                continue
+            out.append(
+                Watch(
+                    key=viewed.yt_id,
+                    yt_id=viewed.yt_id,
+                    video_id=None,
+                    title=viewed.title or "",
+                    channel=(viewed.channel or "").strip(),
+                    channel_url=viewed.channel_url or "",
+                    watched_at=viewed.last_watched_at,
+                    engagement=YOUTUBE_REWATCH_ENGAGEMENT
+                    if viewed.views > 1
+                    else YOUTUBE_ENGAGEMENT,
+                    finished=False,
+                )
+            )
     out.sort(key=lambda w: w.watched_at, reverse=True)
     return out[:limit]

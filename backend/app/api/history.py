@@ -26,6 +26,10 @@ def history_stats(
             "Omitted: the server's."
         ),
     ),
+    include_youtube: bool = Query(
+        False,
+        description="Count the imported YouTube history too (views, never time).",
+    ),
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ) -> HistoryStats:
@@ -36,4 +40,6 @@ def history_stats(
         raise CodedHTTPException(
             422, f"Unknown time zone: {tz}", "invalid_timezone"
         ) from None
-    return watch_stats.compute(session, user.id, range_, tz_name, zone)
+    return watch_stats.compute(
+        session, user.id, range_, tz_name, zone, include_youtube=include_youtube
+    )

@@ -21,9 +21,20 @@ All notable changes to Horde are documented here. The format follows
   pushes back. It can be turned off in Settings → Library, which hides the tab.
 - Videos you watch without downloading now count as watch history for
   recommendations.
+- **YouTube history from Google Takeout** (Settings → Library, and an optional
+  setup step): import your watch history, then pick which subscriptions to
+  follow and which playlists to copy (private). Each account imports its own;
+  it is a one-time copy, so import a newer export to catch up (only new views
+  are added). Videos you watched on YouTube get a **Watched** badge on channel
+  pages, count as seen in Recommended and Recommended+, and the channels you
+  watch there steer both (recent viewing far more than old, with the odd
+  **Throwback**). The Download page lists what you rewatch most and have not
+  downloaded, and History stats can count YouTube views (never as watch time).
 
 ### Changed
 
+- Live broadcast cards keep the same 16:9 thumbnail as the cards beside them
+  instead of growing taller with black bars.
 - Recommended now includes not-downloaded uploads from every indexed channel
   by default, not only followed ones, and honours "not interested".
 - Video cards in every grid line up: cards in a row are one height, the text
@@ -32,7 +43,8 @@ All notable changes to Horde are documented here. The format follows
 
 ### Upgrade notes
 
-- A database migration (`0020_recommended_plus`) adds new tables only.
+- Database migrations `0020_recommended_plus` and `0021_youtube_watch_events`
+  add new tables only.
 
 ### Fixed
 

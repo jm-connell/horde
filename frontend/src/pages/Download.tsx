@@ -8,6 +8,7 @@ import HelpTip from "../components/HelpTip";
 import DownloadJobCard from "../components/DownloadJobCard";
 import LoadingIndicator from "../components/LoadingIndicator";
 import SendLinksHelp from "../components/SendLinksHelp";
+import RewatchedSuggestions from "../components/takeout/RewatchedSuggestions";
 import ThemedSelect from "../components/ThemedSelect";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
@@ -838,6 +839,7 @@ export default function Download() {
       </form>
 
       <SendLinksHelp />
+      <RewatchedSuggestions />
 
       {activeSectionVisible && (
         <section

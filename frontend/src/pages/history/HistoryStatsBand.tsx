@@ -108,8 +108,19 @@ function streakSub(stats: HistoryStats): string {
   const streak = stats.totals.current_streak_days;
   const today = stats.days[stats.days.length - 1];
   if (streak === 0) return "watch today to start one";
-  if (!today || today.seconds === 0) return "watch today to keep it going";
+  if (!today || (today.seconds === 0 && today.youtube_views === 0))
+    return "watch today to keep it going";
   return streak === 1 ? "today" : "days in a row";
+}
+
+function topChannelAmount(
+  stats: HistoryStats,
+  top: HistoryStats["channels"][number]
+): string {
+  if (!stats.includes_youtube || top.youtube_views === 0)
+    return formatWatchTime(top.seconds);
+  const views = `${top.youtube_views.toLocaleString()} YouTube view${top.youtube_views === 1 ? "" : "s"}`;
+  return top.seconds > 0 ? `${formatWatchTime(top.seconds)} + ${views}` : views;
 }
 
 function Tiles({ stats }: { stats: HistoryStats }) {
@@ -154,7 +165,7 @@ function Tiles({ stats }: { stats: HistoryStats }) {
             <span className="text-lg text-muted">None yet</span>
           )
         }
-        sub={top ? `${formatWatchTime(top.seconds)} · last 30 days` : ""}
+        sub={top ? `${topChannelAmount(stats, top)} · last 30 days` : ""}
         className="lg:border-l lg:border-ink-700 lg:pl-5"
       />
       <ActivityStrip
@@ -199,6 +210,7 @@ export default function HistoryStatsBand() {
   const empty =
     stats.totals.watch_seconds === 0 &&
     stats.totals.videos_started === 0 &&
+    stats.totals.youtube_views === 0 &&
     stats.library.watched_videos === 0 &&
     stats.totals.current_streak_days === 0;
   if (empty) {

@@ -586,10 +586,13 @@ def ai_recommendations(
     items: list[dict[str, Any]] = []
     for item in page.items:
         if item.video is not None:
-            items.append({"video": read_by_id[require_id(item.video)]})
+            items.append(
+                {"video": read_by_id[require_id(item.video)], "reason": item.reason}
+            )
         elif item.stream is not None:
             items.append(
                 {
+                    "reason": item.reason,
                     "stream": ChannelFeedEntry(
                         id=item.stream.yt_id,
                         url=item.stream.url,
@@ -600,7 +603,7 @@ def ai_recommendations(
                         published_at=item.stream.published_at,
                         channel=item.channel or None,
                         live_status=item.stream.live_status,
-                    )
+                    ),
                 }
             )
     feedback.record_shown(

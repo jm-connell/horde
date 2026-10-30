@@ -48,6 +48,7 @@ from ..services import (
 )
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ytdlp_slot
+from ..services.takeout import history as takeout_history
 from ..services.url_safety import validate_public_url
 from ..services.ytdlp_common import cookie_configured, is_members_only_entry
 from ..services.ytdlp_extract import (
@@ -538,6 +539,7 @@ def channel_youtube_search(
     url: str | None = None,
     limit: int = Query(20, ge=1, le=40),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
@@ -570,7 +572,7 @@ def channel_youtube_search(
     return ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
-        entries=entries,
+        entries=_mark_youtube_watched(session, user.id, entries),
         has_more=False,
         from_catalog=False,
         direct_youtube_search_effective=True,
@@ -587,6 +589,7 @@ def youtube_video_search(
     limit: int = Query(20, ge=1, le=40),
     offset: int = Query(0, ge=0, le=200),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Site-wide YouTube video search for Library home."""
     effective = app_settings_svc.youtube_video_search_system()
@@ -607,7 +610,7 @@ def youtube_video_search(
         global_search=True,
     )
     return ChannelFeedPage(
-        entries=entries,
+        entries=_mark_youtube_watched(session, user.id, entries),
         has_more=bool(data.get("has_more")),
         from_catalog=False,
         youtube_video_search_effective=True,
@@ -653,7 +656,7 @@ def channel_catalog_search(
     return ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
-        entries=entries,
+        entries=_mark_youtube_watched(session, user.id, entries),
         has_more=False,
         from_catalog=True,
         indexing=bool(progress.get("indexing")),
@@ -662,6 +665,18 @@ def channel_catalog_search(
         catalog_complete=bool(progress.get("catalog_complete")),
         catalog_status=progress.get("catalog_status"),
     )
+
+
+def _mark_youtube_watched(
+    session: Session, user_id: int, entries: list[ChannelFeedEntry]
+) -> list[ChannelFeedEntry]:
+    """Flag the entries the viewer watched on YouTube (their Takeout history)."""
+    watched = takeout_history.watched_among(
+        session, user_id, (e.id for e in entries if e.id)
+    )
+    for entry in entries:
+        entry.youtube_watched = bool(entry.id) and entry.id in watched
+    return entries
 
 
 def _feed_unavailable() -> CodedHTTPException:
@@ -690,6 +705,7 @@ def channel_feed(
         "Streams always come from YouTube (the catalog holds uploads only).",
     ),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     channel_url = _checked_url(url)
     channel_name = (channel or "").strip() or None
@@ -1005,7 +1021,7 @@ def channel_feed(
     return ChannelFeedPage(
         channel=channel_name or data.get("channel"),
         channel_url=data.get("channel_url") or channel_url,
-        entries=entries,
+        entries=_mark_youtube_watched(session, user.id, entries),
         has_more=bool(data.get("has_more")),
         indexing=indexing,
         from_catalog=from_catalog,

@@ -30,7 +30,7 @@ weekday × hour chart are the viewer's, whatever zone the server runs in.
 from __future__ import annotations
 
 import threading
-from collections import OrderedDict
+from collections import Counter, OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta, tzinfo
@@ -38,6 +38,7 @@ from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import func, union
+from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, col, select
 
@@ -46,6 +47,7 @@ from ..models import (
     UserWatchTime,
     Video,
     VideoTag,
+    YoutubeWatchEvent,
     as_utc,
     require_id,
     utcnow,
@@ -226,10 +228,8 @@ def _streak(active: set[date], today: date) -> int:
     return count
 
 
-def _distinct_videos(
-    session: Session, user_id: int, since: datetime | None, *, finished: bool
-) -> int:
-    """Videos watched (or finished) since ``since``, from both tables.
+def _watched_union(user_id: int, since: datetime | None, *, finished: bool) -> Any:
+    """Ids of the videos watched (or finished) since ``since``, from both tables.
 
     ``user_video_state`` carries the history from before watch time was recorded.
     """
@@ -249,8 +249,62 @@ def _distinct_videos(
     if since is not None:
         timed = timed.where(col(UserWatchTime.hour_start) >= since)
         states = states.where(stamp >= since)
-    both = union(timed, states).subquery()
+    return union(timed, states).subquery()
+
+
+def _distinct_videos(
+    session: Session, user_id: int, since: datetime | None, *, finished: bool
+) -> int:
+    """Videos watched (or finished) since ``since``."""
+    both = _watched_union(user_id, since, finished=finished)
     return int(session.scalar(select(func.count()).select_from(both)) or 0)
+
+
+def _watched_youtube_ids(
+    session: Session, user_id: int, since: datetime | None
+) -> set[str]:
+    """YouTube ids of the library videos watched since ``since`` (to not count twice)."""
+    both = _watched_union(user_id, since, finished=False)
+    return {
+        str(yt)
+        for yt in session.exec(
+            select(col(Video.youtube_id)).where(
+                col(Video.id).in_(select(both.c[0])), col(Video.youtube_id).is_not(None)
+            )
+        ).all()
+        if yt
+    }
+
+
+def _youtube_hours(
+    session: Session, user_id: int, zone: tzinfo
+) -> list[tuple[datetime, int]]:
+    """The imported YouTube views (``services/takeout``) per UTC hour, in ``zone``.
+
+    Counted in SQL: a long history is a few hundred thousand views, but far
+    fewer hours.
+    """
+    hour = func.strftime("%Y-%m-%d %H:00:00", col(YoutubeWatchEvent.watched_at))
+    return [
+        (
+            datetime.strptime(str(text), "%Y-%m-%d %H:%M:%S")
+            .replace(tzinfo=UTC)
+            .astimezone(zone),
+            int(count),
+        )
+        for text, count in session.execute(
+            sa_select(hour, func.count())
+            .where(col(YoutubeWatchEvent.user_id) == user_id)
+            .group_by(hour)
+        ).all()
+    ]
+
+
+def _youtube_since(user_id: int, since: datetime | None) -> Any:
+    clause = col(YoutubeWatchEvent.user_id) == user_id
+    if since is not None:
+        clause = clause & (col(YoutubeWatchEvent.watched_at) >= since)
+    return clause
 
 
 def compute(
@@ -261,8 +315,14 @@ def compute(
     zone: tzinfo,
     *,
     now: datetime | None = None,
+    include_youtube: bool = False,
 ) -> HistoryStats:
-    """The History stats of ``user_id`` for ``range_key``, in ``zone``."""
+    """The History stats of ``user_id`` for ``range_key``, in ``zone``.
+
+    With ``include_youtube``, the imported YouTube history counts too: its views
+    add to the videos watched, active days, the streak, top channels and the
+    weekday × hour chart, never to watch time (Takeout does not say how long).
+    """
     today = (now or utcnow()).astimezone(zone).date()
 
     # Every hour this user has watched, folded across videos. Small: at most one
@@ -285,9 +345,14 @@ def compute(
         day_secs, day_fins = per_day.get(local.date(), (0.0, 0))
         per_day[local.date()] = (day_secs + secs, day_fins + int(hour_finished or 0))
 
+    youtube = _youtube_hours(session, user_id, zone) if include_youtube else []
+    youtube_days: Counter[date] = Counter()
+    for local, count in youtube:
+        youtube_days[local.date()] += count
+
     span = RANGE_DAYS[range_key]
     if span is None:
-        start = min(per_day, default=today)
+        start = min([*per_day, *youtube_days], default=today)
     else:
         start = today - timedelta(days=span - 1)
     since = None if span is None else _local_midnight_utc(start, zone)
@@ -297,7 +362,12 @@ def compute(
     while day <= today:
         day_secs, day_fins = per_day.get(day, (0.0, 0))
         days.append(
-            HistoryStatsDay(day=day.isoformat(), seconds=day_secs, finished=day_fins)
+            HistoryStatsDay(
+                day=day.isoformat(),
+                seconds=day_secs,
+                finished=day_fins,
+                youtube_views=youtube_days.get(day, 0),
+            )
         )
         day += timedelta(days=1)
     watch_seconds = sum(d.seconds for d in days)
@@ -306,6 +376,7 @@ def compute(
         before = start - timedelta(days=span)
         previous = sum(v[0] for d, v in per_day.items() if before <= d < start)
     watched_days = [d for d in days if d.seconds > 0]
+    active_days = [d for d in days if d.seconds > 0 or d.youtube_views > 0]
     best = max(watched_days, key=lambda d: d.seconds, default=None)
 
     hours: list[list[float]] | None = None
@@ -314,6 +385,34 @@ def compute(
         for local, seconds in local_hours:
             if local.date() >= start:
                 hours[local.weekday()][local.hour] += seconds
+    in_range = [(local, n) for local, n in youtube if start <= local.date() <= today]
+    youtube_views = sum(n for _local, n in in_range)
+    youtube_hours: list[list[int]] | None = None
+    videos_started = _distinct_videos(session, user_id, since, finished=False)
+    channels = _top_channels(session, user_id, since)
+    # Only a range with YouTube views changes anything (ranking included).
+    if youtube_views:
+        youtube_hours = [[0] * 24 for _ in range(7)]
+        for local, n in in_range:
+            youtube_hours[local.weekday()][local.hour] += n
+        on_youtube = {
+            str(yt)
+            for yt in session.exec(
+                select(YoutubeWatchEvent.yt_id)
+                .where(_youtube_since(user_id, since))
+                .distinct()
+            ).all()
+        }
+        videos_started += len(
+            on_youtube - _watched_youtube_ids(session, user_id, since)
+        )
+        channels = _with_youtube_channels(
+            session,
+            _top_channels(session, user_id, since, limit=None),
+            user_id,
+            since,
+        )
+    active = {d for d, v in per_day.items() if v[0] > 0} | set(youtube_days)
 
     return HistoryStats(
         range=range_key,
@@ -323,18 +422,19 @@ def compute(
         totals=HistoryStatsTotals(
             watch_seconds=watch_seconds,
             previous_watch_seconds=previous,
-            videos_started=_distinct_videos(session, user_id, since, finished=False),
+            videos_started=videos_started,
             videos_finished=_distinct_videos(session, user_id, since, finished=True),
-            active_days=len(watched_days),
-            current_streak_days=_streak(
-                {d for d, v in per_day.items() if v[0] > 0}, today
-            ),
+            active_days=len(active_days),
+            current_streak_days=_streak(active, today),
+            youtube_views=youtube_views,
         ),
         days=days,
         best_day=best,
-        channels=_top_channels(session, user_id, since),
+        channels=channels,
         tags=_top_tags(session, user_id, since),
         hours=hours,
+        includes_youtube=youtube_views > 0,
+        youtube_hours=youtube_hours,
         library=_library(session, user_id, since),
     )
 
@@ -347,7 +447,10 @@ def _range_filter(since: datetime | None) -> Any:
 
 
 def _top_channels(
-    session: Session, user_id: int, since: datetime | None
+    session: Session,
+    user_id: int,
+    since: datetime | None,
+    limit: int | None = TOP_CHANNELS,
 ) -> list[HistoryStatsChannel]:
     # The video's current channel (a rename moves it), or the copy on the row
     # once the video is gone.
@@ -361,12 +464,43 @@ def _top_channels(
         .where(name.is_not(None), name != "")
         .group_by(name)
         .order_by(total.desc())
-        .limit(TOP_CHANNELS)
+        .limit(limit if limit is not None else -1)
     ).all()
     return [
         HistoryStatsChannel(name=str(n), seconds=float(s or 0), videos=int(v or 0))
         for n, s, v in rows
     ]
+
+
+def _with_youtube_channels(
+    session: Session,
+    horde: list[HistoryStatsChannel],
+    user_id: int,
+    since: datetime | None,
+) -> list[HistoryStatsChannel]:
+    """Horde's channels and the YouTube history's together, most videos first.
+
+    Matched by name. A channel's videos are its distinct videos from both (a
+    video watched in both places counts once per place: they are not linked).
+    """
+    merged = {c.name.casefold(): c.model_copy() for c in horde}
+    name = func.trim(col(YoutubeWatchEvent.channel))
+    for channel, views, distinct in session.execute(
+        sa_select(
+            name, func.count(), func.count(func.distinct(col(YoutubeWatchEvent.yt_id)))
+        )
+        .where(_youtube_since(user_id, since), name != "")
+        .group_by(name)
+    ).all():
+        key = str(channel).casefold()
+        entry = merged.get(key) or HistoryStatsChannel(
+            name=str(channel), seconds=0.0, videos=0
+        )
+        entry.videos += int(distinct)
+        entry.youtube_views += int(views)
+        merged[key] = entry
+    ranked = sorted(merged.values(), key=lambda c: (-c.videos, -c.seconds, c.name))
+    return ranked[:TOP_CHANNELS]
 
 
 def _top_tags(

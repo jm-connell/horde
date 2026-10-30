@@ -23,8 +23,19 @@ import FollowedChannelsSection from "./FollowedChannelsSection";
 import MediaServerFiles from "./MediaServerFiles";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 import TrashSection from "./TrashSection";
+import YoutubeHistorySection from "./YoutubeHistorySection";
 
 const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
+
+const YOUTUBE_HISTORY_TERMS = [
+  "youtube history",
+  "google takeout",
+  "takeout",
+  "import",
+  "subscriptions",
+  "watch history",
+  "history stats",
+];
 
 const DOWNLOAD_PREF_TERMS = [
   "download count",
@@ -263,6 +274,14 @@ export default function LibraryTab() {
             ))}
           </div>
         </div>
+      </Section>
+
+      <Section
+        title="YouTube history"
+        description="Import your watch history, subscriptions and playlists from Google Takeout. Only your account sees them."
+        hidden={!match(...YOUTUBE_HISTORY_TERMS)}
+      >
+        <YoutubeHistorySection />
       </Section>
 
       <Section

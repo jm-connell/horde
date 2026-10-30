@@ -28,6 +28,8 @@ GB = 1024 * MB
 FONT_MAX_BYTES = 8 * MB
 BACKGROUND_MAX_BYTES = 100 * MB
 IMAGE_MAX_BYTES = 15 * MB  # video thumbnails, playlist covers, profile pictures
+#: A Google Takeout import, all files together (Takeout splits exports at 2 GB).
+TAKEOUT_MAX_BYTES = 4 * GB
 
 #: Most files kept in each user-asset folder (fonts, backgrounds).
 MAX_STORED_FONTS = 50
