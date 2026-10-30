@@ -46,6 +46,16 @@ import { cssBlocks, splitActions } from "./helpTokens";
 import { CloseIcon } from "./icons";
 import TypingDots from "./TypingDots";
 
+/** The site a link leaves Horde for, or null when it stays on this server. */
+function offSiteHost(href: string): string | null {
+  try {
+    const url = new URL(href, window.location.href);
+    return url.origin === window.location.origin ? null : url.host;
+  } catch {
+    return null;
+  }
+}
+
 /** Paths the app's router serves (the wiki and the API are not among them). */
 function isAppPath(href: string): boolean {
   return /^\/(?![/\\])/.test(href) && !/^\/(wiki|api)(\/|$)/.test(href);
@@ -388,17 +398,39 @@ export default function HelpChatPanel({
         onNavigate={onNavigate}
       />
     ),
-    link: (href, label, key) =>
-      isAppPath(href) ? (
-        <Link
-          key={key}
-          to={href}
-          onClick={onNavigate}
-          className="text-accent underline underline-offset-2"
-        >
-          {label}
-        </Link>
-      ) : null,
+    link: (href, label, key) => {
+      if (isAppPath(href)) {
+        return (
+          <Link
+            key={key}
+            to={href}
+            onClick={onNavigate}
+            className="text-accent underline underline-offset-2"
+          >
+            {label}
+          </Link>
+        );
+      }
+      // A reply can be steered by text it read (a video description), so a
+      // link off the site names where it goes instead of passing for one of
+      // Horde's own.
+      const safe = markdownHref(href);
+      const host = safe ? offSiteHost(safe) : null;
+      if (!safe || !host) return null;
+      return (
+        <span key={key}>
+          <a
+            href={safe}
+            target="_blank"
+            rel="noreferrer"
+            className="text-accent underline underline-offset-2"
+          >
+            {label}
+          </a>{" "}
+          <span className="text-muted">({host})</span>
+        </span>
+      );
+    },
   };
   const lastId = messages[messages.length - 1]?.id;
 

@@ -431,3 +431,24 @@ test("the chat offers downloads and playlists, and does them on confirm", async 
   await expect(panel.getByText("Added to the queue.")).toBeVisible();
   expect(posted).toEqual(["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]);
 });
+
+test("a link that leaves Horde names the site it goes to", async ({ page }) => {
+  await stubAnswer(
+    page,
+    "[Open Settings](https://evil.example/steal) or [the wiki](/wiki/) or [History](/history)"
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = await ask(page, "where are my settings?");
+  const away = panel.getByRole("link", { name: "Open Settings" });
+  await expect(away).toHaveAttribute("href", "https://evil.example/steal");
+  await expect(away.locator("xpath=..")).toContainText(
+    "Open Settings (evil.example)"
+  );
+  // Links that stay on this server read as before.
+  await expect(panel.getByText("(localhost")).toHaveCount(0);
+  await expect(panel.getByRole("link", { name: "History" })).toHaveAttribute(
+    "href",
+    "/history"
+  );
+});

@@ -312,6 +312,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   `ink-700` border, accent text), and put each offered action (Apply a
   setting, Download, Make playlist, Preview CSS) in a card under the reply
   with one primary button; a done card shows a `success` check and Undo.
+  A link that leaves the site is followed by its host in `text-muted`
+  ("Docs (example.com)"), so it cannot pass for one of Horde's own.
 - **Found setting.** A link that points at one setting (`?find=`) scrolls it
   to the middle of the screen, focuses it and rings it with a 2px accent
   outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
