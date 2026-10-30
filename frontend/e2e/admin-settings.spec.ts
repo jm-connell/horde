@@ -71,6 +71,8 @@ test("members see only their own preferences and what their permissions allow", 
     "Display",
     "Default video sort",
     "Channel list order (sidebar)",
+    // Everyone imports their own YouTube history.
+    "YouTube history",
     "Downloads",
   ]);
   await expect(member.getByLabel("Progress expiry in days")).toHaveCount(0);
@@ -110,6 +112,7 @@ test("members see only their own preferences and what their permissions allow", 
     "Display",
     "Default video sort",
     "Channel list order (sidebar)",
+    "YouTube history",
   ]);
   await viewerCtx.close();
 });

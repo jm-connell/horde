@@ -24,23 +24,63 @@ function cellLabel(day: number, hour: number): string {
   return `${WEEKDAYS[day]}, ${hourLabel(hour)} to ${hourLabel((hour + 1) % 24)}`;
 }
 
+function viewsLabel(views: number): string {
+  return `${views.toLocaleString()} YouTube view${views === 1 ? "" : "s"}`;
+}
+
 /**
  * When the viewer watches: seconds by weekday (rows, Monday first) and hour of
- * the day (columns). Arrow keys move between cells, like the bar chart.
+ * the day (columns). Arrow keys move between cells, like the bar chart. With
+ * `youtubeViews` (imported history: views, no time) a cell's shade is its
+ * share of the busiest hour of each, added up.
  */
-export default function HourHeatmap({ hours }: { hours: number[][] }) {
+export default function HourHeatmap({
+  hours,
+  youtubeViews,
+}: {
+  hours: number[][];
+  youtubeViews?: number[][] | null;
+}) {
   const id = useId();
   const [active, setActive] = useState<number | null>(null);
-  const max = Math.max(0, ...hours.flat());
+  const maxSeconds = Math.max(0, ...hours.flat());
+  const maxViews = youtubeViews ? Math.max(0, ...youtubeViews.flat()) : 0;
+  const views = (day: number, hour: number) => youtubeViews?.[day][hour] ?? 0;
+  const activity = hours.map((row, day) =>
+    row.map(
+      (seconds, hour) =>
+        (maxSeconds > 0 ? seconds / maxSeconds : 0) +
+        (maxViews > 0 ? views(day, hour) / maxViews : 0)
+    )
+  );
+  const max = Math.max(0, ...activity.flat());
   let busiest = 0;
-  hours.flat().forEach((v, i, all) => {
+  activity.flat().forEach((v, i, all) => {
     if (v > all[busiest]) busiest = i;
   });
   const busiestDay = Math.floor(busiest / 24);
   const busiestHour = busiest % 24;
+  const amount = (day: number, hour: number) =>
+    [
+      hours[day][hour] > 0 || maxViews === 0
+        ? formatWatchTimeLong(hours[day][hour])
+        : "",
+      views(day, hour) > 0 ? viewsLabel(views(day, hour)) : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || "nothing";
+  const shortAmount = (day: number, hour: number) =>
+    [
+      hours[day][hour] > 0 || maxViews === 0
+        ? formatWatchTime(hours[day][hour])
+        : "",
+      views(day, hour) > 0 ? viewsLabel(views(day, hour)) : "",
+    ]
+      .filter(Boolean)
+      .join(" · ") || "0m";
   const summary =
     max > 0
-      ? `When you watch, by weekday and hour. Busiest: ${cellLabel(busiestDay, busiestHour)}, ${formatWatchTimeLong(max)}. Use the arrow keys to read each hour.`
+      ? `When you watch, by weekday and hour. Busiest: ${cellLabel(busiestDay, busiestHour)}, ${amount(busiestDay, busiestHour)}. Use the arrow keys to read each hour.`
       : "When you watch, by weekday and hour: nothing yet.";
 
   const move = (to: number) => setActive(Math.max(0, Math.min(7 * 24 - 1, to)));
@@ -55,7 +95,7 @@ export default function HourHeatmap({ hours }: { hours: number[][] }) {
 
   const activeDay = active !== null ? Math.floor(active / 24) : 0;
   const activeHour = active !== null ? active % 24 : 0;
-  const activeSeconds = active !== null ? hours[activeDay][activeHour] : 0;
+
   return (
     <div>
       <div className="flex gap-2">
@@ -87,8 +127,8 @@ export default function HourHeatmap({ hours }: { hours: number[][] }) {
             className="grid grid-rows-7 gap-[2px] rounded outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
             style={{ gridTemplateColumns: "repeat(24, minmax(0, 1fr))" }}
           >
-            {hours.map((row, day) =>
-              row.map((seconds, hour) => {
+            {activity.map((row, day) =>
+              row.map((level, hour) => {
                 const index = day * 24 + hour;
                 return (
                   <div
@@ -96,10 +136,10 @@ export default function HourHeatmap({ hours }: { hours: number[][] }) {
                     id={`${id}-cell-${index}`}
                     role="option"
                     aria-selected={index === active}
-                    aria-label={`${cellLabel(day, hour)}: ${formatWatchTimeLong(seconds)}`}
+                    aria-label={`${cellLabel(day, hour)}: ${amount(day, hour)}`}
                     onPointerEnter={() => setActive(index)}
                     className={`h-4 rounded-[3px] sm:h-5 ${
-                      HEAT_CLASSES[heatLevel(seconds, max)]
+                      HEAT_CLASSES[heatLevel(level, max)]
                     } ${index === active ? "ring-2 ring-gray-100/80" : ""}`}
                   />
                 );
@@ -113,7 +153,7 @@ export default function HourHeatmap({ hours }: { hours: number[][] }) {
             >
               <ChartTooltip
                 leftPct={((activeHour + 0.5) / 24) * 100}
-                value={formatWatchTime(activeSeconds)}
+                value={shortAmount(activeDay, activeHour)}
                 label={cellLabel(activeDay, activeHour)}
               />
             </div>

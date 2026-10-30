@@ -160,6 +160,8 @@ class RecommendationItemRead(BaseModel):
 
     video: VideoRead | None = None
     stream: ChannelFeedEntry | None = None
+    #: ``throwback``: picked from a channel or topic the user watched months ago.
+    reason: Literal["throwback"] | None = None
 
 
 class RecommendationSectionRead(BaseModel):

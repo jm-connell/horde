@@ -218,6 +218,10 @@ OPEN_MUTATIONS = {
     ("DELETE", "/api/auth/avatar"),
     ("PUT", "/api/follows"),  # your own followed channels
     ("DELETE", "/api/follows"),
+    # Your own YouTube history; apply follows channels and makes private playlists.
+    ("POST", "/api/takeout/import"),
+    ("POST", "/api/takeout/apply"),
+    ("DELETE", "/api/takeout/history"),
 }
 PUBLIC = {
     ("POST", "/api/auth/login"),

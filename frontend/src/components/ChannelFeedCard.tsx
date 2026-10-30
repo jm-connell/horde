@@ -178,9 +178,12 @@ function FeedThumbnail({
   previewVideoId,
   previewActive,
   queueEntry,
+  watchedOnYoutube = false,
 }: {
   /** Shows a "+ Queue" button on hover. */
   queueEntry?: QueueEntry | null;
+  /** The viewer watched it on YouTube (their imported Takeout history). */
+  watchedOnYoutube?: boolean;
   thumbSrc: string | null;
   duration: string;
   className: string;
@@ -195,7 +198,10 @@ function FeedThumbnail({
   const previewing = previewActive && Boolean(previewSrc);
 
   return (
-    <div className={`relative ${className}`}>
+    // min-h-0: in the card's flex column an aspect-ratio box would otherwise
+    // grow to its image's own shape (YouTube's 4:3 live thumbnails, with
+    // black bars baked in) instead of staying 16:9 and cropping it.
+    <div className={`relative min-h-0 ${className}`}>
       <div className="relative h-full w-full overflow-hidden rounded-[inherit] bg-ink-800/60">
         <div
           className={`relative h-full w-full transition-[scale,filter] duration-200 sm:group-hover:scale-105 ${
@@ -239,6 +245,15 @@ function FeedThumbnail({
           <span className="pointer-events-none absolute bottom-2 right-2 z-20 inline-flex items-center gap-1 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold tracking-wide text-white">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-white" />
             LIVE
+          </span>
+        )}
+        {watchedOnYoutube && (
+          <span
+            className="pointer-events-none absolute bottom-2 left-2 z-20 inline-flex items-center gap-1 rounded bg-black/80 px-1.5 py-0.5 text-xs font-medium text-white"
+            title="You watched this on YouTube"
+          >
+            <CheckIcon className="h-3 w-3" />
+            Watched
           </span>
         )}
         {!live && showDuration && duration && (
@@ -419,6 +434,7 @@ export default function ChannelFeedCard({
           previewVideoId={libraryVideoId}
           previewActive={previewActive}
           queueEntry={queueEntry}
+          watchedOnYoutube={entry.youtube_watched}
         />
         <div className="relative flex min-w-0 flex-1 items-stretch">
           <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 pr-24">
@@ -493,6 +509,7 @@ export default function ChannelFeedCard({
           previewVideoId={libraryVideoId}
           previewActive={previewActive}
           queueEntry={queueEntry}
+          watchedOnYoutube={entry.youtube_watched}
         />
         <CardCopy
           title={titleText}

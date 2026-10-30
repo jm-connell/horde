@@ -110,6 +110,7 @@ export function useChannelLive(url: string | null) {
         view_count: null,
         in_library: false,
         live_status: "is_live",
+        youtube_watched: false,
       }
     : null;
   return { ...query, live, entry };

@@ -2707,6 +2707,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/takeout/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Apply Takeout
+         * @description Follow the chosen subscriptions and import the chosen playlists.
+         */
+        post: operations["apply_takeout_api_takeout_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/takeout/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Takeout History */
+        get: operations["takeout_history_api_takeout_history_get"];
+        put?: never;
+        post?: never;
+        /**
+         * Clear Takeout History
+         * @description Forget the imported views (follows and playlists made from them stay).
+         */
+        delete: operations["clear_takeout_history_api_takeout_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/takeout/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Takeout
+         * @description Read a Takeout export: store its watch history, list its subscriptions and playlists.
+         *
+         *     The views are stored at once (a view imported before is skipped). The
+         *     subscriptions and playlists are only listed; ``/apply`` imports the ones
+         *     the user picks. Blocking (reads the spooled uploads), so a plain ``def``.
+         */
+        post: operations["import_takeout_api_takeout_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/takeout/rewatched": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Rewatched
+         * @description Videos the user watched several times on YouTube that are not in the library.
+         */
+        get: operations["rewatched_api_takeout_rewatched_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/thumbnails/{video_id}": {
         parameters: {
             query?: never;
@@ -4432,6 +4517,11 @@ export interface components {
             /** Url */
             url: string;
         };
+        /** Body_import_takeout_api_takeout_import_post */
+        Body_import_takeout_api_takeout_import_post: {
+            /** Files */
+            files: string[];
+        };
         /** Body_upload_avatar_api_auth_avatar_post */
         Body_upload_avatar_api_auth_avatar_post: {
             /** File */
@@ -4782,6 +4872,11 @@ export interface components {
             video_id?: number | null;
             /** View Count */
             view_count?: number | null;
+            /**
+             * Youtube Watched
+             * @default false
+             */
+            youtube_watched: boolean;
         };
         /** ChannelFeedPage */
         ChannelFeedPage: {
@@ -5647,6 +5742,11 @@ export interface components {
             end_day: string;
             /** Hours */
             hours: number[][] | null;
+            /**
+             * Includes Youtube
+             * @default false
+             */
+            includes_youtube: boolean;
             library: components["schemas"]["HistoryStatsLibrary"];
             /**
              * Range
@@ -5660,6 +5760,8 @@ export interface components {
             totals: components["schemas"]["HistoryStatsTotals"];
             /** Tz */
             tz: string;
+            /** Youtube Hours */
+            youtube_hours?: number[][] | null;
         };
         /** HistoryStatsChannel */
         HistoryStatsChannel: {
@@ -5669,6 +5771,11 @@ export interface components {
             seconds: number;
             /** Videos */
             videos: number;
+            /**
+             * Youtube Views
+             * @default 0
+             */
+            youtube_views: number;
         };
         /** HistoryStatsDay */
         HistoryStatsDay: {
@@ -5681,6 +5788,11 @@ export interface components {
             finished: number;
             /** Seconds */
             seconds: number;
+            /**
+             * Youtube Views
+             * @default 0
+             */
+            youtube_views: number;
         };
         /** HistoryStatsLibrary */
         HistoryStatsLibrary: {
@@ -5718,6 +5830,11 @@ export interface components {
             videos_started: number;
             /** Watch Seconds */
             watch_seconds: number;
+            /**
+             * Youtube Views
+             * @default 0
+             */
+            youtube_views: number;
         };
         /**
          * JobStatus
@@ -6497,6 +6614,8 @@ export interface components {
          * @description A library video (``video``) or an upload that is not downloaded (``stream``).
          */
         RecommendationItemRead: {
+            /** Reason */
+            reason?: "throwback" | null;
             stream?: components["schemas"]["ChannelFeedEntry"] | null;
             video?: components["schemas"]["VideoRead"] | null;
         };
@@ -6575,6 +6694,27 @@ export interface components {
             size_bytes: number;
             /** Title */
             title: string;
+        };
+        /** RewatchedPage */
+        RewatchedPage: {
+            /** Items */
+            items: components["schemas"]["RewatchedVideo"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * RewatchedVideo
+         * @description A video watched several times on YouTube that the library does not hold.
+         */
+        RewatchedVideo: {
+            entry: components["schemas"]["ChannelFeedEntry"];
+            /**
+             * Last Watched At
+             * Format: date-time
+             */
+            last_watched_at: string;
+            /** Views */
+            views: number;
         };
         /** ScanResult */
         ScanResult: {
@@ -6950,6 +7090,107 @@ export interface components {
             items: components["schemas"]["TagStat"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /** TakeoutApplyRequest */
+        TakeoutApplyRequest: {
+            /** Playlists */
+            playlists?: components["schemas"]["TakeoutPlaylistChoice"][];
+            /** Subscriptions */
+            subscriptions?: components["schemas"]["TakeoutSubscriptionChoice"][];
+        };
+        /** TakeoutApplyResult */
+        TakeoutApplyResult: {
+            /** Followed */
+            followed: number;
+            /** Playlists Created */
+            playlists_created: number;
+            /** Playlists Updated */
+            playlists_updated: number;
+            /** Videos Added */
+            videos_added: number;
+        };
+        /** TakeoutClearResult */
+        TakeoutClearResult: {
+            /** Removed Views */
+            removed_views: number;
+        };
+        /**
+         * TakeoutHistorySummary
+         * @description The signed-in user's imported YouTube watch history.
+         */
+        TakeoutHistorySummary: {
+            /** Distinct Videos */
+            distinct_videos: number;
+            /** First Watched At */
+            first_watched_at: string | null;
+            /** Last Imported At */
+            last_imported_at: string | null;
+            /** Last Watched At */
+            last_watched_at: string | null;
+            /** Total Views */
+            total_views: number;
+        };
+        /** TakeoutImportResult */
+        TakeoutImportResult: {
+            /** Found History */
+            found_history: boolean;
+            history: components["schemas"]["TakeoutHistorySummary"];
+            /** New Views */
+            new_views: number;
+            /** Playlists */
+            playlists: components["schemas"]["TakeoutPlaylistRead"][];
+            /** Subscriptions */
+            subscriptions: components["schemas"]["TakeoutSubscription"][];
+            /** Views In File */
+            views_in_file: number;
+            /**
+             * Views Skipped
+             * @default 0
+             */
+            views_skipped: number;
+        };
+        /** TakeoutPlaylistChoice */
+        TakeoutPlaylistChoice: {
+            /** Playlist Id */
+            playlist_id?: string | null;
+            /** Title */
+            title: string;
+            /** Video Ids */
+            video_ids: string[];
+        };
+        /** TakeoutPlaylistRead */
+        TakeoutPlaylistRead: {
+            /** Existing Playlist Id */
+            existing_playlist_id: number | null;
+            /** New Videos */
+            new_videos: number;
+            /** Playlist Id */
+            playlist_id: string | null;
+            /** Title */
+            title: string;
+            /** Video Ids */
+            video_ids: string[];
+            /** Visibility */
+            visibility: string | null;
+        };
+        /** TakeoutSubscription */
+        TakeoutSubscription: {
+            /** Channel Name */
+            channel_name: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "new" | "following" | "unfollowed";
+        };
+        /** TakeoutSubscriptionChoice */
+        TakeoutSubscriptionChoice: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
         };
         /** ThumbnailCandidate */
         ThumbnailCandidate: {
@@ -11364,6 +11605,8 @@ export interface operations {
                 range?: "7d" | "30d" | "365d" | "all";
                 /** @description IANA time zone the days and hours are counted in (the browser's). Omitted: the server's. */
                 tz?: string | null;
+                /** @description Count the imported YouTube history too (views, never time). */
+                include_youtube?: boolean;
             };
             header?: never;
             path?: never;
@@ -14010,6 +14253,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TagStatPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    apply_takeout_api_takeout_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TakeoutApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TakeoutApplyResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    takeout_history_api_takeout_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TakeoutHistorySummary"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clear_takeout_history_api_takeout_history_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TakeoutClearResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    import_takeout_api_takeout_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_import_takeout_api_takeout_import_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TakeoutImportResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rewatched_api_takeout_rewatched_get: {
+        parameters: {
+            query?: {
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RewatchedPage"];
                 };
             };
             /** @description Validation error */

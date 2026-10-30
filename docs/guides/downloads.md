@@ -195,6 +195,10 @@ Instead of copying a link and pasting it on the Download page, send it from wher
 - **Bookmarklet (any desktop browser, and phones without the share sheet).** Open the Download page, expand **Send links from your browser** and drag **Send to Horde** to your bookmarks bar. Click it on any video page and that page opens in a new tab on Horde. On a phone, use **Copy bookmarklet**, create any bookmark, and paste the copied text into its address. A few sites (GitHub, for example) forbid bookmarklets with their security policy; use the share sheet or copy the link instead there.
 - **iPhone and iPad.** Safari does not support share targets, so make a Shortcut. In the Shortcuts app, create one named **Send to Horde**, open its settings and turn on **Show in Share Sheet** (accept **URLs** and **Safari web pages**), then add these actions in order: **URL Encode** the **Shortcut Input**; **Text** containing `https://<your-horde>/download?url=` followed by the **URL Encoded Text** variable; **Open URLs** with that text. Replace `<your-horde>` with the address you use for Horde. Sharing a link and picking **Send to Horde** opens the Download page with it filled in. The bookmarklet also works in Safari.
 
+## Watched often on YouTube
+
+With an [imported YouTube history](youtube-history.md), a folded **Watched often on YouTube** list sits under the download form: videos you watched at least twice on YouTube that are not in the library, most-watched first, each with a **Download** button (1080p). It is hidden when there are none.
+
 ## Playlist import
 
 Paste a **playlist** URL on the Download page:

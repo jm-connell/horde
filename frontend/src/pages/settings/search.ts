@@ -60,6 +60,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
+    keywords:
+      "youtube history google takeout import subscriptions playlists watch history history stats",
+  },
+  {
+    tab: "library",
     access: "admin",
     keywords: "progress expiry inactivity days",
   },

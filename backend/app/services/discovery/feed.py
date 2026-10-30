@@ -35,6 +35,7 @@ from ...models import DiscoveryHit, UserVideoState, Video, VideoTag, utcnow
 from .. import app_settings, follows
 from ..ai import vector_index
 from ..ai.provider import get_embed_provider
+from ..takeout import history as takeout_history
 from .candidates import (
     Candidate,
     catalog_candidates,
@@ -180,7 +181,7 @@ def _household(session: Session, user_id: int) -> tuple[list[Watch], dict[int, f
     pooled: list[Watch] = []
     similarity: dict[int, float] = {}
     for other in others:
-        theirs = watches(session, other, limit=300)
+        theirs = watches(session, other, limit=300, include_youtube=False)
         pooled.extend(theirs)
         counts: dict[str, float] = defaultdict(float)
         for w in theirs:
@@ -202,7 +203,7 @@ def _cowatch(session: Session, user_id: int) -> dict[int, float]:
     for other, sim in similarity.items():
         if sim < 0.1:
             continue
-        for w in watches(session, other, limit=300):
+        for w in watches(session, other, limit=300, include_youtube=False):
             if w.video_id is not None and w.engagement >= 0.7:
                 weights[w.video_id] += sim * w.engagement
     top = max(weights.values(), default=0.0)
@@ -502,7 +503,10 @@ def build_feed(
     now = utcnow()
     history, cold = taste_history(session, user_id)
     own = watches(session, user_id)
-    own_keys = {w.key for w in own}
+    # Everything watched on YouTube is seen, not only the newest part ``own`` holds.
+    own_keys = {w.key for w in own} | takeout_history.cached_profile(
+        session, user_id
+    ).watched
     excluded: Exclusions = exclusions(session, user_id)
     visits = earlier_visits(session, user_id)
     followed_urls: set[str] = set()

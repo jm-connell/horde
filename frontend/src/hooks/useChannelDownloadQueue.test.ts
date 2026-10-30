@@ -22,6 +22,7 @@ function feedEntry(
     video_id: null,
     library_height_px: null,
     max_height: null,
+    youtube_watched: false,
     ...patch,
   };
 }

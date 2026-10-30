@@ -50,6 +50,10 @@ Deleting a video keeps the time you spent on it (it still counts toward your tot
 
 API: `GET /api/history/stats?range=7d|30d|365d|all&tz=<IANA zone>` (the signed-in account only; without `tz` the server's zone is used).
 
+### YouTube views in the stats
+
+If you [imported your YouTube history](youtube-history.md), **Include YouTube in History stats** (Settings → Library → YouTube history, remembered per account) adds those views to videos started, active days, the streak, top channels and the weekday × hour grid. They never add watch time: Takeout does not record how long a video played. The History list itself never shows them. API: `include_youtube=true`.
+
 ## Continue watching
 
 ### Where it appears

@@ -217,7 +217,9 @@ def test_deleting_the_video_keeps_the_watch_time(client, add_video, init_db, clo
     clock.at(20)
     stats = client.get("/api/history/stats", params={"range": "all"}).json()
     assert stats["totals"]["watch_seconds"] == 10
-    assert stats["channels"] == [{"name": "Keepers", "seconds": 10.0, "videos": 0}]
+    assert stats["channels"] == [
+        {"name": "Keepers", "seconds": 10.0, "videos": 0, "youtube_views": 0}
+    ]
 
 
 def test_a_restore_from_the_trash_links_the_watch_time_again(

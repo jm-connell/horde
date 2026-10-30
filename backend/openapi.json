@@ -2306,6 +2306,23 @@
         "title": "BackgroundRead",
         "type": "object"
       },
+      "Body_import_takeout_api_takeout_import_post": {
+        "properties": {
+          "files": {
+            "items": {
+              "contentMediaType": "application/octet-stream",
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "Body_import_takeout_api_takeout_import_post",
+        "type": "object"
+      },
       "Body_upload_avatar_api_auth_avatar_post": {
         "properties": {
           "file": {
@@ -3200,6 +3217,11 @@
               }
             ],
             "title": "View Count"
+          },
+          "youtube_watched": {
+            "default": false,
+            "title": "Youtube Watched",
+            "type": "boolean"
           }
         },
         "required": [
@@ -5875,6 +5897,11 @@
             ],
             "title": "Hours"
           },
+          "includes_youtube": {
+            "default": false,
+            "title": "Includes Youtube",
+            "type": "boolean"
+          },
           "library": {
             "$ref": "#/components/schemas/HistoryStatsLibrary"
           },
@@ -5905,6 +5932,23 @@
           "tz": {
             "title": "Tz",
             "type": "string"
+          },
+          "youtube_hours": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Hours"
           }
         },
         "required": [
@@ -5936,6 +5980,11 @@
           "videos": {
             "title": "Videos",
             "type": "integer"
+          },
+          "youtube_views": {
+            "default": 0,
+            "title": "Youtube Views",
+            "type": "integer"
           }
         },
         "required": [
@@ -5960,6 +6009,11 @@
           "seconds": {
             "title": "Seconds",
             "type": "number"
+          },
+          "youtube_views": {
+            "default": 0,
+            "title": "Youtube Views",
+            "type": "integer"
           }
         },
         "required": [
@@ -6058,6 +6112,11 @@
           "watch_seconds": {
             "title": "Watch Seconds",
             "type": "number"
+          },
+          "youtube_views": {
+            "default": 0,
+            "title": "Youtube Views",
+            "type": "integer"
           }
         },
         "required": [
@@ -8162,6 +8221,18 @@
       "RecommendationItemRead": {
         "description": "A library video (``video``) or an upload that is not downloaded (``stream``).",
         "properties": {
+          "reason": {
+            "anyOf": [
+              {
+                "const": "throwback",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
           "stream": {
             "anyOf": [
               {
@@ -8360,6 +8431,57 @@
           "reason"
         ],
         "title": "RetentionPreviewItem",
+        "type": "object"
+      },
+      "RewatchedPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RewatchedVideo"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RewatchedPage",
+        "type": "object"
+      },
+      "RewatchedVideo": {
+        "description": "A video watched several times on YouTube that the library does not hold.",
+        "properties": {
+          "entry": {
+            "$ref": "#/components/schemas/ChannelFeedEntry"
+          },
+          "last_watched_at": {
+            "format": "date-time",
+            "title": "Last Watched At",
+            "type": "string"
+          },
+          "views": {
+            "title": "Views",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entry",
+          "views",
+          "last_watched_at"
+        ],
+        "title": "RewatchedVideo",
         "type": "object"
       },
       "ScanResult": {
@@ -9413,6 +9535,336 @@
           "items"
         ],
         "title": "TagStatPage",
+        "type": "object"
+      },
+      "TakeoutApplyRequest": {
+        "properties": {
+          "playlists": {
+            "items": {
+              "$ref": "#/components/schemas/TakeoutPlaylistChoice"
+            },
+            "maxItems": 1000,
+            "title": "Playlists",
+            "type": "array"
+          },
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/TakeoutSubscriptionChoice"
+            },
+            "maxItems": 10000,
+            "title": "Subscriptions",
+            "type": "array"
+          }
+        },
+        "title": "TakeoutApplyRequest",
+        "type": "object"
+      },
+      "TakeoutApplyResult": {
+        "properties": {
+          "followed": {
+            "title": "Followed",
+            "type": "integer"
+          },
+          "playlists_created": {
+            "title": "Playlists Created",
+            "type": "integer"
+          },
+          "playlists_updated": {
+            "title": "Playlists Updated",
+            "type": "integer"
+          },
+          "videos_added": {
+            "title": "Videos Added",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "followed",
+          "playlists_created",
+          "playlists_updated",
+          "videos_added"
+        ],
+        "title": "TakeoutApplyResult",
+        "type": "object"
+      },
+      "TakeoutClearResult": {
+        "properties": {
+          "removed_views": {
+            "title": "Removed Views",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "removed_views"
+        ],
+        "title": "TakeoutClearResult",
+        "type": "object"
+      },
+      "TakeoutHistorySummary": {
+        "description": "The signed-in user's imported YouTube watch history.",
+        "properties": {
+          "distinct_videos": {
+            "title": "Distinct Videos",
+            "type": "integer"
+          },
+          "first_watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Watched At"
+          },
+          "last_imported_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Imported At"
+          },
+          "last_watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watched At"
+          },
+          "total_views": {
+            "title": "Total Views",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total_views",
+          "distinct_videos",
+          "first_watched_at",
+          "last_watched_at",
+          "last_imported_at"
+        ],
+        "title": "TakeoutHistorySummary",
+        "type": "object"
+      },
+      "TakeoutImportResult": {
+        "properties": {
+          "found_history": {
+            "title": "Found History",
+            "type": "boolean"
+          },
+          "history": {
+            "$ref": "#/components/schemas/TakeoutHistorySummary"
+          },
+          "new_views": {
+            "title": "New Views",
+            "type": "integer"
+          },
+          "playlists": {
+            "items": {
+              "$ref": "#/components/schemas/TakeoutPlaylistRead"
+            },
+            "title": "Playlists",
+            "type": "array"
+          },
+          "subscriptions": {
+            "items": {
+              "$ref": "#/components/schemas/TakeoutSubscription"
+            },
+            "title": "Subscriptions",
+            "type": "array"
+          },
+          "views_in_file": {
+            "title": "Views In File",
+            "type": "integer"
+          },
+          "views_skipped": {
+            "default": 0,
+            "title": "Views Skipped",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "found_history",
+          "views_in_file",
+          "new_views",
+          "history",
+          "subscriptions",
+          "playlists"
+        ],
+        "title": "TakeoutImportResult",
+        "type": "object"
+      },
+      "TakeoutPlaylistChoice": {
+        "properties": {
+          "playlist_id": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playlist Id"
+          },
+          "title": {
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "video_ids": {
+            "items": {
+              "pattern": "^[A-Za-z0-9_-]{11}$",
+              "type": "string"
+            },
+            "maxItems": 20000,
+            "title": "Video Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "title",
+          "video_ids"
+        ],
+        "title": "TakeoutPlaylistChoice",
+        "type": "object"
+      },
+      "TakeoutPlaylistRead": {
+        "properties": {
+          "existing_playlist_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Playlist Id"
+          },
+          "new_videos": {
+            "title": "New Videos",
+            "type": "integer"
+          },
+          "playlist_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playlist Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "video_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Video Ids",
+            "type": "array"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          }
+        },
+        "required": [
+          "title",
+          "playlist_id",
+          "visibility",
+          "video_ids",
+          "existing_playlist_id",
+          "new_videos"
+        ],
+        "title": "TakeoutPlaylistRead",
+        "type": "object"
+      },
+      "TakeoutSubscription": {
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "new",
+              "following",
+              "unfollowed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url",
+          "channel_name",
+          "status"
+        ],
+        "title": "TakeoutSubscription",
+        "type": "object"
+      },
+      "TakeoutSubscriptionChoice": {
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "TakeoutSubscriptionChoice",
         "type": "object"
       },
       "ThumbnailCandidate": {
@@ -16135,6 +16587,18 @@
               "description": "IANA time zone the days and hours are counted in (the browser's). Omitted: the server's.",
               "title": "Tz"
             }
+          },
+          {
+            "description": "Count the imported YouTube history too (views, never time).",
+            "in": "query",
+            "name": "include_youtube",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Count the imported YouTube history too (views, never time).",
+              "title": "Include Youtube",
+              "type": "boolean"
+            }
           }
         ],
         "responses": {
@@ -19686,6 +20150,264 @@
         "summary": "Tag Stats",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/api/takeout/apply": {
+      "post": {
+        "description": "Follow the chosen subscriptions and import the chosen playlists.",
+        "operationId": "apply_takeout_api_takeout_apply_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TakeoutApplyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeoutApplyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Apply Takeout",
+        "tags": [
+          "takeout"
+        ]
+      }
+    },
+    "/api/takeout/history": {
+      "delete": {
+        "description": "Forget the imported views (follows and playlists made from them stay).",
+        "operationId": "clear_takeout_history_api_takeout_history_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeoutClearResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Clear Takeout History",
+        "tags": [
+          "takeout"
+        ]
+      },
+      "get": {
+        "operationId": "takeout_history_api_takeout_history_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeoutHistorySummary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Takeout History",
+        "tags": [
+          "takeout"
+        ]
+      }
+    },
+    "/api/takeout/import": {
+      "post": {
+        "description": "Read a Takeout export: store its watch history, list its subscriptions and playlists.\n\nThe views are stored at once (a view imported before is skipped). The\nsubscriptions and playlists are only listed; ``/apply`` imports the ones\nthe user picks. Blocking (reads the spooled uploads), so a plain ``def``.",
+        "operationId": "import_takeout_api_takeout_import_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_import_takeout_api_takeout_import_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TakeoutImportResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Import Takeout",
+        "tags": [
+          "takeout"
+        ]
+      }
+    },
+    "/api/takeout/rewatched": {
+      "get": {
+        "description": "Videos the user watched several times on YouTube that are not in the library.",
+        "operationId": "rewatched_api_takeout_rewatched_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 12,
+              "maximum": 60,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RewatchedPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Rewatched",
+        "tags": [
+          "takeout"
         ]
       }
     },

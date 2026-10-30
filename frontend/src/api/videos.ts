@@ -235,12 +235,16 @@ export const videosApi = {
     };
   },
 
-  /** The signed-in account's watch stats, counted in the browser's time zone. */
+  /**
+   * The signed-in account's watch stats, counted in the browser's time zone.
+   * `includeYoutube` adds their imported YouTube history (views, never time).
+   */
   historyStats(
     range: HistoryStatsRange,
-    opts?: ReadOptions
+    opts?: ReadOptions & { includeYoutube?: boolean }
   ): Promise<HistoryStats> {
     const params = new URLSearchParams({ range });
+    if (opts?.includeYoutube) params.set("include_youtube", "true");
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz) params.set("tz", tz);
     return request<HistoryStats>(`/api/history/stats?${params}`, opts);

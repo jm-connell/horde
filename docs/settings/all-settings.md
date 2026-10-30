@@ -127,6 +127,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `showProgressOnContinueWatching` | `true` | bool | | UI blob |
 | `showProgressOnAllVideos` | `false` | bool | | UI blob |
 | `showCardDates` | `true` | bool | | UI blob |
+| `historyIncludeYoutube` | `false` | bool | History stats also count the imported YouTube history (views, never time) | UI blob |
 | `defaultLibrarySort` | `"added_at"` | string | `added_at` \| `published_at` \| `title` \| `duration` \| `file_size` \| `view_count` \| `random` | UI blob |
 | `channelSort` | `"recent_download"` | string | `recent_download` \| `video_count` \| `alphabetical` \| `subscriber_count` | UI blob |
 | `channelOrder` | `"desc"` | string | `asc` \| `desc` | UI blob |

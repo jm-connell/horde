@@ -16,6 +16,7 @@ import { formatSize } from "../utils";
 import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
+import TakeoutImport from "../components/takeout/TakeoutImport";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 import {
   COMPATIBLE_PROVIDERS_TIP,
@@ -33,6 +34,7 @@ const STEPS = [
   "playback",
   "look",
   "ai",
+  "youtube",
   "done",
 ] as const;
 type Step = (typeof STEPS)[number];
@@ -47,6 +49,7 @@ const STEP_TITLE: Record<Step, string> = {
   playback: "Playback compatibility",
   look: "Look",
   ai: "AI (optional)",
+  youtube: "YouTube history (optional)",
   done: "You’re set",
 };
 
@@ -604,6 +607,18 @@ function WizardPanel({
             {aiStatus ? (
               <p className="text-xs text-gray-400">{aiStatus}</p>
             ) : null}
+          </>
+        )}
+
+        {step === "youtube" && (
+          <>
+            <p className="text-sm text-gray-400">
+              Bring your YouTube watch history, subscriptions and playlists from
+              Google Takeout. Videos you watched there are marked as watched and
+              shape your recommendations. It’s all just for your account; anyone
+              else can import their own in Settings → Library.
+            </p>
+            <TakeoutImport onFinished={goNext} />
           </>
         )}
 

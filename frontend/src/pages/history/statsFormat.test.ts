@@ -16,6 +16,7 @@ function days(seconds: number[]): HistoryStatsDay[] {
     day: `2026-01-${String(i + 1).padStart(2, "0")}`,
     seconds: s,
     finished: s > 0 ? 1 : 0,
+    youtube_views: 0,
   }));
 }
 
@@ -65,6 +66,7 @@ describe("binDays", () => {
       day: new Date(Date.UTC(2025, 0, 1 + i)).toISOString().slice(0, 10),
       seconds: 60,
       finished: 0,
+      youtube_views: 0,
     }));
     const bars = binDays(year);
     expect(bars).toHaveLength(53);

@@ -60,6 +60,8 @@ See [Search](search.md).
 
 ### Show undownloaded
 
+Videos you watched on YouTube (from an [imported history](youtube-history.md)) carry a **Watched** badge on their thumbnail, for your account only.
+
 Toggle **Undownloaded** in the channel page toolbar (also available under [Playback / Library settings](../settings/playback.md) as `showUndownloadedOnChannel`). When on, catalog-only uploads appear so you can download or preview them without leaving the feed. Cards show views when Horde has them. Publish time is a calendar day only when yt-dlp has a real upload date; otherwise the card keeps YouTube’s wording (`3 years ago`) or a year (`2013`) — Horde does not invent a month and day from that.
 
 ### Feed layout

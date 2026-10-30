@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0020_recommended_plus"
+HEAD = "0021_youtube_watch_events"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -980,6 +980,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
     try:
         con.executescript(
             """
+            DROP TABLE youtube_watch_events;
             DROP TRIGGER trg_videos_tags_delete;
             ALTER TABLE download_jobs DROP COLUMN clip_end_sec;
             ALTER TABLE download_jobs DROP COLUMN clip_start_sec;

@@ -180,18 +180,24 @@ class HistoryStatsTotals(BaseModel):
     #: Consecutive days with watch time, ending today (or yesterday when nothing
     #: has been watched yet today). Not limited to the range.
     current_streak_days: int
+    #: Views in the imported YouTube history in the range (``include_youtube``).
+    youtube_views: int = 0
 
 
 class HistoryStatsDay(BaseModel):
     day: str = Field(description="Local date, YYYY-MM-DD.")
     seconds: float
     finished: int
+    #: YouTube views that day (``include_youtube``; they add no watch time).
+    youtube_views: int = 0
 
 
 class HistoryStatsChannel(BaseModel):
     name: str
     seconds: float
+    #: Distinct videos watched (in Horde, plus on YouTube with ``include_youtube``).
     videos: int
+    youtube_views: int = 0
 
 
 class HistoryStatsTag(BaseModel):
@@ -227,6 +233,10 @@ class HistoryStats(BaseModel):
     #: Watch seconds by local weekday (0 = Monday) and hour; ``None`` when the
     #: range has no watch time.
     hours: list[list[float]] | None
+    #: Whether the imported YouTube history is counted (views, never time).
+    includes_youtube: bool = False
+    #: YouTube views by local weekday and hour; ``None`` without any.
+    youtube_hours: list[list[int]] | None = None
     library: HistoryStatsLibrary
 
 
@@ -502,6 +512,8 @@ class ChannelFeedEntry(BaseModel):
     match_reason: SearchMatchReason | None = None
     #: yt-dlp live_status: ``is_live`` (live now), ``was_live`` (a past stream), ...
     live_status: str | None = None
+    #: The viewer watched it on YouTube (their imported Takeout history).
+    youtube_watched: bool = False
 
 
 class NextPartRead(BaseModel):
@@ -538,6 +550,98 @@ class ChannelFeedPage(BaseModel):
     catalog_status: str | None = None
     direct_youtube_search_effective: bool | None = None
     youtube_video_search_effective: bool | None = None
+
+
+# --- Google Takeout (YouTube history) -------------------------------------------
+
+_YT_ID = r"^[A-Za-z0-9_-]{11}$"
+
+
+class TakeoutHistorySummary(BaseModel):
+    """The signed-in user's imported YouTube watch history."""
+
+    total_views: int
+    distinct_videos: int
+    first_watched_at: datetime | None
+    last_watched_at: datetime | None
+    last_imported_at: datetime | None
+
+
+class TakeoutSubscription(BaseModel):
+    channel_url: str
+    channel_name: str | None
+    #: ``following`` already, ``unfollowed`` on purpose before, or ``new``.
+    status: Literal["new", "following", "unfollowed"]
+
+
+class TakeoutPlaylistRead(BaseModel):
+    title: str
+    playlist_id: str | None
+    visibility: str | None
+    video_ids: list[str]
+    #: The user's playlist from an earlier import of this one, if any.
+    existing_playlist_id: int | None
+    #: Videos that playlist does not hold yet (all of them for a new one).
+    new_videos: int
+
+
+class TakeoutImportResult(BaseModel):
+    #: The export had a watch history file (it may still hold no views).
+    found_history: bool
+    views_in_file: int
+    #: Views not imported before (re-importing an export adds only these).
+    new_views: int
+    #: Views left out because their time could not be read (HTML exports in
+    #: an unknown date format or time zone).
+    views_skipped: int = 0
+    history: TakeoutHistorySummary
+    subscriptions: list[TakeoutSubscription]
+    playlists: list[TakeoutPlaylistRead]
+
+
+class TakeoutSubscriptionChoice(BaseModel):
+    channel_url: str = Field(min_length=1, max_length=500)
+    channel_name: str | None = Field(default=None, max_length=300)
+
+
+class TakeoutPlaylistChoice(BaseModel):
+    title: str = Field(min_length=1, max_length=300)
+    playlist_id: str | None = Field(default=None, max_length=100)
+    video_ids: list[Annotated[str, Field(pattern=_YT_ID)]] = Field(max_length=20_000)
+
+
+class TakeoutApplyRequest(BaseModel):
+    subscriptions: list[TakeoutSubscriptionChoice] = Field(
+        default_factory=list, max_length=10_000
+    )
+    playlists: list[TakeoutPlaylistChoice] = Field(
+        default_factory=list, max_length=1_000
+    )
+
+
+class TakeoutApplyResult(BaseModel):
+    #: Channels followed that were not followed before.
+    followed: int
+    playlists_created: int
+    playlists_updated: int
+    videos_added: int
+
+
+class TakeoutClearResult(BaseModel):
+    removed_views: int
+
+
+class RewatchedVideo(BaseModel):
+    """A video watched several times on YouTube that the library does not hold."""
+
+    entry: ChannelFeedEntry
+    views: int
+    last_watched_at: datetime
+
+
+class RewatchedPage(BaseModel):
+    items: list[RewatchedVideo]
+    next_cursor: str | None = None
 
 
 class ChannelCatalogStatusItem(BaseModel):
