@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-30
+
 ### Added
 
 - **Recommended+**, a third home tab for when you don't know what to watch:
@@ -30,7 +32,6 @@ All notable changes to Horde are documented here. The format follows
   watch there steer both (recent viewing far more than old, with the odd
   **Throwback**). The Download page lists what you rewatch most and have not
   downloaded, and History stats can count YouTube views (never as watch time).
-
 - Live broadcasts of followed channels show up in Recommended (with
   "Include not downloaded" on) and Recommended+: first when you watched the
   channel in the last two weeks, a few cards in otherwise.
@@ -77,7 +78,6 @@ All notable changes to Horde are documented here. The format follows
   installed desktop app keep the browser's usual behaviour.
 - The installed app has proper icons on Android, including one the launcher
   can shape to match its other icons.
-
 - New search results start at the top of the page instead of wherever the
   page was scrolled.
 - A channel page's search index state ("Not indexed") sits beside Follow
@@ -874,7 +874,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.0...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.1...main
+[1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jm-connell/horde/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jm-connell/horde/compare/v1.0.3...v1.1.0
