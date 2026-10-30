@@ -1,12 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { ApiError } from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import { useDownloads } from "../context/DownloadContext";
 import { appendCss, clearCssPreview, showCssPreview } from "../cssPreview";
+import { customCssSuspended } from "../customCss";
 import { useSettings } from "../hooks/useSettings";
 import { PRESET_LABELS } from "../presets";
 import {
@@ -40,6 +41,8 @@ const SMALL_BTN = button("secondary", "sm");
 
 /** Seconds a CSS preview stays before it reverts by itself. */
 export const CSS_PREVIEW_SECONDS = 20;
+/** Fired with a card's id when its preview starts, so the others stop. */
+const CSS_PREVIEW_EVENT = "horde:css-preview";
 
 function errorText(err: unknown): string {
   if (err instanceof ApiError || err instanceof Error) return err.message;
@@ -318,6 +321,12 @@ function SettingChangeCard({
             ) : (
               <>
                 Change {link} to {valueText}
+                {serverSide && (
+                  <span className="text-muted">
+                    {" "}
+                    for everyone on this server
+                  </span>
+                )}
               </>
             )}
           </p>
@@ -406,6 +415,53 @@ function videoCount(n: number): string {
   return n === 1 ? "1 video" : `${n} videos`;
 }
 
+/**
+ * The library videos behind the ids a reply named: the ones that exist (in
+ * order), and whether every lookup has finished. Made-up ids drop out, so a
+ * card never claims a video it will not add.
+ */
+function useLibraryVideos(ids: number[]) {
+  const results = useQueries({
+    queries: ids.map((id) => ({
+      queryKey: queryKeys.videos.detail(id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        api.getVideo(id, { signal }),
+      retry: false,
+      staleTime: 60_000,
+    })),
+  });
+  const videos = results.flatMap((r) => (r.data ? [r.data] : []));
+  return { videos, ready: results.every((r) => !r.isPending) };
+}
+
+function VideoList({
+  videos,
+  onNavigate,
+}: {
+  videos: { id: number; title: string }[];
+  onNavigate: () => void;
+}) {
+  const shown = videos.slice(0, 6);
+  return (
+    <ul className="list-disc space-y-0.5 pl-4 marker:text-muted">
+      {shown.map((v) => (
+        <li key={v.id} className="truncate">
+          <Link
+            to={`/watch/${v.id}`}
+            onClick={onNavigate}
+            className="text-gray-200 hover:text-accent"
+          >
+            {v.title}
+          </Link>
+        </li>
+      ))}
+      {videos.length > shown.length && (
+        <li className="text-muted">and {videos.length - shown.length} more</li>
+      )}
+    </ul>
+  );
+}
+
 function NewPlaylistCard({
   name,
   videoIds,
@@ -416,15 +472,25 @@ function NewPlaylistCard({
   onNavigate: () => void;
 }) {
   const queryClient = useQueryClient();
+  const { can } = useAuth();
+  const { videos, ready } = useLibraryVideos(videoIds);
   const [phase, setPhase] = useState<"idle" | "busy" | "done">("idle");
+  // Kept across a failed add, so trying again fills the same playlist.
   const [created, setCreated] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  if (ready && !videos.length) {
+    return (
+      <div className={CARD}>
+        <p>None of the videos for “{name}” are in the library.</p>
+      </div>
+    );
+  }
   return (
     <div className={CARD} data-help-action="playlist-new">
       {phase === "done" && created !== null ? (
         <Done>
-          Made “{name}” with {videoCount(videoIds.length)}.{" "}
+          Made “{name}” with {videoCount(videos.length)}.{" "}
           <Link
             to={`/playlists?open=${created}`}
             onClick={onNavigate}
@@ -434,37 +500,50 @@ function NewPlaylistCard({
           </Link>
         </Done>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p>
-            Make a playlist{" "}
-            <strong className="font-semibold text-gray-100">“{name}”</strong>{" "}
-            with {videoCount(videoIds.length)}
-          </p>
-          <button
-            type="button"
-            className={button("primary", "sm")}
-            disabled={phase === "busy"}
-            onClick={async () => {
-              setError(null);
-              setPhase("busy");
-              try {
-                const playlist = await api.createPlaylist(name);
-                setCreated(playlist.id);
-                await api.bulkAddToPlaylist(playlist.id, videoIds);
-                setPhase("done");
-              } catch (err) {
-                setError(errorText(err));
-                setPhase("idle");
-              } finally {
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.playlists.all,
-                });
-              }
-            }}
-          >
-            {phase === "busy" ? "Making…" : "Make playlist"}
-          </button>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p>
+              Make a playlist{" "}
+              <strong className="font-semibold text-gray-100">“{name}”</strong>{" "}
+              with {ready ? videoCount(videos.length) : "…"}
+              {can("manage_playlists")
+                ? " (App-wide: everyone can see it)"
+                : " (Private)"}
+            </p>
+            <button
+              type="button"
+              className={button("primary", "sm")}
+              disabled={phase === "busy" || !ready}
+              onClick={async () => {
+                setError(null);
+                setPhase("busy");
+                try {
+                  const id = created ?? (await api.createPlaylist(name)).id;
+                  setCreated(id);
+                  await api.bulkAddToPlaylist(
+                    id,
+                    videos.map((v) => v.id)
+                  );
+                  setPhase("done");
+                } catch (err) {
+                  setError(errorText(err));
+                  setPhase("idle");
+                } finally {
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.playlists.all,
+                  });
+                }
+              }}
+            >
+              {phase === "busy"
+                ? "Making…"
+                : created !== null
+                  ? "Try again"
+                  : "Make playlist"}
+            </button>
+          </div>
+          {ready && <VideoList videos={videos} onNavigate={onNavigate} />}
+        </>
       )}
       {error && <Failed>{error}</Failed>}
     </div>
@@ -483,10 +562,18 @@ function AddToPlaylistCard({
   const queryClient = useQueryClient();
   const { editable, isPending } = usePlaylists();
   const playlist = editable.find((p) => p.id === playlistId);
+  const { videos, ready } = useLibraryVideos(videoIds);
   const [phase, setPhase] = useState<"idle" | "busy" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
 
-  if (isPending) return null;
+  if (isPending || !ready) return null;
+  if (!videos.length) {
+    return (
+      <div className={CARD}>
+        <p>None of those videos are in the library.</p>
+      </div>
+    );
+  }
   if (!playlist) {
     return (
       <div className={CARD}>
@@ -498,7 +585,7 @@ function AddToPlaylistCard({
     <div className={CARD} data-help-action="playlist-add">
       {phase === "done" ? (
         <Done>
-          Added {videoCount(videoIds.length)} to{" "}
+          Added {videoCount(videos.length)} to{" "}
           <Link
             to={`/playlists?open=${playlist.id}`}
             onClick={onNavigate}
@@ -508,35 +595,41 @@ function AddToPlaylistCard({
           </Link>
         </Done>
       ) : (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p>
-            Add {videoCount(videoIds.length)} to{" "}
-            <strong className="font-semibold text-gray-100">
-              “{playlist.name}”
-            </strong>
-          </p>
-          <button
-            type="button"
-            className={button("primary", "sm")}
-            disabled={phase === "busy"}
-            onClick={async () => {
-              setError(null);
-              setPhase("busy");
-              try {
-                await api.bulkAddToPlaylist(playlist.id, videoIds);
-                setPhase("done");
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.playlists.all,
-                });
-              } catch (err) {
-                setError(errorText(err));
-                setPhase("idle");
-              }
-            }}
-          >
-            {phase === "busy" ? "Adding…" : "Add"}
-          </button>
-        </div>
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p>
+              Add {videoCount(videos.length)} to{" "}
+              <strong className="font-semibold text-gray-100">
+                “{playlist.name}”
+              </strong>
+            </p>
+            <button
+              type="button"
+              className={button("primary", "sm")}
+              disabled={phase === "busy"}
+              onClick={async () => {
+                setError(null);
+                setPhase("busy");
+                try {
+                  await api.bulkAddToPlaylist(
+                    playlist.id,
+                    videos.map((v) => v.id)
+                  );
+                  setPhase("done");
+                  void queryClient.invalidateQueries({
+                    queryKey: queryKeys.playlists.all,
+                  });
+                } catch (err) {
+                  setError(errorText(err));
+                  setPhase("idle");
+                }
+              }}
+            >
+              {phase === "busy" ? "Adding…" : "Add"}
+            </button>
+          </div>
+          <VideoList videos={videos} onNavigate={onNavigate} />
+        </>
       )}
       {error && <Failed>{error}</Failed>}
     </div>
@@ -549,6 +642,7 @@ function AddToPlaylistCard({
  * a rule that hides the page undoes itself. Keep adds it to the saved CSS.
  */
 export function CssPreviewCard({ css }: { css: string }) {
+  const previewId = useId();
   const [settings, update] = useSettings();
   const [phase, setPhase] = useState<
     "idle" | "preview" | "kept" | "reverted" | "undone"
@@ -562,8 +656,15 @@ export function CssPreviewCard({ css }: { css: string }) {
 
   useEffect(() => {
     if (phase !== "preview") return;
-    showCssPreview(css);
-    setLeft(CSS_PREVIEW_SECONDS);
+    showCssPreview(previewId, css);
+    // One preview at a time: starting this one ends any other.
+    window.dispatchEvent(
+      new CustomEvent(CSS_PREVIEW_EVENT, { detail: previewId })
+    );
+    const onOther = (e: Event) => {
+      if ((e as CustomEvent<string>).detail !== previewId) setPhase("reverted");
+    };
+    window.addEventListener(CSS_PREVIEW_EVENT, onOther);
     const timer = window.setInterval(() => setLeft((n) => n - 1), 1000);
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
@@ -575,9 +676,10 @@ export function CssPreviewCard({ css }: { css: string }) {
     return () => {
       window.clearInterval(timer);
       window.removeEventListener("keydown", onKey, true);
-      clearCssPreview();
+      window.removeEventListener(CSS_PREVIEW_EVENT, onOther);
+      clearCssPreview(previewId);
     };
-  }, [phase, css]);
+  }, [phase, css, previewId]);
 
   useEffect(() => {
     if (phase === "preview" && left <= 0) setPhase("reverted");
@@ -602,7 +704,12 @@ export function CssPreviewCard({ css }: { css: string }) {
     <div className={CARD} data-help-action="css">
       {phase === "kept" ? (
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <Done>Added to your custom CSS (and turned it on).</Done>
+          <Done>
+            Added to your custom CSS (and turned it on)
+            {customCssSuspended()
+              ? ". It stays off in this tab until you turn it back on (?nocss)."
+              : "."}
+          </Done>
           {before && (
             <button
               type="button"
@@ -634,6 +741,7 @@ export function CssPreviewCard({ css }: { css: string }) {
             className={button("primary", "sm")}
             onClick={() => {
               setError(null);
+              setLeft(CSS_PREVIEW_SECONDS);
               setPhase("preview");
             }}
           >
@@ -648,7 +756,8 @@ export function CssPreviewCard({ css }: { css: string }) {
             role="alertdialog"
             aria-label="CSS preview"
             data-horde="css-preview-bar"
-            // Inline: the CSS being previewed must not be able to hide or move it.
+            // Inline, so ordinary rules in the CSS being tried do not move or
+            // hide it; a rule that still does is undone by the timer and Esc.
             style={{
               position: "fixed",
               top: 12,

@@ -38,8 +38,12 @@ export function useSettingFind(onMissing?: (text: string) => void) {
       params.delete("find");
       const search = params.toString();
       navigate(
-        { pathname: location.pathname, search: search ? `?${search}` : "" },
-        { replace: true }
+        {
+          pathname: location.pathname,
+          search: search ? `?${search}` : "",
+          hash: location.hash,
+        },
+        { replace: true, state: location.state }
       );
     };
     const look = () => {
@@ -48,7 +52,8 @@ export function useSettingFind(onMissing?: (text: string) => void) {
         flashSetting(el);
         done();
       } else if (performance.now() - started > WAIT_MS) {
-        missingRef.current?.(find);
+        // An anchor id reads as words ("ai-models" searches "ai models").
+        missingRef.current?.(find.replace(/-/g, " "));
         done();
       } else {
         frame = requestAnimationFrame(look);

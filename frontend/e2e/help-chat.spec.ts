@@ -193,7 +193,7 @@ async function stubAnswer(
   page: import("@playwright/test").Page,
   answer: string | ((n: number) => string)
 ) {
-  const bodies: { message: string; use_data?: boolean }[] = [];
+  const bodies: { message: string; data_consent?: string }[] = [];
   await page.route(/\/api\/ai\/help\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
@@ -306,45 +306,65 @@ test("Use my data asks before sending data to a cloud AI", async ({ page }) => {
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   await ask(page, "how many videos are in my library?");
   await expect(panel.getByText("You have 3 videos.")).toBeVisible();
-  expect(bodies[0].use_data).toBe(false);
+  expect(bodies[0].data_consent).toBe("off");
 
   await toggle.click();
   await panel.getByRole("alert").getByRole("button", { name: "Allow" }).click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await ask(page, "and now?");
   await expect(panel.getByText("You have 3 videos.")).toHaveCount(2);
-  expect(bodies[1].use_data).toBe(true);
+  expect(bodies[1].data_consent).toBe("cloud");
 });
 
 test("CSS from the chat previews, reverts by itself or is kept", async ({
   page,
 }) => {
   const css = '[data-horde="nav"] { outline: 3px solid rgb(255, 0, 0); }';
-  await stubAnswer(page, "Here you go:\n\n```css\n" + css + "\n```");
+  const other = ".ui-card { border-radius: 2rem; }";
+  await stubAnswer(
+    page,
+    "Here you go:\n\n```css\n" +
+      css +
+      "\n```\n\nOr:\n\n```css\n" +
+      other +
+      "\n```"
+  );
   await page.clock.install();
   await page.goto("/");
   await page.getByRole("button", { name: "Ask about Horde" }).click();
   const panel = await ask(page, "red outline on the top bar with css");
-  const preview = page.locator("#horde-custom-css-preview");
+  const preview = page.locator('style[data-horde="custom-css-preview"]');
   const bar = page.getByRole("alertdialog", { name: "CSS preview" });
 
-  await panel.getByRole("button", { name: "Preview" }).click();
+  const [first, second] = [
+    panel.locator('[data-help-action="css"]').nth(0),
+    panel.locator('[data-help-action="css"]').nth(1),
+  ];
+  // Only one preview at a time: starting the second ends the first.
+  await second.getByRole("button", { name: "Preview" }).click();
   await expect(preview).toHaveCount(1);
+  await first.getByRole("button", { name: "Preview" }).click();
+  await expect(preview).toHaveCount(1);
+  await expect(bar).toHaveCount(1);
+  await expect(second.getByText("Reverted. Nothing was saved.")).toBeVisible();
   await expect(bar).toContainText("reverts in 20s");
   // Left alone, it undoes itself.
   await page.clock.runFor(21_000);
   await expect(preview).toHaveCount(0);
   await expect(bar).toBeHidden();
-  await expect(panel.getByText("Reverted. Nothing was saved.")).toBeVisible();
+  await expect(first.getByText("Reverted. Nothing was saved.")).toBeVisible();
 
-  // Escape reverts at once (and does not close the chat).
-  await panel.getByRole("button", { name: "Preview again" }).click();
+  // Escape reverts at once (and does not close the chat). A new preview gets
+  // the whole 20 seconds again.
+  await first.getByRole("button", { name: "Preview again" }).click();
+  await page.clock.runFor(1_000);
   await expect(preview).toHaveCount(1);
+  await expect(bar).toContainText("reverts in 19s");
   await page.keyboard.press("Escape");
   await expect(preview).toHaveCount(0);
   await expect(panel).toBeVisible();
 
-  await panel.getByRole("button", { name: "Preview again" }).click();
+  await first.getByRole("button", { name: "Preview again" }).click();
   await bar.getByRole("button", { name: "Keep" }).click();
   await expect(panel.getByText("Added to your custom CSS")).toBeVisible();
   await expect.poll(() => savedCss(page)).toContain("outline: 3px");
@@ -381,7 +401,7 @@ test("the chat offers downloads and playlists, and does them on confirm", async 
   const [a, b] = items;
   await stubAnswer(
     page,
-    `Found [[video:${a.id}|${a.title}]].\n\n[[playlist-new:Chat mix|${a.id},${b.id}]]\n\n[[download:https://www.youtube.com/watch?v=dQw4w9WgXcQ]]`
+    `Found [[video:${a.id}|${a.title}]].\n\n[[playlist-new:Chat mix|${a.id},${b.id},999999]]\n\n[[download:https://www.youtube.com/watch?v=dQw4w9WgXcQ]]`
   );
   const posted: string[] = [];
   await page.route("**/api/downloads", async (route) => {

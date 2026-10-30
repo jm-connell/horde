@@ -9,21 +9,28 @@ import {
  * second style tag after the saved custom CSS (so its rules win), cleaned by
  * the same sanitizer. Nothing is saved until the user keeps it.
  */
-const PREVIEW_STYLE_ID = "horde-custom-css-preview";
+const PREVIEW_ATTR = "data-css-preview";
 
-export function showCssPreview(css: string): void {
-  let el = document.getElementById(PREVIEW_STYLE_ID) as HTMLStyleElement | null;
+function previewTag(owner: string): HTMLStyleElement | null {
+  return document.querySelector<HTMLStyleElement>(
+    `style[${PREVIEW_ATTR}="${CSS.escape(owner)}"]`
+  );
+}
+
+/** Try `css` on the page; `owner` (the card) removes it again. */
+export function showCssPreview(owner: string, css: string): void {
+  let el = previewTag(owner);
   if (!el) {
     el = document.createElement("style");
-    el.id = PREVIEW_STYLE_ID;
+    el.setAttribute(PREVIEW_ATTR, owner);
     el.setAttribute("data-horde", "custom-css-preview");
     document.head.appendChild(el);
   }
   el.textContent = sanitizeCustomCss(normalizeCustomCss(css));
 }
 
-export function clearCssPreview(): void {
-  document.getElementById(PREVIEW_STYLE_ID)?.remove();
+export function clearCssPreview(owner: string): void {
+  previewTag(owner)?.remove();
 }
 
 /** The saved stylesheet with `addition` after it, or null when too long. */

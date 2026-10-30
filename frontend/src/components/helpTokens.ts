@@ -33,7 +33,8 @@ const ACTION_KINDS = new Set([
   "playlist-add",
 ]);
 const ID_RE = /^[a-z0-9-]{1,60}$/;
-const MAX_VIDEOS = 200;
+/** Videos one playlist card resolves and adds. */
+const MAX_VIDEOS = 50;
 const MAX_NAME = 120;
 
 function ids(list: string): number[] | null {
