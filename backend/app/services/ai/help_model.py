@@ -25,6 +25,12 @@ Tier = Literal["small", "medium", "large"]
 #: Parameter counts in names: ``llama3.2:3b``, ``qwen3-235b-a22b``, ``8x7b``.
 _SIZE = re.compile(r"(?<![a-z0-9.])(?:\d+x)?(\d+(?:\.\d+)?)b(?![a-z])")
 _SMALL_WORDS = frozenset({"nano", "tiny"})
+#: Small local families whose names carry no size (``tinyllama``, ``smollm2``).
+_SMALL_FAMILIES = ("tiny", "smol")
+#: Hosted model ids (``vendor/model`` or a vendor's own names). Family words
+#: such as "flash" or "deepseek" only mean large there: a bare Ollama tag
+#: like ``deepseek-r1`` is a 7B model.
+_HOSTED_PREFIXES = ("gpt-", "claude", "gemini", "o3", "o4")
 _MEDIUM_WORDS = frozenset({"lite", "mini", "haiku", "small"})
 _LARGE_WORDS = frozenset(
     {"pro", "sonnet", "opus", "claude", "deepseek", "grok", "flash", "large"}
@@ -52,11 +58,12 @@ def tier(model: str) -> Tier:
         biggest = max(sizes)
         return "small" if biggest <= 4 else "medium" if biggest <= 30 else "large"
     parts = set(_NAME_PARTS.split(name))
-    if parts & _SMALL_WORDS:
+    if parts & _SMALL_WORDS or name.startswith(_SMALL_FAMILIES):
         return "small"
     if parts & _MEDIUM_WORDS:
         return "medium"
-    if parts & _LARGE_WORDS or any(f in name for f in _LARGE_FAMILIES):
+    hosted = "/" in name or name.startswith(_HOSTED_PREFIXES)
+    if hosted and (parts & _LARGE_WORDS or any(f in name for f in _LARGE_FAMILIES)):
         return "large"
     return "medium"
 
@@ -92,10 +99,17 @@ def provider_label(conn: Connection | None, *, is_admin: bool) -> str:
     return "an outside AI service"
 
 
+def configured_model() -> str:
+    """The assistant's model as saved, without checking or pulling anything."""
+    ai = app_settings.ai_settings()
+    return str(ai.get("help_model") or ai.get("chat_model") or "").strip()
+
+
 def info(user: AuthUser) -> HelpAssistantInfo:
+    # A GET: read the settings only (assistant_model() may save and pull).
     conn = chat_connection()
     available = llm_features_allowed()[0] and conn is not None
-    model = assistant_model() if available else ""
+    model = configured_model() if available else ""
     return HelpAssistantInfo(
         model=(model or None) if user.is_admin else None,
         tier=tier(model) if model else "medium",

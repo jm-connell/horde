@@ -1423,9 +1423,10 @@ class HelpChatRequest(BaseModel):
     history: list[HelpChatTurn] = Field(default_factory=list, max_length=24)
     #: Where the user is in the app, e.g. "Settings, AI tab (/settings?tab=ai)".
     page: str | None = Field(default=None, max_length=300)
-    #: The user agreed to let the assistant read their downloads, library,
-    #: history and playlists for this question.
-    use_data: bool = False
+    #: What the user allowed the assistant to read of their downloads, library,
+    #: history and playlists: nothing, only while the AI is on the local
+    #: network (the server checks), or also with a cloud provider.
+    data_consent: Literal["off", "local", "cloud"] = "off"
 
 
 class HelpCatalogOption(BaseModel):

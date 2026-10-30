@@ -6176,6 +6176,16 @@
       "HelpChatRequest": {
         "description": "One Ask-about-Horde question and the conversation before it.",
         "properties": {
+          "data_consent": {
+            "default": "off",
+            "enum": [
+              "off",
+              "local",
+              "cloud"
+            ],
+            "title": "Data Consent",
+            "type": "string"
+          },
           "history": {
             "items": {
               "$ref": "#/components/schemas/HelpChatTurn"
@@ -6201,11 +6211,6 @@
               }
             ],
             "title": "Page"
-          },
-          "use_data": {
-            "default": false,
-            "title": "Use Data",
-            "type": "boolean"
           }
         },
         "required": [

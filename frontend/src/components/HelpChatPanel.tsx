@@ -172,7 +172,8 @@ export default function HelpChatPanel({
   const info = useQuery({
     queryKey: queryKeys.ai.helpInfo,
     queryFn: ({ signal }) => api.getHelpInfo({ signal }),
-    staleTime: 30_000,
+    // Read again on each opening: the provider (local or cloud) may change.
+    staleTime: 0,
   }).data;
   // Consent given while the AI ran locally does not cover a cloud provider.
   const consent = settings.helpChatData;
@@ -331,7 +332,7 @@ export default function HelpChatPanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      await api.streamHelpChat(text, history, currentPage(), useData, {
+      await api.streamHelpChat(text, history, currentPage(), consent, {
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "sources") {

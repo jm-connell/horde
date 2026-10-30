@@ -12,6 +12,7 @@ import type {
   StreamRelatedPage,
   Video,
 } from "../types";
+import type { HelpDataConsent } from "../hooks/settings/types";
 import type { ApiResponse } from "./typed";
 import {
   type ChatStreamOptions,
@@ -194,12 +195,13 @@ export const aiApi = {
     message: string,
     history: HelpChatTurn[],
     page: string,
-    useData: boolean,
+    dataConsent: HelpDataConsent,
     opts: ChatStreamOptions
   ): Promise<void> {
+    // The server checks that "local" consent meets a local provider.
     return postEventStream(
       "/api/ai/help/chat",
-      { message, history, page, use_data: useData },
+      { message, history, page, data_consent: dataConsent },
       opts
     );
   },

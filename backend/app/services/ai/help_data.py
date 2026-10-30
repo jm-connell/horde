@@ -1,11 +1,12 @@
 """The user's own data for Ask about Horde, when they allow it.
 
-Only what a question is about is sent, as short lines: words in the question
-(and the previous one, for follow-ups) and the page the user is on pick the
-topics, and each topic has a fixed size. A question that names no topic but
-is about the user ("my", "I") gets a small overview instead. Everything is
-read as the asking user sees it: their own history, playlists they can open
-and download jobs they may see.
+Only a question about the user's own things gets any ("my downloads", "did I
+watch", "what should I watch", "make a playlist"); a how-to question gets
+none, even when it says "my password". The question's words (and the previous
+question's, for a follow-up like "and mine?") and the page then pick the
+topics, and each topic has a fixed size. Everything is read as the asking
+user sees it: their own history, playlists they can open and download jobs
+they may see.
 """
 
 from __future__ import annotations
@@ -24,11 +25,13 @@ from ...models import (
     PlaylistItem,
     UserVideoState,
     Video,
+    require_id,
     utcnow,
 )
-from .. import playlists, user_state
+from .. import library, playlists, user_state
 from ..auth.accounts import AuthUser
 from ..downloads import device_access
+from ..pagination import PageRequest
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +51,23 @@ _TOPIC_WORDS: dict[str, frozenset[str]] = {
     ),
     "playlists": _words("playlist playlists"),
     "library": _words(
-        "library channels channel storage space size biggest largest many "
+        "library channels channel storage size biggest largest many "
         "count stats statistics total"
     ),
     "search": _words("find search looking called named titled remember"),
     "suggest": _words(
-        "suggest suggestion recommend recommendation should next bored tonight pick"
+        "suggest suggestion recommend recommendation should next bored tonight pick "
+        "unwatched"
     ),
 }
 #: A question about the user's own things ("I" alone is in every how-to).
 _PERSONAL = _words("my mine")
+#: "did I watch", "have I seen", "I downloaded": about the user without "my".
+_ABOUT_ME = re.compile(
+    r"\b(?:did|have|had) i\b|\bi(?:'ve| have)? (?:watched|downloaded|saw|seen|added)\b"
+)
+_WATCH = _words("watch watching")
+_MAKE = _words("make create build new add put")
 #: Words that say what to look for rather than what it is about.
 _NOT_SEARCH_TERMS = _words(
     "a an the and or of to in on at for from with about that this these those "
@@ -66,7 +76,8 @@ _NOT_SEARCH_TERMS = _words(
     "where when who how video videos clip clips watched watch watching saw seen "
     "remember called named titled one ones thing something last ago month months "
     "week weeks year years day days yesterday today recently recent there some "
-    "any all library download downloaded please"
+    "any all library download downloaded please make create build new add put "
+    "playlist playlists into"
 )
 _WORD = re.compile(r"[a-z0-9']+")
 _PAGE_TOPICS = (("/download", "downloads"), ("/history", "history"))
@@ -75,26 +86,38 @@ _MAX_JOBS = 6
 _MAX_HISTORY = 12
 _MAX_RESULTS = 8
 _MAX_PLAYLISTS = 15
+_ITEMS_PER_PLAYLIST = 5
 _ERROR_CHARS = 220
 _TITLE_CHARS = 90
 
 
+def _vocab_topics(words: set[str]) -> set[str]:
+    return {name for name, vocab in _TOPIC_WORDS.items() if words & vocab}
+
+
 def topics(question: str, previous: str = "", page: str = "") -> set[str]:
-    """Which kinds of data the question needs (empty: none)."""
-    words = set(_WORD.findall(question.lower()))
-    earlier = set(_WORD.findall(previous.lower()))
-    found = {
-        name
-        for name, vocab in _TOPIC_WORDS.items()
-        if words & vocab or (earlier & vocab and words & _PERSONAL)
-    }
-    if {"did", "watch"} <= words:
-        found.add("history")
-    for prefix, name in _PAGE_TOPICS:
-        if f"({prefix}" in page and words & _PERSONAL:
-            found.add(name)
-    if not found and words & _PERSONAL:
-        found.add("overview")
+    """Which kinds of the user's data the question needs (empty: none)."""
+    text = question.lower()
+    words = set(_WORD.findall(text))
+    playlist_request = bool(words & _TOPIC_WORDS["playlists"] and words & _MAKE)
+    personal = bool(words & _PERSONAL or _ABOUT_ME.search(text) or playlist_request)
+    found: set[str] = set()
+    if personal:
+        found = _vocab_topics(words) - {"suggest"}
+        if not found and previous:
+            # "and mine?" after "any failed downloads?"
+            found = _vocab_topics(set(_WORD.findall(previous.lower()))) - {"suggest"}
+        if words & _WATCH and _ABOUT_ME.search(text):
+            found.add("history")
+        for prefix, name in _PAGE_TOPICS:
+            if f"({prefix}" in page:
+                found.add(name)
+    # "What should I watch next?" is about the user without saying "my".
+    if words & _TOPIC_WORDS["suggest"] and words & (_WATCH | {"unwatched"}):
+        found.add("suggest")
+    if playlist_request:
+        # The model needs real video ids to put in it.
+        found.add("suggest" if words & {"unwatched", "unseen"} else "search")
     return found
 
 
@@ -155,7 +178,7 @@ def _downloads(session: Session, user: AuthUser) -> str | None:
                 col(DownloadJob.status).in_([JobStatus.queued, JobStatus.downloading])
             )
             .order_by(col(DownloadJob.created_at).asc())
-            .limit(_MAX_JOBS * 2)
+            .limit(_MAX_JOBS * 4)
         ).all()
     )
     since = utcnow() - timedelta(days=14)
@@ -167,7 +190,7 @@ def _downloads(session: Session, user: AuthUser) -> str | None:
                 col(DownloadJob.created_at) >= since,
             )
             .order_by(col(DownloadJob.created_at).desc())
-            .limit(_MAX_JOBS * 2)
+            .limit(_MAX_JOBS * 4)
         ).all()
     )
     done = list(
@@ -175,13 +198,15 @@ def _downloads(session: Session, user: AuthUser) -> str | None:
             select(DownloadJob)
             .where(DownloadJob.status == JobStatus.completed)
             .order_by(col(DownloadJob.created_at).desc())
-            .limit(_MAX_JOBS)
+            .limit(_MAX_JOBS * 4)
         ).all()
     )
     hidden = device_access.hidden_job_ids(session, user, [*active, *failed, *done])
 
     def name(job: DownloadJob) -> str:
-        return f'"{_clip(job.title_override or job.title)}"' if job.title else job.url
+        if job.title:
+            return f'"{_clip(job.title_override or job.title)}"'
+        return _clip(job.url, 120)
 
     hold = download_queue.space_hold()
     lines = [
@@ -237,6 +262,18 @@ def _playlists(session: Session, user: AuthUser) -> str | None:
     ).all()
     if not rows:
         return "Playlists: none yet."
+    ids = [require_id(p) for p, _ in rows]
+    items: dict[int, list[str]] = {}
+    for item, title in session.exec(
+        select(PlaylistItem, Video.title)
+        .outerjoin(Video, col(Video.id) == PlaylistItem.video_id)
+        .where(col(PlaylistItem.playlist_id).in_(ids))
+        .order_by(col(PlaylistItem.position).asc())
+    ).all():
+        shown = items.setdefault(item.playlist_id, [])
+        if len(shown) < _ITEMS_PER_PLAYLIST:
+            where = f"#{item.video_id} " if item.video_id else "streamed "
+            shown.append(f'{where}"{_clip(title or item.title, 60)}"')
     lines = []
     for playlist, count in rows:
         mine = "yours" if playlist.owner_user_id == user.id else "shared"
@@ -244,6 +281,9 @@ def _playlists(session: Session, user: AuthUser) -> str | None:
             f'- playlist #{playlist.id} "{_clip(playlist.name, 60)}", '
             f"{count or 0} videos, {mine}, {playlist.visibility.value}"
         )
+        if first := items.get(require_id(playlist)):
+            more = ", …" if (count or 0) > len(first) else ""
+            lines.append("  " + ", ".join(first) + more)
     return "Playlists you can open:\n" + "\n".join(lines)
 
 
@@ -256,35 +296,65 @@ def _library(session: Session) -> str | None:
             func.count(func.distinct(Video.channel)),
         ).where(ready)
     ).one()
+    used = func.coalesce(func.sum(Video.file_size), 0)
     top = session.exec(
-        select(Video.channel, func.count().label("n"))
+        select(Video.channel, func.count(), used)
         .where(ready, col(Video.channel).is_not(None))
         .group_by(col(Video.channel))
-        .order_by(func.count().desc())
+        .order_by(used.desc())
         .limit(8)
     ).all()
-    gib = (size or 0) / 1024**3
-    lines = [f"Library: {total} videos, {channels} channels, {gib:.1f} GiB"]
+    lines = [f"Library: {total} videos, {channels} channels, {_gib(size)}"]
     if top:
         lines.append(
-            "Biggest channels: " + ", ".join(f"{_clip(c, 40)} ({n})" for c, n in top)
+            "Channels using the most space: "
+            + ", ".join(f"{_clip(c, 40)} ({n} videos, {_gib(b)})" for c, n, b in top)
         )
     return "\n".join(lines)
 
 
-def _search(session: Session, user: AuthUser, question: str) -> str | None:
-    from .search import hybrid_search
+def _gib(size: int | None) -> str:
+    return f"{(size or 0) / 1024**3:.1f} GiB"
+
+
+def _search(
+    session: Session, user: AuthUser, question: str, *, semantic: bool
+) -> str | None:
+    """Title and description matches, then (when allowed) the nearest by meaning."""
+    from . import embeddings
+    from .search import query_allows_semantic
 
     terms = search_terms(question)
     if not terms:
         return None
-    try:
-        videos, _ = hybrid_search(session, terms, user_id=user.id)
-    except Exception:
-        logger.warning("help chat library search failed", exc_info=True)
-        return None
+    found = library.query_videos(
+        session, q=terms, needs_review=False, page=PageRequest(limit=_MAX_RESULTS)
+    )[:_MAX_RESULTS]
+    if semantic and len(found) < _MAX_RESULTS and query_allows_semantic(terms):
+        try:
+            vector = embeddings.embed_query(terms)
+            hits = (
+                embeddings.similar_video_hits(
+                    session, vector, limit=_MAX_RESULTS, min_score=0.35
+                )
+                if vector
+                else []
+            )
+        except Exception:
+            logger.warning("help chat semantic search failed", exc_info=True)
+            hits = []
+        have = {v.id for v in found}
+        extra = [vid for vid, _, _ in hits if vid not in have]
+        if extra:
+            rows = session.exec(
+                select(Video).where(
+                    col(Video.id).in_(extra), col(Video.needs_review).is_(False)
+                )
+            ).all()
+            by_id = {v.id: v for v in rows}
+            found += [by_id[i] for i in extra if i in by_id]
     block = _videos_block(
-        session, user, f'Library videos matching "{terms}"', videos[:_MAX_RESULTS]
+        session, user, f'Library videos matching "{terms}"', found[:_MAX_RESULTS]
     )
     return block or f'Library search for "{terms}": no matches.'
 
@@ -323,16 +393,18 @@ def gather(
     *,
     previous: str = "",
     page: str = "",
+    semantic: bool = True,
 ) -> str:
-    """The data blocks this question needs, or "" when it needs none."""
+    """The data blocks this question needs, or "" when it needs none.
+
+    ``semantic`` allows sending the search words to the embedding provider.
+    """
     wanted = topics(question, previous, page)
     blocks: list[str | None] = []
-    if "overview" in wanted:
-        blocks += [_library(session), _history(session, user)]
     if "downloads" in wanted:
         blocks.append(_downloads(session, user))
     if "search" in wanted:
-        blocks.append(_search(session, user, question))
+        blocks.append(_search(session, user, question, semantic=semantic))
     if "history" in wanted:
         blocks.append(_history(session, user))
     if "suggest" in wanted:

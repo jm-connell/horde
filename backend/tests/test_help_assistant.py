@@ -181,6 +181,10 @@ def test_catalog_route_is_filtered_per_user(client, member_client):
         ("openai/gpt-4.1-mini", "medium"),
         ("anthropic/claude-sonnet-4.5", "large"),
         ("something-unknown", "medium"),
+        ("tinyllama", "small"),
+        ("smollm2", "small"),
+        ("deepseek-r1", "medium"),  # Ollama's default tag is 7B
+        ("deepseek/deepseek-v4-flash", "large"),
     ],
 )
 def test_model_tier_from_the_name(model, tier):
@@ -234,13 +238,19 @@ def test_the_assistant_model_wins_over_the_chat_model(app, monkeypatch):
 
 
 def test_info_route_hides_the_model_from_members(client, member_client, monkeypatch):
+    from app.services.ai import workload
+
+    def no_side_effects():
+        raise AssertionError("a GET must not save settings or pull models")
+
+    monkeypatch.setattr(workload, "ensure_quality_chat_model", no_side_effects)
     monkeypatch.setattr(help_model, "llm_features_allowed", lambda: (True, None))
     monkeypatch.setattr(
         help_model,
         "chat_connection",
         lambda: Connection("https://openrouter.ai/api/v1"),
     )
-    monkeypatch.setattr(help_model, "assistant_model", lambda: "openai/gpt-4.1-mini")
+    app_settings.save({"ai": {"chat_model": "x", "help_model": "openai/gpt-4.1-mini"}})
     admin = client.get("/api/ai/help/info").json()
     member = member_client.get("/api/ai/help/info").json()
     assert admin["model"] == "openai/gpt-4.1-mini" and admin["tier"] == "medium"
@@ -256,17 +266,39 @@ def test_info_route_hides_the_model_from_members(client, member_client, monkeypa
     ("question", "expected"),
     [
         ("Why did my download fail?", {"downloads"}),
-        ("find that cooking video", {"search"}),
+        ("find that cooking video in my library", {"search", "library"}),
         ("what have I watched recently", {"history"}),
+        ("what did I watch this week?", {"history"}),
         ("what should I watch tonight?", {"suggest"}),
         ("how many channels are in my library", {"library"}),
-        ("make me a playlist", {"playlists"}),
-        ("what's going on with my stuff", {"overview"}),
-        ("How do I change the theme?", set()),
+        ("make me a playlist of space videos", {"playlists", "search"}),
+        (
+            "Make a playlist of my unwatched recent downloads",
+            {"playlists", "downloads", "suggest"},
+        ),
+        ("what's going on with my stuff", set()),
     ],
 )
 def test_topics_follow_the_question(question, expected):
     assert help_data.topics(question) == expected
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "How do I change the theme?",
+        "How do I change my password?",
+        "How do I set up my AI provider?",
+        "Where do I find the AI settings?",
+        "How many accounts can I have?",
+        "Should I use Ollama or OpenRouter?",
+        "How does Recommended+ pick videos?",
+        "How do I download a playlist?",
+        "find that cooking video",
+    ],
+)
+def test_how_to_questions_need_no_data(question):
+    assert help_data.topics(question) == set()
 
 
 def test_follow_ups_keep_the_topic_and_the_page_counts():
@@ -283,6 +315,7 @@ def test_search_terms_drop_the_question_words():
         "cooking"
     )
     assert help_data.search_terms("find the video") == ""
+    assert help_data.search_terms("make me a playlist of space videos") == "space"
 
 
 @pytest.fixture
@@ -348,6 +381,7 @@ def library_data(session: Session, add_video, admin_user, member_user):
 def test_gather_reads_only_what_the_user_may_see(session, library_data):
     member = library_data["member"]
     text = help_data.gather(session, member, "what did I watch, and my downloads?")
+    assert "Library:" not in text  # only what was asked
     assert f'#{library_data["soup"].id} "Tomato soup in ten minutes"' in text
     assert "finished" in text
     assert "Private watching" not in text  # the administrator's history
@@ -356,14 +390,18 @@ def test_gather_reads_only_what_the_user_may_see(session, library_data):
 
     lists = help_data.gather(session, member, "show my playlists")
     assert '"Cooking", 1 videos, yours, private' in lists
+    soup = library_data["soup"].id
+    assert f'#{soup} "Tomato soup in ten minutes"' in lists  # what is in it
     assert "Admin only" not in lists
 
 
 def test_gather_searches_the_library(session, library_data, monkeypatch):
-    from app.services.ai import search
+    from app.services.ai import embeddings
 
-    monkeypatch.setattr(search, "get_embed_provider", lambda: None)
-    text = help_data.gather(session, library_data["member"], "find the rocket video")
+    monkeypatch.setattr(embeddings, "get_embed_provider", lambda: None)
+    text = help_data.gather(
+        session, library_data["member"], "find the rocket video in my library"
+    )
     assert 'matching "rocket"' in text and "Rocket engines explained" in text
     assert "not watched" in text
     assert "Tomato" not in text
@@ -386,3 +424,25 @@ def test_recent_failures_only(session, library_data):
     session.commit()
     text = help_data.gather(session, library_data["member"], "my failed downloads")
     assert "Ancient failure" not in text
+
+
+def test_a_missing_assistant_model_is_downloaded(app, monkeypatch):
+    """The model asked for is pulled, not only the configured chat model."""
+    from types import SimpleNamespace
+
+    from app.services.ai import provider
+
+    class Admin:
+        base_url = "http://ollama:11434"
+
+        def has_model(self, model: str) -> bool:
+            return False
+
+    pulled: list[str] = []
+    monkeypatch.setattr(provider, "ollama_admin", lambda conn: Admin())
+    monkeypatch.setattr(provider, "ensure_models", lambda: (True, True))
+    monkeypatch.setattr(provider, "_start_pull", lambda admin, m: pulled.append(m))
+    target = SimpleNamespace(connection=Connection("http://ollama:11434/v1"))
+    message = provider.require_llm_chat_model(target, "help-only-model:14b")  # type: ignore[arg-type]  # a stand-in provider
+    assert message is not None and "download started" in message
+    assert pulled == ["help-only-model:14b"]

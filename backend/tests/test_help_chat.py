@@ -357,7 +357,7 @@ def test_user_data_is_sent_only_when_allowed(client, help_env, add_video):
     add_video(title="Sourdough basics", channel="Bakery")
     body = {"message": "how many channels are in my library?"}
     client.post("/api/ai/help/chat", json=body)
-    client.post("/api/ai/help/chat", json={**body, "use_data": True})
+    client.post("/api/ai/help/chat", json={**body, "data_consent": "cloud"})
     without, with_data = (call["system"] for call in help_env)
     assert "Library: 1 videos, 1 channels" not in without
     assert "they have not turned on Use my data" in without
@@ -384,3 +384,30 @@ def test_css_questions_get_the_reference_and_the_users_css(
     assert "The user's custom CSS (on):\n```css\n.ui-card{}\n```" in system
     client.post("/api/ai/help/chat", json={"message": "rounder cards"})
     assert "custom CSS (on)" not in help_env[1]["system"]
+
+
+def test_local_consent_does_not_cover_a_cloud_provider(
+    client, help_env, add_video, monkeypatch
+):
+    from app.services.ai.provider import Connection
+
+    add_video(title="Sourdough basics", channel="Bakery")
+    body = {"message": "how many channels are in my library?", "data_consent": "local"}
+    for url in ("https://openrouter.ai/api/v1", "http://192.168.1.5:11434/v1"):
+        monkeypatch.setattr(help_chat, "chat_connection", lambda u=url: Connection(u))
+        client.post("/api/ai/help/chat", json=body)
+    cloud, local = (call["system"] for call in help_env)
+    assert "Library: 1 videos" not in cloud
+    assert "Library: 1 videos" in local
+
+
+def test_the_users_css_only_goes_with_a_css_question(
+    client, help_env, admin_user, session
+):
+    from app.services import user_settings
+
+    user_settings.save_ui(session, admin_user.id, {"custom_css": ".mine{}"})
+    client.post("/api/ai/help/chat", json={"message": "what loading styles are there"})
+    client.post("/api/ai/help/chat", json={"message": "fix my css"})
+    assert ".mine{}" not in help_env[0]["system"]
+    assert ".mine{}" in help_env[1]["system"]

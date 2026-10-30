@@ -974,6 +974,8 @@ def require_llm_chat_model(
         return None
     if app_settings.ai_settings().get("auto_pull_models", True):
         ensure_models()
+        # The model asked for may be the assistant's own, not the chat model.
+        _model_present(provider.connection, chat_model, pull=True)
         return (
             f"Chat model '{chat_model}' is not installed on Ollama; "
             "download started. Try again in a minute."

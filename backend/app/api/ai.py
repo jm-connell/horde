@@ -460,7 +460,7 @@ def post_help_chat(
             [turn.model_dump() for turn in payload.history],
             user,
             page=payload.page,
-            use_data=payload.use_data,
+            data_consent=payload.data_consent,
             authorized=StreamAuthGuard.of(request).still_valid,
         ),
         media_type="text/event-stream",

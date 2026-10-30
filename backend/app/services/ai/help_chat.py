@@ -32,7 +32,7 @@ from .. import user_settings
 from ..auth.accounts import AuthUser
 from . import chat as ai_chat
 from . import help_catalog, help_data, help_model
-from .provider import chat_connection, llm_features_allowed
+from .provider import chat_connection, embed_connection, llm_features_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -490,10 +490,10 @@ def clean_page(page: str | None) -> str:
     return " ".join((page or "").split())[:_PAGE_CHARS]
 
 
-#: Words that make a question about restyling the app with CSS.
-_CSS_WORDS = frozenset(
-    {"css", "stylesheet", "style", "styles", "styling", "restyle", "selector"}
-)
+#: Words that make a question about restyling the app with CSS (the CSS
+#: reference is sent); the user's own stylesheet only goes with the first set.
+_OWN_CSS_WORDS = frozenset({"css", "stylesheet", "selector", "selectors"})
+_CSS_WORDS = _OWN_CSS_WORDS | {"style", "styles", "styling", "restyle"}
 _CSS_DOC = "docs/settings/custom-css.md"
 #: Characters of the user's own stylesheet sent with a CSS question.
 _CSS_CHARS = 8_000
@@ -501,10 +501,12 @@ _CSS_CHARS = 8_000
 _NUM_PREDICT = 2048
 
 
-def asks_css(question: str, history: list[dict[str, str]]) -> bool:
+def asks_css(
+    question: str, history: list[dict[str, str]], words: frozenset[str] = _CSS_WORDS
+) -> bool:
     earlier = [m["content"] for m in history if m.get("role") == "user"][-1:]
-    words = set(_WORD.findall(" ".join([question, *earlier]).lower()))
-    return bool(words & _CSS_WORDS)
+    found = set(_WORD.findall(" ".join([question, *earlier]).lower()))
+    return bool(found & words)
 
 
 def _token_rules(user: AuthUser) -> str:
@@ -562,8 +564,10 @@ def system_prompt(
     if use_data:
         data = (
             "The user lets you read their downloads, library, watch history and "
-            f"playlists; what this question needs is below (sent to {data_label}). "
-            "Answer from it, and say so when it does not contain the answer."
+            "playlists. When a question is about their own things, what it needs "
+            f"is below (sent to {data_label}); answer from it and say so when it "
+            "does not contain the answer. If nothing is below, ask them to say "
+            'which, for example "my downloads" or "my library".'
         )
     else:
         data = (
@@ -668,11 +672,13 @@ class _HelpChat:
         user: AuthUser,
         page: str = "",
         use_data: bool = False,
+        semantic: bool = False,
     ) -> None:
         self._history = trim_history(history)
         self._user = user
         self._page = page
         self._use_data = use_data
+        self._semantic = semantic
         self.sources: list[dict[str, str]] | None = None
 
     def validate(self, session: Session, message: str) -> None:
@@ -736,6 +742,7 @@ class _HelpChat:
             reference = css_reference(index.root)
             if reference:
                 extra.append(f"Custom CSS reference ({_CSS_DOC}):\n{reference}")
+        if asks_css(question, self._history, _OWN_CSS_WORDS):
             ui = user_settings.effective_ui(session, self._user.id)
             css = str(ui.get("custom_css") or "").strip()
             on = bool(ui.get("custom_css_enabled"))
@@ -750,6 +757,7 @@ class _HelpChat:
                 question,
                 previous=self._previous_question(),
                 page=self._page,
+                semantic=self._semantic,
             )
             if data:
                 extra.append(f"The user's data:\n{data}")
@@ -771,16 +779,26 @@ def stream_help_events(
     user: AuthUser,
     *,
     page: str | None = None,
-    use_data: bool = False,
+    data_consent: str = "off",
     authorized: ai_chat.Authorized | None = None,
 ) -> Generator[str]:
     """SSE events for one help turn; a ``sources`` event precedes the reply.
 
     ``page`` is the client's description of the screen the user is on;
-    ``use_data`` lets the turn read the user's own library data.
+    ``data_consent`` is what the user allowed of their own data: ``local``
+    covers only a provider on the local network, checked here.
     """
     where = clean_page(page)
-    target = _HelpChat(history, user=user, page=where, use_data=use_data)
+    cloud_ok = data_consent == "cloud"
+    use_data = cloud_ok or (
+        data_consent == "local" and help_model.is_local(chat_connection())
+    )
+    embed = embed_connection()
+    # Search words go to the embedding provider, which may be elsewhere.
+    semantic = use_data and (cloud_ok or embed is None or help_model.is_local(embed))
+    target = _HelpChat(
+        history, user=user, page=where, use_data=use_data, semantic=semantic
+    )
     sent_sources = False
     model = help_model.assistant_model() if llm_features_allowed()[0] else ""
     prompt = system_prompt(

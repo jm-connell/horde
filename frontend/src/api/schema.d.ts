@@ -5906,17 +5906,18 @@ export interface components {
          * @description One Ask-about-Horde question and the conversation before it.
          */
         HelpChatRequest: {
+            /**
+             * Data Consent
+             * @default off
+             * @enum {string}
+             */
+            data_consent: "off" | "local" | "cloud";
             /** History */
             history?: components["schemas"]["HelpChatTurn"][];
             /** Message */
             message: string;
             /** Page */
             page?: string | null;
-            /**
-             * Use Data
-             * @default false
-             */
-            use_data: boolean;
         };
         /** HelpChatTurn */
         HelpChatTurn: {
