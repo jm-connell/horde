@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import { TabIcon } from "../../../components/BottomTabBar";
 import { ChevronIcon, CloseIcon } from "../../../components/icons";
 import {
@@ -24,11 +25,58 @@ export default function TabBarSection() {
     items.length === DEFAULT_TAB_BAR.length &&
     items.every((item, i) => item === DEFAULT_TAB_BAR[i]);
 
-  const set = (next: TabBarItem[]) => update({ tabBarItems: next });
+  const rootRef = useRef<HTMLDivElement>(null);
+  // Moving, removing or adding a tab re-renders the control that was used
+  // (or drops it), so keep keyboard focus on the first of these that is
+  // there and enabled afterwards, by accessible name.
+  const focusNext = useRef<string[]>([]);
+  useLayoutEffect(() => {
+    const names = focusNext.current;
+    focusNext.current = [];
+    for (const name of names) {
+      const el = rootRef.current?.querySelector<HTMLButtonElement>(
+        `button[aria-label="${name}"]:not(:disabled)`
+      );
+      if (el) {
+        el.focus();
+        return;
+      }
+    }
+  }, [items]);
+
+  const set = (next: TabBarItem[], focus: string[]) => {
+    focusNext.current = focus;
+    update({ tabBarItems: next });
+  };
+  const label = (item: TabBarItem | undefined) =>
+    item ? TAB_BAR_LABELS[item] : "";
   const move = (i: number, by: -1 | 1) => {
     const next = [...items];
     [next[i], next[i + by]] = [next[i + by], next[i]];
-    set(next);
+    const name = label(items[i]);
+    set(next, [
+      `Move ${name} ${by < 0 ? "earlier" : "later"}`,
+      `Move ${name} ${by < 0 ? "later" : "earlier"}`,
+    ]);
+  };
+  const remove = (i: number) => {
+    const next = items.filter((_, j) => j !== i);
+    set(next, [
+      `Remove ${label(next[i])}`,
+      `Remove ${label(next[i - 1])}`,
+      `Add ${label(items[i])}`,
+    ]);
+  };
+  const add = (item: TabBarItem) => {
+    const k = hidden.indexOf(item);
+    set(
+      [...items, item],
+      [
+        `Add ${label(hidden[k + 1])}`,
+        `Add ${label(hidden[k - 1])}`,
+        `Remove ${label(item)}`,
+      ]
+    );
   };
 
   return (
@@ -40,7 +88,9 @@ export default function TabBarSection() {
           <button
             type="button"
             className={PANEL_BTN}
-            onClick={() => set([...DEFAULT_TAB_BAR])}
+            onClick={() =>
+              set([...DEFAULT_TAB_BAR], [`Remove ${label(DEFAULT_TAB_BAR[0])}`])
+            }
           >
             Reset
           </button>
@@ -60,10 +110,10 @@ export default function TabBarSection() {
         )
       }
     >
-      <div data-setting="tab-bar" className="flex flex-col gap-4">
+      <div ref={rootRef} data-setting="tab-bar" className="flex flex-col gap-4">
         <ol aria-label="Tabs shown" className="flex max-w-sm flex-col gap-1.5">
           {items.map((item, i) => {
-            const label = TAB_BAR_LABELS[item];
+            const name = TAB_BAR_LABELS[item];
             return (
               <li
                 key={item}
@@ -71,12 +121,12 @@ export default function TabBarSection() {
               >
                 <TabIcon d={TAB_BAR_ICONS[item]} />
                 <span className="min-w-0 flex-1 truncate font-medium">
-                  {label}
+                  {name}
                 </span>
                 <button
                   type="button"
                   className={ICON_BTN}
-                  aria-label={`Move ${label} earlier`}
+                  aria-label={`Move ${name} earlier`}
                   disabled={i === 0}
                   onClick={() => move(i, -1)}
                 >
@@ -85,7 +135,7 @@ export default function TabBarSection() {
                 <button
                   type="button"
                   className={ICON_BTN}
-                  aria-label={`Move ${label} later`}
+                  aria-label={`Move ${name} later`}
                   disabled={i === items.length - 1}
                   onClick={() => move(i, 1)}
                 >
@@ -94,9 +144,9 @@ export default function TabBarSection() {
                 <button
                   type="button"
                   className={ICON_BTN}
-                  aria-label={`Remove ${label}`}
+                  aria-label={`Remove ${name}`}
                   disabled={items.length === 1}
-                  onClick={() => set(items.filter((t) => t !== item))}
+                  onClick={() => remove(i)}
                 >
                   <CloseIcon />
                 </button>
@@ -121,7 +171,7 @@ export default function TabBarSection() {
                   type="button"
                   disabled={items.length >= TAB_BAR_MAX}
                   aria-label={`Add ${TAB_BAR_LABELS[item]}`}
-                  onClick={() => set([...items, item])}
+                  onClick={() => add(item)}
                   className={`${CHIP} inline-flex items-center gap-2 disabled:pointer-events-none disabled:opacity-50`}
                 >
                   <TabIcon d={TAB_BAR_ICONS[item]} />

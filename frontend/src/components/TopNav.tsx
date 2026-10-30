@@ -254,7 +254,7 @@ export default function TopNav() {
       setNavHidden(false);
       setSearchOpen(true);
     });
-    searchInputRef.current?.focus();
+    (useHamburger ? searchInputRef : desktopSearchRef).current?.focus();
     if (location.pathname !== "/" || location.search) {
       navigate({ pathname: "/", search: "" });
     }

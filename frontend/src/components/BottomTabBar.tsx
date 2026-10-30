@@ -30,7 +30,8 @@ function opensKeyboard(el: Element | null): boolean {
 }
 
 /** The bar's height (with the home-indicator inset), for fixed layers that
- *  must sit above it. Unset when there is no bar. */
+ *  must sit above it: 0 while it is away for the keyboard, unset when there
+ *  is no bar. */
 const BAR_VAR = "--horde-bottom-bar";
 
 /**
@@ -63,7 +64,7 @@ export default function BottomTabBar() {
     const root = document.documentElement;
     const measure = () => {
       setBarH(el.offsetHeight);
-      root.style.setProperty(BAR_VAR, `${el.offsetHeight}px`);
+      root.style.setProperty(BAR_VAR, `${typing ? 0 : el.offsetHeight}px`);
     };
     measure();
     const ro = new ResizeObserver(measure);
@@ -72,7 +73,7 @@ export default function BottomTabBar() {
       ro.disconnect();
       root.style.removeProperty(BAR_VAR);
     };
-  }, [shown]);
+  }, [shown, typing]);
 
   useEffect(() => {
     if (!shown) return;
@@ -168,7 +169,7 @@ export default function BottomTabBar() {
         aria-current={current ? "page" : undefined}
         className={tabClass(current)}
       >
-        <span className="relative">
+        <span className="relative shrink-0">
           <TabIcon d={TAB_BAR_ICONS[item]} />
           {badge > 0 && (
             <span className="absolute -right-2 -top-1.5 rounded-full bg-accent px-1.5 text-[10px] font-bold leading-4 text-on-accent">
@@ -189,6 +190,9 @@ export default function BottomTabBar() {
     return pageLinks.has(`/${item}`);
   };
 
+  // Home stands in when none of the chosen tabs can be used here.
+  const usable = settings.tabBarItems.filter(available);
+
   return (
     <>
       <div aria-hidden className="shrink-0" style={{ height: barH }} />
@@ -201,11 +205,11 @@ export default function BottomTabBar() {
         }`}
       >
         <div
-          className={`ui-panel flex items-center gap-1 rounded-full border border-ink-700/70 bg-ink-900/95 p-1.5 shadow-[0_8px_28px_rgb(0_0_0/0.45)] backdrop-blur-md ${
+          className={`ui-panel flex max-w-[calc(100vw-1.5rem)] items-center gap-1 rounded-full border border-ink-700/70 bg-ink-900/95 p-1.5 shadow-[0_8px_28px_rgb(0_0_0/0.45)] backdrop-blur-md ${
             typing ? "" : "pointer-events-auto"
           }`}
         >
-          {settings.tabBarItems.filter(available).map(renderTab)}
+          {(usable.length > 0 ? usable : (["home"] as const)).map(renderTab)}
         </div>
       </nav>
     </>
@@ -214,7 +218,7 @@ export default function BottomTabBar() {
 
 /** A tab: icon only, or a tinted capsule with its label when current. */
 function tabClass(current: boolean): string {
-  return `flex h-11 items-center rounded-full px-3.5 transition-colors duration-200 motion-reduce:transition-none ${
+  return `flex h-11 min-w-0 items-center rounded-full px-3.5 transition-colors duration-200 motion-reduce:transition-none ${
     current ? "bg-accent/15 text-accent" : "text-gray-300 active:bg-ink-700/60"
   }`;
 }
@@ -247,7 +251,7 @@ function TabLabel({
 }) {
   return (
     <span
-      className={`overflow-hidden whitespace-nowrap text-sm font-semibold transition-[max-width,opacity,margin] duration-200 ease-out motion-reduce:transition-none ${
+      className={`min-w-0 truncate text-sm font-semibold transition-[max-width,opacity,margin] duration-200 ease-out motion-reduce:transition-none ${
         shown ? "ml-2 max-w-24 opacity-100" : "ml-0 max-w-0 opacity-0"
       }`}
     >

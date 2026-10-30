@@ -280,7 +280,7 @@ export default function HelpChatPanel({
       style={placement}
       className={`ui-panel ui-panel-legible fixed z-45 flex flex-col overflow-hidden rounded-xl bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
         isMobile
-          ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] h-[min(36rem,75dvh)]"
+          ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom),var(--horde-bottom-bar,0px))] h-[min(36rem,75dvh)]"
           : ""
       }`}
     >

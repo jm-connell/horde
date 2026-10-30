@@ -224,8 +224,9 @@ and its label opens out beside the icon, the others are icon-only in
 `gray-300`. The user picks the tabs and their order (Settings → Appearance →
 Tab bar, `src/tabBar.ts`, at most 5). It slides down out of the way while
 the on-screen keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
-`<html>`; anything fixed to the bottom of the screen (mini player, queue dock,
-toasts, floating panels) adds it to its bottom offset. Bottom sheets and the
+`<html>` (0 while it is away for the keyboard); anything fixed to the bottom
+of the screen (mini player, queue dock, toasts, floating panels, the phone
+Ask about Horde panel) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.
 
 ## Elevation & Depth

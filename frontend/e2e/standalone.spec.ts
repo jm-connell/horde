@@ -222,9 +222,20 @@ test("the Search tab opens the search box and Chat opens Ask about Horde", async
   await page.getByRole("button", { name: "Close search" }).click();
 
   await tabs.getByRole("button", { name: "Chat" }).click();
-  await expect(
-    page.getByRole("dialog", { name: "Ask about Horde" })
-  ).toBeVisible();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await expect(panel).toBeVisible();
+  // Its question box takes focus, so the island steps aside for the keyboard
+  // and the panel drops to the bottom of the screen.
+  await expect(tabs).toHaveClass(/translate-y-full/);
+  // Once the keyboard is closed the panel sits above the island, so Chat is
+  // there to close it.
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur());
+  await expect(tabs).not.toHaveClass(/translate-y-full/);
+  const panelBox = await panel.boundingBox();
+  const island = await tabs.locator(".ui-panel").boundingBox();
+  expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(island!.y);
+  await tabs.getByRole("button", { name: "Chat" }).click();
+  await expect(panel).toHaveCount(0);
 });
 
 test("Settings chooses the tabs and their order", async ({ page }) => {
@@ -232,7 +243,10 @@ test("Settings chooses the tabs and their order", async ({ page }) => {
   const shown = page.getByRole("list", { name: "Tabs shown" });
   await shown.getByRole("button", { name: "Remove Chat" }).click();
   await page.getByRole("button", { name: "Add History" }).click();
-  await shown.getByRole("button", { name: "Move History earlier" }).click();
+  const earlier = shown.getByRole("button", { name: "Move History earlier" });
+  await earlier.click();
+  // Focus stays on the control that was used, in the tab's new row.
+  await expect(earlier).toBeFocused();
   await expect(shown.getByRole("listitem")).toHaveText([
     "Home",
     "Search",
@@ -246,7 +260,12 @@ test("Settings chooses the tabs and their order", async ({ page }) => {
     /History/,
     /Download/,
   ]);
+  // Wait for the reset to reach the server: the preference is synced.
+  const saved = page.waitForResponse(
+    (r) => r.url().endsWith("/api/settings") && r.request().method() === "PATCH"
+  );
   await page.getByRole("button", { name: "Reset" }).click();
+  await saved;
   await expect(tabs.locator("a, button")).toHaveText([
     /Home/,
     /Search/,
