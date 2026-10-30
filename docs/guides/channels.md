@@ -37,13 +37,13 @@ Open a channel from the sidebar to see its **feed**:
 
 ### Header and channel settings
 
-The header shows who the channel is (its `@handle`, how many of its videos are in your library and its subscriber count) and three actions:
+The header shows who the channel is (its YouTube profile picture, its `@handle`, how many of its videos are downloaded and its subscriber count), the search index state (**Not indexed**, **Fully indexed (1000)**; click it to open **Manage**) and three actions:
 
 - **Follow** / **Following** (YouTube channels): see [Following and live streams](#following-and-live-streams).
 - **Download…** (YouTube channels, needs the `download` permission): opens the [Download](downloads.md) page with the channel's link filled in, so you can pick which of its videos to download.
 - The gear, **Channel settings**: everything that sticks to this channel, in one panel (a side sheet on wide screens, a full-height sheet on phones). Its sections are **Automatic downloads**, **Clean up old videos**, **Live & following**, **Search** (whether searching this channel also asks YouTube) and **Manage** (rename the channel, build its search index).
 
-Small chips under the name sum up what is active, for example **Auto-download on · 1080p**, **Keeps latest 20** or the search index state (**Not indexed**, **Fully indexed (1000)**). Click a chip to open the settings at that section. Sections you lack the permission for are shown read-only: automatic downloads need `download`, cleanup needs `delete_videos`, renaming and the YouTube search choice need `edit_metadata`.
+Small chips under the name sum up what is active, for example **Auto-download on · 1080p** or **Keeps latest 20**. Click a chip to open the settings at that section. Sections you lack the permission for are shown read-only: automatic downloads need `download`, cleanup needs `delete_videos`, renaming and the YouTube search choice need `edit_metadata`.
 
 Above the feed, one toolbar holds the quick view controls: the channel search box, **Videos** / **Live**, **Recent** / **Popular** with the ↑/↓ direction, the **Undownloaded** switch, grid or list layout and **Tags**.
 
@@ -124,7 +124,9 @@ A YouTube channel's page has two tabs. **Videos** lists its uploads. **Live** li
 
 Downloading a past livestream longer than two hours asks first, because a recording that long can take a while and use a lot of storage (the watch page shows the estimated size at the chosen quality). **Download anyway** queues it as usual.
 
-When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. How it works: [Live streams](../design/live-streams.md).
+When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. Live broadcasts of followed channels also lead **Recommended** (with **Include not downloaded** on) and **Recommended+**: first when you watched the channel in the last two weeks, a few cards in otherwise (up to three of each).
+
+Leave a live stream (lock the screen, switch apps) and come back a minute or more later, and it reconnects and plays on from where you left it in the live timeline, as if you had paused it there; if that part is older than the seek bar reaches, it starts at the oldest part. Pressing play after a long pause with the page hidden does the same. How it works: [Live streams](../design/live-streams.md).
 
 ## Catalog indexing
 

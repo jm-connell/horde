@@ -31,8 +31,21 @@ All notable changes to Horde are documented here. The format follows
   **Throwback**). The Download page lists what you rewatch most and have not
   downloaded, and History stats can count YouTube views (never as watch time).
 
+- Live broadcasts of followed channels show up in Recommended (with
+  "Include not downloaded" on) and Recommended+: first when you watched the
+  channel in the last two weeks, a few cards in otherwise.
+- Channel pages show the channel's YouTube profile picture.
+- A live stream you left (screen off, another app) reconnects when you come
+  back a minute or more later and plays on from where you left it in the live
+  timeline, as if paused there.
+
 ### Changed
 
+- New search results start at the top of the page instead of wherever the
+  page was scrolled.
+- A channel page's search index state ("Not indexed") sits beside Follow
+  instead of on a line of its own, and the header counts "videos downloaded"
+  instead of "videos in library".
 - Live broadcast cards keep the same 16:9 thumbnail as the cards beside them
   instead of growing taller with black bars.
 - Recommended now includes not-downloaded uploads from every indexed channel
@@ -48,6 +61,8 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- Deleting the video that is playing stops it at once, instead of it playing
+  on in the mini player.
 - On iPhone and iPad the page under the top bar now keeps its place when iOS
   changes the status-bar area after load (opening the installed app, rotating,
   leaving fullscreen): no more empty band above the video on iPhone, and the
