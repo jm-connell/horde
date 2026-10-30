@@ -12,6 +12,9 @@ WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# `tsc -b` type-checks the tests too; helpTokens.test.ts imports the help
+# catalog the backend ships (../../../backend from src/components).
+COPY backend/app/services/ai/help_catalog.json /backend/app/services/ai/help_catalog.json
 RUN npm run build
 
 # --- Stage 2: build the MkDocs wiki ---
