@@ -208,6 +208,22 @@ def test_local_providers_are_recognized(url, local):
     assert help_model.is_local(Connection(url)) is local
 
 
+@pytest.mark.parametrize(
+    ("model", "local"),
+    [
+        ("llama3.2:3b", True),
+        ("wordcloud:7b", True),
+        ("gpt-oss:120b-cloud", False),
+        ("glm-4.6:cloud", False),
+    ],
+)
+def test_ollama_cloud_models_do_not_stay_local(model, local):
+    conn = Connection("http://localhost:11434/v1")
+    assert help_model.stays_local(conn, model) is local
+    label = help_model.provider_label(conn, is_admin=False, model=model)
+    assert ("cloud" in label) is not local
+
+
 def test_members_never_see_the_provider_address():
     conn = Connection("https://llm.example.com/v1")
     assert (

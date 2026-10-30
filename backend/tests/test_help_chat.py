@@ -401,6 +401,26 @@ def test_local_consent_does_not_cover_a_cloud_provider(
     assert "Library: 1 videos" in local
 
 
+def test_local_consent_does_not_cover_an_ollama_cloud_model(
+    client, help_env, add_video, monkeypatch
+):
+    from app.services.ai import help_model
+    from app.services.ai.provider import Connection
+
+    add_video(title="Sourdough basics", channel="Bakery")
+    monkeypatch.setattr(
+        help_chat, "chat_connection", lambda: Connection("http://ollama:11434/v1")
+    )
+    body = {"message": "how many channels are in my library?", "data_consent": "local"}
+    for model in ("gpt-oss:120b-cloud", "llama3.2:3b"):
+        monkeypatch.setattr(help_model, "assistant_model", lambda m=model: m)
+        client.post("/api/ai/help/chat", json=body)
+    cloud, local = (call["system"] for call in help_env)
+    # The local Ollama passes cloud-tagged models on to ollama.com.
+    assert "Library: 1 videos" not in cloud
+    assert "Library: 1 videos" in local
+
+
 def test_the_users_css_only_goes_with_a_css_question(
     client, help_env, admin_user, session
 ):

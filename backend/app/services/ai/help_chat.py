@@ -789,9 +789,10 @@ def stream_help_events(
     covers only a provider on the local network, checked here.
     """
     where = clean_page(page)
+    model = help_model.assistant_model() if llm_features_allowed()[0] else ""
     cloud_ok = data_consent == "cloud"
     use_data = cloud_ok or (
-        data_consent == "local" and help_model.is_local(chat_connection())
+        data_consent == "local" and help_model.stays_local(chat_connection(), model)
     )
     embed = embed_connection()
     # Search words go to the embedding provider, which may be elsewhere.
@@ -800,7 +801,6 @@ def stream_help_events(
         history, user=user, page=where, use_data=use_data, semantic=semantic
     )
     sent_sources = False
-    model = help_model.assistant_model() if llm_features_allowed()[0] else ""
     prompt = system_prompt(
         user=user,
         page=where,
@@ -808,7 +808,9 @@ def stream_help_events(
         if model
         else "",
         use_data=use_data,
-        data_label=help_model.provider_label(chat_connection(), is_admin=user.is_admin),
+        data_label=help_model.provider_label(
+            chat_connection(), is_admin=user.is_admin, model=model
+        ),
     )
     with Session(get_engine()) as session:
         for event in ai_chat.run_chat_turn(

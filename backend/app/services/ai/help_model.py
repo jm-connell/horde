@@ -40,6 +40,7 @@ _LARGE_FAMILIES = ("gpt-4.1", "gpt-4o", "gpt-5")
 _NAME_PARTS = re.compile(r"[/:_\-\s]+")
 #: Hostnames that never leave the network (Docker service names have no dot).
 _LOCAL_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa", ".localdomain")
+_CLOUD_TAG = re.compile(r"(?::|-)cloud$")
 
 
 def assistant_model() -> str:
@@ -85,12 +86,25 @@ def is_local(conn: Connection | None) -> bool:
     return address.is_private or address.is_loopback or address.is_link_local
 
 
-def provider_label(conn: Connection | None, *, is_admin: bool) -> str:
+def runs_in_cloud(model: str) -> bool:
+    """Ollama runs ``name:cloud`` / ``name:<size>-cloud`` models on ollama.com,
+    not on the server it is reached through."""
+    return bool(_CLOUD_TAG.search(model.strip().lower()))
+
+
+def stays_local(conn: Connection | None, model: str) -> bool:
+    """Whether questions to ``model`` stay on this machine or the local network."""
+    return is_local(conn) and not runs_in_cloud(model)
+
+
+def provider_label(conn: Connection | None, *, is_admin: bool, model: str = "") -> str:
     """Where questions go, in words (members do not see the address)."""
     if conn is None:
         return ""
     if conn.is_openrouter:
         return "OpenRouter, a cloud AI service"
+    if is_local(conn) and runs_in_cloud(model):
+        return "Ollama's cloud service (through the AI server on your network)"
     if is_local(conn):
         return "the AI server on your own network"
     if is_admin:
@@ -113,8 +127,8 @@ def info(user: AuthUser) -> HelpAssistantInfo:
     return HelpAssistantInfo(
         model=(model or None) if user.is_admin else None,
         tier=tier(model) if model else "medium",
-        provider_label=provider_label(conn, is_admin=user.is_admin),
-        local=is_local(conn),
+        provider_label=provider_label(conn, is_admin=user.is_admin, model=model),
+        local=stays_local(conn, model),
         available=available,
     )
 
