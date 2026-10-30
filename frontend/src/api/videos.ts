@@ -24,6 +24,7 @@ import {
   TRASH_ENTRY_HEADER,
   TRASH_ENTRIES_HEADER,
   parseTrashEntryIds,
+  trashEntryIdsOfError,
 } from "./trash";
 import { getItem as getOfflineItem } from "../offline/db";
 import { deviceAccounts } from "../offline/accounts";
@@ -33,6 +34,18 @@ import { unlockedAccountId } from "../offline/unlock";
 
 /** Event the offline manager listens for to keep resume positions current. */
 export const OFFLINE_PROGRESS_EVENT = "horde:offline-progress";
+
+/**
+ * Fired with `{ ids }` once library videos are deleted, so whatever is playing
+ * one of them can stop.
+ */
+export const VIDEOS_DELETED_EVENT = "horde:videos-deleted";
+
+function notifyDeleted(ids: number[]): void {
+  window.dispatchEvent(
+    new CustomEvent(VIDEOS_DELETED_EVENT, { detail: { ids } })
+  );
+}
 
 function notifyOfflineProgress(videoId: number, positionSec: number): void {
   window.dispatchEvent(
@@ -215,6 +228,7 @@ export const videosApi = {
     const resp = await send(`/api/videos/${id}?delete_file=${deleteFile}`, {
       method: "DELETE",
     });
+    notifyDeleted([id]);
     return {
       trashEntryIds: parseTrashEntryIds(resp.headers.get(TRASH_ENTRY_HEADER)),
     };
@@ -225,11 +239,19 @@ export const videosApi = {
     ids: number[],
     deleteFiles = false
   ): Promise<DeleteResult> {
-    const resp = await send("/api/videos/bulk-delete", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ video_ids: ids, delete_files: deleteFiles }),
-    });
+    let resp: Response;
+    try {
+      resp = await send("/api/videos/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ video_ids: ids, delete_files: deleteFiles }),
+      });
+    } catch (err) {
+      // Some may have gone before the failure: stop playback of any of them.
+      if (trashEntryIdsOfError(err).length) notifyDeleted(ids);
+      throw err;
+    }
+    notifyDeleted(ids);
     return {
       trashEntryIds: parseTrashEntryIds(resp.headers.get(TRASH_ENTRIES_HEADER)),
     };
