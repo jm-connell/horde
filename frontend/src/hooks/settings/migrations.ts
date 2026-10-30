@@ -493,6 +493,10 @@ export function normalizeSettings(
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
     compatCopyResolution:
       parsed.compatCopyResolution === "source" ? "source" : "1080p",
+    helpChatData:
+      parsed.helpChatData === "local" || parsed.helpChatData === "cloud"
+        ? parsed.helpChatData
+        : "off",
     ...normalizeFontSettings(parsed),
   };
 }

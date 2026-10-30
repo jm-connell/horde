@@ -1,20 +1,29 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
+import { useAuth } from "../context/AuthContext";
 import {
   usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
 import type { PageDetail } from "../context/HelpChatContext";
+import type { HelpCatalog } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useSettings } from "../hooks/useSettings";
+import { queryKeys } from "../queries/keys";
 import { getJson, removeItem, setJson } from "../storage";
-import AiMarkdown from "./AiMarkdown";
+import AiMarkdown, { type InlineRenderers } from "./AiMarkdown";
 import { markdownHref } from "./aiMarkdownParse";
+import {
+  CssPreviewCard,
+  HelpActionCards,
+  HelpTokenLink,
+} from "./HelpChatActions";
 import {
   HELP_CHAT_STORAGE_KEY,
   HELP_PANEL_ID,
-  HELP_SUGGESTIONS,
   type HelpMessage,
   historyForRequest,
   isHelpThread,
@@ -27,8 +36,29 @@ import {
   resizeFromTopLeft,
 } from "./helpChatLayout";
 import { describePage } from "./helpPage";
+import {
+  capabilitiesAnswer,
+  pickPrompts,
+  promptAllowed,
+  WHAT_CAN_YOU_DO,
+} from "./helpPrompts";
+import { cssBlocks, splitActions } from "./helpTokens";
 import { CloseIcon } from "./icons";
 import TypingDots from "./TypingDots";
+
+/** Paths the app's router serves (the wiki and the API are not among them). */
+function isAppPath(href: string): boolean {
+  return /^\/(?![/\\])/.test(href) && !/^\/(wiki|api)(\/|$)/.test(href);
+}
+
+function isWhatCanYouDo(text: string): boolean {
+  const plain = (t: string) =>
+    t
+      .toLowerCase()
+      .replace(/[^a-z ]/g, "")
+      .trim();
+  return plain(text) === plain(WHAT_CAN_YOU_DO);
+}
 
 interface Props {
   /** Where the user dragged or resized it to; null until they do. */
@@ -59,6 +89,49 @@ function useViewport() {
 }
 
 /**
+ * One reply: its text with links in place, then (once it has finished
+ * streaming) a card for each action it offers and each CSS block.
+ */
+function AssistantReply({
+  content,
+  streaming,
+  renderers,
+  catalog,
+  onNavigate,
+}: {
+  content: string;
+  streaming: boolean;
+  renderers: InlineRenderers;
+  catalog: HelpCatalog | undefined;
+  onNavigate: () => void;
+}) {
+  const { text, actions } = splitActions(content);
+  return (
+    <>
+      <AiMarkdown
+        text={text}
+        render={renderers}
+        className="space-y-2 text-sm text-gray-300"
+      />
+      {!streaming && (
+        <>
+          <HelpActionCards
+            actions={actions}
+            catalog={catalog}
+            onNavigate={onNavigate}
+          />
+          {cssBlocks(content).map((css) => (
+            <div key={css} className="mt-2">
+              <CssPreviewCard css={css} />
+            </div>
+          ))}
+        </>
+      )}
+    </>
+  );
+}
+
+/**
  * Ask about Horde: a chat in the corner that answers from this server's docs
  * and source. It floats over every page (drag it by its header, resize it
  * from the top-left corner) and tells the server which page the user is on.
@@ -74,6 +147,7 @@ export default function HelpChatPanel({
 }: Props) {
   const titleId = useId();
   const inputId = useId();
+  const dataId = useId();
   const panelRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -84,6 +158,28 @@ export default function HelpChatPanel({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAdmin, can } = useAuth();
+  const [settings, updateSettings] = useSettings();
+  // A new set each time the panel opens (it mounts on open).
+  const [prompts] = useState(() =>
+    pickPrompts((p) => promptAllowed(p, { isAdmin, can }))
+  );
+  const catalog = useQuery({
+    queryKey: queryKeys.ai.helpCatalog,
+    queryFn: ({ signal }) => api.getHelpCatalog({ signal }),
+    staleTime: Infinity,
+  }).data;
+  const info = useQuery({
+    queryKey: queryKeys.ai.helpInfo,
+    queryFn: ({ signal }) => api.getHelpInfo({ signal }),
+    staleTime: 30_000,
+  }).data;
+  // Consent given while the AI ran locally does not cover a cloud provider.
+  const consent = settings.helpChatData;
+  const useData =
+    consent === "cloud" || (consent === "local" && info?.local === true);
+  const needsCloudConsent = consent === "local" && info?.local === false;
+  const [askingConsent, setAskingConsent] = useState(false);
 
   const location = useLocation();
   const { current, stream, miniPlayerActive } = usePlaybackSession();
@@ -197,6 +293,24 @@ export default function HelpChatPanel({
     if (!text || sending) return;
     setDraft("");
     setError(null);
+    if (isWhatCanYouDo(text)) {
+      // Answered here: it is about this app, not something to look up.
+      const stamp = Date.now();
+      setMessages((prev) => [
+        ...prev,
+        { id: `user-${stamp}`, role: "user", content: text },
+        {
+          id: `reply-${stamp}`,
+          role: "assistant",
+          content: capabilitiesAnswer({
+            info,
+            isAdmin,
+            canDownload: can("download"),
+          }),
+        },
+      ]);
+      return;
+    }
     setSending(true);
     const history = historyForRequest(messages);
     const stamp = Date.now();
@@ -217,7 +331,7 @@ export default function HelpChatPanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      await api.streamHelpChat(text, history, currentPage(), {
+      await api.streamHelpChat(text, history, currentPage(), useData, {
         signal: ac.signal,
         onEvent: (event) => {
           if (event.type === "sources") {
@@ -258,6 +372,41 @@ export default function HelpChatPanel({
     setError(null);
     removeItem(HELP_CHAT_STORAGE_KEY, "session");
     inputRef.current?.focus();
+  }
+
+  // On a phone the panel covers the page: get out of the way of a link.
+  const onNavigate = () => {
+    if (isMobile) onClose();
+  };
+  const renderers: InlineRenderers = {
+    token: (raw, key) => (
+      <HelpTokenLink
+        key={key}
+        raw={raw}
+        catalog={catalog}
+        onNavigate={onNavigate}
+      />
+    ),
+    link: (href, label, key) =>
+      isAppPath(href) ? (
+        <Link
+          key={key}
+          to={href}
+          onClick={onNavigate}
+          className="text-accent underline underline-offset-2"
+        >
+          {label}
+        </Link>
+      ) : null,
+  };
+  const lastId = messages[messages.length - 1]?.id;
+
+  function turnDataOn() {
+    if (info?.local) {
+      updateSettings({ helpChatData: "local" });
+    } else {
+      setAskingConsent(true);
+    }
   }
 
   const placement: React.CSSProperties | undefined = isMobile
@@ -330,6 +479,83 @@ export default function HelpChatPanel({
       </header>
 
       <div
+        className="space-y-2 border-b border-ink-700 px-4 py-2 text-xs"
+        data-horde="help-data"
+      >
+        <div className="flex items-center justify-between gap-3">
+          <label htmlFor={dataId} className="min-w-0 text-gray-300">
+            Use my data
+            <span className="block truncate text-muted">
+              {useData
+                ? info?.local
+                  ? "Downloads, library, history and playlists; stays on your network"
+                  : `What a question needs is sent to ${info?.provider_label || "the AI service"}`
+                : "Answers about your downloads, library and history"}
+            </span>
+          </label>
+          <button
+            id={dataId}
+            type="button"
+            role="switch"
+            aria-checked={useData}
+            onClick={() =>
+              useData || needsCloudConsent
+                ? (updateSettings({ helpChatData: "off" }),
+                  setAskingConsent(false))
+                : turnDataOn()
+            }
+            className={`ui-interactive flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
+              useData ? "bg-accent" : "bg-ink-700"
+            }`}
+          >
+            <span
+              className={`block h-4 w-4 rounded-full bg-white transition-transform ${
+                useData ? "translate-x-4" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+        {(askingConsent || needsCloudConsent) && (
+          <div
+            role="alert"
+            className="space-y-2 rounded-lg border border-warning/40 bg-warning/5 p-2.5 text-gray-300"
+          >
+            <p>
+              {needsCloudConsent ? "Your AI is now a cloud service. " : ""}
+              To answer, the parts of your downloads, library, watch history and
+              playlists a question needs are sent to{" "}
+              <strong className="font-semibold text-gray-100">
+                {info?.provider_label || "the AI service"}
+              </strong>
+              . Nothing is sent for questions that do not need it.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className={BUTTON}
+                onClick={() => {
+                  updateSettings({ helpChatData: "cloud" });
+                  setAskingConsent(false);
+                }}
+              >
+                Allow
+              </button>
+              <button
+                type="button"
+                className={BUTTON}
+                onClick={() => {
+                  updateSettings({ helpChatData: "off" });
+                  setAskingConsent(false);
+                }}
+              >
+                {needsCloudConsent ? "Turn off" : "Not now"}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div
         ref={listRef}
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
         tabIndex={0}
@@ -340,12 +566,13 @@ export default function HelpChatPanel({
         {messages.length === 0 && !sending && (
           <div className="space-y-3">
             <p className="text-sm text-gray-400">
-              Ask how to use, set up or troubleshoot Horde, or how something
-              works under the hood. The page you are on is sent with your
-              question.
+              Ask how to use, set up or fix Horde. I can also take you to a
+              setting or change it, look at your downloads and library, make
+              playlists and restyle the app. The page you are on is sent with
+              your question.
             </p>
             <div className="flex flex-wrap gap-2">
-              {HELP_SUGGESTIONS.map((q) => (
+              {prompts.map((q) => (
                 <button
                   key={q}
                   type="button"
@@ -380,14 +607,18 @@ export default function HelpChatPanel({
                 </p>
                 {waiting ? (
                   <TypingDots label="Looking it up" className="py-1" />
-                ) : (
+                ) : m.role === "user" ? (
                   <AiMarkdown
                     text={m.content}
-                    className={
-                      m.role === "user"
-                        ? "space-y-2 text-sm text-gray-200"
-                        : "space-y-2 text-sm text-gray-300"
-                    }
+                    className="space-y-2 text-sm text-gray-200"
+                  />
+                ) : (
+                  <AssistantReply
+                    content={m.content}
+                    streaming={sending && m.id === lastId}
+                    renderers={renderers}
+                    catalog={catalog}
+                    onNavigate={onNavigate}
                   />
                 )}
                 {m.role === "assistant" && !!m.sources?.length && !waiting && (

@@ -121,6 +121,13 @@ export type DownloadVideoCodec =
 
 export type CompatCopyResolution = "1080p" | "source";
 
+/**
+ * What Ask about Horde may read of the user's own data (downloads, library,
+ * history, playlists): nothing, or what a question needs while the AI runs on
+ * the local network, or also when it is a cloud service.
+ */
+export type HelpDataConsent = "off" | "local" | "cloud";
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
@@ -229,4 +236,6 @@ export interface Settings {
   showUndownloadedOnChannel: boolean;
   /** Default quality for adaptive stream playback (Auto = ABR within device cap). */
   defaultStreamQuality: StreamQuality;
+  /** What Ask about Horde may read of this user's data (see `HelpDataConsent`). */
+  helpChatData: HelpDataConsent;
 }

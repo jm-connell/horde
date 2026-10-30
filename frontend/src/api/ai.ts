@@ -1,5 +1,7 @@
 import type {
   AiConnectionTest,
+  HelpAssistantInfo,
+  HelpCatalog,
   HelpChatTurn,
   AiJobRow,
   AiProcessResult,
@@ -192,13 +194,24 @@ export const aiApi = {
     message: string,
     history: HelpChatTurn[],
     page: string,
+    useData: boolean,
     opts: ChatStreamOptions
   ): Promise<void> {
     return postEventStream(
       "/api/ai/help/chat",
-      { message, history, page },
+      { message, history, page, use_data: useData },
       opts
     );
+  },
+
+  /** The pages and settings Ask about Horde may link to or change. */
+  getHelpCatalog(opts?: ReadOptions): Promise<HelpCatalog> {
+    return request<HelpCatalog>("/api/ai/help/catalog", opts);
+  },
+
+  /** What Ask about Horde runs on and where questions are sent. */
+  getHelpInfo(opts?: ReadOptions): Promise<HelpAssistantInfo> {
+    return request<HelpAssistantInfo>("/api/ai/help/info", opts);
   },
 
   // --- AI for a streamed (not downloaded) video; all need `use_ai` ---

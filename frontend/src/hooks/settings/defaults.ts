@@ -79,6 +79,7 @@ export const DEFAULTS: Settings = {
   previewMuted: false,
   showUndownloadedOnChannel: true,
   defaultStreamQuality: "auto",
+  helpChatData: "off",
 };
 
 /** Keys persisted to server `ui` blob (excludes ephemeral/session fields). */
@@ -138,6 +139,7 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "sponsorBlockShowNotice",
   "sponsorBlockSkipMode",
   "sponsorBlockCategories",
+  "helpChatData",
   "sidebarCollapsed",
   "chaptersExpanded",
   "descriptionExpanded",

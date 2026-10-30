@@ -64,6 +64,7 @@ export function useAiPanes(core: AiCore, paneState: AiPaneState) {
   /** Save a model choice; a new embedding model offers to rebuild the indexes. */
   const saveModels = async (patch: {
     chat_model?: string;
+    help_model?: string;
     embed_model?: string;
   }) => {
     const prevEmbed = (appSettings?.ai.embed_model ?? "").trim();

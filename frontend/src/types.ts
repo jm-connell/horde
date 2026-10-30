@@ -68,6 +68,10 @@ export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type HelpChatTurn = S["HelpChatTurn"];
+export type HelpCatalog = S["HelpCatalog"];
+export type HelpCatalogSetting = S["HelpCatalogSetting"];
+export type HelpCatalogPage = S["HelpCatalogPage"];
+export type HelpAssistantInfo = S["HelpAssistantInfo"];
 export type OpenRouterCosts = S["AiCostsRead"];
 export type OpenRouterModel = S["AiModelRow"];
 /** `models` / `embedding_models` / `presets` are always sent (defaults in the schema). */
