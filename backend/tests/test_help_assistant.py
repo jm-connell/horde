@@ -210,8 +210,11 @@ def test_local_providers_are_recognized(url, local):
 
 def test_members_never_see_the_provider_address():
     conn = Connection("https://llm.example.com/v1")
-    assert "llm.example.com" in help_model.provider_label(conn, is_admin=True)
-    assert "example" not in help_model.provider_label(conn, is_admin=False)
+    assert (
+        help_model.provider_label(conn, is_admin=True)
+        == "llm.example.com, an outside AI service"
+    )
+    assert help_model.provider_label(conn, is_admin=False) == "an outside AI service"
 
 
 def test_small_models_are_told_to_recommend_better_for_css(monkeypatch):
