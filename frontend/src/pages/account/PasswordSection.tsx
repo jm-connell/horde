@@ -42,7 +42,7 @@ export default function PasswordSection() {
   };
 
   return (
-    <section aria-labelledby="password-heading">
+    <section aria-labelledby="password-heading" data-setting="password">
       <h2
         id="password-heading"
         className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"

@@ -21,6 +21,8 @@ export const queryKeys = {
     costs: ["ai", "costs"] as const,
     models: (target: "chat" | "embed", baseUrl: string) =>
       ["ai", "models", target, baseUrl] as const,
+    helpCatalog: ["ai", "help-catalog"] as const,
+    helpInfo: ["ai", "help-info"] as const,
   },
   system: {
     stats: ["system", "stats"] as const,

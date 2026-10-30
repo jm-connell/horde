@@ -35,13 +35,6 @@ const MAX_HISTORY = 12;
 /** Per-turn cap the server enforces. */
 const MAX_TURN_CHARS = 8000;
 
-export const HELP_SUGGESTIONS = [
-  "How do I set up AI features?",
-  "Why would a download fail?",
-  "How do I add another account?",
-  "Where are my videos stored on disk?",
-];
-
 function isSource(value: unknown): value is HelpSource {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;

@@ -5,6 +5,7 @@ import { useAiModels } from "../../../queries/status";
 import type { AiSettings } from "../../../types";
 import {
   CHAT_MODEL_TIP,
+  HELP_MODEL_TIP,
   EMBED_MODEL_TIP,
   INPUT_COMPACT,
   OPENROUTER_PRESETS,
@@ -51,6 +52,7 @@ export default function ConnectionPane() {
   return (
     <>
       <Section
+        anchor="ai-provider"
         title="Provider"
         description="Any service that speaks the OpenAI API: a cloud provider (OpenRouter, OpenAI, Gemini, Groq, …) or a server you run (Ollama, LM Studio, llama.cpp, vLLM)."
         hidden={
@@ -142,12 +144,14 @@ export default function ConnectionPane() {
       </Section>
 
       <Section
+        anchor="ai-models"
         title="Models"
         hidden={
           !!q &&
           !match(
             "models",
             "chat model",
+            "assistant model",
             "embedding",
             "budget",
             "best",
@@ -228,6 +232,16 @@ export default function ConnectionPane() {
                   : "The provider did not accept this model."}
               </p>
             )}
+          <ModelField
+            label="Assistant model"
+            tip={HELP_MODEL_TIP}
+            value={aiDraft.help_model}
+            models={chatModels?.models ?? []}
+            pinRecommended={isOpenRouter}
+            emptyOption="Same as the chat model"
+            placeholder="Empty = the chat model"
+            onSave={(v) => void saveModels({ help_model: v })}
+          />
           <ModelField
             label="Embedding model"
             tip={EMBED_MODEL_TIP}

@@ -54,6 +54,7 @@ export default function InterfaceSection({
       <div className="flex flex-col gap-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
           <div
+            data-setting="nav-indicator"
             className={`min-w-0 flex-1 ${
               match(
                 "navigation indicator",
@@ -124,6 +125,7 @@ export default function InterfaceSection({
           </div>
 
           <div
+            data-setting="hover-motion"
             className={`min-w-0 flex-1 ${
               match("hover motion", "cards", "controls", "glow", "lift")
                 ? ""
@@ -157,6 +159,7 @@ export default function InterfaceSection({
         </div>
 
         <div
+          data-setting="panels"
           className={
             match(
               "translucent panels",
@@ -292,6 +295,7 @@ export default function InterfaceSection({
         </div>
 
         <div
+          data-setting="loading-style"
           className={
             match("loading animation", LOADING_STYLE_SEARCH_KEYWORDS)
               ? undefined

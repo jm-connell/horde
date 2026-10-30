@@ -1,5 +1,7 @@
 import type {
   AiConnectionTest,
+  HelpAssistantInfo,
+  HelpCatalog,
   HelpChatTurn,
   AiJobRow,
   AiProcessResult,
@@ -10,6 +12,7 @@ import type {
   StreamRelatedPage,
   Video,
 } from "../types";
+import type { HelpDataConsent } from "../hooks/settings/types";
 import type { ApiResponse } from "./typed";
 import {
   type ChatStreamOptions,
@@ -192,13 +195,25 @@ export const aiApi = {
     message: string,
     history: HelpChatTurn[],
     page: string,
+    dataConsent: HelpDataConsent,
     opts: ChatStreamOptions
   ): Promise<void> {
+    // The server checks that "local" consent meets a local provider.
     return postEventStream(
       "/api/ai/help/chat",
-      { message, history, page },
+      { message, history, page, data_consent: dataConsent },
       opts
     );
+  },
+
+  /** The pages and settings Ask about Horde may link to or change. */
+  getHelpCatalog(opts?: ReadOptions): Promise<HelpCatalog> {
+    return request<HelpCatalog>("/api/ai/help/catalog", opts);
+  },
+
+  /** What Ask about Horde runs on and where questions are sent. */
+  getHelpInfo(opts?: ReadOptions): Promise<HelpAssistantInfo> {
+    return request<HelpAssistantInfo>("/api/ai/help/info", opts);
   },
 
   // --- AI for a streamed (not downloaded) video; all need `use_ai` ---

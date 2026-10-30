@@ -2,6 +2,7 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
+import { useSettingFind } from "../hooks/useSettingFind";
 import LiquidNav from "../components/LiquidNav";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { useAuth } from "../context/AuthContext";
@@ -76,6 +77,14 @@ export default function Settings() {
     },
     [tabAllowed]
   );
+
+  // A link to one setting (?find=): show every section so it can be found,
+  // and search for the words when no element carries that anchor.
+  const finding = !!searchParams.get("find");
+  useEffect(() => {
+    if (finding) setSearchQuery("");
+  }, [finding]);
+  useSettingFind(setSearchQuery);
 
   // Deep link: /settings?tab=playback&pane=jobs
   useEffect(() => {

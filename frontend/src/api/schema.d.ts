@@ -81,6 +81,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/help/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Help Catalog
+         * @description The pages and settings Ask about Horde may link to or change, for this user.
+         */
+        get: operations["get_help_catalog_api_ai_help_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/help/chat": {
         parameters: {
             query?: never;
@@ -95,6 +115,26 @@ export interface paths {
          * @description Ask about Horde: answers from this server's docs and source (SSE).
          */
         post: operations["post_help_chat_api_ai_help_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ai/help/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Help Info
+         * @description What Ask about Horde runs on: its strength and where questions are sent.
+         */
+        get: operations["get_help_info_api_ai_help_info_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4102,6 +4142,11 @@ export interface components {
              */
             enrich_tags: boolean;
             /**
+             * Help Model
+             * @default
+             */
+            help_model: string;
+            /**
              * Paused
              * @default false
              */
@@ -4188,6 +4233,8 @@ export interface components {
             enabled?: boolean | null;
             /** Enrich Tags */
             enrich_tags?: boolean | null;
+            /** Help Model */
+            help_model?: string | null;
             /** Paused */
             paused?: boolean | null;
             /** Schedule */
@@ -5742,10 +5789,129 @@ export interface components {
             last_extract_failure?: components["schemas"]["ExtractFailure"] | null;
         };
         /**
+         * HelpAssistantInfo
+         * @description What the assistant runs on, for the chat panel's notices.
+         */
+        HelpAssistantInfo: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /**
+             * Local
+             * @default false
+             */
+            local: boolean;
+            /** Model */
+            model?: string | null;
+            /**
+             * Provider Label
+             * @default
+             */
+            provider_label: string;
+            /**
+             * Tier
+             * @default medium
+             * @enum {string}
+             */
+            tier: "small" | "medium" | "large";
+        };
+        /** HelpCatalog */
+        HelpCatalog: {
+            /** Pages */
+            pages: components["schemas"]["HelpCatalogPage"][];
+            /** Settings */
+            settings: components["schemas"]["HelpCatalogSetting"][];
+        };
+        /** HelpCatalogOption */
+        HelpCatalogOption: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: string | number;
+        };
+        /**
+         * HelpCatalogPage
+         * @description A page of the app the assistant can link to as ``[[page:id]]``.
+         */
+        HelpCatalogPage: {
+            /** About */
+            about: string;
+            /** Access */
+            access?: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+        };
+        /**
+         * HelpCatalogSetting
+         * @description A setting the assistant can link to (``[[setting:id]]``) and, when
+         *     ``chat`` is ``change``, offer to change (``[[set:id=value]]``).
+         */
+        HelpCatalogSetting: {
+            /** About */
+            about: string;
+            /** Access */
+            access?: string | null;
+            /** Anchor */
+            anchor?: string | null;
+            /**
+             * Chat
+             * @enum {string}
+             */
+            chat: "change" | "link";
+            /** Format */
+            format?: ("percent" | "times") | null;
+            /** Id */
+            id: string;
+            /** Implies */
+            implies?: {
+                [key: string]: string | boolean;
+            } | null;
+            /** Key */
+            key?: string | null;
+            /**
+             * Keywords
+             * @default
+             */
+            keywords: string;
+            /** Label */
+            label: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Options */
+            options?: components["schemas"]["HelpCatalogOption"][] | null;
+            /** Pane */
+            pane?: ("providers" | "features" | "jobs") | null;
+            /**
+             * Path
+             * @default /settings
+             */
+            path: string;
+            /** Scope */
+            scope?: ("personal" | "server" | "ai") | null;
+            /** Tab */
+            tab?: ("appearance" | "library" | "playback" | "ai" | "system") | null;
+            /** Type */
+            type?: ("bool" | "enum" | "number" | "color") | null;
+        };
+        /**
          * HelpChatRequest
          * @description One Ask-about-Horde question and the conversation before it.
          */
         HelpChatRequest: {
+            /**
+             * Data Consent
+             * @default off
+             * @enum {string}
+             */
+            data_consent: "off" | "local" | "cloud";
             /** History */
             history?: components["schemas"]["HelpChatTurn"][];
             /** Message */
@@ -7919,6 +8085,44 @@ export interface operations {
             };
         };
     };
+    get_help_catalog_api_ai_help_catalog_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelpCatalog"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     post_help_chat_api_ai_help_chat_post: {
         parameters: {
             query?: never;
@@ -7939,6 +8143,44 @@ export interface operations {
                 };
                 content: {
                     "text/event-stream": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_help_info_api_ai_help_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelpAssistantInfo"];
                 };
             };
             /** @description Validation error */

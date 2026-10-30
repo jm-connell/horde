@@ -46,6 +46,7 @@ export default function FontSection({
     >
       <div className="grid grid-cols-1 items-start gap-6 sm:grid-cols-2">
         <div
+          data-setting="font"
           className={
             match(
               "font",
@@ -75,6 +76,7 @@ export default function FontSection({
           />
         </div>
         <div
+          data-setting="font-size"
           className={
             match("font size", "text size", "small", "medium", "large", "xl")
               ? undefined

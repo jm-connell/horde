@@ -20,6 +20,7 @@ export default function CostsPane() {
 
   return (
     <Section
+      anchor="ai-costs"
       title="Costs"
       description="Spend the provider reports for Horde’s calls (summaries, chat, tags, embeddings). Only OpenRouter reports a cost per call."
       hidden={

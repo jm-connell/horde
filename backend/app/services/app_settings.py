@@ -19,6 +19,9 @@ AI_DEFAULTS: dict[str, Any] = {
     "base_url": "",
     "api_key": "",
     "chat_model": "",
+    # Ask about Horde's model; empty = the chat model. Lets the assistant use a
+    # stronger model than the bulk summaries and tags.
+    "help_model": "",
     # Empty embed_base_url = embeddings use the chat connection. Empty embed_model
     # = no embeddings (search, related videos and categories stay off).
     "embed_base_url": "",
@@ -327,7 +330,7 @@ def _merge_ai(raw: Any) -> dict[str, Any]:
     merged["vram_gb"] = clamp_vram_gb(merged.get("vram_gb"))
     for key in ("base_url", "embed_base_url"):
         merged[key] = normalize_base_url(merged.get(key))
-    for key in ("api_key", "embed_api_key", "chat_model", "embed_model"):
+    for key in ("api_key", "embed_api_key", "chat_model", "help_model", "embed_model"):
         merged[key] = str(merged.get(key) or "").strip()
     merged["show_costs"] = bool(merged.get("show_costs", False))
     merged["weekly_budget_usd"] = clamp_weekly_budget_usd(

@@ -147,8 +147,9 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   expect(reopened.width).toBeCloseTo(resized.width, 0);
   await panel.getByRole("button", { name: "Clear" }).click();
   await expect(panel.getByText("Yes, local models work too.")).toBeHidden();
+  // The sample questions change each time; "What can you do?" is always first.
   await expect(
-    panel.getByRole("button", { name: "How do I set up AI features?" })
+    panel.getByRole("button", { name: "What can you do?" })
   ).toBeVisible();
   await panel.getByRole("button", { name: "Close" }).click();
   await expect(open).toHaveAttribute("aria-expanded", "false");
@@ -179,4 +180,254 @@ test("Ask about Horde shows the server's reason when no AI is set up", async ({
   await expect(panel.getByRole("alert")).toHaveText(/\S/);
   await expect(panel.getByText("Looking it up")).toBeHidden();
   await expect(input).toBeFocused();
+});
+
+/** The applied custom stylesheet (a style tag has no rendered text). */
+const savedCss = (page: import("@playwright/test").Page) =>
+  page.evaluate(
+    () => document.getElementById("horde-custom-css")?.textContent ?? ""
+  );
+
+/** Answer every question with `answer` and record what was asked. */
+async function stubAnswer(
+  page: import("@playwright/test").Page,
+  answer: string | ((n: number) => string)
+) {
+  const bodies: { message: string; data_consent?: string }[] = [];
+  await page.route(/\/api\/ai\/help\/chat$/, (route) => {
+    const body = route.request().postDataJSON() as (typeof bodies)[number];
+    bodies.push(body);
+    const text = typeof answer === "string" ? answer : answer(bodies.length);
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: sse([
+        {
+          type: "user",
+          message: { id: null, role: "user", content: body.message },
+        },
+        { type: "token", text },
+        {
+          type: "done",
+          message: { id: null, role: "assistant", content: text },
+        },
+      ]),
+    });
+  });
+  return bodies;
+}
+
+async function ask(page: import("@playwright/test").Page, question: string) {
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await input.fill(question);
+  await input.press("Enter");
+  return panel;
+}
+
+test("a setting link opens its tab and rings it, and Apply changes it", async ({
+  page,
+}) => {
+  await stubAnswer(
+    page,
+    "It is under [[setting:background-effect]]. Or I can do it: [[set:background-effect=rain]]"
+  );
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = await ask(page, "rain background please");
+
+  // The action token became a card, not text.
+  await expect(panel.getByText("[[set:")).toHaveCount(0);
+  await expect(panel.getByText("Change")).toContainText("Rain");
+  await panel.getByRole("button", { name: "Apply" }).click();
+  await expect(panel.getByRole("status")).toContainText(
+    "Background animation is now Rain"
+  );
+  const saved = () =>
+    page.evaluate(
+      () =>
+        JSON.parse(localStorage.getItem("horde.settings") || "{}")
+          .backgroundEffect as string
+    );
+  expect(await saved()).toBe("rain");
+  await panel.getByRole("button", { name: "Undo" }).click();
+  await expect(panel.getByText("is back how it was")).toBeVisible();
+  expect(await saved()).toBe("none");
+
+  // The link stays in the app, opens the tab and rings the section.
+  await panel
+    .getByRole("link", { name: "Background animation" })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/settings\?tab=appearance$/);
+  const section = page.locator('[data-setting="background"]');
+  await expect(section).toHaveClass(/setting-flash/);
+  await expect(section).toBeInViewport();
+  await expect(section).toBeFocused();
+  await expect(panel).toBeVisible();
+});
+
+test("an unknown ?find= searches Settings for the words", async ({ page }) => {
+  await page.goto("/settings?tab=playback&find=sponsor");
+  await expect(
+    page.getByRole("searchbox", { name: "Search settings" })
+  ).toHaveValue("sponsor", { timeout: 10_000 });
+  await expect(page).toHaveURL(/\/settings\?tab=playback$/);
+});
+
+test("What can you do? is answered without asking the model", async ({
+  page,
+}) => {
+  const bodies = await stubAnswer(page, "unused");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await panel.getByRole("button", { name: "What can you do?" }).click();
+  await expect(panel.getByText("Here's what I can do:")).toBeVisible();
+  await expect(
+    panel.getByRole("link", { name: "Background animation" })
+  ).toBeVisible();
+  expect(bodies).toEqual([]);
+});
+
+test("Use my data asks before sending data to a cloud AI", async ({ page }) => {
+  const bodies = await stubAnswer(page, "You have 3 videos.");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const toggle = panel.getByRole("switch", { name: /Use my data/ });
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await toggle.click();
+  // The e2e server has no local AI, so it asks first.
+  const notice = panel.getByRole("alert");
+  await expect(notice).toContainText("are sent to");
+  await notice.getByRole("button", { name: "Not now" }).click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await ask(page, "how many videos are in my library?");
+  await expect(panel.getByText("You have 3 videos.")).toBeVisible();
+  expect(bodies[0].data_consent).toBe("off");
+
+  await toggle.click();
+  await panel.getByRole("alert").getByRole("button", { name: "Allow" }).click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await ask(page, "and now?");
+  await expect(panel.getByText("You have 3 videos.")).toHaveCount(2);
+  expect(bodies[1].data_consent).toBe("cloud");
+});
+
+test("CSS from the chat previews, reverts by itself or is kept", async ({
+  page,
+}) => {
+  const css = '[data-horde="nav"] { outline: 3px solid rgb(255, 0, 0); }';
+  const other = ".ui-card { border-radius: 2rem; }";
+  await stubAnswer(
+    page,
+    "Here you go:\n\n```css\n" +
+      css +
+      "\n```\n\nOr:\n\n```css\n" +
+      other +
+      "\n```"
+  );
+  await page.clock.install();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = await ask(page, "red outline on the top bar with css");
+  const preview = page.locator('style[data-horde="custom-css-preview"]');
+  const bar = page.getByRole("alertdialog", { name: "CSS preview" });
+
+  const [first, second] = [
+    panel.locator('[data-help-action="css"]').nth(0),
+    panel.locator('[data-help-action="css"]').nth(1),
+  ];
+  // Only one preview at a time: starting the second ends the first.
+  await second.getByRole("button", { name: "Preview" }).click();
+  await expect(preview).toHaveCount(1);
+  await first.getByRole("button", { name: "Preview" }).click();
+  await expect(preview).toHaveCount(1);
+  await expect(bar).toHaveCount(1);
+  await expect(second.getByText("Reverted. Nothing was saved.")).toBeVisible();
+  await expect(bar).toContainText("reverts in 20s");
+  // Left alone, it undoes itself.
+  await page.clock.runFor(21_000);
+  await expect(preview).toHaveCount(0);
+  await expect(bar).toBeHidden();
+  await expect(first.getByText("Reverted. Nothing was saved.")).toBeVisible();
+
+  // Escape reverts at once (and does not close the chat). A new preview gets
+  // the whole 20 seconds again.
+  await first.getByRole("button", { name: "Preview again" }).click();
+  await page.clock.runFor(1_000);
+  await expect(preview).toHaveCount(1);
+  await expect(bar).toContainText("reverts in 19s");
+  await page.keyboard.press("Escape");
+  await expect(preview).toHaveCount(0);
+  await expect(panel).toBeVisible();
+
+  await first.getByRole("button", { name: "Preview again" }).click();
+  await bar.getByRole("button", { name: "Keep" }).click();
+  await expect(panel.getByText("Added to your custom CSS")).toBeVisible();
+  await expect.poll(() => savedCss(page)).toContain("outline: 3px");
+  const stored = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("horde.settings") || "{}") as {
+        customCss: string;
+        customCssEnabled: boolean;
+      }
+  );
+  expect(stored.customCssEnabled).toBe(true);
+  expect(stored.customCss).toContain(css);
+
+  // ?nocss loads the app without it, says so, and can turn it back on.
+  await page.goto("/history?nocss=1");
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(page.locator("#horde-custom-css")).toHaveCount(0);
+  const notice = page.locator('[data-horde="custom-css-off"]');
+  await expect(notice).toContainText("Custom CSS is off in this tab");
+  await page.getByRole("link", { name: "History" }).first().click();
+  await expect(page.locator("#horde-custom-css")).toHaveCount(0);
+  await notice.getByRole("button", { name: "Turn it back on" }).click();
+  await expect.poll(() => savedCss(page)).toContain("outline: 3px");
+  await expect(notice).toBeHidden();
+});
+
+test("the chat offers downloads and playlists, and does them on confirm", async ({
+  page,
+  request,
+}) => {
+  const { items } = (await (await request.get("/api/videos")).json()) as {
+    items: { id: number; title: string }[];
+  };
+  const [a, b] = items;
+  await stubAnswer(
+    page,
+    `Found [[video:${a.id}|${a.title}]].\n\n[[playlist-new:Chat mix|${a.id},${b.id},999999]]\n\n[[download:https://www.youtube.com/watch?v=dQw4w9WgXcQ]]`
+  );
+  const posted: string[] = [];
+  await page.route("**/api/downloads", async (route) => {
+    if (route.request().method() !== "POST") return route.continue();
+    posted.push((route.request().postDataJSON() as { url: string }).url);
+    const jobs = (await (
+      await route.fetch({ method: "GET" })
+    ).json()) as object[];
+    return route.fulfill({ json: jobs[0] });
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = await ask(page, "make me a playlist and grab that link");
+
+  await expect(panel.getByRole("link", { name: a.title })).toHaveAttribute(
+    "href",
+    `/watch/${a.id}`
+  );
+  await panel.getByRole("button", { name: "Make playlist" }).click();
+  await expect(panel.getByText("Made “Chat mix” with 2 videos.")).toBeVisible();
+  const playlists = (await (await request.get("/api/playlists")).json()) as {
+    name: string;
+  }[];
+  expect(playlists.map((p) => p.name)).toContain("Chat mix");
+
+  await panel.getByRole("button", { name: "Download" }).click();
+  await expect(panel.getByText("Added to the queue.")).toBeVisible();
+  expect(posted).toEqual(["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]);
 });

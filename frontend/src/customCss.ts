@@ -1,5 +1,7 @@
 /** User-authored CSS overlay (Jellyfin-style) plus stable theming hooks. */
 
+import { getItem, removeItem, setItem } from "./storage";
+
 export const CUSTOM_CSS_STYLE_ID = "horde-custom-css";
 /** Cap keeps localStorage / the server `ui` blob from ballooning. */
 export const CUSTOM_CSS_MAX_CHARS = 64_000;
@@ -543,9 +545,38 @@ export function isCustomCssEnabled(enabled: unknown, css: string): boolean {
   return normalizeCustomCss(css).trim().length > 0;
 }
 
+/** Set for this tab by opening any page with `?nocss` (the escape hatch). */
+const SUSPEND_KEY = "horde.customCssOff";
+
+/** Whether custom CSS is switched off in this tab (see `?nocss`). */
+export function customCssSuspended(): boolean {
+  return getItem(SUSPEND_KEY, "session") === "1";
+}
+
+/**
+ * `?nocss` (or `?nocss=1`) on any URL turns custom CSS off for this tab, so a
+ * stylesheet that hides the page can still be fixed. Called at boot, before
+ * the first paint; drops the parameter from the address bar.
+ */
+export function suspendCustomCssFromUrl(): void {
+  const url = new URL(window.location.href);
+  if (!url.searchParams.has("nocss")) return;
+  setItem(SUSPEND_KEY, "1", "session");
+  url.searchParams.delete("nocss");
+  window.history.replaceState(window.history.state, "", url);
+}
+
+/** Undo `?nocss` for this tab; the caller applies the saved CSS again. */
+export function resumeCustomCss(): void {
+  removeItem(SUSPEND_KEY, "session");
+}
+
 export function applyCustomCss(css: string, enabled = true): void {
   if (typeof document === "undefined") return;
-  const next = enabled ? sanitizeCustomCss(normalizeCustomCss(css)) : "";
+  const next =
+    enabled && !customCssSuspended()
+      ? sanitizeCustomCss(normalizeCustomCss(css))
+      : "";
   let el = document.getElementById(
     CUSTOM_CSS_STYLE_ID
   ) as HTMLStyleElement | null;

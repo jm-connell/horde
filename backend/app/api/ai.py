@@ -25,8 +25,20 @@ from ..response_schemas import (
     PausedResponse,
     RecommendationsRead,
 )
-from ..schemas import ChannelFeedEntry, HelpChatRequest
-from ..services.ai import embeddings, help_chat, recommend, worker
+from ..schemas import (
+    ChannelFeedEntry,
+    HelpAssistantInfo,
+    HelpCatalog,
+    HelpChatRequest,
+)
+from ..services.ai import (
+    embeddings,
+    help_catalog,
+    help_chat,
+    help_model,
+    recommend,
+    worker,
+)
 from ..services.ai.provider import (
     build_status,
     detect_local_servers,
@@ -446,14 +458,34 @@ def post_help_chat(
         help_chat.stream_help_events(
             payload.message,
             [turn.model_dump() for turn in payload.history],
-            user.id,
-            is_admin=user.is_admin,
+            user,
             page=payload.page,
+            data_consent=payload.data_consent,
             authorized=StreamAuthGuard.of(request).still_valid,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get(
+    "/help/catalog",
+    response_model=HelpCatalog,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def get_help_catalog(user: AuthUser = Depends(current_user)):
+    """The pages and settings Ask about Horde may link to or change, for this user."""
+    return help_catalog.for_user(user)
+
+
+@router.get(
+    "/help/info",
+    response_model=HelpAssistantInfo,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def get_help_info(user: AuthUser = Depends(current_user)):
+    """What Ask about Horde runs on: its strength and where questions are sent."""
+    return help_model.info(user)
 
 
 @router.post(

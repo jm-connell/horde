@@ -1892,3 +1892,17 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   display: inline-block;
   animation: horde-processing-ellipsis 1.2s ease-in-out infinite;
 }
+
+/* A setting a link or Ask about Horde pointed at (`?find=`, hooks/useSettingFind.ts). */
+[data-setting] {
+  transition:
+    outline-color 300ms var(--ease-fluid),
+    background-color 300ms var(--ease-fluid);
+  outline: 2px solid transparent;
+  outline-offset: 6px;
+}
+[data-setting].setting-flash {
+  border-radius: 0.5rem;
+  outline-color: rgb(var(--accent));
+  background-color: rgb(var(--accent) / 0.08);
+}

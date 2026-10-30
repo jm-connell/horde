@@ -17,6 +17,7 @@ export default function ModelField({
   pinRecommended = false,
   placeholder,
   onSave,
+  emptyOption,
 }: {
   label: string;
   tip: string;
@@ -25,6 +26,8 @@ export default function ModelField({
   pinRecommended?: boolean;
   placeholder: string;
   onSave: (value: string) => void;
+  /** Offered first in the list for an empty value (e.g. "Same as …"). */
+  emptyOption?: string;
 }) {
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -46,9 +49,12 @@ export default function ModelField({
           listClassName="max-h-80"
           searchable
           searchPlaceholder="Search models…"
-          options={openRouterSelectOptions(models, value, "", {
-            pinRecommended,
-          })}
+          options={[
+            ...(emptyOption ? [{ value: "", label: emptyOption }] : []),
+            ...openRouterSelectOptions(models, value, "", {
+              pinRecommended,
+            }),
+          ]}
           onChange={(next) => onSave(next)}
         />
       ) : (

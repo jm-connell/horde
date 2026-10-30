@@ -114,6 +114,7 @@ export default function NotificationsSection() {
 
   return (
     <Section
+      anchor="notifications"
       title="Notifications"
       description="Send a message to ntfy, Discord or any webhook when something needs you, such as a failed download or a full disk. Nothing is sent until you add a target."
       hidden={!match(...TERMS)}

@@ -33,6 +33,7 @@ export default function JobsPane() {
   return (
     <>
       <Section
+        anchor="ai-queue"
         first
         title="Queue"
         description="Live AI job status and pause/resume."
@@ -205,6 +206,7 @@ export default function JobsPane() {
       </Section>
 
       <Section
+        anchor="ai-automatic"
         title="Automatic"
         description="When Horde queues AI work on its own. Important for large libraries."
         hidden={
@@ -290,6 +292,7 @@ export default function JobsPane() {
       </Section>
 
       <Section
+        anchor="ai-run-now"
         title="Run now"
         description="Queue search indexing, tagging, and category jobs on demand."
         hidden={
