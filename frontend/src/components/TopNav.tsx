@@ -1,4 +1,3 @@
-import type { Permission } from "../types";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -11,7 +10,6 @@ import { useSearch } from "../context/SearchContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import { useAuth } from "../context/AuthContext";
 import AccountMenu from "./auth/AccountMenu";
 import { queryKeys } from "../queries/keys";
 import { useReviewCount } from "../queries/status";
@@ -24,6 +22,7 @@ import {
   useOfflineDownloads,
 } from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
+import { isLinkActive, useNavLinks } from "./navLinks";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 import { actionForKey, resolveHotkeys } from "../hotkeys";
 import {
@@ -32,53 +31,11 @@ import {
   ownsArrowKeys,
 } from "../utils/keyboardTarget";
 
-interface NavLinkDef {
-  to: string;
-  label: string;
-  end: boolean;
-  /** Needs the server; hidden in offline mode. */
-  serverOnly?: boolean;
-  /** Hidden for accounts without this permission. */
-  permission?: Permission;
-}
-
-const BASE_LINKS: NavLinkDef[] = [
-  { to: "/", label: "Home", end: true },
-  { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
-  { to: "/history", label: "History", end: false, serverOnly: true },
-  {
-    to: "/download",
-    label: "Download",
-    end: false,
-    serverOnly: true,
-    permission: "download",
-  },
-  {
-    to: "/import",
-    label: "Import",
-    end: false,
-    serverOnly: true,
-    permission: "download",
-  },
-  { to: "/settings", label: "Settings", end: false },
-];
-
-const OFFLINE_LINK: NavLinkDef = {
-  to: "/offline",
-  label: "Offline",
-  end: false,
-};
-
 /** Search box and account button before the desktop layout has been measured. */
 const DESKTOP_RIGHT_ESTIMATE_PX = 380;
 
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
-
-function isLinkActive(pathname: string, to: string, end: boolean): boolean {
-  if (end) return pathname === to;
-  return pathname === to || pathname.startsWith(`${to}/`);
-}
 
 export default function TopNav() {
   const queryClient = useQueryClient();
@@ -94,7 +51,6 @@ export default function TopNav() {
   const { search, setSearch, commitSearch } = useSearch();
   const { resetHome } = useHomeReset();
   const [settings] = useSettings();
-  const { can } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode } = usePlaybackSession();
@@ -114,15 +70,7 @@ export default function TopNav() {
     activeOffline,
     offlineSnap.liveBytes
   ).progress;
-  const NAV_LINKS: NavLinkDef[] = (
-    hasOfflineItems || offlineMode
-      ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
-      : BASE_LINKS
-  ).filter(
-    (link) =>
-      !(offlineMode && link.serverOnly) &&
-      (!link.permission || can(link.permission))
-  );
+  const NAV_LINKS = useNavLinks();
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
