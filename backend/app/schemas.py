@@ -1423,6 +1423,80 @@ class HelpChatRequest(BaseModel):
     history: list[HelpChatTurn] = Field(default_factory=list, max_length=24)
     #: Where the user is in the app, e.g. "Settings, AI tab (/settings?tab=ai)".
     page: str | None = Field(default=None, max_length=300)
+    #: The user agreed to let the assistant read their downloads, library,
+    #: history and playlists for this question.
+    use_data: bool = False
+
+
+class HelpCatalogOption(BaseModel):
+    value: str | float
+    label: str
+
+
+class HelpCatalogPage(BaseModel):
+    """A page of the app the assistant can link to as ``[[page:id]]``."""
+
+    id: str
+    label: str
+    path: str
+    about: str
+    #: Who sees it beyond everyone: ``admin`` or a permission name.
+    access: str | None = None
+
+
+class HelpCatalogSetting(BaseModel):
+    """A setting the assistant can link to (``[[setting:id]]``) and, when
+    ``chat`` is ``change``, offer to change (``[[set:id=value]]``)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    label: str
+    about: str
+    keywords: str = ""
+    #: Settings tab (``path`` is then /settings) or another page's path.
+    tab: Literal["appearance", "library", "playback", "ai", "system"] | None = None
+    pane: Literal["providers", "features", "jobs"] | None = None
+    path: str = "/settings"
+    #: ``data-setting`` element on that page to scroll to and flash (default: id).
+    anchor: str | None = None
+    access: str | None = None
+    #: ``change``: the chat may offer an Apply card. ``link``: only point to it.
+    chat: Literal["change", "link"]
+    #: Where a change is saved: the user's own preferences, the server-wide
+    #: settings or the AI settings (both administrator only).
+    scope: Literal["personal", "server", "ai"] | None = None
+    #: Settings key (personal: camelCase, may be ``a.b`` for a nested field).
+    key: str | None = None
+    type: Literal["bool", "enum", "number", "color"] | None = None
+    options: list[HelpCatalogOption] | None = None
+    min: float | None = None
+    max: float | None = None
+    #: How a number reads: ``percent`` (0-1 shown as %) or ``times`` (1 = 1×).
+    format: Literal["percent", "times"] | None = None
+    #: Other keys set along with this one (picking an accent color selects
+    #: the Custom theme).
+    implies: dict[str, str | bool] | None = None
+
+
+class HelpCatalog(BaseModel):
+    pages: list[HelpCatalogPage]
+    settings: list[HelpCatalogSetting]
+
+
+class HelpAssistantInfo(BaseModel):
+    """What the assistant runs on, for the chat panel's notices."""
+
+    #: The model's name (administrators only; members see null).
+    model: str | None = None
+    #: Rough strength: ``small`` local models struggle with CSS and long answers.
+    tier: Literal["small", "medium", "large"] = "medium"
+    #: Where questions (and any library data) are sent, in words.
+    provider_label: str = ""
+    #: True when the AI runs on this server or the local network.
+    local: bool = False
+    #: Whether the AI is configured and switched on at all.
+    available: bool = False
 
 
 class StreamWatchWrite(BaseModel):

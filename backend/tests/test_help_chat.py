@@ -160,7 +160,7 @@ def help_env(monkeypatch, index, app):
         last_cost = 0.002
 
         def chat_stream(self, prompt, model, **kwargs):
-            calls.append({"prompt": prompt, **kwargs})
+            calls.append({"prompt": prompt, "model": model, **kwargs})
             yield "Use "
             yield "a preset."
 
@@ -318,3 +318,69 @@ def test_an_index_failure_is_an_error_event(client, help_env, monkeypatch):
         }
     ]
     assert help_env == []
+
+
+def test_the_prompt_lists_matching_settings_and_how_to_link_them(client, help_env):
+    client.post(
+        "/api/ai/help/chat",
+        json={"message": "How do I change the background animation?"},
+    )
+    system = help_env[0]["system"]
+    assert "[[setting:ID]]" in system and "[[set:ID=VALUE]]" in system
+    assert "- background-effect: Background animation (Appearance) [change: " in system
+    assert "- download: Download (/download)" in system  # the administrator's pages
+    assert "[[download:URL]]" in system
+
+
+def test_members_get_only_their_links_and_actions(member_client, help_env):
+    member_client.post(
+        "/api/ai/help/chat", json={"message": "AI provider and the trash bin"}
+    )
+    system = help_env[0]["system"]
+    assert "ai-provider:" not in system  # the administrator's
+    assert "- trash:" not in system  # needs delete_videos, off by default
+    assert "[[download:URL]]" in system  # members may download by default
+
+
+def test_the_assistant_uses_its_own_model(client, help_env, monkeypatch):
+    from app.services.ai import help_model
+
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "strong-m")
+    client.post("/api/ai/help/chat", json={"message": "hi"})
+    call = help_env[0]
+    assert call["model"] == "strong-m"
+    assert call["num_predict"] == 2048
+    assert "You run on strong-m" in call["system"]
+
+
+def test_user_data_is_sent_only_when_allowed(client, help_env, add_video):
+    add_video(title="Sourdough basics", channel="Bakery")
+    body = {"message": "how many channels are in my library?"}
+    client.post("/api/ai/help/chat", json=body)
+    client.post("/api/ai/help/chat", json={**body, "use_data": True})
+    without, with_data = (call["system"] for call in help_env)
+    assert "Library: 1 videos, 1 channels" not in without
+    assert "they have not turned on Use my data" in without
+    assert "Library: 1 videos, 1 channels" in with_data
+    assert "The user lets you read their downloads" in with_data
+
+
+def test_css_questions_get_the_reference_and_the_users_css(
+    client, help_env, index, admin_user, session
+):
+    from app.services import user_settings
+
+    (index.root / "docs" / "settings").mkdir()
+    (index.root / "docs" / "settings" / "custom-css.md").write_text(
+        "# Custom CSS\n\nIntro.\n\n## CSS variables\n\n--accent is the accent.\n\n"
+        "## Saved themes\n\nNot needed.\n"
+    )
+    user_settings.save_ui(
+        session, admin_user.id, {"custom_css": ".ui-card{}", "custom_css_enabled": True}
+    )
+    client.post("/api/ai/help/chat", json={"message": "write css for rounder cards"})
+    system = help_env[0]["system"]
+    assert "--accent is the accent." in system and "Not needed." not in system
+    assert "The user's custom CSS (on):\n```css\n.ui-card{}\n```" in system
+    client.post("/api/ai/help/chat", json={"message": "rounder cards"})
+    assert "custom CSS (on)" not in help_env[1]["system"]

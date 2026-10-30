@@ -156,6 +156,9 @@ export const EMBED_MODEL_TIP =
 export const CHAT_MODEL_TIP =
   "Chat model — writes summaries, chapters and chat replies, enriches tags, invents category chips and checks duplicates. On Ollama, 3B-class models need about 3–6GB of VRAM.";
 
+export const HELP_MODEL_TIP =
+  "Assistant model — the model Ask about Horde uses. Leave it as the chat model, or pick a stronger one so the assistant (and the CSS it writes) is better without paying more for summaries and tags.";
+
 export const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
   { value: "medium", label: "Medium" },
@@ -320,6 +323,7 @@ export const DEFAULT_AI: AiSettings = {
   api_key: "",
   api_key_set: false,
   chat_model: "",
+  help_model: "",
   embed_base_url: "",
   embed_api_key: "",
   embed_api_key_set: false,

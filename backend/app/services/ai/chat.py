@@ -258,10 +258,13 @@ def run_chat_turn(
     authorized: Authorized | None = None,
     *,
     system_prompt: str | None = None,
+    model: str | None = None,
+    num_predict: int = _NUM_PREDICT,
 ) -> Generator[str]:
     """Yield SSE event strings for a chat turn.
 
-    ``system_prompt`` replaces the video-chat persona (the context still follows).
+    ``system_prompt`` replaces the video-chat persona (the context still follows);
+    ``model`` replaces the chat model and ``num_predict`` the reply length cap.
 
     Events:
     - ``data: {"type":"token","text":"..."}\n\n``
@@ -285,7 +288,7 @@ def run_chat_turn(
             }
         )
         return
-    chat_model = ensure_quality_chat_model()
+    chat_model = model or ensure_quality_chat_model()
     missing = require_llm_chat_model(provider, chat_model)
     if missing:
         yield _sse({"type": "error", "detail": missing, "status": 503})
@@ -328,7 +331,7 @@ def run_chat_turn(
         chat_model,
         system=system,
         messages=history,
-        num_predict=_NUM_PREDICT,
+        num_predict=num_predict,
         timeout=_CHAT_TIMEOUT,
         temperature=0.4,
         usage_kind="chat",

@@ -28,8 +28,11 @@ from sqlmodel import Session
 from ... import context as app_context
 from ...context import get_engine
 from ...models import utcnow
+from .. import user_settings
+from ..auth.accounts import AuthUser
 from . import chat as ai_chat
-from .provider import llm_features_allowed
+from . import help_catalog, help_data, help_model
+from .provider import chat_connection, llm_features_allowed
 
 logger = logging.getLogger(__name__)
 
@@ -487,7 +490,66 @@ def clean_page(page: str | None) -> str:
     return " ".join((page or "").split())[:_PAGE_CHARS]
 
 
-def system_prompt(*, is_admin: bool, page: str = "") -> str:
+#: Words that make a question about restyling the app with CSS.
+_CSS_WORDS = frozenset(
+    {"css", "stylesheet", "style", "styles", "styling", "restyle", "selector"}
+)
+_CSS_DOC = "docs/settings/custom-css.md"
+#: Characters of the user's own stylesheet sent with a CSS question.
+_CSS_CHARS = 8_000
+#: Room for a reply with a stylesheet in it.
+_NUM_PREDICT = 2048
+
+
+def asks_css(question: str, history: list[dict[str, str]]) -> bool:
+    earlier = [m["content"] for m in history if m.get("role") == "user"][-1:]
+    words = set(_WORD.findall(" ".join([question, *earlier]).lower()))
+    return bool(words & _CSS_WORDS)
+
+
+def _token_rules(user: AuthUser) -> str:
+    rules = [
+        "Links and actions: write these tokens exactly as shown; the app turns "
+        "them into buttons. Only use ids listed in this prompt; never invent one, "
+        "and never write a plain URL for something a token can link.",
+        "- [[page:ID]] links to a page of the app.",
+        "- [[setting:ID]] links to a setting and highlights it there. Use it "
+        "every time you mention a setting.",
+        "- [[set:ID=VALUE]] shows an Apply button that changes a setting marked "
+        "change. Use it only when the user asks you to change something, with a "
+        "value from its list (true or false for a switch). Never for a setting "
+        "marked link only: link that one and say they can change it there.",
+        "- [[video:ID|Title]] links to a library video from the data below.",
+        "- [[playlist-new:Name|ID,ID]] offers to create a playlist with those "
+        "library videos; [[playlist-add:PLAYLIST_ID|ID,ID]] offers to add them "
+        "to one of the user's playlists.",
+    ]
+    if user.can("download"):
+        rules.append(
+            "- [[download:URL]] offers to download a link the user gave you "
+            "(only http or https links they wrote; never make one up)."
+        )
+    rules.append(
+        "- For custom CSS, put the rules to add in one ```css block. The app "
+        "offers a preview the user keeps or reverts, so do not tell them to "
+        "paste it. Use only the documented variables and hooks."
+    )
+    rules.append(
+        "Nothing happens until the user presses the button, so offer the action "
+        "and say what it will do; do not claim you already did it."
+    )
+    return "\n".join(rules)
+
+
+def system_prompt(
+    *,
+    user: AuthUser,
+    page: str = "",
+    model_note: str = "",
+    use_data: bool = False,
+    data_label: str = "",
+) -> str:
+    is_admin = user.is_admin
     version = (os.environ.get("HORDE_VERSION") or "").strip() or "a development build"
     role = (
         "The person asking is this server's administrator: they can change every "
@@ -497,28 +559,48 @@ def system_prompt(*, is_admin: bool, page: str = "") -> str:
         "server-wide settings (AI providers, System, accounts, environment "
         "variables) are the administrator's; say so when an answer needs them."
     )
+    if use_data:
+        data = (
+            "The user lets you read their downloads, library, watch history and "
+            f"playlists; what this question needs is below (sent to {data_label}). "
+            "Answer from it, and say so when it does not contain the answer."
+        )
+    else:
+        data = (
+            "You cannot see the user's downloads, library, history or playlists: "
+            "they have not turned on Use my data at the top of this chat. If a "
+            "question needs them, say so and that they can turn it on there."
+        )
     return (
         "You are the help assistant built into Horde, a self-hosted video library "
-        f"and downloader (this server runs {version}). Answer questions about how "
-        "to use, configure, run and troubleshoot Horde, and about how it works.\n"
+        f"and downloader (this server runs {version}). You answer questions about "
+        "how to use, configure, run and troubleshoot Horde and how it works; "
+        "link to and change settings; answer questions about the user's own "
+        "downloads, library, history and playlists; offer to download links and "
+        "build playlists; and write custom CSS to restyle the app.\n"
         f"{role}\n"
+        f"{data}\n"
         "Answer from the documentation and source excerpts below; they come from "
         "this server's own version.\n"
         "For a how-to question, give the exact steps in the app: name the page in "
         "the top bar or the menu and the controls by their labels in bold (for "
         "example: open **Download**, paste the link, pick a quality), as a short "
-        "numbered list when there is more than one step. If Horde has a built-in "
-        "way to do it (the Where to find things list and the excerpts say), give "
-        "that first; mention workarounds such as deleting and downloading again "
-        "only when there is none. Do not pad a how-to answer with settings or "
-        "background it does not need.\n"
+        "numbered list when there is more than one step, and link the page or "
+        "setting. If Horde has a built-in way to do it (the Where to find things "
+        "list and the excerpts say), give that first; mention workarounds such as "
+        "deleting and downloading again only when there is none. Do not pad a "
+        "how-to answer with settings or background it does not need.\n"
         "Bring in code, file paths and environment variables only when the "
         "question is technical or the docs do not cover it. For those answers, "
         "cite the files you used by path in backticks, e.g. "
         "`docs/guides/downloads.md`. If the excerpts do not contain the answer, "
         "say so plainly, never invent settings, buttons or variables, and point to "
-        f"the wiki (/wiki/) or the GitHub issues ({REPO_URL}/issues). Keep answers "
-        "short unless asked for detail, and use Markdown."
+        f"the wiki ([[page:wiki]]) or the GitHub issues ({REPO_URL}/issues). Keep "
+        "answers short unless asked for detail, and use Markdown.\n"
+        "If asked what you can do, answer with a short bulleted list of the "
+        "abilities in the first sentence of this prompt, one example each.\n"
+        + _token_rules(user)
+        + (f"\n{model_note}" if model_note else "")
         + (
             f'\nThe user is looking at: {page}. "This page" or "here" means '
             "that screen; use it when the question is vague, ignore it otherwise."
@@ -528,8 +610,23 @@ def system_prompt(*, is_admin: bool, page: str = "") -> str:
     )
 
 
-def format_context(primer: str, excerpts: list[Chunk]) -> str:
+def format_context(
+    primer: str,
+    excerpts: list[Chunk],
+    *,
+    pages: list[str] | None = None,
+    settings: list[str] | None = None,
+    extra: list[str] | None = None,
+) -> str:
     parts = []
+    if pages:
+        parts.append("Pages ([[page:ID]]):\n" + "\n".join(pages))
+    if settings:
+        parts.append(
+            "Settings that may fit this question ([[setting:ID]], "
+            "[[set:ID=VALUE]] where marked change):\n" + "\n".join(settings)
+        )
+    parts.extend(extra or [])
     if primer:
         parts.append(f"Feature overview (docs/features.md):\n{primer}")
     for chunk in excerpts:
@@ -544,6 +641,20 @@ def format_context(primer: str, excerpts: list[Chunk]) -> str:
     return "\n\n".join(parts)
 
 
+def css_reference(root: Path) -> str:
+    """The custom CSS page's variables, hooks and examples."""
+    try:
+        text = (root / _CSS_DOC).read_text(encoding="utf-8")
+    except OSError:
+        logger.warning("help chat: cannot read %s", _CSS_DOC, exc_info=True)
+        return ""
+    start = text.find("## CSS variables")
+    end = text.find("## Saved themes")
+    if start < 0:
+        return ""
+    return text[start : end if end > start else None].strip()
+
+
 class _HelpChat:
     """``ai_chat.ChatTarget`` whose turns live in the client, not the database."""
 
@@ -551,11 +662,17 @@ class _HelpChat:
     usage_video_id: int | None = None
 
     def __init__(
-        self, history: list[dict[str, str]], *, is_admin: bool, page: str = ""
+        self,
+        history: list[dict[str, str]],
+        *,
+        user: AuthUser,
+        page: str = "",
+        use_data: bool = False,
     ) -> None:
         self._history = trim_history(history)
-        self._is_admin = is_admin
+        self._user = user
         self._page = page
+        self._use_data = use_data
         self.sources: list[dict[str, str]] | None = None
 
     def validate(self, session: Session, message: str) -> None:
@@ -570,6 +687,7 @@ class _HelpChat:
         # Build now, while a failure can still be reported as an error event.
         try:
             help_index().ensure_built()
+            help_catalog.load()
         except Exception as exc:
             logger.warning("help index could not be built", exc_info=True)
             raise ai_chat.ChatError(
@@ -597,6 +715,10 @@ class _HelpChat:
     def history(self, session: Session) -> list[dict[str, str]]:
         return self._history
 
+    def _previous_question(self) -> str:
+        earlier = [m["content"] for m in self._history if m.get("role") == "user"]
+        return earlier[-1] if earlier else ""
+
     def context(self, session: Session, question: str) -> str | None:
         index = help_index()
         excerpts = select_excerpts(index, question, self._history, self._page)
@@ -605,7 +727,39 @@ class _HelpChat:
         for chunk in excerpts:
             seen.setdefault(chunk.path, chunk.source(ref))
         self.sources = list(seen.values())
-        return format_context(index.primer, excerpts)
+
+        catalog = help_catalog.for_user(self._user)
+        query = query_terms(question, self._history, self._page)
+        settings = help_catalog.best_settings(catalog, query)
+        extra: list[str] = []
+        if asks_css(question, self._history):
+            reference = css_reference(index.root)
+            if reference:
+                extra.append(f"Custom CSS reference ({_CSS_DOC}):\n{reference}")
+            ui = user_settings.effective_ui(session, self._user.id)
+            css = str(ui.get("custom_css") or "").strip()
+            on = bool(ui.get("custom_css_enabled"))
+            extra.append(
+                f"The user's custom CSS ({'on' if on else 'off'}):\n"
+                + (f"```css\n{css[:_CSS_CHARS]}\n```" if css else "(empty)")
+            )
+        if self._use_data:
+            data = help_data.gather(
+                session,
+                self._user,
+                question,
+                previous=self._previous_question(),
+                page=self._page,
+            )
+            if data:
+                extra.append(f"The user's data:\n{data}")
+        return format_context(
+            index.primer,
+            excerpts,
+            pages=[help_catalog.page_line(p) for p in catalog.pages],
+            settings=[help_catalog.setting_line(s) for s in settings],
+            extra=extra,
+        )
 
     def exists(self, session: Session) -> bool:
         return True
@@ -614,27 +768,40 @@ class _HelpChat:
 def stream_help_events(
     message: str,
     history: list[dict[str, str]],
-    user_id: int,
+    user: AuthUser,
     *,
-    is_admin: bool,
     page: str | None = None,
+    use_data: bool = False,
     authorized: ai_chat.Authorized | None = None,
 ) -> Generator[str]:
     """SSE events for one help turn; a ``sources`` event precedes the reply.
 
-    ``page`` is the client's description of the screen the user is on.
+    ``page`` is the client's description of the screen the user is on;
+    ``use_data`` lets the turn read the user's own library data.
     """
     where = clean_page(page)
-    target = _HelpChat(history, is_admin=is_admin, page=where)
+    target = _HelpChat(history, user=user, page=where, use_data=use_data)
     sent_sources = False
+    model = help_model.assistant_model() if llm_features_allowed()[0] else ""
+    prompt = system_prompt(
+        user=user,
+        page=where,
+        model_note=help_model.prompt_note(model, is_admin=user.is_admin)
+        if model
+        else "",
+        use_data=use_data,
+        data_label=help_model.provider_label(chat_connection(), is_admin=user.is_admin),
+    )
     with Session(get_engine()) as session:
         for event in ai_chat.run_chat_turn(
             session,
             target,
             message,
-            user_id,
+            user.id,
             authorized,
-            system_prompt=system_prompt(is_admin=is_admin, page=where),
+            system_prompt=prompt,
+            model=model or None,
+            num_predict=_NUM_PREDICT,
         ):
             # ``context`` has run once the turn reaches the model.
             if target.sources is not None and not sent_sources:
