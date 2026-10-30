@@ -42,6 +42,7 @@ import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
 import RequirePermission from "./components/auth/RequirePermission";
+import CustomCssOffNotice from "./components/CustomCssOffNotice";
 import { AuthGate, AuthProvider, useAuth } from "./context/AuthContext";
 import { createQueryClient } from "./queries/client";
 
@@ -101,6 +102,7 @@ function AppRoutes() {
       {/* A render error stays inside <main> so the nav still works, and
           resets on navigation. Lazy routes suspend here until their chunk
           arrives (a failed chunk fetch throws into the boundary). */}
+      <CustomCssOffNotice />
       <ErrorBoundary scope="route" resetKey={location.key}>
         <Suspense fallback={<LoadingIndicator label="Loading" />}>
           <Routes>
