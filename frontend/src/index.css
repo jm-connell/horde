@@ -1056,12 +1056,14 @@ button,
   }
 }
 
-/* Installed app (home screen / desktop PWA): drop the browser behaviours a
-   native app does not have. A browser tab keeps them. The page does not
+/* Installed app on a touch screen (home screen app): drop the browser
+   behaviours a native app does not have. A browser tab and the desktop app
+   (trackpad back swipe, text selection) keep them. The page does not
    rubber-band or pull to refresh past its ends, pinch does not zoom the
-   whole UI (Settings has a text size), and a long press on a link, image or
-   the nav selects nothing and opens no link preview. */
-@media (display-mode: standalone) {
+   whole UI (Settings has a text size), and a long press on a thumbnail or
+   the nav selects nothing and opens no preview. Links in text stay
+   selectable so copied descriptions keep their URLs. */
+@media (display-mode: standalone) and (pointer: coarse) {
   html,
   body {
     overscroll-behavior: none;
@@ -1071,7 +1073,6 @@ button,
     touch-action: pan-x pan-y;
   }
 
-  a,
   img,
   header,
   nav {

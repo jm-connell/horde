@@ -29,12 +29,14 @@ The installed app behaves more like a native app than a browser tab:
   the menu at the top right.
 - On iPhone and iPad, swipe right from the left edge of the screen to go
   back, since apps added to the Home Screen have no back button.
-- The page doesn't bounce or pull to refresh past its ends, pinching doesn't
+- On a phone or tablet, the page doesn't bounce or pull to refresh past its
+  ends (on Android, close and reopen the app to reload it), pinching doesn't
   zoom the whole interface (use **Settings → Appearance → Font size** for larger
-  text), and long-pressing a link or thumbnail doesn't select text or open a
-  link preview.
+  text), and long-pressing a thumbnail or the menu doesn't select text or
+  open a preview.
 
-A browser tab keeps the browser's usual behaviour.
+A browser tab keeps the browser's usual behaviour, and so does the installed
+desktop app apart from its own window.
 
 After the first visit, the UI (scripts, styles, icons) is cached by a service
 worker. Later launches don't re-download it, even on a slow connection;
