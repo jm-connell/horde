@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { isYoutubeChannelUrl } from "../../components/channelFeedYoutubeSearch";
 import { useAuth } from "../../context/AuthContext";
-import { useChannelFollow } from "../../queries/follows";
+import { useChannelAvatar, useChannelFollow } from "../../queries/follows";
 import type { ChannelAutodownload, ChannelStat } from "../../types";
 import { formatCompactCount, joinDotList } from "../../utils";
 import {
@@ -18,7 +18,8 @@ import {
 
 /**
  * A channel page's header: who the channel is, the primary actions (Follow,
- * Download…, Channel settings) and chips that sum up its active policies.
+ * Download…, Channel settings) beside how much of it is indexed, and chips
+ * that sum up its active policies.
  */
 export default function ChannelHeader({
   channel,
@@ -42,40 +43,36 @@ export default function ChannelHeader({
   const count = stat?.count ?? 0;
   const meta = joinDotList([
     handle,
-    `${count} video${count === 1 ? "" : "s"} in library`,
+    `${count} video${count === 1 ? "" : "s"} downloaded`,
     stat?.subscriber_count != null
       ? `${formatCompactCount(stat.subscriber_count)} subscribers`
       : null,
   ]);
 
-  const chips: {
-    section: ChannelSettingsSection;
-    label: string;
-    tone: "accent" | "muted" | "error";
-  }[] = [];
+  const chips: Chip[] = [];
   const autoLabel = autodownloadChipLabel(autodownload);
   if (autoLabel)
     chips.push({ section: "autodownload", label: autoLabel, tone: "accent" });
   const retentionLabel = retentionChipLabel(stat?.retention);
   if (retentionLabel)
     chips.push({ section: "retention", label: retentionLabel, tone: "accent" });
-  if (youtube && catalogProgress)
-    chips.push({
-      section: "manage",
-      label: formatCatalogProgress(catalogProgress),
-      tone: catalogProgress.status === "error" ? "error" : "muted",
-    });
+  const indexChip: Chip | null =
+    youtube && catalogProgress
+      ? {
+          section: "manage",
+          label: formatCatalogProgress(catalogProgress),
+          tone: catalogProgress.status === "error" ? "error" : "muted",
+        }
+      : null;
 
   return (
     <div className="mb-4">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
         <div className="flex min-w-0 flex-1 basis-60 items-center gap-3">
-          <span
-            aria-hidden="true"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-accent/15 text-lg font-semibold text-accent"
-          >
-            {channel.trim().charAt(0).toUpperCase() || "?"}
-          </span>
+          <ChannelAvatar
+            channel={channel}
+            channelUrl={youtube ? channelUrl : null}
+          />
           <div className="min-w-0">
             <h1 className="truncate text-2xl font-bold text-gray-100">
               {channel}
@@ -84,6 +81,12 @@ export default function ChannelHeader({
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {indexChip && (
+            <ChipButton
+              chip={indexChip}
+              onClick={() => onOpenSettings(indexChip.section)}
+            />
+          )}
           {youtube && (
             <FollowButton channel={channel} channelUrl={channelUrl} />
           )}
@@ -111,25 +114,79 @@ export default function ChannelHeader({
         <ul aria-label="Channel status" className="mt-3 flex flex-wrap gap-2">
           {chips.map((chip) => (
             <li key={chip.section}>
-              <button
-                type="button"
+              <ChipButton
+                chip={chip}
                 onClick={() => onOpenSettings(chip.section)}
-                title="Open in channel settings"
-                className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-accent ${
-                  chip.tone === "accent"
-                    ? "border-accent/40 bg-accent/10 text-accent"
-                    : chip.tone === "error"
-                      ? "border-danger/40 bg-danger/10 text-danger"
-                      : "border-ink-700 bg-ink-900 text-muted hover:text-gray-200"
-                }`}
-              >
-                {chip.label}
-              </button>
+              />
             </li>
           ))}
         </ul>
       )}
     </div>
+  );
+}
+
+type Chip = {
+  section: ChannelSettingsSection;
+  label: string;
+  tone: "accent" | "muted" | "error";
+};
+
+function ChipButton({ chip, onClick }: { chip: Chip; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Open in channel settings"
+      className={`rounded-full border px-2.5 py-0.5 text-xs transition-colors hover:border-accent ${
+        chip.tone === "accent"
+          ? "border-accent/40 bg-accent/10 text-accent"
+          : chip.tone === "error"
+            ? "border-danger/40 bg-danger/10 text-danger"
+            : "border-ink-700 bg-ink-900 text-muted hover:text-gray-200"
+      }`}
+    >
+      {chip.label}
+    </button>
+  );
+}
+
+/**
+ * The channel's YouTube profile picture, or its first letter when it has none
+ * (or it cannot load). Decorative: the name is the heading beside it.
+ */
+function ChannelAvatar({
+  channel,
+  channelUrl,
+}: {
+  channel: string;
+  /** Only for a YouTube channel. */
+  channelUrl: string | null;
+}) {
+  const src = useChannelAvatar(channelUrl);
+  const [failed, setFailed] = useState<string | null>(null);
+  const box =
+    "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full";
+  if (src && failed !== src) {
+    return (
+      <img
+        src={src}
+        alt=""
+        aria-hidden="true"
+        draggable={false}
+        referrerPolicy="no-referrer"
+        onError={() => setFailed(src)}
+        className={`${box} bg-ink-800 object-cover`}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden="true"
+      className={`${box} bg-accent/15 text-lg font-semibold text-accent`}
+    >
+      {channel.trim().charAt(0).toUpperCase() || "?"}
+    </span>
   );
 }
 

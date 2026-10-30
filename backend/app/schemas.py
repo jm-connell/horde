@@ -479,6 +479,12 @@ class ChannelStat(BaseModel):
     retention: ChannelRetentionSummary | None = None
 
 
+class ChannelAvatarRead(BaseModel):
+    """A channel's profile picture on YouTube's image host (null when unknown)."""
+
+    url: str | None = None
+
+
 class ChannelSearchHit(BaseModel):
     name: str
     url: str

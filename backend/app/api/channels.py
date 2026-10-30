@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlmodel import Session
+from starlette.concurrency import run_in_threadpool
 
+from .. import e2e_mode
 from ..auth import current_user, require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
@@ -16,6 +18,7 @@ from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
     ChannelAutodownloadUpdate,
+    ChannelAvatarRead,
     ChannelCatalogIndexRequest,
     ChannelCatalogIndexResult,
     ChannelCatalogStatusResponse,
@@ -38,9 +41,11 @@ from ..schemas import (
 from ..services import app_settings as app_settings_svc
 from ..services import (
     channel_autodownload,
+    channel_avatar,
     channel_catalog,
     channel_retention,
     feed_meta_cache,
+    follows,
     library,
     media_sidecars,
     trash,
@@ -88,6 +93,30 @@ def list_channels(
         )
         for row in library.channel_stats(session, sort=sort, order=order)
     ]
+
+
+@router.get("/channels/avatar", response_model=ChannelAvatarRead)
+async def get_channel_avatar(
+    request: Request,
+    url: str = Query(..., max_length=2048, description="The channel's URL"),
+):
+    """The channel's profile picture, read from its YouTube page and remembered."""
+    channel_url = follows.normalize_channel_url(url)
+    if not channel_url or not ytdlp_extract.is_youtube_url(channel_url):
+        raise CodedHTTPException(400, "Not a YouTube channel URL", "invalid_url")
+    avatars = channel_avatar.cache()
+    known, avatar = avatars.get(channel_url)
+    if not known and not e2e_mode.enabled():
+        try:
+            async with request.app.state.ytdlp_slots.slot():
+                found = await run_in_threadpool(channel_avatar.read_avatar, channel_url)
+        except channel_avatar.AvatarUnreadable:
+            # Keep what was known (or remember "none") and try again later.
+            logger.debug("could not read the channel page of %s", url, exc_info=True)
+            found = avatar
+        avatar = found
+        avatars.put(channel_url, avatar)
+    return ChannelAvatarRead(url=avatar)
 
 
 def _retention_summary(row: ChannelRetention | None) -> ChannelRetentionSummary | None:

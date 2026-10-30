@@ -47,6 +47,7 @@ export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
 export type ChannelLive = S["ChannelLiveResponse"];
+export type ChannelAvatar = S["ChannelAvatarRead"];
 export type StorageStats = S["StorageStats"];
 /** A deleted video in the trash. `reason` says why when a rule (not a person) deleted it. */
 export type TrashItem = S["TrashItemRead"];

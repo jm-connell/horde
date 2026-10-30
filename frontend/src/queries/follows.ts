@@ -87,6 +87,17 @@ export function useLiveNow({ enabled }: { enabled: boolean }) {
   return { ...query, live: query.data?.items ?? NO_LIVE };
 }
 
+/** A YouTube channel's profile picture URL (null when it has none or is not known). */
+export function useChannelAvatar(url: string | null) {
+  const query = useQuery({
+    queryKey: queryKeys.channels.avatar(url ?? ""),
+    queryFn: ({ signal }) => api.getChannelAvatar(url ?? "", { signal }),
+    enabled: Boolean(url),
+    staleTime: Infinity,
+  });
+  return query.data?.url ?? null;
+}
+
 /**
  * The broadcast a channel is live with right now, as a feed entry (null when
  * it is not live). Re-checked every two minutes while the page is open.
