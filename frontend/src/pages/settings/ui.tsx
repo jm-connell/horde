@@ -38,15 +38,21 @@ export function SettingRow({
   description,
   control,
   hidden = false,
+  anchor,
 }: {
   title: string;
   description?: string;
   control: React.ReactNode;
   hidden?: boolean;
+  /** `data-setting` id that `?find=` links (and Ask about Horde) jump to. */
+  anchor?: string;
 }) {
   if (hidden) return null;
   return (
-    <label className="flex items-center justify-between gap-4">
+    <label
+      data-setting={anchor}
+      className="flex items-center justify-between gap-4"
+    >
       <span>
         <span className="block text-sm font-medium text-gray-200">{title}</span>
         {description && (
@@ -105,6 +111,7 @@ export function Section({
   children,
   first = false,
   hidden = false,
+  anchor,
 }: {
   title?: string;
   description?: string;
@@ -113,6 +120,8 @@ export function Section({
   children?: React.ReactNode;
   first?: boolean;
   hidden?: boolean;
+  /** `data-setting` id that `?find=` links (and Ask about Horde) jump to. */
+  anchor?: string;
 }) {
   if (hidden) return null;
   const heading = title ? (
@@ -125,7 +134,10 @@ export function Section({
     </h2>
   ) : null;
   return (
-    <div className={first ? undefined : "border-t border-ink-700 pt-6"}>
+    <div
+      data-setting={anchor}
+      className={first ? undefined : "border-t border-ink-700 pt-6"}
+    >
       {action ? (
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           {heading}

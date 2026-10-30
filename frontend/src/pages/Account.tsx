@@ -1,4 +1,5 @@
 import { useAuth } from "../context/AuthContext";
+import { useSettingFind } from "../hooks/useSettingFind";
 import DevicesSection from "./account/DevicesSection";
 import DownloadsSection from "./account/DownloadsSection";
 import PasswordSection from "./account/PasswordSection";
@@ -13,6 +14,7 @@ import UsersSection from "./account/UsersSection";
  */
 export default function Account() {
   const { isAdmin } = useAuth();
+  useSettingFind();
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="mb-6 text-2xl font-bold text-gray-100">

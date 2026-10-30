@@ -69,6 +69,7 @@ export default function SecuritySection({ wiki }: { wiki: boolean }) {
 
   return (
     <Section
+      anchor="security"
       title="Security"
       description="Sign-in safety for a server other people can reach. Keeping Horde on your own network is simplest; to put it on the internet, follow the exposure guide."
       hidden={

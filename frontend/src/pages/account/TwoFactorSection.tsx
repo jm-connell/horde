@@ -41,7 +41,11 @@ export default function TwoFactorSection() {
   };
 
   return (
-    <section aria-labelledby="two-factor-heading" data-horde="two-factor">
+    <section
+      aria-labelledby="two-factor-heading"
+      data-setting="two-factor"
+      data-horde="two-factor"
+    >
       <h2
         id="two-factor-heading"
         className="mb-1 text-xs font-semibold uppercase tracking-wider text-gray-400"

@@ -48,6 +48,7 @@ export default function SystemTab() {
       <StorageSection storage={storage} />
 
       <Section
+        anchor="resources"
         title="Resources"
         hidden={
           !match(
@@ -75,6 +76,7 @@ export default function SystemTab() {
       <StatusSection system={system} />
 
       <Section
+        anchor="background-activity"
         title="Background activity"
         description="Live and recent jobs — ffmpeg, downloads, AI, catalog indexing, folder scans — with why each started. Refresh catalogs indexes new channels and checks ready ones for new uploads; Full reindex re-walks every channel."
         hidden={
@@ -354,6 +356,7 @@ export default function SystemTab() {
       ) : null}
 
       <Section
+        anchor="reset"
         title="Reset Horde"
         hidden={!match("reset", "factory", "wipe", "erase", "setup wizard")}
       >

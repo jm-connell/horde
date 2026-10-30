@@ -74,7 +74,7 @@ export default function UsersSection() {
 
   return (
     <div data-horde="users-section" className="space-y-6">
-      <section aria-labelledby="users-heading">
+      <section aria-labelledby="users-heading" data-setting="users">
         <div className="mb-1 flex flex-wrap items-center gap-2">
           <h2
             id="users-heading"

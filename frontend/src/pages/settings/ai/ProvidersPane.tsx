@@ -20,6 +20,7 @@ export default function ProvidersPane() {
   return (
     <>
       <Section
+        anchor="ai-general"
         first
         title="General"
         description="How much work AI jobs do, whatever the provider."

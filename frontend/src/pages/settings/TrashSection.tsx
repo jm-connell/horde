@@ -179,7 +179,11 @@ export default function TrashSection() {
   const count = summary?.count ?? 0;
 
   return (
-    <Section title="Trash" hidden={!allowed || !match(...TRASH_TERMS)}>
+    <Section
+      anchor="trash"
+      title="Trash"
+      hidden={!allowed || !match(...TRASH_TERMS)}
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p
           ref={summaryRef}

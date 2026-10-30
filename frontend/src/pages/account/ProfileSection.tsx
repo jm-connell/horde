@@ -36,7 +36,7 @@ export default function ProfileSection() {
   const hasPicture = user.avatar_version != null;
 
   return (
-    <section aria-labelledby="profile-heading">
+    <section aria-labelledby="profile-heading" data-setting="profile">
       <h2
         id="profile-heading"
         className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"
