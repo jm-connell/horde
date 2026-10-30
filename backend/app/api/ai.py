@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..context import get_session
+from ..context import AppContext, get_ctx, get_session
 from ..models import require_id
 from ..openapi_responses import EVENT_STREAM, RAW
 from ..response_schemas import (
@@ -36,6 +36,7 @@ from ..services.ai.provider import (
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import feedback
 from ..services.discovery.history import library_key
+from ..services.live import picks as live_picks
 from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
@@ -542,12 +543,15 @@ def ai_recommendations(
         description="Mix in indexed channels' uploads that are not downloaded.",
     ),
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
     """The home page's "For you" shelf, or one category's videos.
 
     "For you" works without AI (ranked from the watch history alone); the
-    category shelves need it.
+    category shelves need it. With ``include_streams``, the first page also
+    carries followed channels' live broadcasts (``reason: live``), which the
+    client leaves out of its ``offset``.
     """
     ai_ready = build_status().ready
     if category:
@@ -606,6 +610,13 @@ def ai_recommendations(
                     ),
                 }
             )
+    if include_streams and offset == 0:
+        items = live_picks.merge(
+            items,
+            live_picks.live_picks(session, ctx.live.directory, user.id),
+            lambda p: {"reason": "live", "stream": live_picks.feed_entry(p)},
+            lambda i: i["stream"].id if i.get("stream") else None,
+        )
     feedback.record_shown(
         session,
         user.id,

@@ -2660,6 +2660,24 @@
         "title": "ChannelAutodownloadUpdate",
         "type": "object"
       },
+      "ChannelAvatarRead": {
+        "description": "A channel's profile picture on YouTube's image host (null when unknown).",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "ChannelAvatarRead",
+        "type": "object"
+      },
       "ChannelCatalogIndexRequest": {
         "properties": {
           "channel": {
@@ -8224,7 +8242,10 @@
           "reason": {
             "anyOf": [
               {
-                "const": "throwback",
+                "enum": [
+                  "throwback",
+                  "live"
+                ],
                 "type": "string"
               },
               {
@@ -12138,7 +12159,7 @@
     },
     "/api/ai/recommendations": {
       "get": {
-        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it.",
+        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it. With ``include_streams``, the first page also\ncarries followed channels' live broadcasts (``reason: live``), which the\nclient leaves out of its ``offset``.",
         "operationId": "ai_recommendations_api_ai_recommendations_get",
         "parameters": [
           {
@@ -13885,6 +13906,62 @@
         ]
       }
     },
+    "/api/channels/avatar": {
+      "get": {
+        "description": "The channel's profile picture, read from its YouTube page and remembered.",
+        "operationId": "get_channel_avatar_api_channels_avatar_get",
+        "parameters": [
+          {
+            "description": "The channel's URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "description": "The channel's URL",
+              "maxLength": 2048,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAvatarRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Channel Avatar",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/api/channels/catalog/index": {
       "post": {
         "description": "Manually queue catalog indexing for one channel (or all library channels).",
@@ -14839,7 +14916,7 @@
     },
     "/api/discover/feed": {
       "get": {
-        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). Each page counts as shown for its videos.",
+        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos.",
         "operationId": "discover_feed_api_discover_feed_get",
         "parameters": [
           {

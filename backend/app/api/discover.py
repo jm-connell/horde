@@ -30,6 +30,7 @@ from ..services.auth.accounts import AuthUser
 from ..services.discovery import feedback, gather, history, suggest
 from ..services.discovery.candidates import Candidate
 from ..services.discovery.feed import ranked_feed
+from ..services.live import picks as live_picks
 from ..services.pagination import (
     SEED_RANGE,
     InvalidCursor,
@@ -63,6 +64,22 @@ def _entry(c: Candidate) -> ChannelFeedEntry:
         channel=c.channel or None,
         channel_url=c.source_channel_url,
         live_status=c.live_status,
+    )
+
+
+def _live_item(pick: live_picks.LivePick) -> DiscoverItemRead:
+    channel = pick.channel_name or "this channel"
+    return DiscoverItemRead(
+        key=pick.broadcast.video_id,
+        stream=live_picks.feed_entry(pick),
+        reason=DiscoverReasonRead(
+            kind="live",
+            text="Live now",
+            detail=f"Live now on {channel}, which you watched lately"
+            if pick.recent
+            else f"Live now on {channel}, which you follow",
+        ),
+        source="channels",
     )
 
 
@@ -110,7 +127,9 @@ def discover_feed(
     """One page of the Recommended+ feed.
 
     The first page also tells the gatherer this user is active (it starts at once
-    the first time). Each page counts as shown for its videos.
+    the first time). It also carries followed channels' live broadcasts, the
+    ones from channels watched lately first. Each page counts as shown for its
+    videos.
     """
     try:
         page = parse_cursor(
@@ -166,6 +185,13 @@ def discover_feed(
                     else "new",
                 )
             )
+    if not cursor:
+        items = live_picks.merge(
+            items,
+            live_picks.live_picks(session, ctx.live.directory, user.id),
+            _live_item,
+            lambda i: i.key,
+        )
     feedback.record_shown(session, user.id, (i.key for i in items))
     return DiscoverFeedRead(
         items=items,

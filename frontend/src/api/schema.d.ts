@@ -232,7 +232,9 @@ export interface paths {
          * @description The home page's "For you" shelf, or one category's videos.
          *
          *     "For you" works without AI (ranked from the watch history alone); the
-         *     category shelves need it.
+         *     category shelves need it. With ``include_streams``, the first page also
+         *     carries followed channels' live broadcasts (``reason: live``), which the
+         *     client leaves out of its ``offset``.
          */
         get: operations["ai_recommendations_api_ai_recommendations_get"];
         put?: never;
@@ -828,6 +830,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Channel Avatar
+         * @description The channel's profile picture, read from its YouTube page and remembered.
+         */
+        get: operations["get_channel_avatar_api_channels_avatar_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/channels/catalog/index": {
         parameters: {
             query?: never;
@@ -1106,7 +1128,9 @@ export interface paths {
          * @description One page of the Recommended+ feed.
          *
          *     The first page also tells the gatherer this user is active (it starts at once
-         *     the first time). Each page counts as shown for its videos.
+         *     the first time). It also carries followed channels' live broadcasts, the
+         *     ones from channels watched lately first. Each page counts as shown for its
+         *     videos.
          */
         get: operations["discover_feed_api_discover_feed_get"];
         put?: never;
@@ -4677,6 +4701,14 @@ export interface components {
             /** Url */
             url?: string | null;
         };
+        /**
+         * ChannelAvatarRead
+         * @description A channel's profile picture on YouTube's image host (null when unknown).
+         */
+        ChannelAvatarRead: {
+            /** Url */
+            url?: string | null;
+        };
         /** ChannelCatalogIndexRequest */
         ChannelCatalogIndexRequest: {
             /** Channel */
@@ -6615,7 +6647,7 @@ export interface components {
          */
         RecommendationItemRead: {
             /** Reason */
-            reason?: "throwback" | null;
+            reason?: ("throwback" | "live") | null;
             stream?: components["schemas"]["ChannelFeedEntry"] | null;
             video?: components["schemas"]["VideoRead"] | null;
         };
@@ -9595,6 +9627,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelAutodownloadRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_channel_avatar_api_channels_avatar_get: {
+        parameters: {
+            query: {
+                /** @description The channel's URL */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChannelAvatarRead"];
                 };
             };
             /** @description Validation error */
