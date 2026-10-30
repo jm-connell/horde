@@ -8,6 +8,17 @@ const DRAG_MARGIN = 8;
 
 export type MiniPos = { left: number; top: number };
 
+/** Height of the installed app's bottom tab bar (`BottomTabBar`), which
+ *  layers fixed to the bottom of the screen sit above; 0 without one. */
+const BOTTOM_BAR = "var(--horde-bottom-bar, 0px)";
+
+function bottomBarPx(): number {
+  const value = getComputedStyle(document.documentElement).getPropertyValue(
+    "--horde-bottom-bar"
+  );
+  return parseFloat(value) || 0;
+}
+
 export type MiniHostInsets = {
   left: string;
   top: string;
@@ -29,7 +40,7 @@ export function clampMiniPos(
   vh?: number
 ): MiniPos {
   const viewW = vw ?? window.innerWidth;
-  const viewH = vh ?? window.innerHeight;
+  const viewH = vh ?? window.innerHeight - bottomBarPx();
   const maxLeft = Math.max(DRAG_MARGIN, viewW - width - DRAG_MARGIN);
   const maxTop = Math.max(DRAG_MARGIN, viewH - height - DRAG_MARGIN);
   return {
@@ -70,7 +81,7 @@ export function miniPlayerHostInsets(
     left: "auto",
     top: "auto",
     right: `${margin}px`,
-    bottom: `${margin}px`,
+    bottom: `calc(${margin}px + ${BOTTOM_BAR})`,
   };
 }
 
@@ -110,10 +121,10 @@ export function avoidMiniPlayerStyle(
   };
 
   if (!rect) {
-    const bottom = opts?.queueBottomLiftPx
+    const lift = opts?.queueBottomLiftPx
       ? Math.max(GAP, opts.queueBottomLiftPx)
       : GAP;
-    return { ...base, right: GAP, bottom };
+    return { ...base, right: GAP, bottom: `calc(${lift}px + ${BOTTOM_BAR})` };
   }
 
   const { vw, vh } = viewportSize(opts);
@@ -149,7 +160,7 @@ export function avoidMiniPlayerStyle(
   return {
     ...base,
     ...(miniOnRight ? { left: GAP } : { right: GAP }),
-    bottom: GAP,
+    bottom: `calc(${GAP}px + ${BOTTOM_BAR})`,
   };
 }
 
@@ -160,7 +171,7 @@ export function queueDockStyle(
 ): CSSProperties {
   const base: CSSProperties = {
     position: "fixed",
-    bottom: 0,
+    bottom: BOTTOM_BAR,
     zIndex: 30,
     width: "26rem",
     padding: "0.75rem",

@@ -26,7 +26,7 @@ export default function TakeoutImportDialog({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`max-h-[90vh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
+        className={`max-h-[90dvh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2 id={titleId} className="text-lg font-semibold text-gray-100">

@@ -15,7 +15,7 @@ export function QueueSidePanel() {
   return (
     <div className="pointer-events-none fixed inset-y-0 right-0 z-40 hidden w-104 p-3 pt-20 lg:block">
       <div className="pointer-events-auto ml-auto flex max-h-full w-96 flex-col overflow-hidden">
-        <PlaybackQueue className="max-h-[calc(100vh-6rem)] overflow-y-auto shadow-2xl" />
+        <PlaybackQueue className="max-h-[calc(100dvh-6rem)] overflow-y-auto shadow-2xl" />
       </div>
     </div>
   );

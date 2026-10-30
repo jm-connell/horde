@@ -72,7 +72,7 @@ export default function LibraryBulkBar({
 
   return (
     <>
-      <div className="ui-panel ui-panel-legible fixed inset-x-0 bottom-0 z-40 border border-ink-700 px-4 py-3 transition-[opacity,translate] duration-200 ease-fluid starting:translate-y-full starting:opacity-0 motion-reduce:starting:translate-y-0">
+      <div className="ui-panel ui-panel-legible fixed inset-x-0 bottom-0 z-40 border border-ink-700 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] transition-[opacity,translate] duration-200 ease-fluid starting:translate-y-full starting:opacity-0 motion-reduce:starting:translate-y-0">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center gap-3">
           <span className="text-sm font-medium text-gray-300">
             {selectedCount} selected
