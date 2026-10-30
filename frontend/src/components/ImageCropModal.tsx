@@ -365,7 +365,7 @@ export default function ImageCropModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="image-crop-title"
-        className={`ui-panel ui-panel-legible max-h-[90vh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6 ${DIALOG_PANEL_ENTER}`}
+        className={`ui-panel ui-panel-legible max-h-[90dvh] w-full max-w-xl overflow-y-auto outline-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 shadow-2xl ring-1 ring-ink-700 sm:p-6 ${DIALOG_PANEL_ENTER}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
