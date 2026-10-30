@@ -112,6 +112,8 @@
     {"id": "pause-background", "label": "Pause background animation during playback", "tab": "appearance", "anchor": "background", "chat": "change", "scope": "personal",
      "key": "pauseBackgroundWhileWatching", "type": "bool",
      "about": "Stop the background effect while a video plays", "keywords": "watching battery"},
+    {"id": "tab-bar", "label": "Tab bar", "tab": "appearance", "chat": "link",
+     "about": "Which tabs, and in what order, the installed app's floating bar shows on a phone (up to 5)", "keywords": "tabs bottom bar island home screen phone app pwa"},
     {"id": "custom-css", "label": "Custom CSS", "tab": "appearance", "chat": "change", "scope": "personal",
      "key": "customCssEnabled", "type": "bool",
      "about": "Your own stylesheet on top of the theme. The CSS itself is offered as a preview you keep or revert", "keywords": "css stylesheet style"},
