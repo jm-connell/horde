@@ -38,8 +38,23 @@ All notable changes to Horde are documented here. The format follows
 - A live stream you left (screen off, another app) reconnects when you come
   back a minute or more later and plays on from where you left it in the live
   timeline, as if paused there.
+- **The installed app feels like a phone app.** On a phone, Home, Playlists,
+  History, Download (and Offline when you have downloads) are tabs along the
+  bottom of the screen; tap the current tab to jump to the top. The bar hides
+  while the keyboard is up, and the mini player, queue and toasts sit above
+  it. Everything else stays in the menu at the top right.
+- In the app added to the iPhone or iPad Home Screen, swipe right from the
+  left edge to go back.
 
 ### Changed
+
+- In the installed app on a phone or tablet, the page no longer bounces or
+  pulls to refresh past its ends, pinching no longer zooms the whole interface
+  (use Settings → Appearance → Font size), and long-pressing a thumbnail or the
+  menu no longer selects text or opens a link preview. A browser tab and the
+  installed desktop app keep the browser's usual behaviour.
+- The installed app has proper icons on Android, including one the launcher
+  can shape to match its other icons.
 
 - New search results start at the top of the page instead of wherever the
   page was scrolled.
@@ -63,6 +78,9 @@ All notable changes to Horde are documented here. The format follows
 
 - Deleting the video that is playing stops it at once, instead of it playing
   on in the mini player.
+- On iPhone, the bulk-select bar's buttons no longer sit under the home
+  indicator, and Safari's toolbar no longer pushes the bottom of dialogs and
+  the queue off screen.
 - On iPhone and iPad the page under the top bar now keeps its place when iOS
   changes the status-bar area after load (opening the installed app, rotating,
   leaving fullscreen): no more empty band above the video on iPhone, and the
