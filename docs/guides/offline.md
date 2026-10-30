@@ -23,10 +23,10 @@ share a video link straight to Horde's Download page; see
 
 The installed app behaves more like a native app than a browser tab:
 
-- On a phone, the main pages (Home, Playlists, History, Download, and
-  Offline when you have downloads) are tabs along the bottom of the screen.
-  Tap the current tab to jump back to the top. Everything else is still in
-  the menu at the top right.
+- On a phone, a floating bar at the bottom of the screen holds Home, Search,
+  Download and Chat (Ask about Horde). Tap the current tab to jump back to
+  the top. Choose the tabs and their order in **Settings → Appearance → Tab
+  bar**; everything else is still in the menu at the top right.
 - On iPhone and iPad, swipe right from the left edge of the screen to go
   back, since apps added to the Home Screen have no back button.
 - On a phone or tablet, the page doesn't bounce or pull to refresh past its

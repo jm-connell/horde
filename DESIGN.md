@@ -213,11 +213,17 @@ right and the play queue docks beside it. A quiet footer (centred
 page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
-The installed app (`display-mode: standalone`) on a phone adds a bottom tab
-bar (`BottomTabBar`): the header's translucent `ink-950` glass with a top
-`ink-700` hairline, icon over an 11px label, accent for the current tab and
-`gray-400` otherwise; it slides down out of the way while the on-screen
-keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
+The installed app (`display-mode: standalone`) on a phone adds a floating tab
+island (`BottomTabBar`): a centred `rounded-full` `.ui-panel` pill with an
+`ink-700` hairline and a soft drop shadow, sitting just above the home
+indicator (12px off the bottom without one). It follows the panel
+transparency, blur and tint but never takes `.ui-panel-legible`: it holds
+icons, not text. Tabs are 44px-tall capsules with 22px line icons (24px grid,
+1.9 stroke, round caps and joins); the current tab fills with `accent/15`
+and its label opens out beside the icon, the others are icon-only in
+`gray-300`. The user picks the tabs and their order (Settings → Appearance →
+Tab bar, `src/tabBar.ts`, at most 5). It slides down out of the way while
+the on-screen keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
 `<html>`; anything fixed to the bottom of the screen (mini player, queue dock,
 toasts, floating panels) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.

@@ -40,6 +40,11 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   {
     tab: "appearance",
     keywords:
+      "tab bar tabs bottom bar island installed app home screen phone pwa chat order",
+  },
+  {
+    tab: "appearance",
+    keywords:
       "custom css enable custom css css stylesheet selector variables data-horde data-page jellyfin theme css",
   },
   {

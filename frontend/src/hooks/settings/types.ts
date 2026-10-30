@@ -1,6 +1,7 @@
 import type { ViewMode } from "../../components/videoPlayerTypes";
 import type { SavedCustomFont, UiFont } from "../../fonts";
 import type { HotkeyOverrides } from "../../hotkeys";
+import type { TabBarItem } from "../../tabBar";
 import type { LoadingStyle } from "../../loadingStyles";
 import type {
   SponsorBlockCategoryMap,
@@ -183,6 +184,8 @@ export interface Settings {
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
   showDownloadNavBadge: boolean;
+  /** Tabs on the installed app's bottom island on phones, in order. */
+  tabBarItems: TabBarItem[];
   normalizeVolumeOnDownload: boolean;
   downloadVideoCodec: DownloadVideoCodec;
   /** Short-side cap for H.264 copies: 1080p (cheap) or source (up to 4K). */

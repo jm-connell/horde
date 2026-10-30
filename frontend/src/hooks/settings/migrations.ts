@@ -6,6 +6,7 @@ import {
   parseCustomFontInput,
 } from "../../fonts";
 import { normalizeHotkeyOverrides } from "../../hotkeys";
+import { normalizeTabBarItems } from "../../tabBar";
 import { isLoadingStyle } from "../../loadingStyles";
 import {
   normalizeSponsorBlockCategories,
@@ -485,6 +486,7 @@ export function normalizeSettings(
       DEFAULTS.playerShortcuts
     ),
     hotkeys: normalizeHotkeyOverrides(parsed.hotkeys),
+    tabBarItems: normalizeTabBarItems(parsed.tabBarItems),
     previewOnHover: normalizeBool(
       parsed.previewOnHover,
       DEFAULTS.previewOnHover

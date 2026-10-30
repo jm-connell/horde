@@ -38,11 +38,14 @@ All notable changes to Horde are documented here. The format follows
 - A live stream you left (screen off, another app) reconnects when you come
   back a minute or more later and plays on from where you left it in the live
   timeline, as if paused there.
-- **The installed app feels like a phone app.** On a phone, Home, Playlists,
-  History, Download (and Offline when you have downloads) are tabs along the
-  bottom of the screen; tap the current tab to jump to the top. The bar hides
-  while the keyboard is up, and the mini player, queue and toasts sit above
-  it. Everything else stays in the menu at the top right.
+- **The installed app feels like a phone app.** On a phone, a floating tab
+  bar at the bottom of the screen holds Home, Search, Download and Chat (Ask
+  about Horde); the current tab shows its name, and tapping it again jumps to
+  the top. Choose the tabs (also Playlists, History, Offline or Settings) and
+  their order in Settings → Appearance → Tab bar. The bar follows your panel
+  transparency settings, hides while the keyboard is up, and the mini player,
+  queue and toasts sit above it. Everything else stays in the menu at the top
+  right.
 - In the app added to the iPhone or iPad Home Screen, swipe right from the
   left edge to go back.
 

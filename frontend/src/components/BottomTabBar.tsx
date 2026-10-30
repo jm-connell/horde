@@ -1,22 +1,16 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useDownloads } from "../context/DownloadContext";
+import { useHelpChat } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
+import { useSearch } from "../context/SearchContext";
 import { useInstalledApp } from "../hooks/useInstalledApp";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { isTextEntryTarget } from "../utils/keyboardTarget";
+import { TAB_BAR_ICONS, TAB_BAR_LABELS, type TabBarItem } from "../tabBar";
+import { HELP_PANEL_ID } from "./helpChat";
 import { isLinkActive, useNavLinks } from "./navLinks";
-
-/** Pages that get a tab; the rest stay in the header menu. */
-const TAB_ICONS: Record<string, string> = {
-  "/": "M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-4.5v-6h-5v6H5a1 1 0 0 1-1-1z",
-  "/playlists": "M4 6h16M4 12h10M4 18h10m4-5v6l4-3z",
-  "/history": "M12 7v5l3 2M3.5 12a8.5 8.5 0 1 0 2.5-6M3 4v4h4",
-  "/offline": "M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19h14",
-  "/download":
-    "M12 8v8m-4-4h8M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z",
-};
 
 /** Fields that use a picker or file chooser instead of the keyboard. */
 const NO_KEYBOARD_TYPES = new Set([
@@ -40,17 +34,22 @@ function opensKeyboard(el: Element | null): boolean {
 const BAR_VAR = "--horde-bottom-bar";
 
 /**
- * Phone tab bar for the installed app: the main pages one tap away at the
- * bottom of the screen, as in a native app. A browser tab keeps the header
- * menu only. Tapping the current tab scrolls back to the top; the bar slides
- * away while the keyboard is up.
+ * Phone tab bar for the installed app: a floating island at the bottom of the
+ * screen with the tabs chosen in Settings (Home, Search, Download and Chat by
+ * default), as in a native app. A browser tab keeps the header menu only.
+ * Tapping the current tab scrolls back to the top; Search opens the header's
+ * search box and Chat the Ask about Horde panel; the island slides away while
+ * the keyboard is up. It follows the panel transparency settings (not
+ * the legibility boost: it holds icons, not text to read).
  */
 export default function BottomTabBar() {
   const installed = useInstalledApp();
   const isMobile = useIsMobile();
-  const links = useNavLinks().filter((link) => link.to in TAB_ICONS);
+  const links = useNavLinks();
   const location = useLocation();
   const { resetHome } = useHomeReset();
+  const { search } = useSearch();
+  const help = useHelpChat();
   const { activeCount } = useDownloads();
   const [settings] = useSettings();
   const [typing, setTyping] = useState(false);
@@ -107,17 +106,88 @@ export default function BottomTabBar() {
 
   if (!shown) return null;
 
-  const onTabClick = (to: string, end: boolean) => {
-    if (to === "/") resetHome();
-    if (isLinkActive(location.pathname, to, end)) {
-      const reduce = window.matchMedia(
-        "(prefers-reduced-motion: reduce)"
-      ).matches;
-      window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
-    }
+  // Chat opens over the page, so while it is open it is the current tab.
+  const chatOpen = help.available && help.open;
+  const onHome = location.pathname === "/";
+  const searching = onHome && search.trim() !== "";
+  const pageLinks = new Set(links.map((link) => link.to));
+  const downloadBadge = settings.showDownloadNavBadge ? activeCount : 0;
+
+  const scrollTopIfCurrent = (current: boolean) => {
+    if (!current) return;
+    const reduce = window.matchMedia(
+      "(prefers-reduced-motion: reduce)"
+    ).matches;
+    window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
   };
 
-  const downloadBadge = settings.showDownloadNavBadge ? activeCount : 0;
+  const renderTab = (item: TabBarItem) => {
+    const label = TAB_BAR_LABELS[item];
+    if (item === "search" || item === "chat") {
+      const current = item === "chat" ? chatOpen : searching && !chatOpen;
+      return (
+        <button
+          key={item}
+          type="button"
+          onClick={() => {
+            if (item === "chat") help.setOpen(!help.open);
+            else {
+              if (chatOpen) help.setOpen(false);
+              window.dispatchEvent(new Event("horde:open-search"));
+            }
+          }}
+          aria-current={item === "search" && current ? "page" : undefined}
+          aria-expanded={item === "chat" ? chatOpen : undefined}
+          aria-controls={
+            item === "chat" && chatOpen ? HELP_PANEL_ID : undefined
+          }
+          className={tabClass(current)}
+        >
+          <TabIcon d={TAB_BAR_ICONS[item]} />
+          <TabLabel shown={current}>{label}</TabLabel>
+        </button>
+      );
+    }
+    const to = item === "home" ? "/" : `/${item}`;
+    const onPage =
+      item === "home"
+        ? onHome && !searching
+        : isLinkActive(location.pathname, to, false);
+    const current = onPage && !chatOpen;
+    const badge = item === "download" ? downloadBadge : 0;
+    return (
+      <NavLink
+        key={item}
+        to={to}
+        end={item === "home"}
+        onClick={() => {
+          if (chatOpen) help.setOpen(false);
+          if (item === "home") resetHome();
+          scrollTopIfCurrent(onPage);
+        }}
+        aria-current={current ? "page" : undefined}
+        className={tabClass(current)}
+      >
+        <span className="relative">
+          <TabIcon d={TAB_BAR_ICONS[item]} />
+          {badge > 0 && (
+            <span className="absolute -right-2 -top-1.5 rounded-full bg-accent px-1.5 text-[10px] font-bold leading-4 text-on-accent">
+              {badge}
+            </span>
+          )}
+        </span>
+        <TabLabel shown={current}>{label}</TabLabel>
+      </NavLink>
+    );
+  };
+
+  // Tabs this account can use here and now: pages from the nav (permissions,
+  // offline mode), Chat when this account may use AI.
+  const available = (item: TabBarItem) => {
+    if (item === "home" || item === "search") return true;
+    if (item === "chat") return help.available;
+    return pageLinks.has(`/${item}`);
+  };
 
   return (
     <>
@@ -126,45 +196,62 @@ export default function BottomTabBar() {
         ref={barRef}
         aria-label="Tabs"
         data-horde="tab-bar"
-        className={`ui-panel fixed inset-x-0 bottom-0 z-30 flex border-t border-ink-700 bg-ink-950/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-sm transition-transform duration-200 ease-out motion-reduce:transition-none ${
-          settings.translucentPanelLegibility ? "ui-panel-legible" : ""
-        } ${typing ? "pointer-events-none translate-y-full" : ""}`}
+        className={`pointer-events-none fixed inset-x-0 bottom-0 z-30 flex justify-center pb-[max(env(safe-area-inset-bottom),0.75rem)] pt-2 transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none ${
+          typing ? "translate-y-full opacity-0" : ""
+        }`}
       >
-        {links.map((link) => (
-          <NavLink
-            key={link.to}
-            to={link.to}
-            end={link.end}
-            onClick={() => onTabClick(link.to, link.end)}
-            className={({ isActive }) =>
-              `relative flex min-w-0 flex-1 flex-col items-center gap-0.5 pb-1.5 pt-2 text-[11px] font-medium transition-colors duration-150 ${
-                isActive ? "text-accent" : "text-gray-400"
-              }`
-            }
-          >
-            <span className="relative">
-              <svg
-                viewBox="0 0 24 24"
-                className="h-6 w-6"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d={TAB_ICONS[link.to]} />
-              </svg>
-              {link.to === "/download" && downloadBadge > 0 && (
-                <span className="absolute -right-2.5 -top-1.5 rounded-full bg-accent px-1.5 text-[10px] font-bold leading-4 text-on-accent">
-                  {downloadBadge}
-                </span>
-              )}
-            </span>
-            <span className="truncate">{link.label}</span>
-          </NavLink>
-        ))}
+        <div
+          className={`ui-panel flex items-center gap-1 rounded-full border border-ink-700/70 bg-ink-900/95 p-1.5 shadow-[0_8px_28px_rgb(0_0_0/0.45)] backdrop-blur-md ${
+            typing ? "" : "pointer-events-auto"
+          }`}
+        >
+          {settings.tabBarItems.filter(available).map(renderTab)}
+        </div>
       </nav>
     </>
+  );
+}
+
+/** A tab: icon only, or a tinted capsule with its label when current. */
+function tabClass(current: boolean): string {
+  return `flex h-11 items-center rounded-full px-3.5 transition-colors duration-200 motion-reduce:transition-none ${
+    current ? "bg-accent/15 text-accent" : "text-gray-300 active:bg-ink-700/60"
+  }`;
+}
+
+export function TabIcon({ d }: { d: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-[22px] w-[22px] shrink-0"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d={d} />
+    </svg>
+  );
+}
+
+/** The label opens out beside the icon of the current tab. Hidden ones stay
+ *  in the DOM so every tab keeps its accessible name. */
+function TabLabel({
+  shown,
+  children,
+}: {
+  shown: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      className={`overflow-hidden whitespace-nowrap text-sm font-semibold transition-[max-width,opacity,margin] duration-200 ease-out motion-reduce:transition-none ${
+        shown ? "ml-2 max-w-24 opacity-100" : "ml-0 max-w-0 opacity-0"
+      }`}
+    >
+      {children}
+    </span>
   );
 }

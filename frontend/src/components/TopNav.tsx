@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
@@ -246,13 +247,25 @@ export default function TopNav() {
   }, [useHamburger, menuOpen, searchOpen, menuRendered]);
 
   const openSearch = () => {
-    setMenuOpen(false);
-    setNavHidden(false);
-    setSearchOpen(true);
+    // Render the box and focus it within the tap: iOS only raises the
+    // keyboard for a focus made while handling the user's gesture.
+    flushSync(() => {
+      setMenuOpen(false);
+      setNavHidden(false);
+      setSearchOpen(true);
+    });
+    searchInputRef.current?.focus();
     if (location.pathname !== "/" || location.search) {
       navigate({ pathname: "/", search: "" });
     }
   };
+
+  // The installed app's tab bar has a Search tab (BottomTabBar). No
+  // dependency list: openSearch reads the current location.
+  useEffect(() => {
+    window.addEventListener("horde:open-search", openSearch);
+    return () => window.removeEventListener("horde:open-search", openSearch);
+  });
 
   // Search lives in the nav on every page; results are the home page's, so
   // typing anywhere else, or on a `?channel=` page, goes home (Library closes a

@@ -1,4 +1,5 @@
 import { DEFAULT_SPONSOR_BLOCK_CATEGORIES } from "../../sponsorBlock";
+import { DEFAULT_TAB_BAR } from "../../tabBar";
 import type { CustomColors, FontSize, Settings } from "./types";
 
 export const DEFAULT_CUSTOM_COLORS: CustomColors = {
@@ -51,6 +52,7 @@ export const DEFAULTS: Settings = {
   recSourceMarks: true,
   showLiveStreams: true,
   showDownloadNavBadge: true,
+  tabBarItems: [...DEFAULT_TAB_BAR],
   normalizeVolumeOnDownload: true,
   downloadVideoCodec: "av1",
   compatCopyResolution: "1080p",
@@ -125,6 +127,7 @@ export const SERVER_UI_KEYS: (keyof Settings)[] = [
   "recSourceMarks",
   "showLiveStreams",
   "showDownloadNavBadge",
+  "tabBarItems",
   "normalizeVolumeOnDownload",
   "downloadVideoCodec",
   "compatCopyResolution",

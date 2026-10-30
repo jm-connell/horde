@@ -176,6 +176,21 @@ Sliders are always visible. First install defaults to **50%** transparency and *
 
 Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `true` keeps the saved strength and converts the old coupled blur.
 
+### Tab bar (`tabBarItems`)
+
+On a phone, the installed app (added to the Home Screen) shows a floating bar of tabs at the bottom of the screen. **Tab bar** chooses which tabs it shows and in what order (up to 5): move a tab earlier or later, remove it, or add one from the list below. **Reset** puts back the default.
+
+| Tab | Does |
+|-----|------|
+| Home | **Default.** The home page; tapping it again goes back to the top |
+| Search | **Default.** Opens the search box at the top |
+| Download | **Default.** The Download page (needs the download permission) |
+| Chat | **Default.** Opens [Ask about Horde](../guides/ai-features.md) (when AI is set up for this account) |
+| Playlists, History, Settings | Those pages |
+| Offline | The Offline page, when this device has offline downloads |
+
+A tab this account cannot use, or one that needs the server while Horde is offline, is left out of the bar. The bar follows the panel transparency, blur and tint above, but not the legibility boost. A browser tab has no tab bar.
+
 ### Loading style (`loadingStyle`)
 
 Settings shows a looping preview of each option instead of a text label.

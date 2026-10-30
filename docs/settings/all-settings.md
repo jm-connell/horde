@@ -118,6 +118,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `fontSize` | `"medium"` | string | `small` \| `medium` \| `large` \| `xl` | UI blob |
 | `uiFont` | `"oxanium"` | string | Builtin id or saved custom id | UI blob |
 | `customFonts` | `[]` | array | Saved URL/file fonts | UI blob |
+| `tabBarItems` | `["home","search","download","chat"]` | array | Up to 5 of `home` \| `search` \| `download` \| `chat` \| `playlists` \| `history` \| `offline` \| `settings`, in order | UI blob |
 
 ### Library / downloads (UI)
 

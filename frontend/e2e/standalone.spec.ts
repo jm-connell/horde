@@ -159,22 +159,32 @@ test("a browser tab has no edge swipe", async ({ page }) => {
   await expect(page.getByRole("navigation", { name: "Tabs" })).toHaveCount(0);
 });
 
-test("the installed app on a phone has a bottom tab bar", async ({ page }) => {
+test("the installed app on a phone has a floating tab bar", async ({
+  page,
+}) => {
   await launch(page, "/");
   const tabs = page.getByRole("navigation", { name: "Tabs" });
-  await expect(tabs.getByRole("link")).toHaveText([
-    "Home",
-    "Playlists",
-    "History",
-    "Download",
+  // Home, Search, Download and Chat by default; only the current tab shows
+  // its label, but every tab keeps it as its name (the Download badge adds a
+  // count to its text).
+  await expect(tabs.locator("a, button")).toHaveText([
+    /Home/,
+    /Search/,
+    /Download/,
+    /Chat/,
   ]);
-  await tabs.getByRole("link", { name: "History" }).click();
-  await expect(
-    page.getByRole("heading", { name: "History", level: 1 })
-  ).toBeVisible();
-  await expect(tabs.getByRole("link", { name: "History" })).toHaveAttribute(
+  await expect(tabs.getByRole("link", { name: "Home" })).toHaveAttribute(
     "aria-current",
     "page"
+  );
+  await tabs.getByRole("link", { name: "Download" }).click();
+  await expect(page).toHaveURL(/\/download$/);
+  await expect(tabs.getByRole("link", { name: "Download" })).toHaveAttribute(
+    "aria-current",
+    "page"
+  );
+  await expect(tabs.getByRole("link", { name: "Home" })).not.toHaveAttribute(
+    "aria-current"
   );
 
   // The current tab again scrolls back to the top.
@@ -186,21 +196,73 @@ test("the installed app on a phone has a bottom tab bar", async ({ page }) => {
       })
     )
     .toBe(400);
-  await tabs.getByRole("link", { name: "History" }).click();
+  await tabs.getByRole("link", { name: "Download" }).click();
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
 
   // The page ends above the bar: its last line is not hidden behind it.
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
   const footer = await page.getByRole("link", { name: "Docs" }).boundingBox();
-  const bar = await tabs.boundingBox();
-  expect(footer!.y + footer!.height).toBeLessThanOrEqual(bar!.y);
+  const island = await tabs.locator(".ui-panel").boundingBox();
+  expect(footer!.y + footer!.height).toBeLessThanOrEqual(island!.y);
+  // A floating island: clear of the screen's sides and bottom.
+  expect(island!.x).toBeGreaterThan(16);
+  expect(island!.y + island!.height).toBeLessThan(844);
+});
+
+test("the Search tab opens the search box and Chat opens Ask about Horde", async ({
+  page,
+}) => {
+  await launch(page, "/history");
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await tabs.getByRole("button", { name: "Search" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("searchbox", { name: "Search library" })
+  ).toBeFocused();
+  await page.getByRole("button", { name: "Close search" }).click();
+
+  await tabs.getByRole("button", { name: "Chat" }).click();
+  await expect(
+    page.getByRole("dialog", { name: "Ask about Horde" })
+  ).toBeVisible();
+});
+
+test("Settings chooses the tabs and their order", async ({ page }) => {
+  await launch(page, "/settings?tab=appearance");
+  const shown = page.getByRole("list", { name: "Tabs shown" });
+  await shown.getByRole("button", { name: "Remove Chat" }).click();
+  await page.getByRole("button", { name: "Add History" }).click();
+  await shown.getByRole("button", { name: "Move History earlier" }).click();
+  await expect(shown.getByRole("listitem")).toHaveText([
+    "Home",
+    "Search",
+    "History",
+    "Download",
+  ]);
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await expect(tabs.locator("a, button")).toHaveText([
+    /Home/,
+    /Search/,
+    /History/,
+    /Download/,
+  ]);
+  await page.getByRole("button", { name: "Reset" }).click();
+  await expect(tabs.locator("a, button")).toHaveText([
+    /Home/,
+    /Search/,
+    /Download/,
+    /Chat/,
+  ]);
 });
 
 test("the tab bar steps aside for the keyboard", async ({ page }) => {
   await launch(page, "/");
   const tabs = page.getByRole("navigation", { name: "Tabs" });
   await expect(tabs).not.toHaveClass(/translate-y-full/);
-  await page.getByRole("button", { name: "Search", exact: true }).click();
+  await page
+    .locator("header")
+    .getByRole("button", { name: "Search", exact: true })
+    .click();
   await expect(
     page.getByRole("searchbox", { name: "Search library" })
   ).toBeFocused();
