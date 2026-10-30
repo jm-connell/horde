@@ -43,7 +43,7 @@ Per-video chat lets you ask about content, chapters, or themes. Context is built
 
 ## Ask about Horde
 
-The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen). **Escape** or the close button hides it; **Clear** starts over.
+The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen, and following a link in an answer closes it). In the installed app on a phone, the **Chat** tab of the tab bar opens and closes it, and it sits just above the bar. **Escape** or the close button hides it; **Clear** starts over.
 
 Each question also tells Horde which page you are on (for example "Settings, Playback tab" or the video playing), so "what does this page do?" gets a useful answer.
 
@@ -76,7 +76,7 @@ Give the assistant a link and it offers a **Download** card with a quality picke
 
 ### Custom CSS
 
-Describe a change to how Horde looks ("rounder video cards", "a frosted top bar") and the assistant writes the CSS with a **Preview** button. The preview is on the page for 20 seconds with a bar at the top: **Keep** adds it to your [custom CSS](../settings/custom-css.md) (and turns custom CSS on; **Undo** takes it back), **Revert** or **Escape** removes it, and if you do nothing it reverts by itself, so CSS that hides the page (even the bar) cannot lock you out. Only one preview runs at a time. If a saved stylesheet ever does, open Horde with `?nocss` on the address (for example `http://horde:8080/?nocss`): custom CSS stays off in that tab until you turn it back on.
+Describe a change to how Horde looks ("rounder video cards", "a frosted top bar") and the assistant writes the CSS with a **Preview** button. The preview is on the page for 20 seconds with a bar at the top: **Keep** adds it to your [custom CSS](../settings/custom-css.md) (and turns custom CSS on; **Undo** takes it back), **Revert** or **Escape** removes it, and if you do nothing it reverts by itself, so CSS that hides the page (even the bar) cannot lock you out. Only one preview runs at a time. If a saved stylesheet ever does, open Horde in a browser tab with `?nocss` on the address (for example `http://horde:8080/?nocss`): custom CSS stays off in that tab until you turn it back on.
 
 ### Which model it uses
 

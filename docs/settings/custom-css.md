@@ -30,7 +30,7 @@ When enabled, Settings includes a collapsed **Selector reference** next to the C
 Cap: **64 000** characters. `</style` sequences are neutralized so the payload cannot break out of the style tag.
 
 !!! warning "You can hide the UI"
-    Custom CSS runs in your own account. A rule like `* { display: none }` will hide Settings too. Open Horde with `?nocss` on the address (for example `http://horde:8080/settings?nocss`): custom CSS stays off in that tab, a notice says so, and you can fix or clear the box, then **Turn it back on**.
+    Custom CSS runs in your own account. A rule like `* { display: none }` will hide Settings too. Open Horde in a browser tab with `?nocss` on the address (the installed app has no address bar; for example `http://horde:8080/settings?nocss`): custom CSS stays off in that tab, a notice says so, and you can fix or clear the box, then **Turn it back on**.
 
 ## Let the assistant write it
 
@@ -89,6 +89,7 @@ html[data-page="watch"] [data-horde="nav"] {
 |-----------|---------|
 | `nav` | Top navigation `<header>` |
 | `main` | Centered page `<main>` |
+| `tab-bar` | Floating tab bar of the installed app on a phone (`<nav>`) |
 | `sidebar` | Library channel sidebar rail |
 | `channel-list` | Channel list inside the sidebar |
 | `background` | Background effect canvas or custom image |

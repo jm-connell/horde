@@ -111,7 +111,7 @@ export function capabilitiesAnswer(opts: {
     canDownload
       ? "- **Download links and build playlists**: send me a link, or ask for a playlist of videos I found. You confirm each one."
       : "- **Build playlists** from videos I find for you. You confirm each one.",
-    "- **Write custom CSS** to restyle Horde, with a preview you keep or revert. If a stylesheet ever hides the page, open Horde with `?nocss` on the address.",
+    "- **Write custom CSS** to restyle Horde, with a preview you keep or revert. If a stylesheet ever hides the page, open Horde in a browser tab with `?nocss` on the address.",
     "",
     "Nothing changes until you press a button.",
   ];

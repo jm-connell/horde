@@ -71,6 +71,10 @@ export const CSS_SELECTORS: CssHookRow[] = [
   { selector: '[data-horde="nav"]', meaning: "Top navigation bar" },
   { selector: '[data-horde="main"]', meaning: "Page content shell" },
   {
+    selector: '[data-horde="tab-bar"]',
+    meaning: "Installed app's floating tab bar on phones",
+  },
+  {
     selector: '[data-horde="sidebar"]',
     meaning: "Library channel sidebar rail",
   },

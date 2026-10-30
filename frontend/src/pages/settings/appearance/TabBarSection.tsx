@@ -81,6 +81,7 @@ export default function TabBarSection() {
 
   return (
     <Section
+      anchor="tab-bar"
       title="Tab bar"
       description={`On a phone, the installed app (added to the Home Screen) shows these tabs in a floating bar at the bottom of the screen, up to ${TAB_BAR_MAX}. Tabs this account cannot use, or that need the server while offline, are left out. A browser tab keeps the menu at the top.`}
       action={
@@ -110,7 +111,7 @@ export default function TabBarSection() {
         )
       }
     >
-      <div ref={rootRef} data-setting="tab-bar" className="flex flex-col gap-4">
+      <div ref={rootRef} className="flex flex-col gap-4">
         <ol aria-label="Tabs shown" className="flex max-w-sm flex-col gap-1.5">
           {items.map((item, i) => {
             const name = TAB_BAR_LABELS[item];

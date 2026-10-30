@@ -56,9 +56,9 @@ export default function CustomCssSection() {
           "Ask about Horde"
         )}{" "}
         writes it for you: describe the change, preview it on the page, then
-        keep or revert it. If a stylesheet ever hides the page, open Horde with{" "}
-        <span className="font-mono text-gray-400">?nocss</span> on the address
-        to load it without your CSS.
+        keep or revert it. If a stylesheet ever hides the page, open Horde in a
+        browser tab with <span className="font-mono text-gray-400">?nocss</span>{" "}
+        on the address to load it without your CSS.
       </p>
       <Collapse open={settings.customCssEnabled}>
         <div className="space-y-3 pt-4">
