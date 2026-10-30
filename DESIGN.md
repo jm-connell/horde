@@ -216,8 +216,8 @@ the header and anything fixed to an edge.
 The installed app (`display-mode: standalone`) on a phone adds a bottom tab
 bar (`BottomTabBar`): the header's translucent `ink-950` glass with a top
 `ink-700` hairline, icon over an 11px label, accent for the current tab and
-`gray-400` otherwise; it slides down out of the way while a text field has
-focus. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
+`gray-400` otherwise; it slides down out of the way while the on-screen
+keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
 `<html>`; anything fixed to the bottom of the screen (mini player, queue dock,
 toasts, floating panels) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.

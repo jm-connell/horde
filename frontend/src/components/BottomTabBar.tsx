@@ -18,6 +18,23 @@ const TAB_ICONS: Record<string, string> = {
     "M12 8v8m-4-4h8M5 4h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z",
 };
 
+/** Fields that use a picker or file chooser instead of the keyboard. */
+const NO_KEYBOARD_TYPES = new Set([
+  "file",
+  "color",
+  "date",
+  "datetime-local",
+  "month",
+  "time",
+  "week",
+]);
+
+/** Focus is in a field that brings up the on-screen keyboard. */
+function opensKeyboard(el: Element | null): boolean {
+  if (!isTextEntryTarget(el) || el instanceof HTMLSelectElement) return false;
+  return !(el instanceof HTMLInputElement && NO_KEYBOARD_TYPES.has(el.type));
+}
+
 /** The bar's height (with the home-indicator inset), for fixed layers that
  *  must sit above it. Unset when there is no bar. */
 const BAR_VAR = "--horde-bottom-bar";
@@ -60,12 +77,31 @@ export default function BottomTabBar() {
 
   useEffect(() => {
     if (!shown) return;
-    const onFocus = () => setTyping(isTextEntryTarget(document.activeElement));
+    const vv = window.visualViewport;
+    let keyboardSeen = false;
+    const onFocus = () => {
+      keyboardSeen = false;
+      setTyping(opensKeyboard(document.activeElement));
+    };
+    // Android closes the keyboard (back, swipe down) without moving focus:
+    // bring the bar back once the viewport is full height again.
+    const onViewportResize = () => {
+      if (!vv) return;
+      if (vv.height * vv.scale < window.innerHeight - 120) {
+        keyboardSeen = true;
+      } else if (keyboardSeen) {
+        keyboardSeen = false;
+        setTyping(false);
+      }
+    };
+    onFocus();
     window.addEventListener("focusin", onFocus);
     window.addEventListener("focusout", onFocus);
+    vv?.addEventListener("resize", onViewportResize);
     return () => {
       window.removeEventListener("focusin", onFocus);
       window.removeEventListener("focusout", onFocus);
+      vv?.removeEventListener("resize", onViewportResize);
     };
   }, [shown]);
 
