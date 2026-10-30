@@ -37,6 +37,7 @@ export default function PlaybackTab() {
     <>
       <Section
         first
+        anchor="watch-page"
         title="Watch page"
         hidden={
           !match("watch page", "description", "related videos", "autoplay")
@@ -87,6 +88,7 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
+            anchor="show-undownloaded"
             title="Show undownloaded on channel pages"
             description="When browsing a channel, include uploads that are not yet in your library. Turn off to show only downloaded videos."
             hidden={
@@ -106,6 +108,7 @@ export default function PlaybackTab() {
             }
           />
           <SettingRow
+            anchor="stream-quality"
             title="Default stream quality"
             hidden={
               !!q &&
@@ -132,6 +135,7 @@ export default function PlaybackTab() {
       </Section>
 
       <Section
+        anchor="preview-on-hover"
         title="Autoplay previews on hover"
         hidden={
           !match(
@@ -155,6 +159,7 @@ export default function PlaybackTab() {
       />
 
       <Section
+        anchor="subtitle-size"
         title="Subtitle size"
         hidden={!match("subtitles", "caption", "size")}
       >
@@ -174,6 +179,7 @@ export default function PlaybackTab() {
       <SponsorBlockSection />
 
       <Section
+        anchor="playback-speed"
         title="Default playback speed"
         hidden={!match("playback speed", "speed", "default")}
       >
@@ -192,6 +198,7 @@ export default function PlaybackTab() {
       </Section>
 
       <Section
+        anchor="hold-speed"
         title="Hold-click speed"
         hidden={
           !match("hold", "hold-click", "hold speed", "click to hold", "speed")
@@ -221,6 +228,7 @@ export default function PlaybackTab() {
       />
 
       <Section
+        anchor="offline-mode"
         title="Offline mode"
         description={
           offlineMode && !net.manual

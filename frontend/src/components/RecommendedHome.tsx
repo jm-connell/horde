@@ -51,6 +51,18 @@ function recItems(data: RecommendationsResponse): RecItem[] {
   );
 }
 
+/**
+ * How far the response moves the paging offset: the live broadcasts the first
+ * page carries (`reason: "live"`) are not part of the paged feed.
+ */
+function pagedCount(data: RecommendationsResponse): number {
+  return data.sections.reduce(
+    (n, section) =>
+      n + (section.items ?? []).filter((i) => i.reason !== "live").length,
+    0
+  );
+}
+
 /** Marks a pick from something the user watched months ago on YouTube. */
 function ThrowbackBadge() {
   return (
@@ -140,7 +152,7 @@ export default function RecommendedHome({
         setCategories(data.categories);
         const vids = recItems(data);
         setFeedVideos(vids);
-        setFeedOffset(vids.length);
+        setFeedOffset(pagedCount(data));
         setFeedHasMore(Boolean(data.has_more));
       })
       .catch(() => {
@@ -170,7 +182,7 @@ export default function RecommendedHome({
         const seen = new Set(prev.map((v) => v.key));
         return [...prev, ...vids.filter((v) => !seen.has(v.key))];
       });
-      setFeedOffset((o) => o + vids.length);
+      setFeedOffset((o) => o + pagedCount(data));
       setFeedHasMore(Boolean(data.has_more && vids.length > 0));
     } catch {
       setFeedHasMore(false);

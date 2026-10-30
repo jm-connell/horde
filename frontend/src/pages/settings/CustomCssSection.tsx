@@ -1,4 +1,5 @@
 import Collapse from "../../components/Collapse";
+import { useHelpChat } from "../../context/HelpChatContext";
 import {
   CSS_SELECTORS,
   CSS_VARIABLES,
@@ -11,10 +12,12 @@ import { useSettingsPage } from "./context";
 
 export default function CustomCssSection() {
   const { q, match, settings, update } = useSettingsPage();
+  const helpChat = useHelpChat();
   const length = settings.customCss.length;
 
   return (
     <Section
+      anchor="custom-css"
       title="Custom CSS"
       action={
         <Toggle
@@ -34,10 +37,29 @@ export default function CustomCssSection() {
           "selector",
           "theme css",
           "jellyfin",
-          "enable custom css"
+          "enable custom css",
+          "nocss"
         )
       }
     >
+      <p className="mt-2 text-xs text-muted">
+        Not a CSS person?{" "}
+        {helpChat.available ? (
+          <button
+            type="button"
+            className="text-accent underline underline-offset-2"
+            onClick={() => helpChat.setOpen(true)}
+          >
+            Ask about Horde
+          </button>
+        ) : (
+          "Ask about Horde"
+        )}{" "}
+        writes it for you: describe the change, preview it on the page, then
+        keep or revert it. If a stylesheet ever hides the page, open Horde in a
+        browser tab with <span className="font-mono text-gray-400">?nocss</span>{" "}
+        on the address to load it without your CSS.
+      </p>
       <Collapse open={settings.customCssEnabled}>
         <div className="space-y-3 pt-4">
           <textarea

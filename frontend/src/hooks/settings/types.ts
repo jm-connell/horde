@@ -1,6 +1,7 @@
 import type { ViewMode } from "../../components/videoPlayerTypes";
 import type { SavedCustomFont, UiFont } from "../../fonts";
 import type { HotkeyOverrides } from "../../hotkeys";
+import type { TabBarItem } from "../../tabBar";
 import type { LoadingStyle } from "../../loadingStyles";
 import type {
   SponsorBlockCategoryMap,
@@ -121,6 +122,13 @@ export type DownloadVideoCodec =
 
 export type CompatCopyResolution = "1080p" | "source";
 
+/**
+ * What Ask about Horde may read of the user's own data (downloads, library,
+ * history, playlists): nothing, or what a question needs while the AI runs on
+ * the local network, or also when it is a cloud service.
+ */
+export type HelpDataConsent = "off" | "local" | "cloud";
+
 export interface Settings {
   theme: Theme;
   customColors: CustomColors;
@@ -183,6 +191,8 @@ export interface Settings {
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
   showDownloadNavBadge: boolean;
+  /** Tabs on the installed app's bottom island on phones, in order. */
+  tabBarItems: TabBarItem[];
   normalizeVolumeOnDownload: boolean;
   downloadVideoCodec: DownloadVideoCodec;
   /** Short-side cap for H.264 copies: 1080p (cheap) or source (up to 4K). */
@@ -229,4 +239,6 @@ export interface Settings {
   showUndownloadedOnChannel: boolean;
   /** Default quality for adaptive stream playback (Auto = ABR within device cap). */
   defaultStreamQuality: StreamQuality;
+  /** What Ask about Horde may read of this user's data (see `HelpDataConsent`). */
+  helpChatData: HelpDataConsent;
 }

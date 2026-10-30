@@ -21,6 +21,8 @@ export const queryKeys = {
     costs: ["ai", "costs"] as const,
     models: (target: "chat" | "embed", baseUrl: string) =>
       ["ai", "models", target, baseUrl] as const,
+    helpCatalog: ["ai", "help-catalog"] as const,
+    helpInfo: ["ai", "help-info"] as const,
   },
   system: {
     stats: ["system", "stats"] as const,
@@ -37,6 +39,7 @@ export const queryKeys = {
     list: (sort: string | undefined, order: string | undefined) =>
       ["channels", "list", sort ?? "", order ?? ""] as const,
     catalogStatus: ["channels", "catalog-status"] as const,
+    avatar: (url: string) => ["channels", "avatar", url] as const,
     retention: (channel: string) => ["channels", "retention", channel] as const,
     retentionPreview: (channel: string, limits: unknown) =>
       ["channels", "retention-preview", channel, limits] as const,

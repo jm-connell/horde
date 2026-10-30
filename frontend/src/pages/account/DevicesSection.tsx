@@ -58,7 +58,7 @@ export default function DevicesSection() {
   const others = (sessions ?? []).filter((s) => !s.current);
 
   return (
-    <section aria-labelledby="devices-heading">
+    <section aria-labelledby="devices-heading" data-setting="devices">
       <div className="mb-1 flex flex-wrap items-center gap-2">
         <h2
           id="devices-heading"

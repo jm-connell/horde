@@ -39,7 +39,7 @@ export default function RecommendationsSection() {
   };
 
   return (
-    <section aria-labelledby="recs-heading">
+    <section aria-labelledby="recs-heading" data-setting="recommendations">
       <h2
         id="recs-heading"
         className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-400"

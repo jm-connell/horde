@@ -107,6 +107,7 @@ export default function UpdatesSection({ system }: { system: SystemState }) {
 
   return (
     <Section
+      anchor="updates"
       first
       title="Updates"
       hidden={

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..context import get_session
+from ..context import AppContext, get_ctx, get_session
 from ..models import require_id
 from ..openapi_responses import EVENT_STREAM, RAW
 from ..response_schemas import (
@@ -25,8 +25,20 @@ from ..response_schemas import (
     PausedResponse,
     RecommendationsRead,
 )
-from ..schemas import ChannelFeedEntry, HelpChatRequest
-from ..services.ai import embeddings, help_chat, recommend, worker
+from ..schemas import (
+    ChannelFeedEntry,
+    HelpAssistantInfo,
+    HelpCatalog,
+    HelpChatRequest,
+)
+from ..services.ai import (
+    embeddings,
+    help_catalog,
+    help_chat,
+    help_model,
+    recommend,
+    worker,
+)
 from ..services.ai.provider import (
     build_status,
     detect_local_servers,
@@ -36,6 +48,7 @@ from ..services.ai.provider import (
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import feedback
 from ..services.discovery.history import library_key
+from ..services.live import picks as live_picks
 from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
@@ -445,14 +458,34 @@ def post_help_chat(
         help_chat.stream_help_events(
             payload.message,
             [turn.model_dump() for turn in payload.history],
-            user.id,
-            is_admin=user.is_admin,
+            user,
             page=payload.page,
+            data_consent=payload.data_consent,
             authorized=StreamAuthGuard.of(request).still_valid,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get(
+    "/help/catalog",
+    response_model=HelpCatalog,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def get_help_catalog(user: AuthUser = Depends(current_user)):
+    """The pages and settings Ask about Horde may link to or change, for this user."""
+    return help_catalog.for_user(user)
+
+
+@router.get(
+    "/help/info",
+    response_model=HelpAssistantInfo,
+    dependencies=[Depends(require_permission("use_ai"))],
+)
+def get_help_info(user: AuthUser = Depends(current_user)):
+    """What Ask about Horde runs on: its strength and where questions are sent."""
+    return help_model.info(user)
 
 
 @router.post(
@@ -542,12 +575,15 @@ def ai_recommendations(
         description="Mix in indexed channels' uploads that are not downloaded.",
     ),
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
     """The home page's "For you" shelf, or one category's videos.
 
     "For you" works without AI (ranked from the watch history alone); the
-    category shelves need it.
+    category shelves need it. With ``include_streams``, the first page also
+    carries followed channels' live broadcasts (``reason: live``), which the
+    client leaves out of its ``offset``.
     """
     ai_ready = build_status().ready
     if category:
@@ -606,6 +642,13 @@ def ai_recommendations(
                     ),
                 }
             )
+    if include_streams and offset == 0:
+        items = live_picks.merge(
+            items,
+            live_picks.live_picks(session, ctx.live.directory, user.id),
+            lambda p: {"reason": "live", "stream": live_picks.feed_entry(p)},
+            lambda i: i["stream"].id if i.get("stream") else None,
+        )
     feedback.record_shown(
         session,
         user.id,

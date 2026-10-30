@@ -21,6 +21,7 @@ import {
   streamUrl,
   subtitleUrl,
   thumbnailUrl,
+  VIDEOS_DELETED_EVENT,
 } from "../api";
 import VideoPlayer, { type ViewMode } from "../components/VideoPlayer";
 import type { ClipMarkers } from "../components/videoPlayerTypes";
@@ -550,6 +551,17 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setMiniPos(null);
     setMiniCornerAnchor(true);
   }, [setMiniPos]);
+
+  // A deleted video stops at once, wherever it is playing.
+  useEffect(() => {
+    const onDeleted = (e: Event) => {
+      const { ids } = (e as CustomEvent<{ ids: number[] }>).detail;
+      const playing = currentRef.current?.id;
+      if (playing != null && ids.includes(playing)) close();
+    };
+    window.addEventListener(VIDEOS_DELETED_EVENT, onDeleted);
+    return () => window.removeEventListener(VIDEOS_DELETED_EVENT, onDeleted);
+  }, [close]);
 
   const suspendPlaybackMedia = useCallback(
     (next: { streamUrl?: string | null; videoId?: number | null }) => {

@@ -18,7 +18,7 @@ export type {
 } from "./api/client";
 export { parseTrashEntryIds, trashEntryIdsOfError } from "./api/trash";
 export type { DeleteResult } from "./api/trash";
-export { OFFLINE_PROGRESS_EVENT } from "./api/videos";
+export { OFFLINE_PROGRESS_EVENT, VIDEOS_DELETED_EVENT } from "./api/videos";
 export type { LibraryQuery } from "./api/videos";
 export type {
   ChannelFeedQuery,

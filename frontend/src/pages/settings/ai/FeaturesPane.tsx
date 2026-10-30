@@ -15,6 +15,7 @@ export default function FeaturesPane() {
 
   return (
     <Section
+      anchor="ai-features"
       first
       title="Features"
       hidden={

@@ -1132,6 +1132,11 @@
             "title": "Enrich Tags",
             "type": "boolean"
           },
+          "help_model": {
+            "default": "",
+            "title": "Help Model",
+            "type": "string"
+          },
           "paused": {
             "default": false,
             "title": "Paused",
@@ -1408,6 +1413,18 @@
               }
             ],
             "title": "Enrich Tags"
+          },
+          "help_model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help Model"
           },
           "paused": {
             "anyOf": [
@@ -2658,6 +2675,24 @@
           }
         },
         "title": "ChannelAutodownloadUpdate",
+        "type": "object"
+      },
+      "ChannelAvatarRead": {
+        "description": "A channel's profile picture on YouTube's image host (null when unknown).",
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "ChannelAvatarRead",
         "type": "object"
       },
       "ChannelCatalogIndexRequest": {
@@ -5790,9 +5825,367 @@
         "title": "HealthYoutube",
         "type": "object"
       },
+      "HelpAssistantInfo": {
+        "description": "What the assistant runs on, for the chat panel's notices.",
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "local": {
+            "default": false,
+            "title": "Local",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider_label": {
+            "default": "",
+            "title": "Provider Label",
+            "type": "string"
+          },
+          "tier": {
+            "default": "medium",
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Tier",
+            "type": "string"
+          }
+        },
+        "title": "HelpAssistantInfo",
+        "type": "object"
+      },
+      "HelpCatalog": {
+        "properties": {
+          "pages": {
+            "items": {
+              "$ref": "#/components/schemas/HelpCatalogPage"
+            },
+            "title": "Pages",
+            "type": "array"
+          },
+          "settings": {
+            "items": {
+              "$ref": "#/components/schemas/HelpCatalogSetting"
+            },
+            "title": "Settings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pages",
+          "settings"
+        ],
+        "title": "HelpCatalog",
+        "type": "object"
+      },
+      "HelpCatalogOption": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "HelpCatalogOption",
+        "type": "object"
+      },
+      "HelpCatalogPage": {
+        "description": "A page of the app the assistant can link to as ``[[page:id]]``.",
+        "properties": {
+          "about": {
+            "title": "About",
+            "type": "string"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "path",
+          "about"
+        ],
+        "title": "HelpCatalogPage",
+        "type": "object"
+      },
+      "HelpCatalogSetting": {
+        "additionalProperties": false,
+        "description": "A setting the assistant can link to (``[[setting:id]]``) and, when\n``chat`` is ``change``, offer to change (``[[set:id=value]]``).",
+        "properties": {
+          "about": {
+            "title": "About",
+            "type": "string"
+          },
+          "access": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Access"
+          },
+          "anchor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor"
+          },
+          "chat": {
+            "enum": [
+              "change",
+              "link"
+            ],
+            "title": "Chat",
+            "type": "string"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "percent",
+                  "times"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "implies": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "boolean"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Implies"
+          },
+          "key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "keywords": {
+            "default": "",
+            "title": "Keywords",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HelpCatalogOption"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Options"
+          },
+          "pane": {
+            "anyOf": [
+              {
+                "enum": [
+                  "providers",
+                  "features",
+                  "jobs"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pane"
+          },
+          "path": {
+            "default": "/settings",
+            "title": "Path",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "personal",
+                  "server",
+                  "ai"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "tab": {
+            "anyOf": [
+              {
+                "enum": [
+                  "appearance",
+                  "library",
+                  "playback",
+                  "ai",
+                  "system"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "enum": [
+                  "bool",
+                  "enum",
+                  "number",
+                  "color"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "about",
+          "chat"
+        ],
+        "title": "HelpCatalogSetting",
+        "type": "object"
+      },
       "HelpChatRequest": {
         "description": "One Ask-about-Horde question and the conversation before it.",
         "properties": {
+          "data_consent": {
+            "default": "off",
+            "enum": [
+              "off",
+              "local",
+              "cloud"
+            ],
+            "title": "Data Consent",
+            "type": "string"
+          },
           "history": {
             "items": {
               "$ref": "#/components/schemas/HelpChatTurn"
@@ -8224,7 +8617,10 @@
           "reason": {
             "anyOf": [
               {
-                "const": "throwback",
+                "enum": [
+                  "throwback",
+                  "live"
+                ],
                 "type": "string"
               },
               {
@@ -11714,6 +12110,48 @@
         ]
       }
     },
+    "/api/ai/help/catalog": {
+      "get": {
+        "description": "The pages and settings Ask about Horde may link to or change, for this user.",
+        "operationId": "get_help_catalog_api_ai_help_catalog_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpCatalog"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Help Catalog",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/ai/help/chat": {
       "post": {
         "description": "Ask about Horde: answers from this server's docs and source (SSE).",
@@ -11762,6 +12200,48 @@
           }
         },
         "summary": "Post Help Chat",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/help/info": {
+      "get": {
+        "description": "What Ask about Horde runs on: its strength and where questions are sent.",
+        "operationId": "get_help_info_api_ai_help_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpAssistantInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Help Info",
         "tags": [
           "ai"
         ]
@@ -12138,7 +12618,7 @@
     },
     "/api/ai/recommendations": {
       "get": {
-        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it.",
+        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it. With ``include_streams``, the first page also\ncarries followed channels' live broadcasts (``reason: live``), which the\nclient leaves out of its ``offset``.",
         "operationId": "ai_recommendations_api_ai_recommendations_get",
         "parameters": [
           {
@@ -13885,6 +14365,62 @@
         ]
       }
     },
+    "/api/channels/avatar": {
+      "get": {
+        "description": "The channel's profile picture, read from its YouTube page and remembered.",
+        "operationId": "get_channel_avatar_api_channels_avatar_get",
+        "parameters": [
+          {
+            "description": "The channel's URL",
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "description": "The channel's URL",
+              "maxLength": 2048,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelAvatarRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Channel Avatar",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
     "/api/channels/catalog/index": {
       "post": {
         "description": "Manually queue catalog indexing for one channel (or all library channels).",
@@ -14839,7 +15375,7 @@
     },
     "/api/discover/feed": {
       "get": {
-        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). Each page counts as shown for its videos.",
+        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos.",
         "operationId": "discover_feed_api_discover_feed_get",
         "parameters": [
           {

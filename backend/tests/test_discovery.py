@@ -969,3 +969,100 @@ def test_gather_pauses_between_calls(
     )
     calls, _ = youtube
     assert pauses == [gather.REQUEST_PAUSE_SEC] * (len(calls) - 1)
+
+
+# --- followed channels' live broadcasts -------------------------------------------
+
+
+def _go_live(app, session, user, channel, video_id, *, follow=True):
+    from app.services import follows
+    from app.services.live.page import LiveBroadcast
+
+    url = f"https://youtube.com/@{channel.lower()}"
+    if follow:
+        follows.follow(session, user.id, url, channel)
+    app.state.ctx.live.directory.record(
+        url,
+        channel,
+        LiveBroadcast(video_id, f"{channel} live", channel, None, 100, None),
+    )
+    return url
+
+
+def test_live_broadcasts_lead_recommended_plus_when_watched_lately(
+    app, client, session, add_video, set_watch, admin_user, ai_on
+):
+    from app.services.live.picks import LATER_POSITION
+
+    for n in range(8):
+        _discovered(session, admin_user, f"found{n:06d}", f"Found {n}", f"Chan {n}")
+    loved = _go_live(app, session, admin_user, "Loved", "lovedlive01")
+    set_watch(admin_user, add_video(channel="Loved", channel_url=loved), 0)
+    _go_live(app, session, admin_user, "Followed", "followlive1")
+    _go_live(app, session, admin_user, "Stranger", "strangelive", follow=False)
+
+    first = client.get("/api/discover/feed", params={"limit": 4}).json()
+    keys = [i["key"] for i in first["items"]]
+    assert keys[0] == "lovedlive01"
+    assert keys.index("followlive1") == 1 + LATER_POSITION
+    assert "strangelive" not in keys
+    lead = first["items"][0]
+    assert lead["reason"]["kind"] == "live"
+    assert lead["source"] == "channels"
+    assert lead["stream"]["live_status"] == "is_live"
+    assert lead["stream"]["channel_url"] == loved
+    # The live cards ride on the first page only; paging is unchanged.
+    later = client.get(
+        "/api/discover/feed", params={"cursor": first["next_cursor"]}
+    ).json()
+    assert not {"lovedlive01", "followlive1"} & {i["key"] for i in later["items"]}
+
+
+def test_live_broadcasts_join_recommended_with_streams_on(
+    app, client, session, add_video, set_watch, admin_user
+):
+    seen = add_video(title="Seen", channel="Loved")
+    set_watch(admin_user, seen, 0, datetime.now(UTC) - timedelta(days=60))
+    _go_live(app, session, admin_user, "Loved", "lovedlive01")
+    blocked = _go_live(app, session, admin_user, "Muted", "mutedlive01")
+    client.post(
+        "/api/discover/feedback",
+        json={"kind": "channel", "key": blocked, "label": "Muted"},
+    )
+
+    def live_items(**params):
+        body = client.get("/api/ai/recommendations", params=params).json()
+        return [
+            i for s in body["sections"] for i in s["items"] if i["reason"] == "live"
+        ]
+
+    [item] = live_items(include_streams=True)
+    assert item["stream"]["id"] == "lovedlive01"
+    assert item["stream"]["live_status"] == "is_live"
+    assert live_items() == []
+    assert live_items(include_streams=True, offset=24) == []
+
+
+def test_live_picks_are_capped_and_match_streamed_watches(
+    app, client, session, admin_user
+):
+    from app.services.live.picks import MAX_OTHER, MAX_RECENT
+
+    total = MAX_RECENT + MAX_OTHER + 2
+    for n in range(total):
+        _go_live(app, session, admin_user, f"Chan{n}", f"livevideo{n:02d}")
+    # Watched as a stream under another name: matched by its channel URL.
+    client.post(
+        "/api/discover/history",
+        json={
+            "url": _yt("watchedvid1"),
+            "channel": "Chan Seven (renamed)",
+            "channel_url": "https://www.youtube.com/@Chan7",
+            "position_sec": 60,
+            "duration_sec": 600,
+        },
+    )
+    keys = [i["key"] for i in _items(client)]
+    live = [k for k in keys if k.startswith("livevideo")]
+    assert len(live) == 1 + MAX_OTHER
+    assert keys[0] == "livevideo07"

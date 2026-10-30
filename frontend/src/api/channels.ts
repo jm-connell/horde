@@ -9,6 +9,7 @@ import type {
   FollowList,
   LiveList,
   ChannelLive,
+  ChannelAvatar,
   UnfollowResult,
   RetentionLimits,
 } from "../types";
@@ -272,6 +273,13 @@ export const channelsApi = {
 
   getLiveNow(opts?: ReadOptions): Promise<LiveList> {
     return request<LiveList>("/api/live", opts);
+  },
+
+  getChannelAvatar(url: string, opts?: ReadOptions): Promise<ChannelAvatar> {
+    return request<ChannelAvatar>(
+      `/api/channels/avatar?url=${encodeURIComponent(url)}`,
+      opts
+    );
   },
 
   getChannelLive(url: string, opts?: ReadOptions): Promise<ChannelLive> {

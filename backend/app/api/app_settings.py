@@ -53,6 +53,8 @@ class AiSettingsRead(BaseModel):
     api_key: str = ""
     api_key_set: bool = False
     chat_model: str = ""
+    # Ask about Horde's model; empty uses chat_model.
+    help_model: str = ""
     embed_base_url: str = ""
     embed_api_key: str = ""
     embed_api_key_set: bool = False
@@ -85,6 +87,7 @@ class AiSettingsUpdate(BaseModel):
     # A masked value (the read form) leaves the stored key alone; "" clears it.
     api_key: str | None = Field(default=None, max_length=4096)
     chat_model: str | None = Field(default=None, max_length=200)
+    help_model: str | None = Field(default=None, max_length=200)
     embed_base_url: str | None = Field(default=None, max_length=2048)
     embed_api_key: str | None = Field(default=None, max_length=4096)
     embed_model: str | None = Field(default=None, max_length=200)
@@ -231,7 +234,7 @@ def _prepare_connection_update(
     if "base_url" in ai_updates or "embed_base_url" in ai_updates:
         # An address chosen by the admin ends a migrated install's Ollama search.
         ai_updates["autodetect_ollama"] = ""
-    for model_field in ("chat_model", "embed_model"):
+    for model_field in ("chat_model", "help_model", "embed_model"):
         if model_field in ai_updates:
             ai_updates[model_field] = str(ai_updates[model_field] or "").strip()
 

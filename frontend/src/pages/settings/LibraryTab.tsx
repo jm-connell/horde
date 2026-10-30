@@ -115,6 +115,7 @@ export default function LibraryTab() {
       >
         <div className="space-y-4">
           <SettingRow
+            anchor="show-continue-watching"
             title="Show continue watching"
             description="Display the continue watching row on the library home page."
             hidden={!!q && !match("continue watching", "homepage")}
@@ -130,6 +131,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="show-live-streams"
             title="Show live streams"
             description="List followed channels that are live in the library sidebar."
             hidden={!!q && !match("live streams", "live", "follow")}
@@ -146,6 +148,7 @@ export default function LibraryTab() {
             <FollowedChannelsSection />
           </div>
           <SettingRow
+            anchor="progress-continue-watching"
             title="Progress bar on continue watching"
             description="Show watch progress on cards in the continue watching row."
             hidden={!!q && !match("progress bar", "continue watching")}
@@ -162,6 +165,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="progress-all-videos"
             title="Progress bar on all library videos"
             description="Show watch progress on every card in the main library grid."
             hidden={!!q && !match("progress bar", "library videos")}
@@ -177,6 +181,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="card-dates"
             title="Show dates on video cards"
             description="Display the published date (e.g. May 14, 2023) on library cards."
             hidden={!!q && !match("dates", "video cards")}
@@ -193,7 +198,10 @@ export default function LibraryTab() {
 
         {/* Server-wide: it resets everyone's saved positions. */}
         {isAdmin && (
-          <div className="mt-6 border-t border-ink-700 pt-6">
+          <div
+            data-setting="progress-expiry"
+            className="mt-6 border-t border-ink-700 pt-6"
+          >
             <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
               Progress expiry
             </h3>
@@ -226,7 +234,10 @@ export default function LibraryTab() {
           </div>
         )}
 
-        <div className="mt-6 border-t border-ink-700 pt-6">
+        <div
+          data-setting="default-sort"
+          className="mt-6 border-t border-ink-700 pt-6"
+        >
           <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
             Default video sort
           </h3>
@@ -247,7 +258,10 @@ export default function LibraryTab() {
           </div>
         </div>
 
-        <div className="mt-6 border-t border-ink-700 pt-6">
+        <div
+          data-setting="channel-sort"
+          className="mt-6 border-t border-ink-700 pt-6"
+        >
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted">
             Channel list order (sidebar)
           </h3>
@@ -277,6 +291,7 @@ export default function LibraryTab() {
       </Section>
 
       <Section
+        anchor="youtube-history"
         title="YouTube history"
         description="Import your watch history, subscriptions and playlists from Google Takeout. Only your account sees them."
         hidden={!match(...YOUTUBE_HISTORY_TERMS)}
@@ -285,6 +300,7 @@ export default function LibraryTab() {
       </Section>
 
       <Section
+        anchor="downloads"
         title="Downloads"
         hidden={
           !canDownload ||
@@ -293,6 +309,7 @@ export default function LibraryTab() {
       >
         <div className="space-y-4">
           <SettingRow
+            anchor="download-badge"
             title="Show active download count in navigation"
             hidden={!!q && !match("download count", "navigation", "badge")}
             control={
@@ -307,6 +324,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="normalize-volume"
             title="Normalize volume on download"
             hidden={!!q && !match("normalize volume", "loudness")}
             control={
@@ -340,6 +358,7 @@ export default function LibraryTab() {
       </Section>
 
       <Section
+        anchor="metadata"
         title="Metadata and catalog"
         hidden={
           !isAdmin ||
@@ -383,6 +402,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="youtube-channel-search"
             title="YouTube results in channel search"
             description="A channel’s search box also finds that channel’s uploads on YouTube that are not indexed yet."
             control={
@@ -402,6 +422,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="youtube-library-search"
             title="YouTube results in library search"
             description="The main search bar also shows matching videos from all of YouTube."
             control={
@@ -421,6 +442,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="discovery"
             title="Recommended+ looks on YouTube"
             description="Recommended+ searches YouTube for videos and channels new to each person, built from what they watch. Needs YouTube results in library search."
             control={
@@ -440,6 +462,7 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="discovery-household"
             title="Recommendations learn from the household"
             description="Recommended+ gives a small lift to library videos that people here with similar taste liked. It never says who watched what."
             control={

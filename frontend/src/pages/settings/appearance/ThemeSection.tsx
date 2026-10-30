@@ -22,6 +22,7 @@ export default function ThemeSection({
   return (
     <Section
       first
+      anchor="theme"
       title="Theme"
       hidden={
         !!q &&

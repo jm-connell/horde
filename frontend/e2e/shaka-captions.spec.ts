@@ -172,6 +172,55 @@ test("a live broadcast plays through the Shaka HLS build", async ({ page }) => {
   await expect(page.getByRole("alert")).toHaveText("");
 });
 
+/** Pretend the page is hidden (screen off) or shown again. */
+async function setHidden(page: Page, hidden: boolean) {
+  await page.evaluate((h) => {
+    if (h) document.querySelector("video")?.pause(); // As iOS does on lock.
+    Object.defineProperty(document, "visibilityState", {
+      configurable: true,
+      get: () => (h ? "hidden" : "visible"),
+    });
+    document.dispatchEvent(new Event("visibilitychange"));
+  }, hidden);
+}
+
+test("a live stream left for a while reconnects and plays on", async ({
+  page,
+}) => {
+  await page.clock.install();
+  let loads = 0;
+  page.on("request", (r) => {
+    if (/\/api\/live\/abc123\/master\.m3u8/.test(r.url())) loads += 1;
+  });
+  await openStream(page, true);
+  // The clip is 6 s long, so count the player's play() calls rather than
+  // watching it play.
+  const video = page.locator("video").first();
+  await video.evaluate((v: HTMLVideoElement) => {
+    const w = window as unknown as { __plays: number };
+    w.__plays = 0;
+    v.addEventListener("play", () => (w.__plays += 1));
+  });
+  const plays = () =>
+    page.evaluate(() => (window as unknown as { __plays: number }).__plays);
+
+  const before = loads;
+
+  // Back after a few seconds: it just carries on.
+  await setHidden(page, true);
+  await page.clock.fastForward(5_000);
+  await setHidden(page, false);
+  await expect.poll(plays).toBe(1);
+  expect(loads).toBe(before);
+
+  // Back after minutes: the stream is loaded again and plays.
+  await setHidden(page, true);
+  await page.clock.fastForward("02:00");
+  await setHidden(page, false);
+  await expect.poll(() => loads).toBeGreaterThan(before);
+  await expect.poll(plays).toBeGreaterThan(1);
+});
+
 test("on a phone captions are centred and sized to the player", async ({
   page,
 }) => {

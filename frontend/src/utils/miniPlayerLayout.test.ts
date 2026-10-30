@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   avoidMiniPlayerStyle,
   clampMiniPos,
@@ -36,7 +36,7 @@ describe("miniPlayerHostInsets", () => {
       false
     );
     expect(insets.right).toBe("16px");
-    expect(insets.bottom).toBe("16px");
+    expect(insets.bottom).toBe("calc(16px + var(--horde-bottom-bar, 0px))");
     expect(insets.left).toBe("auto");
     expect(insets.top).toBe("auto");
   });
@@ -48,7 +48,7 @@ describe("miniPlayerHostInsets", () => {
       true
     );
     expect(insets.right).toBe("12px");
-    expect(insets.bottom).toBe("12px");
+    expect(insets.bottom).toBe("calc(12px + var(--horde-bottom-bar, 0px))");
   });
 
   it("clamps a dragged mini player onto a smaller viewport", () => {
@@ -71,6 +71,22 @@ describe("clampMiniPos", () => {
     expect(clampMiniPos(40, 50, 400, 225, 1200, 800)).toEqual({
       left: 40,
       top: 50,
+    });
+  });
+
+  describe("in the window", () => {
+    afterEach(() => vi.unstubAllGlobals());
+
+    it("keeps a dragged mini player above the installed app's tab bar", () => {
+      vi.stubGlobal("window", { innerWidth: 400, innerHeight: 800 });
+      vi.stubGlobal("document", { documentElement: {} });
+      vi.stubGlobal("getComputedStyle", () => ({
+        getPropertyValue: () => "64px",
+      }));
+      expect(clampMiniPos(10, 900, 200, 100)).toEqual({
+        left: 10,
+        top: 800 - 64 - 100 - 8,
+      });
     });
   });
 });
@@ -130,7 +146,7 @@ describe("avoidMiniPlayerStyle", () => {
       viewportHeight: 600,
     });
     expect(style.right).toBe(16);
-    expect(style.bottom).toBe(16);
+    expect(style.bottom).toBe("calc(16px + var(--horde-bottom-bar, 0px))");
     expect(style.width).toBe("22rem");
   });
 

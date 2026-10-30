@@ -8,11 +8,19 @@ import { markdownHref, parseBlocks } from "./aiMarkdownParse";
  * Raw HTML is never interpreted.
  */
 
-function parseInline(text: string): ReactNode[] {
+/** Hooks for a chat that renders more than plain markdown (Ask about Horde). */
+export interface InlineRenderers {
+  /** A `[[kind:...]]` token; without this the token shows as typed. */
+  token?: (raw: string, key: string) => ReactNode;
+  /** A markdown link; return null for the default (opens in a new tab). */
+  link?: (href: string, label: string, key: string) => ReactNode | null;
+}
+
+function parseInline(text: string, render: InlineRenderers = {}): ReactNode[] {
   const out: ReactNode[] = [];
-  // Links first, then ** / __ / ` before single * / _.
+  // Tokens, then links, then ** / __ / ` before single * / _.
   const re =
-    /(\[[^\]\n]+\]\([^)\s]+\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
+    /(\[\[(?:(?!\]\])[^\n]){1,1000}\]\]|\[[^\]\n]+\]\([^)\s]+\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -22,7 +30,14 @@ function parseInline(text: string): ReactNode[] {
     }
     const token = m[0];
     const link = /^\[([^\]\n]+)\]\(([^)\s]+)\)$/.exec(token);
-    if (link) {
+    const custom = link
+      ? render.link?.(link[2], link[1], `l-${key++}`)
+      : undefined;
+    if (token.startsWith("[[")) {
+      out.push(render.token ? render.token(token, `t-${key++}`) : token);
+    } else if (custom) {
+      out.push(custom);
+    } else if (link) {
       const href = markdownHref(link[2]);
       out.push(
         href
@@ -89,6 +104,7 @@ interface Props {
   className?: string;
   wrapClassName?: string;
   children?: ReactNode;
+  render?: InlineRenderers;
 }
 
 export default function AiMarkdown({
@@ -96,6 +112,7 @@ export default function AiMarkdown({
   className = "space-y-3 text-sm text-gray-300",
   wrapClassName,
   children,
+  render,
 }: Props) {
   const body = (text || "").trim();
   if (!body && !children) return null;
@@ -110,7 +127,7 @@ export default function AiMarkdown({
             if (block.kind === "p") {
               return (
                 <p key={`p-${i}`} className="leading-relaxed">
-                  {parseInline(block.text)}
+                  {parseInline(block.text, render)}
                 </p>
               );
             }
@@ -120,7 +137,7 @@ export default function AiMarkdown({
                   key={`h-${i}`}
                   className="font-semibold leading-relaxed text-gray-200"
                 >
-                  {parseInline(block.text)}
+                  {parseInline(block.text, render)}
                 </p>
               );
             }
@@ -148,7 +165,7 @@ export default function AiMarkdown({
                 createElement(
                   "li",
                   { key: j, className: "pl-0.5" },
-                  parseInline(item)
+                  parseInline(item, render)
                 )
               )
             );

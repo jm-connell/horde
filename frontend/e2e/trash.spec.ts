@@ -61,6 +61,32 @@ test("a deleted video waits in the trash and comes back", async ({
   await expect(videoCard(page, "Harbor Lights").first()).toBeVisible();
 });
 
+test("deleting the playing video stops it", async ({ page, request }) => {
+  const id = await videoId(request, "Harbor Lights");
+  await page.goto(`/watch/${id}`);
+  const video = page.locator("video").first();
+  await video.evaluate((v: HTMLVideoElement) => v.play());
+  await expect
+    .poll(() => video.evaluate((v: HTMLVideoElement) => v.paused))
+    .toBe(false);
+
+  await page.getByTitle("More actions").click();
+  await page.getByRole("menuitem", { name: "Delete" }).click();
+  await page
+    .getByRole("dialog", { name: "Move to trash?" })
+    .getByRole("button", { name: "Move to trash" })
+    .click();
+  await expect(page).toHaveURL(/\/$/);
+  // Leaving the watch page would otherwise carry on in the mini player.
+  await expect(page.locator(".player-mini")).toHaveCount(0);
+  await expect(page.locator("video")).toHaveCount(0);
+
+  await toast(page, "Moved “Harbor Lights” to the trash")
+    .getByRole("button", { name: "Undo" })
+    .click();
+  await expect(toast(page, "Restored “Harbor Lights”")).toBeVisible();
+});
+
 test("bulk-deleted videos are erased by emptying the trash", async ({
   page,
 }) => {

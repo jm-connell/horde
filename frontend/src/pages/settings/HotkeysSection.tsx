@@ -42,6 +42,7 @@ export default function HotkeysSection() {
 
   return (
     <Section
+      anchor="hotkeys"
       title="Hotkeys"
       hidden={
         !match(

@@ -27,6 +27,8 @@ import ConnectionTag from "./components/ConnectionTag";
 import TopNav from "./components/TopNav";
 import AppFooter from "./components/AppFooter";
 import BackgroundEffect from "./components/BackgroundEffect";
+import BottomTabBar from "./components/BottomTabBar";
+import EdgeSwipeBack from "./components/EdgeSwipeBack";
 import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
@@ -42,6 +44,7 @@ import { useSetupGate } from "./hooks/useSettings";
 import { useOfflineQuotaToast } from "./hooks/useOfflineQuotaToast";
 import { useServiceWorkerUpdate } from "./hooks/useServiceWorkerUpdate";
 import RequirePermission from "./components/auth/RequirePermission";
+import CustomCssOffNotice from "./components/CustomCssOffNotice";
 import { AuthGate, AuthProvider, useAuth } from "./context/AuthContext";
 import { createQueryClient } from "./queries/client";
 
@@ -101,6 +104,7 @@ function AppRoutes() {
       {/* A render error stays inside <main> so the nav still works, and
           resets on navigation. Lazy routes suspend here until their chunk
           arrives (a failed chunk fetch throws into the boundary). */}
+      <CustomCssOffNotice />
       <ErrorBoundary scope="route" resetKey={location.key}>
         <Suspense fallback={<LoadingIndicator label="Loading" />}>
           <Routes>
@@ -199,7 +203,9 @@ function AppShell() {
       <TopNav />
       <AppRoutes />
       <AppFooter />
+      <BottomTabBar />
       <HelpChatHost />
+      <EdgeSwipeBack />
     </div>
   );
 }

@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-10-30
+
 ### Added
 
 - **Recommended+**, a third home tab for when you don't know what to watch:
@@ -30,9 +32,57 @@ All notable changes to Horde are documented here. The format follows
   watch there steer both (recent viewing far more than old, with the odd
   **Throwback**). The Download page lists what you rewatch most and have not
   downloaded, and History stats can count YouTube views (never as watch time).
+- Live broadcasts of followed channels show up in Recommended (with
+  "Include not downloaded" on) and Recommended+: first when you watched the
+  channel in the last two weeks, a few cards in otherwise.
+- Channel pages show the channel's YouTube profile picture.
+- A live stream you left (screen off, another app) reconnects when you come
+  back a minute or more later and plays on from where you left it in the live
+  timeline, as if paused there.
+- **The installed app feels like a phone app.** On a phone, a floating tab
+  bar at the bottom of the screen holds Home, Search, Download and Chat (Ask
+  about Horde); the current tab shows its name, and tapping it again jumps to
+  the top. Choose the tabs (also Playlists, History, Offline or Settings) and
+  their order in Settings → Appearance → Tab bar. The bar follows your panel
+  transparency settings, hides while the keyboard is up, and the mini player,
+  queue and toasts sit above it. Everything else stays in the menu at the top
+  right.
+- In the app added to the iPhone or iPad Home Screen, swipe right from the
+  left edge to go back.
+- **Ask about Horde does more than answer.** It links settings and pages
+  (following one opens the right tab, scrolls to the setting and rings it),
+  offers to change safe settings for you with an **Apply** button and
+  **Undo** (riskier ones, such as AI keys, accounts and the storage limit,
+  it only links to), and with **Use my data** on answers about your own
+  downloads, history, playlists and library, sending only what a question
+  needs and asking first when the AI is a cloud service. It offers to
+  download a link you give it or build a playlist from videos it found, and
+  writes custom CSS you preview for 20 seconds before keeping it. Each
+  opening suggests three questions, starting with **What can you do?**
+- An optional **Assistant model** (Settings → AI → Models) gives Ask about
+  Horde a stronger model than summaries and tags use. The assistant knows
+  roughly how capable its model is and says when a bigger one would write
+  better CSS.
+- Settings links can point at one setting: `/settings?tab=appearance&find=background`
+  scrolls to it and highlights it.
+- `?nocss` on any address loads Horde without your custom CSS for that tab,
+  with a notice and a button to turn it back on, so a stylesheet that hides
+  the page can always be fixed.
 
 ### Changed
 
+- In the installed app on a phone or tablet, the page no longer bounces or
+  pulls to refresh past its ends, pinching no longer zooms the whole interface
+  (use Settings → Appearance → Font size), and long-pressing a thumbnail or the
+  menu no longer selects text or opens a link preview. A browser tab and the
+  installed desktop app keep the browser's usual behaviour.
+- The installed app has proper icons on Android, including one the launcher
+  can shape to match its other icons.
+- New search results start at the top of the page instead of wherever the
+  page was scrolled.
+- A channel page's search index state ("Not indexed") sits beside Follow
+  instead of on a line of its own, and the header counts "videos downloaded"
+  instead of "videos in library".
 - Live broadcast cards keep the same 16:9 thumbnail as the cards beside them
   instead of growing taller with black bars.
 - Recommended now includes not-downloaded uploads from every indexed channel
@@ -48,6 +98,17 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- Deleting the video that is playing stops it at once, instead of it playing
+  on in the mini player.
+- On iPhone, the bulk-select bar's buttons no longer sit under the home
+  indicator, and Safari's toolbar no longer pushes the bottom of dialogs and
+  the queue off screen.
+- On iPhone and iPad the page under the top bar now keeps its place when iOS
+  changes the status-bar area after load (opening the installed app, rotating,
+  leaving fullscreen): no more empty band above the video on iPhone, and the
+  bar no longer covers the top of the video on iPad.
+- On phones and narrow windows, "AI generated chapters" and its Regenerate
+  button sit right above the chapter list instead of above the description.
 - AI chats (Ask about Horde and video chat) no longer fail on a brief rate
   limit from the AI provider: a 429 before the answer starts is retried after
   1, 2 and 4 seconds (or the provider's `Retry-After`, up to 10 seconds), and
@@ -813,7 +874,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.0...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.1...main
+[1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jm-connell/horde/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/jm-connell/horde/compare/v1.0.3...v1.1.0

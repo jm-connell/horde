@@ -37,6 +37,7 @@ export default function BackgroundSection({
 
   return (
     <Section
+      anchor="background"
       title="Background"
       hidden={
         !!q &&

@@ -128,6 +128,7 @@ nav:
       - 0018 Ask about Horde retrieval: adr/0018-help-chat-retrieval.md
       - 0019 Recommended+: adr/0019-recommended-plus.md
       - 0020 YouTube history from Takeout: adr/0020-youtube-history-from-takeout.md
+      - 0021 Ask about Horde actions: adr/0021-help-chat-acts-through-confirmed-tokens.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

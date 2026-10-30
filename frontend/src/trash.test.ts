@@ -23,6 +23,8 @@ describe("trash entry headers", () => {
   });
 
   it("reads the entries of a delete and of a partly failed bulk delete", async () => {
+    // A delete announces itself (VIDEOS_DELETED_EVENT) on window.
+    vi.stubGlobal("window", new EventTarget());
     vi.stubGlobal(
       "fetch",
       vi

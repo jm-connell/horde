@@ -7,7 +7,11 @@ import {
   applyTheme,
   loadSettings,
 } from "./hooks/useSettings";
-import { applyCustomCss, applyPageId } from "./customCss";
+import {
+  applyCustomCss,
+  applyPageId,
+  suspendCustomCssFromUrl,
+} from "./customCss";
 import { applyUiFont } from "./fonts";
 // The default UI font ships with the app, so a fresh install never asks
 // Google Fonts for anything.
@@ -27,6 +31,7 @@ runStorageMigrations();
 const bootSettings = loadSettings();
 applyTheme(bootSettings.theme, bootSettings.customColors);
 applyMotionPrefs(bootSettings);
+suspendCustomCssFromUrl();
 applyCustomCss(bootSettings.customCss, bootSettings.customCssEnabled);
 applyPageId(window.location.pathname);
 void applyUiFont({

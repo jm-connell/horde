@@ -1,5 +1,5 @@
-import type { Permission } from "../types";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDownloads } from "../context/DownloadContext";
@@ -11,7 +11,6 @@ import { useSearch } from "../context/SearchContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
-import { useAuth } from "../context/AuthContext";
 import AccountMenu from "./auth/AccountMenu";
 import { queryKeys } from "../queries/keys";
 import { useReviewCount } from "../queries/status";
@@ -24,6 +23,7 @@ import {
   useOfflineDownloads,
 } from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
+import { isLinkActive, useNavLinks } from "./navLinks";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 import { actionForKey, resolveHotkeys } from "../hotkeys";
 import {
@@ -32,53 +32,11 @@ import {
   ownsArrowKeys,
 } from "../utils/keyboardTarget";
 
-interface NavLinkDef {
-  to: string;
-  label: string;
-  end: boolean;
-  /** Needs the server; hidden in offline mode. */
-  serverOnly?: boolean;
-  /** Hidden for accounts without this permission. */
-  permission?: Permission;
-}
-
-const BASE_LINKS: NavLinkDef[] = [
-  { to: "/", label: "Home", end: true },
-  { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
-  { to: "/history", label: "History", end: false, serverOnly: true },
-  {
-    to: "/download",
-    label: "Download",
-    end: false,
-    serverOnly: true,
-    permission: "download",
-  },
-  {
-    to: "/import",
-    label: "Import",
-    end: false,
-    serverOnly: true,
-    permission: "download",
-  },
-  { to: "/settings", label: "Settings", end: false },
-];
-
-const OFFLINE_LINK: NavLinkDef = {
-  to: "/offline",
-  label: "Offline",
-  end: false,
-};
-
 /** Search box and account button before the desktop layout has been measured. */
 const DESKTOP_RIGHT_ESTIMATE_PX = 380;
 
 const ICON_BTN =
   "ui-nav-icon relative z-10 shrink-0 bg-transparent p-1.5 text-gray-300 hover:text-gray-100";
-
-function isLinkActive(pathname: string, to: string, end: boolean): boolean {
-  if (end) return pathname === to;
-  return pathname === to || pathname.startsWith(`${to}/`);
-}
 
 export default function TopNav() {
   const queryClient = useQueryClient();
@@ -89,12 +47,15 @@ export default function TopNav() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [useHamburger, setUseHamburger] = useState(false);
   const [navHidden, setNavHidden] = useState(false);
-  const [navH, setNavH] = useState(56);
+  // The bar's height below the safe-area inset. The inset itself is added in
+  // CSS (`navOffset`): iOS changes it after load (launch, rotation, leaving
+  // fullscreen) without resizing the header's content box, so a measured
+  // total went stale and left a gap or put the nav over the page.
+  const [barH, setBarH] = useState(56);
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const { resetHome } = useHomeReset();
   const [settings] = useSettings();
-  const { can } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode } = usePlaybackSession();
@@ -114,15 +75,7 @@ export default function TopNav() {
     activeOffline,
     offlineSnap.liveBytes
   ).progress;
-  const NAV_LINKS: NavLinkDef[] = (
-    hasOfflineItems || offlineMode
-      ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
-      : BASE_LINKS
-  ).filter(
-    (link) =>
-      !(offlineMode && link.serverOnly) &&
-      (!link.permission || can(link.permission))
-  );
+  const NAV_LINKS = useNavLinks();
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -139,6 +92,8 @@ export default function TopNav() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const desktopSearchRef = useRef<HTMLInputElement>(null);
   const lastScrollY = useRef(0);
+
+  const navOffset = `calc(env(safe-area-inset-top) + ${barH}px)`;
 
   const showDownloadBadge = settings.showDownloadNavBadge && activeCount > 0;
 
@@ -252,7 +207,13 @@ export default function TopNav() {
   useLayoutEffect(() => {
     const el = headerRef.current;
     if (!el) return;
-    const measure = () => setNavH(el.offsetHeight);
+    const measure = () =>
+      setBarH(
+        Math.max(
+          0,
+          el.offsetHeight - parseFloat(getComputedStyle(el).paddingTop)
+        )
+      );
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -286,23 +247,42 @@ export default function TopNav() {
   }, [useHamburger, menuOpen, searchOpen, menuRendered]);
 
   const openSearch = () => {
-    setMenuOpen(false);
-    setNavHidden(false);
-    setSearchOpen(true);
+    // Render the box and focus it within the tap: iOS only raises the
+    // keyboard for a focus made while handling the user's gesture.
+    flushSync(() => {
+      setMenuOpen(false);
+      setNavHidden(false);
+      setSearchOpen(true);
+    });
+    (useHamburger ? searchInputRef : desktopSearchRef).current?.focus();
     if (location.pathname !== "/" || location.search) {
       navigate({ pathname: "/", search: "" });
     }
   };
 
+  // The installed app's tab bar has a Search tab (BottomTabBar). No
+  // dependency list: openSearch reads the current location.
+  useEffect(() => {
+    window.addEventListener("horde:open-search", openSearch);
+    return () => window.removeEventListener("horde:open-search", openSearch);
+  });
+
   // Search lives in the nav on every page; results are the home page's, so
   // typing anywhere else, or on a `?channel=` page, goes home (Library closes a
   // channel opened from the sidebar itself). A tag filter on home is kept.
+  // New results start at the top, however far down the page was scrolled.
   const onSearchInput = (value: string) => {
     setSearch(value);
     const onHome =
       location.pathname === "/" &&
       !new URLSearchParams(location.search).has("channel");
     if (!onHome) navigate("/");
+    window.scrollTo({ top: 0 });
+  };
+
+  const onSearchEnter = () => {
+    commitSearch();
+    window.scrollTo({ top: 0 });
   };
 
   // The "Focus search" hotkey, on every page. No dependency list: it reads
@@ -504,7 +484,7 @@ export default function TopNav() {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault();
-                      commitSearch();
+                      onSearchEnter();
                     } else if (e.key === "Escape") {
                       e.currentTarget.blur();
                     }
@@ -536,7 +516,7 @@ export default function TopNav() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        commitSearch();
+                        onSearchEnter();
                       }
                     }}
                     placeholder="Search"
@@ -657,7 +637,7 @@ export default function TopNav() {
           <nav
             ref={menuPanelRef}
             className="fixed inset-x-0 z-40"
-            style={{ top: navH }}
+            style={{ top: navOffset }}
           >
             <Collapse
               open={menuShown}
@@ -705,7 +685,7 @@ export default function TopNav() {
           </nav>
         </>
       )}
-      <div aria-hidden className="shrink-0" style={{ height: navH }} />
+      <div aria-hidden className="shrink-0" style={{ height: navOffset }} />
     </>
   );
 }

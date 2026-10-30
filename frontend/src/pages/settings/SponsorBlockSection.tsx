@@ -37,6 +37,7 @@ export default function SponsorBlockSection() {
 
   return (
     <Section
+      anchor="sponsorblock"
       title="SponsorBlock"
       description="Skip sponsored segments and other non-content during YouTube playback. Has no effect on other sources. Files on disk are unchanged."
       hidden={!!q && !match(SPONSOR_BLOCK_SEARCH_KEYWORDS)}

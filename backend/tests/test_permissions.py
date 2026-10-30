@@ -158,6 +158,8 @@ GATES: dict[tuple[str, str], str] = {
             ("DELETE", "/api/preview/ai/chat"),
             ("POST", "/api/preview/ai/chat"),
             ("POST", "/api/ai/help/chat"),
+            ("GET", "/api/ai/help/catalog"),
+            ("GET", "/api/ai/help/info"),
         ]
     },
 }

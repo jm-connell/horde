@@ -28,6 +28,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
 import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
+import { useLiveResume } from "./player/useLiveResume";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -301,6 +302,18 @@ export default function VideoPlayer({
   });
 
   const liveWindow = useLiveWindow(shakaPlayerRef, live, shakaReady);
+  const reconnectLive = useCallback(() => {
+    setMediaError(null);
+    setBuffering(true);
+    setDashReloadToken((n) => n + 1);
+  }, [setMediaError, setBuffering, setDashReloadToken]);
+  useLiveResume({
+    enabled: live,
+    videoRef,
+    shakaPlayerRef,
+    shakaReady,
+    reconnect: reconnectLive,
+  });
 
   const seekTo = useCallback(
     (sec: number) => {

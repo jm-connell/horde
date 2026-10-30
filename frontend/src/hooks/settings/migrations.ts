@@ -6,6 +6,7 @@ import {
   parseCustomFontInput,
 } from "../../fonts";
 import { normalizeHotkeyOverrides } from "../../hotkeys";
+import { normalizeTabBarItems } from "../../tabBar";
 import { isLoadingStyle } from "../../loadingStyles";
 import {
   normalizeSponsorBlockCategories,
@@ -485,6 +486,7 @@ export function normalizeSettings(
       DEFAULTS.playerShortcuts
     ),
     hotkeys: normalizeHotkeyOverrides(parsed.hotkeys),
+    tabBarItems: normalizeTabBarItems(parsed.tabBarItems),
     previewOnHover: normalizeBool(
       parsed.previewOnHover,
       DEFAULTS.previewOnHover
@@ -493,6 +495,10 @@ export function normalizeSettings(
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
     compatCopyResolution:
       parsed.compatCopyResolution === "source" ? "source" : "1080p",
+    helpChatData:
+      parsed.helpChatData === "local" || parsed.helpChatData === "cloud"
+        ? parsed.helpChatData
+        : "off",
     ...normalizeFontSettings(parsed),
   };
 }

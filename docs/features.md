@@ -14,6 +14,7 @@ The top bar has **Home** (the library), **Playlists**, **History**, **Download**
 - **Edit a video's title, notes or tags, normalize its volume, save it to this device or delete it**: the same **•••** menu on its watch page.
 - **Add files you already have**: **Import**, or drop them in the media folder.
 - **Change how Horde looks, downloads and plays**: **Settings → Appearance / Library / Playback**. **AI** and **System** are there for the administrator.
+- **Have Horde do it for you**: **Ask about Horde** (footer) links and changes settings, answers about your own downloads and library with **Use my data** on, offers downloads and playlists, and writes custom CSS you preview first.
 
 ## Downloads
 

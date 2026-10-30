@@ -47,6 +47,7 @@ export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
 export type ChannelLive = S["ChannelLiveResponse"];
+export type ChannelAvatar = S["ChannelAvatarRead"];
 export type StorageStats = S["StorageStats"];
 /** A deleted video in the trash. `reason` says why when a rule (not a person) deleted it. */
 export type TrashItem = S["TrashItemRead"];
@@ -67,6 +68,10 @@ export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
 export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type HelpChatTurn = S["HelpChatTurn"];
+export type HelpCatalog = S["HelpCatalog"];
+export type HelpCatalogSetting = S["HelpCatalogSetting"];
+export type HelpCatalogPage = S["HelpCatalogPage"];
+export type HelpAssistantInfo = S["HelpAssistantInfo"];
 export type OpenRouterCosts = S["AiCostsRead"];
 export type OpenRouterModel = S["AiModelRow"];
 /** `models` / `embedding_models` / `presets` are always sent (defaults in the schema). */

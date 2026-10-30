@@ -59,6 +59,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
 
   return (
     <Section
+      anchor="status"
       title="Status"
       hidden={
         !match(

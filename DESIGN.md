@@ -213,6 +213,22 @@ right and the play queue docks beside it. A quiet footer (centred
 page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
+The installed app (`display-mode: standalone`) on a phone adds a floating tab
+island (`BottomTabBar`): a centred `rounded-full` `.ui-panel` pill with an
+`ink-700` hairline and a soft drop shadow, sitting just above the home
+indicator (12px off the bottom without one). It follows the panel
+transparency, blur and tint but never takes `.ui-panel-legible`: it holds
+icons, not text. Tabs are 44px-tall capsules with 22px line icons (24px grid,
+1.9 stroke, round caps and joins); the current tab fills with `accent/15`
+and its label opens out beside the icon, the others are icon-only in
+`gray-300`. The user picks the tabs and their order (Settings → Appearance →
+Tab bar, `src/tabBar.ts`, at most 5). It slides down out of the way while
+the on-screen keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
+`<html>` (0 while it is away for the keyboard); anything fixed to the bottom
+of the screen (mini player, queue dock, toasts, floating panels, the phone
+Ask about Horde panel) adds it to its bottom offset. Bottom sheets and the
+bulk-select bar cover it instead. A browser tab has no tab bar.
+
 ## Elevation & Depth
 
 Depth is tonal first: page `ink-950`, panels and cards `ink-900` with a 1px
@@ -291,7 +307,20 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
   corner like the mini player, and becomes a bottom sheet on phones. Escape
-  closes it while focus is inside; the page behind stays usable.
+  closes it while focus is inside; the page behind stays usable. Its replies
+  link settings, pages and videos as small inline chips (`ink-950` fill,
+  `ink-700` border, accent text), and put each offered action (Apply a
+  setting, Download, Make playlist, Preview CSS) in a card under the reply
+  with one primary button; a done card shows a `success` check and Undo.
+  A link that leaves the site is followed by its host in `text-muted`
+  ("Docs (example.com)"), so it cannot pass for one of Horde's own.
+- **Found setting.** A link that points at one setting (`?find=`) scrolls it
+  to the middle of the screen, focuses it and rings it with a 2px accent
+  outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
+- **CSS preview bar.** While CSS from the assistant is on trial, a bar is
+  pinned top-centre (inline position and the top z-index, so ordinary rules
+  in the CSS being tried do not move it) with a countdown, **Keep** and
+  **Revert**; the countdown and Escape still revert CSS that hides it.
 - **Progress.** Full-width fill moved with `translateX`, linear, on an `ink-700`
   or `ink-800` track; accent for downloads, sky for background jobs, red on
   failure.

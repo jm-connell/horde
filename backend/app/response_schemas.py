@@ -161,7 +161,8 @@ class RecommendationItemRead(BaseModel):
     video: VideoRead | None = None
     stream: ChannelFeedEntry | None = None
     #: ``throwback``: picked from a channel or topic the user watched months ago.
-    reason: Literal["throwback"] | None = None
+    #: ``live``: a followed channel's broadcast, live now (not counted in ``offset``).
+    reason: Literal["throwback", "live"] | None = None
 
 
 class RecommendationSectionRead(BaseModel):
@@ -468,7 +469,7 @@ class FontList(BaseModel):
 
 
 class DiscoverReasonRead(BaseModel):
-    #: subscription | similar | new_channel | throwback | library
+    #: subscription | similar | new_channel | throwback | library | live
     kind: str
     text: str
     #: A longer why (``Because you watched ...``) for a tooltip.

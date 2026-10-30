@@ -29,7 +29,8 @@ from ..url_safety import fetch_bytes
 logger = logging.getLogger(__name__)
 
 _MAX_PAGE_BYTES = 6 * 1024 * 1024
-_HEADERS = {
+#: Sent with every YouTube page read (also by ``services/channel_avatar``).
+PAGE_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
@@ -225,6 +226,6 @@ def fetch_live_page(channel_url: str, *, timeout: float = 20.0) -> str:
         live_page_url(channel_url),
         max_bytes=_MAX_PAGE_BYTES,
         timeout=timeout,
-        headers=_HEADERS,
+        headers=PAGE_HEADERS,
     )
     return result.body.decode("utf-8", errors="replace")

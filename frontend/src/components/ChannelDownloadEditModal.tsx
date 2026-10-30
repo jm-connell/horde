@@ -54,7 +54,7 @@ export default function ChannelDownloadEditModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={dialogTitleId}
-        className={`max-h-[90vh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
+        className={`max-h-[90dvh] w-full max-w-lg overflow-y-auto outline-hidden rounded-xl bg-ink-900 p-6 shadow-2xl ring-1 ring-ink-700 ${DIALOG_PANEL_ENTER}`}
       >
         <div className="mb-4 flex items-start justify-between gap-3">
           <h2

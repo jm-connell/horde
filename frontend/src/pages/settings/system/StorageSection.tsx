@@ -71,6 +71,7 @@ export default function StorageSection({
 
   return (
     <Section
+      anchor="storage"
       title="Storage"
       hidden={
         !match(

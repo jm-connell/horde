@@ -6,6 +6,7 @@ import {
   isChapterActive,
   nextChapterStartAfter,
 } from "./useChapters";
+import { liveResumeTime } from "./useLiveResume";
 import { noticeReducer, skipNoticeText } from "./useSkipSegments";
 
 const seg = { startSec: 5, endSec: 9, label: "Sponsor" };
@@ -107,5 +108,18 @@ describe("playerLayout", () => {
       "cursor-grab"
     );
     expect(playerLayout(base).miniStyle).toBeUndefined();
+  });
+});
+
+describe("liveResumeTime", () => {
+  const range = { start: 100, end: 3700 };
+
+  it("keeps the distance behind live plus the time away", () => {
+    expect(liveResumeTime(range, 0)).toBe(3700);
+    expect(liveResumeTime(range, 600)).toBe(3100);
+  });
+
+  it("stops at the oldest part the stream still keeps", () => {
+    expect(liveResumeTime(range, 9000)).toBe(100);
   });
 });

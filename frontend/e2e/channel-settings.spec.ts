@@ -190,3 +190,43 @@ test("renaming into another channel says its cleanup rule was turned off", async
     0
   );
 });
+
+test("the header shows the channel's picture and its index beside Follow", async ({
+  page,
+}) => {
+  await giveKilnAYoutubeUrl(page);
+  const avatar = "https://yt3.googleusercontent.com/kiln=s176-c-k-no-rj";
+  await page.route(/\/api\/channels\/avatar\?/, (route) =>
+    route.fulfill({ json: { url: avatar } })
+  );
+  await page.route(avatar, (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64"
+      ),
+    })
+  );
+  await page.goto("/?channel=Kiln");
+
+  const picture = page.locator(`img[src="${avatar}"]`);
+  await expect(picture).toBeVisible();
+  await expect
+    .poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBe(1);
+  await expect(page.getByText(/\d+ videos? downloaded/)).toBeVisible();
+
+  // The index state sits on the action row, left of Follow, not on a line of its own.
+  const index = page.getByRole("button", { name: "Not indexed" });
+  const follow = page.getByRole("button", { name: "Follow", exact: true });
+  await expect(index).toBeVisible();
+  await expect(page.getByRole("list", { name: "Channel status" })).toHaveCount(
+    0
+  );
+  const [i, f] = await Promise.all([index.boundingBox(), follow.boundingBox()]);
+  expect(i && f && i.x + i.width <= f.x).toBe(true);
+  expect(
+    i && f && Math.abs(i.y + i.height / 2 - (f.y + f.height / 2))
+  ).toBeLessThan(4);
+});
