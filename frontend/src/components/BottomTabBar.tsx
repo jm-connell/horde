@@ -34,6 +34,9 @@ function opensKeyboard(el: Element | null): boolean {
  *  is no bar. */
 const BAR_VAR = "--horde-bottom-bar";
 
+/** How long after the keyboard's text box loses focus the bar comes back. */
+const BAR_RETURN_MS = 300;
+
 /**
  * Phone tab bar for the installed app: a floating island at the bottom of the
  * screen with the tabs chosen in Settings (Home, Search, Download and Chat by
@@ -79,9 +82,21 @@ export default function BottomTabBar() {
     if (!shown) return;
     const vv = window.visualViewport;
     let keyboardSeen = false;
+    let comeBack = 0;
     const onFocus = () => {
       keyboardSeen = false;
-      setTyping(opensKeyboard(document.activeElement));
+      window.clearTimeout(comeBack);
+      if (opensKeyboard(document.activeElement)) {
+        setTyping(true);
+        return;
+      }
+      // Come back a moment later, not mid-tap: the bar lifts everything
+      // fixed above it, so a tap that takes focus from a text box (Send in
+      // Ask about Horde) would end on whatever moved under the finger.
+      comeBack = window.setTimeout(
+        () => setTyping(opensKeyboard(document.activeElement)),
+        BAR_RETURN_MS
+      );
     };
     // Android closes the keyboard (back, swipe down) without moving focus:
     // bring the bar back once the viewport is full height again.
@@ -99,6 +114,7 @@ export default function BottomTabBar() {
     window.addEventListener("focusout", onFocus);
     vv?.addEventListener("resize", onViewportResize);
     return () => {
+      window.clearTimeout(comeBack);
       window.removeEventListener("focusin", onFocus);
       window.removeEventListener("focusout", onFocus);
       vv?.removeEventListener("resize", onViewportResize);

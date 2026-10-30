@@ -238,6 +238,36 @@ test("the Search tab opens the search box and Chat opens Ask about Horde", async
   await expect(panel).toHaveCount(0);
 });
 
+test("a tap in Ask about Horde while typing lands where it was aimed", async ({
+  page,
+}) => {
+  const answer = "Here is how.";
+  await page.route(/\/api\/ai\/help\/chat$/, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: [
+        { type: "token", text: answer },
+        {
+          type: "done",
+          message: { id: null, role: "assistant", content: answer },
+        },
+      ]
+        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+        .join(""),
+    })
+  );
+  await launch(page, "/");
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await tabs.getByRole("button", { name: "Chat" }).click();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await panel.getByRole("textbox", { name: "Your question" }).fill("how?");
+  // The tap takes focus from the question box. The island must not come
+  // back (lifting the panel) under the finger before the tap is done.
+  await panel.getByRole("button", { name: "Send" }).tap();
+  await expect(panel.getByText(answer)).toBeVisible();
+});
+
 test("Settings chooses the tabs and their order", async ({ page }) => {
   await launch(page, "/settings?tab=appearance");
   const shown = page.getByRole("list", { name: "Tabs shown" });
