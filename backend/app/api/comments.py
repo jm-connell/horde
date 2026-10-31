@@ -70,11 +70,6 @@ def video_comments(video_id: int, session: Session = Depends(get_session)):
         status="pending",
         youtube_id=video.youtube_id,
         items=items,
-        next_limit=(
-            live.next_step(fetch.TOP_COMMENTS)
-            if len(items) >= fetch.TOP_COMMENTS
-            else None
-        ),
     )
     if state is None:
         if not comments_worker.enabled():
@@ -82,9 +77,11 @@ def video_comments(video_id: int, session: Session = Depends(get_session)):
         return read
     read.fetched_at = state.fetched_at
     read.total_count = state.total_count
-    if state.status == fetch.FAILED and state.next_attempt_at is not None:
-        return read  # a retry is due: still pending
-    read.status = _STORED.get(state.status, "failed")
+    if state.status != fetch.FAILED or state.next_attempt_at is None:
+        read.status = _STORED.get(state.status, "failed")
+    # More can be read from YouTube only while it still shows the comments.
+    if read.status in ("saved", "pending") and len(items) >= fetch.TOP_COMMENTS:
+        read.next_limit = live.next_step(fetch.TOP_COMMENTS)
     return read
 
 
@@ -111,6 +108,10 @@ def live_comments(youtube_id: str, limit: int = fetch.TOP_COMMENTS):
     if result.status == fetch.RETRY:
         raise CodedHTTPException(
             503, "YouTube is limiting requests; try again later", "youtube_rate_limited"
+        )
+    if result.status == fetch.LATER:
+        raise CodedHTTPException(
+            503, "Could not reach YouTube; try again later", "youtube_unreachable"
         )
     if result.status == fetch.FAILED:
         raise CodedHTTPException(

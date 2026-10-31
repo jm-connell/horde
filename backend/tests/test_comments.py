@@ -88,7 +88,8 @@ def test_comments_are_read_from_ytdlp_without_processing_formats(monkeypatch):
             self.add_info_extractor(FakeYoutubeIE())
 
     monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
-    result = fetch._fetch(fetch.video_url("abcdefghijk"), 100, True)
+    monkeypatch.setattr(fetch, "call_gated", lambda fn, **_: fn())
+    result = fetch._fetch(fetch.video_url("abcdefghijk"), 100, True, 2)
     assert result.status == fetch.SAVED
     assert result.total_count == 4321
     assert [(c.comment_id, c.parent_comment_id) for c in result.comments] == [
@@ -99,6 +100,51 @@ def test_comments_are_read_from_ytdlp_without_processing_formats(monkeypatch):
     first, _, second = result.comments
     assert first.is_pinned and first.author_is_uploader and not first.is_hearted
     assert second.is_hearted and second.like_count == 7
+
+
+def test_only_the_page_extract_holds_the_gate(monkeypatch):
+    """Previews and downloads must not wait for the comment pages."""
+    import yt_dlp
+    from yt_dlp.extractor.common import InfoExtractor
+
+    state = {"in_gate": False, "pages_in_gate": None, "spacing": None}
+
+    def gated(fn, **_):
+        state["in_gate"] = True
+        try:
+            return fn()
+        finally:
+            state["in_gate"] = False
+
+    class FakeYoutubeIE(InfoExtractor):
+        IE_NAME = "fakeyoutube"
+        _VALID_URL = r"https://www\.youtube\.com/watch\?v=(?P<id>[\w-]{11})"
+
+        def _real_extract(self, url):
+            video_id = self._match_id(url)
+            return {
+                "id": video_id,
+                "title": "t",
+                "__post_extractor": self.extract_comments(video_id),
+            }
+
+        def _get_comments(self, video_id):
+            state["pages_in_gate"] = state["in_gate"]
+            state["spacing"] = self.get_param("sleep_interval_requests")
+            yield _raw("a", "first")
+
+    class FakeYoutubeDL(yt_dlp.YoutubeDL):
+        def __init__(self, params=None, auto_init=True):
+            super().__init__(params, auto_init=False)
+            self.add_info_extractor(FakeYoutubeIE())
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    monkeypatch.setattr(fetch, "call_gated", gated)
+    assert fetch.fetch_comments("abcdefghijk").status == fetch.SAVED
+    assert state["pages_in_gate"] is False
+    assert state["spacing"] == fetch.PAGE_SPACING_SEC
+    live_read = fetch.fetch_comments("abcdefghijk", priority=0)
+    assert live_read.status == fetch.SAVED and state["spacing"] == 0.0
 
 
 def test_parsing_drops_duplicates_orphans_and_empty_comments():
@@ -119,7 +165,9 @@ def test_parsing_drops_duplicates_orphans_and_empty_comments():
 
 def test_turned_off_comments_are_reported_as_disabled(monkeypatch, no_gate):
     monkeypatch.setattr(
-        fetch, "_extract", lambda url, opts: {"comment_count": None, "comments": None}
+        fetch,
+        "_extract",
+        lambda url, opts, **_: {"comment_count": None, "comments": None},
     )
     assert fetch.fetch_comments("abcdefghijk").status == fetch.DISABLED
 
@@ -133,15 +181,37 @@ def test_turned_off_comments_are_reported_as_disabled(monkeypatch, no_gate):
             "Video unavailable. This video has been removed by the uploader",
             "unavailable",
         ),
+        (
+            "Private video. Sign in if you've been granted access to this video",
+            "unavailable",
+        ),
         ("Something odd happened", fetch.FAILED),
     ],
 )
 def test_failures_are_classified(monkeypatch, no_gate, message, status):
-    def boom(url, opts):
+    def boom(url, opts, **_):
         raise RuntimeError(message)
 
     monkeypatch.setattr(fetch, "_extract", boom)
     assert fetch.fetch_comments("abcdefghijk").status == status
+
+
+def test_a_busy_gate_or_no_network_is_not_a_failure(monkeypatch, no_gate):
+    from app.services.ytdlp_common import ExtractQueueTimeout
+
+    def busy(url, opts, **_):
+        raise ExtractQueueTimeout("Gave up waiting")
+
+    monkeypatch.setattr(fetch, "_extract", busy)
+    assert fetch.fetch_comments("abcdefghijk").status == fetch.LATER
+
+    def offline(url, opts, **_):
+        from yt_dlp.networking.exceptions import TransportError
+
+        raise TransportError("Temporary failure in name resolution")
+
+    monkeypatch.setattr(fetch, "_extract", offline)
+    assert fetch.fetch_comments("abcdefghijk").status == fetch.LATER
 
 
 # --- Saving --------------------------------------------------------------------
@@ -186,6 +256,32 @@ def test_comments_turned_off_later_keep_what_was_saved(session, add_video):
     store.apply_result(session, video, FetchResult(fetch.DISABLED))
     assert [c.comment_id for c in _saved(session, video.id)] == ["a"]
     assert session.get(VideoCommentState, video.id).status == "disabled"
+
+
+def test_a_refetch_that_finds_nothing_keeps_what_was_saved(session, add_video):
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=2))
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
+    store.apply_result(session, video, FetchResult(fetch.SAVED, []))
+    assert [c.comment_id for c in _saved(session, video.id)] == ["a"]
+    assert session.get(VideoCommentState, video.id).next_attempt_at is None
+
+
+def test_later_is_tried_again_without_counting(
+    session, add_video, init_db, monkeypatch
+):
+    video = add_video()
+    monkeypatch.setattr(
+        fetch, "fetch_comments", lambda yt_id, **_: FetchResult(fetch.LATER)
+    )
+    for _ in range(store.MAX_ATTEMPTS + 1):
+        assert worker.fetch_next() is True
+        session.expire_all()
+        state = session.get(VideoCommentState, video.id)
+        assert state.attempts == 0 and state.next_attempt_at is not None
+        state.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+        session.add(state)
+        session.commit()
+    assert 0 < init_db["ctx"].comments.seconds_paused() <= worker.PAUSE_ON_LATER_SEC
 
 
 def test_failures_back_off_then_give_up(session, add_video):
@@ -343,6 +439,18 @@ def test_a_full_page_offers_more(client, session, add_video):
     assert client.get(f"/api/videos/{video.id}/comments").json()["next_limit"] == 300
 
 
+def test_no_more_is_offered_once_youtube_no_longer_shows_them(
+    client, session, add_video
+):
+    video = add_video()
+    full = [_comment(f"c{i}", f"comment {i}") for i in range(fetch.TOP_COMMENTS)]
+    store.apply_result(session, video, FetchResult(fetch.SAVED, full))
+    store.apply_result(session, video, FetchResult(fetch.DISABLED))
+    body = client.get(f"/api/videos/{video.id}/comments").json()
+    assert body["status"] == "disabled" and len(body["items"]) == 100
+    assert body["next_limit"] is None
+
+
 def test_the_status_says_why_there_are_no_comments(
     client, member_client, session, add_video
 ):
@@ -400,6 +508,39 @@ def test_more_comments_are_read_live_and_kept_for_a_while(client, monkeypatch):
     assert last["next_limit"] is None
 
 
+def test_simultaneous_live_reads_share_one_fetch(init_db, monkeypatch):
+    import threading
+    import time
+
+    calls = []
+
+    def slow(yt_id, **_):
+        calls.append(yt_id)
+        time.sleep(0.2)
+        return FetchResult(fetch.SAVED, [_comment("a", "x")])
+
+    monkeypatch.setattr(live, "fetch_comments", slow)
+    ctx = init_db["ctx"]
+    results = []
+
+    def read():
+        from app import context
+
+        previous = context.activate(ctx)
+        try:
+            results.append(live.fetch_live("abcdefghijk", 100))
+        finally:
+            context.deactivate(previous)
+
+    threads = [threading.Thread(target=read) for _ in range(3)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert calls == ["abcdefghijk"]
+    assert [r.status for r in results] == [fetch.SAVED] * 3
+
+
 def test_live_comments_refuse_bad_input_and_report_failures(client, monkeypatch):
     resp = client.get("/api/comments/youtube/not-an-id")
     assert (resp.status_code, resp.json()["code"]) == (422, "invalid_youtube_id")
@@ -407,12 +548,19 @@ def test_live_comments_refuse_bad_input_and_report_failures(client, monkeypatch)
     assert (resp.status_code, resp.json()["code"]) == (422, "invalid_limit")
 
     results = iter(
-        [FetchResult("retry"), FetchResult(fetch.FAILED), FetchResult(fetch.DISABLED)]
+        [
+            FetchResult("retry"),
+            FetchResult(fetch.LATER),
+            FetchResult(fetch.FAILED),
+            FetchResult(fetch.DISABLED),
+        ]
     )
     monkeypatch.setattr(live, "fetch_comments", lambda *a, **k: next(results))
     url = "/api/comments/youtube/abcdefghijk"
     resp = client.get(url)
     assert (resp.status_code, resp.json()["code"]) == (503, "youtube_rate_limited")
+    resp = client.get(url)
+    assert (resp.status_code, resp.json()["code"]) == (503, "youtube_unreachable")
     resp = client.get(url)
     assert (resp.status_code, resp.json()["code"]) == (502, "comments_unavailable")
     assert client.get(url).json() == {
@@ -485,6 +633,21 @@ def test_the_video_chat_sees_the_top_comments_with_the_creator_marked(
     assert "  - reply [the creator] 25 Nm" in context
     assert "thanks" not in context  # viewers' replies stay out
     assert "x" * 400 not in context  # one comment is cut short
+
+
+def test_a_thread_too_long_for_the_chat_is_skipped_not_the_rest(session, add_video):
+    video = add_video()
+    long_thread = [_comment("p", "intro", author_is_uploader=True)] + [
+        _comment(f"p.{i}", "y" * 390, parent="p", author_is_uploader=True)
+        for i in range(9)
+    ]
+    store.apply_result(
+        session,
+        video,
+        FetchResult(fetch.SAVED, [*long_thread, _comment("b", "short and sweet")]),
+    )
+    lines = store.chat_lines(session, video.id)
+    assert lines == ["- short and sweet"]
 
 
 def test_deleting_a_video_removes_its_comments_and_their_index(session, add_video):

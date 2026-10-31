@@ -13,6 +13,7 @@ from ...models import Video, VideoComment, VideoCommentState, as_utc, require_id
 from .fetch import (
     DISABLED,
     FAILED,
+    LATER,
     RETRY,
     SAVED,
     UNAVAILABLE,
@@ -22,10 +23,11 @@ from .fetch import (
 
 #: Comments on a new upload keep coming for days: fetch once more a week in.
 REFRESH_AGE = timedelta(days=7)
-#: A failed fetch is retried this many times (1 h, 4 h, 16 h apart), then left.
+#: Attempts before a failing video is left alone (retried 1 h, then 4 h later).
 MAX_ATTEMPTS = 3
 RETRY_BASE = timedelta(hours=1)
-#: After a rate limit or bot check, the same video is tried again this much later.
+#: After a rate limit, a bot check, a network error or a busy gate, the same
+#: video is tried again this much later (not counted as an attempt).
 RATE_LIMIT_WAIT = timedelta(hours=1)
 
 
@@ -71,13 +73,26 @@ def _refresh_at(video: Video, now: datetime) -> datetime | None:
 
 
 def apply_result(session: Session, video: Video, result: FetchResult) -> None:
-    """Record a fetch: replace the saved comments when it worked. Commits."""
+    """Record a fetch: replace the saved comments when it worked. Commits.
+
+    Comments saved before are never replaced by nothing: a later fetch that finds
+    none (or finds them turned off or gone) keeps them.
+    """
     video_id = require_id(video)
     now = datetime.now(UTC)
     state = session.get(VideoCommentState, video_id) or VideoCommentState(
         video_id=video_id
     )
-    if result.status == SAVED:
+    if (
+        result.status == SAVED
+        and not result.comments
+        and session.exec(
+            select(VideoComment.id).where(VideoComment.video_id == video_id).limit(1)
+        ).first()
+        is not None
+    ):
+        state.next_attempt_at = None
+    elif result.status == SAVED:
         session.exec(delete(VideoComment).where(col(VideoComment.video_id) == video_id))
         session.add_all(
             VideoComment(
@@ -107,7 +122,7 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
         state.total_count = result.total_count
         state.attempts = 0
         state.next_attempt_at = None
-    elif result.status == RETRY:
+    elif result.status in (RETRY, LATER):
         if state.fetched_at is None:
             state.status = FAILED
         state.next_attempt_at = now + RATE_LIMIT_WAIT
@@ -159,7 +174,7 @@ def chat_lines(session: Session, video_id: int) -> list[str]:
         ]
         size = sum(len(line) + 1 for line in group)
         if used + size > CHAT_COMMENTS_CHARS:
-            break
+            continue  # a long thread; a shorter one further down may still fit
         lines.extend(group)
         used += size
     return lines

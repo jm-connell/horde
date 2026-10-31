@@ -4,8 +4,12 @@ YouTube returns comments about 20 at a time in its "top" order, each reply threa
 behind a request of its own. yt-dlp's ``max_comments`` caps the top-level count and
 the total replies across all threads; threads are read in rank order, so the
 reply budget goes to the highest-ranked discussions and later threads cost no
-request at all. The info is extracted unprocessed (no format selection) and the
-comment pages are read from it inside the extract gate (``call_gated``).
+request at all (each thread that has replies costs one until the budget is spent).
+
+Only the page extract (unprocessed: no format selection, no manifests) runs inside
+the extract gate (``call_gated``), so a preview or download waits for that, not for
+the comment pages. The pages are read after it, outside the gate, with yt-dlp's
+own pause between requests (``PAGE_SPACING_SEC`` in the background).
 """
 
 from __future__ import annotations
@@ -18,14 +22,19 @@ from typing import Any
 from ..downloads.subtitles import SubtitleYtdlpLogger
 from ..ytdlp_common import (
     ERROR_KIND_BOT,
+    ERROR_KIND_COOKIES,
     ERROR_KIND_MEMBERS,
     ERROR_KIND_POT,
     ERROR_KIND_RATE_LIMIT,
     ERROR_KIND_UNAVAILABLE,
     EXTRACT_PRIORITY_BACKGROUND,
+    ExtractQueueTimeout,
     apply_cookie_opts,
     call_gated,
     classify_ytdlp_error,
+    cookie_configured,
+    is_network_error,
+    remember_cookie_required,
     should_retry_with_cookies,
     url_cookie_required,
     youtube_extractor_args,
@@ -40,6 +49,8 @@ REPLIES_PER_THREAD = 10
 REPLY_BUDGET = 100
 #: The most top-level comments a live (unsaved) fetch reads.
 LIVE_MAX = 1000
+#: Pause between comment page requests of a background fetch.
+PAGE_SPACING_SEC = 1.0
 
 _MAX_TEXT = 10_000
 _MAX_AUTHOR = 200
@@ -50,6 +61,7 @@ DISABLED = "disabled"
 UNAVAILABLE = "unavailable"
 FAILED = "failed"
 RETRY = "retry"  # rate limited or bot check: everyone waits, then tries again
+LATER = "later"  # YouTube unreachable or the gate busy: try again, not a failure
 
 _RETRY_KINDS = frozenset({ERROR_KIND_RATE_LIMIT, ERROR_KIND_BOT, ERROR_KIND_POT})
 
@@ -105,14 +117,22 @@ def _ydl_opts(limit: int, *, replies: bool) -> dict[str, Any]:
     }
 
 
-def _extract(url: str, opts: dict[str, Any]) -> dict[str, Any]:
+def _extract(
+    url: str, opts: dict[str, Any], *, priority: int, page_spacing: float
+) -> dict[str, Any]:
     import yt_dlp
 
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = dict(ydl.extract_info(url, download=False, process=False) or {})
+        info = call_gated(
+            lambda: dict(ydl.extract_info(url, download=False, process=False) or {}),
+            url=url,
+            priority=priority,
+        )
         # The real count, before the comment pages replace it with how many were read.
         total = info.get("comment_count")
         post = info.pop("__post_extractor", None)
+        # yt-dlp reads this before every request it makes.
+        ydl.params["sleep_interval_requests"] = page_spacing
         extra = post() if callable(post) else {}
     return {"comment_count": total, "comments": (extra or {}).get("comments")}
 
@@ -170,15 +190,24 @@ def parse_comments(raw: Any) -> list[FetchedComment]:
     return found
 
 
-def _fetch(url: str, limit: int, replies: bool) -> FetchResult:
+def _fetch(url: str, limit: int, replies: bool, priority: int) -> FetchResult:
     opts = _ydl_opts(limit, replies=replies)
+    spacing = PAGE_SPACING_SEC if priority >= EXTRACT_PRIORITY_BACKGROUND else 0.0
     with_cookies = url_cookie_required(url)
     try:
-        data = _extract(url, apply_cookie_opts(opts) if with_cookies else opts)
+        data = _extract(
+            url,
+            apply_cookie_opts(opts) if with_cookies else opts,
+            priority=priority,
+            page_spacing=spacing,
+        )
     except Exception as exc:
         if with_cookies or not should_retry_with_cookies({}, exc):
             raise
-        data = _extract(url, apply_cookie_opts(opts))
+        data = _extract(
+            url, apply_cookie_opts(opts), priority=priority, page_spacing=spacing
+        )
+        remember_cookie_required(url)
     total = _int_or_none(data.get("comment_count"))
     if data.get("comments") is None:
         # yt-dlp's answer when the comment section is turned off.
@@ -196,13 +225,17 @@ def fetch_comments(
     """Up to ``limit`` top comments (and replies to the top threads). Never raises."""
     url = video_url(yt_id)
     try:
-        return call_gated(
-            lambda: _fetch(url, limit, replies), url=url, priority=priority
-        )
+        return _fetch(url, limit, replies, priority)
     except Exception as exc:
+        if isinstance(exc, ExtractQueueTimeout) or is_network_error(exc):
+            logger.info("Comments for %s: try again later", yt_id, exc_info=True)
+            return FetchResult(LATER)
         kind, message = classify_ytdlp_error(exc, url=url)
         logger.info("Comments for %s failed (%s)", yt_id, kind, exc_info=True)
         if kind in (ERROR_KIND_MEMBERS, ERROR_KIND_UNAVAILABLE):
+            return FetchResult(UNAVAILABLE, message=message)
+        if kind == ERROR_KIND_COOKIES and not cookie_configured():
+            # Private or age-restricted, and Horde has no account to ask with.
             return FetchResult(UNAVAILABLE, message=message)
         if kind in _RETRY_KINDS:
             return FetchResult(RETRY, message=message)

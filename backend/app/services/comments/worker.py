@@ -4,7 +4,8 @@ Each pass fetches one video: one without saved comments (newest added first, so
 a finished download gets its comments within a minute), else one whose retry or
 new-upload refresh is due. Fetches run at background priority in the extract
 gate, at most one every ``FETCH_SPACING_SEC``; a rate limit or bot check pauses
-the fetcher for ``PAUSE_ON_LIMIT_SEC``. ``save_comments`` (Settings → Library)
+the fetcher for ``PAUSE_ON_LIMIT_SEC``, YouTube out of reach or a busy gate for
+``PAUSE_ON_LATER_SEC``. ``save_comments`` (Settings → Library)
 turns it off.
 """
 
@@ -28,6 +29,7 @@ STARTUP_DELAY_SEC = 60
 IDLE_POLL_SEC = 5 * 60
 FETCH_SPACING_SEC = 30
 PAUSE_ON_LIMIT_SEC = 60 * 60
+PAUSE_ON_LATER_SEC = 10 * 60
 
 
 def enabled() -> bool:
@@ -79,6 +81,8 @@ def fetch_next() -> bool:
     if result.status == fetch.RETRY:
         current().comments.pause(PAUSE_ON_LIMIT_SEC)
         logger.info("Comments: YouTube pushed back; pausing for an hour")
+    elif result.status == fetch.LATER:
+        current().comments.pause(PAUSE_ON_LATER_SEC)
     return True
 
 

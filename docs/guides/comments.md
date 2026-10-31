@@ -11,7 +11,7 @@ For every library video that came from YouTube, Horde saves:
 
 Each comment keeps its author, whether the author is the creator, whether it is pinned or hearted by the creator, its like count and its approximate date (YouTube only says "3 years ago").
 
-Comments are fetched in the background, one video every 30 seconds behind anything you are doing: a new download gets its comments within a minute or so, and the rest of the library is filled in newest first. A video that came out less than a week before is fetched once more when it is a week old, because comments keep coming in the first days. When YouTube rate-limits Horde, the fetcher waits an hour. A fetch that fails is tried again after an hour and after four hours, then left. Progress shows under **Settings → System → Background activity**.
+Comments are fetched in the background, one video every 30 seconds: a new download gets its comments within a minute or so, and the rest of the library is filled in newest first. A video that came out less than a week before is fetched once more when it is a week old, because comments keep coming in the first days. When YouTube rate-limits Horde, the fetcher waits an hour (ten minutes when YouTube cannot be reached). A fetch that fails is tried again after an hour and after four hours, then left. Only the first request of each fetch waits its turn with downloads and previews; the comment pages are read after it, one a second, so they never hold up anything you are doing. Progress shows under **Settings → System → Background activity**.
 
 Videos without a YouTube id (your own uploads, files from other sites, clips) have no comments.
 
@@ -19,11 +19,11 @@ Videos without a YouTube id (your own uploads, files from other sites, clips) ha
 
 The **Comments** section sits under the description, with YouTube's total count beside the heading. It starts with five threads; **Show more comments** adds twenty at a time. A thread with saved replies has an **N replies** button that opens the discussion under it. Timestamps in a comment (`3:10`) seek the player, links open in a new tab, and a comment's date opens it on YouTube.
 
-Past the 100 saved comments, **Show more comments** reads more from YouTube on the spot: the top 300, then the top 1000. These are not saved (they are kept in memory for half an hour), and YouTube has to be reachable. Until a video's comments are saved, **Load them now from YouTube** shows them straight away.
+Past the 100 saved comments, **Show more comments** reads more from YouTube on the spot: the top 300, then the top 1000 (this can take a little while; the button says **Loading from YouTube…**). These are not saved (they are kept in memory for half an hour), and YouTube has to be reachable; if it is not, what is already shown stays and **Try again** reads again. Until a video's comments are saved, **Load them now from YouTube** shows them straight away.
 
 A video you are only streaming (`/watch?url=…`) has nothing saved; **Load comments** reads its top 100 from YouTube.
 
-When comments are turned off on YouTube or the video is no longer available, the section says so, and shows the comments saved before, with the date they were saved.
+When comments are turned off on YouTube, or YouTube no longer shows them (the video is private, removed, members-only, or age-restricted and Horde has no YouTube cookies), the section says so and shows the comments saved before, with the date they were saved. A later fetch that finds no comments never removes saved ones.
 
 ## In search and chat
 

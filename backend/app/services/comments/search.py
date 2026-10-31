@@ -8,9 +8,10 @@ expression is built from the query, never taken from it.
 from __future__ import annotations
 
 from sqlalchemy import text
-from sqlmodel import Session
+from sqlmodel import Session, select
 
-from ..search_text import fts_match_expression, snippet_around
+from ...models import VideoComment
+from ..search_text import fts_match_expression, query_in_text, snippet_around
 
 #: Videos found through their comments that a search adds at most.
 MAX_VIDEOS = 200
@@ -47,19 +48,22 @@ def matching_video_ids(session: Session, query: str) -> list[int]:
 
 
 def best_snippet(session: Session, video_id: int, query: str) -> str | None:
-    """The best-liked matching comment of a video, shortened around the match."""
-    match = fts_match_expression(query)
-    if match is None or not _available(session):
+    """The best-liked comment of a video that matches, shortened around the match.
+
+    Reads the video's own saved comments (a couple of hundred at most) instead of
+    every match in the library.
+    """
+    if fts_match_expression(query) is None:
         return None
-    row = session.execute(
-        text(
-            "SELECT c.text FROM video_comments_fts "
-            "JOIN video_comments c ON c.id = video_comments_fts.rowid "
-            "WHERE video_comments_fts MATCH :q AND c.video_id = :video_id "
-            "ORDER BY coalesce(c.like_count, 0) DESC LIMIT 1"
-        ),
-        {"q": match, "video_id": video_id},
-    ).first()
-    if row is None:
+    rows = session.exec(
+        select(VideoComment.text, VideoComment.like_count).where(
+            VideoComment.video_id == video_id
+        )
+    ).all()
+    matching = [
+        (likes or 0, body) for body, likes in rows if query_in_text(query, body)
+    ]
+    if not matching:
         return None
-    return snippet_around(str(row[0]), query) or None
+    _, body = max(matching, key=lambda m: m[0])
+    return snippet_around(body, query) or None

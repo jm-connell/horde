@@ -27,6 +27,8 @@ class CommentsRuntime:
     _live: dict[tuple[str, int], tuple[float, FetchResult]] = field(
         default_factory=dict
     )
+    #: One read per (YouTube id, limit) at a time; the others wait for its result.
+    _live_reads: dict[tuple[str, int], threading.Lock] = field(default_factory=dict)
 
     def pause(self, seconds: float) -> None:
         with self._lock:
@@ -35,6 +37,14 @@ class CommentsRuntime:
     def seconds_paused(self) -> float:
         with self._lock:
             return max(0.0, self._paused_until - time.monotonic())
+
+    def live_read_lock(self, yt_id: str, limit: int) -> threading.Lock:
+        with self._lock:
+            # Locks of reads that are over and no longer cached are dropped.
+            for key in [k for k in self._live_reads if k not in self._live]:
+                if not self._live_reads[key].locked():
+                    del self._live_reads[key]
+            return self._live_reads.setdefault((yt_id, limit), threading.Lock())
 
     def live_get(self, yt_id: str, limit: int) -> FetchResult | None:
         with self._lock:
