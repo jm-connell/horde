@@ -10,6 +10,7 @@ import {
 import { useSearch } from "../context/SearchContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useSettings } from "../hooks/useSettings";
 import AccountMenu from "./auth/AccountMenu";
 import { queryKeys } from "../queries/keys";
@@ -61,6 +62,9 @@ export default function TopNav() {
   const { mode } = usePlaybackSession();
   const { videoFrameInset } = usePlaybackLayout();
   const isMobile = useIsMobile();
+  // Typing in the search box: iOS pans the page for the keyboard and would
+  // take the fixed nav (and the box) off screen with it.
+  const viewport = useVisualViewport(useHamburger && searchOpen);
   const net = useConnectivity();
   const offlineMode = net.status === "offline";
   const offlineSnap = useOfflineDownloads();
@@ -396,6 +400,7 @@ export default function TopNav() {
         ref={headerRef}
         data-horde="nav"
         data-nav-hidden={navHidden ? "true" : undefined}
+        style={viewport?.keyboard ? { top: viewport.top } : undefined}
         className={`ui-panel fixed inset-x-0 top-0 z-30 border-b border-ink-700 bg-ink-950/90 pt-[env(safe-area-inset-top)] backdrop-blur-sm motion-reduce:transition-none ${
           settings.translucentPanelLegibility ? "ui-panel-legible" : ""
         } ${

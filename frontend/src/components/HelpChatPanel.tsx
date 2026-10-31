@@ -11,6 +11,7 @@ import {
 import type { PageDetail } from "../context/HelpChatContext";
 import type { HelpCatalog } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useSettings } from "../hooks/useSettings";
 import { queryKeys } from "../queries/keys";
 import { getJson, removeItem, setJson } from "../storage";
@@ -192,6 +193,7 @@ export default function HelpChatPanel({
   const { current, stream, miniPlayerActive } = usePlaybackSession();
   const { miniPlayerRect } = usePlaybackLayout();
   const isMobile = useIsMobile();
+  const viewport = useVisualViewport(isMobile);
   const { vw, vh } = useViewport();
   const box = frame
     ? clampHelpFrame(frame, vw, vh)
@@ -430,8 +432,17 @@ export default function HelpChatPanel({
   };
   const lastId = messages[messages.length - 1]?.id;
 
+  // With the keyboard up, sit just above it inside what is visible: pinned
+  // to the bottom, iOS pans the page and the panel's top goes off screen.
+  const keyboardHeight = `min(36rem, 75dvh, ${viewport?.height ?? 0}px - 1rem)`;
   const placement: React.CSSProperties | undefined = isMobile
-    ? undefined
+    ? viewport?.keyboard
+      ? {
+          top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
+          bottom: "auto",
+          height: keyboardHeight,
+        }
+      : undefined
     : {
         left: box.left,
         top: box.top,
