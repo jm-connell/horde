@@ -49,7 +49,7 @@ export default function SaidInVideos({
                 src={youtubeListThumbnailUrl(g.yt_id) ?? undefined}
                 alt=""
                 loading="lazy"
-                className="h-16 w-28 rounded-md object-cover"
+                className="h-12 w-20 rounded-md object-cover sm:h-16 sm:w-28"
               />
             </Link>
             <div className="min-w-0 flex-1">
