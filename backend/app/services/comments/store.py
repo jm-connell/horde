@@ -30,6 +30,8 @@ REFRESH_AGES = (
     timedelta(days=182),
     timedelta(days=365),
 )
+#: Past the last age (and for a video added when already older), every this long.
+REFRESH_EVERY = timedelta(days=182)
 #: A video never fetched that is retried soon (a status of its own, not an outcome).
 PENDING = "pending"
 #: Attempts before a failing fetch waits for the next refresh age (retried 1 h,
@@ -75,10 +77,14 @@ def saved_comments(session: Session, video_id: int) -> list[VideoComment]:
     )
 
 
-def refresh_at(video: Video, now: datetime) -> datetime | None:
-    """The next refresh age the video reaches after ``now``, if any is left."""
+def refresh_at(video: Video, now: datetime) -> datetime:
+    """When to fetch again after a fetch at ``now``: the next refresh age the
+    video reaches, or ``REFRESH_EVERY`` from now once it is past them all."""
     born = as_utc(video.published_at) or as_utc(video.added_at)
-    return next((born + age for age in REFRESH_AGES if born + age > now), None)
+    return next(
+        (born + age for age in REFRESH_AGES if born + age > now),
+        now + REFRESH_EVERY,
+    )
 
 
 def apply_result(session: Session, video: Video, result: FetchResult) -> None:
@@ -142,7 +148,7 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
             if state.fetched_at is None:
                 state.status = PENDING
         else:
-            # Given up for now; the next refresh age tries again from scratch.
+            # Given up for now; the next refresh tries again from scratch.
             state.attempts = 0
             state.next_attempt_at = refresh_at(video, now)
             if state.fetched_at is None:

@@ -233,11 +233,8 @@ def test_a_fetch_replaces_the_saved_comments(session, add_video):
     )
     assert [c.comment_id for c in _saved(session, video.id)] == ["a", "a.1"]
     state = session.get(VideoCommentState, video.id)
-    assert (state.status, state.total_count, state.next_attempt_at) == (
-        "saved",
-        50,
-        None,
-    )
+    assert (state.status, state.total_count) == ("saved", 50)
+    assert state.next_attempt_at is not None
 
 
 def test_comments_are_fetched_again_at_a_week_a_month_six_months_and_a_year(
@@ -255,21 +252,25 @@ def test_comments_are_fetched_again_at_a_week_a_month_six_months_and_a_year(
         at = store.refresh_at(video, published + timedelta(days=days_old))
         return None if at is None else (at - published).days
 
-    # A fetch that ran late (Horde was off) skips the ages already past.
-    assert [next_age(d) for d in (7.5, 29, 40, 200, 364, 366)] == [
+    # A fetch that ran late (Horde was off) skips the ages already past; past a
+    # year, every six months from the fetch.
+    assert [next_age(d) for d in (7.5, 29, 40, 200, 364, 366, 600)] == [
         30,
         30,
         182,
         365,
         365,
-        None,
+        366 + 182,
+        600 + 182,
     ]
 
 
-def test_an_old_video_is_fetched_once(session, add_video):
+def test_an_old_video_is_fetched_again_every_six_months(session, add_video):
     video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
+    before = datetime.now(UTC)
     store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
-    assert session.get(VideoCommentState, video.id).next_attempt_at is None
+    next_at = session.get(VideoCommentState, video.id).next_attempt_at
+    assert (next_at.replace(tzinfo=UTC) - before).days == 182
 
 
 def test_comments_turned_off_later_keep_what_was_saved(session, add_video):
@@ -326,7 +327,7 @@ def test_failures_back_off_then_give_up(session, add_video):
                 / 3600
             )
         )
-    assert waits == [1, 4, None]
+    assert waits == [1, 4, 182 * 24]  # then the six-monthly refresh
     assert statuses == ["pending", "pending", "failed"]
 
 
