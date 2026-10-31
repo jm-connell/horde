@@ -1236,6 +1236,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/comments/youtube/{youtube_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Live Comments
+         * @description The top ``limit`` comments of any YouTube video, read from YouTube now.
+         *
+         *     ``limit`` is one of 100, 300 or 1000 (follow ``next_limit``). Not saved; a
+         *     result is kept in memory for 30 minutes.
+         */
+        get: operations["live_comments_api_comments_youtube__youtube_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/compat/backfill": {
         parameters: {
             query?: never;
@@ -3495,6 +3518,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/videos/{video_id}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Video Comments
+         * @description The comments saved with a library video, top-level in YouTube's order.
+         */
+        get: operations["video_comments_api_videos__video_id__comments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/videos/{video_id}/compat": {
         parameters: {
             query?: never;
@@ -4646,6 +4689,11 @@ export interface components {
              */
             require_two_factor: "off" | "admins" | "everyone";
             /**
+             * Save Comments
+             * @default true
+             */
+            save_comments: boolean;
+            /**
              * Settings Degraded
              * @default false
              */
@@ -4688,6 +4736,8 @@ export interface components {
             progress_expiry_days?: number | null;
             /** Require Two Factor */
             require_two_factor?: ("off" | "admins" | "everyone") | null;
+            /** Save Comments */
+            save_comments?: boolean | null;
             /** Setup Completed */
             setup_completed?: boolean | null;
             /** Ui */
@@ -5579,6 +5629,42 @@ export interface components {
             /** Url */
             url: string;
         };
+        /**
+         * CommentRead
+         * @description A YouTube comment. ``replies`` holds the ones saved with it (top threads only).
+         */
+        CommentRead: {
+            /** Author */
+            author?: string | null;
+            /**
+             * Author Is Uploader
+             * @default false
+             */
+            author_is_uploader: boolean;
+            /** Id */
+            id: string;
+            /**
+             * Is Hearted
+             * @default false
+             */
+            is_hearted: boolean;
+            /**
+             * Is Pinned
+             * @default false
+             */
+            is_pinned: boolean;
+            /** Like Count */
+            like_count?: number | null;
+            /** Published At */
+            published_at?: string | null;
+            /**
+             * Replies
+             * @default []
+             */
+            replies: components["schemas"]["CommentRead"][];
+            /** Text */
+            text: string;
+        };
         /** CompatBulkResult */
         CompatBulkResult: {
             /**
@@ -6450,6 +6536,26 @@ export interface components {
             watch_url: string;
         };
         /**
+         * LiveCommentsRead
+         * @description The top ``limit`` comments of a YouTube video, read now (not saved).
+         */
+        LiveCommentsRead: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["CommentRead"][];
+            /** Next Limit */
+            next_limit?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "disabled" | "unavailable";
+            /** Total Count */
+            total_count?: number | null;
+        };
+        /**
          * LiveListResponse
          * @description Followed channels that are live now (one page; ``next_cursor`` is null).
          */
@@ -7318,7 +7424,7 @@ export interface components {
              * Source
              * @enum {string}
              */
-            source: "title" | "description" | "tags" | "notes" | "captions" | "related" | "youtube";
+            source: "title" | "description" | "tags" | "notes" | "captions" | "comments" | "related" | "youtube";
         };
         /** SecurityCheckItem */
         SecurityCheckItem: {
@@ -8081,6 +8187,35 @@ export interface components {
         VideoAiChatRequest: {
             /** Message */
             message: string;
+        };
+        /**
+         * VideoCommentsRead
+         * @description A library video's saved comments, in YouTube's "top" order.
+         *
+         *     ``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on
+         *     YouTube); ``unavailable`` (private, removed or members-only); ``failed``;
+         *     ``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier
+         *     are still listed when a later fetch finds them disabled or unavailable.
+         */
+        VideoCommentsRead: {
+            /** Fetched At */
+            fetched_at?: string | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["CommentRead"][];
+            /** Next Limit */
+            next_limit?: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "saved" | "pending" | "disabled" | "unavailable" | "failed" | "off" | "not_youtube";
+            /** Total Count */
+            total_count?: number | null;
+            /** Youtube Id */
+            youtube_id?: string | null;
         };
         /**
          * VideoPage
@@ -11206,6 +11341,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelFeedPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    live_comments_api_comments_youtube__youtube_id__get: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                youtube_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LiveCommentsRead"];
                 };
             };
             /** @description Validation error */
@@ -16918,6 +17095,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    video_comments_api_videos__video_id__comments_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VideoCommentsRead"];
                 };
             };
             /** @description Validation error */

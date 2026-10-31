@@ -1,5 +1,5 @@
 /**
- * Small inline icons that replace text glyphs (✕ ▼ ✓ ⠿ ▶ ❚❚ ← ↗ ••• ⤢ ↩ ⤓). Text glyphs
+ * Small inline icons that replace text glyphs (✕ ▼ ✓ ⠿ ▶ ❚❚ ← ↗ ♥ ••• ⤢ ↩ ⤓). Text glyphs
  * change shape and weight with the user's font choice; these do not. They
  * size to the surrounding text (1em) and take its color, so they drop in
  * where the glyph was. All are decorative (aria-hidden): the button or label
@@ -163,6 +163,20 @@ export function ExternalIcon({ className = "" }: { className?: string }) {
       aria-hidden
     >
       <path d="M6 4h6v6M12 4l-7.5 7.5" />
+    </svg>
+  );
+}
+
+/** ♥: hearted (a creator's heart on a comment). */
+export function HeartIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="currentColor"
+      aria-hidden
+    >
+      <path d="M8 14s-5.5-3.3-5.5-7.2A3 3 0 0 1 8 5a3 3 0 0 1 5.5 1.8C13.5 10.7 8 14 8 14z" />
     </svg>
   );
 }

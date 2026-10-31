@@ -398,6 +398,7 @@ export default function LibraryTab() {
             "youtube video search",
             "channel search",
             "library search",
+            "comments",
             ...MEDIA_SERVER_TERMS
           )
         }
@@ -494,6 +495,21 @@ export default function LibraryTab() {
                     discovery_household: !(
                       appSettings?.discovery_household ?? true
                     ),
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
+            anchor="save-comments"
+            title="Save top comments"
+            description="Saves the top 100 comments of every YouTube video in the library, with replies to the most popular ones, for the watch page, search and video chat. Fetched in the background, one video every 30 seconds."
+            control={
+              <Toggle
+                checked={appSettings?.save_comments ?? true}
+                onChange={() =>
+                  void saveCatalogSettings({
+                    save_comments: !(appSettings?.save_comments ?? true),
                   })
                 }
               />

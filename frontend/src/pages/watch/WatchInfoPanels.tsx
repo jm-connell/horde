@@ -6,14 +6,20 @@ import { VideoAiPanel } from "../../components/lazy";
 import WatchMeta from "../../components/WatchMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-import { resolveLibraryChapters, stripChapterLines } from "../../utils";
+import {
+  resolveLibraryChapters,
+  stripChapterLines,
+  youtubeVideoIdFromUrl,
+} from "../../utils";
 import type { Video } from "../../types";
 import type { WatchAi } from "./useWatchAi";
+import CommentsPanel from "./CommentsPanel";
 import type { WatchSource } from "./useWatchVideo";
 
 /**
  * Under the title: the AI panel (summary, chat), description, chapters, tags
- * and notes, with the playback queue beside them when the sidebar is not shown.
+ * and notes, then the comments, with the playback queue beside them when the
+ * sidebar is not shown.
  */
 export default function WatchInfoPanels({
   source,
@@ -116,6 +122,22 @@ export default function WatchInfoPanels({
           }
           onTagError={(msg) => showToast(msg)}
         />
+
+        {video ? (
+          <CommentsPanel
+            key={`video-${video.id}`}
+            videoId={video.id}
+            streamYoutubeId={null}
+          />
+        ) : (
+          source.kind === "stream" && (
+            <CommentsPanel
+              key={`stream-${source.url}`}
+              videoId={null}
+              streamYoutubeId={youtubeVideoIdFromUrl(source.url)}
+            />
+          )
+        )}
       </div>
 
       {queueBeside && (

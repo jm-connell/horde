@@ -55,6 +55,10 @@ export type AskChannel = S["AskChannelRead"];
 export type AskChannelList = S["AskChannelList"];
 export type AskChannelPreview = S["AskChannelPreview"];
 export type AskSearchHit = S["AskSearchHit"];
+/** A YouTube comment; `replies` holds the ones saved with it (top threads only). */
+export type CommentItem = S["CommentRead"];
+export type VideoComments = S["VideoCommentsRead"];
+export type LiveComments = S["LiveCommentsRead"];
 export type AskThreadSummary = S["AskThreadSummary"];
 export type AskThread = S["AskThreadRead"];
 export type TrashSummary = S["TrashSummary"];

@@ -173,6 +173,12 @@ describe("formatMatchReasonTip", () => {
         "wifi"
       )
     ).toBe("In captions: “put a wifi hotspot in”");
+    expect(
+      formatMatchReasonTip(
+        { source: "comments", snippet: "the wifi trick at 3:10" },
+        "wifi"
+      )
+    ).toBe("In a YouTube comment: “the wifi trick at 3:10”");
     expect(formatMatchReasonTip({ source: "related" }, "wifi")).toBe(
       "Related by search index from the title and description."
     );

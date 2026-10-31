@@ -70,6 +70,7 @@ function videoToFeedEntry(v: Video): ChannelFeedEntry {
 const MATCH_REASON_RANK: Record<string, number> = {
   captions: 4,
   description: 3,
+  comments: 2,
   tags: 3,
   notes: 3,
   youtube: 2,
