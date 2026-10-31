@@ -546,3 +546,20 @@ def test_age_restricted_is_retried_and_rate_limits_give_up(session):
 def test_search_caps_the_channel_list(client):
     r = client.get("/api/ask/search", params={"q": "x", "channel_id": list(range(60))})
     assert r.status_code == 422
+
+
+def test_search_endpoint_covers_every_channel_unless_one_is_chosen(client, session):
+    nut = _channel(session)
+    fix = _channel(
+        session, channel_url="https://youtube.com/@chrisfix", channel_name="ChrisFix"
+    )
+    _index(session, _video(session, nut, "aaaaaaaaaaa"))
+    _index(session, _video(session, fix, "bbbbbbbbbbb"))
+    everything = client.get("/api/ask/search", params={"q": "timing belt"}).json()[
+        "items"
+    ]
+    assert {h["channel_name"] for h in everything} == {"The Car Care Nut", "ChrisFix"}
+    one = client.get(
+        "/api/ask/search", params={"q": "timing belt", "channel_id": fix.id}
+    ).json()["items"]
+    assert {h["channel_name"] for h in one} == {"ChrisFix"}
