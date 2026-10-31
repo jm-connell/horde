@@ -294,14 +294,17 @@ export default function HelpChatPanel({
   const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
   const { setChatDocked } = usePlaybackActions();
+  const floatRef = useRef(() => onDockedChange(false));
+  floatRef.current = () => onDockedChange(false);
   useEffect(() => {
     if (!dockedHere) return;
-    setChatDocked(true);
+    // The player's Theater button floats the chat to leave theater.
+    setChatDocked(() => floatRef.current());
     const root = document.documentElement;
     root.dataset.chatDocked = "true";
     root.style.setProperty("--horde-chat-dock", `${dockWidth}px`);
     return () => {
-      setChatDocked(false);
+      setChatDocked(null);
       delete root.dataset.chatDocked;
       root.style.removeProperty("--horde-chat-dock");
     };

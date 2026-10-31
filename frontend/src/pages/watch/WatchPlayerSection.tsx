@@ -35,7 +35,8 @@ export default function WatchPlayerSection({
   const playerOuterClass = isMobile
     ? "relative left-1/2 w-screen -translate-x-1/2 bg-black"
     : `relative left-1/2 -translate-x-1/2 bg-black transition-[width] duration-300 ease-fluid motion-reduce:transition-none ${
-        isWide ? "w-screen" : "w-full"
+        // Full bleed, minus the chat when it is docked at the side.
+        isWide ? "w-[calc(100vw-var(--horde-chat-dock,0px))]" : "w-full"
       }`;
   const playerInnerClass = isWide && !isMobile ? "mx-auto w-full" : "w-full";
   const playerMetaClass =

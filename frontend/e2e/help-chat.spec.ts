@@ -567,4 +567,16 @@ test("watching with the chat docked shows the player as theater", async ({
   await panel.getByRole("button", { name: "Float the chat" }).click();
   await reveal();
   await expect(theater).not.toHaveClass(active);
+
+  // Docked again, leaving theater from the player floats the chat.
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await reveal();
+  await expect(theater).toHaveClass(active);
+  await reveal();
+  await theater.click();
+  await expect(panel).not.toHaveAttribute("data-docked", "true");
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
 });
