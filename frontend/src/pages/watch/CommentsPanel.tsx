@@ -4,7 +4,7 @@ import { button } from "../../components/buttons";
 import { ExternalIcon, HeartIcon } from "../../components/icons";
 import LinkifiedText from "../../components/LinkifiedText";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { useLiveComments, useVideoComments } from "../../queries/comments";
+import { useLiveCommentSteps, useVideoComments } from "../../queries/comments";
 import type { CommentItem, VideoComments } from "../../types";
 import {
   formatCompactCount,
@@ -27,6 +27,9 @@ function youtubeUrl(youtubeId: string, commentId?: string): string {
   return commentId ? `${base}&lc=${encodeURIComponent(commentId)}` : base;
 }
 
+const UNAVAILABLE_NOTE =
+  "YouTube does not show this video's comments (it may be private, removed, members-only or age-restricted).";
+
 /** Why the panel has no (or only older) comments, from the saved status. */
 function savedNote(data: VideoComments, empty: boolean): string | null {
   const saved = data.fetched_at ? formatDate(data.fetched_at) : "";
@@ -45,8 +48,8 @@ function savedNote(data: VideoComments, empty: boolean): string | null {
         : `Comments are turned off on YouTube now; these were saved ${saved}.`;
     case "unavailable":
       return empty
-        ? "This video is no longer available on YouTube."
-        : `This video is no longer available on YouTube; these comments were saved ${saved}.`;
+        ? UNAVAILABLE_NOTE
+        : `YouTube no longer shows this video's comments; these were saved ${saved}.`;
     default:
       return empty ? "No comments yet." : null;
   }
@@ -55,6 +58,9 @@ function savedNote(data: VideoComments, empty: boolean): string | null {
 function liveError(error: unknown): string {
   if (error instanceof ApiError && error.code === "youtube_rate_limited") {
     return "YouTube is limiting requests right now; try again later.";
+  }
+  if (error instanceof ApiError && error.code === "youtube_unreachable") {
+    return "Could not reach YouTube; try again later.";
   }
   return "Could not load comments from YouTube.";
 }
@@ -177,8 +183,10 @@ export default function CommentsPanel({
   const saved = useVideoComments(videoId);
   const youtubeId =
     videoId !== null ? (saved.data?.youtube_id ?? null) : streamYoutubeId;
-  const [liveLimit, setLiveLimit] = useState<number | null>(null);
-  const live = useLiveComments(youtubeId, liveLimit);
+  // The steps read from YouTube so far (e.g. [300, 1000]); the last is current.
+  const [limits, setLimits] = useState<number[]>([]);
+  const liveSteps = useLiveCommentSteps(youtubeId, limits);
+  const current = liveSteps[liveSteps.length - 1] ?? null;
   const [shown, setShown] = useState(FIRST);
 
   // Shown once the server says the video has comments to show (not for a file
@@ -190,33 +198,51 @@ export default function CommentsPanel({
     return null;
   if (videoId === null && !streamYoutubeId) return null;
 
+  const okSteps = liveSteps.flatMap((q) =>
+    q.data?.status === "ok" ? [q.data] : []
+  );
+  const latestOk = okSteps[okSteps.length - 1] ?? null;
+  // Only the first step reads replies; later, longer lists keep them.
+  const replies = new Map<string, CommentItem[]>();
+  for (const step of okSteps) {
+    for (const c of step.items ?? []) {
+      if (c.replies?.length) replies.set(c.id, c.replies);
+    }
+  }
   const savedItems = saved.data?.items ?? [];
-  const liveData = live.data?.status === "ok" ? live.data : null;
   const seen = new Set(savedItems.map((c) => c.id));
   const items = [
     ...savedItems,
-    ...(liveData?.items ?? []).filter((c) => !seen.has(c.id)),
+    ...(latestOk?.items ?? [])
+      .filter((c) => !seen.has(c.id))
+      .map((c) =>
+        c.replies?.length ? c : { ...c, replies: replies.get(c.id) ?? [] }
+      ),
   ];
   const nextLimit =
-    liveLimit === null
+    current === null
       ? (saved.data?.next_limit ?? null)
-      : (live.data?.next_limit ?? null);
-  const total = live.data?.total_count ?? saved.data?.total_count ?? null;
-  const loadingLive = live.isFetching;
+      : current.data?.status === "ok"
+        ? (current.data.next_limit ?? null)
+        : null;
+  const total = latestOk?.total_count ?? saved.data?.total_count ?? null;
+  const loadingLive = current?.isFetching ?? false;
+  const liveFailed = !loadingLive && current?.isError === true;
 
   let note: string | null = null;
-  if (live.data && live.data.status !== "ok" && items.length === 0) {
+  const refused = liveSteps.find((q) => q.data && q.data.status !== "ok")?.data;
+  if (refused && items.length === 0) {
     note =
-      live.data.status === "disabled"
+      refused.status === "disabled"
         ? "Comments are turned off for this video."
-        : "This video is no longer available on YouTube.";
-  } else if (saved.data && liveData === null) {
+        : UNAVAILABLE_NOTE;
+  } else if (saved.data && latestOk === null) {
     note = savedNote(saved.data, items.length === 0);
   }
   // Nothing saved (yet): offer to read them from YouTube now.
   const canLoadNow =
     youtubeId !== null &&
-    liveLimit === null &&
+    limits.length === 0 &&
     items.length === 0 &&
     (videoId === null ||
       saved.data?.status === "pending" ||
@@ -233,9 +259,12 @@ export default function CommentsPanel({
         <h2 id={headingId} className="text-sm font-semibold text-gray-100">
           Comments
           {total !== null && total > 0 && (
-            <span className="ml-1.5 font-normal text-muted">
-              {formatCompactCount(total)}
-            </span>
+            <>
+              {" "}
+              <span className="font-normal text-muted">
+                {formatCompactCount(total)}
+              </span>
+            </>
           )}
         </h2>
         {youtubeId && (
@@ -263,9 +292,9 @@ export default function CommentsPanel({
         </ol>
       )}
 
-      {live.isError && (
+      {liveFailed && current && (
         <p className="mt-3 text-sm text-warning" role="status">
-          {liveError(live.error)}
+          {liveError(current.error)}
         </p>
       )}
       {loadingLive && items.length === 0 && (
@@ -277,8 +306,7 @@ export default function CommentsPanel({
           <button
             type="button"
             className={button("secondary", "xs")}
-            disabled={loadingLive}
-            onClick={() => setLiveLimit(FIRST_LIVE_LIMIT)}
+            onClick={() => setLimits([FIRST_LIVE_LIMIT])}
           >
             {videoId === null ? "Load comments" : "Load them now from YouTube"}
           </button>
@@ -291,19 +319,30 @@ export default function CommentsPanel({
           >
             Show more comments
           </button>
+        ) : loadingLive && items.length > 0 ? (
+          <button type="button" className={button("secondary", "xs")} disabled>
+            Loading from YouTube…
+          </button>
+        ) : liveFailed && current ? (
+          <button
+            type="button"
+            className={button("secondary", "xs")}
+            onClick={() => void current.refetch()}
+          >
+            Try again
+          </button>
         ) : (
           items.length > 0 &&
           nextLimit !== null && (
             <button
               type="button"
               className={button("secondary", "xs")}
-              disabled={loadingLive}
               onClick={() => {
-                setLiveLimit(nextLimit);
+                setLimits((steps) => [...steps, nextLimit]);
                 setShown((n) => n + STEP);
               }}
             >
-              {loadingLive ? "Loading from YouTube…" : "Show more comments"}
+              Show more comments
             </button>
           )
         )}
