@@ -1912,6 +1912,6 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
    mx-auto on those elements. */
 html[data-chat-docked] [data-horde="main"],
 html[data-chat-docked] [data-horde="footer"] {
-  width: auto;
+  width: calc(100% - var(--horde-chat-dock));
   margin-right: var(--horde-chat-dock);
 }
