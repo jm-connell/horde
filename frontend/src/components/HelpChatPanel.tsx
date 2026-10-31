@@ -114,21 +114,26 @@ const BUTTON =
 
 /** Where the fixed top nav ends, kept current while ``active``. */
 function useNavBottom(active: boolean): number {
-  const [bottom, setBottom] = useState(0);
-  useEffect(() => {
+  const nav = () => document.querySelector<HTMLElement>('[data-horde="nav"]');
+  const measure = () =>
+    Math.max(0, Math.round(nav()?.getBoundingClientRect().bottom ?? 0));
+  // Measured before the first paint, so the docked panel never shows under
+  // the nav for a frame.
+  const [bottom, setBottom] = useState(() => (active ? measure() : 0));
+  useLayoutEffect(() => {
     if (!active) return;
-    const nav = document.querySelector<HTMLElement>('[data-horde="nav"]');
-    if (!nav) return;
-    const measure = () =>
-      setBottom(Math.max(0, Math.round(nav.getBoundingClientRect().bottom)));
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(nav);
-    window.addEventListener("resize", measure);
+    const el = nav();
+    if (!el) return;
+    const update = () => setBottom(measure());
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    window.addEventListener("resize", update);
     return () => {
       observer.disconnect();
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", update);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- nav and measure read the DOM; only switching on matters
   }, [active]);
   return bottom;
 }
