@@ -439,10 +439,11 @@ test("the chat offers downloads and playlists, and does them on confirm", async 
   await page.getByRole("button", { name: "Ask about Horde" }).click();
   const panel = await ask(page, "make me a playlist and grab that link");
 
-  await expect(panel.getByRole("link", { name: a.title })).toHaveAttribute(
-    "href",
-    `/watch/${a.id}`
-  );
+  // The link in the reply; the playlist card lists the same video once the
+  // titles load.
+  await expect(
+    panel.locator('a[data-help-link="video"]', { hasText: a.title })
+  ).toHaveAttribute("href", `/watch/${a.id}`);
   await panel.getByRole("button", { name: "Make playlist" }).click();
   await expect(panel.getByText("Made “Chat mix” with 2 videos.")).toBeVisible();
   const playlists = (await (await request.get("/api/playlists")).json()) as {
