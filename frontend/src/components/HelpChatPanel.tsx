@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ApiError, api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
+  usePlaybackActions,
   usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
@@ -292,16 +293,19 @@ export default function HelpChatPanel({
   const dockedHere = docked && !isMobile;
   const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
+  const { setChatDocked } = usePlaybackActions();
   useEffect(() => {
     if (!dockedHere) return;
+    setChatDocked(true);
     const root = document.documentElement;
     root.dataset.chatDocked = "true";
     root.style.setProperty("--horde-chat-dock", `${dockWidth}px`);
     return () => {
+      setChatDocked(false);
       delete root.dataset.chatDocked;
       root.style.removeProperty("--horde-chat-dock");
     };
-  }, [dockedHere, dockWidth]);
+  }, [dockedHere, dockWidth, setChatDocked]);
   const box = frame
     ? clampHelpFrame(frame, vw, vh)
     : defaultHelpFrame(vw, vh, miniPlayerRect);

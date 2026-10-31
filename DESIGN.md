@@ -313,7 +313,9 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   (360–520 px) until its left edge is dragged (a focusable separator, accent
   on hover; arrows nudge, Home resets; at least 320 px, leaving the page at
   least 480 px). The page and footer make room for it (`--horde-chat-dock`,
-  set on the root while docked) and the corner mini player moves left of it;
+  set on the root while docked), the corner mini player moves left of it, and
+  a standard player shows as theater (the related list moves under it instead
+  of squeezing the video; the saved mode returns when the chat floats);
   it stays docked across pages until floated again. Escape
   closes it while focus is inside; the page behind stays usable. Its replies
   link settings, pages and videos as small inline chips (`ink-950` fill,

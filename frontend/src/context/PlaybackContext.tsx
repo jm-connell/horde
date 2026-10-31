@@ -140,6 +140,8 @@ export interface PlaybackLayout {
 
 export interface PlaybackActions {
   setMode: (mode: ViewMode) => void;
+  /** The chat is docked at the side: standard playback shows as theater. */
+  setChatDocked: (docked: boolean) => void;
   playVideo: (video: Video, opts?: { queue?: QueueEntry[] }) => void;
   playStream: (session: StreamSession) => void;
   /** Latest stream playback position (seconds). */
@@ -255,8 +257,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     [updateSettings]
   );
 
+  // With the chat docked at the side the page is narrow, so a standard
+  // player (video beside the related list) shows as theater instead; the
+  // saved choice is untouched and comes back when the chat floats again.
+  const [chatDocked, setChatDocked] = useState(false);
+  const shownMode: ViewMode =
+    chatDocked && mode === "standard" ? "theater" : mode;
   // Mobile always uses the inline standard layout (no theater/fullscreen).
-  const effectiveMode: ViewMode = isMobile ? "standard" : mode;
+  const effectiveMode: ViewMode = isMobile ? "standard" : shownMode;
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   if (hostRef.current === null) {
@@ -787,8 +795,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [pollCurrentVideo, refreshCurrentVideo]);
 
   const session = useMemo<PlaybackSession>(
-    () => ({ current, stream, queue, mode, miniPlayerActive }),
-    [current, stream, queue, mode, miniPlayerActive]
+    () => ({ current, stream, queue, mode: shownMode, miniPlayerActive }),
+    [current, stream, queue, shownMode, miniPlayerActive]
   );
   const layout = useMemo<PlaybackLayout>(
     () => ({
@@ -802,6 +810,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const actions = useMemo<PlaybackActions>(
     () => ({
       setMode,
+      setChatDocked,
       playVideo,
       playStream,
       getStreamPosition,
@@ -821,6 +830,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       setMode,
+      setChatDocked,
       playVideo,
       playStream,
       getStreamPosition,

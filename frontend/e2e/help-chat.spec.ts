@@ -1,5 +1,5 @@
 import { expectNoSeriousViolations } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, test, videoCard } from "./fixtures";
 
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
@@ -535,4 +535,36 @@ test("the chat docks at the side and the page makes room for it", async ({
   await expect
     .poll(async () => (await main.boundingBox())!.width)
     .toBeCloseTo(fullWidth, 0);
+});
+
+test("watching with the chat docked shows the player as theater", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const theater = page.getByRole("button", { name: "Theater", exact: true });
+  // `hover:text-accent` is on every button; the active one has it bare.
+  const active = /(^|\s)text-accent(\s|$)/;
+  const reveal = async () => {
+    const box = (await page.locator("video").first().boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2);
+  };
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
+
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await reveal();
+  await expect(theater).toHaveClass(active);
+
+  // Floating it again brings back the saved standard layout.
+  await panel.getByRole("button", { name: "Float the chat" }).click();
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
 });
