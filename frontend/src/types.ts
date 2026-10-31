@@ -59,6 +59,7 @@ export type AskSearchHit = S["AskSearchHit"];
 export type CommentItem = S["CommentRead"];
 export type VideoComments = S["VideoCommentsRead"];
 export type LiveComments = S["LiveCommentsRead"];
+export type CommentsStorage = S["CommentsStorage"];
 export type AskThreadSummary = S["AskThreadSummary"];
 export type AskThread = S["AskThreadRead"];
 export type TrashSummary = S["TrashSummary"];

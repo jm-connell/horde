@@ -34,8 +34,10 @@ When comments are turned off on YouTube, or YouTube no longer shows them (the vi
 
 **Settings → Library → Comments** (administrators) is one switch for the whole feature. Off, nothing is fetched from YouTube, no one sees a comments section (on library videos or streams), and search and the video chat leave comments out. Comments already saved are kept, and turning it back on brings them back as they were; the fetcher then carries on with its schedule. Deleting a video deletes its comments.
 
+Under the switch, Horde shows how much space the saved comments take (usually a few MB). While comments are off, **Delete saved comments** removes them all; turning comments on again afterwards fetches them from YouTube afresh.
+
 ## Size
 
-A video's saved comments take about 30–60 KB of the database, search index included: roughly 150–300 MB for 5,000 videos. The nightly and pre-update backups copy the database, so count that several times.
+A video's saved comments take about 30–60 KB of the database, search index included: roughly 150–300 MB for 5,000 videos. **Settings → Library → Comments** shows the exact figure. The nightly and pre-update backups copy the database, so count that several times. After **Delete saved comments** the backups shrink from the next one; the database file itself keeps the freed space for new data.
 
 How it works: [ADR 0023](../adr/0023-saved-comments.md).

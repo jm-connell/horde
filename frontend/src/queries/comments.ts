@@ -7,6 +7,27 @@ import {
 import { api } from "../api";
 import { queryKeys } from "./keys";
 
+/** How much space the saved comments take (administrators). */
+export function useCommentsStorage(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.comments.storage,
+    queryFn: ({ signal }) => api.commentsStorage({ signal }),
+    enabled,
+  });
+}
+
+/** Delete every saved comment (only while comments are off). */
+export function useDeleteSavedComments() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.deleteSavedComments(),
+    onSuccess: (data) => {
+      qc.setQueryData(queryKeys.comments.storage, data);
+      void qc.invalidateQueries({ queryKey: ["comments", "video"] });
+    },
+  });
+}
+
 /** The comments saved with a library video. */
 export function useVideoComments(videoId: number | null) {
   return useQuery({

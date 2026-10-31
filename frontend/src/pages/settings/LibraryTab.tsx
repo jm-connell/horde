@@ -20,6 +20,7 @@ import {
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
+import CommentsSetting from "./CommentsSetting";
 import FollowedChannelsSection from "./FollowedChannelsSection";
 import HelpDataSection from "./HelpDataSection";
 import MediaServerFiles from "./MediaServerFiles";
@@ -73,7 +74,8 @@ const COMPAT_TERMS = [
 ];
 
 export default function LibraryTab() {
-  const { q, match, settings, update } = useSettingsPage();
+  const { q, match, settings, update, showError, showToast } =
+    useSettingsPage();
   const { isAdmin, can } = useAuth();
   const helpChat = useHelpChat();
   // Download preferences only matter to someone who may download (admins can).
@@ -500,20 +502,13 @@ export default function LibraryTab() {
               />
             }
           />
-          <SettingRow
-            anchor="comments"
-            title="Comments"
-            description="Shows YouTube comments under videos. Horde saves the top 100 of every YouTube video in the library, with replies to the most popular ones, in the background, and uses them in search and video chat. Off hides them everywhere and stops fetching; saved comments come back when it is on again."
-            control={
-              <Toggle
-                checked={appSettings?.comments_enabled ?? true}
-                onChange={() =>
-                  void saveCatalogSettings({
-                    comments_enabled: !(appSettings?.comments_enabled ?? true),
-                  })
-                }
-              />
+          <CommentsSetting
+            enabled={appSettings?.comments_enabled ?? true}
+            onToggle={(on) =>
+              void saveCatalogSettings({ comments_enabled: on })
             }
+            showError={showError}
+            showToast={showToast}
           />
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
             <div>

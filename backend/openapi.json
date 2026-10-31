@@ -4585,6 +4585,30 @@
         "title": "CommentRead",
         "type": "object"
       },
+      "CommentsStorage": {
+        "description": "The saved comments: how many, of how many videos, and the database space\nthey take (rows, indexes and search index).",
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "comments": {
+            "title": "Comments",
+            "type": "integer"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "videos",
+          "comments",
+          "bytes"
+        ],
+        "title": "CommentsStorage",
+        "type": "object"
+      },
       "CompatBulkResult": {
         "properties": {
           "already_queued": {
@@ -21657,6 +21681,90 @@
           }
         },
         "summary": "Update Settings",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/comments/delete": {
+      "post": {
+        "description": "Delete every saved comment. Only while comments are off, or they would\nall be fetched again; turning them on later starts from scratch.",
+        "operationId": "delete_saved_comments_api_settings_comments_delete_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentsStorage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Saved Comments",
+        "tags": [
+          "settings"
+        ]
+      }
+    },
+    "/api/settings/comments/storage": {
+      "get": {
+        "description": "How much space the saved comments take.",
+        "operationId": "comments_storage_api_settings_comments_storage_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommentsStorage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Comments Storage",
         "tags": [
           "settings"
         ]

@@ -97,6 +97,7 @@ export const queryKeys = {
     list: ["trash", "list"] as const,
   },
   comments: {
+    storage: ["comments", "storage"] as const,
     video: (videoId: number) => ["comments", "video", videoId] as const,
     live: (youtubeId: string, limit: number) =>
       ["comments", "live", youtubeId, limit] as const,

@@ -66,6 +66,9 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/videos/refresh-metadata"),
             # Deletes files across the whole library.
             ("POST", "/api/settings/media-sidecars/remove"),
+            # How much the saved comments take, and deleting them all.
+            ("GET", "/api/settings/comments/storage"),
+            ("POST", "/api/settings/comments/delete"),
             # Its progress names the video being synced and the raw last error.
             ("GET", "/api/videos/refresh-metadata/status"),
             # Queue and worker internals.

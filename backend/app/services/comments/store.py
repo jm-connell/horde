@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete
+from sqlalchemy import delete, distinct, func
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, col, select
 
 from ...models import Video, VideoComment, VideoCommentState, as_utc, require_id
@@ -21,6 +23,8 @@ from .fetch import (
     FetchedComment,
     FetchResult,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Comments keep coming while a video is young: after the first fetch, fetch
 #: again when the video is this old (counted from its upload date, or from when
@@ -203,3 +207,66 @@ def chat_lines(session: Session, video_id: int) -> list[str]:
         lines.extend(group)
         used += size
     return lines
+
+
+@dataclass
+class Storage:
+    """What the saved comments take: how many, of how many videos, in bytes."""
+
+    videos: int
+    comments: int
+    bytes: int
+
+
+#: Comment rows deleted per transaction (the search index trigger runs per row).
+_DELETE_BATCH = 2000
+
+
+def _bytes(session: Session) -> int:
+    """Database pages of the comment tables, their indexes and search index."""
+    conn = session.connection()
+    names = [
+        str(r[0])
+        for r in conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'index') AND "
+            "(tbl_name IN ('video_comments', 'video_comment_state') "
+            "OR tbl_name LIKE 'video_comments_fts%')"
+        )
+    ]
+    try:
+        return sum(
+            int(
+                conn.exec_driver_sql(
+                    "SELECT coalesce(sum(pgsize), 0) FROM dbstat WHERE name = ?",
+                    (name,),
+                ).scalar()
+                or 0
+            )
+            for name in names
+        )
+    except OperationalError:
+        # An SQLite built without the dbstat table: about twice the text (rows
+        # plus the search index), close enough for "a few MB".
+        logger.debug("dbstat unavailable; estimating comment storage", exc_info=True)
+        text = conn.exec_driver_sql(
+            "SELECT coalesce(sum(length(text) + coalesce(length(author), 0) + 60), 0) "
+            "FROM video_comments"
+        ).scalar()
+        return int(text or 0) * 2
+
+
+def storage(session: Session) -> Storage:
+    comments, videos = session.exec(
+        select(func.count(), func.count(distinct(col(VideoComment.video_id))))
+    ).one()
+    return Storage(videos=int(videos), comments=int(comments), bytes=_bytes(session))
+
+
+def delete_all(session: Session) -> None:
+    """Delete every saved comment and fetch state, a batch per commit so other
+    writers are not held up. Turning comments on again fetches them afresh."""
+    while ids := list(session.exec(select(VideoComment.id).limit(_DELETE_BATCH)).all()):
+        session.exec(delete(VideoComment).where(col(VideoComment.id).in_(ids)))
+        session.commit()
+    session.exec(delete(VideoCommentState))
+    session.commit()

@@ -809,3 +809,73 @@ def test_a_fetch_saved_at_the_same_moment_by_the_fetcher_does_not_clash(
     monkeypatch.setattr(store, "sqlite_insert", insert_after_the_fetcher)
     store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
     assert session.get(VideoCommentState, video.id).status == "saved"
+
+
+# --- Storage and deleting them all ----------------------------------------------
+
+
+def test_turning_comments_off_keeps_them_and_the_storage_says_how_much(
+    client, session, add_video
+):
+    for title in ("One", "Two"):
+        video = add_video(title=title)
+        store.apply_result(
+            session,
+            video,
+            FetchResult(
+                fetch.SAVED,
+                [_comment(f"{title}-{i}", "words " * 40) for i in range(30)],
+            ),
+        )
+    client.patch("/api/settings", json={"comments_enabled": False})
+    used = client.get("/api/settings/comments/storage").json()
+    assert (used["videos"], used["comments"]) == (2, 60)
+    # Rows, indexes and the search index: real database pages.
+    assert used["bytes"] >= 60 * 240
+
+
+def test_storage_is_estimated_without_dbstat(session, add_video, monkeypatch):
+    video = add_video()
+    store.apply_result(
+        session, video, FetchResult(fetch.SAVED, [_comment("a", "x" * 1000)])
+    )
+    real_exec = type(session.connection()).exec_driver_sql
+
+    def no_dbstat(conn, statement, *args, **kwargs):
+        if "dbstat" in statement:
+            from sqlalchemy.exc import OperationalError
+
+            raise OperationalError(statement, None, Exception("no such table: dbstat"))
+        return real_exec(conn, statement, *args, **kwargs)
+
+    monkeypatch.setattr(type(session.connection()), "exec_driver_sql", no_dbstat)
+    assert store.storage(session).bytes >= 2000
+
+
+def test_saved_comments_are_deleted_only_while_comments_are_off(
+    client, session, add_video
+):
+    video = add_video()
+    store.apply_result(
+        session, video, FetchResult(fetch.SAVED, [_comment("a", "zeppelin")])
+    )
+    resp = client.post("/api/settings/comments/delete")
+    assert (resp.status_code, resp.json()["code"]) == (409, "comments_enabled")
+    assert len(_saved(session, video.id)) == 1
+
+    client.patch("/api/settings", json={"comments_enabled": False})
+    body = client.post("/api/settings/comments/delete").json()
+    assert (body["videos"], body["comments"]) == (0, 0)
+    session.expire_all()
+    assert _saved(session, video.id) == []
+    assert session.get(VideoCommentState, video.id) is None
+    hits = session.execute(
+        text(
+            "SELECT count(*) FROM video_comments_fts "
+            "WHERE video_comments_fts MATCH 'zeppelin'"
+        )
+    ).scalar()
+    assert hits == 0
+    # On again, the video is fetched afresh.
+    client.patch("/api/settings", json={"comments_enabled": True})
+    assert worker.next_video(session).id == video.id

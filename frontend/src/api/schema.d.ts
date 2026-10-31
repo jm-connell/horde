@@ -2772,6 +2772,47 @@ export interface paths {
         patch: operations["update_settings_api_settings_patch"];
         trace?: never;
     };
+    "/api/settings/comments/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete Saved Comments
+         * @description Delete every saved comment. Only while comments are off, or they would
+         *     all be fetched again; turning them on later starts from scratch.
+         */
+        post: operations["delete_saved_comments_api_settings_comments_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/settings/comments/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comments Storage
+         * @description How much space the saved comments take.
+         */
+        get: operations["comments_storage_api_settings_comments_storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/settings/media-sidecars/remove": {
         parameters: {
             query?: never;
@@ -5686,6 +5727,19 @@ export interface components {
             replies: components["schemas"]["CommentRead"][];
             /** Text */
             text: string;
+        };
+        /**
+         * CommentsStorage
+         * @description The saved comments: how many, of how many videos, and the database space
+         *     they take (rows, indexes and search index).
+         */
+        CommentsStorage: {
+            /** Bytes */
+            bytes: number;
+            /** Comments */
+            comments: number;
+            /** Videos */
+            videos: number;
         };
         /** CompatBulkResult */
         CompatBulkResult: {
@@ -15213,6 +15267,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AppSettingsRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_saved_comments_api_settings_comments_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentsStorage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    comments_storage_api_settings_comments_storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CommentsStorage"];
                 };
             };
             /** @description Validation error */

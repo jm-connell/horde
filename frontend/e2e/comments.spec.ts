@@ -275,3 +275,37 @@ test("with comments off there is no comments section", async ({ page }) => {
   ).toBeVisible();
   await expect(page.locator("[data-horde='comments']")).toHaveCount(0);
 });
+
+test("saved comments are kept when comments go off, and can then be deleted", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=library");
+  const setting = page.locator("[data-setting='comments']");
+  const toggle = setting.getByRole("switch", { name: "Comments" });
+  const remove = setting.getByRole("button", { name: "Delete saved comments" });
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await expect(setting).toContainText(
+    /Saved comments take [\d.]+ (KB|MB) \(12 comments of 1 video\)\. Turn comments off to delete them\./
+  );
+  await expect(remove).toBeDisabled();
+
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  // Off keeps them: nothing is deleted until asked.
+  await expect(setting).toContainText("12 comments of 1 video");
+  await remove.click();
+  const dialog = page.getByRole("dialog", { name: "Delete saved comments?" });
+  await expect(dialog).toContainText("12 comments saved for 1 video");
+  await dialog.getByRole("button", { name: "Delete comments" }).click();
+  await expect(setting).toContainText("No comments are saved.");
+  await expect(remove).toBeDisabled();
+
+  // On again, the video has nothing saved (it is fetched afresh).
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  const id = await videoId(page, "Cedar Notes");
+  const saved = await (
+    await page.request.get(`/api/videos/${id}/comments`)
+  ).json();
+  expect(saved.items).toEqual([]);
+});

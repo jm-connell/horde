@@ -24,6 +24,7 @@ from ..services.ai.provider import (
 )
 from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
+from ..services.comments import store as comments_store
 from ..services.css_sanitize import sanitize_ui_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -490,3 +491,45 @@ def remove_media_sidecars(ctx: AppContext = Depends(get_ctx)):
         )
     ctx.sidecars.remove_all()
     return MediaSidecarsRemoval(queued=True)
+
+
+class CommentsStorage(BaseModel):
+    """The saved comments: how many, of how many videos, and the database space
+    they take (rows, indexes and search index)."""
+
+    videos: int
+    comments: int
+    bytes: int
+
+
+def _comments_storage(session: Session) -> CommentsStorage:
+    used = comments_store.storage(session)
+    return CommentsStorage(videos=used.videos, comments=used.comments, bytes=used.bytes)
+
+
+@router.get(
+    "/comments/storage",
+    response_model=CommentsStorage,
+    dependencies=[Depends(require_admin)],
+)
+def comments_storage(session: Session = Depends(get_session)):
+    """How much space the saved comments take."""
+    return _comments_storage(session)
+
+
+@router.post(
+    "/comments/delete",
+    response_model=CommentsStorage,
+    dependencies=[Depends(require_admin)],
+)
+def delete_saved_comments(session: Session = Depends(get_session)):
+    """Delete every saved comment. Only while comments are off, or they would
+    all be fetched again; turning them on later starts from scratch."""
+    if comments_svc.enabled():
+        raise CodedHTTPException(
+            409,
+            "Turn comments off first, or they would be fetched again.",
+            "comments_enabled",
+        )
+    comments_store.delete_all(session)
+    return _comments_storage(session)

@@ -21,7 +21,8 @@ All notable changes to Horde are documented here. The format follows
   its comments when asked. Library search also finds videos through their
   comments (after title and description matches), and the video chat knows
   how viewers reacted. Saved comments stay when a video leaves YouTube. Turn
-  it all off with Settings → Library → **Comments**.
+  it all off with Settings → Library → **Comments**; saved comments are
+  kept, and the setting shows how much space they take and can delete them.
 
 ### Changed
 
