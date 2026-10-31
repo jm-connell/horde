@@ -21,7 +21,7 @@ export function isAskChannelBusy(channel: AskChannel): boolean {
 
 /**
  * Ask channels with their progress. `poll` refreshes it every few seconds
- * while a channel is indexing (the Ask page); the nav and buttons only need
+ * while a channel is indexing (Settings, the channel sheet); search and buttons only need
  * to know which channels exist, so they do not poll.
  */
 export function useAskChannels(enabled = true, { poll = false } = {}) {

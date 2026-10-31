@@ -7,8 +7,9 @@ A closer look at what Horde actually does. Each section is a product tour, not a
 
 ## Where to find things
 
-The top bar has **Home** (the library), **Playlists**, **History**, **Ask** (once a channel is indexed), **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
+The top bar has **Home** (the library), **Playlists**, **History**, **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
 
+- **Find what a channel said**: turn on [Ask](guides/ask.md) for it (Settings → Library → Ask channels), then search from the search bar: **Said in videos** lists every moment that mentions your words.
 - **Download a video**: open **Download** in the top bar, paste the link, pick a quality and press **Download**.
 - **Upgrade a video you have to a higher resolution** (say 1080p to 4K): open it, then **••• → Change resolution** under the player. The file is replaced; no need to delete and download again.
 - **Edit a video's title, notes or tags, normalize its volume, save it to this device or delete it**: the same **•••** menu on its watch page.

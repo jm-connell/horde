@@ -1,27 +1,23 @@
 import { expectNoSeriousViolations } from "./axe";
-import { expect, test, videoCard } from "./fixtures";
+import { expect, hasDesktopPlayerChrome, test, videoCard } from "./fixtures";
 
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
-test("the Ask page lists channels and finds the moment something was said", async ({
+test("the search bar finds the moment an Ask channel said something", async ({
   page,
 }) => {
-  await page.goto("/ask");
-  await expect(
-    page.getByRole("heading", { name: "Ask", level: 1 })
-  ).toBeVisible();
-  const channels = page.getByRole("region", { name: "Channels" });
-  await expect(channels.getByRole("link", { name: "Northwind" })).toBeVisible();
-  await expect(channels.getByText("1 of 1 videos indexed")).toBeVisible();
-  // The admin may add channels.
-  await expect(page.getByRole("button", { name: "Add channel" })).toBeVisible();
-
+  test.skip(
+    !hasDesktopPlayerChrome(page),
+    "phones open search from the nav button"
+  );
+  await page.goto("/");
   await page
-    .getByRole("textbox", { name: "Words to find" })
+    .getByRole("searchbox", { name: "Search library" })
     .fill("timing belt");
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  const results = page.getByRole("region", { name: "Search what was said" });
+  const results = page.locator("section").filter({
+    has: page.getByRole("button", { name: /Said in videos/ }),
+  });
   await expect(
     results.getByRole("link", { name: "Cedar Notes" })
   ).toBeVisible();
@@ -30,10 +26,38 @@ test("the Ask page lists channels and finds the moment something was said", asyn
   const moment = results.getByRole("link", { name: "0:40" });
   await expect(moment).toHaveAttribute("href", /^\/watch\/\d+\?t=40$/);
   await expect(results.locator("mark").first()).toHaveText(/timing|belt/);
-  await expectNoSeriousViolations(page, "ask page");
+  await expect(
+    page
+      .getByRole("navigation", { name: "Search results" })
+      .getByRole("link", { name: /Said in videos/ })
+  ).toBeVisible();
+  await expectNoSeriousViolations(page, "transcript search results");
 
   await moment.click();
   await expect(page).toHaveURL(/\/watch\/\d+\?t=40$/);
+});
+
+test("Ask channels are managed in Settings, not their own page", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=library&find=ask-channels");
+  const section = page.locator('[data-setting="ask-channels"]');
+  await expect(
+    section.getByRole("heading", { name: "Ask channels" })
+  ).toBeVisible();
+  await expect(section.getByRole("link", { name: "Northwind" })).toBeVisible();
+  await expect(section.getByText("1 of 1 videos indexed")).toBeVisible();
+  await expect(
+    section.getByRole("button", { name: "Add channel" })
+  ).toBeVisible();
+  await expectNoSeriousViolations(
+    page,
+    "ask channels settings",
+    '[data-setting="ask-channels"]'
+  );
+  await expect(
+    page.getByRole("link", { name: "Ask", exact: true })
+  ).toHaveCount(0);
 });
 
 test("a channel answer links every point to its moment", async ({ page }) => {

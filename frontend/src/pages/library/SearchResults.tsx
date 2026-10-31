@@ -1,4 +1,4 @@
-import { useId, useState, type ReactNode } from "react";
+import { useId, useMemo, useState, type ReactNode } from "react";
 import ChannelFeedCard from "../../components/ChannelFeedCard";
 import type { ChannelFeedEntry, Video } from "../../types";
 import { YOUTUBE_SEARCH_LOAD_MORE_LABEL } from "../libraryCatalogProgress";
@@ -8,6 +8,12 @@ import { videoGridClassName } from "./videoGridClassName";
 import type { useGlobalSearch } from "./useGlobalSearch";
 import { ChevronIcon } from "../../components/icons";
 import { button } from "../../components/buttons";
+import { useAskChannels, useAskSearch } from "../../queries/ask";
+import { groupByVideo } from "../ask/askLinks";
+import SaidInVideos from "./SaidInVideos";
+
+/** Transcript search covers every Ask channel. */
+const ALL_CHANNELS: number[] = [];
 
 function SearchResultSection({
   id,
@@ -173,6 +179,12 @@ export default function SearchResults({
   const youtubePending =
     youtubeOn &&
     (global.youtubeLoading || global.youtubeQuery.trim() !== query.trim());
+  // What Ask channels said, once one has captions indexed. Keyword search,
+  // so it works without an AI provider.
+  const askChannels = useAskChannels();
+  const saidOn = askChannels.data?.items.some((c) => c.passages > 0) ?? false;
+  const said = useAskSearch(saidOn ? query.trim() : "", ALL_CHANNELS);
+  const saidGroups = useMemo(() => groupByVideo(said.hits), [said.hits]);
   return (
     <div className="space-y-8">
       <SectionStrip
@@ -182,6 +194,16 @@ export default function SearchResults({
             label: "In your library",
             count: videos.length,
           },
+          ...(saidOn
+            ? [
+                {
+                  id: "search-said",
+                  label: "Said in videos",
+                  count: saidGroups.length,
+                  loading: said.isLoading,
+                },
+              ]
+            : []),
           {
             id: "search-stream",
             label: "Stream",
@@ -214,6 +236,18 @@ export default function SearchResults({
       >
         <LibraryGrid videos={videos} searchQuery={query} options={grid} />
       </SearchResultSection>
+      {saidOn && (
+        <SearchResultSection
+          id="search-said"
+          title="Said in videos"
+          source="Captions of Ask channels"
+          count={saidGroups.length}
+          emptyText="Nothing in the indexed captions mentions that."
+          loading={said.isLoading}
+        >
+          <SaidInVideos groups={saidGroups} search={said} />
+        </SearchResultSection>
+      )}
       <SearchResultSection
         id="search-stream"
         title="Available to stream"

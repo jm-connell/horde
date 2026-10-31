@@ -14,6 +14,7 @@ Some channels publish long, detailed videos that are hard to search: what a chan
 - **Hybrid retrieval with one model call for spellings.** The chat model expands the question into the spellings captions produce and related terms (skipped for small models); each channel is searched by keyword and by meaning, merged by reciprocal rank fusion, and given a fair share of the excerpt budget.
 - **Citations resolved by the server.** The model sees numbered excerpts without times and must cite numbers. The server drops numbers it did not give, renumbers in order of use, and resolves each to the caption line its sentence matches, linking two seconds early. Answers are saved with their references.
 - **One chat, routed by naming a channel.** The Ask about Horde panel answers from channels when the question names one (or the client says which: opened on a channel page, or the previous answer's channels), and is Ask about Horde otherwise. Conversations of both kinds are saved per user (`ask_threads`, `ask_messages`). No per-video AI summaries: titles and descriptions serve as the video-level signal.
+- **No page of its own.** Asking happens in the chat panel; transcript search is a **Said in videos** section of the search bar's results, so it works without AI where people already search; channels are managed in Settings → Library and in each channel's settings.
 
 ## Consequences
 
