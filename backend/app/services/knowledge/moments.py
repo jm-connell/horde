@@ -37,16 +37,24 @@ def _match_count(line_words: set[str], wanted: set[str]) -> int:
     return count
 
 
-def moment(lines: list[Line], start: float, end: float, wanted: set[str]) -> float:
-    """Seconds to open at: the best-matching line in ``[start, end)``, else ``start``."""
-    best_at: float | None = None
+def best_line(
+    lines: list[Line], start: float, end: float, wanted: set[str]
+) -> Line | None:
+    """The line in ``[start, end)`` sharing the most of ``wanted``; None when none does."""
+    found: Line | None = None
     best = 0
     for at, text in lines:
         if at < start - 0.01 or at >= end:
             continue
         score = _match_count(words(text), wanted)
         if score > best:
-            best, best_at = score, at
-    if best_at is None:
+            best, found = score, (at, text)
+    return found
+
+
+def moment(lines: list[Line], start: float, end: float, wanted: set[str]) -> float:
+    """Seconds to open at: just before the best-matching line, else ``start``."""
+    line = best_line(lines, start, end, wanted)
+    if line is None:
         return start
-    return max(start, best_at - LEAD_IN_SEC)
+    return max(start, line[0] - LEAD_IN_SEC)

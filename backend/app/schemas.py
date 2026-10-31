@@ -1591,3 +1591,48 @@ class AskSearchHit(BaseModel):
 class AskSearchPage(BaseModel):
     items: list[AskSearchHit]
     next_cursor: str | None = None
+
+
+class AskChatRequest(BaseModel):
+    """One turn of the chat panel (Ask about Horde or Ask channels)."""
+
+    message: str = Field(..., min_length=1, max_length=4000)
+    #: Continue this saved conversation; a new one is started when empty.
+    thread_id: int | None = None
+    #: Channels the chat is about when the question names none: the channel page
+    #: it was opened on, or the previous answer's channels.
+    channel_ids: list[int] = Field(default_factory=list, max_length=8)
+    #: Where the user is in the app (Ask about Horde only).
+    page: str | None = Field(default=None, max_length=300)
+    data_consent: Literal["off", "local", "cloud"] = "off"
+
+
+class AskThreadSummary(BaseModel):
+    id: int
+    title: str
+    updated_at: datetime
+
+
+class AskThreadList(BaseModel):
+    items: list[AskThreadSummary]
+    next_cursor: str | None = None
+
+
+class AskThreadMessage(BaseModel):
+    id: int
+    role: Literal["user", "assistant"]
+    content: str
+    #: Channel answers: ``{"kind": "channels", "channels", "references"}``;
+    #: Ask about Horde answers: ``{"kind": "help", "sources"}``.
+    sources: dict | None = None
+    cost: float | None = None
+    model: str | None = None
+    created_at: datetime
+
+
+class AskThreadRead(BaseModel):
+    id: int
+    title: str
+    #: ``{"channels": [{id, name}]}`` or ``{"help": true}``: the last turn's source.
+    scope: dict
+    messages: list[AskThreadMessage]

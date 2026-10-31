@@ -2,26 +2,33 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
 
-from ..auth import current_user, require_permission
+from ..auth import StreamAuthGuard, current_user, require_permission
 from ..context import get_session
 from ..errors import CodedHTTPException
 from ..models import KbChannel, KbVideo, Video, require_id
+from ..openapi_responses import EVENT_STREAM, RAW
 from ..schemas import (
     AskChannelCreate,
     AskChannelList,
     AskChannelPreview,
     AskChannelRead,
     AskChannelUpdate,
+    AskChatRequest,
     AskSearchHit,
     AskSearchPage,
+    AskThreadList,
+    AskThreadMessage,
+    AskThreadRead,
+    AskThreadSummary,
 )
 from ..services.auth.accounts import AuthUser
 from ..services.follows import normalize_channel_url
+from ..services.knowledge import ask_chat, chunking, moments, threads
 from ..services.knowledge import channels as kb_channels
-from ..services.knowledge import chunking, moments
 from ..services.knowledge import search as kb_search
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from . import member_view
@@ -269,3 +276,94 @@ def search(
         if more
         else None,
     )
+
+
+_USE_AI = [Depends(require_permission("use_ai"))]
+
+
+@router.post("/chat", response_class=RAW, responses=EVENT_STREAM, dependencies=_USE_AI)
+def chat(
+    request: Request,
+    payload: AskChatRequest,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """One chat turn (SSE): Ask channels when the question names one, else Ask about Horde."""
+    if payload.thread_id is not None:
+        threads.owned_or_404(session, payload.thread_id, user.id)
+    return StreamingResponse(
+        ask_chat.stream_ask_events(
+            user,
+            payload.message,
+            thread_id=payload.thread_id,
+            channel_ids=payload.channel_ids,
+            page=payload.page,
+            data_consent=payload.data_consent,
+            authorized=StreamAuthGuard.of(request).still_valid,
+        ),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/threads", response_model=AskThreadList, dependencies=_USE_AI)
+def list_threads(
+    limit: int = Query(30, ge=1, le=100),
+    cursor: str | None = Query(default=None, max_length=500),
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """The user's saved conversations, most recent first."""
+    try:
+        page = parse_cursor(
+            cursor, limit=limit, sort="updated_at", order="desc", kind="offset"
+        )
+    except InvalidCursor as exc:
+        raise CodedHTTPException(400, str(exc), "invalid_cursor") from exc
+    rows = threads.list_threads(session, user.id, limit=limit + 1, offset=page.offset)
+    return AskThreadList(
+        items=[
+            AskThreadSummary(id=require_id(t), title=t.title, updated_at=t.updated_at)
+            for t in rows[:limit]
+        ],
+        next_cursor=offset_cursor(
+            sort="updated_at", order="desc", offset=page.offset + limit
+        )
+        if len(rows) > limit
+        else None,
+    )
+
+
+@router.get("/threads/{thread_id}", response_model=AskThreadRead, dependencies=_USE_AI)
+def get_thread(
+    thread_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    thread = threads.owned_or_404(session, thread_id, user.id)
+    return AskThreadRead(
+        id=thread_id,
+        title=thread.title,
+        scope=threads.parse_sources(thread.scope) or {},
+        messages=[
+            AskThreadMessage(
+                id=require_id(m),
+                role="assistant" if m.role == "assistant" else "user",
+                content=m.content,
+                sources=threads.parse_sources(m.sources),
+                cost=m.cost if user.is_admin else None,
+                model=m.model if user.is_admin else None,
+                created_at=m.created_at,
+            )
+            for m in threads.messages(session, thread_id)
+        ],
+    )
+
+
+@router.delete("/threads/{thread_id}", status_code=204, dependencies=_USE_AI)
+def delete_thread(
+    thread_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    threads.delete(session, threads.owned_or_404(session, thread_id, user.id))

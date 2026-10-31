@@ -438,6 +438,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ask/chat": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Chat
+         * @description One chat turn (SSE): Ask channels when the question names one, else Ask about Horde.
+         */
+        post: operations["chat_api_ask_chat_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ask/search": {
         parameters: {
             query?: never;
@@ -453,6 +473,44 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Threads
+         * @description The user's saved conversations, most recent first.
+         */
+        get: operations["list_threads_api_ask_threads_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Thread */
+        get: operations["get_thread_api_ask_threads__thread_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Thread */
+        delete: operations["delete_thread_api_ask_threads__thread_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -4737,6 +4795,26 @@ export interface components {
             /** Include Streams */
             include_streams: boolean;
         };
+        /**
+         * AskChatRequest
+         * @description One turn of the chat panel (Ask about Horde or Ask channels).
+         */
+        AskChatRequest: {
+            /** Channel Ids */
+            channel_ids?: number[];
+            /**
+             * Data Consent
+             * @default off
+             * @enum {string}
+             */
+            data_consent: "off" | "local" | "cloud";
+            /** Message */
+            message: string;
+            /** Page */
+            page?: string | null;
+            /** Thread Id */
+            thread_id?: number | null;
+        };
         /** AskSearchHit */
         AskSearchHit: {
             /** Channel Id */
@@ -4769,6 +4847,63 @@ export interface components {
             items: components["schemas"]["AskSearchHit"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /** AskThreadList */
+        AskThreadList: {
+            /** Items */
+            items: components["schemas"]["AskThreadSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** AskThreadMessage */
+        AskThreadMessage: {
+            /** Content */
+            content: string;
+            /** Cost */
+            cost?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: number;
+            /** Model */
+            model?: string | null;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "user" | "assistant";
+            /** Sources */
+            sources?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /** AskThreadRead */
+        AskThreadRead: {
+            /** Id */
+            id: number;
+            /** Messages */
+            messages: components["schemas"]["AskThreadMessage"][];
+            /** Scope */
+            scope: {
+                [key: string]: unknown;
+            };
+            /** Title */
+            title: string;
+        };
+        /** AskThreadSummary */
+        AskThreadSummary: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** AuthLoginResult */
         AuthLoginResult: {
@@ -9176,6 +9311,48 @@ export interface operations {
             };
         };
     };
+    chat_api_ask_chat_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskChatRequest"];
+            };
+        };
+        responses: {
+            /** @description Server-sent events, one JSON object per event */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     search_api_ask_search_get: {
         parameters: {
             query: {
@@ -9198,6 +9375,125 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AskSearchPage"];
                 };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_threads_api_ask_threads_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskThreadList"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_thread_api_ask_threads__thread_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskThreadRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_thread_api_ask_threads__thread_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation error */
             422: {
