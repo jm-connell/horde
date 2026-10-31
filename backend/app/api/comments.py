@@ -113,7 +113,10 @@ def refresh_video_comments(
     result = fetch.fetch_comments(
         video.youtube_id, priority=EXTRACT_PRIORITY_INTERACTIVE
     )
-    store.apply_result(session, video, result)
+    # Only an answer from YouTube is recorded: a failed refresh by hand must not
+    # use up the fetcher's retries or move the video's schedule.
+    if result.status in (fetch.SAVED, fetch.DISABLED, fetch.UNAVAILABLE):
+        store.apply_result(session, video, result)
     if result.status == fetch.RETRY:
         ctx.comments.pause(comments_worker.PAUSE_ON_LIMIT_SEC)
     _raise_for_failure(result)

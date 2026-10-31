@@ -111,7 +111,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended+. Nobody is shown who watched what.
 
-**Save top comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off: nothing more is fetched; comments already saved stay, and the watch page can still read them from YouTube on request. See [Comments](../guides/comments.md).
+**Save top comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off: nothing more is fetched in the background; comments already saved stay, the watch page can still read them from YouTube on request, and the refresh button (Edit details) still saves a video's comments when pressed. See [Comments](../guides/comments.md).
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

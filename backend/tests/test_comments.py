@@ -252,14 +252,16 @@ def test_comments_are_fetched_again_at_a_week_a_month_six_months_and_a_year(
         at = store.refresh_at(video, published + timedelta(days=days_old))
         return None if at is None else (at - published).days
 
-    # A fetch that ran late (Horde was off) skips the ages already past; past a
-    # year, every six months from the fetch.
-    assert [next_age(d) for d in (7.5, 29, 40, 200, 364, 366, 600)] == [
+    # A fetch that ran late (Horde was off) skips the ages already past, and an
+    # age a few days away (the comments have barely changed); past a year,
+    # every six months from the fetch.
+    assert [next_age(d) for d in (6.9, 7.5, 28, 40, 200, 364, 366, 600)] == [
         30,
         30,
         182,
+        182,
         365,
-        365,
+        364 + 182,
         366 + 182,
         600 + 182,
     ]
@@ -737,3 +739,39 @@ def test_a_rate_limited_refresh_says_so_and_pauses_the_fetcher(
     resp = client.post(f"/api/videos/{video.id}/comments/refresh")
     assert (resp.status_code, resp.json()["code"]) == (503, "youtube_rate_limited")
     assert init_db["ctx"].comments.seconds_paused() > 3000
+
+
+def test_a_failed_refresh_leaves_the_schedule_alone(
+    client, session, add_video, monkeypatch
+):
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
+    app_settings.save({"save_comments": False})
+    url = f"/api/videos/{video.id}/comments"
+    assert client.get(url).json()["status"] == "off"
+    outcomes = iter([fetch.FAILED, fetch.FAILED, fetch.FAILED, fetch.LATER, "retry"])
+    monkeypatch.setattr(
+        fetch, "fetch_comments", lambda *a, **k: FetchResult(next(outcomes))
+    )
+    for _ in range(5):
+        assert client.post(f"{url}/refresh").status_code in (502, 503)
+    assert session.get(VideoCommentState, video.id) is None
+    assert client.get(url).json()["status"] == "off"
+
+
+def test_a_fetch_saved_at_the_same_moment_by_the_fetcher_does_not_clash(
+    session, add_video, init_db, monkeypatch
+):
+    """The fetcher commits a video's first state row while a refresh saves it."""
+    from sqlalchemy.dialects.sqlite import insert as real_insert
+
+    video = add_video()
+
+    def insert_after_the_fetcher(model):
+        with Session(init_db["engine"]) as other:
+            other.add(VideoCommentState(video_id=video.id, status="pending"))
+            other.commit()
+        return real_insert(model)
+
+    monkeypatch.setattr(store, "sqlite_insert", insert_after_the_fetcher)
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
+    assert session.get(VideoCommentState, video.id).status == "saved"

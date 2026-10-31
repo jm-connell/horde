@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import delete
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, col, select
 
 from ...models import Video, VideoComment, VideoCommentState, as_utc, require_id
@@ -32,6 +33,8 @@ REFRESH_AGES = (
 )
 #: Past the last age (and for a video added when already older), every this long.
 REFRESH_EVERY = timedelta(days=182)
+#: An age this close to a fetch is skipped: the comments have barely changed.
+REFRESH_MIN_GAP = timedelta(days=3)
 #: A video never fetched that is retried soon (a status of its own, not an outcome).
 PENDING = "pending"
 #: Attempts before a failing fetch waits for the next refresh age (retried 1 h,
@@ -82,7 +85,7 @@ def refresh_at(video: Video, now: datetime) -> datetime:
     video reaches, or ``REFRESH_EVERY`` from now once it is past them all."""
     born = as_utc(video.published_at) or as_utc(video.added_at)
     return next(
-        (born + age for age in REFRESH_AGES if born + age > now),
+        (born + age for age in REFRESH_AGES if born + age > now + REFRESH_MIN_GAP),
         now + REFRESH_EVERY,
     )
 
@@ -95,9 +98,13 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
     """
     video_id = require_id(video)
     now = datetime.now(UTC)
-    state = session.get(VideoCommentState, video_id) or VideoCommentState(
-        video_id=video_id
+    # Created race-free: a refresh by hand can save while the fetcher does.
+    session.exec(
+        sqlite_insert(VideoCommentState)
+        .values(video_id=video_id, status=PENDING, attempts=0)
+        .on_conflict_do_nothing()
     )
+    state = session.get_one(VideoCommentState, video_id)
     if (
         result.status == SAVED
         and not result.comments

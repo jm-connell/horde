@@ -380,6 +380,8 @@ export default function CommentsPanel({
             <button
               type="button"
               className={button("secondary", "xs")}
+              // A refresh replaces the list this would add to.
+              disabled={refresh.isPending}
               onClick={() => {
                 setLimits((steps) => [...steps, nextLimit]);
                 setShown((n) => n + STEP);

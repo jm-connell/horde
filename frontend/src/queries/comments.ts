@@ -23,6 +23,11 @@ export function useRefreshVideoComments(videoId: number | null) {
     mutationFn: () => api.refreshVideoComments(videoId ?? 0),
     onSuccess: (data) =>
       qc.setQueryData(queryKeys.comments.video(videoId ?? 0), data),
+    // A failed fetch can still change what the server reports (pending to failed).
+    onError: () =>
+      qc.invalidateQueries({
+        queryKey: queryKeys.comments.video(videoId ?? 0),
+      }),
   });
 }
 
