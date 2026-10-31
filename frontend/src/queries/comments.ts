@@ -1,4 +1,9 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api } from "../api";
 import { queryKeys } from "./keys";
 
@@ -8,6 +13,16 @@ export function useVideoComments(videoId: number | null) {
     queryKey: queryKeys.comments.video(videoId ?? 0),
     queryFn: ({ signal }) => api.videoComments(videoId ?? 0, { signal }),
     enabled: videoId !== null,
+  });
+}
+
+/** Fetch and save a library video's comments now; the saved list updates. */
+export function useRefreshVideoComments(videoId: number | null) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.refreshVideoComments(videoId ?? 0),
+    onSuccess: (data) =>
+      qc.setQueryData(queryKeys.comments.video(videoId ?? 0), data),
   });
 }
 

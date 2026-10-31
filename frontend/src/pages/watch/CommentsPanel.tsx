@@ -1,10 +1,15 @@
 import { useId, useState } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
-import { ExternalIcon, HeartIcon } from "../../components/icons";
+import { ExternalIcon, HeartIcon, RefreshIcon } from "../../components/icons";
 import LinkifiedText from "../../components/LinkifiedText";
 import LoadingIndicator from "../../components/LoadingIndicator";
-import { useLiveCommentSteps, useVideoComments } from "../../queries/comments";
+import { useAuth } from "../../context/AuthContext";
+import {
+  useLiveCommentSteps,
+  useRefreshVideoComments,
+  useVideoComments,
+} from "../../queries/comments";
 import type { CommentItem, VideoComments } from "../../types";
 import {
   formatCompactCount,
@@ -188,6 +193,8 @@ export default function CommentsPanel({
   const liveSteps = useLiveCommentSteps(youtubeId, limits);
   const current = liveSteps[liveSteps.length - 1] ?? null;
   const [shown, setShown] = useState(FIRST);
+  const { can } = useAuth();
+  const refresh = useRefreshVideoComments(videoId);
 
   // Shown once the server says the video has comments to show (not for a file
   // that never came from YouTube), so the panel never flashes in and out.
@@ -239,6 +246,13 @@ export default function CommentsPanel({
   } else if (saved.data && latestOk === null) {
     note = savedNote(saved.data, items.length === 0);
   }
+  // Fetching and saving again (Edit details): the saved list replaces what a
+  // live read showed, so "Show more" starts again from the saved ones.
+  const canRefresh =
+    videoId !== null && youtubeId !== null && can("edit_metadata");
+  const refreshNow = () =>
+    refresh.mutate(undefined, { onSuccess: () => setLimits([]) });
+  const savedAt = saved.data?.fetched_at ?? null;
   // Nothing saved (yet): offer to read them from YouTube now.
   const canLoadNow =
     youtubeId !== null &&
@@ -267,16 +281,36 @@ export default function CommentsPanel({
             </>
           )}
         </h2>
-        {youtubeId && (
-          <a
-            href={safeHref(youtubeUrl(youtubeId))}
-            target="_blank"
-            rel="noreferrer"
-            className="ui-interactive inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
-          >
-            On YouTube <ExternalIcon />
-          </a>
-        )}
+        <div className="flex items-center gap-3">
+          {canRefresh && (
+            <button
+              type="button"
+              className="ui-interactive inline-flex items-center text-xs text-muted hover:text-accent disabled:opacity-50"
+              aria-label="Refresh comments"
+              title={
+                savedAt
+                  ? `Refresh comments (saved ${formatRelative(savedAt)})`
+                  : "Refresh comments"
+              }
+              disabled={refresh.isPending}
+              onClick={refreshNow}
+            >
+              <RefreshIcon
+                className={refresh.isPending ? "motion-safe:animate-spin" : ""}
+              />
+            </button>
+          )}
+          {youtubeId && (
+            <a
+              href={safeHref(youtubeUrl(youtubeId))}
+              target="_blank"
+              rel="noreferrer"
+              className="ui-interactive inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
+            >
+              On YouTube <ExternalIcon />
+            </a>
+          )}
+        </div>
       </div>
 
       {saved.isError && (
@@ -292,12 +326,17 @@ export default function CommentsPanel({
         </ol>
       )}
 
+      {refresh.isError && (
+        <p className="mt-3 text-sm text-warning" role="status">
+          {liveError(refresh.error)}
+        </p>
+      )}
       {liveFailed && current && (
         <p className="mt-3 text-sm text-warning" role="status">
           {liveError(current.error)}
         </p>
       )}
-      {loadingLive && items.length === 0 && (
+      {(loadingLive || refresh.isPending) && items.length === 0 && (
         <LoadingIndicator className="py-3" />
       )}
 
@@ -306,7 +345,11 @@ export default function CommentsPanel({
           <button
             type="button"
             className={button("secondary", "xs")}
-            onClick={() => setLimits([FIRST_LIVE_LIMIT])}
+            disabled={refresh.isPending}
+            // With Edit details they are saved, not just shown.
+            onClick={() =>
+              canRefresh ? refreshNow() : setLimits([FIRST_LIVE_LIMIT])
+            }
           >
             {videoId === null ? "Load comments" : "Load them now from YouTube"}
           </button>

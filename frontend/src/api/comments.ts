@@ -7,6 +7,13 @@ export const commentsApi = {
     return request<VideoComments>(`/api/videos/${videoId}/comments`, opts);
   },
 
+  /** Fetch and save a library video's top comments now (Edit details). */
+  refreshVideoComments(videoId: number): Promise<VideoComments> {
+    return request<VideoComments>(`/api/videos/${videoId}/comments/refresh`, {
+      method: "POST",
+    });
+  },
+
   /** The top `limit` (100, 300 or 1000) comments, read from YouTube now. */
   liveComments(
     youtubeId: string,

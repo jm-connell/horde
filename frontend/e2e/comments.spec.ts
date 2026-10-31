@@ -220,3 +220,39 @@ test("a streamed video loads its comments on request and keeps replies on the ne
   await threads.first().getByRole("button", { name: "1 reply" }).click();
   await expect(threads.first()).toContainText("Agreed!");
 });
+
+test("the refresh button fetches and saves the comments again", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Cedar Notes");
+  const saved = await (
+    await page.request.get(`/api/videos/${id}/comments`)
+  ).json();
+  let refreshed = 0;
+  await page.route(
+    new RegExp(`/api/videos/${id}/comments/refresh$`),
+    async (route) => {
+      expect(route.request().method()).toBe("POST");
+      expect(route.request().headers()["x-horde-request"]).toBeTruthy();
+      refreshed += 1;
+      await route.fulfill({
+        json: {
+          ...saved,
+          total_count: 2500,
+          items: [comment("fresh-1", "A new top comment"), ...saved.items],
+        },
+      });
+    }
+  );
+
+  await page.goto(`/watch/${id}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const button = panel.getByRole("button", { name: "Refresh comments" });
+  await expect(button).toHaveAttribute("title", /^Refresh comments \(saved /);
+  await button.click();
+  await expect(panel.locator(":scope > ol > li").first()).toContainText(
+    "A new top comment"
+  );
+  await expect(panel.getByRole("heading")).toHaveText("Comments 2.5K");
+  expect(refreshed).toBe(1);
+});
