@@ -161,3 +161,27 @@ test("suggested channels can be followed or dismissed", async ({ page }) => {
   ).items.map((f) => f.channel_url);
   expect(urls).toContain("https://youtube.com/@northernskies");
 });
+
+test("suggested channels show the channel's picture", async ({ page }) => {
+  const avatar = "https://yt3.googleusercontent.com/skies=s176-c-k-no-rj";
+  await page.route(/\/api\/channels\/avatar\?/, (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    return route.fulfill({
+      json: { url: url?.includes("northernskies") ? avatar : null },
+    });
+  });
+  await page.route(avatar, (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64"
+      ),
+    })
+  );
+  await openRecommendedPlus(page);
+  const shelf = page.getByRole("region", { name: "Channels you might like" });
+  await expect(shelf.locator(`img[src="${avatar}"]`)).toBeVisible();
+  // A channel without one shows its first letter instead.
+  await expect(shelf.getByText("T", { exact: true })).toBeVisible();
+});

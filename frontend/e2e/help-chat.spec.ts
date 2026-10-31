@@ -290,28 +290,51 @@ test("What can you do? is answered without asking the model", async ({
   expect(bodies).toEqual([]);
 });
 
-test("Use my data asks before sending data to a cloud AI", async ({ page }) => {
+test("Use my data is a setting, not a switch in the chat", async ({ page }) => {
   const bodies = await stubAnswer(page, "You have 3 videos.");
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "OpenRouter, a cloud AI service",
+        local: false,
+        available: true,
+      },
+    })
+  );
   await page.goto("/");
   await page.getByRole("button", { name: "Ask about Horde" }).click();
   const panel = page.getByRole("dialog", { name: "Ask about Horde" });
-  const toggle = panel.getByRole("switch", { name: /Use my data/ });
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
-  await toggle.click();
-  // The e2e server has no local AI, so it asks first.
-  const notice = panel.getByRole("alert");
-  await expect(notice).toContainText("are sent to");
-  await notice.getByRole("button", { name: "Not now" }).click();
-  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  await expect(panel.getByText("Use my data")).toHaveCount(0);
   await ask(page, "how many videos are in my library?");
   await expect(panel.getByText("You have 3 videos.")).toBeVisible();
   expect(bodies[0].data_consent).toBe("off");
 
-  await toggle.click();
-  await panel.getByRole("alert").getByRole("button", { name: "Allow" }).click();
-  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  // The capabilities answer links the setting; it opens on the Library tab.
+  await panel.getByRole("button", { name: "New chat" }).click();
+  await panel.getByRole("button", { name: "What can you do?" }).click();
+  await panel.getByRole("link", { name: "Use my data" }).click();
+  await expect(page).toHaveURL(/\/settings\?tab=library$/);
+  const choices = page.getByRole("group", { name: "Use my data" });
+  await expect(choices.getByRole("button", { name: "Off" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  );
+  // The e2e server's AI is not on the local network: local-only sends nothing.
+  await choices.getByRole("button", { name: "AI on my network only" }).click();
+  await expect(
+    page.getByText("nothing is sent until you choose")
+  ).toBeVisible();
+  await choices
+    .getByRole("button", { name: "Any AI, including cloud" })
+    .click();
+  await expect(
+    page.getByText("what a question needs is sent there")
+  ).toBeVisible();
+
   await ask(page, "and now?");
-  await expect(panel.getByText("You have 3 videos.")).toHaveCount(2);
+  await expect(panel.getByText("You have 3 videos.")).toBeVisible();
   expect(bodies[1].data_consent).toBe("cloud");
 });
 
@@ -415,10 +438,11 @@ test("the chat offers downloads and playlists, and does them on confirm", async 
   await page.getByRole("button", { name: "Ask about Horde" }).click();
   const panel = await ask(page, "make me a playlist and grab that link");
 
-  await expect(panel.getByRole("link", { name: a.title })).toHaveAttribute(
-    "href",
-    `/watch/${a.id}`
-  );
+  // The link in the reply; the playlist card lists the same video once the
+  // titles load.
+  await expect(
+    panel.locator('a[data-help-link="video"]', { hasText: a.title })
+  ).toHaveAttribute("href", `/watch/${a.id}`);
   await panel.getByRole("button", { name: "Make playlist" }).click();
   await expect(panel.getByText("Made “Chat mix” with 2 videos.")).toBeVisible();
   const playlists = (await (await request.get("/api/playlists")).json()) as {

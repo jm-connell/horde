@@ -11,6 +11,7 @@ import {
 import type { ChannelRequest, PageDetail } from "../context/HelpChatContext";
 import type { HelpCatalog } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useSettings } from "../hooks/useSettings";
 import { queryKeys } from "../queries/keys";
 import { getJson, removeItem, setJson } from "../storage";
@@ -195,7 +196,6 @@ export default function HelpChatPanel({
 }: Props) {
   const titleId = useId();
   const inputId = useId();
-  const dataId = useId();
   const panelRef = useRef<HTMLElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -227,7 +227,7 @@ export default function HelpChatPanel({
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { isAdmin, can } = useAuth();
-  const [settings, updateSettings] = useSettings();
+  const [settings] = useSettings();
   // A new set each time the panel opens (it mounts on open).
   const [prompts] = useState(() =>
     pickPrompts((p) => promptAllowed(p, { isAdmin, can }))
@@ -243,17 +243,15 @@ export default function HelpChatPanel({
     // Read again on each opening: the provider (local or cloud) may change.
     staleTime: 0,
   }).data;
-  // Consent given while the AI ran locally does not cover a cloud provider.
+  // Settings → Library; the server holds the data back from a cloud AI when
+  // only "local" was allowed.
   const consent = settings.helpChatData;
-  const useData =
-    consent === "cloud" || (consent === "local" && info?.local === true);
-  const needsCloudConsent = consent === "local" && info?.local === false;
-  const [askingConsent, setAskingConsent] = useState(false);
 
   const location = useLocation();
   const { current, stream, miniPlayerActive } = usePlaybackSession();
   const { miniPlayerRect } = usePlaybackLayout();
   const isMobile = useIsMobile();
+  const viewport = useVisualViewport(isMobile);
   const { vw, vh } = useViewport();
   const box = frame
     ? clampHelpFrame(frame, vw, vh)
@@ -601,16 +599,17 @@ export default function HelpChatPanel({
   };
   const lastId = messages[messages.length - 1]?.id;
 
-  function turnDataOn() {
-    if (info?.local) {
-      updateSettings({ helpChatData: "local" });
-    } else {
-      setAskingConsent(true);
-    }
-  }
-
+  // With the keyboard up, sit just above it inside what is visible: pinned
+  // to the bottom, iOS pans the page and the panel's top goes off screen.
+  const keyboardHeight = `min(36rem, 75dvh, ${viewport?.height ?? 0}px - 1rem)`;
   const placement: React.CSSProperties | undefined = isMobile
-    ? undefined
+    ? viewport?.keyboard
+      ? {
+          top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
+          bottom: "auto",
+          height: keyboardHeight,
+        }
+      : undefined
     : {
         left: box.left,
         top: box.top,
@@ -647,16 +646,12 @@ export default function HelpChatPanel({
         }`}
         onPointerDown={isMobile ? undefined : onHeaderPointerDown}
       >
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-sm font-semibold text-gray-100">
-            {ask.scope.length ? `Ask ${channelNames}` : "Ask about Horde"}
-          </h2>
-          <p className="truncate text-xs text-muted">
-            {ask.scope.length
-              ? "From what they said in their videos. Check the references."
-              : "From Horde’s docs and code. Can be wrong."}
-          </p>
-        </div>
+        <h2
+          id={titleId}
+          className="min-w-0 truncate text-sm font-semibold text-gray-100"
+        >
+          {ask.scope.length ? `Ask ${channelNames}` : "Ask about Horde"}
+        </h2>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
@@ -688,83 +683,6 @@ export default function HelpChatPanel({
           </button>
         </div>
       </header>
-
-      <div
-        className="space-y-2 border-b border-ink-700 px-4 py-2 text-xs"
-        data-horde="help-data"
-      >
-        <div className="flex items-center justify-between gap-3">
-          <label htmlFor={dataId} className="min-w-0 text-gray-300">
-            Use my data
-            <span className="block truncate text-muted">
-              {useData
-                ? info?.local
-                  ? "Downloads, library, history and playlists; stays on your network"
-                  : `What a question needs is sent to ${info?.provider_label || "the AI service"}`
-                : "Answers about your downloads, library and history"}
-            </span>
-          </label>
-          <button
-            id={dataId}
-            type="button"
-            role="switch"
-            aria-checked={useData}
-            onClick={() =>
-              useData || needsCloudConsent
-                ? (updateSettings({ helpChatData: "off" }),
-                  setAskingConsent(false))
-                : turnDataOn()
-            }
-            className={`ui-interactive flex h-5 w-9 shrink-0 items-center rounded-full px-0.5 transition-colors ${
-              useData ? "bg-accent" : "bg-ink-700"
-            }`}
-          >
-            <span
-              className={`block h-4 w-4 rounded-full bg-white transition-transform ${
-                useData ? "translate-x-4" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-        {(askingConsent || needsCloudConsent) && (
-          <div
-            role="alert"
-            className="space-y-2 rounded-lg border border-warning/40 bg-warning/5 p-2.5 text-gray-300"
-          >
-            <p>
-              {needsCloudConsent ? "Your AI is now a cloud service. " : ""}
-              To answer, the parts of your downloads, library, watch history and
-              playlists a question needs are sent to{" "}
-              <strong className="font-semibold text-gray-100">
-                {info?.provider_label || "the AI service"}
-              </strong>
-              . Nothing is sent for questions that do not need it.
-            </p>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                className={BUTTON}
-                onClick={() => {
-                  updateSettings({ helpChatData: "cloud" });
-                  setAskingConsent(false);
-                }}
-              >
-                Allow
-              </button>
-              <button
-                type="button"
-                className={BUTTON}
-                onClick={() => {
-                  updateSettings({ helpChatData: "off" });
-                  setAskingConsent(false);
-                }}
-              >
-                {needsCloudConsent ? "Turn off" : "Not now"}
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
 
       <div
         ref={listRef}

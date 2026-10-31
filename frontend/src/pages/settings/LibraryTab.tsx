@@ -1,4 +1,5 @@
 import { useAuth } from "../../context/AuthContext";
+import { useHelpChat } from "../../context/HelpChatContext";
 import { useSettingsPage } from "./context";
 import { useLibraryState } from "./useLibraryState";
 import { Section, SettingRow, Toggle, Chip } from "./ui";
@@ -20,6 +21,7 @@ import {
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
 import FollowedChannelsSection from "./FollowedChannelsSection";
+import HelpDataSection from "./HelpDataSection";
 import MediaServerFiles from "./MediaServerFiles";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 import TrashSection from "./TrashSection";
@@ -35,6 +37,15 @@ const YOUTUBE_HISTORY_TERMS = [
   "subscriptions",
   "watch history",
   "history stats",
+];
+
+const HELP_DATA_TERMS = [
+  "use my data",
+  "ask about horde",
+  "assistant",
+  "chat",
+  "privacy",
+  "consent",
 ];
 
 const DOWNLOAD_PREF_TERMS = [
@@ -64,6 +75,7 @@ const COMPAT_TERMS = [
 export default function LibraryTab() {
   const { q, match, settings, update } = useSettingsPage();
   const { isAdmin, can } = useAuth();
+  const helpChat = useHelpChat();
   // Download preferences only matter to someone who may download (admins can).
   const canDownload = can("download");
   const {
@@ -297,6 +309,15 @@ export default function LibraryTab() {
         hidden={!match(...YOUTUBE_HISTORY_TERMS)}
       >
         <YoutubeHistorySection />
+      </Section>
+
+      <Section
+        anchor="help-data"
+        title="Ask about Horde: use my data"
+        description="Let Ask about Horde answer about your own downloads, library, watch history and playlists. Only questions about your own things send any, and only what the question needs."
+        hidden={!helpChat.available || !match(...HELP_DATA_TERMS)}
+      >
+        <HelpDataSection />
       </Section>
 
       <Section

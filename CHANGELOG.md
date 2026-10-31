@@ -7,6 +7,16 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Use my data** for Ask about Horde moved from a switch at the top of the
+  chat to Settings → Library, with three choices: **Off**, **AI on my
+  network only** and **Any AI, including cloud**. A line under them says
+  which AI you have and whether your data goes to it, and the assistant
+  links the setting when a question needs your data and it is off.
+- Ask about Horde has a one-line header (no subtitle) and suggests five
+  questions when it opens instead of three.
+
 ## [1.2.1] - 2026-10-30
 
 ### Added

@@ -319,3 +319,79 @@ test("the tab bar steps aside for the keyboard", async ({ page }) => {
   await page.getByRole("button", { name: "Close search" }).click();
   await expect(tabs).not.toHaveClass(/translate-y-full/);
 });
+
+/**
+ * Stand in for iOS's keyboard: the visual viewport shrinks to `height` and is
+ * panned `top` px down the page, while fixed boxes stay where they were.
+ */
+async function fakeKeyboard(page: Page, top: number, height: number) {
+  await page.evaluate(
+    ([top, height]) => {
+      const vv = new EventTarget();
+      Object.defineProperties(vv, {
+        offsetTop: { value: top },
+        height: { value: height },
+        scale: { value: 1 },
+      });
+      Object.defineProperty(window, "visualViewport", {
+        value: vv,
+        configurable: true,
+      });
+    },
+    [top, height]
+  );
+}
+
+async function showKeyboard(page: Page) {
+  await page.evaluate(() =>
+    window.visualViewport!.dispatchEvent(new Event("resize"))
+  );
+}
+
+test("Ask about Horde stays above the keyboard, header and all", async ({
+  page,
+}) => {
+  await launch(page, "/");
+  await fakeKeyboard(page, 200, 420);
+  await page
+    .getByRole("navigation", { name: "Tabs" })
+    .getByRole("button", { name: "Chat" })
+    .click();
+  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await expect(panel).toBeVisible();
+  await showKeyboard(page);
+  await expect
+    .poll(async () => (await panel.boundingBox())!.y)
+    .toBeGreaterThanOrEqual(200);
+  const box = (await panel.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(620);
+  await expect(panel.getByRole("textbox")).toBeInViewport();
+});
+
+test("the nav follows the keyboard when Search opens it from far down", async ({
+  page,
+}) => {
+  await launch(page, "/");
+  const header = page.locator("header");
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        window.scrollTo(0, window.scrollY + 300);
+        return window.scrollY;
+      })
+    )
+    .toBeGreaterThan(600);
+  await expect(header).toHaveAttribute("data-nav-hidden", "true");
+
+  await fakeKeyboard(page, 300, 420);
+  await page
+    .getByRole("navigation", { name: "Tabs" })
+    .getByRole("button", { name: "Search" })
+    .click();
+  await expect(
+    page.getByRole("searchbox", { name: "Search library" })
+  ).toBeFocused();
+  await showKeyboard(page);
+  await expect(header).not.toHaveAttribute("data-nav-hidden");
+  await expect.poll(async () => (await header.boundingBox())!.y).toBe(300);
+});

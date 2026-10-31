@@ -2,6 +2,8 @@ import { useState } from "react";
 import type { SuggestedChannel } from "../../types";
 import { youtubeThumbnailUrl } from "../../utils";
 import { button } from "../buttons";
+import ChannelAvatar from "../ChannelAvatar";
+import { isYoutubeChannelUrl } from "../channelFeedYoutubeSearch";
 import FadeImage from "../FadeImage";
 import { CloseIcon } from "../icons";
 
@@ -57,19 +59,26 @@ export default function SuggestedChannels({
                 />
               ))}
             </button>
-            <div className="min-w-0 pr-6">
-              <button
-                type="button"
-                onClick={() => onOpen(ch)}
-                className="block max-w-full truncate text-left text-sm font-medium text-gray-100 hover:text-accent"
-              >
-                {ch.name}
-              </button>
-              {ch.reason && (
-                <p className="truncate text-xs text-muted" title={ch.reason}>
-                  {ch.reason}
-                </p>
-              )}
+            <div className="flex min-w-0 items-center gap-2 pr-6">
+              <ChannelAvatar
+                channel={ch.name}
+                channelUrl={isYoutubeChannelUrl(ch.url) ? ch.url : null}
+                size="h-9 w-9 text-sm"
+              />
+              <div className="min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onOpen(ch)}
+                  className="block max-w-full truncate text-left text-sm font-medium text-gray-100 hover:text-accent"
+                >
+                  {ch.name}
+                </button>
+                {ch.reason && (
+                  <p className="truncate text-xs text-muted" title={ch.reason}>
+                    {ch.reason}
+                  </p>
+                )}
+              </div>
             </div>
             <button
               type="button"

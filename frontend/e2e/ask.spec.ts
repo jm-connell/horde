@@ -165,7 +165,9 @@ test("Ask <channel> on a channel page opens a chat about it", async ({
   await expect(
     panel.getByRole("textbox", { name: "Your question" })
   ).toHaveAttribute("placeholder", "Ask Northwind…");
-  // Removing the chip goes back to Ask about Horde, and New chat keeps it so.
+  // The download box floats over the panel's corner on this page.
+  await page.getByRole("button", { name: "Hide download panel" }).click();
+  // Removing the chip goes back to Ask about Horde.
   await panel
     .getByRole("button", { name: "Stop answering from these channels" })
     .click();

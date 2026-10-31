@@ -572,8 +572,8 @@ def system_prompt(
     else:
         data = (
             "You cannot see the user's downloads, library, history or playlists: "
-            "they have not turned on Use my data at the top of this chat. If a "
-            "question needs them, say so and that they can turn it on there."
+            "they have not turned on Use my data in Settings ([[setting:help-data]]). "
+            "If a question needs them, say so and link that setting."
         )
     return (
         "You are the help assistant built into Horde, a self-hosted video library "

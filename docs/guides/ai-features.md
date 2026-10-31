@@ -55,7 +55,7 @@ Answers come from the documentation and the source code shipped with your versio
 - The conversation, and where you put the panel, are kept in the browser tab only (until the tab closes or **Clear**); the server stores none of it. Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
 - Answers can be wrong. The model only sees the excerpts it was given; check the linked pages before changing anything important.
 
-When the panel opens it suggests three questions, a different mix each time; the first is always **What can you do?**, which lists everything below (answered by the app itself, without asking the model).
+When the panel opens it suggests five questions, a different mix each time; the first is always **What can you do?**, which lists everything below (answered by the app itself, without asking the model).
 
 ### Links to settings and pages
 
@@ -67,9 +67,9 @@ Ask for a change ("make the text bigger", "turn on SponsorBlock") and the answer
 
 ### Your own data
 
-Turn on **Use my data** at the top of the chat and the assistant can answer about your downloads ("why did my last download fail?"), watch history ("what did I watch this week?"), playlists and library ("which channels take the most space?", "find that cooking video", "what should I watch next?"). Only a question about your own things gets any ("my downloads", "did I watch…", "what should I watch next", "make a playlist of…"); how-to questions send none, even "how do I change my password?". Then only what it needs is sent, as a few short lines: the words of the question pick which (failed downloads, recent history, your playlists and what is in them, library totals, a library search or unwatched videos). If it does not find what you mean, say "my downloads" or "my library". Everything is read as you see it: your own history, playlists you can open, downloads you may see.
+Turn on **Use my data** (Settings → Library) and the assistant can answer about your downloads ("why did my last download fail?"), watch history ("what did I watch this week?"), playlists and library ("which channels take the most space?", "find that cooking video", "what should I watch next?"). Only a question about your own things gets any ("my downloads", "did I watch…", "what should I watch next", "make a playlist of…"); how-to questions send none, even "how do I change my password?". Then only what it needs is sent, as a few short lines: the words of the question pick which (failed downloads, recent history, your playlists and what is in them, library totals, a library search or unwatched videos). If it does not find what you mean, say "my downloads" or "my library". Everything is read as you see it: your own history, playlists you can open, downloads you may see.
 
-With a cloud provider such as OpenRouter, or an Ollama cloud model (one whose name ends in `cloud`, such as `gpt-oss:120b-cloud`, which your Ollama server passes on to ollama.com), the switch first says where the data goes and asks you to allow it. Allowing it while the AI ran on your own network does not count for a cloud provider later: the server holds the data back and the chat asks again. The choice is saved per account. Questions about custom CSS also send your saved stylesheet when they mention CSS.
+It has three choices: **Off**, **AI on my network only** and **Any AI, including cloud**; under them Settings says which AI you have and whether your data goes to it. A cloud provider such as OpenRouter, or an Ollama cloud model (one whose name ends in `cloud`, such as `gpt-oss:120b-cloud`, which your Ollama server passes on to ollama.com), only gets your data with **Any AI, including cloud**: with **AI on my network only** the server holds it back, even if the AI changes to a cloud one later. The choice is saved per account, and the assistant links the setting when a question needs your data and it is off. Questions about custom CSS also send your saved stylesheet when they mention CSS.
 
 ### Downloads and playlists
 

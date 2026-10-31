@@ -148,6 +148,8 @@
      "key": "normalizeVolumeOnDownload", "type": "bool", "about": "Even out loudness of new downloads", "keywords": "loudness audio level"},
     {"id": "youtube-history", "label": "YouTube history (Google Takeout)", "tab": "library", "chat": "link",
      "about": "Import your YouTube watch history, subscriptions and playlists", "keywords": "takeout import google subscriptions"},
+    {"id": "help-data", "label": "Use my data", "tab": "library", "chat": "link",
+     "about": "Whether Ask about Horde may read your own downloads, library, history and playlists, and with which AI", "keywords": "privacy consent assistant chat my data"},
     {"id": "trash", "label": "Trash", "tab": "library", "access": "delete_videos", "chat": "link",
      "about": "Restore or permanently remove deleted videos", "keywords": "deleted restore recycle"},
     {"id": "youtube-library-search", "label": "YouTube results in library search", "tab": "library", "access": "admin", "chat": "change", "scope": "server",
