@@ -562,6 +562,14 @@ test("watching with the chat docked shows the player as theater", async ({
     .click();
   await reveal();
   await expect(theater).toHaveClass(active);
+  // Full bleed stops at the chat, so the player's own controls stay clickable.
+  await expect
+    .poll(async () => {
+      const video = (await page.locator("video").first().boundingBox())!;
+      const chat = (await panel.boundingBox())!;
+      return video.x + video.width - chat.x;
+    })
+    .toBeLessThanOrEqual(1);
 
   // Floating it again brings back the saved standard layout.
   await panel.getByRole("button", { name: "Float the chat" }).click();
