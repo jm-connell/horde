@@ -47,7 +47,14 @@ class SubtitleTrack(BaseModel):
 
 class SearchMatchReason(BaseModel):
     source: Literal[
-        "title", "description", "tags", "notes", "captions", "related", "youtube"
+        "title",
+        "description",
+        "tags",
+        "notes",
+        "captions",
+        "comments",
+        "related",
+        "youtube",
     ]
     snippet: str | None = None
 
@@ -1642,3 +1649,50 @@ class AskThreadRead(BaseModel):
     #: ``{"channels": [{id, name}]}`` or ``{"help": true}``: the last turn's source.
     scope: dict
     messages: list[AskThreadMessage]
+
+
+class CommentRead(BaseModel):
+    """A YouTube comment. ``replies`` holds the ones saved with it (top threads only)."""
+
+    id: str
+    author: str | None = None
+    author_is_uploader: bool = False
+    is_pinned: bool = False
+    #: Hearted by the creator.
+    is_hearted: bool = False
+    like_count: int | None = None
+    text: str
+    #: Approximate: YouTube only says "3 years ago".
+    published_at: datetime | None = None
+    replies: list[CommentRead] = []
+
+
+class VideoCommentsRead(BaseModel):
+    """A library video's saved comments, in YouTube's "top" order.
+
+    ``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on
+    YouTube); ``unavailable`` (private, removed or members-only); ``failed``;
+    ``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier
+    are still listed when a later fetch finds them disabled or unavailable.
+    """
+
+    status: Literal[
+        "saved", "pending", "disabled", "unavailable", "failed", "off", "not_youtube"
+    ]
+    youtube_id: str | None = None
+    fetched_at: datetime | None = None
+    #: YouTube's count of all the video's comments when they were fetched.
+    total_count: int | None = None
+    items: list[CommentRead] = []
+    #: ``limit`` for ``GET /api/comments/youtube/{youtube_id}`` to read more.
+    next_limit: int | None = None
+
+
+class LiveCommentsRead(BaseModel):
+    """The top ``limit`` comments of a YouTube video, read now (not saved)."""
+
+    status: Literal["ok", "disabled", "unavailable"]
+    total_count: int | None = None
+    items: list[CommentRead] = []
+    #: The next, larger ``limit``; null when there are no more comments to read.
+    next_limit: int | None = None

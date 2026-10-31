@@ -37,6 +37,8 @@ from ..models import (
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
+    VideoComment,
+    VideoCommentState,
     VideoEmbedding,
 )
 from . import app_settings, scanner
@@ -57,6 +59,8 @@ _ERASE_MEDIA_MODELS = (
     KbChannel,
     VideoAiChatMessage,
     VideoAiMeta,
+    VideoComment,
+    VideoCommentState,
     VideoEmbedding,
     ChannelCatalogEmbedding,
     ChannelCatalogSkip,

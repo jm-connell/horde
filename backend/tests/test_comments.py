@@ -1,0 +1,505 @@
+"""Saved YouTube comments: fetching, saving, the fetcher's order, the API, search
+and the video chat."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+from sqlalchemy import text
+from sqlmodel import Session, select
+
+from app.models import Video, VideoComment, VideoCommentState
+from app.services import app_settings
+from app.services.comments import fetch, live, store, worker
+from app.services.comments.fetch import FetchedComment, FetchResult
+
+CSRF = {"X-Horde-Request": "1"}
+
+
+def _raw(cid: str, text_: str, *, parent: str = "root", **extra: Any) -> dict:
+    return {"id": cid, "text": text_, "parent": parent, **extra}
+
+
+def _comment(cid: str, text_: str, *, parent: str | None = None, **extra: Any):
+    return FetchedComment(
+        comment_id=cid,
+        parent_comment_id=parent,
+        author=extra.get("author", "viewer"),
+        author_is_uploader=extra.get("author_is_uploader", False),
+        is_pinned=extra.get("is_pinned", False),
+        is_hearted=extra.get("is_hearted", False),
+        like_count=extra.get("like_count"),
+        text=text_,
+        published_at=None,
+    )
+
+
+@pytest.fixture
+def no_gate(monkeypatch):
+    """Run fetches straight away (the extract gate spaces calls over a second)."""
+    monkeypatch.setattr(fetch, "call_gated", lambda fn, **_: fn())
+
+
+def _saved(session: Session, video_id: int) -> list[VideoComment]:
+    return store.saved_comments(session, video_id)
+
+
+# --- Fetching ------------------------------------------------------------------
+
+
+def test_the_reply_budget_goes_to_the_top_threads():
+    args = fetch._ydl_opts(100, replies=True)["extractor_args"]["youtube"]
+    # total, top-level, replies in all, replies per thread, depth
+    assert args["max_comments"] == ["all", "100", "100", "10", "2"]
+    assert args["comment_sort"] == ["top"]
+    no_replies = fetch._ydl_opts(300, replies=False)["extractor_args"]["youtube"]
+    assert no_replies["max_comments"][1:3] == ["300", "0"]
+
+
+def test_comments_are_read_from_ytdlp_without_processing_formats(monkeypatch):
+    """The real yt-dlp path: the page's comment count survives, comments come from
+    the post-extractor, and no format has to exist."""
+    import yt_dlp
+    from yt_dlp.extractor.common import InfoExtractor
+
+    class FakeYoutubeIE(InfoExtractor):
+        IE_NAME = "fakeyoutube"
+        _VALID_URL = r"https://www\.youtube\.com/watch\?v=(?P<id>[\w-]{11})"
+
+        def _real_extract(self, url):
+            video_id = self._match_id(url)
+            return {
+                "id": video_id,
+                "title": "t",
+                "comment_count": 4321,
+                "__post_extractor": self.extract_comments(video_id),
+            }
+
+        def _get_comments(self, video_id):
+            yield _raw("a", "first", is_pinned=True, author_is_uploader=True)
+            yield _raw("a.1", "a reply", parent="a")
+            yield _raw("b", "second", like_count=7, is_favorited=True)
+
+    class FakeYoutubeDL(yt_dlp.YoutubeDL):
+        def __init__(self, params=None, auto_init=True):
+            super().__init__(params, auto_init=False)
+            self.add_info_extractor(FakeYoutubeIE())
+
+    monkeypatch.setattr(yt_dlp, "YoutubeDL", FakeYoutubeDL)
+    result = fetch._fetch(fetch.video_url("abcdefghijk"), 100, True)
+    assert result.status == fetch.SAVED
+    assert result.total_count == 4321
+    assert [(c.comment_id, c.parent_comment_id) for c in result.comments] == [
+        ("a", None),
+        ("a.1", "a"),
+        ("b", None),
+    ]
+    first, _, second = result.comments
+    assert first.is_pinned and first.author_is_uploader and not first.is_hearted
+    assert second.is_hearted and second.like_count == 7
+
+
+def test_parsing_drops_duplicates_orphans_and_empty_comments():
+    parsed = fetch.parse_comments(
+        [
+            _raw("a", "hello", timestamp=1_700_000_000, like_count=3),
+            _raw("a", "hello again"),  # YouTube looping
+            _raw("x.1", "reply to a thread that was not read", parent="x"),
+            _raw("b", "   "),
+            "not a dict",
+            _raw("c", "fine", like_count=True),
+        ]
+    )
+    assert [c.comment_id for c in parsed] == ["a", "c"]
+    assert parsed[0].published_at == datetime.fromtimestamp(1_700_000_000, UTC)
+    assert parsed[1].like_count is None
+
+
+def test_turned_off_comments_are_reported_as_disabled(monkeypatch, no_gate):
+    monkeypatch.setattr(
+        fetch, "_extract", lambda url, opts: {"comment_count": None, "comments": None}
+    )
+    assert fetch.fetch_comments("abcdefghijk").status == fetch.DISABLED
+
+
+@pytest.mark.parametrize(
+    ("message", "status"),
+    [
+        ("Sign in to confirm you're not a bot", fetch.RETRY),
+        ("HTTP Error 429: Too Many Requests", fetch.RETRY),
+        (
+            "Video unavailable. This video has been removed by the uploader",
+            "unavailable",
+        ),
+        ("Something odd happened", fetch.FAILED),
+    ],
+)
+def test_failures_are_classified(monkeypatch, no_gate, message, status):
+    def boom(url, opts):
+        raise RuntimeError(message)
+
+    monkeypatch.setattr(fetch, "_extract", boom)
+    assert fetch.fetch_comments("abcdefghijk").status == status
+
+
+# --- Saving --------------------------------------------------------------------
+
+
+def test_a_fetch_replaces_the_saved_comments(session, add_video):
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=400))
+    store.apply_result(
+        session, video, FetchResult(fetch.SAVED, [_comment("old", "old")], 1)
+    )
+    store.apply_result(
+        session,
+        video,
+        FetchResult(
+            fetch.SAVED,
+            [_comment("a", "top"), _comment("a.1", "reply", parent="a")],
+            total_count=50,
+        ),
+    )
+    assert [c.comment_id for c in _saved(session, video.id)] == ["a", "a.1"]
+    state = session.get(VideoCommentState, video.id)
+    assert (state.status, state.total_count, state.next_attempt_at) == (
+        "saved",
+        50,
+        None,
+    )
+
+
+def test_a_new_upload_is_fetched_again_a_week_after_it_came_out(session, add_video):
+    published = datetime.now(UTC) - timedelta(days=2)
+    video = add_video(published_at=published)
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
+    state = session.get(VideoCommentState, video.id)
+    assert abs(
+        state.next_attempt_at.replace(tzinfo=UTC) - (published + store.REFRESH_AGE)
+    ) < timedelta(seconds=1)
+
+
+def test_comments_turned_off_later_keep_what_was_saved(session, add_video):
+    video = add_video()
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
+    store.apply_result(session, video, FetchResult(fetch.DISABLED))
+    assert [c.comment_id for c in _saved(session, video.id)] == ["a"]
+    assert session.get(VideoCommentState, video.id).status == "disabled"
+
+
+def test_failures_back_off_then_give_up(session, add_video):
+    video = add_video()
+    waits = []
+    for _ in range(store.MAX_ATTEMPTS):
+        before = datetime.now(UTC)
+        store.apply_result(session, video, FetchResult(fetch.FAILED))
+        state = session.get(VideoCommentState, video.id)
+        assert state.status == "failed"
+        waits.append(
+            None
+            if state.next_attempt_at is None
+            else round(
+                (state.next_attempt_at.replace(tzinfo=UTC) - before).total_seconds()
+                / 3600
+            )
+        )
+    assert waits == [1, 4, None]
+
+
+def test_a_rate_limit_does_not_count_as_an_attempt(session, add_video):
+    video = add_video()
+    store.apply_result(session, video, FetchResult(fetch.RETRY))
+    state = session.get(VideoCommentState, video.id)
+    assert state.attempts == 0 and state.next_attempt_at is not None
+
+
+# --- The fetcher ---------------------------------------------------------------
+
+
+def test_the_fetcher_takes_new_videos_first_and_skips_what_it_cannot_fetch(
+    session, add_video
+):
+    now = datetime.now(UTC)
+    older = add_video(added_at=now - timedelta(days=3))
+    newer = add_video(added_at=now - timedelta(days=1))
+    add_video(added_at=now, needs_review=True)
+    add_video(added_at=now, source_url=None, file_path="Alpha/2024/clip [clip-1].mp4")
+    retry_due = add_video(added_at=now)
+    not_due = add_video(added_at=now)
+    session.add(
+        VideoCommentState(
+            video_id=retry_due.id, status="failed", next_attempt_at=now - timedelta(1)
+        )
+    )
+    session.add(
+        VideoCommentState(
+            video_id=not_due.id, status="failed", next_attempt_at=now + timedelta(1)
+        )
+    )
+    session.commit()
+
+    order = []
+    while (video := worker.next_video(session)) is not None:
+        order.append(video.id)
+        session.merge(VideoCommentState(video_id=video.id, next_attempt_at=None))
+        session.commit()
+    assert order == [newer.id, older.id, retry_due.id]
+
+
+def test_fetch_next_saves_and_a_rate_limit_pauses_everyone(
+    session, add_video, init_db, monkeypatch
+):
+    video = add_video()
+    calls = []
+
+    def fake(yt_id, **_):
+        calls.append(yt_id)
+        return FetchResult(fetch.SAVED, [_comment("a", "nice")], 9)
+
+    monkeypatch.setattr(fetch, "fetch_comments", fake)
+    assert worker.fetch_next() is True
+    assert calls == [video.youtube_id]
+    session.expire_all()
+    assert [c.text for c in _saved(session, video.id)] == ["nice"]
+    assert worker.fetch_next() is False  # nothing else is due
+
+    other = add_video()
+    monkeypatch.setattr(
+        fetch, "fetch_comments", lambda yt_id, **_: FetchResult("retry")
+    )
+    assert worker.fetch_next() is True
+    assert init_db["ctx"].comments.seconds_paused() > 3000
+    session.expire_all()
+    assert session.get(VideoCommentState, other.id).next_attempt_at is not None
+
+
+def test_turning_the_setting_off_stops_the_fetcher(init_db):
+    assert worker.enabled() is True
+    app_settings.save({"save_comments": False})
+    assert worker.enabled() is False
+
+
+def test_the_setting_is_admin_only_and_wakes_the_fetcher(
+    client, member_client, init_db
+):
+    assert client.get("/api/settings").json()["save_comments"] is True
+    assert (
+        member_client.patch("/api/settings", json={"save_comments": False}).status_code
+        == 403
+    )
+    assert (
+        client.patch("/api/settings", json={"save_comments": False}).json()[
+            "save_comments"
+        ]
+        is False
+    )
+    wake = init_db["ctx"].comments.wake
+    wake.clear()
+    client.patch("/api/settings", json={"save_comments": True})
+    assert wake.is_set()
+
+
+# --- The API -------------------------------------------------------------------
+
+
+def test_saved_comments_come_back_as_threads(client, session, add_video):
+    video = add_video()
+    store.apply_result(
+        session,
+        video,
+        FetchResult(
+            fetch.SAVED,
+            [
+                _comment("p", "pinned note", is_pinned=True, author_is_uploader=True),
+                _comment("a", "great video", like_count=12, is_hearted=True),
+                _comment("a.1", "agreed", parent="a"),
+                _comment("b", "first!"),
+            ],
+            total_count=1234,
+        ),
+    )
+    body = client.get(f"/api/videos/{video.id}/comments").json()
+    assert body["status"] == "saved"
+    assert body["total_count"] == 1234
+    assert body["youtube_id"] == video.youtube_id
+    assert body["next_limit"] is None  # fewer than 100 were there
+    assert [c["id"] for c in body["items"]] == ["p", "a", "b"]
+    assert body["items"][0]["is_pinned"] and body["items"][0]["author_is_uploader"]
+    assert body["items"][1]["is_hearted"] and body["items"][1]["like_count"] == 12
+    assert [r["text"] for r in body["items"][1]["replies"]] == ["agreed"]
+
+
+def test_a_full_page_offers_more(client, session, add_video):
+    video = add_video()
+    store.apply_result(
+        session,
+        video,
+        FetchResult(
+            fetch.SAVED,
+            [_comment(f"c{i}", f"comment {i}") for i in range(fetch.TOP_COMMENTS)],
+        ),
+    )
+    assert client.get(f"/api/videos/{video.id}/comments").json()["next_limit"] == 300
+
+
+def test_the_status_says_why_there_are_no_comments(
+    client, member_client, session, add_video
+):
+    upload = add_video(source_url=None, file_path="Alpha/2024/home movie.mp4")
+    assert client.get(f"/api/videos/{upload.id}/comments").json()["status"] == (
+        "not_youtube"
+    )
+    video = add_video()
+    url = f"/api/videos/{video.id}/comments"
+    assert member_client.get(url).json()["status"] == "pending"
+    session.add(
+        VideoCommentState(
+            video_id=video.id,
+            status="failed",
+            attempts=1,
+            next_attempt_at=datetime.now(UTC) + timedelta(hours=1),
+        )
+    )
+    session.commit()
+    assert client.get(url).json()["status"] == "pending"  # it will try again
+    state = session.get(VideoCommentState, video.id)
+    state.next_attempt_at = None
+    session.add(state)
+    session.commit()
+    assert client.get(url).json()["status"] == "failed"
+
+    later = add_video()
+    app_settings.save({"save_comments": False})
+    assert client.get(f"/api/videos/{later.id}/comments").json()["status"] == "off"
+    resp = client.get("/api/videos/999999/comments")
+    assert (resp.status_code, resp.json()["code"]) == (404, "not_found")
+
+
+def test_more_comments_are_read_live_and_kept_for_a_while(client, monkeypatch):
+    calls = []
+
+    def fake(yt_id, *, limit, replies, priority):
+        calls.append((yt_id, limit, replies))
+        return FetchResult(
+            fetch.SAVED,
+            [_comment(f"c{i}", f"comment {i}") for i in range(limit)],
+            total_count=5000,
+        )
+
+    monkeypatch.setattr(live, "fetch_comments", fake)
+    url = "/api/comments/youtube/abcdefghijk"
+    body = client.get(url, params={"limit": 300}).json()
+    assert body["status"] == "ok"
+    assert len(body["items"]) == 300 and body["next_limit"] == 1000
+    client.get(url, params={"limit": 300})
+    assert calls == [("abcdefghijk", 300, False)]
+    first = client.get(url).json()
+    assert len(first["items"]) == 100 and calls[-1] == ("abcdefghijk", 100, True)
+    last = client.get(url, params={"limit": 1000}).json()
+    assert last["next_limit"] is None
+
+
+def test_live_comments_refuse_bad_input_and_report_failures(client, monkeypatch):
+    resp = client.get("/api/comments/youtube/not-an-id")
+    assert (resp.status_code, resp.json()["code"]) == (422, "invalid_youtube_id")
+    resp = client.get("/api/comments/youtube/abcdefghijk", params={"limit": 50})
+    assert (resp.status_code, resp.json()["code"]) == (422, "invalid_limit")
+
+    results = iter(
+        [FetchResult("retry"), FetchResult(fetch.FAILED), FetchResult(fetch.DISABLED)]
+    )
+    monkeypatch.setattr(live, "fetch_comments", lambda *a, **k: next(results))
+    url = "/api/comments/youtube/abcdefghijk"
+    resp = client.get(url)
+    assert (resp.status_code, resp.json()["code"]) == (503, "youtube_rate_limited")
+    resp = client.get(url)
+    assert (resp.status_code, resp.json()["code"]) == (502, "comments_unavailable")
+    assert client.get(url).json() == {
+        "status": "disabled",
+        "total_count": None,
+        "items": [],
+        "next_limit": None,
+    }
+
+
+# --- Search, chat and deletion -------------------------------------------------
+
+
+def test_search_finds_a_video_through_its_comments_after_title_matches(
+    client, session, add_video
+):
+    by_title = add_video(title="Rebuilding a carburetor")
+    by_comment = add_video(title="Shop tour", channel="Beta")
+    add_video(title="Unrelated")
+    store.apply_result(
+        session,
+        by_comment,
+        FetchResult(
+            fetch.SAVED,
+            [
+                _comment(
+                    "a", "The carburetor rebuild at 12:30 saved my bike", like_count=4
+                )
+            ],
+        ),
+    )
+    items = client.get("/api/videos", params={"q": "carburetor"}).json()["items"]
+    assert [v["id"] for v in items] == [by_title.id, by_comment.id]
+    assert items[1]["match_reason"]["source"] == "comments"
+    assert "carburetor" in items[1]["match_reason"]["snippet"]
+    # Filters still apply to videos found through comments.
+    alpha = client.get("/api/videos", params={"q": "carburetor", "channel": "Alpha"})
+    assert [v["id"] for v in alpha.json()["items"]] == [by_title.id]
+
+
+def test_the_video_chat_sees_the_top_comments_with_the_creator_marked(
+    session, add_video
+):
+    from app.services.ai import embeddings
+
+    video = add_video(title="Engine teardown")
+    store.apply_result(
+        session,
+        video,
+        FetchResult(
+            fetch.SAVED,
+            [
+                _comment(
+                    "p",
+                    "Correction: the bolt is 10 mm",
+                    author_is_uploader=True,
+                    is_pinned=True,
+                ),
+                _comment("a", "What torque did you use?", like_count=40),
+                _comment("a.1", "25 Nm", parent="a", author_is_uploader=True),
+                _comment("a.2", "thanks", parent="a"),
+                _comment("b", "x" * 900),
+            ],
+        ),
+    )
+    context = embeddings.build_chat_context(session, video, "what did people say?")
+    assert "Top viewer comments" in context
+    assert "- [the creator, pinned] Correction: the bolt is 10 mm" in context
+    assert "- What torque did you use? (40 likes)" in context
+    assert "  - reply [the creator] 25 Nm" in context
+    assert "thanks" not in context  # viewers' replies stay out
+    assert "x" * 400 not in context  # one comment is cut short
+
+
+def test_deleting_a_video_removes_its_comments_and_their_index(session, add_video):
+    from app.services.video_delete import delete_video_cascade
+
+    video = add_video()
+    store.apply_result(
+        session, video, FetchResult(fetch.SAVED, [_comment("a", "zeppelin")])
+    )
+    delete_video_cascade(session, session.get(Video, video.id), delete_files=False)
+    assert session.exec(select(VideoComment)).all() == []
+    assert session.get(VideoCommentState, video.id) is None
+    hits = session.execute(
+        text(
+            "SELECT count(*) FROM video_comments_fts WHERE video_comments_fts MATCH 'zeppelin'"
+        )
+    ).scalar()
+    assert hits == 0

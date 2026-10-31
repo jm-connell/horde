@@ -38,6 +38,7 @@ KIND_GROUPS: dict[str, str] = {
     "metadata_sync": "library",
     "sidecars": "library",
     "subtitles": "library",
+    "comments": "library",
     "feed_enrich": "index",
 }
 

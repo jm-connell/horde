@@ -23,6 +23,7 @@ from ..services.ai.provider import (
 )
 from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
+from ..services.comments import worker as comments_worker
 from ..services.css_sanitize import sanitize_ui_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -133,6 +134,8 @@ class AppSettingsRead(BaseModel):
     max_library_bytes: int | None = None
     # Write Jellyfin / Kodi / Plex files (.nfo, -thumb.jpg) beside the media.
     media_server_sidecars: bool = False
+    # Save the top comments of YouTube videos in the library.
+    save_comments: bool = True
     # Who must sign in with a second step (administrators only see this).
     require_two_factor: TwoFactorRequirement = "off"
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
@@ -160,6 +163,7 @@ class AppSettingsUpdate(BaseModel):
         default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
     )
     media_server_sidecars: bool | None = None
+    save_comments: bool | None = None
     require_two_factor: TwoFactorRequirement | None = None
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
@@ -184,7 +188,7 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 
 #: Top-level fields only the administrator's settings screens read: how often
 #: metadata and catalogs refresh, how large catalogs grow, whether indexing is on,
-#: the library size limit, the media-server files switch, and whether the settings file is damaged. A member gets the defaults. (The
+#: the library size limit, the media-server files and comments switches, and whether the settings file is damaged. A member gets the defaults. (The
 #: YouTube search switches and the progress expiry stay: member screens use them.)
 MEMBER_HIDDEN_FIELDS = (
     "metadata_sync_interval_hours",
@@ -192,6 +196,7 @@ MEMBER_HIDDEN_FIELDS = (
     "channel_catalog_max_videos",
     "max_library_bytes",
     "media_server_sidecars",
+    "save_comments",
     "require_two_factor",
     "settings_degraded",
 )
@@ -313,6 +318,7 @@ def _settings_read(
             data.get("max_library_bytes")
         ),
         media_server_sidecars=bool(data.get(media_sidecars.SETTING)),
+        save_comments=bool(data.get(comments_worker.SETTING, True)),
         require_two_factor=cast(
             TwoFactorRequirement,
             two_factor.normalize_requirement(data.get("require_two_factor")),
@@ -389,6 +395,8 @@ def update_settings(
         )
     if payload.media_server_sidecars is not None:
         updates[media_sidecars.SETTING] = payload.media_server_sidecars
+    if payload.save_comments is not None:
+        updates[comments_worker.SETTING] = payload.save_comments
     if payload.require_two_factor is not None:
         updates["require_two_factor"] = payload.require_two_factor
     if payload.setup_completed is False:
@@ -450,6 +458,8 @@ def update_settings(
     data = app_settings.save(updates) if updates else app_settings.load()
     if turned_on:
         ctx.sidecars.write_all()
+    if updates.get(comments_worker.SETTING) is True:
+        ctx.comments.wake.set()
     if "max_library_bytes" in updates:
         # Held downloads may fit under the new limit now.
         ctx.download_queue.library_changed(room_made=True)

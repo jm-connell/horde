@@ -9,6 +9,7 @@ from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings, library
+from ..comments import search as comment_search
 from ..search_text import explain_match, query_allows_semantic
 from . import embeddings
 from . import text as ai_text
@@ -26,6 +27,7 @@ def _caption_chunk_text(video: Video, chunk_index: int) -> str | None:
 
 
 def explain_library_video(
+    session: Session,
     video: Video,
     query: str,
     *,
@@ -45,15 +47,21 @@ def explain_library_video(
     caption = None
     if chunk_index is not None and chunk_index >= 0:
         caption = _caption_chunk_text(video, chunk_index)
-    return explain_match(
+    reason = explain_match(
         query,
         title=video.title,
         description=video.description,
         tags=tags,
         notes=video.notes,
         caption_chunk=caption,
-        allow_related=chunk_index is not None,
     )
+    if reason:
+        return reason
+    if video.id is not None:
+        snippet = comment_search.best_snippet(session, video.id, query)
+        if snippet:
+            return {"source": "comments", "snippet": snippet}
+    return {"source": "related", "snippet": None} if chunk_index is not None else None
 
 
 def hybrid_search(
@@ -70,7 +78,8 @@ def hybrid_search(
     semantic: bool = True,
     embed_query: Callable[[str], list[float] | None] | None = None,
 ) -> tuple[list[Video], dict[int, int]]:
-    """Merge whole-word keyword hits with embedding nearest neighbors.
+    """Merge whole-word keyword hits with embedding nearest neighbors, then add
+    videos found only through their saved comments.
 
     Returns (videos, chunk_index_by_video_id) for match-reason snippets.
     When Ollama/embeddings are unavailable, or the query is too short to
@@ -78,6 +87,48 @@ def hybrid_search(
     embedding half (the caller may not spend AI quota); ``embed_query`` lets the
     caller reuse a cached query vector.
     """
+    results, chunks = _metadata_search(
+        session,
+        q,
+        channel=channel,
+        tag=tag,
+        sort=sort,
+        order=order,
+        needs_review=needs_review,
+        seed=seed,
+        user_id=user_id,
+        semantic=semantic,
+        embed_query=embed_query,
+    )
+    found = {v.id for v in results}
+    extra = [i for i in comment_search.matching_video_ids(session, q) if i not in found]
+    if not extra:
+        return results, chunks
+    # Comments are a weaker signal than the video's own text: these come last,
+    # most matching comments first.
+    allowed = {
+        v.id: v
+        for v in library.query_videos(
+            session, channel=channel, tag=tag, needs_review=needs_review, ids=extra
+        )
+    }
+    return results + [allowed[i] for i in extra if i in allowed], chunks
+
+
+def _metadata_search(
+    session: Session,
+    q: str,
+    *,
+    channel: str | None,
+    tag: str | None,
+    sort: str,
+    order: str,
+    needs_review: bool | None,
+    seed: int | None,
+    user_id: int | None,
+    semantic: bool,
+    embed_query: Callable[[str], list[float] | None] | None,
+) -> tuple[list[Video], dict[int, int]]:
     keyword = library.query_videos(
         session,
         q=q,

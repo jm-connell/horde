@@ -30,6 +30,8 @@ from ..models import (
     Video,
     VideoAiChatMessage,
     VideoAiMeta,
+    VideoComment,
+    VideoCommentState,
     VideoEmbedding,
 )
 from . import library, playlist_entries, thumbnails
@@ -43,6 +45,8 @@ _OWNED_ROW_COLUMNS: tuple[tuple[type[SQLModel], Mapped[Any]], ...] = (
     (VideoEmbedding, col(VideoEmbedding.video_id)),
     (VideoAiChatMessage, col(VideoAiChatMessage.video_id)),
     (VideoAiMeta, col(VideoAiMeta.video_id)),
+    (VideoComment, col(VideoComment.video_id)),
+    (VideoCommentState, col(VideoCommentState.video_id)),
     (AiJob, col(AiJob.video_id)),
     (UserVideoState, col(UserVideoState.video_id)),
     (RetentionKeep, col(RetentionKeep.video_id)),

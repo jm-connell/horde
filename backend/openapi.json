@@ -1949,6 +1949,11 @@
             "title": "Require Two Factor",
             "type": "string"
           },
+          "save_comments": {
+            "default": true,
+            "title": "Save Comments",
+            "type": "boolean"
+          },
           "settings_degraded": {
             "default": false,
             "title": "Settings Degraded",
@@ -2110,6 +2115,17 @@
               }
             ],
             "title": "Require Two Factor"
+          },
+          "save_comments": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Save Comments"
           },
           "setup_completed": {
             "anyOf": [
@@ -4491,6 +4507,82 @@
           "url"
         ],
         "title": "ClipCreate",
+        "type": "object"
+      },
+      "CommentRead": {
+        "description": "A YouTube comment. ``replies`` holds the ones saved with it (top threads only).",
+        "properties": {
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "author_is_uploader": {
+            "default": false,
+            "title": "Author Is Uploader",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_hearted": {
+            "default": false,
+            "title": "Is Hearted",
+            "type": "boolean"
+          },
+          "is_pinned": {
+            "default": false,
+            "title": "Is Pinned",
+            "type": "boolean"
+          },
+          "like_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Like Count"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "replies": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CommentRead"
+            },
+            "title": "Replies",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "CommentRead",
         "type": "object"
       },
       "CompatBulkResult": {
@@ -7171,6 +7263,55 @@
         "title": "LiveChannelRead",
         "type": "object"
       },
+      "LiveCommentsRead": {
+        "description": "The top ``limit`` comments of a YouTube video, read now (not saved).",
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CommentRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Limit"
+          },
+          "status": {
+            "enum": [
+              "ok",
+              "disabled",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Count"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "LiveCommentsRead",
+        "type": "object"
+      },
       "LiveListResponse": {
         "description": "Followed channels that are live now (one page; ``next_cursor`` is null).",
         "properties": {
@@ -9471,6 +9612,7 @@
               "tags",
               "notes",
               "captions",
+              "comments",
               "related",
               "youtube"
             ],
@@ -11703,6 +11845,82 @@
           "message"
         ],
         "title": "VideoAiChatRequest",
+        "type": "object"
+      },
+      "VideoCommentsRead": {
+        "description": "A library video's saved comments, in YouTube's \"top\" order.\n\n``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on\nYouTube); ``unavailable`` (private, removed or members-only); ``failed``;\n``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier\nare still listed when a later fetch finds them disabled or unavailable.",
+        "properties": {
+          "fetched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fetched At"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CommentRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Limit"
+          },
+          "status": {
+            "enum": [
+              "saved",
+              "pending",
+              "disabled",
+              "unavailable",
+              "failed",
+              "off",
+              "not_youtube"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "total_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Count"
+          },
+          "youtube_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Youtube Id"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "VideoCommentsRead",
         "type": "object"
       },
       "VideoPage": {
@@ -16349,6 +16567,69 @@
         "summary": "Channel Youtube Search",
         "tags": [
           "channels"
+        ]
+      }
+    },
+    "/api/comments/youtube/{youtube_id}": {
+      "get": {
+        "description": "The top ``limit`` comments of any YouTube video, read from YouTube now.\n\n``limit`` is one of 100, 300 or 1000 (follow ``next_limit``). Not saved; a\nresult is kept in memory for 30 minutes.",
+        "operationId": "live_comments_api_comments_youtube__youtube_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "youtube_id",
+            "required": true,
+            "schema": {
+              "title": "Youtube Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveCommentsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Live Comments",
+        "tags": [
+          "comments"
         ]
       }
     },
@@ -23951,6 +24232,59 @@
         "summary": "Summarize Video",
         "tags": [
           "videos"
+        ]
+      }
+    },
+    "/api/videos/{video_id}/comments": {
+      "get": {
+        "description": "The comments saved with a library video, top-level in YouTube's order.",
+        "operationId": "video_comments_api_videos__video_id__comments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoCommentsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Video Comments",
+        "tags": [
+          "comments"
         ]
       }
     },

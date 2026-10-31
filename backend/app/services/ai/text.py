@@ -693,6 +693,10 @@ def chat_system_prompt() -> str:
         "Use the provided metadata, description, notes and caption excerpts "
         "as your source, and refer to the video, its creator and the people "
         "in it in the third person (never speak as the video). "
+        "Viewer comments, when given, show how viewers reacted: use them for "
+        "questions about reactions, corrections or what people said, say that "
+        "it comes from the comments, and never present a viewer's claim as "
+        "what the video says. "
         "Keep answers short unless asked for detail. If the context does not "
         "contain the answer, say so plainly rather than inventing details. "
         "Do not output JSON unless the viewer asks for it."
@@ -704,9 +708,13 @@ def format_chat_context(
     metadata: str,
     caption_chunks: list[str],
     summary: str | None = None,
+    comments: list[str] | None = None,
     max_chars: int = _CHAT_CONTEXT_CHARS,
 ) -> str:
-    """Assemble the video context block injected into the chat system prompt."""
+    """Assemble the video context block injected into the chat system prompt.
+
+    Comments go before the captions, so a long transcript is what gets cut.
+    """
     parts: list[str] = ["Video context:"]
     meta = (metadata or "").strip()
     if meta:
@@ -714,6 +722,11 @@ def format_chat_context(
     summary_text = (summary or "").strip()
     if summary_text:
         parts.append("Existing summary:\n" + summary_text[:2000])
+    if comments:
+        parts.append(
+            "Top viewer comments from YouTube (written by viewers, not the "
+            "creator, unless marked [the creator]):\n" + "\n".join(comments)
+        )
     captions = [c.strip() for c in caption_chunks if c and c.strip()]
     if captions:
         parts.append("Caption excerpts:")

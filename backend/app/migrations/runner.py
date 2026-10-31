@@ -57,7 +57,7 @@ _INTERNAL_TABLES = frozenset({"alembic_version", "sqlite_sequence"})
 
 # The FTS5 indexes are created with raw SQL (a virtual table plus its shadow
 # tables ``<name>_data`` / ``_idx`` / ``_content`` / ``_docsize`` / ``_config``).
-_FTS_TABLE_PREFIXES = ("videos_fts", "kb_chunks_fts")
+_FTS_TABLE_PREFIXES = ("videos_fts", "kb_chunks_fts", "video_comments_fts")
 
 
 def _include_object(

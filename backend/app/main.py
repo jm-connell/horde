@@ -19,6 +19,7 @@ from .api import (
     ask,
     backgrounds,
     channels,
+    comments,
     compat,
     discover,
     downloads,
@@ -176,6 +177,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         trash as trash_svc,
     )
     from .services.ai import worker as ai_worker
+    from .services.comments import worker as comments_worker
     from .services.discovery import gather as discovery_gather
     from .services.knowledge import worker as knowledge_worker
     from .services.live import directory as live_directory
@@ -210,6 +212,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         registry.start(ctx.live.poller)
     registry.start(subtitle_retry.create_worker())
     registry.start(knowledge_worker.create_worker())
+    registry.start(comments_worker.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(discovery_gather.create_worker(ctx.discovery))
     registry.start(job_metadata.create_worker())
@@ -555,6 +558,7 @@ def include_api(target: FastAPI) -> None:
         videos,
         video_ai,
         video_media,
+        comments,
         compat,
         channels,
         downloads,
