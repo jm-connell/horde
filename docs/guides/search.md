@@ -8,9 +8,19 @@ Type in the search field in the navigation bar, just left of your account button
 
 On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
 
+## Mixed results
+
+By default the results are **one list**, best first: library matches, catalog videos you can stream, moments from [Ask](ask.md) channels' captions and live YouTube hits, mixed. Every result is scored the same way, by how much of your query its title (most), channel, tags and description or caption text contain, with a bonus for the whole phrase; then each source's weight decides ties and close calls: your library counts most (plus a fixed lead), then what Ask channels said, then catalog videos, then YouTube. A strong stream or YouTube match can still beat a weak library match. Being near the top of its own source adds a little, and a video whose captions also match gets a bonus.
+
+A video appears once: when its captions match too, the moment (timestamp and the line, linking there) shows under its card. A downloaded video found only by what it says shows as the library copy. Caption hits on videos you do not have become cards you can stream or download.
+
+YouTube answers a second or two after the rest, so its best four results have fixed places in the list (5th, 10th, 15th and 20th, or straight after the last result when there are fewer). Until they arrive those places hold a card that says **Searching YouTube…** with the app's loading mark, and when they land nothing else moves; any further YouTube hits join below the last of those places. **Rest of your library** (videos that did not match) follows, collapsed.
+
+The **Mixed / Sections** switch beside the results changes the layout; your choice is saved with your account (`searchLayout`).
+
 ## Result sections
 
-Matches are grouped into up to five sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
+With **Sections**, matches are grouped into up to five sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|

@@ -15,17 +15,29 @@ test("the search bar finds the moment an Ask channel said something", async ({
   await page
     .getByRole("searchbox", { name: "Search library" })
     .fill("timing belt");
+  // Mixed results: the downloaded video whose captions say it, with the
+  // moment under its card. It opens the library copy at the line that says
+  // it (0:42, 2 s early), not at the start of its passage.
+  const mixed = page.getByRole("region", { name: /^Results/ });
+  await expect(videoCard(mixed, "Cedar Notes")).toBeVisible();
+  const moment = mixed.getByRole("link", { name: "0:40" });
+  await expect(moment).toHaveAttribute("href", /^\/watch\/\d+\?t=40$/);
+  await expect(mixed.locator("mark").first()).toHaveText(/timing|belt/);
+  await expectNoSeriousViolations(page, "mixed search results");
+
+  // Sections: what was said has its own group and jump link.
+  await page
+    .getByRole("group", { name: "Results layout" })
+    .getByRole("button", { name: "Sections" })
+    .click();
   const results = page.locator("section").filter({
     has: page.getByRole("button", { name: /Said in videos/ }),
   });
   await expect(
     results.getByRole("link", { name: "Cedar Notes" })
   ).toBeVisible();
-  // The hit opens the library copy at the line that says it (0:42, 2 s early),
-  // not at the start of its passage.
-  const moment = results.getByRole("link", { name: "0:40" });
-  await expect(moment).toHaveAttribute("href", /^\/watch\/\d+\?t=40$/);
-  await expect(results.locator("mark").first()).toHaveText(/timing|belt/);
+  const sectionMoment = results.getByRole("link", { name: "0:40" });
+  await expect(sectionMoment).toHaveAttribute("href", /^\/watch\/\d+\?t=40$/);
   await expect(
     page
       .getByRole("navigation", { name: "Search results" })
@@ -33,7 +45,7 @@ test("the search bar finds the moment an Ask channel said something", async ({
   ).toBeVisible();
   await expectNoSeriousViolations(page, "transcript search results");
 
-  await moment.click();
+  await sectionMoment.click();
   await expect(page).toHaveURL(/\/watch\/\d+\?t=40$/);
 });
 

@@ -11,6 +11,9 @@ import { button } from "../../components/buttons";
 import { useAskChannels, useAskSearch } from "../../queries/ask";
 import { groupByVideo } from "../ask/askLinks";
 import SaidInVideos from "./SaidInVideos";
+import { useSettings } from "../../hooks/useSettings";
+import MixedResults from "./MixedResults";
+import { mixResults } from "./mixResults";
 
 /** Transcript search covers every Ask channel. */
 const ALL_CHANNELS: number[] = [];
@@ -22,6 +25,7 @@ function SearchResultSection({
   count,
   emptyText,
   loading = false,
+  defaultOpen = true,
   footer,
   children,
 }: {
@@ -32,10 +36,11 @@ function SearchResultSection({
   count: number;
   emptyText: string;
   loading?: boolean;
+  defaultOpen?: boolean;
   footer?: ReactNode;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   const bodyId = useId();
   return (
     <section id={id} className="scroll-mt-24 space-y-3" aria-busy={loading}>
@@ -155,6 +160,43 @@ function RemoteEntryGrid({
   );
 }
 
+/** Switch between one mixed list and a section per source. */
+function LayoutToggle({
+  value,
+  onChange,
+}: {
+  value: "mixed" | "sections";
+  onChange: (next: "mixed" | "sections") => void;
+}) {
+  const options = [
+    { value: "mixed", label: "Mixed" },
+    { value: "sections", label: "Sections" },
+  ] as const;
+  return (
+    <div
+      role="group"
+      aria-label="Results layout"
+      className="ui-panel inline-flex shrink-0 gap-0.5 rounded-lg bg-ink-900 p-0.5 ring-1 ring-ink-700"
+    >
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          aria-pressed={value === o.value}
+          onClick={() => onChange(o.value)}
+          className={`ui-interactive rounded-md px-2.5 py-1 text-xs font-medium ${
+            value === o.value
+              ? "bg-ink-800 text-gray-100"
+              : "text-gray-400 hover:text-gray-200"
+          }`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** A home-page search: the library matches, then everything else worth showing. */
 export default function SearchResults({
   query,
@@ -185,48 +227,179 @@ export default function SearchResults({
   const saidOn = askChannels.data?.items.some((c) => c.passages > 0) ?? false;
   const said = useAskSearch(saidOn ? query.trim() : "", ALL_CHANNELS);
   const saidGroups = useMemo(() => groupByVideo(said.hits), [said.hits]);
+
+  const [settings, update] = useSettings();
+  const mixed = settings.searchLayout !== "sections";
+  const toggle = (
+    <LayoutToggle
+      value={mixed ? "mixed" : "sections"}
+      onChange={(next) => update({ searchLayout: next })}
+    />
+  );
+  const mixedItems = useMemo(
+    () =>
+      mixed
+        ? mixResults({
+            query,
+            library: videos,
+            otherLibrary: otherVideos,
+            stream: global.streamResults,
+            said: said.hits,
+            youtube: youtubeOn
+              ? { entries: global.youtubeVisible, pending: youtubePending }
+              : null,
+          })
+        : [],
+    [
+      mixed,
+      query,
+      videos,
+      otherVideos,
+      global.streamResults,
+      said.hits,
+      youtubeOn,
+      global.youtubeVisible,
+      youtubePending,
+    ]
+  );
+  const selectIndex = useMemo(
+    () => new Map([...videos, ...otherVideos].map((v, i) => [v.id, i])),
+    [videos, otherVideos]
+  );
+
+  if (mixed) {
+    const mixedLoading =
+      global.streamLoading ||
+      askChannels.isPending ||
+      (saidOn && said.isLoading);
+    const shownIds = new Set(
+      mixedItems.flatMap((item) =>
+        item.kind === "library" ? [item.video.id] : []
+      )
+    );
+    const rest = otherVideos.filter((v) => !shownIds.has(v.id));
+    const results = mixedItems.filter((item) => item.kind !== "slot").length;
+    return (
+      <div className="space-y-8">
+        <section aria-labelledby="search-mixed-title" className="space-y-4">
+          <div className="flex items-center gap-3">
+            <h2
+              id="search-mixed-title"
+              className="text-sm font-semibold text-gray-100"
+            >
+              Results{" "}
+              <span className="text-xs font-normal text-muted">
+                {mixedLoading ? "Searching…" : results}
+              </span>
+            </h2>
+            <span className="hidden truncate text-xs text-muted sm:inline">
+              Your library first, then what you can stream
+            </span>
+            <hr className="min-w-0 flex-1 border-0 border-t border-ink-700" />
+            {toggle}
+          </div>
+          <MixedResults
+            items={mixedItems}
+            loading={mixedLoading}
+            query={query}
+            grid={grid}
+            global={global}
+            selectIndex={selectIndex}
+            onChannelClick={onChannelClick}
+          />
+          {(global.youtubeHasMore || (saidOn && said.hasNextPage)) &&
+            !mixedLoading && (
+              <div className="flex flex-wrap justify-center gap-2">
+                {saidOn && said.hasNextPage && (
+                  <button
+                    type="button"
+                    className={button("secondary")}
+                    disabled={said.isFetchingNextPage}
+                    onClick={() => void said.fetchNextPage()}
+                  >
+                    {said.isFetchingNextPage
+                      ? "Loading…"
+                      : "More of what was said"}
+                  </button>
+                )}
+                {global.youtubeHasMore && (
+                  <button
+                    type="button"
+                    className={button("secondary")}
+                    disabled={global.youtubeLoadingMore}
+                    onClick={() => global.loadMoreYoutube()}
+                  >
+                    {global.youtubeLoadingMore
+                      ? "Loading…"
+                      : YOUTUBE_SEARCH_LOAD_MORE_LABEL}
+                  </button>
+                )}
+              </div>
+            )}
+        </section>
+        <SearchResultSection
+          id="search-other"
+          title="Rest of your library"
+          source="Everything else, not matching"
+          count={rest.length}
+          emptyText="No other videos in your library."
+          defaultOpen={false}
+        >
+          <LibraryGrid
+            videos={rest}
+            indexOffset={videos.length}
+            searchQuery={query}
+            options={grid}
+          />
+        </SearchResultSection>
+      </div>
+    );
+  }
   return (
     <div className="space-y-8">
-      <SectionStrip
-        items={[
-          {
-            id: "search-library",
-            label: "In your library",
-            count: videos.length,
-          },
-          ...(saidOn
-            ? [
-                {
-                  id: "search-said",
-                  label: "Said in videos",
-                  count: saidGroups.length,
-                  loading: said.isLoading,
-                },
-              ]
-            : []),
-          {
-            id: "search-stream",
-            label: "Stream",
-            count: global.streamResults.length,
-            loading: global.streamLoading,
-          },
-          ...(youtubeOn
-            ? [
-                {
-                  id: "search-youtube",
-                  label: "YouTube",
-                  count: global.youtubeVisible.length,
-                  loading: youtubePending,
-                },
-              ]
-            : []),
-          {
-            id: "search-other",
-            label: "Rest of library",
-            count: otherVideos.length,
-          },
-        ]}
-      />
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <SectionStrip
+          items={[
+            {
+              id: "search-library",
+              label: "In your library",
+              count: videos.length,
+            },
+            ...(saidOn
+              ? [
+                  {
+                    id: "search-said",
+                    label: "Said in videos",
+                    count: saidGroups.length,
+                    loading: said.isLoading,
+                  },
+                ]
+              : []),
+            {
+              id: "search-stream",
+              label: "Stream",
+              count: global.streamResults.length,
+              loading: global.streamLoading,
+            },
+            ...(youtubeOn
+              ? [
+                  {
+                    id: "search-youtube",
+                    label: "YouTube",
+                    count: global.youtubeVisible.length,
+                    loading: youtubePending,
+                  },
+                ]
+              : []),
+            {
+              id: "search-other",
+              label: "Rest of library",
+              count: otherVideos.length,
+            },
+          ]}
+        />
+        {toggle}
+      </div>
       <SearchResultSection
         id="search-library"
         title="In your library"

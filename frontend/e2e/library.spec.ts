@@ -40,9 +40,7 @@ test("home shows the library, continue watching, tags, and search", async ({
     ).toHaveAttribute("aria-checked", "false");
   }
   await (await openSearchBox(page)).fill("Harbor");
-  const matches = page.locator("section").filter({
-    has: page.getByRole("button", { name: /In your library/ }),
-  });
+  const matches = page.getByRole("region", { name: /^Results/ });
   await expect(videoCard(matches, "Harbor Lights")).toBeVisible();
   await expect(videoCard(matches, "Aurora Drift")).toHaveCount(0);
   await expect(
@@ -379,9 +377,7 @@ test("on a phone a feed card does not reserve a second title line", async ({
   expect(title!.height).toBeLessThan(30);
 });
 
-test("search keeps the YouTube section in place while it loads", async ({
-  page,
-}) => {
+test("search keeps YouTube's places while it loads", async ({ page }) => {
   // Force YouTube search on and answer it only when the test says so.
   await page.route("**/api/settings", async (route) => {
     const response = await route.fetch();
@@ -414,15 +410,29 @@ test("search keeps the YouTube section in place while it loads", async ({
   await page.goto("/");
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
   await (await openSearchBox(page)).fill("Harbor");
+  // Mixed results keep YouTube's place with a loading card, and the result
+  // lands there without moving the library match.
+  const results = page.getByRole("region", { name: /^Results/ });
+  const placeholder = results.locator('[data-horde="search-placeholder"]');
+  await expect(placeholder.first()).toContainText("Searching YouTube…");
+  const harbor = videoCard(results, "Harbor Lights");
+  await expect(harbor).toBeVisible();
+  const before = await harbor.boundingBox();
+
+  release();
+  await expect(feedCard(results, "Harbor ferry ride")).toBeVisible();
+  await expect(placeholder).toHaveCount(0);
+  expect(await harbor.boundingBox()).toEqual(before);
+
+  // Sections: one group per source, with YouTube's own heading.
+  await page
+    .getByRole("group", { name: "Results layout" })
+    .getByRole("button", { name: "Sections" })
+    .click();
   const heading = page.getByRole("button", { name: /On YouTube/ });
-  await expect(heading).toContainText("Searching…");
+  await expect(heading).toContainText("1");
   const nav = page.getByRole("navigation", { name: "Search results" });
   await expect(
     nav.getByRole("link", { name: /In your library/ })
   ).toBeVisible();
-
-  release();
-  await expect(heading).toContainText("1");
-  await expect(heading).not.toContainText("Searching…");
-  await expect(feedCard(page, "Harbor ferry ride")).toBeVisible();
 });

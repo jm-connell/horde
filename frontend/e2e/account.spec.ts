@@ -96,9 +96,7 @@ test("the nav search works from any page and lands on home results", async ({
   await search.fill("Harbor");
   await expect(page).toHaveURL(/\/$/);
   await expect(search).toBeFocused();
-  const matches = page.locator("section").filter({
-    has: page.getByRole("button", { name: /In your library/ }),
-  });
+  const matches = page.getByRole("region", { name: /^Results/ });
   await expect(videoCard(matches, "Harbor Lights")).toBeVisible();
   await expect(videoCard(matches, "Aurora Drift")).toHaveCount(0);
 });
@@ -116,9 +114,7 @@ test("typing in the nav search on a channel opened from the sidebar shows home r
 
   await page.getByRole("searchbox", { name: "Search library" }).fill("Harbor");
   await expect(page.getByPlaceholder("Search this channel")).toHaveCount(0);
-  const matches = page.locator("section").filter({
-    has: page.getByRole("button", { name: /In your library/ }),
-  });
+  const matches = page.getByRole("region", { name: /^Results/ });
   await expect(videoCard(matches, "Harbor Lights")).toBeVisible();
 });
 

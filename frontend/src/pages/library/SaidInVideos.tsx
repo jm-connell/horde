@@ -4,7 +4,8 @@ import type { useAskSearch } from "../../queries/ask";
 import { formatTimestamp, youtubeListThumbnailUrl } from "../../utils";
 import { askWatchPath, snippetParts, type VideoGroup } from "../ask/askLinks";
 
-function Snippet({ text }: { text: string }) {
+/** A caption passage with the matching words highlighted. */
+export function Snippet({ text }: { text: string }) {
   return (
     <>
       {snippetParts(text).map((part, i) =>
