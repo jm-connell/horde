@@ -1,132 +1,134 @@
 # Channel knowledge (draft)
 
-Status: **Proposed**. Nothing here is built yet. This is the plan to agree on before implementation; once settled, the decisions move into an ADR and this page becomes the design reference.
+Status: **Proposed**. Nothing here is built yet. This is the plan to agree on before implementation; once settled, the decisions move into an ADR and this page becomes the design reference. Revised after a critical review against the code; the findings that changed the plan are listed at the end.
 
 ## Goal
 
-Let a user add YouTube channels to a server-wide knowledge base ("Ask"), let Horde index every upload's captions in the background (however long that takes), and then ask questions in a chat:
+Let users add YouTube channels to a server-wide knowledge base, let Horde index every upload's captions in the background (however long that takes), and then:
 
-- about one channel ("What does The Car Care Nut say about the 2004 4Runner?"),
-- about a hand-picked set of channels,
-- or about a topic, with Horde choosing the relevant channels itself,
+- **search** what was said across those channels, with links to the moment (works without AI),
+- **ask** one channel, several picked channels, or **Auto** (Horde picks the relevant channels), and get an answer built only from what they said, every claim linked to a video and timestamp,
+- see **viewpoints**: where channels agree and where they differ ("Channel A recommends X; Channel B disagrees because Y").
 
-and get an answer built only from what those channels said, with every claim linked to the video and the moment it was said. When several channels cover the topic, the answer says where they agree and where they differ ("Channel A recommends X; Channel B disagrees because Y").
+Non-goals for the first version: transcribing videos without captions (Whisper), non-English captions, sites other than YouTube, finding a channel by name (paste a channel URL or `@handle`), saving threads on the server.
 
-Non-goals for the first version: transcribing videos that have no captions (Whisper), non-English captions, other sites than YouTube, and editing or annotating transcripts.
+## Fit with existing code
 
-## What already exists and what does not fit
-
-| Existing piece | Use | Why not as-is |
-|---|---|---|
-| Channel catalog (`services/channel_catalog/`) | Lists every upload of a channel (flat yt-dlp pages, up to 5,000 videos), keeps up with new uploads (feed-head sync), records members-only skips | It deletes rows beyond its cap (`_trim_beyond_cap`) and whole catalogs when it merges aliases (`reconcile_duplicate_catalogs`). Knowledge rows with a cascading foreign key to catalog rows would silently lose transcripts that took hours to fetch |
-| Subtitle fetch (`downloads/subtitles.py`: `subtitle_ydl_opts`, yt-dlp `skip_download` into a temp dir) and the timedtext cooldown in `subtitle_retry.py` | Fetch one video's captions without the video; back off on 429s | Written for library videos (copies `.vtt` next to a media file). Needs a small helper that returns the VTT text instead. English only (`subtitleslangs: ["en"]`) |
-| Stream caption fetch (`api/preview.py: fetch_preview_vtt`) | — | Request-bound and async in the API layer; not usable from a worker |
-| `chapters.parse_vtt_cues` | `(start_sec, text)` cues | YouTube auto-captions repeat each line in the next cue ("rolling" captions); the parser only drops exact duplicates, so the chunker must remove the overlap |
-| `video_embeddings` and `ai/vector_index.py` | Pattern to copy (float32 blobs, one normalised numpy matrix, exact cosine) | Hard-wired to `VideoEmbedding.video_id` with ORM listeners. Knowledge vectors are static once indexed and are always searched per channel, so a much simpler per-channel cache fits |
-| `ai/chat.py: run_chat_turn` + `ChatTarget`, help chat's stateless thread and `sources` event | Streaming, model checks, auth re-checks, cost booking; client-held history | `context()` runs inside the turn, so it cannot stream progress while several retrieval/extraction calls run. Retrieval runs before the turn in a wrapper generator (as help chat already wraps the turn to emit `sources`) |
-| `ai/help_model.tier()` | Guess a model's strength from its name | Use it to scale the pipeline down for small local models |
-| FTS5 with triggers (ADR 0007) | Keyword index pattern | New table; the pinned-trigger test and migration docs need updating |
-| Watch page | Plays library videos (`/watch/:id`) and streams (`/watch?url=`) | No start-time parameter, so citations cannot jump to a moment |
+| Existing piece | Decision |
+|---|---|
+| Channel catalog (`services/channel_catalog/`) | **Not a dependency.** It lists only the `/videos` tab (`index.py:61`, `fetch_channel_feed` defaults to `tab="videos"`), keeps only the newest `max_videos` (100–5,000, `_trim_beyond_cap`), can be switched off (`channel_catalog_enabled`), deletes whole catalogs when it merges aliases, re-indexes every catalog daily and runs one catalog at a time. Knowledge does its own listing with the same `fetch_channel_feed` (`videos` and `streams` tabs) and only *borrows*: it seeds from an existing catalog's rows, reuses `_channel_identity_keys` / `get_catalog_by_url` logic so `@handle` and `/channel/UC…` are one channel, and listens to `after_catalog_update` to pick up new uploads early |
+| Subtitle download (`downloads/subtitles.py`) | **Not reused as-is**: it needs a media file, copies `.vtt` beside it, reports every track as manual, and calls yt-dlp outside the extract gate. A new helper runs `subtitle_ydl_opts` into a temp dir **inside `call_gated(..., priority=EXTRACT_PRIORITY_BACKGROUND)`** and returns the VTT text plus whether it is auto-generated |
+| Timedtext cooldown (`subtitle_retry.py`, module state) | Moves to a small **timedtext pacer on `AppContext`** with an atomic `reserve(priority)`; library caption work (download retry, metadata sync) goes first, knowledge fetches yield to it. Required by the AppContext rule once a second consumer exists |
+| Caption cleanup (`chapters.parse_vtt_cues`, `_merge_rolling`, `_downsample_cues`) | Reuse: merges YouTube's rolling auto-captions into windows. End times come from the next cue's start |
+| `vector_index.py` | Not reused (hard-wired to `VideoEmbedding`). A per-channel matrix cache on `ctx.caches`, size-capped (LRU), invalidated by a `(count, max id)` fingerprint because cascades and factory reset bypass ORM listeners |
+| FTS5 + triggers (ADR 0007, revision 0005) | Same approach, new table. `runner._FTS_TABLE_PREFIX` becomes a tuple so the drift test and autogenerate ignore the new shadow tables; pinned trigger set updated. Knowledge requires FTS5 (all official images ship it); on a build without it the feature reports itself unavailable |
+| `search_text.fts_match_expression` | Not reused: it ANDs every token. A new builder ORs quoted terms and quoted phrases ("for runner"), drops stop words, orders by `bm25()` and always has a `LIMIT`. User and model text are never FTS5 syntax |
+| AI job queue (`ai/worker.py`, `ai/tasks.py`) | One new kind, **one job per channel batch** (not per video), and `_next_job` ranks library kinds ahead of knowledge kinds so new downloads' embeds, summaries and tags never wait behind a channel |
+| Chat (`ai/chat.py run_chat_turn`, `ChatTarget`) | Reused for the final streamed answer. Retrieval and the extra model calls run first in a wrapper generator (a new pattern; help chat retrieves inside `context()`), which must check availability, model and `authorized()` itself and handle the budget limit (details below) |
+| Assistant model (`help_model.assistant_model()`) | Ask uses it; no new model setting. `help_model.tier()` scales the pipeline down (small = 4B or less; medium = 7–30B) |
+| Watch | Library videos already take a resume position (`location.state.resumeAt`); streams take none and the stream-to-library redirect drops the query. Citations always link `/watch?url=<youtube url>&t=<sec>`; Watch forwards `t` through the redirect, lets it override the saved position, and seeks in place (`horde:seek`) when that video is already playing |
 
 ## Data model (one Alembic revision)
 
-All in `horde.db`. Knowledge tables do not reference catalog rows with cascading keys; they copy the few fields they need.
+All in `horde.db`. No foreign keys to catalog rows.
 
-**`kb_channels`**: one row per channel in the knowledge base.
-`id`, `channel_url` (normalised, unique), `channel_name`, `catalog_id` (nullable, `ON DELETE SET NULL`, re-resolved by URL after a catalog merge), `status` (`queued` / `indexing` / `ready` / `paused` / `error`), progress counters (`video_count`, `fetched_count`, `no_captions_count`, `failed_count`, `chunk_count`), `embed_model`, `last_error`, `added_by` (user id), timestamps.
+- **`kb_channels`**: `id`, `channel_url`, `channel_name`, `include_streams` (bool), `max_videos` (null = all), `status` (`queued` / `listing` / `indexing` / `ready` / `paused` / `error`), `embed_model`, `embed_dim`, `last_listed_at`, `last_error`, `added_by` (FK users, `ON DELETE SET NULL`), timestamps. Uniqueness by channel identity (the catalog's identity keys), not by URL string.
+- **`kb_videos`**: `id`, `kb_channel_id` (FK, cascade), `yt_id`, `title`, `published_at`, `duration`, `is_stream`, `fetch_status` (`pending` / `fetched` / `no_captions` / `members_only` / `failed`), `attempts`, `next_attempt_at`, `caption_auto`, `cues` (zlib JSON of cleaned `[start, text]`, so re-chunking never re-fetches), unique `(kb_channel_id, yt_id)`.
+- **`kb_chunks`**: `id`, `kb_video_id` (FK, cascade), `kb_channel_id` (denormalised for filtering), `chunk_index`, `start_sec`, `end_sec`, `text`.
+- **`kb_chunks_fts`**: FTS5, external content on `kb_chunks.text`. Triggers use the external-content form (`INSERT INTO kb_chunks_fts(kb_chunks_fts, rowid, text) VALUES('delete', old.id, old.text)`), and the update trigger is `AFTER UPDATE OF text`.
+- **`kb_chunk_vectors`** (phase 2): `chunk_id` (PK, FK cascade), `vector` stored as **float16** (model and dimension live on `kb_channels`). Kept apart from the text so text reads do not walk overflow pages and embed writes do not touch text rows.
+- **`ai_jobs`** (phase 2): new nullable `kb_channel_id` (FK, cascade) and the new kind in the `aijobkind` enum.
 
-**`kb_videos`**: one row per upload of a knowledge channel.
-`id`, `kb_channel_id` (FK, cascade), `yt_id`, `title`, `published_at`, `duration`, `fetch_status` (`pending` / `fetched` / `no_captions` / `members_only` / `failed`), `attempts`, `next_attempt_at`, `caption_lang`, `caption_auto`, `cues` (zlib-compressed JSON of cleaned `[start, end, text]`, kept so re-chunking never re-fetches), `cues_hash`, `embed_status`, unique `(kb_channel_id, yt_id)`.
+Progress counts come from `COUNT` queries, not stored counters.
 
-**`kb_chunks`**: time-aligned passages.
-`id`, `kb_video_id` (FK, cascade), `kb_channel_id` (denormalised for filtering), `chunk_index`, `start_sec`, `end_sec`, `text`, `model`, `dim`, `vector`.
+**Size**, for a channel of 500 videos averaging 25 minutes (about 10M characters): about 12k chunks; about 13 MB text, about 10 MB FTS index, a few MB of cues, and about 18 MB of float16 vectors at 768 dimensions. **About 45 MB per channel**, but `horde.db` is copied by 7 nightly backups and 5 pre-migration copies, so **about 0.5 GB of disk per channel** in total. Removing a channel does not shrink the file (no auto-vacuum); the docs say so.
 
-**`kb_chunks_fts`**: FTS5 over `kb_chunks.text` (external content, rowid = `kb_chunks.id`), maintained by triggers.
+## Indexing (phase 1: no AI needed)
 
-Size, for a channel of 500 videos averaging 25 minutes (about 10M characters of speech): about 10k chunks; about 13 MB text, 30 MB vectors at 768 dims (half that if stored as float16), 10–15 MB FTS index, a few MB of compressed cues. Roughly **50–70 MB per channel** in the database, and in each nightly backup.
+1. **Add a channel** by URL or `@handle` (through `url_safety`), from the Ask page or the channel settings sheet. Options: include past live streams (default on), video limit (default all; Shorts are never listed).
+2. **List** uploads with `fetch_channel_feed` for `videos` (and `streams`), paged, inside `call_gated` at background priority. Seed from an existing catalog first when there is one. Re-list daily for new uploads, plus early when `after_catalog_update` reports new rows for the same channel.
+3. **Fetch captions** in a new `knowledge` worker (in `WorkerRegistry`, skipped under `HORDE_E2E`, with startup recovery like `recover_catalog_jobs`):
+   - a video already in the library with a caption file is read from disk;
+   - otherwise one gated subtitle-only call, after reserving the timedtext pacer at low priority; manual English captions preferred over auto;
+   - outcomes `fetched`, `no_captions` and `members_only` are final; `failed` backs off and gives up after a few attempts.
+   - About one video per 15 seconds: 500 videos take 2+ hours, longer after 429s. Newest uploads first, so search improves while it runs.
+4. **Chunk**: merged cues into windows of about 60–90 seconds (1,000–1,400 characters) with 15–20 seconds of overlap.
+5. **Remove** a channel: rows are deleted by the worker in batches (a single cascading delete over 12k chunks and FTS triggers would hold the write lock for seconds); a fetch in progress for that channel is discarded.
 
-## Indexing pipeline
+Factory reset erases the knowledge tables (`_ERASE_MEDIA_MODELS`) and pauses the worker.
 
-1. **Add a channel** (paste a channel URL or name on the Ask page, or a switch in the channel settings sheet). Horde ensures a catalog exists for it (`enqueue_channel`) and creates the `kb_channels` row.
-2. **Sync the video list** from the catalog into `kb_videos` once the catalog has listed it, and again after each feed-head sync (new uploads join automatically). Shorts excluded; past live streams included. Rows the catalog trims or skips (members-only) are not deleted from the knowledge base.
-3. **Fetch captions** in a new `knowledge` worker (registered in `WorkerRegistry`, skipped under `HORDE_E2E`):
-   - If the video is already in the library with a caption file, read that file (no network).
-   - Otherwise one subtitle-only yt-dlp call (manual English captions preferred over auto), paced like the subtitle retry worker and sharing its global timedtext cooldown so the two never hammer YouTube together.
-   - Outcomes: `fetched`, `no_captions` (final), `members_only` (final), `failed` with backoff and a retry cap.
-   - Pacing makes this the slow step: at about one video per 15 seconds, 500 videos take 2+ hours, longer after 429 back-offs. Channels are processed oldest-added first, newest uploads first within a channel, so answers improve while indexing runs.
-4. **Chunk**: drop rolling-caption overlap, then windows of about 60–90 seconds (about 1,000–1,400 characters) with about 15–20 seconds of overlap, each with `start_sec` / `end_sec`.
-5. **Embed** through the single-flight AI worker (new job kind `embed_kb_video`), with the text prefixed by `"<channel> · <title> (<upload year>)"` so short passages keep their context. Changing the embedding model re-queues embeds; cues are kept, so nothing is fetched again.
+## Transcript search (phase 1)
 
-Removing a channel deletes its rows (cascade). Pause/resume stops and restarts fetching.
+Keyword search over `kb_chunks_fts` within chosen channels, hits grouped by video, each with its passage, timestamp and a play link. Paginated (`{items, next_cursor}`). Needs no AI provider.
 
-## Answering
+## Ask (phase 2)
 
-Run in a wrapper generator before `run_chat_turn`, emitting `status` events ("Searching 3 channels", "Reading The Car Care Nut") and then a `sources` event, then the streamed answer.
+Embeddings: a job per channel batch embeds about 50 videos' chunks per run, text prefixed with `"<channel> · <title> (<year>)"`. Changing the embedding model re-queues these jobs; nothing is re-fetched.
 
-1. **Scope**: the channels the user picked, or **Auto**: score every ready channel by keyword hits (FTS5) and by similarity of the question to the channel's chunk centroid, keep those above a threshold, at most 4 (2 for small models). The chosen channels are shown and can be changed.
-2. **Query expansion** (one JSON call, skipped for small models or on failure): spelling variants and synonyms for names (auto-captions write "4Runner" as "for runner"), generations or year ranges, part names; plus a rewritten search sentence.
-3. **Hybrid retrieval per channel**: FTS5 `MATCH` over the expanded terms (exhaustive: every chunk that mentions them) and vector top-k (meaning without shared words), fused with reciprocal rank fusion, grouped by video (best chunk plus number of hits), neighbouring windows merged.
-4. **Context**: per video, the best 2–3 passages, labelled `[S3] <channel> · "<title>" (2021-05) @ 12:34`, sorted by date so the model can point out a changed opinion.
-5. **One channel**: answer directly from the context.
-6. **Several channels (viewpoints)**: per channel, one extraction call returns JSON `{covered, position, claims: [{text, sources}]}` (including "not covered", so a channel is never forced into a view); a final streamed call compares only these positions and labels agreement and disagreement. Every claim must cite sources.
-7. **Citations**: the server keeps the `[S#]` → video and timestamp map, drops citations the model invented, and the client renders them as links: the library copy at that time when downloaded (`/watch/:id?t=754`), otherwise the stream view (`/watch?url=…&t=754`).
+A turn, in a wrapper generator that streams `status` events ("Searching 2 channels…"), then `sources`, then the answer:
 
-The model is told to answer only from the excerpts and to say plainly when they do not cover the question. The thread lives in the browser (`sessionStorage`), as with Ask about Horde; nothing is stored server-side, so there is no message table.
+1. **Check first**: AI allowed, provider reachable, Assistant model present (otherwise an `error` event before any cost). Check `authorized()` between steps.
+2. **Query expansion** (one JSON call; skipped for small models or on failure): spelling variants and synonyms ("4Runner", "4 runner", "for runner"), generation or year ranges, part names, and a rewritten search sentence.
+3. **Hybrid retrieval per channel**: FTS (OR of quoted terms, `bm25`, limited) and vector top-k, fused with reciprocal rank fusion, grouped by video (best chunk plus number of hits), neighbouring windows merged.
+4. **Context**: per video the best 2–3 passages, labelled `[S3] <channel> · "<title>" (2021-05) @ 12:34`, sorted by date so a changed opinion shows.
+5. **Answer** with `run_chat_turn` (Assistant model, a system prompt that requires citations and says to admit when the excerpts do not cover the question).
+6. **Citations**: the server keeps the `[S#]` map, drops invented ones, and sends source cards (thumbnail, title, date, timestamp, passage).
 
-**Without a chat model** the Ask page still offers **transcript search**: keyword and semantic hits with timestamps, grouped by video.
+Costs: extra calls pass `usage_kind="ask"`, so they are booked; the turn's reported cost adds them to the answer's. `OpenRouterBudgetExceeded` from any step ends the turn with the usual budget error. The SSE route follows help chat (`response_class=RAW, responses=EVENT_STREAM`). The thread stays in `sessionStorage`; no message table.
+
+## Auto and viewpoints (phase 3)
+
+- **Auto**: rank ready channels by FTS hit count for the expanded terms plus the best similarity among each channel's top-k chunks (not a channel centroid, which blurs topics); keep those above a threshold, at most 4 (2 for small models). The chosen channels are shown and can be changed.
+- **Viewpoints**: start with one call whose excerpts are grouped and labelled by channel, asked to state each channel's position (or "not covered") and where they agree or differ, every claim cited. Add a per-channel extraction step only if real questions show the single call mixing channels up.
 
 ## API (new router `api/knowledge.py`)
 
-| Route | Who | Purpose |
+| Route | Who | Phase |
 |---|---|---|
-| `GET /api/knowledge/channels` | `use_ai` | Channels with status and progress |
-| `POST /api/knowledge/channels` | admin | Add a channel (URL or name) |
-| `DELETE /api/knowledge/channels/{id}` | admin | Remove a channel and its data |
-| `POST /api/knowledge/channels/{id}/pause`, `/resume`, `/reindex` | admin | Control indexing |
-| `GET /api/knowledge/search` | `use_ai` | Transcript search, `{items, next_cursor}` |
-| `POST /api/knowledge/chat` | `use_ai` | SSE answer: `status`, `sources`, `token`, `done`, `error` |
+| `GET /api/knowledge/channels` | signed in (members see no model names or error texts) | 1 |
+| `POST /api/knowledge/channels` | admin | 1 |
+| `DELETE /api/knowledge/channels/{id}` | admin | 1 |
+| `POST /api/knowledge/channels/{id}/pause`, `/resume` | admin | 1 |
+| `GET /api/knowledge/search` | signed in | 1 |
+| `POST /api/knowledge/chat` (SSE) | `use_ai` | 2 |
 
-All with `response_model`, the error envelope, CSRF header and a classification in `tests/test_permissions.py`; `openapi.json` and `schema.d.ts` regenerated.
-
-## Settings
-
-Kept small. Server `ai` settings: knowledge on/off, an optional model for Ask (falls back to the chat model, like the Assistant model), maximum videos per channel (default 1,000). Fetch pacing reuses the subtitle worker's constants.
+`response_model` everywhere except the SSE route, the error envelope, the CSRF header, classification in `tests/test_permissions.py`, regenerated `openapi.json` and `schema.d.ts`.
 
 ## Frontend
 
-- **Ask page** (`/ask`, lazy-loaded, nav entry for users with `use_ai` when AI is on): channel list with progress and an "Add channel" box (admin), multi-select or Auto, chat thread with source cards (thumbnail, title, date, timestamp, play), and a Search tab for transcript search.
-- **Channel settings sheet**: an "Ask" section to add or remove the channel and see its progress.
-- **Settings → AI**: the knowledge switches above, and the queue breakdown counts knowledge embeds.
-- **Watch**: a `t` query parameter (seconds) to start at a moment, for library videos and streams.
-- Follows `DESIGN.md`; must hold up across all themes.
+- **Ask page** (`/ask`, lazy-loaded): channel list with progress, add box (admin), Search tab (phase 1), chat with channel picker and Auto (phases 2–3), source cards with play links. Nav entry for everyone once a channel exists (and always for the admin); the chat tab needs `use_ai` and AI on. `navLinks.ts` needs a predicate beyond a single permission.
+- **Channel settings sheet**: an "Ask" section (add, progress, remove).
+- **Settings → AI → Jobs**: label for the new job kind (phase 2).
+- **Watch**: start time as described above.
+- Page-name maps: `helpPage.ts`, `customCss.ts`, the `pages` list in `help_catalog.json`. Follows `DESIGN.md` across all themes.
 
-## Docs and housekeeping
+## Docs
 
-User guide page (`docs/guides/`), this design page, an ADR (knowledge tables in SQLite, hybrid retrieval, no vector database), `docs/settings/ai.md`, `docs/features.md`, `README.md`, the help chat catalog (`help_catalog.json`), the pinned-trigger test and the migration docs (new FTS5 table and triggers).
+User guide page, this page, an ADR (knowledge in SQLite with FTS5 and float16 vectors, own channel listing, timedtext pacer), and updates to `docs/settings/ai.md`, `docs/features.md`, `README.md`, `docs/architecture/workers.md`, `docs/architecture/ai-pipeline.md`, `docs/ops/youtube-access.md` (a new timedtext and extract consumer), `docs/design/app-context.md` (the pacer), `docs/design/sqlite-and-migrations.md` (the FTS prefix list), and the `use_ai` description.
 
 ## Tests
 
-- Unit: rolling-caption de-duplication and chunk timing, reciprocal rank fusion, citation validation, channel routing threshold.
-- `TestClient`: channel add/remove/pause permissions, search pagination, chat SSE with a stub provider (scope, sources, dropped invalid citations).
-- Migration drift test and the pinned trigger set.
-- Playwright: Ask page against a seeded knowledge base in `e2e/serve.py` (channel list, search, a chat turn with a stub provider, a citation link opening Watch at the timestamp).
+- Unit: caption merge and chunk timing; FTS query builder (quoting, phrases, hostile input); reciprocal rank fusion; citation validation; pacer priority.
+- `TestClient`: channel add, remove and pause permissions and identity de-duplication; search pagination; chat SSE with a stubbed provider (checks before cost, sources, dropped citations, budget error); member view hides model and errors.
+- Migration drift test (with the new FTS prefix), pinned trigger set, factory reset.
+- Playwright: seed knowledge rows in `backend/app/e2e_seed.py`; Ask page list and search; a chat turn mocked with `page.route` (as `help-chat.spec.ts` does); a citation opening Watch at the timestamp.
 
 ## Phases
 
-1. **Foundation**: tables and revision, knowledge worker (caption fetch with library reuse, chunking), embed job, FTS5, channel add/remove/progress API and UI, transcript search, Watch `t`.
-2. **Ask one or more channels**: query expansion, hybrid retrieval, citations, picked channels.
-3. **Auto and viewpoints**: channel routing, per-channel extraction, comparison answers.
-4. **Later, if wanted**: per-video digests written once at index time (helps broad questions over many videos), a server-side saved-answers list, exports.
+1. **Collect and search**: tables, pacer, own listing, gated caption fetch, chunking, FTS, channel management, transcript search, Watch start time. No AI involved.
+2. **Ask**: embeddings (batched job, scheduler priority), query expansion, hybrid retrieval, citations, cost and budget handling.
+3. **Auto and viewpoints.**
+4. **Later, if wanted**: finding channels by name, per-video digests for broad questions, saved threads, the user's own library as a source.
 
 ## Risks
 
-- **YouTube rate limits** on caption fetches across thousands of videos. Mitigated by pacing, the shared cooldown, cookies and library reuse; a channel may still take many hours.
-- **Auto-caption errors** in names. Mitigated by query expansion and keyword search over variants.
-- **Small local models** (3–8B) follow the comparison format poorly. The pipeline scales down by tier; the docs recommend a larger or cloud model for Ask.
-- **Database and backup growth** of about 50–70 MB per channel.
-- **Privacy**: with a cloud embedding provider every caption chunk is sent to it; with a cloud chat model the excerpts are. Same rules as existing AI features; the Ask page says which provider is used.
-- **Misattribution**: a model can put words in a creator's mouth. Every claim cites a timestamp, invalid citations are dropped, and source cards show the passage.
+- **YouTube rate limits** across thousands of caption fetches: pacing, priority below library work, the extract gate and cookies; a big channel may take many hours or a day.
+- **Auto-caption errors in names**: query expansion and keyword search over variants.
+- **Small local models** follow citation and comparison instructions poorly: the pipeline scales down, and the docs recommend a larger or cloud Assistant model for Ask.
+- **Disk**: about 0.5 GB per channel including backups.
+- **Privacy**: a cloud embedding provider receives every chunk; a cloud chat model receives the excerpts. The Ask page names the provider through `help_model.provider_label`.
+- **Misattribution**: every claim cites a timestamp, invented citations are dropped, source cards show the passage.
 
-## Open questions
+## Review findings that changed this plan
 
-See the decisions list in the conversation that produced this draft; answers will be folded in here.
+Own channel listing instead of the catalog (Shorts already absent, streams never listed, cap and merges); a gated caption helper instead of `download_subtitles`; the pacer on `AppContext` with library priority instead of sharing the module cooldown; external-content FTS triggers and the drift-test prefix; vectors in their own float16 table; batched embed jobs with priority over FIFO; checks, budget and cost handling before extra model calls; members' reduced AI view; a new FTS query builder; the real backup footprint; Watch start time via the stream URL; keyword search and channel management needing no AI, so phase 1 ships without embeddings; one-call viewpoints first.
