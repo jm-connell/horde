@@ -13,5 +13,6 @@ export const Settings = lazy(() => import("./Settings"));
 export const Account = lazy(() => import("./Account"));
 export const Setup = lazy(() => import("./Setup"));
 export const Playlists = lazy(() => import("./Playlists"));
+export const Ask = lazy(() => import("./Ask"));
 export const OfflinePage = lazy(() => import("./Offline"));
 export const NotFound = lazy(() => import("./NotFound"));

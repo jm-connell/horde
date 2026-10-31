@@ -18,6 +18,7 @@ import {
   NotFound,
   OfflinePage,
   Playlists,
+  Ask,
   Settings,
   Setup,
   Watch,
@@ -120,6 +121,7 @@ function AppRoutes() {
               }
             />
             <Route path="/playlists" element={<Playlists />} />
+            <Route path="/ask" element={<Ask />} />
             <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
             <Route
               path="/import"

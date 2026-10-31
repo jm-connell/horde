@@ -339,6 +339,125 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ask/channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Channels
+         * @description Every Ask channel with its indexing progress.
+         */
+        get: operations["list_channels_api_ask_channels_get"];
+        put?: never;
+        /**
+         * Add Channel
+         * @description Turn Ask on for a channel; its captions are indexed in the background.
+         */
+        post: operations["add_channel_api_ask_channels_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/channels/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Channel
+         * @description Name, upload count and whether the channel has past live streams (reads YouTube).
+         */
+        get: operations["preview_channel_api_ask_channels_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/channels/{channel_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Channel
+         * @description Turn Ask off for a channel and delete everything indexed for it.
+         */
+        delete: operations["remove_channel_api_ask_channels__channel_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Channel */
+        patch: operations["update_channel_api_ask_channels__channel_id__patch"];
+        trace?: never;
+    };
+    "/api/ask/channels/{channel_id}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Channel */
+        post: operations["pause_channel_api_ask_channels__channel_id__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/channels/{channel_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Resume Channel */
+        post: operations["resume_channel_api_ask_channels__channel_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ask/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search
+         * @description Passages that mention the query's words, best match first.
+         */
+        get: operations["search_api_ask_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/2fa": {
         parameters: {
             query?: never;
@@ -4520,6 +4639,137 @@ export interface components {
             /** Youtube Video Search */
             youtube_video_search?: boolean | null;
         };
+        /** AskChannelCreate */
+        AskChannelCreate: {
+            /**
+             * Include Streams
+             * @default false
+             */
+            include_streams: boolean;
+            /** Url */
+            url: string;
+        };
+        /** AskChannelList */
+        AskChannelList: {
+            /**
+             * Available
+             * @default true
+             */
+            available: boolean;
+            /** Items */
+            items: components["schemas"]["AskChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** AskChannelPreview */
+        AskChannelPreview: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /** Existing Id */
+            existing_id?: number | null;
+            /**
+             * Has Streams
+             * @default false
+             */
+            has_streams: boolean;
+            /** Video Count */
+            video_count?: number | null;
+        };
+        /** AskChannelRead */
+        AskChannelRead: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Fetched
+             * @default 0
+             */
+            fetched: number;
+            /** Id */
+            id: number;
+            /**
+             * Include Streams
+             * @default false
+             */
+            include_streams: boolean;
+            /** Last Error */
+            last_error?: string | null;
+            /** Last Listed At */
+            last_listed_at?: string | null;
+            /**
+             * No Captions
+             * @default 0
+             */
+            no_captions: number;
+            /**
+             * Passages
+             * @default 0
+             */
+            passages: number;
+            /**
+             * Pending
+             * @default 0
+             */
+            pending: number;
+            /** Status */
+            status: string;
+            /**
+             * Unavailable
+             * @default 0
+             */
+            unavailable: number;
+            /**
+             * Videos
+             * @default 0
+             */
+            videos: number;
+        };
+        /** AskChannelUpdate */
+        AskChannelUpdate: {
+            /** Include Streams */
+            include_streams: boolean;
+        };
+        /** AskSearchHit */
+        AskSearchHit: {
+            /** Channel Id */
+            channel_id: number;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** End Sec */
+            end_sec: number;
+            /**
+             * In Description
+             * @default false
+             */
+            in_description: boolean;
+            /** Library Video Id */
+            library_video_id?: number | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Snippet */
+            snippet: string;
+            /** Start Sec */
+            start_sec: number;
+            /** Title */
+            title?: string | null;
+            /** Yt Id */
+            yt_id: string;
+        };
+        /** AskSearchPage */
+        AskSearchPage: {
+            /** Items */
+            items: components["schemas"]["AskSearchHit"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** AuthLoginResult */
         AuthLoginResult: {
             user: components["schemas"]["AuthUserRead"];
@@ -8622,6 +8872,331 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiConnectionTest"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_channels_api_ask_channels_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelList"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_channel_api_ask_channels_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskChannelCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_channel_api_ask_channels_preview_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelPreview"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_channel_api_ask_channels__channel_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_channel_api_ask_channels__channel_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskChannelUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    pause_channel_api_ask_channels__channel_id__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resume_channel_api_ask_channels__channel_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                channel_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_api_ask_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                channel_id?: number[] | null;
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AskSearchPage"];
                 };
             };
             /** @description Validation error */

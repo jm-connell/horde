@@ -1,6 +1,7 @@
 import type { Permission } from "../types";
 import { useAuth } from "../context/AuthContext";
 import { useConnectivity, useOfflineDownloads } from "../offline/hooks";
+import { useAskChannels } from "../queries/ask";
 
 export interface NavLinkDef {
   to: string;
@@ -10,12 +11,15 @@ export interface NavLinkDef {
   serverOnly?: boolean;
   /** Hidden for accounts without this permission. */
   permission?: Permission;
+  /** Shown only when this is true (beyond the permission). */
+  when?: "ask";
 }
 
 const BASE_LINKS: NavLinkDef[] = [
   { to: "/", label: "Home", end: true },
   { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
   { to: "/history", label: "History", end: false, serverOnly: true },
+  { to: "/ask", label: "Ask", end: false, serverOnly: true, when: "ask" },
   {
     to: "/download",
     label: "Download",
@@ -49,6 +53,10 @@ export function useNavLinks(): NavLinkDef[] {
   // how to get at them.
   const hasOfflineItems =
     offlineSnap.items.length > 0 || offlineSnap.hidden.length > 0;
+  // Ask shows once a channel is on, and always for whoever may add one.
+  const askChannels = useAskChannels(!offlineMode);
+  const showAsk =
+    can("manage_ask") || (askChannels.data?.items.length ?? 0) > 0;
   return (
     hasOfflineItems || offlineMode
       ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
@@ -56,7 +64,8 @@ export function useNavLinks(): NavLinkDef[] {
   ).filter(
     (link) =>
       !(offlineMode && link.serverOnly) &&
-      (!link.permission || can(link.permission))
+      (!link.permission || can(link.permission)) &&
+      (link.when !== "ask" || showAsk)
   );
 }
 

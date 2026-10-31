@@ -51,6 +51,10 @@ export type ChannelAvatar = S["ChannelAvatarRead"];
 export type StorageStats = S["StorageStats"];
 /** A deleted video in the trash. `reason` says why when a rule (not a person) deleted it. */
 export type TrashItem = S["TrashItemRead"];
+export type AskChannel = S["AskChannelRead"];
+export type AskChannelList = S["AskChannelList"];
+export type AskChannelPreview = S["AskChannelPreview"];
+export type AskSearchHit = S["AskSearchHit"];
 export type TrashSummary = S["TrashSummary"];
 export type HistoryStats = S["HistoryStats"];
 export type HistoryStatsRange = HistoryStats["range"];
@@ -213,4 +217,5 @@ export type Permission =
   | "offline_download"
   | "edit_metadata"
   | "manage_playlists"
-  | "use_ai";
+  | "use_ai"
+  | "manage_ask";
