@@ -122,6 +122,24 @@ def _ai_probes_offline(monkeypatch):
     provider.invalidate_resolved_url()
 
 
+@pytest.fixture(autouse=True)
+def _empty_compat_tables():
+    """Start each test with no compat jobs or remembered failures.
+
+    ``compat_rendition`` keeps them in module tables keyed by video id, and every
+    test's first video is id 1: a remux failure one test provokes would otherwise
+    show as that video's Safari status in a later test run by the same process.
+    """
+    from app.services import compat_rendition
+
+    with compat_rendition._lock:
+        compat_rendition._jobs.clear()
+        compat_rendition._pending.clear()
+        compat_rendition._running.clear()
+        compat_rendition._errors.clear()
+        compat_rendition._safari_errors.clear()
+
+
 @pytest.fixture
 def serve_ai(monkeypatch):
     """``serve_ai(handler)``: answer AI provider requests with ``handler(request)``."""
@@ -167,6 +185,15 @@ def tmp_dirs(tmp_path, monkeypatch):
         "db_path": ctx.paths.db_path,
         "ctx": ctx,
     }
+    # Download and ffmpeg threads read the active context. One still finishing a
+    # job the test has already seen complete would otherwise run on into the next
+    # test's context, or crash between the two and leave its job id marked running.
+    # (``_join_background_workers`` restarts the queue for the next test.)
+    from app.services.downloads.ffmpeg_queue import ffmpeg_queue
+    from app.services.downloads.queue import download_queue
+
+    assert download_queue.stop(timeout=30), "download threads still running after test"
+    assert ffmpeg_queue.stop(timeout=30), "ffmpeg threads still running after test"
     context.deactivate(previous)
     ctx.engine.dispose()
 
