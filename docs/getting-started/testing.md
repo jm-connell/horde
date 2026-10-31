@@ -66,7 +66,7 @@ Same commands GitHub Actions runs (`scripts/check.sh` wraps them).
 Backend (from `backend/`, venv with `requirements.txt` + `requirements-dev.txt`):
 
 ```bash
-pip install -r requirements.txt -r requirements-dev.txt
+pip install -r requirements.txt -r requirements-dev.txt   # again after it changes: -n needs pytest-xdist
 ruff check . && ruff format --check . && mypy
 pytest -n auto              # whole suite, one worker process per CPU
 pytest tests/test_x.py      # one file: serial is faster than starting workers
