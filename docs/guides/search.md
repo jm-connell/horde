@@ -10,11 +10,12 @@ On a **channel page**, the box in the header searches that channel’s **indexed
 
 ## Result sections
 
-Matches are grouped into up to four sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
+Matches are grouped into up to five sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|
 | **In your library** | Videos already downloaded / approved into your library | Nothing in your library matches. |
+| **Said in videos** | Moments in the captions of [Ask](ask.md) channels that mention your words, grouped by video; each timestamp opens the video there. Shown once an Ask channel has captions indexed; needs no AI | Nothing in the indexed captions mentions that. |
 | **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
 | **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
 | **Rest of your library** | Downloaded library videos that did not match the query | No other videos in your library. |

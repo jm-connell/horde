@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -80,6 +81,8 @@ export function useAskSearch(q: string, channelIds: number[]) {
     getNextPageParam: (last: Page<AskSearchHit>) =>
       last.next_cursor ?? undefined,
     enabled: q.trim().length > 0,
+    // A new query keeps the last results showing until its own arrive.
+    placeholderData: keepPreviousData,
   });
   const hits = useMemo(
     () => query.data?.pages.flatMap((p) => p.items) ?? NO_HITS,

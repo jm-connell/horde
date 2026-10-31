@@ -668,6 +668,14 @@ export default function HelpChatPanel({
     .map((c) => c.name)
     .filter(Boolean)
     .join(", ");
+  // The channels a question can name, so nobody has to guess.
+  const askable = (askChannels ?? [])
+    .filter((c) => c.passages > 0)
+    .map((c) => c.channel_name || c.channel_url);
+  const askNames =
+    askable.length > 6
+      ? `${askable.slice(0, 6).join(", ")} and ${askable.length - 6} more`
+      : askable.join(", ");
   const placeholder = ask.scope.length
     ? `Ask ${channelNames || "this channel"}…`
     : pageName
@@ -909,8 +917,8 @@ export default function HelpChatPanel({
                 setting or change it, look at your downloads and library, make
                 playlists and restyle the app. The page you are on is sent with
                 your question.
-                {askChannels?.length
-                  ? " Name a channel to ask what it said in its videos."
+                {askNames
+                  ? ` Name a channel to ask what it said in its videos: ${askNames}.`
                   : ""}
               </p>
               <div className="flex flex-wrap gap-2">

@@ -110,6 +110,10 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   const input = panel.getByRole("textbox", { name: "Your question" });
   // With an Ask channel on, the hint says a channel can be named.
   await expect(input).toHaveAttribute("placeholder", /name a channel/);
+  // And which channels can be named.
+  await expect(
+    panel.getByText(/Name a channel to ask what it said .*: Northwind\./)
+  ).toBeVisible();
   await input.fill("What does Northwind say about the timing belt?");
   await input.press("Enter");
 
