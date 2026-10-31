@@ -34,12 +34,20 @@ import { ArrowIcon } from "../components/icons";
  * stream (`/watch?url=`). The player itself lives in PlaybackContext and is
  * docked into this page; the pieces around it are in `./watch/`.
  */
+/** `?t=` in whole seconds (Ask references link straight to a moment). */
+function parseStartParam(raw: string | null): number | null {
+  if (raw == null || raw === "") return null;
+  const sec = Number(raw);
+  return Number.isFinite(sec) && sec >= 0 ? Math.floor(sec) : null;
+}
+
 export default function Watch() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const libraryId = id ? Number(id) : NaN;
   const streamUrlParam = (searchParams.get("url") || "").trim();
   const channelParam = (searchParams.get("channel") || "").trim();
+  const startParam = parseStartParam(searchParams.get("t"));
   const [settings] = useSettings();
   const isMobile = useIsMobile();
   const { mode, queue } = usePlaybackSession();
@@ -50,6 +58,7 @@ export default function Watch() {
     libraryValid,
     streamUrlParam,
     channelParam,
+    startParam,
   });
   const streamDownload = useStreamDownload({
     source,

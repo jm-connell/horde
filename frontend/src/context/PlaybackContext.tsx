@@ -88,6 +88,8 @@ export interface StreamSession {
   /** For the user's stream history (Recommended+). */
   durationSec?: number | null;
   channelUrl?: string | null;
+  /** Start here (seconds) instead of the beginning: `?t=` on the watch page. */
+  startSec?: number | null;
 }
 
 function watchedStream(stream: StreamSession): WatchedStream {
@@ -1035,6 +1037,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         streamType="dash"
         live={Boolean(stream.liveVideoId)}
         progressiveFallbackSrc={previewStreamUrl(stream.url)}
+        initialPosition={stream.startSec ?? 0}
         mimeType={
           stream.liveVideoId
             ? "application/vnd.apple.mpegurl"
