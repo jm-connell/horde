@@ -54,7 +54,7 @@ Answers come from the documentation and the source code shipped with your versio
 - The conversation, and where you put the panel, are kept in the browser tab only (until the tab closes or **Clear**); the server stores none of it. Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
 - Answers can be wrong. The model only sees the excerpts it was given; check the linked pages before changing anything important.
 
-When the panel opens it suggests three questions, a different mix each time; the first is always **What can you do?**, which lists everything below (answered by the app itself, without asking the model).
+When the panel opens it suggests five questions, a different mix each time; the first is always **What can you do?**, which lists everything below (answered by the app itself, without asking the model).
 
 ### Links to settings and pages
 

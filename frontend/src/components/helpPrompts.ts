@@ -14,7 +14,7 @@ interface SamplePrompt {
   needs?: Permission;
 }
 
-/** Questions that show off one ability each; three are shown per opening. */
+/** Questions that show off one ability each; five are shown per opening. */
 export const SAMPLE_PROMPTS: SamplePrompt[] = [
   {
     text: "How do I download a whole playlist?",
@@ -67,7 +67,7 @@ export const SAMPLE_PROMPTS: SamplePrompt[] = [
 ];
 
 /**
- * "What can you do?" plus two more from different areas, chosen at random
+ * "What can you do?" plus four more from different areas, chosen at random
  * each time the panel opens, from the prompts this person can use.
  */
 export function pickPrompts(
@@ -76,7 +76,7 @@ export function pickPrompts(
 ): string[] {
   const pool = SAMPLE_PROMPTS.filter(allowed);
   const picked: SamplePrompt[] = [];
-  while (picked.length < 2 && pool.length) {
+  while (picked.length < 4 && pool.length) {
     const fresh = pool.filter((p) => !picked.some((q) => q.area === p.area));
     const from = fresh.length ? fresh : pool;
     const choice = from[Math.floor(random() * from.length)];

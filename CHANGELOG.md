@@ -59,7 +59,7 @@ All notable changes to Horde are documented here. The format follows
   there. It offers to
   download a link you give it or build a playlist from videos it found, and
   writes custom CSS you preview for 20 seconds before keeping it. Each
-  opening suggests three questions, starting with **What can you do?**
+  opening suggests five questions, starting with **What can you do?**
 - An optional **Assistant model** (Settings → AI → Models) gives Ask about
   Horde a stronger model than summaries and tags use. The assistant knows
   roughly how capable its model is and says when a bigger one would write
