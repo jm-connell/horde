@@ -2,8 +2,6 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
-
 from app.services.subtitle_retry import (
     BACKOFF_SECONDS,
     SubtitleFetchOutcome,
@@ -14,18 +12,9 @@ from app.services.subtitle_retry import (
     outcome_from_fetch,
     process_due_subtitle,
     recover_unsynced_missing_captions,
-    reset_for_tests,
     subtitle_failure_retryable,
 )
 from app.services.ytdlp_common import ERROR_KIND_RATE_LIMIT
-
-
-@pytest.fixture(autouse=True)
-def _reset_subtitle_retry_state():
-    reset_for_tests()
-    yield
-    reset_for_tests()
-
 
 _SUBTITLE_429 = (
     "ERROR: Unable to download video subtitles for 'en': "

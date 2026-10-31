@@ -9,14 +9,13 @@ from __future__ import annotations
 
 import logging
 import re
-import threading
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlmodel import Session, col, select
 
-from ..context import get_engine, get_paths
+from ..context import current, get_engine, get_paths
 from ..models import Video, as_utc
 from . import activity, library
 from .workers import BackgroundWorker
@@ -62,9 +61,6 @@ _RETRYABLE_KINDS = frozenset(
     }
 )
 
-_cooldown_lock = threading.Lock()
-_global_retry_after: datetime | None = None
-
 
 @dataclass
 class SubtitleFetchOutcome:
@@ -72,13 +68,6 @@ class SubtitleFetchOutcome:
     retryable: bool = False
     kind: str | None = None
     message: str | None = None
-
-
-def reset_for_tests() -> None:
-    """Clear process-wide timedtext cooldown (unit tests only)."""
-    global _global_retry_after
-    with _cooldown_lock:
-        _global_retry_after = None
 
 
 def backoff_seconds(attempts: int) -> int:
@@ -91,21 +80,11 @@ def backoff_seconds(attempts: int) -> int:
 
 def note_global_cooldown(delay_sec: float) -> None:
     """Block further timedtext fetches until ``delay_sec`` from now (max wins)."""
-    global _global_retry_after
-    if delay_sec <= 0:
-        return
-    until = datetime.now(UTC) + timedelta(seconds=delay_sec)
-    with _cooldown_lock:
-        if _global_retry_after is None or until > _global_retry_after:
-            _global_retry_after = until
+    current().timedtext.block(delay_sec)
 
 
 def seconds_until_global_cooldown() -> float:
-    with _cooldown_lock:
-        if _global_retry_after is None:
-            return 0.0
-        delta = (_global_retry_after - datetime.now(UTC)).total_seconds()
-        return max(0.0, delta)
+    return current().timedtext.seconds_blocked()
 
 
 def subtitle_failure_retryable(text: str) -> bool:
