@@ -4,6 +4,7 @@ const PAGES: [prefix: string, label: string][] = [
   ["/offline", "Offline downloads"],
   ["/download", "Download page"],
   ["/playlists", "Playlists"],
+  ["/ask", "Ask page (channel search)"],
   ["/import", "Import page"],
   ["/settings", "Settings"],
   ["/account", "Account settings"],

@@ -2,6 +2,7 @@
   "pages": [
     {"id": "library", "label": "Library", "path": "/", "about": "Home: your videos, Continue watching, For you and Recommended+"},
     {"id": "playlists", "label": "Playlists", "path": "/playlists", "about": "Your playlists and the household's shared ones"},
+    {"id": "ask", "label": "Ask", "path": "/ask", "about": "Channels whose videos' captions are indexed, and search over what they said; ask about them in this chat by naming the channel"},
     {"id": "history", "label": "History", "path": "/history", "about": "What you watched, with viewing stats"},
     {"id": "download", "label": "Download", "path": "/download", "access": "download", "about": "Paste a link to download a video, playlist or channel; the queue"},
     {"id": "import", "label": "Import", "path": "/import", "access": "download", "about": "Add video files you already have and review them"},

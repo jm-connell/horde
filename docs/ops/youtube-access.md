@@ -60,7 +60,7 @@ All metadata `extract_info` calls (feed cards, download preview, stream preview,
 | Min interval | **1.25 s** | Spacing between extracts |
 | Result cache | **180 s** TTL (max 48 entries) | Shared by preview, download-meta, and stream preview (`cache_key=url`) |
 
-Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**). The extract gate is specifically for metadata bursts when scrolling feeds or opening many previews. Caption fetches after download share a separate timedtext cooldown so a 429 does not drop subtitles forever — see [subtitle retry](../architecture/workers.md#subtitle-retry).
+Downloads themselves stay limited by `MAX_DOWNLOAD_CONCURRENCY` (default **2**). The extract gate is specifically for metadata bursts when scrolling feeds or opening many previews. Caption fetches after download share a separate timedtext cooldown so a 429 does not drop subtitles forever — see [subtitle retry](../architecture/workers.md#subtitle-retry). [Ask](../guides/ask.md) fetches captions for whole channels through the same gate at background priority, about one video every 15 seconds, and only while no library caption retry is due; a 429 it hits pushes every caption fetch back (`services/timedtext.py`, held on the `AppContext`).
 
 `force=True` bypasses cache reads (used when refreshing CDN URLs for DASH/progressive preview).
 

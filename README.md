@@ -58,6 +58,10 @@ Interactive API reference: `/docs`.
   how-to questions, finds and changes settings, answers about your own library
   and writes custom CSS, with any OpenAI-compatible provider (OpenRouter,
   OpenAI, Gemini, Groq, Ollama, LM Studio, …).
+- **Ask**: index what YouTube channels say in their videos (captions only, no
+  download), search it, and ask questions such as "What does The Car Care Nut
+  say about the 2004 4Runner?" in the chat; answers cite each point with a link
+  to the moment it was said, and compare channels that disagree.
 
 Horde is meant for a home network or VPN. Everyone signs in, but before
 exposing it to the internet, follow the

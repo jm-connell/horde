@@ -7,7 +7,7 @@ A closer look at what Horde actually does. Each section is a product tour, not a
 
 ## Where to find things
 
-The top bar has **Home** (the library), **Playlists**, **History**, **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
+The top bar has **Home** (the library), **Playlists**, **History**, **Ask** (once a channel is indexed), **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
 
 - **Download a video**: open **Download** in the top bar, paste the link, pick a quality and press **Download**.
 - **Upgrade a video you have to a higher resolution** (say 1080p to 4K): open it, then **••• → Change resolution** under the player. The file is replaced; no need to delete and download again.
@@ -122,6 +122,7 @@ Turn the archive into something you can actually ask questions of. Use any OpenA
 | Recommended+ (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |
 | Summaries, chapters, chat, tag enrich | Chat LLM |
 | Duplicate help on Import | Chat (optional embed similarity) |
+| [Ask](guides/ask.md): search what channels said, and ask them questions with references to the moment | Search works without AI; asking needs a chat model; embeddings help it find meaning |
 
 Until providers are ready, Library stays on a single home tab and search is keyword-only. Workload profiles keep a small GPU from getting thrashed.
 

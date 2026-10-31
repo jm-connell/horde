@@ -25,6 +25,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
 | **Chat** | Ask questions about a video (metadata + optional subs) | Chat LLM |
 | **Ask about Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
+| **[Ask](ask.md)** | Answers questions about what indexed YouTube channels said, citing each point to the moment, from the same chat panel when you name a channel | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
 | **Recommended tab** | Better "For you" ranking (by content) and category shelves | Embed + categories ready |
 | **Duplicate confirmation** | Score heuristic duplicate groups on Import | Chat (+ optional embed similarity) |
@@ -43,7 +44,7 @@ Per-video chat lets you ask about content, chapters, or themes. Context is built
 
 ## Ask about Horde
 
-The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen, and following a link in an answer closes it). In the installed app on a phone, the **Chat** tab of the tab bar opens and closes it, and it sits just above the bar. **Escape** or the close button hides it; **Clear** starts over.
+The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen, and following a link in an answer closes it). In the installed app on a phone, the **Chat** tab of the tab bar opens and closes it, and it sits just above the bar. **Escape** or the close button hides it; **New chat** starts over, and **History** lists your earlier conversations (saved on the server for your account). Name an [Ask](ask.md) channel in a question to ask what it said in its videos.
 
 Each question also tells Horde which page you are on (for example "Settings, Playback tab" or the video playing), so "what does this page do?" gets a useful answer.
 
