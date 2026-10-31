@@ -35,6 +35,7 @@ from ..ai import help_chat, help_model
 from ..ai.provider import get_llm_provider, llm_features_allowed, require_llm_chat_model
 from ..auth.accounts import AuthUser
 from . import chunking, references, retrieval, routing, threads
+from . import search as kb_search
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +97,25 @@ def pick_scope(
         return named
     wanted = set(channel_ids or [])
     return [c for c in channels if c.id in wanted]
+
+
+def most_relevant(
+    session: Session, channels: list[KbChannel], question: str, limit: int
+) -> list[KbChannel]:
+    """At most ``limit`` channels, those with the most passages matching ``question``."""
+    if len(channels) <= limit:
+        return channels
+    hits = kb_search.search(
+        session,
+        kb_search.query_terms(question),
+        channel_ids=[require_id(c) for c in channels],
+        limit=400,
+    )
+    counts: dict[int, int] = {}
+    for hit in hits:
+        counts[hit.kb_channel_id] = counts.get(hit.kb_channel_id, 0) + 1
+    ranked = sorted(channels, key=lambda c: -counts.get(c.id or 0, 0))
+    return [c for c in ranked if counts.get(c.id or 0)][:limit] or ranked[:limit]
 
 
 def _progress_note(session: Session, channels: list[KbChannel]) -> str:
@@ -244,7 +264,7 @@ def _channel_turn(
         yield _sse({"type": "error", "detail": missing, "status": 503})
         return
     strength = help_model.tier(model)
-    channels = channels[: MAX_CHANNELS[strength]]
+    channels = most_relevant(session, channels, message, MAX_CHANNELS[strength])
     names = [c.channel_name or c.channel_url for c in channels]
     history = threads.history(session, thread_id)
     yield _sse({"type": "status", "text": f"Searching {', '.join(names)}"})

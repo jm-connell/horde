@@ -450,3 +450,46 @@ def test_vectors_are_float16():
         0.5,
         0.25,
     ]
+
+
+def test_all_channels_picks_the_most_relevant(session):
+    belt = _channel(session, "Belt Channel", "https://youtube.com/@belt")
+    other = _channel(session, "Other Channel", "https://youtube.com/@other")
+    _indexed_video(session, belt, "aaaaaaaaaaa", BELT_VTT)
+    _indexed_video(session, other, "bbbbbbbbbbb", _vtt({}, 30))
+    assert ask_chat.pick_scope(
+        session, "what do all my channels say about belts?", None
+    ) == [
+        belt,
+        other,
+    ]
+    assert ask_chat.most_relevant(session, [other, belt], "timing belt", 1) == [belt]
+
+
+def test_two_named_channels_are_compared_from_both(client, session, llm):
+    nut = _channel(session)
+    fix = _channel(session, "ChrisFix", "https://youtube.com/@chrisfix")
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    _indexed_video(
+        session, fix, "bbbbbbbbbbb", _vtt({60: "i never change the timing belt early"})
+    )
+    llm["replies"] = ["They disagree [1][2]."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "Do ChrisFix and the Car Care Nut agree on the timing belt?"
+            },
+        ).text
+    )
+    assert {c["name"] for c in events[1]["channels"]} == {
+        "ChrisFix",
+        "The Car Care Nut",
+    }
+    system = llm["calls"][0]["system"]
+    assert "ChrisFix ·" in system and "The Car Care Nut ·" in system
+    assert "where they agree and where they disagree" in system
+    assert {r["channel"] for r in events[-2]["references"]} == {
+        "ChrisFix",
+        "The Car Care Nut",
+    }
