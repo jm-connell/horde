@@ -120,7 +120,7 @@ The workflow file is `.github/workflows/ci.yml`. It runs on:
 | **`pull_request`** | Opening or updating a PR (including forks) |
 | **`workflow_dispatch`** | **Actions → CI → Run workflow** after a large local change if you want a fresh run without a new commit |
 
-Jobs (parallel): **backend** (pytest), **frontend** (Vitest + production build), **e2e** (Playwright against the built SPA), **docs** (MkDocs `--strict`), **image** (`docker build` of the single-container app).
+Jobs (parallel): **backend** (pytest), **frontend** (Vitest + production build), **e2e** (Playwright against the built SPA, split into four `e2e (n/4)` shard jobs that each start their own servers; the `e2e` job only reports whether all four passed), **docs** (MkDocs `--strict`), **image** (`docker build` of the single-container app).
 
 A red X on the commit or PR means “do not merge until it is green.” Open the failed job log; pytest and Vitest names map to files under `backend/tests/` and `frontend/src/`.
 
@@ -135,7 +135,7 @@ A red X on the commit or PR means “do not merge until it is green.” Open the
 On GitHub: **Settings → Branches → Add branch protection rule** for `main`.
 
 - Require a pull request before merging (if you want that workflow)
-- **Require status checks to pass**: `backend`, `frontend`, `e2e`, `docs`, `image`
+- **Require status checks to pass**: `backend`, `frontend`, `e2e` (the shard roll-up, not the `e2e (n/4)` jobs), `docs`, `image`
 
 Without protection, CI still **runs and reports**; it just will not physically stop a merge. For a homelab repo that is often enough if you glance at the checks.
 
