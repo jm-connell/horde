@@ -1,9 +1,10 @@
 """Fetch one video's English captions for Ask, without the video.
 
-A library copy with a caption file is read from disk. Otherwise one subtitle-only
-yt-dlp call runs inside the extract gate (``call_gated``, background priority), so
-it waits behind interactive and download work and keeps the gate's spacing. The
-same call returns the description, so Ask gets it for free.
+A library copy with a caption file is read from disk (``from_library``). Otherwise
+one subtitle-only yt-dlp call (``fetch_remote``) runs inside the extract gate
+(``call_gated``, background priority), so it waits behind interactive and download
+work and keeps the gate's spacing. The same call returns the description, so Ask
+gets it for free.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from typing import Any
 
 from sqlmodel import Session
 
-from ...context import get_engine, get_paths
+from ...context import get_paths
 from .. import library
 from ..downloads.subtitles import SubtitleYtdlpLogger, subtitle_ydl_opts
 from ..subtitle_retry import subtitle_failure_retryable
@@ -131,16 +132,8 @@ def _fetch(url: str) -> CaptionResult:
     return CaptionResult(FETCHED, vtt=vtt, auto=auto, description=description)
 
 
-def fetch(yt_id: str) -> CaptionResult:
-    """Captions from the library copy if there is one, else from YouTube. Never raises."""
-    try:
-        with Session(get_engine()) as session:
-            local = from_library(session, yt_id)
-    except Exception:
-        logger.warning("Ask: reading library captions failed", exc_info=True)
-        local = None
-    if local is not None:
-        return local
+def fetch_remote(yt_id: str) -> CaptionResult:
+    """Captions from YouTube (the caller has reserved the timedtext pacer). Never raises."""
     url = video_url(yt_id)
     try:
         return call_gated(

@@ -14,6 +14,8 @@ from ..context import get_engine, get_paths
 from ..models import (
     AiCategory,
     AiJob,
+    AskMessage,
+    AskThread,
     ChannelAutodownload,
     ChannelCatalog,
     ChannelCatalogEmbedding,
@@ -21,6 +23,10 @@ from ..models import (
     ChannelCatalogVideo,
     DownloadJob,
     JobStatus,
+    KbChannel,
+    KbChunk,
+    KbChunkVector,
+    KbVideo,
     OpenRouterUsage,
     Playlist,
     PlaylistItem,
@@ -43,6 +49,12 @@ logger = logging.getLogger(__name__)
 _ALWAYS_CLEAR_MODELS = (AiJob, OpenRouterUsage, DownloadJob, UserSettings)
 
 _ERASE_MEDIA_MODELS = (
+    AskMessage,
+    AskThread,
+    KbChunkVector,
+    KbChunk,
+    KbVideo,
+    KbChannel,
     VideoAiChatMessage,
     VideoAiMeta,
     VideoEmbedding,

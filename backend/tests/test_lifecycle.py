@@ -39,6 +39,7 @@ EXPECTED_WORKERS = {
     "autodownload-poller",
     "live-poller",
     "subtitle-retry",
+    "ask",
     "stream-ai",
     "discovery",
     "job-metadata",

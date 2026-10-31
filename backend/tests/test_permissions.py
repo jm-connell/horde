@@ -162,6 +162,17 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/ai/help/info"),
         ]
     },
+    **{
+        (m, p): "manage_ask"
+        for m, p in [
+            ("GET", "/api/ask/channels/preview"),
+            ("POST", "/api/ask/channels"),
+            ("PATCH", "/api/ask/channels/{channel_id}"),
+            ("DELETE", "/api/ask/channels/{channel_id}"),
+            ("POST", "/api/ask/channels/{channel_id}/pause"),
+            ("POST", "/api/ask/channels/{channel_id}/resume"),
+        ]
+    },
 }
 
 #: Needs two permissions (both are checked).

@@ -1521,3 +1521,73 @@ class RecFeedbackWrite(BaseModel):
     #: ``label``, is known).
     key: str = Field(default="", max_length=500)
     label: str | None = Field(default=None, max_length=300)
+
+
+# --- Ask (channel knowledge) ---------------------------------------------------
+
+
+class AskChannelRead(BaseModel):
+    id: int
+    channel_url: str
+    channel_name: str | None = None
+    #: queued | listing | indexing | ready | paused | error
+    status: str
+    include_streams: bool = False
+    #: Uploads listed; captions fetched; still to fetch; without captions;
+    #: unavailable (members-only or failed); searchable passages.
+    videos: int = 0
+    fetched: int = 0
+    pending: int = 0
+    no_captions: int = 0
+    unavailable: int = 0
+    passages: int = 0
+    last_listed_at: datetime | None = None
+    #: The administrator sees the YouTube error; members a generic one.
+    last_error: str | None = None
+    created_at: datetime
+
+
+class AskChannelList(BaseModel):
+    items: list[AskChannelRead]
+    next_cursor: str | None = None
+    #: False on a SQLite without FTS5: Ask cannot index or search.
+    available: bool = True
+
+
+class AskChannelPreview(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+    video_count: int | None = None
+    has_streams: bool = False
+    #: Set when Ask is already on for this channel.
+    existing_id: int | None = None
+
+
+class AskChannelCreate(BaseModel):
+    url: str = Field(min_length=1, max_length=500)
+    include_streams: bool = False
+
+
+class AskChannelUpdate(BaseModel):
+    include_streams: bool
+
+
+class AskSearchHit(BaseModel):
+    channel_id: int
+    channel_name: str | None = None
+    yt_id: str
+    title: str | None = None
+    published_at: str | None = None
+    #: The library copy, when downloaded (links open it instead of the stream).
+    library_video_id: int | None = None
+    start_sec: float
+    end_sec: float
+    #: The matching text; matched words are wrapped in \u0002 … \u0003.
+    snippet: str
+    #: True for a hit in the title or description rather than the captions.
+    in_description: bool = False
+
+
+class AskSearchPage(BaseModel):
+    items: list[AskSearchHit]
+    next_cursor: str | None = None
