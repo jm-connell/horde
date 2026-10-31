@@ -412,29 +412,64 @@ def test_fetch_next_saves_and_a_rate_limit_pauses_everyone(
     assert session.get(VideoCommentState, other.id).next_attempt_at is not None
 
 
-def test_turning_the_setting_off_stops_the_fetcher(init_db):
-    assert worker.enabled() is True
-    app_settings.save({"save_comments": False})
-    assert worker.enabled() is False
+def test_comments_off_turns_the_whole_feature_off(
+    client, session, add_video, monkeypatch
+):
+    from app.services import comments
+    from app.services.ai import embeddings
+
+    video = add_video(title="Shop tour")
+    store.apply_result(
+        session, video, FetchResult(fetch.SAVED, [_comment("a", "zeppelin rides")])
+    )
+    monkeypatch.setattr(fetch, "fetch_comments", lambda *a, **k: pytest.fail("fetched"))
+    app_settings.save({"comments_enabled": False})
+
+    assert comments.enabled() is False
+    assert client.get(f"/api/videos/{video.id}/comments").json() == {
+        "status": "off",
+        "youtube_id": None,
+        "fetched_at": None,
+        "total_count": None,
+        "items": [],
+        "next_limit": None,
+    }
+    for resp in (
+        client.post(f"/api/videos/{video.id}/comments/refresh"),
+        client.get("/api/comments/youtube/abcdefghijk"),
+    ):
+        assert (resp.status_code, resp.json()["code"]) == (409, "comments_off")
+    assert client.get("/api/videos", params={"q": "zeppelin"}).json()["items"] == []
+    context = embeddings.build_chat_context(session, video, "what did people say?")
+    assert "zeppelin" not in context
+
+    # Back on: what was saved is all there again, nothing refetched.
+    app_settings.save({"comments_enabled": True})
+    items = client.get(f"/api/videos/{video.id}/comments").json()["items"]
+    assert [c["text"] for c in items] == ["zeppelin rides"]
 
 
-def test_the_setting_is_admin_only_and_wakes_the_fetcher(
+def test_the_switch_is_admins_to_change_and_everyone_sees_it(
     client, member_client, init_db
 ):
-    assert client.get("/api/settings").json()["save_comments"] is True
+    assert member_client.get("/api/settings").json()["comments_enabled"] is True
     assert (
-        member_client.patch("/api/settings", json={"save_comments": False}).status_code
+        member_client.patch(
+            "/api/settings", json={"comments_enabled": False}
+        ).status_code
         == 403
     )
     assert (
-        client.patch("/api/settings", json={"save_comments": False}).json()[
-            "save_comments"
+        client.patch("/api/settings", json={"comments_enabled": False}).json()[
+            "comments_enabled"
         ]
         is False
     )
+    # Members' watch pages hide comments too, so they read the real value.
+    assert member_client.get("/api/settings").json()["comments_enabled"] is False
     wake = init_db["ctx"].comments.wake
     wake.clear()
-    client.patch("/api/settings", json={"save_comments": True})
+    client.patch("/api/settings", json={"comments_enabled": True})
     assert wake.is_set()
 
 
@@ -510,7 +545,7 @@ def test_the_status_says_why_there_are_no_comments(
     assert client.get(url).json()["status"] == "failed"
 
     later = add_video()
-    app_settings.save({"save_comments": False})
+    app_settings.save({"comments_enabled": False})
     assert client.get(f"/api/videos/{later.id}/comments").json()["status"] == "off"
     resp = client.get("/api/videos/999999/comments")
     assert (resp.status_code, resp.json()["code"]) == (404, "not_found")
@@ -745,9 +780,8 @@ def test_a_failed_refresh_leaves_the_schedule_alone(
     client, session, add_video, monkeypatch
 ):
     video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
-    app_settings.save({"save_comments": False})
     url = f"/api/videos/{video.id}/comments"
-    assert client.get(url).json()["status"] == "off"
+    assert client.get(url).json()["status"] == "pending"
     outcomes = iter([fetch.FAILED, fetch.FAILED, fetch.FAILED, fetch.LATER, "retry"])
     monkeypatch.setattr(
         fetch, "fetch_comments", lambda *a, **k: FetchResult(next(outcomes))
@@ -755,7 +789,7 @@ def test_a_failed_refresh_leaves_the_schedule_alone(
     for _ in range(5):
         assert client.post(f"{url}/refresh").status_code in (502, 503)
     assert session.get(VideoCommentState, video.id) is None
-    assert client.get(url).json()["status"] == "off"
+    assert client.get(url).json()["status"] == "pending"
 
 
 def test_a_fetch_saved_at_the_same_moment_by_the_fetcher_does_not_clash(

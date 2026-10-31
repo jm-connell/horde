@@ -1899,6 +1899,11 @@
             "title": "Channel Catalog Max Videos",
             "type": "integer"
           },
+          "comments_enabled": {
+            "default": true,
+            "title": "Comments Enabled",
+            "type": "boolean"
+          },
           "direct_youtube_search": {
             "default": true,
             "title": "Direct Youtube Search",
@@ -1948,11 +1953,6 @@
             ],
             "title": "Require Two Factor",
             "type": "string"
-          },
-          "save_comments": {
-            "default": true,
-            "title": "Save Comments",
-            "type": "boolean"
           },
           "settings_degraded": {
             "default": false,
@@ -2016,6 +2016,17 @@
               }
             ],
             "title": "Channel Catalog Max Videos"
+          },
+          "comments_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comments Enabled"
           },
           "direct_youtube_search": {
             "anyOf": [
@@ -2115,17 +2126,6 @@
               }
             ],
             "title": "Require Two Factor"
-          },
-          "save_comments": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Save Comments"
           },
           "setup_completed": {
             "anyOf": [
@@ -11848,7 +11848,7 @@
         "type": "object"
       },
       "VideoCommentsRead": {
-        "description": "A library video's saved comments, in YouTube's \"top\" order.\n\n``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on\nYouTube); ``unavailable`` (private, removed or members-only); ``failed``;\n``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier\nare still listed when a later fetch finds them disabled or unavailable.",
+        "description": "A library video's saved comments, in YouTube's \"top\" order.\n\n``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on\nYouTube); ``unavailable`` (private, removed or members-only); ``failed``;\n``off`` (comments are turned off: nothing is listed); ``not_youtube``. Comments saved earlier\nare still listed when a later fetch finds them disabled or unavailable.",
         "properties": {
           "fetched_at": {
             "anyOf": [

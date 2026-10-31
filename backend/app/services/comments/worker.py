@@ -5,7 +5,7 @@ a finished download gets its comments within a minute), else one whose retry or
 new-upload refresh is due. Fetches run at background priority in the extract
 gate, at most one every ``FETCH_SPACING_SEC``; a rate limit or bot check pauses
 the fetcher for ``PAUSE_ON_LIMIT_SEC``, YouTube out of reach or a busy gate for
-``PAUSE_ON_LATER_SEC``. ``save_comments`` (Settings → Library)
+``PAUSE_ON_LATER_SEC``. ``comments_enabled`` (Settings → Library → Comments)
 turns it off.
 """
 
@@ -18,22 +18,18 @@ from sqlmodel import Session, col, or_, select
 
 from ...context import current, get_engine
 from ...models import Video, VideoCommentState, VideoStatus, require_id
-from .. import activity, app_settings
+from .. import activity
 from ..workers import BackgroundWorker
+from . import enabled as comments_enabled
 from . import fetch, store
 
 logger = logging.getLogger(__name__)
 
-SETTING = "save_comments"
 STARTUP_DELAY_SEC = 60
 IDLE_POLL_SEC = 5 * 60
 FETCH_SPACING_SEC = 30
 PAUSE_ON_LIMIT_SEC = 60 * 60
 PAUSE_ON_LATER_SEC = 10 * 60
-
-
-def enabled() -> bool:
-    return bool(app_settings.load().get(SETTING, True))
 
 
 def next_video(session: Session) -> Video | None:
@@ -98,7 +94,7 @@ def _loop(worker: BackgroundWorker) -> None:
             continue
         worked = False
         try:
-            worked = enabled() and fetch_next()
+            worked = comments_enabled() and fetch_next()
         except Exception:
             logger.warning("Comments: worker pass failed", exc_info=True)
         if worked:

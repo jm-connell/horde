@@ -85,7 +85,7 @@ The summary line shows library size, how many copies exist and their size, and "
 
 ## Metadata and catalog
 
-These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled`, `channel_catalog_max_videos` and `save_comments` (the two YouTube search switches keep their real values, because member screens use them).
+These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled` and `channel_catalog_max_videos` (the two YouTube search switches and `comments_enabled` keep their real values, because member screens use them).
 
 ### Channel catalog
 
@@ -97,7 +97,7 @@ These are **top-level** keys (not the `ui` blob). The whole section is server-wi
 | YouTube results in library search | `youtube_video_search` | `true` | boolean |
 | Recommended+ looks on YouTube | `discovery_enabled` | `true` | boolean |
 | Recommendations learn from the household | `discovery_household` | `true` | boolean |
-| Save top comments | `save_comments` | `true` | boolean |
+| Comments | `comments_enabled` | `true` | boolean |
 
 When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
@@ -111,7 +111,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended+. Nobody is shown who watched what.
 
-**Save top comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off: nothing more is fetched in the background; comments already saved stay, the watch page can still read them from YouTube on request, and the refresh button (Edit details) still saves a video's comments when pressed. See [Comments](../guides/comments.md).
+**Comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off turns all of that off for everyone: nothing is fetched, the watch page has no comments section (for streams too), and search and chat leave comments out. Comments already saved stay in the database and come back when it is turned on again. See [Comments](../guides/comments.md).
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

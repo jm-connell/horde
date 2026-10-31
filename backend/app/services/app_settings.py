@@ -243,7 +243,7 @@ DEFAULTS: dict[str, Any] = {
     # (services/media_sidecars.py).
     "media_server_sidecars": False,
     # Save the top comments of YouTube videos in the library (services/comments).
-    "save_comments": True,
+    "comments_enabled": True,
     # Two-step sign-in required of: "off" | "admins" | "everyone"
     # (services/auth/two_factor.py).
     "require_two_factor": "off",

@@ -4676,6 +4676,11 @@ export interface components {
              */
             channel_catalog_max_videos: number;
             /**
+             * Comments Enabled
+             * @default true
+             */
+            comments_enabled: boolean;
+            /**
              * Direct Youtube Search
              * @default true
              */
@@ -4711,11 +4716,6 @@ export interface components {
              */
             require_two_factor: "off" | "admins" | "everyone";
             /**
-             * Save Comments
-             * @default true
-             */
-            save_comments: boolean;
-            /**
              * Settings Degraded
              * @default false
              */
@@ -4742,6 +4742,8 @@ export interface components {
             channel_catalog_enabled?: boolean | null;
             /** Channel Catalog Max Videos */
             channel_catalog_max_videos?: number | null;
+            /** Comments Enabled */
+            comments_enabled?: boolean | null;
             /** Direct Youtube Search */
             direct_youtube_search?: boolean | null;
             /** Discovery Enabled */
@@ -4758,8 +4760,6 @@ export interface components {
             progress_expiry_days?: number | null;
             /** Require Two Factor */
             require_two_factor?: ("off" | "admins" | "everyone") | null;
-            /** Save Comments */
-            save_comments?: boolean | null;
             /** Setup Completed */
             setup_completed?: boolean | null;
             /** Ui */
@@ -8216,7 +8216,7 @@ export interface components {
          *
          *     ``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on
          *     YouTube); ``unavailable`` (private, removed or members-only); ``failed``;
-         *     ``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier
+         *     ``off`` (comments are turned off: nothing is listed); ``not_youtube``. Comments saved earlier
          *     are still listed when a later fetch finds them disabled or unavailable.
          */
         VideoCommentsRead: {

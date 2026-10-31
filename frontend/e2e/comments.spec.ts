@@ -1,4 +1,10 @@
-import { expect, openSearchBox, test, videoCard } from "./fixtures";
+import {
+  CSRF_HEADERS,
+  expect,
+  openSearchBox,
+  test,
+  videoCard,
+} from "./fixtures";
 import type { Page, Route } from "@playwright/test";
 
 /** The seeded id of the library video called `title`. */
@@ -255,4 +261,17 @@ test("the refresh button fetches and saves the comments again", async ({
   );
   await expect(panel.getByRole("heading")).toHaveText("Comments 2.5K");
   expect(refreshed).toBe(1);
+});
+
+test("with comments off there is no comments section", async ({ page }) => {
+  const off = await page.request.patch("/api/settings", {
+    headers: CSRF_HEADERS,
+    data: { comments_enabled: false },
+  });
+  expect(off.ok()).toBe(true);
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  await expect(
+    page.getByRole("heading", { name: "Cedar Notes" })
+  ).toBeVisible();
+  await expect(page.locator("[data-horde='comments']")).toHaveCount(0);
 });

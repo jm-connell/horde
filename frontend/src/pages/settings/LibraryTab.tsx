@@ -501,15 +501,15 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
-            anchor="save-comments"
-            title="Save top comments"
-            description="Saves the top 100 comments of every YouTube video in the library, with replies to the most popular ones, for the watch page, search and video chat. Fetched in the background, one video every 30 seconds."
+            anchor="comments"
+            title="Comments"
+            description="Shows YouTube comments under videos. Horde saves the top 100 of every YouTube video in the library, with replies to the most popular ones, in the background, and uses them in search and video chat. Off hides them everywhere and stops fetching; saved comments come back when it is on again."
             control={
               <Toggle
-                checked={appSettings?.save_comments ?? true}
+                checked={appSettings?.comments_enabled ?? true}
                 onChange={() =>
                   void saveCatalogSettings({
-                    save_comments: !(appSettings?.save_comments ?? true),
+                    comments_enabled: !(appSettings?.comments_enabled ?? true),
                   })
                 }
               />

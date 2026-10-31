@@ -1672,7 +1672,7 @@ class VideoCommentsRead(BaseModel):
 
     ``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on
     YouTube); ``unavailable`` (private, removed or members-only); ``failed``;
-    ``off`` (saving comments is turned off); ``not_youtube``. Comments saved earlier
+    ``off`` (comments are turned off: nothing is listed); ``not_youtube``. Comments saved earlier
     are still listed when a later fetch finds them disabled or unavailable.
     """
 

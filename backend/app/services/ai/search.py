@@ -9,6 +9,7 @@ from sqlmodel import Session
 
 from ...models import Video
 from .. import app_settings, library
+from ..comments import enabled as comments_enabled
 from ..comments import search as comment_search
 from ..search_text import explain_match, query_allows_semantic
 from . import embeddings
@@ -57,7 +58,7 @@ def explain_library_video(
     )
     if reason:
         return reason
-    if video.id is not None:
+    if video.id is not None and comments_enabled():
         snippet = comment_search.best_snippet(session, video.id, query)
         if snippet:
             return {"source": "comments", "snippet": snippet}
@@ -100,6 +101,8 @@ def hybrid_search(
         semantic=semantic,
         embed_query=embed_query,
     )
+    if not comments_enabled():
+        return results, chunks
     found = {v.id for v in results}
     extra = [i for i in comment_search.matching_video_ids(session, q) if i not in found]
     if not extra:

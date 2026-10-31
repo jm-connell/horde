@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import PlaybackQueue from "../../components/PlaybackQueue";
@@ -12,6 +13,7 @@ import {
   youtubeVideoIdFromUrl,
 } from "../../utils";
 import type { Video } from "../../types";
+import { appSettingsQuery } from "../../queries/app";
 import type { WatchAi } from "./useWatchAi";
 import CommentsPanel from "./CommentsPanel";
 import type { WatchSource } from "./useWatchVideo";
@@ -38,6 +40,9 @@ export default function WatchInfoPanels({
   onVideoUpdated: (video: Video) => void;
 }) {
   const { can } = useAuth();
+  // Comments are one switch (Settings → Library → Comments) for everyone.
+  const commentsOn =
+    useQuery(appSettingsQuery()).data?.comments_enabled ?? false;
   const { showToast } = useToast();
   const video = source.kind === "library" ? source.video : null;
   const description =
@@ -123,7 +128,7 @@ export default function WatchInfoPanels({
           onTagError={(msg) => showToast(msg)}
         />
 
-        {video ? (
+        {!commentsOn ? null : video ? (
           <CommentsPanel
             key={`video-${video.id}`}
             videoId={video.id}

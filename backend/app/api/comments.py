@@ -14,6 +14,7 @@ from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import Video, VideoComment, VideoCommentState, require_id
 from ..schemas import CommentRead, LiveCommentsRead, VideoCommentsRead
+from ..services import comments as comments_svc
 from ..services.comments import fetch, live, store
 from ..services.comments import worker as comments_worker
 from ..services.comments.fetch import FetchedComment
@@ -59,6 +60,8 @@ def _threads[C: (VideoComment, FetchedComment)](
 
 
 def _video_comments(session: Session, video: Video) -> VideoCommentsRead:
+    if not comments_svc.enabled():
+        return VideoCommentsRead(status="off")
     if video.youtube_id is None:
         return VideoCommentsRead(status="not_youtube")
     video_id = require_id(video)
@@ -66,8 +69,6 @@ def _video_comments(session: Session, video: Video) -> VideoCommentsRead:
     items = _threads(store.saved_comments(session, video_id))
     read = VideoCommentsRead(status="pending", youtube_id=video.youtube_id, items=items)
     if state is None:
-        if not comments_worker.enabled():
-            read.status = "off"
         return read
     read.fetched_at = state.fetched_at
     read.total_count = state.total_count
@@ -106,6 +107,7 @@ def refresh_video_comments(
     The background schedule carries on from here (the next refresh age).
     """
     video = _video_or_404(session, video_id)
+    _require_enabled()
     if video.youtube_id is None:
         raise CodedHTTPException(
             409, "This video did not come from YouTube", "not_youtube"
@@ -122,6 +124,11 @@ def refresh_video_comments(
     _raise_for_failure(result)
     session.refresh(video)
     return _video_comments(session, video)
+
+
+def _require_enabled() -> None:
+    if not comments_svc.enabled():
+        raise CodedHTTPException(409, "Comments are turned off", "comments_off")
 
 
 def _raise_for_failure(result: fetch.FetchResult) -> None:
@@ -150,6 +157,7 @@ def live_comments(youtube_id: str, limit: int = fetch.TOP_COMMENTS):
     ``limit`` is one of 100, 300 or 1000 (follow ``next_limit``). Not saved; a
     result is kept in memory for 30 minutes.
     """
+    _require_enabled()
     if not _YT_ID.fullmatch(youtube_id):
         raise CodedHTTPException(422, "Not a YouTube video id", "invalid_youtube_id")
     if limit not in live.LIVE_STEPS:

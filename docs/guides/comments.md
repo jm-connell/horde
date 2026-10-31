@@ -32,7 +32,7 @@ When comments are turned off on YouTube, or YouTube no longer shows them (the vi
 
 ## Turning it off
 
-**Settings → Library → Save top comments** (administrators). Off, nothing more is fetched in the background; comments already saved stay and are still shown and searched, and the watch page can still read comments from YouTube when someone asks. The refresh button still fetches and saves a video's comments when someone with **Edit details** presses it. Deleting a video deletes its comments.
+**Settings → Library → Comments** (administrators) is one switch for the whole feature. Off, nothing is fetched from YouTube, no one sees a comments section (on library videos or streams), and search and the video chat leave comments out. Comments already saved are kept, and turning it back on brings them back as they were; the fetcher then carries on with its schedule. Deleting a video deletes its comments.
 
 ## Size
 

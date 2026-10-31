@@ -43,8 +43,6 @@ function savedNote(data: VideoComments, empty: boolean): string | null {
       return empty
         ? "Horde saves the top comments in the background; they will show up here soon."
         : null;
-    case "off":
-      return "Saving comments is turned off (Settings → Library).";
     case "failed":
       return empty ? "Horde could not fetch the comments from YouTube." : null;
     case "disabled":
@@ -200,7 +198,9 @@ export default function CommentsPanel({
   // that never came from YouTube), so the panel never flashes in and out.
   if (
     videoId !== null &&
-    (saved.isPending || saved.data?.status === "not_youtube")
+    (saved.isPending ||
+      saved.data?.status === "not_youtube" ||
+      saved.data?.status === "off")
   )
     return null;
   if (videoId === null && !streamYoutubeId) return null;
@@ -260,7 +260,6 @@ export default function CommentsPanel({
     items.length === 0 &&
     (videoId === null ||
       saved.data?.status === "pending" ||
-      saved.data?.status === "off" ||
       saved.data?.status === "failed");
 
   return (
