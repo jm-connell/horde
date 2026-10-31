@@ -19,7 +19,7 @@ Only the administrator, and members given **Manage Ask channels** (Account → U
 
 The chat is the same panel as Ask about Horde (the footer button); dock it at the side with the button in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. Questions that name no channel are Ask about Horde questions, as before.
 
-From a channel's page, **Ask \<channel\>** opens the chat already about that channel. The panel shows **Answering from …** while it is; follow-up questions stay on that channel without naming it again. Press the × next to it to go back to Ask about Horde.
+On a channel's page, or watching one of its videos, the chat already knows the channel: the panel says **On this page: …**, and a question that names no channel is answered from it (the video you are watching first) unless it is about Horde itself, such as its settings, downloads or playlists. **Ask \<channel\>** on a channel's page opens a new conversation about that channel. The panel shows **Answering from …** while it is; follow-up questions stay on that channel without naming it again. Press the × next to it to go back to Ask about Horde.
 
 Answers come only from what the channels said. When the indexed videos do not cover the question, the answer says so. When several channels cover it, the answer says where they agree and where they disagree, and when a channel changed its mind over the years, it says that too.
 

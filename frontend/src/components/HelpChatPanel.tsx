@@ -9,7 +9,12 @@ import {
   usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
-import type { ChannelRequest, PageDetail } from "../context/HelpChatContext";
+import type {
+  ChannelRequest,
+  PageChannel,
+  PageDetail,
+} from "../context/HelpChatContext";
+import { findAskChannel } from "../pages/ask/askLinks";
 import type { HelpCatalog } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useVisualViewport } from "../hooks/useVisualViewport";
@@ -97,6 +102,8 @@ interface Props {
   onDockWidthChange?: (width: number) => void;
   /** "Ask <channel>" from a channel page: a new conversation about it. */
   channelRequest?: ChannelRequest | null;
+  /** The channel (and video) the current page is about. */
+  pageChannel?: PageChannel | null;
   pendingChannelRequest?: () => ChannelRequest | null;
   consumeChannelRequest?: (seq: number) => void;
   onClose: () => void;
@@ -225,6 +232,7 @@ export default function HelpChatPanel({
   pageDetail,
   focusOnOpen,
   channelRequest = null,
+  pageChannel = null,
   pendingChannelRequest = () => null,
   consumeChannelRequest = () => {},
   onClose,
@@ -516,6 +524,8 @@ export default function HelpChatPanel({
       const params = {
         threadId: ask.threadId,
         channelIds: ask.scope.map((c) => c.id),
+        pageChannelId: pageAsk?.id ?? null,
+        pageVideoId: pageAsk ? (pageChannel?.videoId ?? null) : null,
         page: currentPage(),
         dataConsent: consent,
       };
@@ -638,15 +648,28 @@ export default function HelpChatPanel({
     queryFn: ({ signal }) => api.askChannels({ signal }),
     staleTime: 60_000,
   }).data?.items;
+  // The page's channel, when Ask has indexed it and the page is still showing.
+  const pageFound =
+    pageChannel && pageChannel.pathname === location.pathname
+      ? findAskChannel(
+          askChannels ?? [],
+          pageChannel.channelUrl,
+          pageChannel.channelName
+        )
+      : null;
+  const pageAsk = pageFound && pageFound.passages > 0 ? pageFound : null;
+  const pageName = pageAsk?.channel_name || null;
   const channelNames = ask.scope
     .map((c) => c.name)
     .filter(Boolean)
     .join(", ");
   const placeholder = ask.scope.length
     ? `Ask ${channelNames || "this channel"}…`
-    : askChannels?.length
-      ? "Ask about Horde, or name a channel…"
-      : "Ask about Horde…";
+    : pageName
+      ? `Ask ${pageName}, or about Horde…`
+      : askChannels?.length
+        ? "Ask about Horde, or name a channel…"
+        : "Ask about Horde…";
 
   // On a phone the panel covers the page: get out of the way of a link.
   const onNavigate = () => {
@@ -975,6 +998,15 @@ export default function HelpChatPanel({
         )}
       </div>
 
+      {ask.scope.length === 0 && pageName && (
+        <p
+          className="border-t border-ink-700 px-3 pt-2 text-xs text-muted"
+          data-horde="ask-page-channel"
+        >
+          On this page: <span className="text-gray-300">{pageName}</span>.
+          Questions about its videos go to it; questions about Horde do not.
+        </p>
+      )}
       {ask.scope.length > 0 && (
         <div className="flex items-center gap-2 border-t border-ink-700 px-3 pt-2 text-xs">
           <span className="text-muted">Answering from</span>

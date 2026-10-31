@@ -29,6 +29,17 @@ interface HelpChatValue {
   clearDetail: (detail: PageDetail) => void;
   /** Open the panel on a new conversation about this Ask channel. */
   askChannel: (channel: AskScopeChannel) => void;
+  /** Set by a page about one channel (see `useAskPageChannel`). */
+  setPageChannel: (page: PageChannel | null) => void;
+}
+
+/** The channel (and video) a page is about, for routing Ask questions. */
+export interface PageChannel {
+  pathname: string;
+  channelUrl: string | null;
+  channelName: string | null;
+  /** The YouTube id of the video being watched. */
+  videoId: string | null;
 }
 
 interface HostValue {
@@ -43,6 +54,8 @@ interface HostValue {
   openedHere: boolean;
   /** The latest "Ask <channel>" request; a new one starts a new conversation. */
   channelRequest: ChannelRequest | null;
+  /** The channel the current page is about, if any. */
+  pageChannel: PageChannel | null;
   /** The request the panel has not acted on yet (null once it has). */
   pendingChannelRequest: () => ChannelRequest | null;
   /** The panel acted on this request. */
@@ -128,6 +141,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [channelRequest, setChannelRequest] = useState<ChannelRequest | null>(
     null
   );
+  const [pageChannel, setPageChannel] = useState<PageChannel | null>(null);
   // Kept here, not in the panel: the panel mounts on open, after the request.
   const consumedSeq = useRef(0);
   const latestRequest = useRef<ChannelRequest | null>(null);
@@ -166,6 +180,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDetail,
       clearDetail,
       askChannel,
+      setPageChannel,
     }),
     [available, state.open, setOpen, setDetail, clearDetail, askChannel]
   );
@@ -181,6 +196,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       pageDetail: () => detail.current,
       openedHere,
       channelRequest,
+      pageChannel,
       pendingChannelRequest,
       consumeChannelRequest,
     }),
@@ -193,6 +209,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDockWidth,
       openedHere,
       channelRequest,
+      pageChannel,
       pendingChannelRequest,
       consumeChannelRequest,
     ]
@@ -226,6 +243,7 @@ export function HelpChatHost() {
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}
         channelRequest={host.channelRequest}
+        pageChannel={host.pageChannel}
         pendingChannelRequest={host.pendingChannelRequest}
         consumeChannelRequest={host.consumeChannelRequest}
         onClose={() => setOpen(false)}
@@ -252,4 +270,27 @@ export function useHelpPageDetail(pathname: string, text: string | null) {
     setDetail(mine);
     return () => clearDetail(mine);
   }, [pathname, text, setDetail, clearDetail]);
+}
+
+/**
+ * Tell the chat which channel (and video) this page is about. A question that
+ * names no channel and is not about Horde is then answered from it.
+ */
+export function useAskPageChannel(
+  pathname: string,
+  channelUrl: string | null | undefined,
+  channelName: string | null | undefined,
+  videoId: string | null = null
+) {
+  const { setPageChannel } = useHelpChat();
+  useEffect(() => {
+    if (!channelUrl && !channelName) return;
+    setPageChannel({
+      pathname,
+      channelUrl: channelUrl ?? null,
+      channelName: channelName ?? null,
+      videoId,
+    });
+    return () => setPageChannel(null);
+  }, [pathname, channelUrl, channelName, videoId, setPageChannel]);
 }

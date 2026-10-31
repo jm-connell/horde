@@ -4812,6 +4812,10 @@ export interface components {
             message: string;
             /** Page */
             page?: string | null;
+            /** Page Channel Id */
+            page_channel_id?: number | null;
+            /** Page Video Id */
+            page_video_id?: string | null;
             /** Thread Id */
             thread_id?: number | null;
         };

@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import {
+  Link,
+  useLocation,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
   usePlaybackActions,
@@ -9,6 +14,7 @@ import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
+import { useAskPageChannel } from "../context/HelpChatContext";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import ClipPanel from "./watch/ClipPanel";
 import RedownloadDialog from "./watch/RedownloadDialog";
@@ -69,6 +75,17 @@ export default function Watch() {
   });
   const video = source?.kind === "library" ? source.video : null;
   const actions = useWatchActions({ video, setSource });
+  // The chat answers questions about this video from its channel (Ask).
+  const location = useLocation();
+  const streamMeta = source?.kind === "stream" ? source.meta : null;
+  useAskPageChannel(
+    location.pathname,
+    video?.channel_url ?? streamMeta?.channel_url,
+    video?.channel ?? streamMeta?.channel,
+    (video?.source_url ? extractYouTubeId(video.source_url, "") : null) ||
+      streamMeta?.id ||
+      null
+  );
   const { can } = useAuth();
   // Live and past broadcasts can be clipped, and downloaded YouTube videos
   // (the clip comes from YouTube; the library file shares its timeline).

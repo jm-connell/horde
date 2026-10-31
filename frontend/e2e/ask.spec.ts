@@ -1,5 +1,5 @@
 import { expectNoSeriousViolations } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, test, videoCard } from "./fixtures";
 
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
@@ -174,4 +174,53 @@ test("Ask <channel> on a channel page opens a chat about it", async ({
   await expect(
     page.getByRole("dialog", { name: "Ask about Horde" })
   ).toBeVisible();
+});
+
+test("on a video of an Ask channel, the chat answers from that channel", async ({
+  page,
+}) => {
+  const bodies: {
+    page_channel_id: number | null;
+    page_video_id: string | null;
+  }[] = [];
+  await page.route(/\/api\/ask\/chat$/, (route) => {
+    bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: sse([
+        { type: "thread", id: 9, title: "x" },
+        { type: "scope", channels: [{ id: 1, name: "Northwind" }] },
+        { type: "token", text: "Change it early." },
+        {
+          type: "references",
+          channels: [{ id: 1, name: "Northwind" }],
+          references: [],
+        },
+        {
+          type: "done",
+          message: { id: 2, role: "assistant", content: "Change it early." },
+        },
+      ]),
+    });
+  });
+  await page.goto("/");
+  await videoCard(page, "Cedar Notes").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await expect(panel.locator('[data-horde="ask-page-channel"]')).toContainText(
+    "On this page: Northwind"
+  );
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toHaveAttribute(
+    "placeholder",
+    "Ask Northwind, or about Horde…"
+  );
+  await input.fill("when should the belt be changed?");
+  await input.press("Enter");
+  await expect(panel.getByText("Change it early.")).toBeVisible();
+  // The server is told the page's channel and the video being watched.
+  expect(bodies[0].page_channel_id).toBe(1);
+  expect(bodies[0].page_video_id).toBe("e2ecedar001");
 });

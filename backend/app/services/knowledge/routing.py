@@ -1,8 +1,9 @@
 """Which Ask channels a question is about.
 
 A turn is answered from channels when the question names them ("what does the car
-care nut say…", "@TheCarCareNut", "CarCareNut"), or from the channel whose page
-the chat was opened on. "All my channels" and similar search every ready channel.
+care nut say…", "@TheCarCareNut", "CarCareNut"), from channels the chat is already
+about, or from the channel of the page the user is on unless the question is
+about Horde itself. "All my channels" and similar search every ready channel.
 Plain text matching, no model call, so it is predictable and free.
 """
 
@@ -19,6 +20,15 @@ _ALL = re.compile(
     re.IGNORECASE,
 )
 _MIN_LEN = 4
+# Words that make a question about the app rather than a channel's videos.
+_HORDE = re.compile(
+    r"\b(horde|settings?|preferences?|download(s|ed|ing)?|upload(s|ed|ing)?|"
+    r"import(s|ed|ing)?|playlists?|library|queue|account|password|log ?in|"
+    r"sign ?in|theme|css|subtitles? (setting|size|position)|captions? setting|"
+    r"ollama|openrouter|api key|provider|server|docker|storage|disk|backup|"
+    r"permissions?|admin|bug|error message|keyboard shortcut|hotkey)\b",
+    re.IGNORECASE,
+)
 
 
 def _norm(text: str) -> str:
@@ -61,6 +71,11 @@ def named_channels(message: str, channels: list[KbChannel]) -> list[KbChannel]:
                 found.append(channel)
                 break
     return found
+
+
+def about_horde(message: str) -> bool:
+    """True for a question about the app itself (its settings, downloads, ...)."""
+    return bool(_HORDE.search(message or ""))
 
 
 def asks_all_channels(message: str) -> bool:

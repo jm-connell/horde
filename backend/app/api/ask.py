@@ -300,6 +300,8 @@ def chat(
             page=payload.page,
             data_consent=payload.data_consent,
             authorized=StreamAuthGuard.of(request).still_valid,
+            page_channel_id=payload.page_channel_id,
+            page_video_id=payload.page_video_id,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

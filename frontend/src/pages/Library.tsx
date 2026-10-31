@@ -7,6 +7,7 @@ import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
 import DiscoverHome from "../components/DiscoverHome";
 import RecommendedHome from "../components/RecommendedHome";
+import { useAskPageChannel } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
 import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
@@ -163,6 +164,8 @@ function OnlineLibrary() {
     );
   }, [activeChannel, channels, channelNav.channelUrlOverrides]);
   const catalog = useChannelCatalog(activeChannel, activeChannelUrl);
+  // On a channel page the chat answers questions about it from Ask.
+  useAskPageChannel("/", activeChannelUrl, activeChannel);
   const activeChannelStat = useMemo(
     () => channels.find((c) => c.channel === activeChannel) ?? null,
     [channels, activeChannel]

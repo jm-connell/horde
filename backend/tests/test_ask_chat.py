@@ -644,3 +644,106 @@ def test_library_ai_jobs_go_before_a_window_of_ask_jobs(session, add_video):
     session.commit()
     job = ai_worker._next_job(session, llm_ok=True, embed_ok=True)
     assert job is not None and job.kind == AiJobKind.embed_video
+
+
+# --- the page's channel -------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "how do I change the subtitle size setting?",
+        "why did my download fail",
+        "add this to a playlist",
+        "Does Horde support 4K?",
+    ],
+)
+def test_questions_about_horde(message):
+    assert routing.about_horde(message)
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "what does he say about the timing belt?",
+        "is the 2UZ reliable?",
+        "explain this part",
+    ],
+)
+def test_questions_about_the_videos(message):
+    assert not routing.about_horde(message)
+
+
+def test_the_page_channel_answers_unless_the_question_is_about_horde(session):
+    nut = _channel(session)
+    fix = _channel(session, "ChrisFix", "https://youtube.com/@chrisfix")
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    _indexed_video(session, fix, "bbbbbbbbbbb", BELT_VTT)
+    assert ask_chat.pick_scope(session, "when should I change it?", None, nut.id) == [
+        nut
+    ]
+    assert (
+        ask_chat.pick_scope(session, "how do I change the theme?", None, nut.id) == []
+    )
+    # Naming a channel, or one already chosen, wins over the page's.
+    assert ask_chat.pick_scope(session, "what does chrisfix say?", None, nut.id) == [
+        fix
+    ]
+    assert ask_chat.pick_scope(session, "and then?", [fix.id], nut.id) == [fix]
+    assert ask_chat.pick_scope(session, "when should I change it?", None, None) == []
+
+
+def test_the_page_channel_reaches_the_chat(client, session, llm):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    llm["replies"] = ["Every ninety thousand [1]."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "when should the timing belt be changed?",
+                "page_channel_id": nut.id,
+            },
+        ).text
+    )
+    assert events[1]["channels"] == [{"id": nut.id, "name": "The Car Care Nut"}]
+    assert events[-1]["type"] == "done"
+
+
+def test_the_watched_video_comes_first(session, init_db, monkeypatch):
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(session)
+    # Distinct lines (identical ones are merged), each naming the belt.
+    strong = _vtt(
+        {
+            s: f"the timing belt matters here, point number {s} about the belt"
+            for s in range(0, 120, 3)
+        }
+    )
+    for i in range(4):
+        _indexed_video(session, channel, f"strong00000{i}", strong)
+    # The watched video mentions it once, in a long talk about other things.
+    weak = {
+        s: f"lots of other talk about engines and oil, number {s}"
+        for s in range(0, 120, 3)
+    }
+    weak[60] = "and the belt too"
+    _indexed_video(session, channel, "watched0000", _vtt(weak))
+    cache = init_db["ctx"].knowledge.vectors
+
+    def found(**kw):
+        excerpts = retrieval.retrieve(
+            session,
+            cache,
+            [channel],
+            "timing belt",
+            retrieval.Expansion(),
+            budget_chars=2000,
+            **kw,
+        )
+        return {e.yt_id for e in excerpts}
+
+    # Many videos say it more often; within the budget, the watched one is left out...
+    assert "watched0000" not in found()
+    # ...unless it is the one being watched.
+    assert "watched0000" in found(focus_yt_id="watched0000")

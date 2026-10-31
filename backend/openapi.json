@@ -2402,6 +2402,29 @@
             ],
             "title": "Page"
           },
+          "page_channel_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Channel Id"
+          },
+          "page_video_id": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Video Id"
+          },
           "thread_id": {
             "anyOf": [
               {
@@ -13813,6 +13836,7 @@
                   "items": {
                     "type": "integer"
                   },
+                  "maxItems": 50,
                   "type": "array"
                 },
                 {

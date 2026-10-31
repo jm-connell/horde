@@ -93,6 +93,9 @@ export const askApi = {
     params: {
       threadId: number | null;
       channelIds: number[];
+      /** The page's Ask channel and watched video (see `useAskPageChannel`). */
+      pageChannelId?: number | null;
+      pageVideoId?: string | null;
       page: string;
       dataConsent: HelpDataConsent;
     },
@@ -104,6 +107,8 @@ export const askApi = {
         message,
         thread_id: params.threadId,
         channel_ids: params.channelIds,
+        page_channel_id: params.pageChannelId ?? null,
+        page_video_id: params.pageVideoId ?? null,
         page: params.page,
         data_consent: params.dataConsent,
       },

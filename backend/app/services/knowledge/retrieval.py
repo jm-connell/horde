@@ -182,6 +182,32 @@ def _pick(
     return picked
 
 
+# Above any fused score (at most about 2 / (k + 1)): the watched video's
+# matching passages come first.
+_FOCUS_BOOST = 0.05
+
+
+def _boost_video(
+    session: Session, scores: dict[int, float], channel: KbChannel, yt_id: str
+) -> None:
+    if not scores:
+        return
+    focus = set(
+        session.exec(
+            select(KbChunk.id)
+            .join(KbVideo, col(KbVideo.id) == col(KbChunk.kb_video_id))
+            .where(
+                KbVideo.kb_channel_id == require_id(channel),
+                KbVideo.yt_id == yt_id,
+                col(KbChunk.id).in_(list(scores)),
+            )
+        ).all()
+    )
+    for chunk_id in focus:
+        if chunk_id is not None:
+            scores[chunk_id] += _FOCUS_BOOST
+
+
 def retrieve(
     session: Session,
     cache: VectorCache,
@@ -190,8 +216,12 @@ def retrieve(
     expansion: Expansion,
     *,
     budget_chars: int,
+    focus_yt_id: str | None = None,
 ) -> list[Excerpt]:
-    """Numbered excerpts for ``question`` from ``channels``, oldest first."""
+    """Numbered excerpts for ``question`` from ``channels``, oldest first.
+
+    ``focus_yt_id`` is the video being watched: its matching passages rank first.
+    """
     terms = expansion.terms + kb_search.query_terms(question)
     query_vector = embed_query(expansion.search or question)
     # Only vectors from the current model compare with the query's.
@@ -199,7 +229,11 @@ def retrieve(
     share = max(2000, budget_chars // max(1, len(channels)))
     picked: list[tuple[KbChannel, KbChunk, KbVideo]] = []
     for channel in channels:
-        scores = _channel_candidates(session, cache, channel, terms, query_vector, model)
+        scores = _channel_candidates(
+            session, cache, channel, terms, query_vector, model
+        )
+        if focus_yt_id:
+            _boost_video(session, scores, channel, focus_yt_id)
         picked.extend(
             (channel, c, v) for c, v in _pick(session, channel, scores, share)
         )

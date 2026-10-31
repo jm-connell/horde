@@ -1602,6 +1602,12 @@ class AskChatRequest(BaseModel):
     #: Channels the chat is about when the question names none: the channel page
     #: it was opened on, or the previous answer's channels.
     channel_ids: list[int] = Field(default_factory=list, max_length=8)
+    #: The Ask channel of the page the user is on (a channel page, or the
+    #: channel of the video being watched): answered from when the question
+    #: names no channel and is not about Horde itself.
+    page_channel_id: int | None = None
+    #: The YouTube id of the video being watched: its passages come first.
+    page_video_id: str | None = Field(default=None, max_length=32)
     #: Where the user is in the app (Ask about Horde only).
     page: str | None = Field(default=None, max_length=300)
     data_consent: Literal["off", "local", "cloud"] = "off"

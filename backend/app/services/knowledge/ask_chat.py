@@ -87,9 +87,17 @@ def searchable_channels(session: Session) -> list[KbChannel]:
 
 
 def pick_scope(
-    session: Session, message: str, channel_ids: list[int] | None
+    session: Session,
+    message: str,
+    channel_ids: list[int] | None,
+    page_channel_id: int | None = None,
 ) -> list[KbChannel]:
-    """The channels this turn answers from; empty for Ask about Horde."""
+    """The channels this turn answers from; empty for Ask about Horde.
+
+    In order: every channel ("all my channels"), the channels the question
+    names, the channels the chat is about, the page's channel (unless the
+    question is about Horde itself), else none.
+    """
     channels = searchable_channels(session)
     if routing.asks_all_channels(message):
         return channels
@@ -97,7 +105,12 @@ def pick_scope(
     if named:
         return named
     wanted = set(channel_ids or [])
-    return [c for c in channels if c.id in wanted]
+    chosen = [c for c in channels if c.id in wanted]
+    if chosen:
+        return chosen
+    if page_channel_id is not None and not routing.about_horde(message):
+        return [c for c in channels if c.id == page_channel_id]
+    return []
 
 
 def most_relevant(
@@ -242,6 +255,7 @@ def _channel_turn(
     channels: list[KbChannel],
     user: AuthUser,
     authorized: ai_chat.Authorized | None,
+    focus_yt_id: str | None = None,
 ) -> Generator[str]:
     allowed, reason = llm_features_allowed()
     if not allowed:
@@ -286,6 +300,7 @@ def _channel_turn(
         message,
         expansion,
         budget_chars=_BUDGET[strength],
+        focus_yt_id=focus_yt_id,
     )
     scope = {"channels": [{"id": c.id, "name": c.channel_name} for c in channels]}
     if not excerpts:
@@ -346,6 +361,8 @@ def stream_ask_events(
     page: str | None,
     data_consent: str,
     authorized: ai_chat.Authorized | None = None,
+    page_channel_id: int | None = None,
+    page_video_id: str | None = None,
 ) -> Generator[str]:
     """SSE events for one turn (the route has checked ``thread_id`` belongs to ``user``).
 
@@ -362,6 +379,8 @@ def stream_ask_events(
             page=page,
             data_consent=data_consent,
             authorized=authorized,
+            page_channel_id=page_channel_id,
+            page_video_id=page_video_id,
         ):
             if started is None and thread_id is None and _event_type(event) == "thread":
                 started = json.loads(event.removeprefix("data: "))["id"]
@@ -380,9 +399,11 @@ def _turn_events(
     page: str | None,
     data_consent: str,
     authorized: ai_chat.Authorized | None,
+    page_channel_id: int | None,
+    page_video_id: str | None,
 ) -> Generator[str]:
     with Session(get_engine()) as session:
-        channels = pick_scope(session, message, channel_ids)
+        channels = pick_scope(session, message, channel_ids, page_channel_id)
         if thread_id is None:
             thread_id = require_id(threads.start(session, user.id, message))
         thread = threads.owned_or_404(session, thread_id, user.id)
@@ -393,7 +414,13 @@ def _turn_events(
         if channels:
             try:
                 yield from _channel_turn(
-                    session, thread_id, message, channels, user, authorized
+                    session,
+                    thread_id,
+                    message,
+                    channels,
+                    user,
+                    authorized,
+                    focus_yt_id=page_video_id,
                 )
             except Exception:
                 logger.warning("Ask: channel turn failed", exc_info=True)
