@@ -4,13 +4,25 @@ Status: **Proposed**. Nothing here is built yet. This is the plan to agree on be
 
 ## Goal
 
-Let users add YouTube channels to a server-wide knowledge base, let Horde index every upload's captions in the background (however long that takes), and then:
+The feature is called **Ask**. Let users turn on Ask for YouTube channels (a server-wide set), let Horde index every upload's captions in the background (however long that takes), and then:
 
 - **search** what was said across those channels, with links to the moment (works without AI),
-- **ask** one channel, several picked channels, or **Auto** (Horde picks the relevant channels), and get an answer built only from what they said, every claim linked to a video and timestamp,
-- see **viewpoints**: where channels agree and where they differ ("Channel A recommends X; Channel B disagrees because Y").
+- **ask** one channel ("Ask LinusTechTips…" on the channel's page), several picked channels, or **Auto** (Horde picks the relevant channels), and get an answer built only from what they said, every claim linked to a video and timestamp,
+- see **viewpoints**: where channels agree and where they differ ("Channel A recommends X; Channel B disagrees because Y"),
+- come back to earlier conversations (saved per user on the server).
 
-Non-goals for the first version: transcribing videos without captions (Whisper), non-English captions, sites other than YouTube, finding a channel by name (paste a channel URL or `@handle`), saving threads on the server.
+Non-goals for the first version: transcribing videos without captions (Whisper), non-English captions, sites other than YouTube, finding a channel by name (paste a channel URL or `@handle`), AI-written per-video summaries (see [Video summaries](#video-summaries-not-in-the-first-version)).
+
+## Decisions
+
+| Question | Decision |
+|---|---|
+| Who adds and removes Ask channels | The admin, and members granted the new **Manage Ask channels** permission (`manage_ask`, off by default, a checkbox when the admin creates or edits an account) |
+| Who searches and asks | Every signed-in user can search; asking needs `use_ai` |
+| Live streams | Off by default. When Ask is turned on for a channel that has past live streams, the dialog offers "Also index live streams" (off) |
+| Name | "Ask" everywhere: the page, the channel switch ("Turn on Ask"), the per-channel prompt ("Ask <channel>…") |
+| Conversations | Saved on the server per user (private to that user), listed on the Ask page, deletable |
+| Per-video AI summaries | Not in the first version; the creator's title and description serve as the video-level signal instead |
 
 ## Fit with existing code
 
@@ -32,12 +44,14 @@ Non-goals for the first version: transcribing videos without captions (Whisper),
 
 All in `horde.db`. No foreign keys to catalog rows.
 
-- **`kb_channels`**: `id`, `channel_url`, `channel_name`, `include_streams` (bool), `max_videos` (null = all), `status` (`queued` / `listing` / `indexing` / `ready` / `paused` / `error`), `embed_model`, `embed_dim`, `last_listed_at`, `last_error`, `added_by` (FK users, `ON DELETE SET NULL`), timestamps. Uniqueness by channel identity (the catalog's identity keys), not by URL string.
-- **`kb_videos`**: `id`, `kb_channel_id` (FK, cascade), `yt_id`, `title`, `published_at`, `duration`, `is_stream`, `fetch_status` (`pending` / `fetched` / `no_captions` / `members_only` / `failed`), `attempts`, `next_attempt_at`, `caption_auto`, `cues` (zlib JSON of cleaned `[start, text]`, so re-chunking never re-fetches), unique `(kb_channel_id, yt_id)`.
-- **`kb_chunks`**: `id`, `kb_video_id` (FK, cascade), `kb_channel_id` (denormalised for filtering), `chunk_index`, `start_sec`, `end_sec`, `text`.
+- **`kb_channels`**: `id`, `channel_url`, `channel_name`, `include_streams` (bool, default false), `max_videos` (null = all), `status` (`queued` / `listing` / `indexing` / `ready` / `paused` / `error`), `embed_model`, `embed_dim`, `last_listed_at`, `last_error`, `added_by` (FK users, `ON DELETE SET NULL`), timestamps. Uniqueness by channel identity (the catalog's identity keys), not by URL string.
+- **`kb_videos`**: `id`, `kb_channel_id` (FK, cascade), `yt_id`, `title`, `description`, `published_at`, `duration`, `is_stream`, `fetch_status` (`pending` / `fetched` / `no_captions` / `members_only` / `failed`), `attempts`, `next_attempt_at`, `caption_auto`, `cues` (zlib JSON of cleaned `[start, text]`, so re-chunking never re-fetches), unique `(kb_channel_id, yt_id)`.
+- **`kb_chunks`**: `id`, `kb_video_id` (FK, cascade), `kb_channel_id` (denormalised for filtering), `chunk_index`, `start_sec`, `end_sec`, `text`. Chunk `-1` is the video's **title and description** (written by the creator), so a video can be found by what it is about even when its passages never use the question's words; it is cited as "description", not as something said.
 - **`kb_chunks_fts`**: FTS5, external content on `kb_chunks.text`. Triggers use the external-content form (`INSERT INTO kb_chunks_fts(kb_chunks_fts, rowid, text) VALUES('delete', old.id, old.text)`), and the update trigger is `AFTER UPDATE OF text`.
 - **`kb_chunk_vectors`** (phase 2): `chunk_id` (PK, FK cascade), `vector` stored as **float16** (model and dimension live on `kb_channels`). Kept apart from the text so text reads do not walk overflow pages and embed writes do not touch text rows.
 - **`ai_jobs`** (phase 2): new nullable `kb_channel_id` (FK, cascade) and the new kind in the `aijobkind` enum.
+- **`ask_threads`** (phase 2): `id`, `user_id` (FK, cascade), `title` (the first question, trimmed), `scope` (JSON: channel ids, or auto), `created_at`, `updated_at`.
+- **`ask_messages`** (phase 2): `id`, `thread_id` (FK, cascade), `role`, `content`, `sources` (JSON snapshot per citation: channel name, video title, YouTube id, start second, passage), `cost`, `model`, `created_at`. The snapshot keeps old answers' links working after a channel is removed. A turn is a few KB, so threads are negligible next to the index. Only the question and answer text of earlier turns go back into the prompt, never their excerpts.
 
 Progress counts come from `COUNT` queries, not stored counters.
 
@@ -45,11 +59,11 @@ Progress counts come from `COUNT` queries, not stored counters.
 
 ## Indexing (phase 1: no AI needed)
 
-1. **Add a channel** by URL or `@handle` (through `url_safety`), from the Ask page or the channel settings sheet. Options: include past live streams (default on), video limit (default all; Shorts are never listed).
+1. **Turn on Ask for a channel** by URL or `@handle` (through `url_safety`), from the Ask page or the channel settings sheet. The dialog first loads a preview (one gated request per tab): channel name, number of videos, and whether the channel has past live streams; only then does it show "Also index live streams" (off). Video limit defaults to all; Shorts are never listed.
 2. **List** uploads with `fetch_channel_feed` for `videos` (and `streams`), paged, inside `call_gated` at background priority. Seed from an existing catalog first when there is one. Re-list daily for new uploads, plus early when `after_catalog_update` reports new rows for the same channel.
 3. **Fetch captions** in a new `knowledge` worker (in `WorkerRegistry`, skipped under `HORDE_E2E`, with startup recovery like `recover_catalog_jobs`):
    - a video already in the library with a caption file is read from disk;
-   - otherwise one gated subtitle-only call, after reserving the timedtext pacer at low priority; manual English captions preferred over auto;
+   - otherwise one gated subtitle-only call, after reserving the timedtext pacer at low priority; manual English captions preferred over auto. The same call's info dict carries the description, so descriptions cost no extra request;
    - outcomes `fetched`, `no_captions` and `members_only` are final; `failed` backs off and gives up after a few attempts.
    - About one video per 15 seconds: 500 videos take 2+ hours, longer after 429s. Newest uploads first, so search improves while it runs.
 4. **Chunk**: merged cues into windows of about 60–90 seconds (1,000–1,400 characters) with 15–20 seconds of overlap.
@@ -74,7 +88,18 @@ A turn, in a wrapper generator that streams `status` events ("Searching 2 channe
 5. **Answer** with `run_chat_turn` (Assistant model, a system prompt that requires citations and says to admit when the excerpts do not cover the question).
 6. **Citations**: the server keeps the `[S#]` map, drops invented ones, and sends source cards (thumbnail, title, date, timestamp, passage).
 
-Costs: extra calls pass `usage_kind="ask"`, so they are booked; the turn's reported cost adds them to the answer's. `OpenRouterBudgetExceeded` from any step ends the turn with the usual budget error. The SSE route follows help chat (`response_class=RAW, responses=EVENT_STREAM`). The thread stays in `sessionStorage`; no message table.
+Costs: extra calls pass `usage_kind="ask"`, so they are booked; the turn's reported cost adds them to the answer's. `OpenRouterBudgetExceeded` from any step ends the turn with the usual budget error. The SSE route follows help chat (`response_class=RAW, responses=EVENT_STREAM`). The turn is saved to `ask_threads` / `ask_messages` (a `ChatTarget` whose `add_message` writes there, with the sources snapshot on the answer).
+
+## Video summaries (not in the first version)
+
+An index-time job that writes one or two sentences per video was considered and left out:
+
+- **What it would help**: broad questions ("what does he think of Toyota overall?") where a whole video is on topic but few passages use the question's words; and channel choice for Auto.
+- **What it would hurt**: a two-sentence summary of a 40-minute video drops nearly everything, so passing mentions (the 4Runner in a Tacoma video) never appear in it; used as a filter, it would lose exactly the "every video that mentions X" answers. Summaries can also be wrong, and an answer built on a summary cites something the creator never said in those words.
+- **Cost**: one model call over each full transcript (several million tokens per channel; hours on a local GPU, competing with the library's AI jobs).
+- **Instead**: the creator's own title and description are indexed as each video's chunk `-1`, for free and without invented claims, and the title is in every passage's prefix.
+
+If real questions show broad topics being missed, add it later as an opt-in job that writes a **topic list with timestamps** (products, models, subjects) rather than prose, used only for ranking and as a label next to excerpts, never as something to cite.
 
 ## Auto and viewpoints (phase 3)
 
@@ -86,18 +111,25 @@ Costs: extra calls pass `usage_kind="ask"`, so they are booked; the turn's repor
 | Route | Who | Phase |
 |---|---|---|
 | `GET /api/knowledge/channels` | signed in (members see no model names or error texts) | 1 |
-| `POST /api/knowledge/channels` | admin | 1 |
-| `DELETE /api/knowledge/channels/{id}` | admin | 1 |
-| `POST /api/knowledge/channels/{id}/pause`, `/resume` | admin | 1 |
+| `GET /api/knowledge/channels/preview?url=` | `manage_ask` | 1 |
+| `POST /api/knowledge/channels` | `manage_ask` | 1 |
+| `PATCH /api/knowledge/channels/{id}` (streams on/off) | `manage_ask` | 1 |
+| `DELETE /api/knowledge/channels/{id}` | `manage_ask` | 1 |
+| `POST /api/knowledge/channels/{id}/pause`, `/resume` | `manage_ask` | 1 |
 | `GET /api/knowledge/search` | signed in | 1 |
-| `POST /api/knowledge/chat` (SSE) | `use_ai` | 2 |
+| `GET /api/knowledge/threads`, `GET /api/knowledge/threads/{id}` | `use_ai`, own threads only | 2 |
+| `DELETE /api/knowledge/threads/{id}` | `use_ai`, own threads only | 2 |
+| `POST /api/knowledge/chat` (SSE; new thread or `thread_id`) | `use_ai` | 2 |
+
+`manage_ask` is a new row in `PERMISSION_TABLE` ("Manage Ask channels", default off); the users API lists it, so the account form shows it without UI changes beyond its label.
 
 `response_model` everywhere except the SSE route, the error envelope, the CSRF header, classification in `tests/test_permissions.py`, regenerated `openapi.json` and `schema.d.ts`.
 
 ## Frontend
 
-- **Ask page** (`/ask`, lazy-loaded): channel list with progress, add box (admin), Search tab (phase 1), chat with channel picker and Auto (phases 2–3), source cards with play links. Nav entry for everyone once a channel exists (and always for the admin); the chat tab needs `use_ai` and AI on. `navLinks.ts` needs a predicate beyond a single permission.
-- **Channel settings sheet**: an "Ask" section (add, progress, remove).
+- **Ask page** (`/ask`, lazy-loaded): channel list with progress, add box (`manage_ask`), Search tab (phase 1), chat with channel picker and Auto plus the user's saved conversations (phases 2–3), source cards with play links. Nav entry for everyone once a channel exists (and always for `manage_ask`); the chat needs `use_ai` and AI on. `navLinks.ts` needs a predicate beyond a single permission.
+- **Channel page header**: for a channel with Ask on, an "Ask <channel>…" box that opens the Ask page with that channel selected and the question sent; while it is indexing, it shows progress instead.
+- **Channel settings sheet**: an "Ask" section (turn on with the preview dialog and the streams option, progress, streams switch, remove).
 - **Settings → AI → Jobs**: label for the new job kind (phase 2).
 - **Watch**: start time as described above.
 - Page-name maps: `helpPage.ts`, `customCss.ts`, the `pages` list in `help_catalog.json`. Follows `DESIGN.md` across all themes.
@@ -116,9 +148,9 @@ User guide page, this page, an ADR (knowledge in SQLite with FTS5 and float16 ve
 ## Phases
 
 1. **Collect and search**: tables, pacer, own listing, gated caption fetch, chunking, FTS, channel management, transcript search, Watch start time. No AI involved.
-2. **Ask**: embeddings (batched job, scheduler priority), query expansion, hybrid retrieval, citations, cost and budget handling.
+2. **Ask**: embeddings (batched job, scheduler priority), query expansion, hybrid retrieval, citations, cost and budget handling, saved conversations, the "Ask <channel>" box.
 3. **Auto and viewpoints.**
-4. **Later, if wanted**: finding channels by name, per-video digests for broad questions, saved threads, the user's own library as a source.
+4. **Later, if wanted**: finding channels by name, an opt-in topic-list job for broad questions, the user's own library as a source.
 
 ## Risks
 
