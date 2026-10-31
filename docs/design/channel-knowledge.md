@@ -21,7 +21,10 @@ Non-goals for the first version: transcribing videos without captions (Whisper),
 | Who searches and asks | Every signed-in user can search; asking needs `use_ai` |
 | Live streams | Off by default. When Ask is turned on for a channel that has past live streams, the dialog offers "Also index live streams" (off) |
 | Name | "Ask" everywhere: the page, the channel switch ("Turn on Ask"), the per-channel prompt ("Ask <channel>…") |
-| Conversations | Saved on the server per user (private to that user), listed on the Ask page, deletable |
+| Conversations | Saved on the server per user (private to that user), deletable. Ask about Horde conversations are saved the same way, so the chat panel has one history list |
+| Where the chat lives | One chat panel for everything: the existing Ask about Horde panel grows a channel mode. The Ask page keeps channel management and transcript search; the panel can expand for long answers |
+| How a turn picks its source | By naming a channel. A question that names one or more Ask channels (title, handle, or a close spelling) is answered from those channels; "all my channels" / "any channel" searches every ready channel; otherwise the turn is an Ask about Horde question. Opened from a channel page, the panel answers from that channel unless the question names others. The input hint says this, and every channel answer shows which channels it used. Matching is plain text (no extra model call) |
+| References | Every statement attributed to a channel carries a numbered marker, "(1)", and a reference list follows the answer: channel, video title, date and a timestamp link, to the library copy when downloaded, else the stream. The model writes markers only; the server resolves each to the exact caption line (see Citations) |
 | Per-video AI summaries | Not in the first version; the creator's title and description serve as the video-level signal instead |
 
 ## Fit with existing code
@@ -86,7 +89,7 @@ A turn, in a wrapper generator that streams `status` events ("Searching 2 channe
 3. **Hybrid retrieval per channel**: FTS (OR of quoted terms, `bm25`, limited) and vector top-k, fused with reciprocal rank fusion, grouped by video (best chunk plus number of hits), neighbouring windows merged.
 4. **Context**: per video the best 2–3 passages, labelled `[S3] <channel> · "<title>" (2021-05) @ 12:34`, sorted by date so a changed opinion shows.
 5. **Answer** with `run_chat_turn` (Assistant model, a system prompt that requires citations and says to admit when the excerpts do not cover the question).
-6. **Citations**: the server keeps the `[S#]` map, drops invented ones, and sends source cards (thumbnail, title, date, timestamp, passage).
+6. **Citations**: excerpts are numbered `[1]`, `[2]`… and the model marks attributed statements with those numbers only; it never writes a time. The server drops numbers it did not give, renumbers the rest in order of first use, and resolves each to a moment: it compares the sentence carrying the marker with the passage's stored caption lines (5-second lines) and links to the best-matching line, 2 seconds early. So "Linus said X (1)" opens where X is said, not where the 75-second passage starts. The reference list (channel, title, date, timestamp, the matching line) is saved with the answer.
 
 Costs: extra calls pass `usage_kind="ask"`, so they are booked; the turn's reported cost adds them to the answer's. `OpenRouterBudgetExceeded` from any step ends the turn with the usual budget error. The SSE route follows help chat (`response_class=RAW, responses=EVENT_STREAM`). The turn is saved to `ask_threads` / `ask_messages` (a `ChatTarget` whose `add_message` writes there, with the sources snapshot on the answer).
 
