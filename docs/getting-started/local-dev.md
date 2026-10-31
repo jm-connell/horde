@@ -110,7 +110,7 @@ Backend (from `backend/`, with the repo venv activated):
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-pytest
+pytest -n auto
 ```
 
 Frontend:

@@ -82,7 +82,7 @@ jobs:
       - name: OpenAPI export is up to date
         run: PYTHONPATH=. python -m app.export_openapi --check openapi.json
       - name: Run pytest
-        run: PYTHONPATH=. pytest -q
+        run: PYTHONPATH=. pytest -q -n auto --durations=20
 
   frontend:
     runs-on: ubuntu-latest

@@ -40,7 +40,7 @@ scripts/check.sh --e2e    # also run the Playwright suite
 | 2b | Backend types | `python -m mypy` in `backend/` (configuration in `pyproject.toml`; zero errors) |
 | 2c | Python lock file | `python scripts/check_requirements_lock.py` (`backend/requirements.lock` satisfies `requirements.txt`; see [Dependencies](../development/dependencies.md)) |
 | 3a | API schema | `python -m app.export_openapi --check openapi.json` in `backend/` (regenerate with `... openapi.json` when you change the API) |
-| 3 | Backend tests | `PYTHONPATH=. pytest -q` in `backend/` |
+| 3 | Backend tests | `PYTHONPATH=. pytest -q -n auto --durations=20` in `backend/` (pytest-xdist, one worker per CPU; lists the 20 slowest tests) |
 | 3b | API types | `npm run gen:api:check` in `frontend/` (regenerate `src/api/schema.d.ts` with `npm run gen:api` after regenerating `openapi.json`) |
 | 4 | Frontend lint | `npm run lint` (ESLint, zero warnings) |
 | 5 | Frontend format | `npm run format:check` (Prettier) |
@@ -68,7 +68,8 @@ Backend (from `backend/`, venv with `requirements.txt` + `requirements-dev.txt`)
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
 ruff check . && ruff format --check . && mypy
-pytest
+pytest -n auto              # whole suite, one worker process per CPU
+pytest tests/test_x.py      # one file: serial is faster than starting workers
 ```
 
 Frontend:
@@ -151,6 +152,8 @@ def test_example(client, add_video):
 ```
 
 Stub outbound work with `monkeypatch` (see `test_api_downloads.py` for `extract_preview`). Do not start uvicorn or Vite inside pytest.
+
+The suite runs under pytest-xdist (`-n auto`), so tests are spread over several worker processes in no fixed order. Each worker has its own process-wide state (queues, caches, the active `AppContext`) and its own `tmp_path` root, so a test must not depend on another having run first, must write only under `tmp_path`, and must not bind a fixed port. A thread a test starts must end before the test does: `tmp_dirs` stops the download and ffmpeg queues and `_join_background_workers` drains the sprite pool, and a thread still running then fails the test. If a test fails only in parallel, rerun its file serially, then the whole suite with `-n 4`, to tell an ordering dependency from a timing one; fix the isolation rather than pinning the test to one worker.
 
 Frontend: colocate `*.test.ts` next to the pure helper. Vitest is configured with `environment: "node"` — keep it for formatters, URL parsing, and layout math. Page chrome belongs in `frontend/e2e/` (Playwright), which drives the production bundle and must stay offline.
 
