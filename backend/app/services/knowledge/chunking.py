@@ -67,7 +67,11 @@ def build_passages(lines: list[Line]) -> list[Passage]:
             break
         # Next passage starts OVERLAP_SEC before this one ended, but always moves on.
         nxt = j
-        while nxt - 1 > i and lines[nxt - 1][0] >= end - OVERLAP_SEC:
+        while (
+            nxt - 1 > i
+            and lines[nxt - 1][0] >= end - OVERLAP_SEC
+            and lines[nxt - 1][0] > start
+        ):
             nxt -= 1
         i = nxt
     return passages

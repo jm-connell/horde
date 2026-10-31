@@ -1,7 +1,7 @@
 """Turn the model's ``[n]`` excerpt citations into a numbered reference list.
 
 The model cites excerpt numbers only; it never writes a time. Here each citation
-is checked (numbers the model was not given are dropped), resolved to the exact
+is checked (numbers the model was not given are dropped, code is skipped), resolved to the exact
 caption line its sentence talks about (``moments``), and renumbered in order of
 first use, so the answer reads "… [1] … [2]" with references 1, 2, … below it.
 The same excerpt cited by sentences about different moments becomes two
@@ -19,6 +19,8 @@ from .chunking import Line
 from .retrieval import Excerpt
 
 _CITE = re.compile(r"\s?\[(\d{1,3}(?:\s*[,;]\s*\d{1,3})*)\]")
+# Code (fenced or inline) is left as written: ``arr[0]`` is not a citation.
+_CODE = re.compile(r"```.*?```|`[^`\n]*`", re.DOTALL)
 _SENTENCE_END = re.compile(r"[.!?…](?=\s)|\n")
 
 
@@ -91,7 +93,35 @@ def resolve(
                 refs[key] = ref
             if ref.n not in numbers:
                 numbers.append(ref.n)
-        return "".join(f"[{n}]" for n in numbers)
+        if numbers:
+            return "".join(f"[{n}]" for n in numbers)
+        # Numbers it was not given: an invented citation (after a space) goes,
+        # but "items[5]", glued to a word, is not a citation and stays.
+        glued = (
+            not match.group(0)[0].isspace()
+            and reply[match.start() - 1 : match.start()].isalnum()
+        )
+        return match.group(0) if glued else ""
 
-    content = _CITE.sub(replace, reply)
-    return content.strip(), sorted(refs.values(), key=lambda r: r.n)
+    parts: list[str] = []
+    last = 0
+    for code in _CODE.finditer(reply):
+        parts.append(_cite_outside_code(reply, last, code.start(), replace))
+        parts.append(code.group(0))
+        last = code.end()
+    parts.append(_cite_outside_code(reply, last, len(reply), replace))
+    return "".join(parts).strip(), sorted(refs.values(), key=lambda r: r.n)
+
+
+def _cite_outside_code(
+    reply: str, start: int, end: int, replace: Callable[[re.Match[str]], str]
+) -> str:
+    """``reply[start:end]`` with its citations replaced (matches keep their offsets)."""
+    out: list[str] = []
+    pos = start
+    for match in _CITE.finditer(reply, start, end):
+        out.append(reply[pos : match.start()])
+        out.append(replace(match))
+        pos = match.end()
+    out.append(reply[pos:end])
+    return "".join(out)

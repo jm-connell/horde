@@ -429,14 +429,16 @@ def test_embedding_batches_and_vector_search(session, init_db, monkeypatch):
     assert all(v.embedded_model == "emb" for v in session.exec(select(KbVideo)))
 
     cache = init_db["ctx"].knowledge.vectors
-    hits = vectors.top_chunks(session, cache, channel, [1.0, 0.0, 0.0], 3)
+    hits = vectors.top_chunks(session, cache, channel, [1.0, 0.0, 0.0], 3, model="emb")
     assert hits and hits[0][1] == pytest.approx(1.0, abs=1e-3)
     # A new embedding model: old vectors are left out until re-embedded.
     monkeypatch.setattr(embed, "resolve_embed_model", lambda *_: "emb2")
     embed.embed_channel_batch(session, channel.id)
     session.refresh(channel)
     assert channel.embed_model == "emb2"
-    found = vectors.top_chunks(session, cache, channel, [1.0, 0.0, 0.0], 50)
+    found = vectors.top_chunks(
+        session, cache, channel, [1.0, 0.0, 0.0], 50, model="emb2"
+    )
     embedded = {
         c.id
         for v in session.exec(select(KbVideo).where(KbVideo.embedded_model == "emb2"))
@@ -493,3 +495,152 @@ def test_two_named_channels_are_compared_from_both(client, session, llm):
         "ChrisFix",
         "The Car Care Nut",
     }
+
+
+def test_references_leave_code_and_glued_numbers_alone():
+    excerpts = [_excerpt(1, 10, 0.0, 75.0), _excerpt(5, 50, 0.0, 75.0)]
+    reply = "Use `arr[1]` and items[7] here [1][5]. Made up [9]."
+    content, refs = references.resolve(reply, excerpts, lambda _v: LINES)
+    assert content == "Use `arr[1]` and items[7] here[1][2]. Made up."
+    assert [r.n for r in refs] == [1, 2]
+
+
+# --- review regressions ----------------------------------------------------------
+
+
+def test_one_failing_video_does_not_block_the_channel(session, monkeypatch):
+    channel = _channel(session)
+    bad = _indexed_video(session, channel, "aaaaaaaaaaa", BELT_VTT, position=0)
+    good = _indexed_video(session, channel, "bbbbbbbbbbb", BELT_VTT, position=1)
+
+    calls: list[int] = []
+
+    class Picky:
+        def embed_many(self, texts, model, **kwargs):
+            calls.append(len(texts))
+            if len(calls) == 1:
+                raise RuntimeError("this video always fails")
+            return [[1.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr(embed, "get_embed_provider", lambda: Picky())
+    monkeypatch.setattr(embed, "resolve_embed_model", lambda *_: "emb")
+    monkeypatch.setattr(embed, "_enqueue", lambda cid, force=False: None)
+    assert channel.id is not None
+    assert embed.embed_channel_batch(session, channel.id) is None
+    session.refresh(bad)
+    session.refresh(good)
+    assert good.embedded_model == "emb"
+    assert bad.embedded_model == "failed:emb"  # skipped until the model changes
+    assert not embed._has_work(session, channel.id, "emb")
+    assert embed._has_work(session, channel.id, "emb2")
+
+
+def test_a_batch_where_nothing_works_fails_and_waits(session, monkeypatch, init_db):
+    from app.models import AiJob, AiJobKind, AiJobStatus
+
+    channel = _channel(session)
+    _indexed_video(session, channel, "aaaaaaaaaaa", BELT_VTT)
+
+    class Down:
+        def embed_many(self, texts, model, **kwargs):
+            raise RuntimeError("provider down")
+
+    monkeypatch.setattr(embed, "get_embed_provider", lambda: Down())
+    monkeypatch.setattr(embed, "resolve_embed_model", lambda *_: "emb")
+    monkeypatch.setattr(embed, "embeddings_configured", lambda: True)
+    assert channel.id is not None
+    with pytest.raises(RuntimeError):
+        embed.embed_channel_batch(session, channel.id)
+    session.add(
+        AiJob(
+            kind=AiJobKind.embed_kb_channel,
+            kb_channel_id=channel.id,
+            status=AiJobStatus.error,
+        )
+    )
+    session.commit()
+    assert embed.ensure_jobs() == 0  # backs off instead of retrying at once
+
+
+def test_non_object_expansion_falls_back(monkeypatch):
+    class Provider:
+        last_cost = None
+
+        def chat(self, *a, **k):
+            return '["timing belt", "4.7"]'
+
+    assert retrieval.expand(Provider(), "m", "q", ["c"]) == retrieval.Expansion()
+
+
+def test_a_crash_while_answering_is_an_error_event(client, session, llm, monkeypatch):
+    _indexed_video(session, _channel(session), "aaaaaaaaaaa", BELT_VTT)
+
+    def boom(*a, **k):
+        raise RuntimeError("bug")
+
+    monkeypatch.setattr(retrieval, "retrieve", boom)
+    events = _events(
+        client.post("/api/ask/chat", json={"message": "car care nut belt?"}).text
+    )
+    assert events[-1]["type"] == "error"
+    # The conversation it started holds nothing, so it is gone again.
+    assert session.exec(select(AskThread)).all() == []
+
+
+def test_members_see_no_model_or_cost_in_the_stream(member_client, session, llm):
+    _indexed_video(session, _channel(session), "aaaaaaaaaaa", BELT_VTT)
+    llm["replies"] = ["Change it [1]."]
+    events = _events(
+        member_client.post("/api/ask/chat", json={"message": "car care nut belt?"}).text
+    )
+    done = events[-1]
+    assert done["type"] == "done"
+    assert "model" not in done and "cost" not in done
+    assert "model" not in done["message"] and "cost" not in done["message"]
+
+
+def test_old_model_vectors_are_not_compared_with_a_new_query(
+    session, init_db, monkeypatch
+):
+    channel = _channel(session)
+    _indexed_video(session, channel, "aaaaaaaaaaa", BELT_VTT)
+
+    class Provider:
+        def embed_many(self, texts, model, **kwargs):
+            return [[1.0, 0.0, 0.0] for _ in texts]
+
+    monkeypatch.setattr(embed, "get_embed_provider", lambda: Provider())
+    monkeypatch.setattr(embed, "resolve_embed_model", lambda *_: "old")
+    monkeypatch.setattr(embed, "_enqueue", lambda cid, force=False: None)
+    assert channel.id is not None
+    embed.embed_channel_batch(session, channel.id)
+    session.refresh(channel)
+    cache = init_db["ctx"].knowledge.vectors
+    assert vectors.top_chunks(session, cache, channel, [1.0, 0.0, 0.0], 3, model="old")
+    assert (
+        vectors.top_chunks(session, cache, channel, [1.0, 0.0, 0.0], 3, model="new")
+        == []
+    )
+
+
+def test_library_ai_jobs_go_before_a_window_of_ask_jobs(session, add_video):
+    from datetime import timedelta
+
+    from app.models import AiJob, AiJobKind, utcnow
+    from app.services.ai import worker as ai_worker
+
+    old = utcnow() - timedelta(hours=1)
+    for i in range(40):
+        channel = _channel(session, f"Channel {i}", f"https://youtube.com/@c{i}")
+        session.add(
+            AiJob(
+                kind=AiJobKind.embed_kb_channel,
+                kb_channel_id=channel.id,
+                created_at=old,
+            )
+        )
+    video = add_video()
+    session.add(AiJob(kind=AiJobKind.embed_video, video_id=video.id))
+    session.commit()
+    job = ai_worker._next_job(session, llm_ok=True, embed_ok=True)
+    assert job is not None and job.kind == AiJobKind.embed_video

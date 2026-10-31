@@ -198,7 +198,7 @@ def remove_channel(channel_id: int, session: Session = Depends(get_session)):
 @router.get("/search", response_model=AskSearchPage)
 def search(
     q: str = Query(..., min_length=1, max_length=300),
-    channel_id: list[int] | None = Query(default=None),
+    channel_id: list[int] | None = Query(default=None, max_length=50),
     limit: int = Query(30, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=500),
     session: Session = Depends(get_session),

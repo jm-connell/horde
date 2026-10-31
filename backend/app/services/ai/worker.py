@@ -951,29 +951,19 @@ def _compute_blocked_reason(
 
 def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> AiJob | None:
     now = utcnow()
-    jobs = session.exec(
-        select(AiJob)
-        .where(AiJob.status == AiJobStatus.queued)
-        .where((col(AiJob.run_after).is_(None)) | (col(AiJob.run_after) <= now))
-        .order_by(col(AiJob.created_at).asc())
-        .limit(32)
-    ).all()
     # Library work first: Ask's channel embedding is a long backlog that must not
     # hold up a new download's embedding, summary or tags.
-    jobs = sorted(jobs, key=lambda j: j.kind in _BACKGROUND_KINDS)
-    for job in jobs:
-        if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
-            return job
-    if len(jobs) == 32:
-        # A full window of Ask jobs could hide library jobs behind it.
-        for job in session.exec(
+    for background in (False, True):
+        kinds = col(AiJob.kind).in_(_BACKGROUND_KINDS)
+        jobs = session.exec(
             select(AiJob)
             .where(AiJob.status == AiJobStatus.queued)
-            .where(col(AiJob.kind).not_in(_BACKGROUND_KINDS))
+            .where(kinds if background else ~kinds)
             .where((col(AiJob.run_after).is_(None)) | (col(AiJob.run_after) <= now))
             .order_by(col(AiJob.created_at).asc())
             .limit(32)
-        ).all():
+        ).all()
+        for job in jobs:
             if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
                 return job
     return None

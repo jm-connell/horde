@@ -102,8 +102,12 @@ def list_due_channel() -> bool:
         return True
     with Session(get_engine()) as session:
         channel = session.get(KbChannel, channel_id)
-        # Removed or paused while listing.
-        if channel is None or channel.status != KbChannelStatus.listing:
+        # Removed, paused or its streams choice changed while listing.
+        if (
+            channel is None
+            or channel.status != KbChannelStatus.listing
+            or channel.include_streams != include_streams
+        ):
             return True
         added = indexing.apply_listing(session, channel, found)
         indexing.finish_if_done(session, channel_id)

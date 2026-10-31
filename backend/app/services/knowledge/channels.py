@@ -98,6 +98,9 @@ def set_streams(session: Session, channel: KbChannel, include: bool) -> None:
         return
     channel.include_streams = include
     channel.updated_at = utcnow()
+    if channel.status == KbChannelStatus.listing:
+        # The listing in flight used the old choice: list again.
+        channel.status = KbChannelStatus.queued
     if include:
         if channel.status != KbChannelStatus.paused:
             channel.status = KbChannelStatus.queued

@@ -142,8 +142,11 @@ def fetch_remote(yt_id: str) -> CaptionResult:
     except Exception as exc:
         kind, message = classify_ytdlp_error(exc, url=url)
         logger.info("Ask: captions for %s failed (%s)", yt_id, kind, exc_info=True)
-        if kind in (ERROR_KIND_MEMBERS, ERROR_KIND_COOKIES):
+        if kind == ERROR_KIND_MEMBERS:
             return CaptionResult(MEMBERS_ONLY, message=message)
+        if kind == ERROR_KIND_COOKIES:
+            # Age-restricted: retried later, so configuring cookies can fix it.
+            return CaptionResult(FAILED, message=message)
         if kind == ERROR_KIND_UNAVAILABLE:
             return CaptionResult(NO_CAPTIONS, message=message)
         if kind in _RETRY_KINDS:

@@ -20,6 +20,7 @@ from sqlmodel import Session, col, select
 
 from ...models import KbChannel, KbChunk, KbVideo, Video, require_id
 from ..ai.embeddings import embed_query
+from ..ai.provider import resolve_embed_model
 from . import chunking
 from . import search as kb_search
 from .vectors import VectorCache, top_chunks
@@ -79,11 +80,17 @@ def expand(provider, model: str, question: str, channel_names: list[str]) -> Exp
             usage_kind="ask",
         )
         data = json.loads(raw)
+        raw_terms = data.get("terms") if isinstance(data, dict) else None
+        search = data.get("search") if isinstance(data, dict) else None
     except Exception:
         logger.info("Ask: query expansion failed; using the question", exc_info=True)
         return Expansion()
-    terms = [str(t).strip() for t in data.get("terms") or [] if str(t).strip()]
-    return Expansion(terms=terms[:12], search=str(data.get("search") or "").strip())
+    terms = (
+        [str(t).strip() for t in raw_terms if str(t).strip()]
+        if isinstance(raw_terms, list)
+        else []
+    )
+    return Expansion(terms=terms[:12], search=str(search or "").strip())
 
 
 def _fuse(rankings: list[list[int]]) -> dict[int, float]:
@@ -100,6 +107,7 @@ def _channel_candidates(
     channel: KbChannel,
     terms: list[str],
     query_vector: list[float] | None,
+    model: str,
 ) -> dict[int, float]:
     keyword = [
         h.chunk_id
@@ -113,7 +121,7 @@ def _channel_candidates(
             [
                 c
                 for c, _ in top_chunks(
-                    session, cache, channel, query_vector, _CANDIDATES
+                    session, cache, channel, query_vector, _CANDIDATES, model=model
                 )
             ]
         )
@@ -186,10 +194,12 @@ def retrieve(
     """Numbered excerpts for ``question`` from ``channels``, oldest first."""
     terms = expansion.terms + kb_search.query_terms(question)
     query_vector = embed_query(expansion.search or question)
+    # Only vectors from the current model compare with the query's.
+    model = resolve_embed_model()
     share = max(2000, budget_chars // max(1, len(channels)))
     picked: list[tuple[KbChannel, KbChunk, KbVideo]] = []
     for channel in channels:
-        scores = _channel_candidates(session, cache, channel, terms, query_vector)
+        scores = _channel_candidates(session, cache, channel, terms, query_vector, model)
         picked.extend(
             (channel, c, v) for c, v in _pick(session, channel, scores, share)
         )

@@ -72,9 +72,18 @@ def top_chunks(
     channel: KbChannel,
     query: list[float],
     k: int,
+    *,
+    model: str,
 ) -> list[tuple[int, float]]:
-    """``(chunk_id, cosine)`` of the channel's ``k`` passages closest to ``query``."""
-    if not channel.embed_model or channel.embed_dim != len(query) or channel.id is None:
+    """``(chunk_id, cosine)`` of the channel's ``k`` passages closest to ``query``.
+
+    ``model`` embedded the query; a channel not yet re-embedded with it has none.
+    """
+    if (
+        channel.embed_model != model
+        or channel.embed_dim != len(query)
+        or channel.id is None
+    ):
         return []
     fp = _fingerprint(session, channel)
     with cache.lock:

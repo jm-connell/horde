@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 from sqlmodel import Session, col, func, select
 
 from ...models import KbChannel, KbChannelStatus, KbChunk, KbVideo, require_id, utcnow
@@ -14,6 +14,8 @@ from .listing import Listing
 
 # Failures other than rate limits: retry this many times, an hour apart and growing.
 MAX_ATTEMPTS = 3
+# Rate limits and bot checks: back off this many times before giving up.
+MAX_RETRIES = 6
 _FAILED_RETRY = timedelta(hours=1)
 PENDING = "pending"
 # States after which a video is not fetched again.
@@ -46,9 +48,17 @@ def apply_listing(session: Session, channel: KbChannel, listing: Listing) -> int
         channel.channel_name = listing.channel_name
     channel.last_listed_at = utcnow()
     channel.last_error = None
-    channel.status = KbChannelStatus.indexing
     channel.updated_at = utcnow()
     session.add(channel)
+    # Only while still listing: a pause or a changed streams choice meanwhile wins.
+    session.execute(
+        update(KbChannel)
+        .where(
+            col(KbChannel.id) == channel_id,
+            col(KbChannel.status) == KbChannelStatus.listing,
+        )
+        .values(status=KbChannelStatus.indexing)
+    )
     session.commit()
     return added
 
@@ -106,7 +116,11 @@ def apply_result(
     elif result.status == captions.RETRY:
         video.attempts += 1
         backoff = backoff_seconds(video.attempts)
-        video.next_attempt_at = now + timedelta(seconds=backoff)
+        if video.attempts >= MAX_RETRIES:
+            # A bot check or PO token problem that never clears: stop asking.
+            video.fetch_status = captions.FAILED
+        else:
+            video.next_attempt_at = now + timedelta(seconds=backoff)
     else:
         video.attempts += 1
         if video.attempts >= MAX_ATTEMPTS:

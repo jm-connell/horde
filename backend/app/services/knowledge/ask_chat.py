@@ -24,6 +24,7 @@ from sqlmodel import Session, col, func, select
 from ...context import current, get_engine
 from ...models import (
     AskMessage,
+    AskThread,
     KbChannel,
     KbChannelStatus,
     KbChunk,
@@ -346,7 +347,40 @@ def stream_ask_events(
     data_consent: str,
     authorized: ai_chat.Authorized | None = None,
 ) -> Generator[str]:
-    """SSE events for one turn (the route has checked ``thread_id`` belongs to ``user``)."""
+    """SSE events for one turn (the route has checked ``thread_id`` belongs to ``user``).
+
+    A conversation started here that ends without a message (AI off, model
+    missing, an error) is deleted again, so History holds no empty ones.
+    """
+    started: int | None = None
+    try:
+        for event in _turn_events(
+            user,
+            message,
+            thread_id=thread_id,
+            channel_ids=channel_ids,
+            page=page,
+            data_consent=data_consent,
+            authorized=authorized,
+        ):
+            if started is None and thread_id is None and _event_type(event) == "thread":
+                started = json.loads(event.removeprefix("data: "))["id"]
+            yield event if user.is_admin else _for_member(event)
+    finally:
+        if started is not None:
+            _drop_if_empty(started)
+
+
+def _turn_events(
+    user: AuthUser,
+    message: str,
+    *,
+    thread_id: int | None,
+    channel_ids: list[int] | None,
+    page: str | None,
+    data_consent: str,
+    authorized: ai_chat.Authorized | None,
+) -> Generator[str]:
     with Session(get_engine()) as session:
         channels = pick_scope(session, message, channel_ids)
         if thread_id is None:
@@ -357,9 +391,20 @@ def stream_ask_events(
         threads.set_scope(session, thread, scope if channels else {"help": True})
         yield _sse({"type": "scope", **scope})
         if channels:
-            yield from _channel_turn(
-                session, thread_id, message, channels, user, authorized
-            )
+            try:
+                yield from _channel_turn(
+                    session, thread_id, message, channels, user, authorized
+                )
+            except Exception:
+                logger.warning("Ask: channel turn failed", exc_info=True)
+                session.rollback()
+                yield _sse(
+                    {
+                        "type": "error",
+                        "detail": "Answering failed; try again",
+                        "status": 500,
+                    }
+                )
             return
         history = threads.history(session, thread_id)
 
@@ -376,3 +421,31 @@ def stream_ask_events(
         authorized=authorized,
         store=store,
     )
+
+
+#: Shown to members instead of an error that names the model or the server.
+_MEMBER_AI_ERROR = "The AI is not available right now; ask the administrator"
+
+
+def _for_member(event: str) -> str:
+    """Members see no model names or costs (``docs/architecture/ai-pipeline.md``)."""
+    kind = _event_type(event)
+    if kind not in ("done", "error"):
+        return event
+    payload = json.loads(event.removeprefix("data: "))
+    if kind == "done":
+        payload.pop("model", None)
+        payload.pop("cost", None)
+        if isinstance(payload.get("message"), dict):
+            payload["message"].pop("model", None)
+            payload["message"].pop("cost", None)
+    elif payload.get("status") == 503:
+        payload["detail"] = _MEMBER_AI_ERROR
+    return _sse(payload)
+
+
+def _drop_if_empty(thread_id: int) -> None:
+    with Session(get_engine()) as session:
+        thread = session.get(AskThread, thread_id)
+        if thread is not None and not threads.messages(session, thread_id):
+            threads.delete(session, thread)

@@ -484,3 +484,65 @@ def test_search_links_to_the_matching_line(client, session):
     _index(session, _video(session, _channel(session), "aaaaaaaaaaa"), vtt)
     [hit] = client.get("/api/ask/search", params={"q": "head gasket"}).json()["items"]
     assert hit["start_sec"] == pytest.approx(40.0, abs=5.0)
+
+
+# --- review regressions ----------------------------------------------------------
+
+
+def test_turning_streams_off_during_a_listing_discards_it(client, session, monkeypatch):
+    channel = _channel(session, status=KbChannelStatus.queued, include_streams=True)
+    found = listing.Listing(
+        uploads=[listing.Upload("sssssssssss", "Stream", None, None, True, 0)]
+    )
+
+    def slow_listing(*a, **k):
+        # The user turns streams off while the listing runs.
+        r = client.patch(
+            f"/api/ask/channels/{channel.id}", json={"include_streams": False}
+        )
+        assert r.status_code == 200
+        return found
+
+    monkeypatch.setattr(listing, "list_channel", slow_listing)
+    assert worker.list_due_channel()
+    assert session.exec(select(KbVideo)).all() == []
+    session.refresh(channel)
+    assert channel.status == KbChannelStatus.queued  # listed again with the new choice
+
+
+def test_pausing_during_a_listing_stays_paused(client, session, monkeypatch):
+    channel = _channel(session, status=KbChannelStatus.queued)
+    found = listing.Listing(
+        uploads=[listing.Upload("aaaaaaaaaaa", "A", None, None, False, 0)]
+    )
+
+    def pause_then_list(*a, **k):
+        assert client.post(f"/api/ask/channels/{channel.id}/pause").status_code == 200
+        return found
+
+    monkeypatch.setattr(listing, "list_channel", pause_then_list)
+    worker.list_due_channel()
+    session.refresh(channel)
+    assert channel.status == KbChannelStatus.paused
+
+
+def test_dense_timestamps_do_not_multiply_passages():
+    lines = [(0.0, "word " * 30) for _ in range(100)]
+    passages = chunking.build_passages(lines)
+    # About 15,000 characters at 1,400 a passage, each line in one passage only
+    # (it used to step one line at a time: 87 near-copies).
+    assert len(passages) <= 12
+    assert sum(len(p.text) for p in passages) < 16_000
+
+
+def test_age_restricted_is_retried_and_rate_limits_give_up(session):
+    channel = _channel(session)
+    video = _video(session, channel, "abcdefghijk")
+    for _ in range(indexing.MAX_RETRIES):
+        indexing.apply_result(session, video, captions.CaptionResult(captions.RETRY))
+    assert video.fetch_status == captions.FAILED
+
+
+def test_search_caps_the_channel_list(client):
+    r = client.get("/api/ask/search", params={"q": "x", "channel_id": list(range(60))})
+    assert r.status_code == 422
