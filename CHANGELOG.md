@@ -7,6 +7,16 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Use my data** for Ask about Horde moved from a switch at the top of the
+  chat to Settings → Library, with three choices: **Off**, **AI on my
+  network only** and **Any AI, including cloud**. A line under them says
+  which AI you have and whether your data goes to it, and the assistant
+  links the setting when a question needs your data and it is off.
+- Ask about Horde has a one-line header (no subtitle) and suggests five
+  questions when it opens instead of three.
+
 ## [1.2.1] - 2026-10-30
 
 ### Added
@@ -53,13 +63,12 @@ All notable changes to Horde are documented here. The format follows
   (following one opens the right tab, scrolls to the setting and rings it),
   offers to change safe settings for you with an **Apply** button and
   **Undo** (riskier ones, such as AI keys, accounts and the storage limit,
-  it only links to), and with **Use my data** on (Settings → Library)
-  answers about your own downloads, history, playlists and library, sending
-  only what a question needs, and to a cloud AI only if you allow that
-  there. It offers to
+  it only links to), and with **Use my data** on answers about your own
+  downloads, history, playlists and library, sending only what a question
+  needs and asking first when the AI is a cloud service. It offers to
   download a link you give it or build a playlist from videos it found, and
   writes custom CSS you preview for 20 seconds before keeping it. Each
-  opening suggests five questions, starting with **What can you do?**
+  opening suggests three questions, starting with **What can you do?**
 - An optional **Assistant model** (Settings → AI → Models) gives Ask about
   Horde a stronger model than summaries and tags use. The assistant knows
   roughly how capable its model is and says when a bigger one would write
