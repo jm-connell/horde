@@ -34,6 +34,8 @@ interface HelpChatValue {
 interface HostValue {
   frame: HelpFrame | null;
   setFrame: (frame: HelpFrame) => void;
+  docked: boolean;
+  setDocked: (docked: boolean) => void;
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
@@ -64,6 +66,8 @@ const HostCtx = createContext<HostValue | null>(null);
 interface PanelState {
   open: boolean;
   frame: HelpFrame | null;
+  /** Docked as a full-height side panel the page makes room for (desktop). */
+  docked?: boolean;
 }
 
 function isFrame(v: unknown): v is HelpFrame {
@@ -77,7 +81,11 @@ function isFrame(v: unknown): v is HelpFrame {
 function isPanelState(v: unknown): v is PanelState {
   if (!v || typeof v !== "object") return false;
   const s = v as Record<string, unknown>;
-  return typeof s.open === "boolean" && (s.frame === null || isFrame(s.frame));
+  return (
+    typeof s.open === "boolean" &&
+    (s.frame === null || isFrame(s.frame)) &&
+    (s.docked === undefined || typeof s.docked === "boolean")
+  );
 }
 
 /**
@@ -136,6 +144,10 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     (frame: HelpFrame) => setState((s) => ({ ...s, frame })),
     []
   );
+  const setDocked = useCallback(
+    (docked: boolean) => setState((s) => ({ ...s, docked })),
+    []
+  );
   const value = useMemo(
     () => ({
       available,
@@ -152,6 +164,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     () => ({
       frame: state.frame,
       setFrame,
+      docked: !!state.docked,
+      setDocked,
       pageDetail: () => detail.current,
       openedHere,
       channelRequest,
@@ -161,6 +175,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     [
       state.frame,
       setFrame,
+      state.docked,
+      setDocked,
       openedHere,
       channelRequest,
       pendingChannelRequest,
@@ -188,6 +204,8 @@ export function HelpChatHost() {
     <ErrorBoundary scope="help-chat">
       <HelpChatPanel
         frame={host.frame}
+        docked={host.docked}
+        onDockedChange={host.setDocked}
         onFrameChange={host.setFrame}
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}

@@ -80,7 +80,8 @@ export function miniPlayerHostInsets(
   return {
     left: "auto",
     top: "auto",
-    right: `${margin}px`,
+    // Clear of the chat when it is docked at the side (HelpChatPanel).
+    right: `calc(${margin}px + var(--horde-chat-dock, 0px))`,
     bottom: `calc(${margin}px + ${BOTTOM_BAR})`,
   };
 }

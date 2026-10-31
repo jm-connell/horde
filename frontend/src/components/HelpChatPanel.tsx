@@ -50,7 +50,7 @@ import {
   WHAT_CAN_YOU_DO,
 } from "./helpPrompts";
 import { cssBlocks, splitActions } from "./helpTokens";
-import { CloseIcon } from "./icons";
+import { CloseIcon, SidePanelIcon } from "./icons";
 import TypingDots from "./TypingDots";
 
 /** The site a link leaves Horde for, or null when it stays on this server. */
@@ -85,6 +85,9 @@ interface Props {
   pageDetail: () => PageDetail | null;
   /** Focus the question box (false when restored open after a reload). */
   focusOnOpen: boolean;
+  /** Docked as a full-height side panel the page makes room for (desktop). */
+  docked?: boolean;
+  onDockedChange?: (docked: boolean) => void;
   /** "Ask <channel>" from a channel page: a new conversation about it. */
   channelRequest?: ChannelRequest | null;
   pendingChannelRequest?: () => ChannelRequest | null;
@@ -94,6 +97,27 @@ interface Props {
 
 const BUTTON =
   "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40";
+
+/** Where the fixed top nav ends, kept current while ``active``. */
+function useNavBottom(active: boolean): number {
+  const [bottom, setBottom] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const nav = document.querySelector<HTMLElement>('[data-horde="nav"]');
+    if (!nav) return;
+    const measure = () =>
+      setBottom(Math.max(0, Math.round(nav.getBoundingClientRect().bottom)));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    window.addEventListener("resize", measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [active]);
+  return bottom;
+}
 
 function useViewport() {
   const [size, setSize] = useState(() => ({
@@ -187,6 +211,8 @@ function AssistantReply({
 export default function HelpChatPanel({
   frame,
   onFrameChange,
+  docked = false,
+  onDockedChange = () => {},
   pageDetail,
   focusOnOpen,
   channelRequest = null,
@@ -253,6 +279,21 @@ export default function HelpChatPanel({
   const isMobile = useIsMobile();
   const viewport = useVisualViewport(isMobile);
   const { vw, vh } = useViewport();
+  // Docked: a column on the right below the full-width nav; the page makes room
+  // through --horde-chat-dock (index.css). Phones keep the bottom sheet.
+  const dockedHere = docked && !isMobile;
+  const dockWidth = Math.round(Math.min(520, Math.max(360, vw * 0.3)));
+  const navBottom = useNavBottom(dockedHere);
+  useEffect(() => {
+    if (!dockedHere) return;
+    const root = document.documentElement;
+    root.dataset.chatDocked = "true";
+    root.style.setProperty("--horde-chat-dock", `${dockWidth}px`);
+    return () => {
+      delete root.dataset.chatDocked;
+      root.style.removeProperty("--horde-chat-dock");
+    };
+  }, [dockedHere, dockWidth]);
   const box = frame
     ? clampHelpFrame(frame, vw, vh)
     : defaultHelpFrame(vw, vh, miniPlayerRect);
@@ -602,20 +643,22 @@ export default function HelpChatPanel({
   // With the keyboard up, sit just above it inside what is visible: pinned
   // to the bottom, iOS pans the page and the panel's top goes off screen.
   const keyboardHeight = `min(36rem, 75dvh, ${viewport?.height ?? 0}px - 1rem)`;
-  const placement: React.CSSProperties | undefined = isMobile
-    ? viewport?.keyboard
-      ? {
-          top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
-          bottom: "auto",
-          height: keyboardHeight,
-        }
-      : undefined
-    : {
-        left: box.left,
-        top: box.top,
-        width: box.width,
-        height: box.height,
-      };
+  const placement: React.CSSProperties | undefined = dockedHere
+    ? { top: navBottom, right: 0, bottom: 0, width: dockWidth }
+    : isMobile
+      ? viewport?.keyboard
+        ? {
+            top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
+            bottom: "auto",
+            height: keyboardHeight,
+          }
+        : undefined
+      : {
+          left: box.left,
+          top: box.top,
+          width: box.width,
+          height: box.height,
+        };
 
   return createPortal(
     <section
@@ -626,13 +669,18 @@ export default function HelpChatPanel({
       data-horde="help-chat"
       ref={panelRef}
       style={placement}
-      className={`ui-panel ui-panel-legible fixed z-45 flex flex-col overflow-hidden rounded-xl bg-ink-900 shadow-2xl ring-1 ring-ink-600 ${
+      data-docked={dockedHere ? "true" : undefined}
+      className={`ui-panel ui-panel-legible fixed z-45 flex flex-col overflow-hidden bg-ink-900 ${
+        dockedHere
+          ? "border-l border-ink-700"
+          : "rounded-xl shadow-2xl ring-1 ring-ink-600"
+      } ${
         isMobile
           ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom),var(--horde-bottom-bar,0px))] h-[min(36rem,75dvh)]"
           : ""
       }`}
     >
-      {!isMobile && (
+      {!isMobile && !dockedHere && (
         <div
           className="absolute left-0 top-0 z-10 h-4 w-4 cursor-nwse-resize touch-none"
           title="Drag to resize"
@@ -642,9 +690,9 @@ export default function HelpChatPanel({
       )}
       <header
         className={`flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5 ${
-          isMobile ? "" : "cursor-move touch-none select-none"
+          isMobile || dockedHere ? "" : "cursor-move touch-none select-none"
         }`}
-        onPointerDown={isMobile ? undefined : onHeaderPointerDown}
+        onPointerDown={isMobile || dockedHere ? undefined : onHeaderPointerDown}
       >
         <h2
           id={titleId}
@@ -670,6 +718,20 @@ export default function HelpChatPanel({
               className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
             >
               New chat
+            </button>
+          )}
+          {!isMobile && (
+            <button
+              type="button"
+              onClick={() => onDockedChange(!docked)}
+              aria-pressed={docked}
+              aria-label={
+                docked ? "Float the chat" : "Dock the chat at the side"
+              }
+              title={docked ? "Float the chat" : "Dock at the side"}
+              className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-accent"
+            >
+              <SidePanelIcon docked={docked} className="h-4 w-4" />
             </button>
           )}
           <button

@@ -1906,3 +1906,12 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   outline-color: rgb(var(--accent));
   background-color: rgb(var(--accent) / 0.08);
 }
+
+/* The chat docked at the side (HelpChatPanel): the page and footer make room
+   for it below the full-width nav. Outside the layers, so it beats w-full and
+   mx-auto on those elements. */
+html[data-chat-docked] [data-horde="main"],
+html[data-chat-docked] [data-horde="footer"] {
+  width: auto;
+  margin-right: var(--horde-chat-dock);
+}

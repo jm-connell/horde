@@ -475,3 +475,45 @@ test("a link that leaves Horde names the site it goes to", async ({ page }) => {
     "/history"
   );
 });
+
+test("the chat docks at the side and the page makes room for it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const main = page.locator('[data-horde="main"]');
+  const fullWidth = (await main.boundingBox())!.width;
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await expect(panel).toHaveAttribute("data-docked", "true");
+
+  // A full-height column on the right, below the full-width nav.
+  const nav = (await page.locator('[data-horde="nav"]').boundingBox())!;
+  const box = (await panel.boundingBox())!;
+  expect(nav.width).toBeGreaterThan(1400);
+  expect(box.x + box.width).toBeCloseTo(1440, 0);
+  expect(box.y).toBeCloseTo(nav.y + nav.height, 0);
+  expect(box.y + box.height).toBeCloseTo(900, 0);
+  // The page sits beside it instead of under it.
+  const beside = (await main.boundingBox())!;
+  expect(beside.x + beside.width).toBeLessThanOrEqual(box.x + 1);
+  expect(beside.width).toBeLessThan(fullWidth);
+
+  // It stays docked on the next page, and floating again gives the room back.
+  await page.getByRole("link", { name: "History" }).first().click();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(panel).toHaveAttribute("data-docked", "true");
+  await expectNoSeriousViolations(
+    page,
+    "docked chat",
+    '[data-horde="help-chat"]'
+  );
+  await panel.getByRole("button", { name: "Float the chat" }).click();
+  await expect(panel).not.toHaveAttribute("data-docked", "true");
+  await expect
+    .poll(async () => (await main.boundingBox())!.width)
+    .toBeCloseTo(fullWidth, 0);
+});

@@ -236,3 +236,37 @@ export function UndoIcon({ className = "" }: { className?: string }) {
     </svg>
   );
 }
+
+/** A window with a column on the right: dock a panel at the side (filled when docked). */
+export function SidePanelIcon({
+  className = "",
+  docked = false,
+}: {
+  className?: string;
+  docked?: boolean;
+}) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5" />
+      <path d="M9.75 2.75v10.5" fill={docked ? "currentColor" : "none"} />
+      {docked && (
+        <rect
+          x="9.75"
+          y="2.75"
+          width="4.5"
+          height="10.5"
+          fill="currentColor"
+          stroke="none"
+        />
+      )}
+    </svg>
+  );
+}

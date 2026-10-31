@@ -17,7 +17,7 @@ Only the administrator, and members given **Manage Ask channels** (Account → U
 
 ## Asking in the chat
 
-The chat is the same panel as Ask about Horde (the footer button). A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. Questions that name no channel are Ask about Horde questions, as before.
+The chat is the same panel as Ask about Horde (the footer button); dock it at the side with the button in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. Questions that name no channel are Ask about Horde questions, as before.
 
 From a channel's page, **Ask \<channel\>** opens the chat already about that channel. The panel shows **Answering from …** while it is; follow-up questions stay on that channel without naming it again. Press the × next to it to go back to Ask about Horde.
 

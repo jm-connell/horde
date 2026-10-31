@@ -35,7 +35,7 @@ describe("miniPlayerHostInsets", () => {
       { width: 400, height: 225 },
       false
     );
-    expect(insets.right).toBe("16px");
+    expect(insets.right).toBe("calc(16px + var(--horde-chat-dock, 0px))");
     expect(insets.bottom).toBe("calc(16px + var(--horde-bottom-bar, 0px))");
     expect(insets.left).toBe("auto");
     expect(insets.top).toBe("auto");
@@ -47,7 +47,7 @@ describe("miniPlayerHostInsets", () => {
       { width: 224, height: 126 },
       true
     );
-    expect(insets.right).toBe("12px");
+    expect(insets.right).toBe("calc(12px + var(--horde-chat-dock, 0px))");
     expect(insets.bottom).toBe("calc(12px + var(--horde-bottom-bar, 0px))");
   });
 
