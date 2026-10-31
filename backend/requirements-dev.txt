@@ -1,4 +1,5 @@
 pytest>=9.1.1
+pytest-xdist>=3.8.0
 -r ../docs/requirements.txt
 ruff==0.17.2
 mypy==2.4.0
