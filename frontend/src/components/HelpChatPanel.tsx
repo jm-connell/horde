@@ -468,14 +468,12 @@ export default function HelpChatPanel({
         }`}
         onPointerDown={isMobile ? undefined : onHeaderPointerDown}
       >
-        <div className="min-w-0">
-          <h2 id={titleId} className="text-sm font-semibold text-gray-100">
-            Ask about Horde
-          </h2>
-          <p className="truncate text-xs text-muted">
-            From Horde’s docs and code. Can be wrong.
-          </p>
-        </div>
+        <h2
+          id={titleId}
+          className="min-w-0 truncate text-sm font-semibold text-gray-100"
+        >
+          Ask about Horde
+        </h2>
         <div className="flex shrink-0 items-center gap-1">
           {messages.length > 0 && (
             <button
