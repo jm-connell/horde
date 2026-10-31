@@ -5,9 +5,9 @@ import type { AskSearchHit, ChannelFeedEntry, Video } from "../../types";
  * One list of search results from every source. Each result is scored by the
  * same text relevance (how much of the query its title, channel, tags and text
  * contain), weighted by where it comes from so the library leads, with a small
- * bonus for its rank in its own source. YouTube results arrive late, so they
- * get fixed places in the list (placeholders until they load) and never move
- * the cards around them.
+ * bonus for its rank in its own source (`scoreResults`). The layout then holds
+ * still while sources answer late or reload (`arrangeResults`): YouTube gets
+ * held places, shown as loading cards until it answers.
  */
 
 export type RemoteSource = "stream" | "youtube" | "said";
@@ -162,21 +162,33 @@ function entryFromHit(hit: AskSearchHit): ChannelFeedEntry {
   };
 }
 
-function byScore(a: MixedItem, b: MixedItem): number {
-  return (b.kind === "slot" ? 0 : b.score) - (a.kind === "slot" ? 0 : a.score);
+function byScore(a: ScoredItem, b: ScoredItem): number {
+  return b.score - a.score;
 }
 
-export function mixResults(input: {
+/** A result card (not a held place). */
+export type ScoredItem = Exclude<MixedItem, { kind: "slot" }>;
+
+/**
+ * Every source's results scored on one scale, each video once: `local` (the
+ * library, catalogs and captions) and `youtube`, each best first. Keys are
+ * the YouTube id when known, so a stream card that becomes a library video
+ * keeps its key.
+ */
+export function scoreResults(input: {
   query: string;
   library: Video[];
   /** The rest of the library: a transcript hit may land on one of these. */
   otherLibrary: Video[];
   stream: ChannelFeedEntry[];
   said: AskSearchHit[];
-  /** Null while YouTube search is off; `pending` while it is still searching. */
-  youtube: { entries: ChannelFeedEntry[]; pending: boolean } | null;
-}): MixedItem[] {
+  youtube: ChannelFeedEntry[];
+}): { local: ScoredItem[]; youtube: ScoredItem[] } {
   const terms = queryTerms(input.query);
+  const libraryKey = (video: Video) => {
+    const yt = extractYouTubeId(video.source_url, video.file_path);
+    return yt ? `yt:${yt}` : `v${video.id}`;
+  };
 
   // Transcript hits, by video, in their own rank order.
   const momentsByYt = new Map<string, AskSearchHit[]>();
@@ -186,21 +198,56 @@ export function mixResults(input: {
     else momentsByYt.set(hit.yt_id, [hit]);
   }
   const saidRank = new Map([...momentsByYt.keys()].map((id, i) => [id, i]));
+  // The library copy each transcript hit names, when the server knows it.
+  const libraryIdByYt = new Map<string, number>();
+  for (const hit of input.said) {
+    if (hit.library_video_id != null) {
+      libraryIdByYt.set(hit.yt_id, hit.library_video_id);
+    }
+  }
   const used = new Set<string>();
-  const takeMoments = (ytId: string | null | undefined) => {
-    if (!ytId) return [];
-    const moments = momentsByYt.get(ytId);
+  const momentsFor = (ytId: string | null | undefined, videoId?: number) => {
+    let id = ytId ?? undefined;
+    if (videoId != null && (!id || !momentsByYt.has(id))) {
+      id = [...libraryIdByYt].find(([, v]) => v === videoId)?.[0];
+    }
+    if (!id) return [];
+    const moments = momentsByYt.get(id);
     if (!moments) return [];
-    used.add(ytId);
+    used.add(id);
     return moments;
   };
 
-  const local: MixedItem[] = [];
-  const libraryIds = new Set<number>();
+  const seen = new Set<string>();
+  const local: ScoredItem[] = [];
+  const push = (item: ScoredItem) => {
+    if (seen.has(item.key)) return;
+    seen.add(item.key);
+    local.push(item);
+  };
+
+  const libraryItem = (
+    video: Video,
+    relevance: number,
+    weight: number,
+    rank: number,
+    moments: AskSearchHit[]
+  ): ScoredItem => ({
+    kind: "library",
+    key: libraryKey(video),
+    video,
+    moments,
+    score:
+      relevance * weight +
+      LIBRARY_BOOST +
+      rankBonus(rank) +
+      (moments.length ? MOMENT_BOOST : 0),
+  });
+
   input.library.forEach((video, rank) => {
-    libraryIds.add(video.id);
-    const moments = takeMoments(
-      extractYouTubeId(video.source_url, video.file_path)
+    const moments = momentsFor(
+      extractYouTubeId(video.source_url, video.file_path),
+      video.id
     );
     const relevance = Math.max(
       libraryFloor(video),
@@ -211,17 +258,7 @@ export function mixResults(input: {
         text: [video.description, video.notes].filter(Boolean).join(" "),
       })
     );
-    local.push({
-      kind: "library",
-      key: `v${video.id}`,
-      video,
-      moments,
-      score:
-        relevance * SOURCE_WEIGHT.library +
-        LIBRARY_BOOST +
-        rankBonus(rank) +
-        (moments.length ? MOMENT_BOOST : 0),
-    });
+    push(libraryItem(video, relevance, SOURCE_WEIGHT.library, rank, moments));
   });
 
   const remoteItem = (
@@ -229,7 +266,7 @@ export function mixResults(input: {
     entry: ChannelFeedEntry,
     rank: number,
     moments: AskSearchHit[]
-  ): MixedItem => {
+  ): ScoredItem => {
     const relevance = textRelevance(terms, {
       title: entry.title ?? "",
       channel: entry.channel ?? "",
@@ -239,7 +276,7 @@ export function mixResults(input: {
     });
     return {
       kind: "remote",
-      key: `${source}:${entry.id ?? entry.url}`,
+      key: entry.id ? `yt:${entry.id}` : `url:${entry.url}`,
       source,
       entry,
       moments,
@@ -251,74 +288,154 @@ export function mixResults(input: {
   };
 
   input.stream.forEach((entry, rank) => {
-    local.push(remoteItem("stream", entry, rank, takeMoments(entry.id)));
+    push(remoteItem("stream", entry, rank, momentsFor(entry.id)));
   });
 
   // What was said in videos not already shown: a library copy when there is
   // one (it did not match by its words), otherwise the video to stream.
+  const otherById = new Map(input.otherLibrary.map((v) => [v.id, v]));
   const otherByYt = new Map<string, Video>();
   for (const video of input.otherLibrary) {
     const yt = extractYouTubeId(video.source_url, video.file_path);
-    if (yt && !libraryIds.has(video.id)) otherByYt.set(yt, video);
+    if (yt) otherByYt.set(yt, video);
   }
   for (const [ytId, moments] of momentsByYt) {
     if (used.has(ytId)) continue;
     const rank = saidRank.get(ytId) ?? 0;
-    const video = otherByYt.get(ytId);
+    const libraryId = libraryIdByYt.get(ytId);
+    const video =
+      (libraryId != null ? otherById.get(libraryId) : undefined) ??
+      otherByYt.get(ytId);
     if (video) {
       const relevance = textRelevance(terms, {
         title: video.title,
         channel: video.channel ?? "",
         text: plainSnippet(moments),
       });
-      local.push({
-        kind: "library",
-        key: `v${video.id}`,
-        video,
-        moments,
-        score:
-          relevance * SOURCE_WEIGHT.said +
-          LIBRARY_BOOST +
-          rankBonus(rank) +
-          MOMENT_BOOST,
-      });
+      push(libraryItem(video, relevance, SOURCE_WEIGHT.said, rank, moments));
     } else {
-      local.push(remoteItem("said", entryFromHit(moments[0]), rank, moments));
+      push(remoteItem("said", entryFromHit(moments[0]), rank, moments));
+    }
+  }
+  local.sort(byScore);
+
+  const youtube = input.youtube
+    .map((entry, rank) => remoteItem("youtube", entry, rank, []))
+    .filter((item) => !seen.has(item.key) && !!seen.add(item.key))
+    .sort(byScore);
+  return { local, youtube };
+}
+
+/** Results laid out for one query; later updates for it build on this. */
+export interface MixedLayout {
+  query: string;
+  /** Item keys and held places (`slot-<n>`) in display order. */
+  order: string[];
+  /** Every key's latest item, kept while its source reloads. */
+  items: ReadonlyMap<string, ScoredItem>;
+}
+
+const isSlot = (key: string) => key.startsWith("slot-");
+
+/**
+ * Lay the scored results out without moving what is on screen. The first
+ * layout for a query waits until the library, catalogs and captions have
+ * answered (null until then); it is their order by score with YouTube's
+ * places held. After that, for the same query:
+ *
+ * - a card keeps its place and takes its source's latest data (a stream card
+ *   that was downloaded becomes the library card in the same place);
+ * - new cards join at the end, except YouTube's first results, which fill the
+ *   held places in their score order;
+ * - a card leaves only once its source has answered again without it, and a
+ *   held place YouTube did not fill takes the last card, so only that one
+ *   moves.
+ */
+export function arrangeResults(
+  prev: MixedLayout | null,
+  scored: { local: ScoredItem[]; youtube: ScoredItem[] },
+  state: {
+    query: string;
+    /** The library, catalogs and captions answer this query. */
+    localSettled: boolean;
+    /** YouTube search is on for this query. */
+    youtubeOn: boolean;
+    /** YouTube answered this query. */
+    youtubeSettled: boolean;
+  }
+): MixedLayout | null {
+  const { query, localSettled, youtubeOn, youtubeSettled } = state;
+  let order: string[];
+  const items = new Map<string, ScoredItem>();
+  if (prev && prev.query === query) {
+    order = [...prev.order];
+    prev.items.forEach((item, key) => items.set(key, item));
+  } else {
+    if (!localSettled) return null;
+    order = scored.local.map((item) => item.key);
+    if (youtubeOn) {
+      YOUTUBE_SLOTS.forEach((pos, i) => {
+        order.splice(Math.min(pos, order.length), 0, `slot-${i}`);
+      });
     }
   }
 
-  local.sort(byScore);
-  if (!input.youtube) return local;
-
-  // YouTube's best results take the kept places; the rest join by score
-  // below the last of them, so nothing above moves when they arrive.
-  if (input.youtube.pending) {
-    return placeInSlots(
-      local,
-      YOUTUBE_SLOTS.map((_, i) => ({ kind: "slot", key: `slot-${i}` }))
-    );
+  const localKeys = new Set(scored.local.map((item) => item.key));
+  const youtubeKeys = new Set(scored.youtube.map((item) => item.key));
+  for (const item of [...scored.local, ...scored.youtube]) {
+    items.set(item.key, item);
   }
-  const youtube = input.youtube.entries
-    .map((entry, rank) => remoteItem("youtube", entry, rank, []))
-    .sort(byScore);
-  const slotted = youtube.slice(0, YOUTUBE_SLOTS.length);
-  const placed = placeInSlots(local, slotted);
-  const lastSlot = placed.findIndex(
-    (item) => item === slotted[slotted.length - 1]
-  );
-  const head = placed.slice(0, lastSlot + 1);
-  const tail = [
-    ...placed.slice(lastSlot + 1),
-    ...youtube.slice(slotted.length),
-  ];
-  return [...head, ...tail.sort(byScore)];
+
+  // Leave: only once the source that showed a card has answered without it.
+  order = order.filter((key) => {
+    if (isSlot(key) || localKeys.has(key) || youtubeKeys.has(key)) return true;
+    const item = items.get(key);
+    const fromYoutube = item?.kind === "remote" && item.source === "youtube";
+    return fromYoutube ? !youtubeSettled : !localSettled;
+  });
+  if (!youtubeOn) order = order.filter((key) => !isSlot(key));
+
+  // Join: new local cards at the end; YouTube's fill the held places first.
+  const placed = new Set(order);
+  if (localSettled) {
+    for (const item of scored.local) {
+      if (!placed.has(item.key)) {
+        order.push(item.key);
+        placed.add(item.key);
+      }
+    }
+  }
+  if (youtubeSettled) {
+    for (const item of scored.youtube) {
+      if (placed.has(item.key)) continue;
+      const slot = order.findIndex(isSlot);
+      if (slot >= 0) order[slot] = item.key;
+      else order.push(item.key);
+      placed.add(item.key);
+    }
+    // Places YouTube left empty take the last card, so only it moves; held
+    // places at the very end just go.
+    const dropTrailing = () => {
+      while (order.length && isSlot(order[order.length - 1])) order.pop();
+    };
+    dropTrailing();
+    for (let i = order.findIndex(isSlot); i >= 0; i = order.findIndex(isSlot)) {
+      order[i] = order.pop() as string;
+      dropTrailing();
+    }
+  }
+
+  const shown = new Set(order);
+  for (const key of [...items.keys()]) {
+    if (!shown.has(key)) items.delete(key);
+  }
+  return { query, order, items };
 }
 
-/** Put `fill` at the kept places (or right after the last local result). */
-function placeInSlots(local: MixedItem[], fill: MixedItem[]): MixedItem[] {
-  const out = [...local];
-  fill.forEach((item, i) => {
-    out.splice(Math.min(YOUTUBE_SLOTS[i], out.length), 0, item);
+/** The layout's cards and held places, in order. */
+export function layoutItems(layout: MixedLayout): MixedItem[] {
+  return layout.order.map((key) => {
+    const item = layout.items.get(key);
+    return item ?? { kind: "slot", key };
   });
-  return out;
 }

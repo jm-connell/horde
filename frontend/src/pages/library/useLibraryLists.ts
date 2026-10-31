@@ -50,6 +50,8 @@ export function useLibraryLists(input: {
   return {
     videos,
     loading: matchList.loading,
+    /** The matches and the rest of the library are both for this search. */
+    searchSettled: matchList.settled && restList.settled,
     otherVideos,
     continueWatching,
     channels,

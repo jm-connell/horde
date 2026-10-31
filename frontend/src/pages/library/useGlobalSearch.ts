@@ -32,6 +32,8 @@ export function useGlobalSearch(input: {
 
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
+  /** The query `streamResults` answer ("" when none). */
+  const [streamResultsFor, setStreamResultsFor] = useState("");
   const [streamDownloading, setStreamDownloading] = useState<Set<string>>(
     () => new Set()
   );
@@ -42,6 +44,8 @@ export function useGlobalSearch(input: {
   const youtubeMoreAcRef = useRef<AbortController | null>(null);
   const youtubeFetchOffsetRef = useRef(0);
   const [youtubeQuery, setYoutubeQuery] = useState("");
+  /** The query `youtubeResults` answer ("" while none has answered). */
+  const [youtubeResultsFor, setYoutubeResultsFor] = useState("");
 
   useEffect(() => {
     const trimmed = search.trim();
@@ -57,6 +61,7 @@ export function useGlobalSearch(input: {
   useEffect(() => {
     if (!debouncedSearch || activeChannel) {
       setStreamResults([]);
+      setStreamResultsFor("");
       setStreamLoading(false);
       return;
     }
@@ -65,10 +70,14 @@ export function useGlobalSearch(input: {
     api
       .searchChannelCatalog({ q: debouncedSearch, limit: 40 })
       .then((page) => {
-        if (!cancelled) setStreamResults(page.entries ?? []);
+        if (cancelled) return;
+        setStreamResults(page.entries ?? []);
+        setStreamResultsFor(debouncedSearch);
       })
       .catch(() => {
-        if (!cancelled) setStreamResults([]);
+        if (cancelled) return;
+        setStreamResults([]);
+        setStreamResultsFor(debouncedSearch);
       })
       .finally(() => {
         if (!cancelled) setStreamLoading(false);
@@ -89,6 +98,7 @@ export function useGlobalSearch(input: {
       q === search.trim();
     if (!live) {
       setYoutubeResults([]);
+      setYoutubeResultsFor("");
       setYoutubeHasMore(false);
       setYoutubeLoading(false);
       setYoutubeLoadingMore(false);
@@ -97,6 +107,7 @@ export function useGlobalSearch(input: {
     }
     const ac = new AbortController();
     setYoutubeResults([]);
+    setYoutubeResultsFor("");
     setYoutubeHasMore(false);
     setYoutubeLoading(true);
     setYoutubeLoadingMore(false);
@@ -115,12 +126,14 @@ export function useGlobalSearch(input: {
           return;
         }
         setYoutubeResults(page.entries ?? []);
+        setYoutubeResultsFor(q);
         setYoutubeHasMore(Boolean(page.has_more));
         youtubeFetchOffsetRef.current = YOUTUBE_SEARCH_PAGE_SIZE;
       })
       .catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "AbortError") return;
         setYoutubeResults([]);
+        setYoutubeResultsFor(q);
         setYoutubeHasMore(false);
       })
       .finally(() => {
@@ -223,9 +236,11 @@ export function useGlobalSearch(input: {
 
   return {
     streamResults,
+    streamResultsFor,
     streamLoading,
     streamDownloading,
     youtubeQuery,
+    youtubeResultsFor,
     youtubeVisible,
     youtubeLoading,
     youtubeHasMore,

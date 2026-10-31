@@ -1,10 +1,11 @@
 import { Link } from "react-router-dom";
 import ChannelFeedCard from "../../components/ChannelFeedCard";
 import VideoCard from "../../components/VideoCard";
-import type { AskSearchHit, Video } from "../../types";
+import type { AskSearchHit } from "../../types";
 import { formatTimestamp } from "../../utils";
 import { askWatchPath } from "../ask/askLinks";
 import type { LibraryGridOptions } from "./LibraryGrid";
+import { videoProgress } from "./videoProgress";
 import type { MixedItem } from "./mixResults";
 import { Snippet } from "./SaidInVideos";
 import SearchPlaceholderCard from "./SearchPlaceholderCard";
@@ -13,12 +14,6 @@ import { videoGridClassName } from "./videoGridClassName";
 
 /** Cards shown while the library, catalogs and captions are searched. */
 const LOADING_CARDS = 8;
-
-function videoProgress(video: Video): number | undefined {
-  if (!video.duration_sec || video.duration_sec <= 0) return undefined;
-  if (video.last_position_sec <= 0) return undefined;
-  return Math.min(1, video.last_position_sec / video.duration_sec);
-}
 
 /** Up to two moments where the video says the words, each a link to it. */
 function Moments({
@@ -96,7 +91,12 @@ export default function MixedResults({
   return (
     <div className={videoGridClassName(grid.sidebarCollapsed)}>
       {items.map((item) => (
-        <div key={item.key} className="flex flex-col">
+        <div
+          key={item.key}
+          data-horde="mixed-item"
+          data-key={item.key}
+          className="flex flex-col"
+        >
           {item.kind === "slot" ? (
             <SearchPlaceholderCard />
           ) : item.kind === "library" ? (

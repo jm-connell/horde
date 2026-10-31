@@ -85,27 +85,35 @@ function OnlineLibrary() {
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
-  const { videos, loading, otherVideos, continueWatching, channels, tags } =
-    useLibraryLists({
-      mainFilters,
-      debouncedSearch,
-      activeChannel,
-      // The Recommended tab renders its own data.
-      skipLibrary: onRecommendedTab && !debouncedSearch,
-      channelSort: settings.channelSort,
-      channelOrder: settings.channelOrder,
-    });
+  const {
+    videos,
+    loading,
+    searchSettled,
+    otherVideos,
+    continueWatching,
+    channels,
+    tags,
+  } = useLibraryLists({
+    mainFilters,
+    debouncedSearch,
+    activeChannel,
+    // The Recommended tab renders its own data.
+    skipLibrary: onRecommendedTab && !debouncedSearch,
+    channelSort: settings.channelSort,
+    channelOrder: settings.channelOrder,
+  });
   const tagDrawer = useTagDrawer(tags, activeTag, activeChannel);
   const { hasTags, showTags, setShowTags } = tagDrawer;
 
-  // Select mode picks across every card shown, matches first.
-  const selectableVideos = useMemo(
-    () => (debouncedSearch ? [...videos, ...otherVideos] : videos),
-    [debouncedSearch, videos, otherVideos]
-  );
+  // Select mode picks across every card shown, in the order shown: a search
+  // reports its own order (mixed results are not matches-then-rest).
+  const [searchOrder, setSearchOrder] = useState<number[] | null>(null);
   const selectableIds = useMemo(
-    () => selectableVideos.map((v) => v.id),
-    [selectableVideos]
+    () =>
+      debouncedSearch
+        ? (searchOrder ?? [...videos, ...otherVideos].map((v) => v.id))
+        : videos.map((v) => v.id),
+    [debouncedSearch, searchOrder, videos, otherVideos]
   );
   const selection = useBulkSelection(selectableIds);
   const bulkBar = useBulkActions({
@@ -398,6 +406,8 @@ function OnlineLibrary() {
               query={debouncedSearch}
               videos={videos}
               otherVideos={otherVideos}
+              librarySettled={searchSettled}
+              onSelectableOrder={setSearchOrder}
               global={globalSearch}
               grid={grid}
               onChannelClick={channelNav.openFeedChannel}

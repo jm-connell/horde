@@ -1,4 +1,11 @@
-import { useId, useMemo, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import ChannelFeedCard from "../../components/ChannelFeedCard";
 import type { ChannelFeedEntry, Video } from "../../types";
 import { YOUTUBE_SEARCH_LOAD_MORE_LABEL } from "../libraryCatalogProgress";
@@ -13,7 +20,12 @@ import { groupByVideo } from "../ask/askLinks";
 import SaidInVideos from "./SaidInVideos";
 import { useSettings } from "../../hooks/useSettings";
 import MixedResults from "./MixedResults";
-import { mixResults } from "./mixResults";
+import {
+  arrangeResults,
+  layoutItems,
+  scoreResults,
+  type MixedLayout,
+} from "./mixResults";
 
 /** Transcript search covers every Ask channel. */
 const ALL_CHANNELS: number[] = [];
@@ -202,6 +214,8 @@ export default function SearchResults({
   query,
   videos,
   otherVideos,
+  librarySettled,
+  onSelectableOrder,
   global,
   grid,
   onChannelClick,
@@ -209,6 +223,10 @@ export default function SearchResults({
   query: string;
   videos: Video[];
   otherVideos: Video[];
+  /** Both library lists are fully loaded for this query. */
+  librarySettled: boolean;
+  /** The library videos in the order shown, for select mode (null: the default). */
+  onSelectableOrder: (ids: number[] | null) => void;
   global: ReturnType<typeof useGlobalSearch>;
   grid: LibraryGridOptions;
   onChannelClick: (hit: { name: string; url: string | null }) => void;
@@ -218,9 +236,11 @@ export default function SearchResults({
   // YouTube is searched a moment after typing stops and takes a second or two:
   // show its heading from the start, marked as searching.
   const youtubeOn = youtubeVideoSearch && query.trim().length >= 2;
-  const youtubePending =
+  const youtubeSettled =
     youtubeOn &&
-    (global.youtubeLoading || global.youtubeQuery.trim() !== query.trim());
+    !global.youtubeLoading &&
+    global.youtubeResultsFor === query.trim();
+  const youtubePending = youtubeOn && !youtubeSettled;
   // What Ask channels said, once one has captions indexed. Keyword search,
   // so it works without an AI provider.
   const askChannels = useAskChannels();
@@ -236,22 +256,19 @@ export default function SearchResults({
       onChange={(next) => update({ searchLayout: next })}
     />
   );
-  const mixedItems = useMemo(
+  // Mixed: score every source on one scale, then lay the results out so
+  // nothing on screen moves while sources answer late or reload.
+  const scored = useMemo(
     () =>
-      mixed
-        ? mixResults({
-            query,
-            library: videos,
-            otherLibrary: otherVideos,
-            stream: global.streamResults,
-            said: said.hits,
-            youtube: youtubeOn
-              ? { entries: global.youtubeVisible, pending: youtubePending }
-              : null,
-          })
-        : [],
+      scoreResults({
+        query,
+        library: videos,
+        otherLibrary: otherVideos,
+        stream: global.streamResults,
+        said: said.hits,
+        youtube: youtubeOn ? global.youtubeVisible : [],
+      }),
     [
-      mixed,
       query,
       videos,
       otherVideos,
@@ -259,19 +276,58 @@ export default function SearchResults({
       said.hits,
       youtubeOn,
       global.youtubeVisible,
-      youtubePending,
     ]
   );
+  const localSettled =
+    librarySettled &&
+    !global.streamLoading &&
+    global.streamResultsFor === query &&
+    !askChannels.isPending &&
+    (!saidOn || said.isError || (said.isSuccess && !said.isPlaceholderData));
+  const layoutRef = useRef<MixedLayout | null>(null);
+  const layout = useMemo(
+    () =>
+      mixed
+        ? arrangeResults(layoutRef.current, scored, {
+            query,
+            localSettled,
+            youtubeOn,
+            youtubeSettled,
+          })
+        : null,
+    [mixed, scored, query, localSettled, youtubeOn, youtubeSettled]
+  );
+  useEffect(() => {
+    layoutRef.current = layout;
+  }, [layout]);
+  const mixedItems = useMemo(
+    () => (layout ? layoutItems(layout) : []),
+    [layout]
+  );
+  // Select mode follows the cards as shown: the mixed library cards, then
+  // the rest of the library.
+  const selectableOrder = useMemo(() => {
+    if (!mixed) return null;
+    const shown = mixedItems.flatMap((item) =>
+      item.kind === "library" ? [item.video.id] : []
+    );
+    const shownIds = new Set(shown);
+    return [
+      ...shown,
+      ...otherVideos.flatMap((v) => (shownIds.has(v.id) ? [] : [v.id])),
+    ];
+  }, [mixed, mixedItems, otherVideos]);
+  useEffect(() => {
+    onSelectableOrder(selectableOrder);
+  }, [selectableOrder, onSelectableOrder]);
+  useEffect(() => () => onSelectableOrder(null), [onSelectableOrder]);
   const selectIndex = useMemo(
-    () => new Map([...videos, ...otherVideos].map((v, i) => [v.id, i])),
-    [videos, otherVideos]
+    () => new Map((selectableOrder ?? []).map((id, i) => [id, i])),
+    [selectableOrder]
   );
 
   if (mixed) {
-    const mixedLoading =
-      global.streamLoading ||
-      askChannels.isPending ||
-      (saidOn && said.isLoading);
+    const mixedLoading = layout === null;
     const shownIds = new Set(
       mixedItems.flatMap((item) =>
         item.kind === "library" ? [item.video.id] : []
@@ -281,14 +337,21 @@ export default function SearchResults({
     const results = mixedItems.filter((item) => item.kind !== "slot").length;
     return (
       <div className="space-y-8">
-        <section aria-labelledby="search-mixed-title" className="space-y-4">
+        <section
+          aria-labelledby="search-mixed-title"
+          aria-busy={mixedLoading || youtubePending}
+          className="space-y-4"
+        >
           <div className="flex items-center gap-3">
             <h2
               id="search-mixed-title"
               className="text-sm font-semibold text-gray-100"
             >
               Results{" "}
-              <span className="text-xs font-normal text-muted">
+              <span
+                className="text-xs font-normal text-muted"
+                aria-live="polite"
+              >
                 {mixedLoading ? "Searching…" : results}
               </span>
             </h2>
@@ -347,7 +410,7 @@ export default function SearchResults({
         >
           <LibraryGrid
             videos={rest}
-            indexOffset={videos.length}
+            indexOffset={shownIds.size}
             searchQuery={query}
             options={grid}
           />

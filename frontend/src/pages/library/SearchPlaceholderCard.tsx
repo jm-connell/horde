@@ -19,6 +19,8 @@ export default function SearchPlaceholderCard({
   return (
     <div
       data-horde="search-placeholder"
+      // The results region is marked busy; one card per place would repeat it.
+      aria-hidden
       className="flex h-full flex-col overflow-hidden max-sm:border-b max-sm:border-ink-700 sm:rounded-xl sm:bg-ink-900 sm:ring-1 sm:ring-ink-700"
     >
       <div className="relative flex aspect-video w-full items-center justify-center overflow-hidden bg-gradient-to-br from-accent/15 via-ink-800 to-ink-900">
