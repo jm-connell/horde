@@ -62,6 +62,9 @@ export function useWatchVideo({
   const handedOffRef = useRef<number | null>(null);
   /** The `?t=` already handed to the player (a different one seeks). */
   const appliedStartRef = useRef<number | null>(null);
+  // Read by the load effects without restarting them: a new `t` only seeks.
+  const startRef = useRef(startParam);
+  startRef.current = startParam;
 
   useEffect(() => {
     if (!libraryValid) return;
@@ -150,11 +153,12 @@ export function useWatchVideo({
     const meta = metaQuery.data;
     if (!meta) return;
     if (meta.library_video_id != null) {
-      const start = startParam != null ? `?t=${startParam}` : "";
+      const t = startRef.current;
+      const start = t != null ? `?t=${t}` : "";
       navigate(`/watch/${meta.library_video_id}${start}`, { replace: true });
       return;
     }
-    appliedStartRef.current = startParam;
+    appliedStartRef.current = startRef.current;
     setSource({ kind: "stream", url: streamUrlParam, meta });
     setLoading(false);
   }, [
@@ -164,7 +168,6 @@ export function useWatchVideo({
     metaQuery.error,
     streamUrlParam,
     navigate,
-    startParam,
   ]);
 
   // Start stream playback

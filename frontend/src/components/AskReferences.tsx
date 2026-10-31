@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { askWatchPath } from "../pages/ask/askLinks";
+import { askWatchPath, seekIfOpen } from "../pages/ask/askLinks";
 import { formatTimestamp } from "../utils";
 import type { AskReference } from "./helpChat";
 
@@ -19,7 +19,10 @@ export function AskCite({
     <sup className="ml-0.5">
       <Link
         to={askWatchPath(reference)}
-        onClick={onNavigate}
+        onClick={() => {
+          seekIfOpen(askWatchPath(reference));
+          onNavigate?.();
+        }}
         title={`${reference.channel} · ${reference.title} · ${where(reference)}`}
         aria-label={`Reference ${reference.n}: ${reference.title} at ${where(reference)}`}
         className="rounded px-0.5 text-[0.7rem] font-semibold text-accent hover:underline"
@@ -49,7 +52,10 @@ export function AskReferenceList({
           <span className="min-w-0">
             <Link
               to={askWatchPath(ref)}
-              onClick={onNavigate}
+              onClick={() => {
+                seekIfOpen(askWatchPath(ref));
+                onNavigate?.();
+              }}
               className="text-gray-300 hover:text-accent"
             >
               {ref.channel} · “{ref.title}”

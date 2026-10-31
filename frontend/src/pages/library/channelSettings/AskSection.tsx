@@ -15,7 +15,7 @@ export default function AskSection({
 }) {
   const { can } = useAuth();
   const manage = can("manage_ask");
-  const channels = useAskChannels();
+  const channels = useAskChannels(true, { poll: true });
   const found = findAskChannel(channels.data?.items ?? [], channelUrl, channel);
   return (
     <SettingsSection

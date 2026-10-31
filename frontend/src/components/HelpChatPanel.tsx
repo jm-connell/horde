@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { api } from "../api";
+import { ApiError, api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import {
   usePlaybackLayout,
@@ -86,6 +86,8 @@ interface Props {
   focusOnOpen: boolean;
   /** "Ask <channel>" from a channel page: a new conversation about it. */
   channelRequest?: ChannelRequest | null;
+  pendingChannelRequest?: () => ChannelRequest | null;
+  consumeChannelRequest?: (seq: number) => void;
   onClose: () => void;
 }
 
@@ -128,16 +130,21 @@ function AssistantReply({
 }) {
   const { text, actions } = splitActions(content);
   const byN = new Map((references ?? []).map((r) => [r.n, r]));
+  // A channel answer is built from captions anyone could have written, so its
+  // help tokens stay text and it offers no actions or CSS.
   const render: InlineRenderers = references
     ? {
-        ...renderers,
+        link: renderers.link,
+        token: (raw) => raw,
         // While streaming, the numbers are the model's excerpt numbers: hidden
         // until the server sends the renumbered answer with its references.
         cite: (n, key) => {
           const ref = byN.get(n);
-          return ref ? (
-            <AskCite key={key} reference={ref} onNavigate={onNavigate} />
-          ) : null;
+          if (ref)
+            return (
+              <AskCite key={key} reference={ref} onNavigate={onNavigate} />
+            );
+          return streaming ? null : `[${n}]`;
         },
       }
     : renderers;
@@ -151,7 +158,7 @@ function AssistantReply({
       {!streaming && references && (
         <AskReferenceList references={references} onNavigate={onNavigate} />
       )}
-      {!streaming && (
+      {!streaming && !references && (
         <>
           <HelpActionCards
             actions={actions}
@@ -182,6 +189,8 @@ export default function HelpChatPanel({
   pageDetail,
   focusOnOpen,
   channelRequest = null,
+  pendingChannelRequest = () => null,
+  consumeChannelRequest = () => {},
   onClose,
 }: Props) {
   const titleId = useId();
@@ -191,17 +200,27 @@ export default function HelpChatPanel({
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Opened by "Ask <channel>": start on a new conversation about it. (The
+  // panel mounts on open, so the request is already there; peeking, not
+  // taking, keeps React's doubled initialisers harmless.)
+  const [opening] = useState(() => pendingChannelRequest());
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
-    getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
+    opening ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
   // The saved conversation this tab shows, and the channels it is about.
   const [ask, setAsk] = useState(() =>
-    getJson(
-      ASK_CHAT_STORAGE_KEY,
-      isAskState,
-      { threadId: null, scope: [] },
-      "session"
-    )
+    opening
+      ? { threadId: null, scope: [opening.channel] }
+      : getJson(
+          ASK_CHAT_STORAGE_KEY,
+          isAskState,
+          { threadId: null, scope: [] },
+          "session"
+        )
+  );
+  /** The channel "New chat" starts on: the one the panel was opened for, until the chip is removed. */
+  const [openerScope, setOpenerScope] = useState(() =>
+    opening ? [opening.channel] : []
   );
   const [showHistory, setShowHistory] = useState(false);
   const [draft, setDraft] = useState("");
@@ -281,18 +300,20 @@ export default function HelpChatPanel({
     setJson(ASK_CHAT_STORAGE_KEY, ask, "session");
   }, [ask]);
 
-  // "Ask <channel>": a new conversation about that channel.
-  const seenRequest = useRef(channelRequest?.seq ?? 0);
+  // "Ask <channel>" while the panel is open: a new conversation about it.
   useEffect(() => {
-    if (!channelRequest || channelRequest.seq === seenRequest.current) return;
-    seenRequest.current = channelRequest.seq;
+    const req = pendingChannelRequest();
+    if (!req) return;
+    consumeChannelRequest(req.seq);
+    if (req.seq === opening?.seq) return; // started on it already
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
     setShowHistory(false);
-    setAsk({ threadId: null, scope: [channelRequest.channel] });
+    setAsk({ threadId: null, scope: [req.channel] });
+    setOpenerScope([req.channel]);
     inputRef.current?.focus();
-  }, [channelRequest]);
+  }, [channelRequest, pendingChannelRequest, consumeChannelRequest, opening]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -402,15 +423,18 @@ export default function HelpChatPanel({
         page: currentPage(),
         dataConsent: consent,
       };
-      await api.streamAsk(text, params, {
+      const handlers = {
         signal: ac.signal,
-        onEvent: (event) => {
+        onEvent: (event: Record<string, unknown>) => {
           if (event.type === "thread" && typeof event.id === "number") {
             const threadId = event.id;
             setAsk((a) => ({ ...a, threadId }));
           } else if (event.type === "scope") {
             const scope = parseScopeChannels(event.channels);
             setAsk((a) => ({ ...a, scope }));
+            // A channel answer: the model's own numbers stay hidden until the
+            // renumbered answer and its references arrive.
+            if (scope.length) update((m) => ({ ...m, references: [] }));
           } else if (
             event.type === "status" &&
             typeof event.text === "string"
@@ -440,7 +464,15 @@ export default function HelpChatPanel({
             dropEmptyReply();
           }
         },
-      });
+      };
+      try {
+        await api.streamAsk(text, params, handlers);
+      } catch (err) {
+        // The conversation was deleted (elsewhere, or empty): start a new one.
+        if (!(err instanceof ApiError && err.status === 404 && params.threadId))
+          throw err;
+        await api.streamAsk(text, { ...params, threadId: null }, handlers);
+      }
     } catch (err) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
         setError(err instanceof Error ? err.message : "Chat failed");
@@ -459,10 +491,7 @@ export default function HelpChatPanel({
     setMessages([]);
     setError(null);
     setShowHistory(false);
-    setAsk({
-      threadId: null,
-      scope: channelRequest ? [channelRequest.channel] : [],
-    });
+    setAsk({ threadId: null, scope: openerScope });
     removeItem(HELP_CHAT_STORAGE_KEY, "session");
     inputRef.current?.focus();
   }
@@ -899,7 +928,10 @@ export default function HelpChatPanel({
           </span>
           <button
             type="button"
-            onClick={() => setAsk((a) => ({ ...a, scope: [] }))}
+            onClick={() => {
+              setAsk((a) => ({ ...a, scope: [] }));
+              setOpenerScope([]);
+            }}
             disabled={sending}
             aria-label="Stop answering from these channels"
             title="Ask about Horde instead"

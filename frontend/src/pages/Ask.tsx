@@ -14,7 +14,7 @@ import AskSearch from "./ask/AskSearch";
 export default function Ask() {
   const { can } = useAuth();
   const manage = can("manage_ask");
-  const channels = useAskChannels();
+  const channels = useAskChannels(true, { poll: true });
   const [adding, setAdding] = useState(false);
   const items = channels.data?.items ?? [];
 

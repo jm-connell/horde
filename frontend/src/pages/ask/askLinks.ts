@@ -21,6 +21,19 @@ export function askWatchPath(ref: {
 const MARK_START = String.fromCharCode(2);
 const MARK_END = String.fromCharCode(3);
 
+/**
+ * Clicking a link to the page already open does not change `?t=`, so the
+ * player would not move: seek it directly instead.
+ */
+export function seekIfOpen(path: string): void {
+  const here = window.location.pathname + window.location.search;
+  if (here !== path) return;
+  const t = Number(new URL(path, window.location.origin).searchParams.get("t"));
+  if (Number.isFinite(t)) {
+    window.dispatchEvent(new CustomEvent("horde:seek", { detail: { sec: t } }));
+  }
+}
+
 /** Text split into plain and highlighted parts (search marks matches with \u0002…\u0003). */
 export function snippetParts(
   snippet: string

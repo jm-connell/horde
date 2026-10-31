@@ -39,6 +39,10 @@ interface HostValue {
   openedHere: boolean;
   /** The latest "Ask <channel>" request; a new one starts a new conversation. */
   channelRequest: ChannelRequest | null;
+  /** The request the panel has not acted on yet (null once it has). */
+  pendingChannelRequest: () => ChannelRequest | null;
+  /** The panel acted on this request. */
+  consumeChannelRequest: (seq: number) => void;
 }
 
 /** A request to start a conversation about a channel (`seq` tells repeats apart). */
@@ -110,6 +114,17 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [channelRequest, setChannelRequest] = useState<ChannelRequest | null>(
     null
   );
+  // Kept here, not in the panel: the panel mounts on open, after the request.
+  const consumedSeq = useRef(0);
+  const latestRequest = useRef<ChannelRequest | null>(null);
+  latestRequest.current = channelRequest;
+  const pendingChannelRequest = useCallback(() => {
+    const req = latestRequest.current;
+    return req && req.seq > consumedSeq.current ? req : null;
+  }, []);
+  const consumeChannelRequest = useCallback((seq: number) => {
+    consumedSeq.current = Math.max(consumedSeq.current, seq);
+  }, []);
   const askChannel = useCallback(
     (channel: AskScopeChannel) => {
       setChannelRequest((prev) => ({ channel, seq: (prev?.seq ?? 0) + 1 }));
@@ -140,8 +155,17 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       pageDetail: () => detail.current,
       openedHere,
       channelRequest,
+      pendingChannelRequest,
+      consumeChannelRequest,
     }),
-    [state.frame, setFrame, openedHere, channelRequest]
+    [
+      state.frame,
+      setFrame,
+      openedHere,
+      channelRequest,
+      pendingChannelRequest,
+      consumeChannelRequest,
+    ]
   );
 
   return (
@@ -168,6 +192,8 @@ export function HelpChatHost() {
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}
         channelRequest={host.channelRequest}
+        pendingChannelRequest={host.pendingChannelRequest}
+        consumeChannelRequest={host.consumeChannelRequest}
         onClose={() => setOpen(false)}
       />
     </ErrorBoundary>

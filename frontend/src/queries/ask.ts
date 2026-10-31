@@ -19,14 +19,18 @@ export function isAskChannelBusy(channel: AskChannel): boolean {
   return BUSY.has(channel.status);
 }
 
-/** Ask channels with their progress; refreshes every few seconds while indexing. */
-export function useAskChannels(enabled = true) {
+/**
+ * Ask channels with their progress. `poll` refreshes it every few seconds
+ * while a channel is indexing (the Ask page); the nav and buttons only need
+ * to know which channels exist, so they do not poll.
+ */
+export function useAskChannels(enabled = true, { poll = false } = {}) {
   return useQuery({
     queryKey: queryKeys.ask.channels,
     queryFn: ({ signal }) => api.askChannels({ signal }),
     enabled,
     refetchInterval: (query) =>
-      query.state.data?.items.some(isAskChannelBusy) ? 5000 : false,
+      poll && query.state.data?.items.some(isAskChannelBusy) ? 5000 : false,
   });
 }
 

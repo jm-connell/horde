@@ -131,3 +131,45 @@ test("saved conversations are listed in the chat panel", async ({ page }) => {
   await expect(panel.getByText("Your conversations")).toBeVisible();
   await expect(panel.getByText("None yet.")).toBeVisible();
 });
+
+test("Ask <channel> on a channel page opens a chat about it", async ({
+  page,
+}) => {
+  // The suite is offline: give the library channel its YouTube URL here.
+  await page.route(/\/api\/channels(\?.*)?$/, async (route) => {
+    const response = await route.fetch();
+    const rows = (await response.json()) as { channel: string }[];
+    await route.fulfill({
+      response,
+      json: rows.map((row) =>
+        row.channel === "Northwind"
+          ? { ...row, channel_url: "https://www.youtube.com/@northwind" }
+          : row
+      ),
+    });
+  });
+  await page.route(/\/api\/channels\/feed\?/, (route) =>
+    route.fulfill({
+      json: { channel: "Northwind", entries: [], has_more: false },
+    })
+  );
+  await page.route(/\/api\/live\/channel\?/, (route) =>
+    route.fulfill({ json: { live: null } })
+  );
+  await page.goto("/?channel=Northwind");
+  // The panel is closed: the request must survive its mounting.
+  await page.getByRole("button", { name: "Ask Northwind" }).click();
+  const panel = page.getByRole("dialog", { name: "Ask Northwind" });
+  await expect(panel).toBeVisible();
+  await expect(panel.getByText("Answering from")).toBeVisible();
+  await expect(
+    panel.getByRole("textbox", { name: "Your question" })
+  ).toHaveAttribute("placeholder", "Ask Northwind…");
+  // Removing the chip goes back to Ask about Horde, and New chat keeps it so.
+  await panel
+    .getByRole("button", { name: "Stop answering from these channels" })
+    .click();
+  await expect(
+    page.getByRole("dialog", { name: "Ask about Horde" })
+  ).toBeVisible();
+});
