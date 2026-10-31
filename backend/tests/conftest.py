@@ -122,6 +122,24 @@ def _ai_probes_offline(monkeypatch):
     provider.invalidate_resolved_url()
 
 
+@pytest.fixture(autouse=True)
+def _empty_compat_tables():
+    """Start each test with no compat jobs or remembered failures.
+
+    ``compat_rendition`` keeps them in module tables keyed by video id, and every
+    test's first video is id 1: a remux failure one test provokes would otherwise
+    show as that video's Safari status in a later test run by the same process.
+    """
+    from app.services import compat_rendition
+
+    with compat_rendition._lock:
+        compat_rendition._jobs.clear()
+        compat_rendition._pending.clear()
+        compat_rendition._running.clear()
+        compat_rendition._errors.clear()
+        compat_rendition._safari_errors.clear()
+
+
 @pytest.fixture
 def serve_ai(monkeypatch):
     """``serve_ai(handler)``: answer AI provider requests with ``handler(request)``."""
