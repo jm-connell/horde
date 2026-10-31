@@ -167,6 +167,15 @@ def tmp_dirs(tmp_path, monkeypatch):
         "db_path": ctx.paths.db_path,
         "ctx": ctx,
     }
+    # Download and ffmpeg threads read the active context. One still finishing a
+    # job the test has already seen complete would otherwise run on into the next
+    # test's context, or crash between the two and leave its job id marked running.
+    # (``_join_background_workers`` restarts the queue for the next test.)
+    from app.services.downloads.ffmpeg_queue import ffmpeg_queue
+    from app.services.downloads.queue import download_queue
+
+    assert download_queue.stop(timeout=30), "download threads still running after test"
+    assert ffmpeg_queue.stop(timeout=30), "ffmpeg threads still running after test"
     context.deactivate(previous)
     ctx.engine.dispose()
 
