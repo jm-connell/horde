@@ -82,7 +82,7 @@ jobs:
       - name: OpenAPI export is up to date
         run: PYTHONPATH=. python -m app.export_openapi --check openapi.json
       - name: Run pytest
-        run: PYTHONPATH=. pytest -q
+        run: PYTHONPATH=. pytest -q -n auto --durations=20
 
   frontend:
     runs-on: ubuntu-latest
@@ -103,8 +103,16 @@ jobs:
       - name: Build
         run: npm run build
 
-  e2e:
+  # The suite runs on one worker against one server (every test resets its
+  # state), so it is split across jobs instead: each shard starts its own
+  # webServers and runs a quarter of the spec files.
+  e2e-shard:
+    name: e2e (${{ matrix.shard }}/4)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -137,14 +145,25 @@ jobs:
         working-directory: frontend
         env:
           E2E_PYTHON: python
-        run: npx playwright test
+        run: npx playwright test --shard=${{ matrix.shard }}/4
       - name: Upload Playwright report
         if: failure()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: frontend/playwright-report
           retention-days: 7
+
+  # The ruleset on main requires a check named `e2e`; this rolls the shards up
+  # into it. `always()` keeps it from being skipped (a skipped required check
+  # counts as passing) when a shard fails.
+  e2e:
+    needs: e2e-shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: All e2e shards passed
+        run: test "${{ needs.e2e-shard.result }}" = success
 
   docs:
     runs-on: ubuntu-latest

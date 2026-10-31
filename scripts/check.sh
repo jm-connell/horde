@@ -66,7 +66,7 @@ gate "ruff format --check" in_dir "$ROOT/backend" "$PYTHON" -m ruff format --che
 gate "mypy" in_dir "$ROOT/backend" "$PYTHON" -m mypy
 gate "requirements.lock up to date" "$PYTHON" "$ROOT/scripts/check_requirements_lock.py"
 gate "openapi.json up to date" in_dir "$ROOT/backend" env PYTHONPATH=. "$PYTHON" -m app.export_openapi --check openapi.json
-gate "pytest" in_dir "$ROOT/backend" env PYTHONPATH=. "$PYTHON" -m pytest -q
+gate "pytest" in_dir "$ROOT/backend" env PYTHONPATH=. "$PYTHON" -m pytest -q -n auto --durations=20
 
 # --- frontend ----------------------------------------------------------------
 if [[ ! -d "$ROOT/frontend/node_modules" ]]; then

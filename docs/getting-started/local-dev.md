@@ -28,7 +28,7 @@ From the repo root:
 
 1. Sets `DOWNLOADS_DIR` and `DATA_DIR` to `./downloads` and `./data` under the repo (creating them if needed)
 2. Creates `.venv` if missing and installs `backend/requirements.txt` when needed
-3. Installs `backend/requirements-dev.txt` (pytest, ruff, mypy, mkdocs-material) when needed
+3. Installs `backend/requirements-dev.txt` (pytest, pytest-xdist, ruff, mypy, mkdocs-material) when it changed
 4. Builds the MkDocs wiki into `backend/static/wiki/` when missing or when `docs/` / `mkdocs.yml` changed (unless `SKIP_WIKI=1`)
 5. Runs `npm install` in `frontend/` when `node_modules` is missing
 6. Starts **uvicorn** with `--reload` on port **8080**
@@ -110,7 +110,7 @@ Backend (from `backend/`, with the repo venv activated):
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
-pytest
+pytest -n auto
 ```
 
 Frontend:
