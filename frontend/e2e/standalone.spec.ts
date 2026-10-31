@@ -242,7 +242,7 @@ test("a tap in Ask about Horde while typing lands where it was aimed", async ({
   page,
 }) => {
   const answer = "Here is how.";
-  await page.route(/\/api\/ai\/help\/chat$/, (route) =>
+  await page.route(/\/api\/ask\/chat$/, (route) =>
     route.fulfill({
       status: 200,
       contentType: "text/event-stream",

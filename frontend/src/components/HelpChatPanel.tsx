@@ -8,13 +8,14 @@ import {
   usePlaybackLayout,
   usePlaybackSession,
 } from "../context/PlaybackContext";
-import type { PageDetail } from "../context/HelpChatContext";
+import type { ChannelRequest, PageDetail } from "../context/HelpChatContext";
 import type { HelpCatalog } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { queryKeys } from "../queries/keys";
 import { getJson, removeItem, setJson } from "../storage";
 import AiMarkdown, { type InlineRenderers } from "./AiMarkdown";
+import { AskCite, AskReferenceList } from "./AskReferences";
 import { markdownHref } from "./aiMarkdownParse";
 import {
   CssPreviewCard,
@@ -22,12 +23,17 @@ import {
   HelpTokenLink,
 } from "./HelpChatActions";
 import {
+  ASK_CHAT_STORAGE_KEY,
+  type AskReference,
   HELP_CHAT_STORAGE_KEY,
   HELP_PANEL_ID,
   type HelpMessage,
-  historyForRequest,
+  isAskState,
   isHelpThread,
+  parseReferences,
+  parseScopeChannels,
   parseSources,
+  savedSources,
 } from "./helpChat";
 import {
   clampHelpFrame,
@@ -78,6 +84,8 @@ interface Props {
   pageDetail: () => PageDetail | null;
   /** Focus the question box (false when restored open after a reload). */
   focusOnOpen: boolean;
+  /** "Ask <channel>" from a channel page: a new conversation about it. */
+  channelRequest?: ChannelRequest | null;
   onClose: () => void;
 }
 
@@ -107,22 +115,42 @@ function AssistantReply({
   streaming,
   renderers,
   catalog,
+  references,
   onNavigate,
 }: {
   content: string;
   streaming: boolean;
   renderers: InlineRenderers;
   catalog: HelpCatalog | undefined;
+  /** Ask channel answers: markers become links to these. */
+  references?: AskReference[];
   onNavigate: () => void;
 }) {
   const { text, actions } = splitActions(content);
+  const byN = new Map((references ?? []).map((r) => [r.n, r]));
+  const render: InlineRenderers = references
+    ? {
+        ...renderers,
+        // While streaming, the numbers are the model's excerpt numbers: hidden
+        // until the server sends the renumbered answer with its references.
+        cite: (n, key) => {
+          const ref = byN.get(n);
+          return ref ? (
+            <AskCite key={key} reference={ref} onNavigate={onNavigate} />
+          ) : null;
+        },
+      }
+    : renderers;
   return (
     <>
       <AiMarkdown
         text={text}
-        render={renderers}
+        render={render}
         className="space-y-2 text-sm text-gray-300"
       />
+      {!streaming && references && (
+        <AskReferenceList references={references} onNavigate={onNavigate} />
+      )}
       {!streaming && (
         <>
           <HelpActionCards
@@ -153,6 +181,7 @@ export default function HelpChatPanel({
   onFrameChange,
   pageDetail,
   focusOnOpen,
+  channelRequest = null,
   onClose,
 }: Props) {
   const titleId = useId();
@@ -165,6 +194,16 @@ export default function HelpChatPanel({
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
+  // The saved conversation this tab shows, and the channels it is about.
+  const [ask, setAsk] = useState(() =>
+    getJson(
+      ASK_CHAT_STORAGE_KEY,
+      isAskState,
+      { threadId: null, scope: [] },
+      "session"
+    )
+  );
+  const [showHistory, setShowHistory] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -238,6 +277,22 @@ export default function HelpChatPanel({
     // Only finished turns: a half-streamed reply is not worth restoring.
     if (!sending) setJson(HELP_CHAT_STORAGE_KEY, messages, "session");
   }, [messages, sending]);
+  useEffect(() => {
+    setJson(ASK_CHAT_STORAGE_KEY, ask, "session");
+  }, [ask]);
+
+  // "Ask <channel>": a new conversation about that channel.
+  const seenRequest = useRef(channelRequest?.seq ?? 0);
+  useEffect(() => {
+    if (!channelRequest || channelRequest.seq === seenRequest.current) return;
+    seenRequest.current = channelRequest.seq;
+    abortRef.current?.abort();
+    setMessages([]);
+    setError(null);
+    setShowHistory(false);
+    setAsk({ threadId: null, scope: [channelRequest.channel] });
+    inputRef.current?.focus();
+  }, [channelRequest]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -323,7 +378,6 @@ export default function HelpChatPanel({
       return;
     }
     setSending(true);
-    const history = historyForRequest(messages);
     const stamp = Date.now();
     const userId = `user-${stamp}`;
     const replyId = `reply-${stamp}`;
@@ -342,10 +396,32 @@ export default function HelpChatPanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
-      await api.streamHelpChat(text, history, currentPage(), consent, {
+      const params = {
+        threadId: ask.threadId,
+        channelIds: ask.scope.map((c) => c.id),
+        page: currentPage(),
+        dataConsent: consent,
+      };
+      await api.streamAsk(text, params, {
         signal: ac.signal,
         onEvent: (event) => {
-          if (event.type === "sources") {
+          if (event.type === "thread" && typeof event.id === "number") {
+            const threadId = event.id;
+            setAsk((a) => ({ ...a, threadId }));
+          } else if (event.type === "scope") {
+            const scope = parseScopeChannels(event.channels);
+            setAsk((a) => ({ ...a, scope }));
+          } else if (
+            event.type === "status" &&
+            typeof event.text === "string"
+          ) {
+            const status = event.text;
+            update((m) => ({ ...m, status }));
+          } else if (event.type === "references") {
+            const references = parseReferences(event.references);
+            const channels = parseScopeChannels(event.channels);
+            update((m) => ({ ...m, references, channels }));
+          } else if (event.type === "sources") {
             const sources = parseSources(event.sources);
             update((m) => ({ ...m, sources }));
           } else if (event.type === "token" && typeof event.text === "string") {
@@ -377,13 +453,75 @@ export default function HelpChatPanel({
     }
   }
 
+  /** A new conversation; one opened from a channel page stays about that channel. */
   function clear() {
     if (sending) return;
     setMessages([]);
     setError(null);
+    setShowHistory(false);
+    setAsk({
+      threadId: null,
+      scope: channelRequest ? [channelRequest.channel] : [],
+    });
     removeItem(HELP_CHAT_STORAGE_KEY, "session");
     inputRef.current?.focus();
   }
+
+  async function openThread(id: number) {
+    if (sending) return;
+    setError(null);
+    try {
+      const thread = await api.askThread(id);
+      setMessages(
+        thread.messages.map((m) => ({
+          id: `saved-${m.id}`,
+          role: m.role,
+          content: m.content,
+          ...savedSources(m.sources),
+        }))
+      );
+      setAsk({
+        threadId: thread.id,
+        scope: parseScopeChannels(
+          (thread.scope as { channels?: unknown }).channels
+        ),
+      });
+      setShowHistory(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not open it");
+    }
+  }
+
+  async function deleteThread(id: number) {
+    try {
+      await api.deleteAskThread(id);
+      if (ask.threadId === id) clear();
+      void threadsQuery.refetch();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete it");
+    }
+  }
+
+  const threadsQuery = useQuery({
+    queryKey: queryKeys.ask.threads,
+    queryFn: ({ signal }) => api.askThreads({ signal }),
+    enabled: showHistory,
+    staleTime: 0,
+  });
+  const askChannels = useQuery({
+    queryKey: queryKeys.ask.channels,
+    queryFn: ({ signal }) => api.askChannels({ signal }),
+    staleTime: 60_000,
+  }).data?.items;
+  const channelNames = ask.scope
+    .map((c) => c.name)
+    .filter(Boolean)
+    .join(", ");
+  const placeholder = ask.scope.length
+    ? `Ask ${channelNames || "this channel"}…`
+    : askChannels?.length
+      ? "Ask about Horde, or name a channel…"
+      : "Ask about Horde…";
 
   // On a phone the panel covers the page: get out of the way of a link.
   const onNavigate = () => {
@@ -482,21 +620,32 @@ export default function HelpChatPanel({
       >
         <div className="min-w-0">
           <h2 id={titleId} className="text-sm font-semibold text-gray-100">
-            Ask about Horde
+            {ask.scope.length ? `Ask ${channelNames}` : "Ask about Horde"}
           </h2>
           <p className="truncate text-xs text-muted">
-            From Horde’s docs and code. Can be wrong.
+            {ask.scope.length
+              ? "From what they said in their videos. Check the references."
+              : "From Horde’s docs and code. Can be wrong."}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          {messages.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowHistory((v) => !v)}
+            disabled={sending}
+            aria-pressed={showHistory}
+            className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
+          >
+            History
+          </button>
+          {(messages.length > 0 || ask.threadId != null) && (
             <button
               type="button"
               onClick={clear}
               disabled={sending}
               className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
             >
-              Clear
+              New chat
             </button>
           )}
           <button
@@ -596,90 +745,145 @@ export default function HelpChatPanel({
         className="horde-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3"
         aria-live="polite"
       >
-        {messages.length === 0 && !sending && (
-          <div className="space-y-3">
-            <p className="text-sm text-gray-400">
-              Ask how to use, set up or fix Horde. I can also take you to a
-              setting or change it, look at your downloads and library, make
-              playlists and restyle the app. The page you are on is sent with
-              your question.
+        {showHistory && (
+          <div className="space-y-1" data-horde="ask-history">
+            <p className="text-xs font-semibold text-gray-400">
+              Your conversations
             </p>
-            <div className="flex flex-wrap gap-2">
-              {prompts.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => void send(q)}
-                  className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-left text-xs text-gray-300 hover:border-accent hover:text-accent"
-                >
-                  {q}
-                </button>
+            {threadsQuery.isLoading && <TypingDots label="Loading" />}
+            {threadsQuery.data?.items.length === 0 && (
+              <p className="text-xs text-muted">None yet.</p>
+            )}
+            <ul className="space-y-1">
+              {threadsQuery.data?.items.map((t) => (
+                <li key={t.id} className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void openThread(t.id)}
+                    className="min-w-0 flex-1 truncate rounded-md px-2 py-1 text-left text-sm text-gray-300 hover:bg-ink-800 hover:text-accent"
+                  >
+                    {t.title || "Untitled"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void deleteThread(t.id)}
+                    aria-label={`Delete “${t.title}”`}
+                    className="shrink-0 rounded-md px-1.5 py-1 text-xs text-muted hover:text-danger"
+                  >
+                    Delete
+                  </button>
+                </li>
               ))}
-            </div>
+            </ul>
           </div>
         )}
-        {messages.map((m) => {
-          const waiting =
-            sending && m.role === "assistant" && !m.content.trim();
-          return (
-            <div
-              key={m.id}
-              className={
-                m.role === "user" ? "flex justify-end" : "flex justify-start"
-              }
-            >
-              <div
-                className={
-                  m.role === "user"
-                    ? "w-fit max-w-[85%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
-                    : "w-fit max-w-full min-w-0 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
-                }
-              >
-                <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                  {m.role === "user" ? "You" : "Horde"}
-                </p>
-                {waiting ? (
-                  <TypingDots label="Looking it up" className="py-1" />
-                ) : m.role === "user" ? (
-                  <AiMarkdown
-                    text={m.content}
-                    className="space-y-2 text-sm text-gray-200"
-                  />
-                ) : (
-                  <AssistantReply
-                    content={m.content}
-                    streaming={sending && m.id === lastId}
-                    renderers={renderers}
-                    catalog={catalog}
-                    onNavigate={onNavigate}
-                  />
-                )}
-                {m.role === "assistant" && !!m.sources?.length && !waiting && (
-                  <details className="mt-2 text-xs text-muted">
-                    <summary className="cursor-pointer select-none hover:text-gray-300">
-                      Sources ({m.sources.length})
-                    </summary>
-                    <ul className="mt-1 space-y-0.5">
-                      {m.sources.map((s) => (
-                        <li key={s.path} className="truncate">
-                          <a
-                            href={markdownHref(s.url)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title={s.path}
-                            className="text-accent underline-offset-2 hover:underline"
-                          >
-                            {s.title}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
+        {!showHistory &&
+          messages.length === 0 &&
+          !sending &&
+          ask.scope.length > 0 && (
+            <p className="text-sm text-gray-400">
+              Ask what {channelNames || "this channel"} said about something.
+              Answers come only from the indexed videos, with a numbered
+              reference to the moment for each point.
+            </p>
+          )}
+        {!showHistory &&
+          messages.length === 0 &&
+          !sending &&
+          ask.scope.length === 0 && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-400">
+                Ask how to use, set up or fix Horde. I can also take you to a
+                setting or change it, look at your downloads and library, make
+                playlists and restyle the app. The page you are on is sent with
+                your question.
+                {askChannels?.length
+                  ? " Name a channel to ask what it said in its videos."
+                  : ""}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {prompts.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => void send(q)}
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-left text-xs text-gray-300 hover:border-accent hover:text-accent"
+                  >
+                    {q}
+                  </button>
+                ))}
               </div>
             </div>
-          );
-        })}
+          )}
+        {!showHistory &&
+          messages.map((m) => {
+            const waiting =
+              sending && m.role === "assistant" && !m.content.trim();
+            return (
+              <div
+                key={m.id}
+                className={
+                  m.role === "user" ? "flex justify-end" : "flex justify-start"
+                }
+              >
+                <div
+                  className={
+                    m.role === "user"
+                      ? "w-fit max-w-[85%] rounded-lg bg-accent/10 px-3 py-2 text-sm text-gray-200"
+                      : "w-fit max-w-full min-w-0 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
+                  }
+                >
+                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+                    {m.role === "user" ? "You" : "Horde"}
+                  </p>
+                  {waiting ? (
+                    <TypingDots
+                      label={m.status || "Looking it up"}
+                      className="py-1"
+                    />
+                  ) : m.role === "user" ? (
+                    <AiMarkdown
+                      text={m.content}
+                      className="space-y-2 text-sm text-gray-200"
+                    />
+                  ) : (
+                    <AssistantReply
+                      content={m.content}
+                      streaming={sending && m.id === lastId}
+                      renderers={renderers}
+                      catalog={catalog}
+                      references={m.references}
+                      onNavigate={onNavigate}
+                    />
+                  )}
+                  {m.role === "assistant" &&
+                    !!m.sources?.length &&
+                    !waiting && (
+                      <details className="mt-2 text-xs text-muted">
+                        <summary className="cursor-pointer select-none hover:text-gray-300">
+                          Sources ({m.sources.length})
+                        </summary>
+                        <ul className="mt-1 space-y-0.5">
+                          {m.sources.map((s) => (
+                            <li key={s.path} className="truncate">
+                              <a
+                                href={markdownHref(s.url)}
+                                target="_blank"
+                                rel="noreferrer"
+                                title={s.path}
+                                className="text-accent underline-offset-2 hover:underline"
+                              >
+                                {s.title}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </details>
+                    )}
+                </div>
+              </div>
+            );
+          })}
         {error && (
           <p role="alert" className="text-xs text-warning">
             {error}
@@ -687,6 +891,24 @@ export default function HelpChatPanel({
         )}
       </div>
 
+      {ask.scope.length > 0 && (
+        <div className="flex items-center gap-2 border-t border-ink-700 px-3 pt-2 text-xs">
+          <span className="text-muted">Answering from</span>
+          <span className="truncate rounded-full bg-ink-800 px-2 py-0.5 text-gray-300">
+            {channelNames || "a channel"}
+          </span>
+          <button
+            type="button"
+            onClick={() => setAsk((a) => ({ ...a, scope: [] }))}
+            disabled={sending}
+            aria-label="Stop answering from these channels"
+            title="Ask about Horde instead"
+            className="text-muted hover:text-accent disabled:opacity-40"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
       <form
         className="flex items-end gap-2 border-t border-ink-700 px-3 py-2.5"
         onSubmit={(e) => {
@@ -713,7 +935,7 @@ export default function HelpChatPanel({
           // Read-only, not disabled: disabling drops focus, and the user
           // would have to click back in for the next question.
           readOnly={sending}
-          placeholder="Ask about Horde…"
+          placeholder={placeholder}
           className="horde-scrollbar min-h-10 flex-1 resize-none rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-base text-gray-200 placeholder:text-muted focus:border-accent focus:outline-hidden md:text-sm"
         />
         {sending ? (

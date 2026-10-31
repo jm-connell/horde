@@ -11,7 +11,10 @@ import {
 import ErrorBoundary from "../components/ErrorBoundary";
 import HelpChatPanel from "../components/HelpChatPanel";
 import type { HelpFrame } from "../components/helpChatLayout";
-import { HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY } from "../components/helpChat";
+import {
+  type AskScopeChannel,
+  HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY,
+} from "../components/helpChat";
 import { getJson, setJson } from "../storage";
 import { useAuth } from "./AuthContext";
 
@@ -24,6 +27,8 @@ interface HelpChatValue {
   setDetail: (detail: PageDetail) => void;
   /** Drop `detail` unless another page has replaced it already. */
   clearDetail: (detail: PageDetail) => void;
+  /** Open the panel on a new conversation about this Ask channel. */
+  askChannel: (channel: AskScopeChannel) => void;
 }
 
 interface HostValue {
@@ -32,6 +37,14 @@ interface HostValue {
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
+  /** The latest "Ask <channel>" request; a new one starts a new conversation. */
+  channelRequest: ChannelRequest | null;
+}
+
+/** A request to start a conversation about a channel (`seq` tells repeats apart). */
+export interface ChannelRequest {
+  channel: AskScopeChannel;
+  seq: number;
 }
 
 /** A page's own note on what is showing, e.g. the selected Settings tab. */
@@ -94,6 +107,16 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const clearDetail = useCallback((mine: PageDetail) => {
     if (detail.current === mine) detail.current = null;
   }, []);
+  const [channelRequest, setChannelRequest] = useState<ChannelRequest | null>(
+    null
+  );
+  const askChannel = useCallback(
+    (channel: AskScopeChannel) => {
+      setChannelRequest((prev) => ({ channel, seq: (prev?.seq ?? 0) + 1 }));
+      setOpen(true);
+    },
+    [setOpen]
+  );
   const setFrame = useCallback(
     (frame: HelpFrame) => setState((s) => ({ ...s, frame })),
     []
@@ -105,8 +128,9 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setOpen,
       setDetail,
       clearDetail,
+      askChannel,
     }),
-    [available, state.open, setOpen, setDetail, clearDetail]
+    [available, state.open, setOpen, setDetail, clearDetail, askChannel]
   );
 
   const host = useMemo(
@@ -115,8 +139,9 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setFrame,
       pageDetail: () => detail.current,
       openedHere,
+      channelRequest,
     }),
-    [state.frame, setFrame, openedHere]
+    [state.frame, setFrame, openedHere, channelRequest]
   );
 
   return (
@@ -142,6 +167,7 @@ export function HelpChatHost() {
         onFrameChange={host.setFrame}
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}
+        channelRequest={host.channelRequest}
         onClose={() => setOpen(false)}
       />
     </ErrorBoundary>

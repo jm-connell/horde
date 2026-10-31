@@ -2,7 +2,6 @@ import type {
   AiConnectionTest,
   HelpAssistantInfo,
   HelpCatalog,
-  HelpChatTurn,
   AiJobRow,
   AiProcessResult,
   AiStatus,
@@ -12,7 +11,6 @@ import type {
   StreamRelatedPage,
   Video,
 } from "../types";
-import type { HelpDataConsent } from "../hooks/settings/types";
 import type { ApiResponse } from "./typed";
 import {
   type ChatStreamOptions,
@@ -185,25 +183,6 @@ export const aiApi = {
     opts: ChatStreamOptions
   ): Promise<void> {
     return postEventStream(`/api/videos/${id}/ai/chat`, { message }, opts);
-  },
-
-  /**
-   * Ask about Horde: one question and the conversation before it (the server
-   * keeps none). Events as for video chat, plus `sources` before the reply.
-   */
-  streamHelpChat(
-    message: string,
-    history: HelpChatTurn[],
-    page: string,
-    dataConsent: HelpDataConsent,
-    opts: ChatStreamOptions
-  ): Promise<void> {
-    // The server checks that "local" consent meets a local provider.
-    return postEventStream(
-      "/api/ai/help/chat",
-      { message, history, page, data_consent: dataConsent },
-      opts
-    );
   },
 
   /** The pages and settings Ask about Horde may link to or change. */

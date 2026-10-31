@@ -1,10 +1,19 @@
+import type { HelpDataConsent } from "../hooks/settings/types";
 import type {
   AskChannel,
   AskChannelList,
   AskChannelPreview,
   AskSearchHit,
+  AskThread,
+  AskThreadSummary,
 } from "../types";
-import { type Page, type ReadOptions, request } from "./client";
+import {
+  type ChatStreamOptions,
+  type Page,
+  postEventStream,
+  type ReadOptions,
+  request,
+} from "./client";
 
 export const askApi = {
   askChannels(opts?: ReadOptions): Promise<AskChannelList> {
@@ -72,5 +81,45 @@ export const askApi = {
       `/api/ask/search?${qs.toString()}`,
       params.signal ? { signal: params.signal } : undefined
     );
+  },
+
+  /**
+   * One chat turn (SSE): Ask channels when the question names one or
+   * `channelIds` says which, Ask about Horde otherwise. The server saves the
+   * turn in `threadId` (a new conversation when null; see the `thread` event).
+   */
+  streamAsk(
+    message: string,
+    params: {
+      threadId: number | null;
+      channelIds: number[];
+      page: string;
+      dataConsent: HelpDataConsent;
+    },
+    opts: ChatStreamOptions
+  ): Promise<void> {
+    return postEventStream(
+      "/api/ask/chat",
+      {
+        message,
+        thread_id: params.threadId,
+        channel_ids: params.channelIds,
+        page: params.page,
+        data_consent: params.dataConsent,
+      },
+      opts
+    );
+  },
+
+  askThreads(opts?: ReadOptions): Promise<Page<AskThreadSummary>> {
+    return request<Page<AskThreadSummary>>("/api/ask/threads?limit=50", opts);
+  },
+
+  askThread(id: number, opts?: ReadOptions): Promise<AskThread> {
+    return request<AskThread>(`/api/ask/threads/${id}`, opts);
+  },
+
+  deleteAskThread(id: number): Promise<void> {
+    return request<void>(`/api/ask/threads/${id}`, { method: "DELETE" });
   },
 };

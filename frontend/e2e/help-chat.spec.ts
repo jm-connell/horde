@@ -24,8 +24,9 @@ test("the footer links to the docs and the GitHub issue tracker", async ({
 test("Ask about Horde opens in the corner, follows the user and moves", async ({
   page,
 }) => {
-  const bodies: { message: string; history: unknown[]; page: string }[] = [];
-  await page.route(/\/api\/ai\/help\/chat$/, (route) => {
+  const bodies: { message: string; thread_id: number | null; page: string }[] =
+    [];
+  await page.route(/\/api\/ask\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
     const answer =
@@ -36,6 +37,8 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
       status: 200,
       contentType: "text/event-stream",
       body: sse([
+        { type: "thread", id: 7, title: "How do I set up AI?" },
+        { type: "scope", channels: [] },
         {
           type: "user",
           message: { id: null, role: "user", content: body.message },
@@ -104,13 +107,9 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   await input.press("Enter");
   await expect(panel.getByText("Yes, local models work too.")).toBeVisible();
   expect(bodies[1].page).toBe("History (/history)");
-  expect(bodies[1].history).toEqual([
-    { role: "user", content: "How do I set up AI?" },
-    {
-      role: "assistant",
-      content: expect.stringContaining("Settings → AI") as unknown as string,
-    },
-  ]);
+  // The server keeps the conversation: the follow-up names its thread.
+  expect(bodies[0].thread_id).toBeNull();
+  expect(bodies[1].thread_id).toBe(7);
 
   // Drag it by the header, then resize it from the top-left corner.
   const before = (await panel.boundingBox())!;
@@ -145,7 +144,7 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   const reopened = (await panel.boundingBox())!;
   expect(reopened.x).toBeCloseTo(resized.x, 0);
   expect(reopened.width).toBeCloseTo(resized.width, 0);
-  await panel.getByRole("button", { name: "Clear" }).click();
+  await panel.getByRole("button", { name: "New chat" }).click();
   await expect(panel.getByText("Yes, local models work too.")).toBeHidden();
   // The sample questions change each time; "What can you do?" is always first.
   await expect(
@@ -194,7 +193,7 @@ async function stubAnswer(
   answer: string | ((n: number) => string)
 ) {
   const bodies: { message: string; data_consent?: string }[] = [];
-  await page.route(/\/api\/ai\/help\/chat$/, (route) => {
+  await page.route(/\/api\/ask\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
     const text = typeof answer === "string" ? answer : answer(bodies.length);

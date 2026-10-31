@@ -1,27 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   type HelpMessage,
-  historyForRequest,
+  isAskState,
   isHelpThread,
   parseSources,
+  savedSources,
 } from "./helpChat";
 
 const msg = (i: number, content = `turn ${i}`): HelpMessage => ({
   id: String(i),
   role: i % 2 ? "assistant" : "user",
   content,
-});
-
-describe("historyForRequest", () => {
-  it("sends the latest finished turns within the server's limits", () => {
-    const thread = Array.from({ length: 30 }, (_, i) => msg(i));
-    thread.push(msg(30, "   "));
-    thread[29] = msg(29, "x".repeat(9000));
-    const history = historyForRequest(thread);
-    expect(history).toHaveLength(12);
-    expect(history[0]).toEqual({ role: "user", content: "turn 18" });
-    expect(history[11].content).toHaveLength(8000);
-  });
 });
 
 describe("stored thread", () => {
@@ -37,5 +26,42 @@ describe("stored thread", () => {
     const ok = { path: "docs/a.md", title: "A", url: "/wiki/a/" };
     expect(parseSources([ok, { path: 1 }, null])).toEqual([ok]);
     expect(parseSources("nope")).toEqual([]);
+  });
+});
+
+describe("saved Ask messages", () => {
+  const ref = {
+    n: 1,
+    channel: "The Car Care Nut",
+    title: "Belts",
+    yt_id: "abcdefghijk",
+    published_at: null,
+    start_sec: 28,
+    library_video_id: null,
+    line: "the timing belt",
+    is_description: false,
+  };
+
+  it("reads channel answers' references and help answers' sources", () => {
+    expect(
+      savedSources({
+        kind: "channels",
+        channels: [{ id: 3, name: "The Car Care Nut" }, { id: "x" }],
+        references: [ref, { n: "bad" }],
+      })
+    ).toEqual({
+      references: [ref],
+      channels: [{ id: 3, name: "The Car Care Nut" }],
+    });
+    const doc = { path: "docs/a.md", title: "A", url: "/wiki/a/" };
+    expect(savedSources({ kind: "help", sources: [doc] })).toEqual({
+      sources: [doc],
+    });
+    expect(savedSources(null)).toEqual({});
+  });
+
+  it("accepts only a well-formed tab state", () => {
+    expect(isAskState({ threadId: 4, scope: [] })).toBe(true);
+    expect(isAskState({ threadId: "4", scope: [] })).toBe(false);
   });
 });
