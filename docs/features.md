@@ -84,7 +84,7 @@ Library watch and stream preview share the same player.
 | **Theater** | Wider player, reduced chrome (desktop) |
 | **Windowed** | Immersive layout, page scroll locked (desktop) |
 
-Also: mini player, PiP, Chromecast / AirPlay, SponsorBlock, chapters (description, yt-dlp, or optional AI), draggable VTT subtitles, hold-to-2×, and a session play queue. Mobile forces standard mode.
+Also: mini player, PiP, Chromecast / AirPlay, SponsorBlock, chapters (description, yt-dlp, or optional AI), draggable VTT subtitles, hold-to-2×, and a session play queue. Under the video, YouTube's top comments are saved with it, popular discussions included, and count in search and the video chat ([Comments](guides/comments.md)). Mobile forces standard mode.
 
 Keyboard shortcuts live in the [player guide](guides/player.md) and the [shortcuts reference](reference/keyboard-shortcuts.md). Watch/resume behavior: [Watching](guides/watching.md).
 

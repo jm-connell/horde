@@ -85,7 +85,7 @@ The summary line shows library size, how many copies exist and their size, and "
 
 ## Metadata and catalog
 
-These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled` and `channel_catalog_max_videos` (the two YouTube search switches keep their real values, because member screens use them).
+These are **top-level** keys (not the `ui` blob). The whole section is server-wide and shown to administrators only; `GET /api/settings` gives members the defaults of `metadata_sync_interval_hours`, `channel_catalog_enabled`, `channel_catalog_max_videos` and `save_comments` (the two YouTube search switches keep their real values, because member screens use them).
 
 ### Channel catalog
 
@@ -97,6 +97,7 @@ These are **top-level** keys (not the `ui` blob). The whole section is server-wi
 | YouTube results in library search | `youtube_video_search` | `true` | boolean |
 | Recommended+ looks on YouTube | `discovery_enabled` | `true` | boolean |
 | Recommendations learn from the household | `discovery_household` | `true` | boolean |
+| Save top comments | `save_comments` | `true` | boolean |
 
 When catalog indexing is enabled, Horde background-indexes **YouTube** channel uploads (titles; descriptions for the newest ~200) when you download from a channel or open its feed, so feed search works beyond the loaded page. Non-YouTube channel URLs are skipped.
 
@@ -109,6 +110,8 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 **Recommended+ looks on YouTube**: every few hours, for each person who opened Recommended+ in the last three days, Horde makes up to four YouTube searches built from what they watch and reads the up next list of up to three videos they liked; at most 30 calls an hour for everyone, 20 seconds apart, behind anything you are doing, and it pauses for a while when YouTube pushes back. The search words are sent to YouTube. It also needs **YouTube results in library search**. Off: the Recommended+ tab is hidden (Recommended covers your library and indexed channels).
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended+. Nobody is shown who watched what.
+
+**Save top comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off: nothing more is fetched; comments already saved stay, and the watch page can still read them from YouTube on request. See [Comments](../guides/comments.md).
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.

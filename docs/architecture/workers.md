@@ -24,7 +24,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
 | `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
-| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `ask`, `stream-ai`, `discovery`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
+| `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `ask`, `comments`, `stream-ai`, `discovery`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 
 Short-lived threads started by a request (bulk metadata sync, playlist sync, H.264 copies) are not registered; they are daemon threads and every database write they make is transactional.
 
@@ -140,6 +140,10 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 ### Recommended+ gatherer
 
 **Start:** `discovery.gather.create_worker(ctx.discovery)` after stream AI. After 90 seconds, and then whenever woken (a person's first visit or a refresh) or every 10 minutes, it runs for each person who opened Recommended+ in the last 3 days and is due (6 hours since their last run, or asked): up to 4 YouTube searches and 3 up next lists through the extract gate at background priority, at most 30 calls an hour in all, 20 seconds apart, pausing 30 minutes (doubling to 12 hours) after a bot check or rate limit. It then embeds what it found and prunes old hits. Off when `discovery_enabled` or `youtube_video_search` is off. See [ADR 0019](../adr/0019-recommended-plus.md).
+
+## Comments
+
+**Start:** `comments.worker.create_worker()` after the Ask worker. One minute after startup, then one video per pass: a YouTube video in the library without saved comments (newest added first, and a finished download wakes it), else one whose retry or refresh is due. Each fetch is one yt-dlp call in the extract gate at background priority, at most one every **30 s**, for the top 100 comments and up to 10 replies each for the highest-ranked threads (100 replies in all). A rate limit or bot check pauses it for an hour. A failure is retried after 1 h and 4 h, then left; an upload less than a week old is fetched once more when it turns a week old. Off when `save_comments` is off. See [Comments](../guides/comments.md) and [ADR 0023](../adr/0023-saved-comments.md).
 
 ## Trash purge
 

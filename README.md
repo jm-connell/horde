@@ -38,6 +38,10 @@ Interactive API reference: `/docs`.
   uploads from your channels, more like what you've been watching, channels
   you've never seen (found on YouTube in the background, gently rate limited)
   and the odd throwback, with "not interested" and channel suggestions.
+- **Comments**: the top YouTube comments of every video, with the most
+  popular discussions' replies, are saved with it, show under the video,
+  count in search and give the AI chat viewers' reactions. More load from
+  YouTube on request.
 - **Player**: standard, theater and windowed modes, mini player,
   picture-in-picture, Chromecast, SponsorBlock, chapters and subtitles. Videos
   play as stored, without live transcoding; devices that cannot play AV1 can get

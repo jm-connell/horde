@@ -14,7 +14,7 @@ Matches are grouped into up to four sections, in a fixed order. A row of chips a
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|
-| **In your library** | Videos already downloaded / approved into your library | Nothing in your library matches. |
+| **In your library** | Videos already downloaded / approved into your library, including videos found only through their saved [comments](comments.md) (after the others) | Nothing in your library matches. |
 | **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
 | **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
 | **Rest of your library** | Downloaded library videos that did not match the query | No other videos in your library. |
@@ -47,7 +47,7 @@ The channel header search:
 
 Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
 
-When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
+When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, a YouTube comment, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
 
 ### What gets indexed
 
