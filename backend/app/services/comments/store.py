@@ -21,9 +21,19 @@ from .fetch import (
     FetchResult,
 )
 
-#: Comments on a new upload keep coming for days: fetch once more a week in.
-REFRESH_AGE = timedelta(days=7)
-#: Attempts before a failing video is left alone (retried 1 h, then 4 h later).
+#: Comments keep coming while a video is young: after the first fetch, fetch
+#: again when the video is this old (counted from its upload date, or from when
+#: it was added when that is unknown). Ages already past are skipped.
+REFRESH_AGES = (
+    timedelta(days=7),
+    timedelta(days=30),
+    timedelta(days=182),
+    timedelta(days=365),
+)
+#: A video never fetched that is retried soon (a status of its own, not an outcome).
+PENDING = "pending"
+#: Attempts before a failing fetch waits for the next refresh age (retried 1 h,
+#: then 4 h later).
 MAX_ATTEMPTS = 3
 RETRY_BASE = timedelta(hours=1)
 #: After a rate limit, a bot check, a network error or a busy gate, the same
@@ -65,11 +75,10 @@ def saved_comments(session: Session, video_id: int) -> list[VideoComment]:
     )
 
 
-def _refresh_at(video: Video, now: datetime) -> datetime | None:
-    published = as_utc(video.published_at)
-    if published is None or now - published >= REFRESH_AGE:
-        return None
-    return published + REFRESH_AGE
+def refresh_at(video: Video, now: datetime) -> datetime | None:
+    """The next refresh age the video reaches after ``now``, if any is left."""
+    born = as_utc(video.published_at) or as_utc(video.added_at)
+    return next((born + age for age in REFRESH_AGES if born + age > now), None)
 
 
 def apply_result(session: Session, video: Video, result: FetchResult) -> None:
@@ -91,7 +100,7 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
         ).first()
         is not None
     ):
-        state.next_attempt_at = None
+        state.next_attempt_at = refresh_at(video, now)
     elif result.status == SAVED:
         session.exec(delete(VideoComment).where(col(VideoComment.video_id) == video_id))
         session.add_all(
@@ -114,7 +123,7 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
         state.fetched_at = now
         state.total_count = result.total_count
         state.attempts = 0
-        state.next_attempt_at = _refresh_at(video, now)
+        state.next_attempt_at = refresh_at(video, now)
     elif result.status in (DISABLED, UNAVAILABLE):
         # Comments saved earlier stay: they may be all that is left of them.
         state.status = result.status
@@ -124,17 +133,20 @@ def apply_result(session: Session, video: Video, result: FetchResult) -> None:
         state.next_attempt_at = None
     elif result.status in (RETRY, LATER):
         if state.fetched_at is None:
-            state.status = FAILED
+            state.status = PENDING
         state.next_attempt_at = now + RATE_LIMIT_WAIT
     else:
         state.attempts += 1
-        if state.fetched_at is None:
-            state.status = FAILED
-        state.next_attempt_at = (
-            now + RETRY_BASE * 4 ** (state.attempts - 1)
-            if state.attempts < MAX_ATTEMPTS
-            else None
-        )
+        if state.attempts < MAX_ATTEMPTS:
+            state.next_attempt_at = now + RETRY_BASE * 4 ** (state.attempts - 1)
+            if state.fetched_at is None:
+                state.status = PENDING
+        else:
+            # Given up for now; the next refresh age tries again from scratch.
+            state.attempts = 0
+            state.next_attempt_at = refresh_at(video, now)
+            if state.fetched_at is None:
+                state.status = FAILED
     session.add(state)
     session.commit()
 

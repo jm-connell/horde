@@ -24288,6 +24288,59 @@
         ]
       }
     },
+    "/api/videos/{video_id}/comments/refresh": {
+      "post": {
+        "description": "Fetch and save a library video's top comments now, then return them.\n\nThe background schedule carries on from here (the next refresh age).",
+        "operationId": "refresh_video_comments_api_videos__video_id__comments_refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VideoCommentsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Refresh Video Comments",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
     "/api/videos/{video_id}/compat": {
       "delete": {
         "operationId": "delete_compat_api_videos__video_id__compat_delete",

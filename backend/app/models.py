@@ -1183,7 +1183,7 @@ class VideoCommentState(SQLModel, table=True):
     __tablename__ = "video_comment_state"
 
     video_id: int = Field(primary_key=True, foreign_key="videos.id", ondelete="CASCADE")
-    # saved | disabled | unavailable | failed
+    # saved | pending (never fetched, retried soon) | disabled | unavailable | failed
     status: str = Field(default="saved")
     fetched_at: datetime | None = None
     # YouTube's count of all comments when they were fetched.

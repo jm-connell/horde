@@ -133,6 +133,7 @@ GATES: dict[tuple[str, str], str] = {
             ("PATCH", "/api/videos/bulk-notes"),
             ("PATCH", "/api/videos/{video_id}"),
             ("POST", "/api/videos/{video_id}/refresh-metadata"),
+            ("POST", "/api/videos/{video_id}/comments/refresh"),
             ("POST", "/api/videos/{video_id}/thumbnail"),
             ("POST", "/api/videos/{video_id}/thumbnail/candidates"),
             ("POST", "/api/videos/{video_id}/thumbnail/candidates/{index}"),

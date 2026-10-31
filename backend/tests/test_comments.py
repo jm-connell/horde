@@ -240,14 +240,36 @@ def test_a_fetch_replaces_the_saved_comments(session, add_video):
     )
 
 
-def test_a_new_upload_is_fetched_again_a_week_after_it_came_out(session, add_video):
+def test_comments_are_fetched_again_at_a_week_a_month_six_months_and_a_year(
+    session, add_video
+):
     published = datetime.now(UTC) - timedelta(days=2)
     video = add_video(published_at=published)
     store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
     state = session.get(VideoCommentState, video.id)
     assert abs(
-        state.next_attempt_at.replace(tzinfo=UTC) - (published + store.REFRESH_AGE)
+        state.next_attempt_at.replace(tzinfo=UTC) - (published + timedelta(days=7))
     ) < timedelta(seconds=1)
+
+    def next_age(days_old: float) -> int | None:
+        at = store.refresh_at(video, published + timedelta(days=days_old))
+        return None if at is None else (at - published).days
+
+    # A fetch that ran late (Horde was off) skips the ages already past.
+    assert [next_age(d) for d in (7.5, 29, 40, 200, 364, 366)] == [
+        30,
+        30,
+        182,
+        365,
+        365,
+        None,
+    ]
+
+
+def test_an_old_video_is_fetched_once(session, add_video):
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
+    assert session.get(VideoCommentState, video.id).next_attempt_at is None
 
 
 def test_comments_turned_off_later_keep_what_was_saved(session, add_video):
@@ -259,11 +281,14 @@ def test_comments_turned_off_later_keep_what_was_saved(session, add_video):
 
 
 def test_a_refetch_that_finds_nothing_keeps_what_was_saved(session, add_video):
-    video = add_video(published_at=datetime.now(UTC) - timedelta(days=2))
+    published = datetime.now(UTC) - timedelta(days=10)
+    video = add_video(published_at=published)
     store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("a", "x")]))
     store.apply_result(session, video, FetchResult(fetch.SAVED, []))
     assert [c.comment_id for c in _saved(session, video.id)] == ["a"]
-    assert session.get(VideoCommentState, video.id).next_attempt_at is None
+    # ...and the schedule moves on to the next age.
+    next_at = session.get(VideoCommentState, video.id).next_attempt_at
+    assert next_at.replace(tzinfo=UTC) - published >= timedelta(days=30)
 
 
 def test_later_is_tried_again_without_counting(
@@ -285,13 +310,14 @@ def test_later_is_tried_again_without_counting(
 
 
 def test_failures_back_off_then_give_up(session, add_video):
-    video = add_video()
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
     waits = []
+    statuses = []
     for _ in range(store.MAX_ATTEMPTS):
         before = datetime.now(UTC)
         store.apply_result(session, video, FetchResult(fetch.FAILED))
         state = session.get(VideoCommentState, video.id)
-        assert state.status == "failed"
+        statuses.append(state.status)
         waits.append(
             None
             if state.next_attempt_at is None
@@ -301,6 +327,19 @@ def test_failures_back_off_then_give_up(session, add_video):
             )
         )
     assert waits == [1, 4, None]
+    assert statuses == ["pending", "pending", "failed"]
+
+
+def test_a_young_video_given_up_on_tries_again_at_its_next_age(session, add_video):
+    published = datetime.now(UTC) - timedelta(days=1)
+    video = add_video(published_at=published)
+    for _ in range(store.MAX_ATTEMPTS):
+        store.apply_result(session, video, FetchResult(fetch.FAILED))
+    state = session.get(VideoCommentState, video.id)
+    assert state.status == "failed" and state.attempts == 0
+    assert abs(
+        state.next_attempt_at.replace(tzinfo=UTC) - (published + timedelta(days=7))
+    ) < timedelta(seconds=1)
 
 
 def test_a_rate_limit_does_not_count_as_an_attempt(session, add_video):
@@ -461,20 +500,10 @@ def test_the_status_says_why_there_are_no_comments(
     video = add_video()
     url = f"/api/videos/{video.id}/comments"
     assert member_client.get(url).json()["status"] == "pending"
-    session.add(
-        VideoCommentState(
-            video_id=video.id,
-            status="failed",
-            attempts=1,
-            next_attempt_at=datetime.now(UTC) + timedelta(hours=1),
-        )
-    )
-    session.commit()
-    assert client.get(url).json()["status"] == "pending"  # it will try again
-    state = session.get(VideoCommentState, video.id)
-    state.next_attempt_at = None
-    session.add(state)
-    session.commit()
+    store.apply_result(session, video, FetchResult(fetch.FAILED))
+    assert client.get(url).json()["status"] == "pending"  # it will try again soon
+    for _ in range(store.MAX_ATTEMPTS - 1):
+        store.apply_result(session, video, FetchResult(fetch.FAILED))
     assert client.get(url).json()["status"] == "failed"
 
     later = add_video()
@@ -666,3 +695,44 @@ def test_deleting_a_video_removes_its_comments_and_their_index(session, add_vide
         )
     ).scalar()
     assert hits == 0
+
+
+# --- Refreshing by hand --------------------------------------------------------
+
+
+def test_refresh_fetches_and_saves_now(client, session, add_video, monkeypatch):
+    from app.services.ytdlp_common import EXTRACT_PRIORITY_INTERACTIVE
+
+    video = add_video(published_at=datetime.now(UTC) - timedelta(days=900))
+    store.apply_result(session, video, FetchResult(fetch.SAVED, [_comment("old", "x")]))
+    calls = []
+
+    def fake(yt_id, **kwargs):
+        calls.append((yt_id, kwargs["priority"]))
+        return FetchResult(fetch.SAVED, [_comment("new", "fresh take")], 77)
+
+    monkeypatch.setattr(fetch, "fetch_comments", fake)
+    resp = client.post(f"/api/videos/{video.id}/comments/refresh")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert [c["id"] for c in body["items"]] == ["new"]
+    assert body["status"] == "saved" and body["total_count"] == 77
+    assert calls == [(video.youtube_id, EXTRACT_PRIORITY_INTERACTIVE)]
+
+
+def test_only_a_youtube_video_can_be_refreshed(client, add_video, monkeypatch):
+    """Who may refresh (Edit details) is pinned in test_permissions.GATES."""
+    monkeypatch.setattr(fetch, "fetch_comments", lambda *a, **k: pytest.fail("fetched"))
+    upload = add_video(source_url=None, file_path="Alpha/2024/home movie.mp4")
+    resp = client.post(f"/api/videos/{upload.id}/comments/refresh")
+    assert (resp.status_code, resp.json()["code"]) == (409, "not_youtube")
+
+
+def test_a_rate_limited_refresh_says_so_and_pauses_the_fetcher(
+    client, add_video, init_db, monkeypatch
+):
+    video = add_video()
+    monkeypatch.setattr(fetch, "fetch_comments", lambda *a, **k: FetchResult("retry"))
+    resp = client.post(f"/api/videos/{video.id}/comments/refresh")
+    assert (resp.status_code, resp.json()["code"]) == (503, "youtube_rate_limited")
+    assert init_db["ctx"].comments.seconds_paused() > 3000
