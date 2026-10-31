@@ -502,7 +502,25 @@ test("the chat docks at the side and the page makes room for it", async ({
   expect(beside.x + beside.width).toBeLessThanOrEqual(box.x + 1);
   expect(beside.width).toBeLessThan(fullWidth);
 
-  // It stays docked on the next page, and floating again gives the room back.
+  // Dragging its left edge makes it wider and the page narrower.
+  const handle = panel.getByRole("separator", { name: "Resize the chat" });
+  const edge = (await handle.boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(edge.x - 200, edge.y + 200, { steps: 8 });
+  await page.mouse.up();
+  const wider = (await panel.boundingBox())!;
+  expect(wider.width).toBeGreaterThan(box.width + 150);
+  expect((await main.boundingBox())!.width).toBeLessThan(beside.width - 150);
+  // Arrow keys nudge it (right is narrower).
+  await handle.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(async () => (await panel.boundingBox())!.width)
+    .toBeCloseTo(wider.width - 16, 0);
+
+  // It stays docked, at its width, on the next page; floating again gives the
+  // room back.
   await page.getByRole("link", { name: "History" }).first().click();
   await expect(page).toHaveURL(/\/history$/);
   await expect(panel).toHaveAttribute("data-docked", "true");
@@ -511,6 +529,7 @@ test("the chat docks at the side and the page makes room for it", async ({
     "docked chat",
     '[data-horde="help-chat"]'
   );
+  expect((await panel.boundingBox())!.width).toBeCloseTo(wider.width - 16, 0);
   await panel.getByRole("button", { name: "Float the chat" }).click();
   await expect(panel).not.toHaveAttribute("data-docked", "true");
   await expect

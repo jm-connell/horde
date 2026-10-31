@@ -79,3 +79,24 @@ export function resizeFromTopLeft(
   );
   return { left: right - width, top: bottom - height, width, height };
 }
+
+/** Narrowest the docked chat can be dragged. */
+export const DOCK_MIN_W = 320;
+/** Room always left for the page beside the docked chat. */
+const DOCK_PAGE_MIN = 480;
+
+/**
+ * The docked chat's width: the one the user dragged it to, else about 30% of
+ * the window (360–520 px), never narrower than `DOCK_MIN_W` and never leaving
+ * the page less than `DOCK_PAGE_MIN`.
+ */
+export function dockWidthFor(wanted: number | null, vw: number): number {
+  const max = Math.max(DOCK_MIN_W, vw - DOCK_PAGE_MIN);
+  const base = wanted ?? Math.min(520, Math.max(360, vw * 0.3));
+  return Math.round(Math.min(max, Math.max(DOCK_MIN_W, base)));
+}
+
+/** Most the docked chat can be at this window width. */
+export function dockMaxWidth(vw: number): number {
+  return Math.max(DOCK_MIN_W, vw - DOCK_PAGE_MIN);
+}

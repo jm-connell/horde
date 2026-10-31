@@ -36,6 +36,8 @@ interface HostValue {
   setFrame: (frame: HelpFrame) => void;
   docked: boolean;
   setDocked: (docked: boolean) => void;
+  dockWidth: number | null;
+  setDockWidth: (width: number) => void;
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
@@ -68,6 +70,8 @@ interface PanelState {
   frame: HelpFrame | null;
   /** Docked as a full-height side panel the page makes room for (desktop). */
   docked?: boolean;
+  /** The docked panel's width, once the user has dragged it. */
+  dockWidth?: number | null;
 }
 
 function isFrame(v: unknown): v is HelpFrame {
@@ -84,7 +88,9 @@ function isPanelState(v: unknown): v is PanelState {
   return (
     typeof s.open === "boolean" &&
     (s.frame === null || isFrame(s.frame)) &&
-    (s.docked === undefined || typeof s.docked === "boolean")
+    (s.docked === undefined || typeof s.docked === "boolean") &&
+    (s.dockWidth == null ||
+      (typeof s.dockWidth === "number" && Number.isFinite(s.dockWidth)))
   );
 }
 
@@ -148,6 +154,10 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     (docked: boolean) => setState((s) => ({ ...s, docked })),
     []
   );
+  const setDockWidth = useCallback(
+    (dockWidth: number) => setState((s) => ({ ...s, dockWidth })),
+    []
+  );
   const value = useMemo(
     () => ({
       available,
@@ -166,6 +176,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setFrame,
       docked: !!state.docked,
       setDocked,
+      dockWidth: state.dockWidth ?? null,
+      setDockWidth,
       pageDetail: () => detail.current,
       openedHere,
       channelRequest,
@@ -177,6 +189,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setFrame,
       state.docked,
       setDocked,
+      state.dockWidth,
+      setDockWidth,
       openedHere,
       channelRequest,
       pendingChannelRequest,
@@ -206,6 +220,8 @@ export function HelpChatHost() {
         frame={host.frame}
         docked={host.docked}
         onDockedChange={host.setDocked}
+        dockWidth={host.dockWidth}
+        onDockWidthChange={host.setDockWidth}
         onFrameChange={host.setFrame}
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}

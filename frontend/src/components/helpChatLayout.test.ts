@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   clampHelpFrame,
   defaultHelpFrame,
+  DOCK_MIN_W,
+  dockMaxWidth,
+  dockWidthFor,
   MIN_H,
   MIN_W,
   resizeFromTopLeft,
@@ -72,5 +75,21 @@ describe("resizeFromTopLeft", () => {
     const big = resizeFromTopLeft(start, -2000, -2000, 1280, 800);
     expect(big.left).toBe(8);
     expect(big.top).toBe(8);
+  });
+});
+
+describe("dockWidthFor", () => {
+  it("defaults to about 30% of the window within 360–520 px", () => {
+    expect(dockWidthFor(null, 1440)).toBe(432);
+    expect(dockWidthFor(null, 3000)).toBe(520);
+    expect(dockWidthFor(null, 1000)).toBe(360);
+  });
+
+  it("keeps the user's width within its limits", () => {
+    expect(dockWidthFor(700, 1440)).toBe(700);
+    expect(dockWidthFor(100, 1440)).toBe(DOCK_MIN_W);
+    // The page keeps at least 480 px.
+    expect(dockWidthFor(1200, 1440)).toBe(960);
+    expect(dockMaxWidth(1440)).toBe(960);
   });
 });

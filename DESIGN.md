@@ -310,7 +310,9 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   desktop its header button docks it: a full-height column on the right
   (`ink-900`, `border-l ink-700`, no radius or shadow) from the bottom of the
   full-width nav to the bottom of the window, about 30% of the width
-  (360–520 px). The page and footer make room for it (`--horde-chat-dock`,
+  (360–520 px) until its left edge is dragged (a focusable separator, accent
+  on hover; arrows nudge, Home resets; at least 320 px, leaving the page at
+  least 480 px). The page and footer make room for it (`--horde-chat-dock`,
   set on the root while docked) and the corner mini player moves left of it;
   it stays docked across pages until floated again. Escape
   closes it while focus is inside; the page behind stays usable. Its replies

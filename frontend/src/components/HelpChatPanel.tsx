@@ -39,6 +39,9 @@ import {
 import {
   clampHelpFrame,
   defaultHelpFrame,
+  DOCK_MIN_W,
+  dockMaxWidth,
+  dockWidthFor,
   type HelpFrame,
   resizeFromTopLeft,
 } from "./helpChatLayout";
@@ -88,6 +91,9 @@ interface Props {
   /** Docked as a full-height side panel the page makes room for (desktop). */
   docked?: boolean;
   onDockedChange?: (docked: boolean) => void;
+  /** The docked width the user dragged it to (null: the default). */
+  dockWidth?: number | null;
+  onDockWidthChange?: (width: number) => void;
   /** "Ask <channel>" from a channel page: a new conversation about it. */
   channelRequest?: ChannelRequest | null;
   pendingChannelRequest?: () => ChannelRequest | null;
@@ -213,6 +219,8 @@ export default function HelpChatPanel({
   onFrameChange,
   docked = false,
   onDockedChange = () => {},
+  dockWidth: wantedDockWidth = null,
+  onDockWidthChange = () => {},
   pageDetail,
   focusOnOpen,
   channelRequest = null,
@@ -282,7 +290,7 @@ export default function HelpChatPanel({
   // Docked: a column on the right below the full-width nav; the page makes room
   // through --horde-chat-dock (index.css). Phones keep the bottom sheet.
   const dockedHere = docked && !isMobile;
-  const dockWidth = Math.round(Math.min(520, Math.max(360, vw * 0.3)));
+  const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
   useEffect(() => {
     if (!dockedHere) return;
@@ -397,6 +405,48 @@ export default function HelpChatPanel({
         window.innerHeight
       )
     );
+  }
+
+  /** Drag the docked panel's left edge: wider to the left, narrower to the right. */
+  function onDockResizePointerDown(e: React.PointerEvent<HTMLElement>) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    e.preventDefault();
+    const { clientX: x0, pointerId } = e;
+    const start = dockWidth;
+    const onMove = (ev: PointerEvent) => {
+      if (ev.pointerId !== pointerId) return;
+      onDockWidthChange(
+        dockWidthFor(start - (ev.clientX - x0), window.innerWidth)
+      );
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+      document.body.style.removeProperty("cursor");
+      dragCleanup.current = null;
+    };
+    dragCleanup.current?.();
+    document.body.style.cursor = "ew-resize";
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+    dragCleanup.current = stop;
+  }
+
+  function onDockResizeKey(e: React.KeyboardEvent<HTMLElement>) {
+    const step = e.shiftKey ? 64 : 16;
+    const next =
+      e.key === "ArrowLeft"
+        ? dockWidth + step
+        : e.key === "ArrowRight"
+          ? dockWidth - step
+          : e.key === "Home"
+            ? dockWidthFor(null, window.innerWidth)
+            : null;
+    if (next == null) return;
+    e.preventDefault();
+    onDockWidthChange(dockWidthFor(next, window.innerWidth));
   }
 
   function onResizePointerDown(e: React.PointerEvent<HTMLElement>) {
@@ -680,6 +730,24 @@ export default function HelpChatPanel({
           : ""
       }`}
     >
+      {/* eslint-disable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex -- a focusable separator is the ARIA window-splitter pattern (as in ResizeHandle); it takes pointer and arrow-key input */}
+      {dockedHere && (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the chat"
+          aria-valuenow={dockWidth}
+          aria-valuemin={DOCK_MIN_W}
+          aria-valuemax={dockMaxWidth(vw)}
+          tabIndex={0}
+          title="Drag to resize"
+          data-horde="help-chat-resize"
+          onPointerDown={onDockResizePointerDown}
+          onKeyDown={onDockResizeKey}
+          className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize touch-none transition-colors hover:bg-accent/30 focus-visible:bg-accent/50 focus-visible:outline-hidden"
+        />
+      )}
+      {/* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
       {!isMobile && !dockedHere && (
         <div
           className="absolute left-0 top-0 z-10 h-4 w-4 cursor-nwse-resize touch-none"
