@@ -23,7 +23,7 @@ from .. import activity
 from ..subtitle_retry import next_due_video
 from ..workers import BackgroundWorker
 from ..ytdlp_common import classify_ytdlp_error
-from . import captions, indexing, listing
+from . import captions, embed, indexing, listing
 
 logger = logging.getLogger(__name__)
 
@@ -156,10 +156,19 @@ def fetch_next_video() -> bool:
             return True
         backoff = indexing.apply_result(session, video, result)
         indexing.finish_if_done(session, video.kb_channel_id)
+    if result.status in (captions.FETCHED, captions.NO_CAPTIONS):
+        _queue_embedding()
     if backoff:
         current().timedtext.block(backoff)
         logger.info("Ask: captions rate limited; everyone waits %ss", backoff)
     return True
+
+
+def _queue_embedding() -> None:
+    try:
+        embed.ensure_jobs()
+    except Exception:
+        logger.warning("Ask: queueing embeddings failed", exc_info=True)
 
 
 def _loop(worker: BackgroundWorker) -> None:
@@ -177,6 +186,8 @@ def _loop(worker: BackgroundWorker) -> None:
             logger.warning("Ask: worker pass failed", exc_info=True)
         if worked:
             continue
+        # Also catches a changed embedding model or a provider set up later.
+        _queue_embedding()
         wait = max(
             1.0, min(IDLE_POLL_SEC, current().timedtext.seconds_until_background())
         )

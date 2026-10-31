@@ -46,12 +46,15 @@ def _active_job_exists(
     kind: AiJobKind,
     video_id: int | None,
     catalog_video_id: int | None = None,
+    kb_channel_id: int | None = None,
 ) -> bool:
     statement = select(AiJob).where(
         AiJob.kind == kind,
         col(AiJob.status).in_([AiJobStatus.queued, AiJobStatus.running]),
     )
-    if catalog_video_id is not None:
+    if kb_channel_id is not None:
+        statement = statement.where(AiJob.kb_channel_id == kb_channel_id)
+    elif catalog_video_id is not None:
         statement = statement.where(AiJob.catalog_video_id == catalog_video_id)
     elif video_id is None:
         statement = statement.where(col(AiJob.video_id).is_(None))
@@ -66,17 +69,23 @@ def enqueue_job(
     video_id: int | None = None,
     *,
     catalog_video_id: int | None = None,
+    kb_channel_id: int | None = None,
     force: bool = False,
 ) -> int | None:
     with Session(get_engine()) as session:
         if not force and _active_job_exists(
-            session, kind, video_id, catalog_video_id=catalog_video_id
+            session,
+            kind,
+            video_id,
+            catalog_video_id=catalog_video_id,
+            kb_channel_id=kb_channel_id,
         ):
             return None
         job = AiJob(
             kind=kind,
             video_id=video_id,
             catalog_video_id=catalog_video_id,
+            kb_channel_id=kb_channel_id,
             status=AiJobStatus.queued,
             run_after=utcnow(),
             created_at=utcnow(),
@@ -470,6 +479,7 @@ def queue_breakdown() -> dict[str, int]:
         "embed_catalog_video": 0,
         "summarize": 0,
         "chapters": 0,
+        "embed_kb_channel": 0,
         "running": 0,
     }
     with Session(get_engine()) as session:
@@ -779,6 +789,7 @@ def current_job_info() -> dict | None:
             "embed_video",
             AiJobKind.embed_catalog_video.value,
             "embed_catalog_video",
+            AiJobKind.embed_kb_channel.value,
         ):
             model = str(ai.get("embed_model") or "")
         else:
@@ -811,6 +822,12 @@ def current_job_info() -> dict | None:
                 catalog = session.get(ChannelCatalog, cv.catalog_id)
                 if catalog is not None:
                     info["channel"] = catalog.channel_name
+        elif job.kb_channel_id:
+            from ...models import KbChannel
+
+            channel = session.get(KbChannel, job.kb_channel_id)
+            if channel is not None:
+                info["channel"] = channel.channel_name
         return info
 
 
@@ -833,7 +850,11 @@ def _job_runnable(
     llm_ok: bool,
     embed_ok: bool,
 ) -> bool:
-    if kind in (AiJobKind.embed_video, AiJobKind.embed_catalog_video):
+    if kind in (
+        AiJobKind.embed_video,
+        AiJobKind.embed_catalog_video,
+        AiJobKind.embed_kb_channel,
+    ):
         return embed_ok
     if kind in (AiJobKind.enrich_tags, AiJobKind.summarize, AiJobKind.chapters):
         return llm_ok
@@ -937,10 +958,28 @@ def _next_job(session: Session, *, llm_ok: bool, embed_ok: bool) -> AiJob | None
         .order_by(col(AiJob.created_at).asc())
         .limit(32)
     ).all()
+    # Library work first: Ask's channel embedding is a long backlog that must not
+    # hold up a new download's embedding, summary or tags.
+    jobs = sorted(jobs, key=lambda j: j.kind in _BACKGROUND_KINDS)
     for job in jobs:
         if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
             return job
+    if len(jobs) == 32:
+        # A full window of Ask jobs could hide library jobs behind it.
+        for job in session.exec(
+            select(AiJob)
+            .where(AiJob.status == AiJobStatus.queued)
+            .where(col(AiJob.kind).not_in(_BACKGROUND_KINDS))
+            .where((col(AiJob.run_after).is_(None)) | (col(AiJob.run_after) <= now))
+            .order_by(col(AiJob.created_at).asc())
+            .limit(32)
+        ).all():
+            if _job_runnable(job.kind, llm_ok=llm_ok, embed_ok=embed_ok):
+                return job
     return None
+
+
+_BACKGROUND_KINDS = frozenset({AiJobKind.embed_kb_channel})
 
 
 _AI_KIND_LABELS = {
@@ -951,6 +990,7 @@ _AI_KIND_LABELS = {
     "embed_catalog_video": "Embedding catalog video",
     "summarize": "Summarizing video",
     "chapters": "Generating chapters",
+    "embed_kb_channel": "Embedding Ask passages",
 }
 
 
@@ -999,9 +1039,10 @@ def _process_one() -> bool:
         kind = job.kind
         video_id = job.video_id
         catalog_video_id = job.catalog_video_id
+        kb_channel_id = job.kb_channel_id
 
     with job_context(f"ai-{job_id}"):
-        _run_claimed_job(job_id, kind, video_id, catalog_video_id)
+        _run_claimed_job(job_id, kind, video_id, catalog_video_id, kb_channel_id)
     return True
 
 
@@ -1010,6 +1051,7 @@ def _run_claimed_job(
     kind: AiJobKind,
     video_id: int | None,
     catalog_video_id: int | None,
+    kb_channel_id: int | None = None,
 ) -> None:
     """Run one AI job that ``_process_one`` has already marked running."""
     _clear_waiting_notes()
@@ -1021,7 +1063,7 @@ def _run_claimed_job(
     try:
         from .provider import embed_backend_name, llm_backend_name
 
-        if kind_key in ("embed_video", "embed_catalog_video"):
+        if kind_key in ("embed_video", "embed_catalog_video", "embed_kb_channel"):
             ai_engine = embed_backend_name()
         else:
             ai_engine = llm_backend_name()
@@ -1050,7 +1092,11 @@ def _run_claimed_job(
     try:
         with Session(get_engine()) as session:
             skip_reason = tasks.dispatch(
-                session, kind, video_id, catalog_video_id=catalog_video_id
+                session,
+                kind,
+                video_id,
+                catalog_video_id=catalog_video_id,
+                kb_channel_id=kb_channel_id,
             )
         with Session(get_engine()) as session:
             job = session.get(AiJob, job_id)
