@@ -85,7 +85,7 @@ export default function AskSearch({ channels }: { channels: AskChannel[] }) {
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder='Words or "a phrase"'
-          className="min-w-0 flex-1 rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-100 ring-1 ring-ink-700 placeholder:text-muted focus:outline-none focus:ring-accent"
+          className="min-w-0 basis-full rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-100 ring-1 ring-ink-700 placeholder:text-muted focus:outline-none focus:ring-accent sm:basis-0 sm:flex-1"
         />
         <label htmlFor="ask-search-channel" className="sr-only">
           Channel
@@ -96,7 +96,7 @@ export default function AskSearch({ channels }: { channels: AskChannel[] }) {
           onChange={(e) =>
             setChannelId(e.target.value ? Number(e.target.value) : null)
           }
-          className="rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-100 ring-1 ring-ink-700"
+          className="min-w-0 flex-1 rounded-lg bg-ink-800 px-3 py-2 text-sm text-gray-100 ring-1 ring-ink-700 sm:flex-none"
         >
           <option value="">All channels</option>
           {channels.map((c) => (
