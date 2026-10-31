@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { isYoutubeChannelUrl } from "../../components/channelFeedYoutubeSearch";
 import { useAuth } from "../../context/AuthContext";
-import { useChannelAvatar, useChannelFollow } from "../../queries/follows";
+import ChannelAvatar from "../../components/ChannelAvatar";
+import { useChannelFollow } from "../../queries/follows";
 import type { ChannelAutodownload, ChannelStat } from "../../types";
 import { formatCompactCount, joinDotList } from "../../utils";
 import {
@@ -148,45 +149,6 @@ function ChipButton({ chip, onClick }: { chip: Chip; onClick: () => void }) {
     >
       {chip.label}
     </button>
-  );
-}
-
-/**
- * The channel's YouTube profile picture, or its first letter when it has none
- * (or it cannot load). Decorative: the name is the heading beside it.
- */
-function ChannelAvatar({
-  channel,
-  channelUrl,
-}: {
-  channel: string;
-  /** Only for a YouTube channel. */
-  channelUrl: string | null;
-}) {
-  const src = useChannelAvatar(channelUrl);
-  const [failed, setFailed] = useState<string | null>(null);
-  const box =
-    "flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-full";
-  if (src && failed !== src) {
-    return (
-      <img
-        src={src}
-        alt=""
-        aria-hidden="true"
-        draggable={false}
-        referrerPolicy="no-referrer"
-        onError={() => setFailed(src)}
-        className={`${box} bg-ink-800 object-cover`}
-      />
-    );
-  }
-  return (
-    <span
-      aria-hidden="true"
-      className={`${box} bg-accent/15 text-lg font-semibold text-accent`}
-    >
-      {channel.trim().charAt(0).toUpperCase() || "?"}
-    </span>
   );
 }
 
