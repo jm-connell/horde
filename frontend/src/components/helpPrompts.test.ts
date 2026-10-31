@@ -10,17 +10,17 @@ import {
 const member = { isAdmin: false, can: () => false };
 
 describe("pickPrompts", () => {
-  it("leads with What can you do? and adds two from different areas", () => {
+  it("leads with What can you do? and adds four from different areas", () => {
     for (let seed = 0; seed < 20; seed++) {
       let n = seed;
       const random = () => (n = (n * 9301 + 49297) % 233280) / 233280;
       const picked = pickPrompts(() => true, random);
-      expect(picked).toHaveLength(3);
+      expect(picked).toHaveLength(5);
       expect(picked[0]).toBe(WHAT_CAN_YOU_DO);
       const areas = picked
         .slice(1)
         .map((t) => SAMPLE_PROMPTS.find((p) => p.text === t)?.area);
-      expect(new Set(areas).size).toBe(2);
+      expect(new Set(areas).size).toBe(4);
     }
   });
 

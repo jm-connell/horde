@@ -73,6 +73,8 @@ test("members see only their own preferences and what their permissions allow", 
     "Channel list order (sidebar)",
     // Everyone imports their own YouTube history.
     "YouTube history",
+    // Each account with the AI permission chooses what the assistant may read.
+    "Ask about Horde: use my data",
     "Downloads",
   ]);
   await expect(member.getByLabel("Progress expiry in days")).toHaveCount(0);
@@ -113,6 +115,7 @@ test("members see only their own preferences and what their permissions allow", 
     "Default video sort",
     "Channel list order (sidebar)",
     "YouTube history",
+    "Ask about Horde: use my data",
   ]);
   await viewerCtx.close();
 });
