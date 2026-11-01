@@ -173,9 +173,9 @@ export default function ContinueWatchingRow({
                   onDownload={() => onDownloadYoutube?.(e)}
                   skipRemotePreview
                 />
-                <p className="mt-1 px-1 text-xs text-muted">
+                <span className="pointer-events-none absolute right-2 top-2 z-10 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white">
                   Watched on YouTube
-                </p>
+                </span>
               </div>
             ))}
           </div>
