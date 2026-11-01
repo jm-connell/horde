@@ -49,7 +49,14 @@ from .feedback import (
     exclusions,
     impression_penalty,
 )
-from .history import PastFavorite, Watch, counts_as_taste, past_favorites, watches
+from .history import (
+    PastFavorite,
+    Watch,
+    counts_as_taste,
+    past_favorites,
+    watched_keys,
+    watches,
+)
 from .interests import (
     DEFAULT_WINDOW,
     RECENT_HALF_LIFE_DAYS,
@@ -526,18 +533,23 @@ def _hits(session: Session, user_id: int) -> dict[int, _Hit]:
 
 
 def _allowed(c: Candidate, t: Tuning, now: datetime, *, rewatch: bool = False) -> bool:
-    """The user's hard filters: sources, Shorts, past live streams, length, age."""
-    if not rewatch:
-        if c.pool == "library" and not t.use_library:
-            return False
-        if c.pool == "catalog" and not t.use_catalogs:
-            return False
-        if c.pool == "discovery" and not t.use_youtube:
-            return False
-        if t.max_age_days and (
-            c.published is None or now - c.published > timedelta(days=t.max_age_days)
-        ):
-            return False
+    """The user's hard filters: sources, Shorts, past live streams, length, age.
+
+    A rewatch keeps to the source switches (a library video is a library pick)
+    but not to the upload age: an old favorite is old by design.
+    """
+    if c.pool == "library" and not t.use_library:
+        return False
+    if c.pool == "catalog" and not t.use_catalogs:
+        return False
+    if c.pool == "discovery" and not t.use_youtube:
+        return False
+    if (
+        not rewatch
+        and t.max_age_days
+        and (c.published is None or now - c.published > timedelta(days=t.max_age_days))
+    ):
+        return False
     duration = c.duration
     if t.hide_shorts and (
         (duration is not None and duration <= SHORTS_MAX_SEC) or "/shorts/" in c.url
@@ -605,6 +617,7 @@ def _history_candidate(fav: PastFavorite) -> Candidate:
         yt_id=yt_id or None,
         url=f"https://www.youtube.com/watch?v={yt_id}",
         source_channel_url=w.channel_url or None,
+        duration=fav.duration,
     )
 
 
@@ -625,9 +638,10 @@ def build_feed(
     own_all = watches(session, user_id)
     own = [w for w in own_all if counts_as_taste(w, t.min_watched_pct)]
     # Everything watched on YouTube is seen, not only the newest part ``own`` holds.
-    own_keys = {w.key for w in own_all} | takeout_history.cached_profile(
-        session, user_id
-    ).watched
+    own_keys = (
+        watched_keys(session, user_id)
+        | takeout_history.cached_profile(session, user_id).watched
+    )
     excluded: Exclusions = exclusions(session, user_id)
     visits = earlier_visits(session, user_id)
     followed_urls: set[str] = set()
@@ -655,9 +669,11 @@ def build_feed(
         before = now - timedelta(days=t.rewatch_after_days)
         recent_keys = {w.key for w in own_all if w.watched_at >= before}
         by_key = {c.key: c for c in pool}
+        # Already a candidate (never the case unless the history lost it): once.
+        taken_keys = {c.key for c in cands}
         for favorite in past_favorites(session, user_id, before=before):
             key = favorite.watch.key
-            if key in recent_keys or key in favorite_of:
+            if key in recent_keys or key in favorite_of or key in taken_keys:
                 continue
             c = by_key.get(key) or _history_candidate(favorite)
             if excluded.blocks(key, c.channel_url, c.channel) or not _allowed(

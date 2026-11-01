@@ -250,6 +250,28 @@ def watches(
     return out[:limit]
 
 
+def watched_keys(session: Session, user_id: int) -> set[str]:
+    """Every library and streamed video the user ever watched (``watches``
+    stops at ``HISTORY_LIMIT``; what may be shown must not)."""
+    out = {
+        library_key(vid, yt_id)
+        for vid, yt_id in session.exec(
+            select(Video.id, Video.youtube_id)
+            .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
+            .where(
+                UserVideoState.user_id == user_id,
+                col(UserVideoState.last_watched_at).is_not(None),
+            )
+        ).all()
+    }
+    out |= set(
+        session.exec(
+            select(UserStreamState.yt_id).where(UserStreamState.user_id == user_id)
+        ).all()
+    )
+    return out
+
+
 @dataclass
 class PastFavorite:
     """A video the user finished (or watched again) a while ago: a rewatch pick."""
@@ -257,6 +279,8 @@ class PastFavorite:
     watch: Watch
     #: Views known (a YouTube import counts them; 1 otherwise).
     views: int = 1
+    #: Its length when known, for the length and Shorts filters.
+    duration: float | None = None
 
 
 def past_favorites(
@@ -320,7 +344,8 @@ def past_favorites(
                     engagement=1.0,
                     finished=True,
                     fraction=1.0,
-                )
+                ),
+                duration=row.duration_sec,
             ),
         )
     rewatched, _more = takeout_history.rewatched_page(

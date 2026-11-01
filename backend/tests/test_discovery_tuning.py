@@ -267,3 +267,46 @@ def test_unreadable_saved_settings_fall_back_to_balanced(client, session, admin_
     session.commit()
     assert client.get("/api/discover/tuning").json()["active"] == "balanced"
     assert client.get("/api/discover/feed").status_code == 200
+
+
+def _old_stream(session, user, yt_id, *, days, duration=600.0, finished=True):
+    from app.models import UserStreamState
+
+    when = datetime.now(UTC) - timedelta(days=days)
+    session.add(
+        UserStreamState(
+            user_id=user.id,
+            yt_id=yt_id,
+            url=_yt(yt_id),
+            title=f"Stream {yt_id}",
+            channel="Fav",
+            duration_sec=duration,
+            watched_sec=duration,
+            finished_at=when if finished else None,
+            last_watched_at=when,
+        )
+    )
+
+
+def test_a_long_history_does_not_show_a_favorite_twice(client, session, admin_user):
+    # More recent watches than the taste history reads: the old favorite is
+    # outside it, but it is still watched, so it comes once, as a rewatch.
+    for n in range(620):
+        _old_stream(session, admin_user, f"recent{n:05d}", days=1, finished=False)
+    _old_stream(session, admin_user, "catalogfav1", days=200)
+    session.commit()
+    _catalog(session, "Fav", [("catalogfav1", "An old favorite", 400, None)])
+    keys = [i["key"] for i in _items(client)]
+    assert keys.count("catalogfav1") == 1
+    assert len(keys) == len(set(keys))
+
+
+def test_streamed_favorites_keep_to_the_length_filters(client, session, admin_user):
+    _old_stream(session, admin_user, "oldshort001", days=200, duration=40.0)
+    _old_stream(session, admin_user, "oldlongone1", days=200, duration=900.0)
+    session.commit()
+    keys = {i["key"] for i in _items(client)}
+    assert {"oldshort001", "oldlongone1"} <= keys
+    _custom(client, hide_shorts=True)
+    keys = {i["key"] for i in _items(client)}
+    assert "oldshort001" not in keys and "oldlongone1" in keys

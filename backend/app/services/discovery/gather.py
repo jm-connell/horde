@@ -481,13 +481,14 @@ def gather_for(
     found = 0
     error: str | None = None
     try:
-        if not tuned.use_youtube:
-            raise _Halt("the user turned off videos found on YouTube")
         in_library = {yt for yt in session.exec(select(Video.youtube_id)).all() if yt}
         remember_streams(
             session, user_id, in_library | set(runtime.vectors.matrix(session).index)
         )
         embed_pending(session)
+        # Streamed watches are remembered (and embedded) for taste either way.
+        if not tuned.use_youtube:
+            raise _Halt("the user turned off videos found on YouTube")
         recent, dormant = interests(session, runtime, history, now, tuned.window)
         groups = recent + dormant
         if not (_may_use_ai(session, user_id) and llm_queries(groups)):
