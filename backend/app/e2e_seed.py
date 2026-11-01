@@ -73,6 +73,56 @@ def prepare(ctx: AppContext, mode: str) -> None:
     _seed_discovery(engine)
     _seed_live(ctx)
     _seed_ask(engine)
+    _seed_comments(engine)
+
+
+#: Saved YouTube comments of "Cedar Notes" (e2ecedar001): a pinned note from the
+#: creator, a thread with replies, and enough others to need "Show more".
+E2E_COMMENTS = (
+    (
+        "c-pin",
+        None,
+        "Cedar Notes",
+        True,
+        "Thanks for watching! The zeppelin bit is at 0:42",
+    ),
+    ("c-glue", None, "Marta", False, "Which glue holds the cedar strips together?"),
+    ("c-glue.1", "c-glue", "Cedar Notes", True, "Titebond III, clamped overnight."),
+    ("c-glue.2", "c-glue", "Jun", False, "Same here, works great."),
+    *(
+        (f"c-{n}", None, f"Viewer {n}", False, f"Lovely work, part {n}")
+        for n in range(1, 9)
+    ),
+)
+
+
+def _seed_comments(engine: Engine) -> None:
+    from sqlmodel import Session, select
+
+    from .models import Video
+    from .services.comments import fetch, store
+
+    comments = [
+        fetch.FetchedComment(
+            comment_id=cid,
+            parent_comment_id=parent,
+            author=author,
+            author_is_uploader=creator,
+            is_pinned=cid == "c-pin",
+            is_hearted=cid == "c-glue",
+            like_count=120 if cid == "c-glue" else None,
+            text=text,
+            published_at=datetime(2024, 6, 1, tzinfo=UTC),
+        )
+        for cid, parent, author, creator, text in E2E_COMMENTS
+    ]
+    with Session(engine) as session:
+        cedar = session.exec(
+            select(Video).where(Video.youtube_id == "e2ecedar001")
+        ).one()
+        store.apply_result(
+            session, cedar, fetch.FetchResult(fetch.SAVED, comments, total_count=2400)
+        )
 
 
 #: An Ask channel: "the timing belt" is said at 0:42 of e2ecedar001, which is

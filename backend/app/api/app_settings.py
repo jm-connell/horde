@@ -15,6 +15,7 @@ from ..auth import (
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..services import app_settings, media_sidecars, user_settings
+from ..services import comments as comments_svc
 from ..services.ai.provider import (
     env_key_for,
     invalidate_resolved_url,
@@ -23,6 +24,7 @@ from ..services.ai.provider import (
 )
 from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
+from ..services.comments import store as comments_store
 from ..services.css_sanitize import sanitize_ui_css
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -133,6 +135,8 @@ class AppSettingsRead(BaseModel):
     max_library_bytes: int | None = None
     # Write Jellyfin / Kodi / Plex files (.nfo, -thumb.jpg) beside the media.
     media_server_sidecars: bool = False
+    # Comments of YouTube videos: saved, shown, searched and given to the chat.
+    comments_enabled: bool = True
     # Who must sign in with a second step (administrators only see this).
     require_two_factor: TwoFactorRequirement = "off"
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
@@ -160,6 +164,7 @@ class AppSettingsUpdate(BaseModel):
         default=None, ge=0, le=app_settings.MAX_LIBRARY_BYTES_MAX
     )
     media_server_sidecars: bool | None = None
+    comments_enabled: bool | None = None
     require_two_factor: TwoFactorRequirement | None = None
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
@@ -185,7 +190,8 @@ MEMBER_VISIBLE_AI_FIELDS = frozenset(
 #: Top-level fields only the administrator's settings screens read: how often
 #: metadata and catalogs refresh, how large catalogs grow, whether indexing is on,
 #: the library size limit, the media-server files switch, and whether the settings file is damaged. A member gets the defaults. (The
-#: YouTube search switches and the progress expiry stay: member screens use them.)
+#: YouTube search switches, the comments switch and the progress expiry stay:
+#: member screens use them.)
 MEMBER_HIDDEN_FIELDS = (
     "metadata_sync_interval_hours",
     "channel_catalog_enabled",
@@ -313,6 +319,7 @@ def _settings_read(
             data.get("max_library_bytes")
         ),
         media_server_sidecars=bool(data.get(media_sidecars.SETTING)),
+        comments_enabled=bool(data.get(comments_svc.SETTING, True)),
         require_two_factor=cast(
             TwoFactorRequirement,
             two_factor.normalize_requirement(data.get("require_two_factor")),
@@ -389,6 +396,8 @@ def update_settings(
         )
     if payload.media_server_sidecars is not None:
         updates[media_sidecars.SETTING] = payload.media_server_sidecars
+    if payload.comments_enabled is not None:
+        updates[comments_svc.SETTING] = payload.comments_enabled
     if payload.require_two_factor is not None:
         updates["require_two_factor"] = payload.require_two_factor
     if payload.setup_completed is False:
@@ -450,6 +459,8 @@ def update_settings(
     data = app_settings.save(updates) if updates else app_settings.load()
     if turned_on:
         ctx.sidecars.write_all()
+    if updates.get(comments_svc.SETTING) is True:
+        ctx.comments.wake.set()
     if "max_library_bytes" in updates:
         # Held downloads may fit under the new limit now.
         ctx.download_queue.library_changed(room_made=True)
@@ -480,3 +491,45 @@ def remove_media_sidecars(ctx: AppContext = Depends(get_ctx)):
         )
     ctx.sidecars.remove_all()
     return MediaSidecarsRemoval(queued=True)
+
+
+class CommentsStorage(BaseModel):
+    """The saved comments: how many, of how many videos, and the database space
+    they take (rows, indexes and search index)."""
+
+    videos: int
+    comments: int
+    bytes: int
+
+
+def _comments_storage(session: Session) -> CommentsStorage:
+    used = comments_store.storage(session)
+    return CommentsStorage(videos=used.videos, comments=used.comments, bytes=used.bytes)
+
+
+@router.get(
+    "/comments/storage",
+    response_model=CommentsStorage,
+    dependencies=[Depends(require_admin)],
+)
+def comments_storage(session: Session = Depends(get_session)):
+    """How much space the saved comments take."""
+    return _comments_storage(session)
+
+
+@router.post(
+    "/comments/delete",
+    response_model=CommentsStorage,
+    dependencies=[Depends(require_admin)],
+)
+def delete_saved_comments(session: Session = Depends(get_session)):
+    """Delete every saved comment. Only while comments are off, or they would
+    all be fetched again; turning them on later starts from scratch."""
+    if comments_svc.enabled():
+        raise CodedHTTPException(
+            409,
+            "Turn comments off first, or they would be fetched again.",
+            "comments_enabled",
+        )
+    comments_store.delete_all(session)
+    return _comments_storage(session)

@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0022_ask_knowledge"
+HEAD = "0023_video_comments"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -794,6 +794,9 @@ EXPECTED_TRIGGERS = {
     "trg_kb_chunks_fts_insert",
     "trg_kb_chunks_fts_update",
     "trg_kb_chunks_fts_delete",
+    "trg_video_comments_fts_insert",
+    "trg_video_comments_fts_update",
+    "trg_video_comments_fts_delete",
 }
 
 
@@ -983,6 +986,12 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
     try:
         con.executescript(
             """
+            DROP TRIGGER trg_video_comments_fts_insert;
+            DROP TRIGGER trg_video_comments_fts_update;
+            DROP TRIGGER trg_video_comments_fts_delete;
+            DROP TABLE video_comments_fts;
+            DROP TABLE video_comments;
+            DROP TABLE video_comment_state;
             DROP TRIGGER trg_kb_chunks_fts_insert;
             DROP TRIGGER trg_kb_chunks_fts_update;
             DROP TRIGGER trg_kb_chunks_fts_delete;

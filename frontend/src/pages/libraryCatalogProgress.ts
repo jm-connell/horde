@@ -67,6 +67,9 @@ export function formatMatchReasonTip(
   if (reason.source === "captions") {
     return quoted ? `In captions: ${quoted}` : "In captions.";
   }
+  if (reason.source === "comments") {
+    return quoted ? `In a YouTube comment: ${quoted}` : "In a YouTube comment.";
+  }
   if (reason.source === "related") {
     return "Related by search index from the title and description.";
   }

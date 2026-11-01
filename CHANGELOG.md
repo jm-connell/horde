@@ -7,6 +7,23 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Comments.** Horde saves the top 100 YouTube comments of every video in
+  the library, with replies to the most popular threads, in the background
+  (new downloads first, one video every 30 seconds), and fetches them again
+  when a video is a week, a month, six months and a year old, while its
+  comments are still coming in, and every six months after that. They show
+  under the video, pinned and creator comments marked, with **N replies** to
+  open a discussion and timestamps that seek the player; **Show more
+  comments** reads further from YouTube on request, a small refresh button
+  fetches and saves them again (Edit details), and a streamed video loads
+  its comments when asked. Library search also finds videos through their
+  comments (after title and description matches), and the video chat knows
+  how viewers reacted. Saved comments stay when a video leaves YouTube. Turn
+  it all off with Settings → Library → **Comments**; saved comments are
+  kept, and the setting shows how much space they take and can delete them.
+
 ### Changed
 
 - **Use my data** for Ask about Horde moved from a switch at the top of the
@@ -16,6 +33,10 @@ All notable changes to Horde are documented here. The format follows
   links the setting when a question needs your data and it is off.
 - Ask about Horde has a one-line header (no subtitle) and suggests five
   questions when it opens instead of three.
+
+### Upgrade notes
+
+- Database migration `0023_video_comments` adds new tables only.
 
 ## [1.2.1] - 2026-10-30
 

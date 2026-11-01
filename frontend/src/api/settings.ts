@@ -1,4 +1,4 @@
-import type { AiSettings, AppSettings } from "../types";
+import type { AiSettings, AppSettings, CommentsStorage } from "../types";
 import type { ApiResponse } from "./typed";
 import { type ReadOptions, request } from "./client";
 
@@ -22,6 +22,18 @@ export const settingsApi = {
     ApiResponse<"/api/settings/media-sidecars/remove", "post">
   > {
     return request("/api/settings/media-sidecars/remove", { method: "POST" });
+  },
+
+  /** How much space the saved comments take (administrators). */
+  commentsStorage(opts?: ReadOptions): Promise<CommentsStorage> {
+    return request<CommentsStorage>("/api/settings/comments/storage", opts);
+  },
+
+  /** Delete every saved comment; only while comments are off (administrators). */
+  deleteSavedComments(): Promise<CommentsStorage> {
+    return request<CommentsStorage>("/api/settings/comments/delete", {
+      method: "POST",
+    });
   },
 
   resetApp(

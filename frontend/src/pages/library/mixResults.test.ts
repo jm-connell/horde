@@ -176,6 +176,15 @@ describe("scoreResults", () => {
     expect(items[0].kind).toBe("library");
   });
 
+  it("ranks a video found only by its comments after one whose title matches", () => {
+    const byTitle = video("Timing belt guide");
+    const byComment = video("Engine bay tour", {
+      match_reason: { source: "comments", snippet: "great timing belt tips" },
+    });
+    const items = mix({ query: "timing belt", library: [byComment, byTitle] });
+    expect(keys(items)).toEqual([ytKey(byTitle), ytKey(byComment)]);
+  });
+
   it("turns a transcript hit on a video nobody has into a card to stream", () => {
     const items = mix({
       query: "belt",

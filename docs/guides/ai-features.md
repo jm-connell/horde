@@ -40,7 +40,7 @@ When **AI video chapters** is on, choose **On download** or **Watch page**. On d
 
 ## Chat
 
-Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available. Requires a working chat provider. The watch-page AI panel always opens on **Summary**; switching to Chat is not remembered across videos or reloads.
+Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available, and from the video's saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. Requires a working chat provider. The watch-page AI panel always opens on **Summary**; switching to Chat is not remembered across videos or reloads.
 
 ## Ask about Horde
 

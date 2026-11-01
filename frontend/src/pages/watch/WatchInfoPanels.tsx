@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { api } from "../../api";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import PlaybackQueue from "../../components/PlaybackQueue";
@@ -6,14 +7,21 @@ import { VideoAiPanel } from "../../components/lazy";
 import WatchMeta from "../../components/WatchMeta";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
-import { resolveLibraryChapters, stripChapterLines } from "../../utils";
+import {
+  resolveLibraryChapters,
+  stripChapterLines,
+  youtubeVideoIdFromUrl,
+} from "../../utils";
 import type { Video } from "../../types";
+import { appSettingsQuery } from "../../queries/app";
 import type { WatchAi } from "./useWatchAi";
+import CommentsPanel from "./CommentsPanel";
 import type { WatchSource } from "./useWatchVideo";
 
 /**
  * Under the title: the AI panel (summary, chat), description, chapters, tags
- * and notes, with the playback queue beside them when the sidebar is not shown.
+ * and notes, then the comments, with the playback queue beside them when the
+ * sidebar is not shown.
  */
 export default function WatchInfoPanels({
   source,
@@ -32,6 +40,9 @@ export default function WatchInfoPanels({
   onVideoUpdated: (video: Video) => void;
 }) {
   const { can } = useAuth();
+  // Comments are one switch (Settings → Library → Comments) for everyone.
+  const commentsOn =
+    useQuery(appSettingsQuery()).data?.comments_enabled ?? false;
   const { showToast } = useToast();
   const video = source.kind === "library" ? source.video : null;
   const description =
@@ -116,6 +127,22 @@ export default function WatchInfoPanels({
           }
           onTagError={(msg) => showToast(msg)}
         />
+
+        {!commentsOn ? null : video ? (
+          <CommentsPanel
+            key={`video-${video.id}`}
+            videoId={video.id}
+            streamYoutubeId={null}
+          />
+        ) : (
+          source.kind === "stream" && (
+            <CommentsPanel
+              key={`stream-${source.url}`}
+              videoId={null}
+              streamYoutubeId={youtubeVideoIdFromUrl(source.url)}
+            />
+          )
+        )}
       </div>
 
       {queueBeside && (

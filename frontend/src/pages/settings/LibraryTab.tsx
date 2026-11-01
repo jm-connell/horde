@@ -21,6 +21,7 @@ import {
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
 import AskChannelsSection from "./AskChannelsSection";
+import CommentsSetting from "./CommentsSetting";
 import FollowedChannelsSection from "./FollowedChannelsSection";
 import HelpDataSection from "./HelpDataSection";
 import MediaServerFiles from "./MediaServerFiles";
@@ -84,7 +85,8 @@ const COMPAT_TERMS = [
 ];
 
 export default function LibraryTab() {
-  const { q, match, settings, update } = useSettingsPage();
+  const { q, match, settings, update, showError, showToast } =
+    useSettingsPage();
   const { isAdmin, can } = useAuth();
   const helpChat = useHelpChat();
   // Download preferences only matter to someone who may download (admins can).
@@ -409,6 +411,7 @@ export default function LibraryTab() {
             "youtube video search",
             "channel search",
             "library search",
+            "comments",
             ...MEDIA_SERVER_TERMS
           )
         }
@@ -509,6 +512,14 @@ export default function LibraryTab() {
                 }
               />
             }
+          />
+          <CommentsSetting
+            enabled={appSettings?.comments_enabled ?? true}
+            onToggle={(on) =>
+              void saveCatalogSettings({ comments_enabled: on })
+            }
+            showError={showError}
+            showToast={showToast}
           />
           <div className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2">
             <div>

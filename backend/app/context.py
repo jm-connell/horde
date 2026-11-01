@@ -32,6 +32,7 @@ from sqlmodel import Session
 if TYPE_CHECKING:
     from .services.ai.state import AiRuntimeState
     from .services.auth.runtime import AuthRuntime
+    from .services.comments.runtime import CommentsRuntime
     from .services.discovery.runtime import DiscoveryRuntime
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
@@ -138,6 +139,8 @@ class AppContext:
     timedtext: TimedtextPacer = field(default_factory=lambda: _new_timedtext())
     #: Ask (channel knowledge): the worker's wake event.
     knowledge: KnowledgeRuntime = field(default_factory=lambda: _new_knowledge())
+    #: Saved comments: the fetcher's wake event and pause, live fetches in memory.
+    comments: CommentsRuntime = field(default_factory=lambda: _new_comments())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -195,6 +198,12 @@ def _new_knowledge() -> KnowledgeRuntime:
     from .services.knowledge.runtime import KnowledgeRuntime
 
     return KnowledgeRuntime()
+
+
+def _new_comments() -> CommentsRuntime:
+    from .services.comments.runtime import CommentsRuntime
+
+    return CommentsRuntime()
 
 
 def _new_registry() -> WorkerRegistry:

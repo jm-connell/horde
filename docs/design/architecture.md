@@ -104,6 +104,7 @@ SQLite at `DATA_DIR/horde.db` ([ADR 0001](../adr/0001-sqlite-wal-alembic.md)). S
 | Area | Tables | Owner |
 |---|---|---|
 | Library | `videos` (`youtube_id`), `playlists`, `playlist_items` | **Shared** by everyone |
+| Comments | `video_comments` (and the `video_comments_fts` index), `video_comment_state` | **Shared** |
 | Downloads | `download_jobs` | **Shared** (no user column) |
 | Channels | `channel_catalogs`, `channel_catalog_videos`, `channel_catalog_skips`, `channel_catalog_embeddings`, `channel_autodownloads` | **Shared** |
 | AI (derived from the library) | `video_embeddings`, `video_ai_meta`, `ai_categories`, `ai_jobs`, `openrouter_usage` | **Shared** |

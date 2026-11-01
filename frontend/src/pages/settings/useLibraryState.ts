@@ -77,6 +77,7 @@ export function useLibraryState() {
         | "youtube_video_search"
         | "discovery_enabled"
         | "discovery_household"
+        | "comments_enabled"
       >
     >
   ) => {

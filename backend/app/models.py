@@ -1146,3 +1146,48 @@ class AskMessage(SQLModel, table=True):
     cost: float | None = None
     model: str | None = None
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class VideoComment(SQLModel, table=True):
+    """One saved YouTube comment of a library video (``services/comments``).
+
+    The top comments in YouTube's "top" order, and replies to the highest-ranked
+    threads. ``parent_comment_id`` is None for a top-level comment, else the
+    YouTube id of the comment it answers. ``video_comments_fts`` indexes ``text``
+    (triggers).
+    """
+
+    __tablename__ = "video_comments"
+    __table_args__ = (UniqueConstraint("video_id", "comment_id"), _AUTOINCREMENT)
+
+    id: int | None = Field(default=None, primary_key=True)
+    video_id: int = Field(foreign_key="videos.id", index=True, ondelete="CASCADE")
+    comment_id: str
+    parent_comment_id: str | None = None
+    # Order as fetched: top-level comments by rank, replies in thread order.
+    position: int = 0
+    author: str | None = None
+    author_is_uploader: bool = Field(default=False)
+    is_pinned: bool = Field(default=False)
+    # Hearted by the creator.
+    is_hearted: bool = Field(default=False)
+    like_count: int | None = None
+    text: str = Field(default="")
+    # Approximate: YouTube only says "3 years ago".
+    published_at: datetime | None = None
+
+
+class VideoCommentState(SQLModel, table=True):
+    """Whether a library video's comments were saved, and when to try (again)."""
+
+    __tablename__ = "video_comment_state"
+
+    video_id: int = Field(primary_key=True, foreign_key="videos.id", ondelete="CASCADE")
+    # saved | pending (never fetched, retried soon) | disabled | unavailable | failed
+    status: str = Field(default="saved")
+    fetched_at: datetime | None = None
+    # YouTube's count of all comments when they were fetched.
+    total_count: int | None = None
+    attempts: int = 0
+    # Fetch (again) once this passes: a retry, or the refresh of a new upload.
+    next_attempt_at: datetime | None = Field(default=None, index=True)

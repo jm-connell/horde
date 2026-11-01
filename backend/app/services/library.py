@@ -3,6 +3,7 @@ import json
 import logging
 import math
 import random as py_random
+from collections.abc import Collection
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, overload
@@ -206,6 +207,7 @@ def query_videos(
     user_id: int | None = None,
     page: PageRequest | None = None,
     *,
+    ids: Collection[int] | None = None,
     count_only: Literal[True],
 ) -> int: ...
 
@@ -224,6 +226,8 @@ def query_videos(
     seed: int | None = None,
     user_id: int | None = None,
     page: PageRequest | None = None,
+    *,
+    ids: Collection[int] | None = None,
     count_only: Literal[False] = False,
 ) -> list[Video]: ...
 
@@ -241,12 +245,15 @@ def query_videos(
     seed: int | None = None,
     user_id: int | None = None,
     page: PageRequest | None = None,
+    *,
+    ids: Collection[int] | None = None,
     count_only: bool = False,
 ) -> list[Video] | int:
     """Library rows, newest first by default.
 
     With ``page`` the result is that page plus one extra row (so the caller can tell
     whether another page follows); ``count_only`` returns how many rows match.
+    ``ids`` limits the rows to those videos.
 
     Anything that reads watch state (``continue_watching``, ``watched_only``,
     ``sort="last_watched_at"``) needs ``user_id``: history belongs to one user,
@@ -264,6 +271,8 @@ def query_videos(
             ),
         )
 
+    if ids is not None:
+        statement = statement.where(col(Video.id).in_(list(ids)))
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
     if continue_watching:

@@ -227,7 +227,10 @@ def list_videos(
                     states=states,
                     compact=True,
                     match_reason=explain_library_video(
-                        v, q, chunk_index=chunks.get(v.id) if v.id is not None else None
+                        session,
+                        v,
+                        q,
+                        chunk_index=chunks.get(v.id) if v.id is not None else None,
                     ),
                 )
                 for v in rows

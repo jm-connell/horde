@@ -10,7 +10,7 @@ On a **channel page**, the box in the header searches that channel’s **indexed
 
 ## Mixed results
 
-By default the results are **one list**, best first: library matches, catalog videos you can stream, moments from [Ask](ask.md) channels' captions and live YouTube hits, mixed. Every result is scored the same way, by how much of your query its title (most), channel, tags and description or caption text contain, with a bonus for the whole phrase. That score is weighted by source: your library counts most (and gets a fixed lead on top), then what Ask channels said, then catalog videos, then YouTube. A strong stream or YouTube match can still beat a weak library match. Being near the top of its own source adds a little, and a video whose captions also match gets a bonus.
+By default the results are **one list**, best first: library matches (including videos found through their saved comments), catalog videos you can stream, moments from [Ask](ask.md) channels' captions and live YouTube hits, mixed. Every result is scored the same way, by how much of your query its title (most), channel, tags and description or caption text contain, with a bonus for the whole phrase. That score is weighted by source: your library counts most (and gets a fixed lead on top), then what Ask channels said, then catalog videos, then YouTube. A strong stream or YouTube match can still beat a weak library match. Being near the top of its own source adds a little, and a video whose captions also match gets a bonus.
 
 A video appears once: when its captions match too, the moment (timestamp and the line, linking there) shows under its card. A downloaded video found only by what it says shows as the library copy. Caption hits on videos you do not have become cards you can stream or download.
 
@@ -24,7 +24,7 @@ With **Sections**, matches are grouped into up to five sections, in a fixed orde
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|
-| **In your library** | Videos already downloaded / approved into your library | Nothing in your library matches. |
+| **In your library** | Videos already downloaded / approved into your library, including videos found only through their saved [comments](comments.md) (after the others) | Nothing in your library matches. |
 | **Said in videos** | Moments in the captions of [Ask](ask.md) channels that mention your words, grouped by video; each timestamp opens the video there. Shown once an Ask channel has captions indexed; needs no AI | Nothing in the indexed captions mentions that. |
 | **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
 | **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
@@ -58,7 +58,7 @@ The channel header search:
 
 Status copy shows **Searching indexed catalog…**, then **Finding related matches…** while embeddings run, plus a match count when local results settle. If the catalog is still indexing, the feed notes that results may be incomplete.
 
-When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
+When a hit is **not** obvious from the title, a **?** appears on the thumbnail. Hover (or tap) the **?** for a short explanation: a description/tags/notes snippet, a caption quote on downloaded videos, a YouTube comment, “related by search index,” or “Found on YouTube” for extras from YouTube results in channel search.
 
 ### What gets indexed
 

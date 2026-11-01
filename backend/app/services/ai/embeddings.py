@@ -10,6 +10,8 @@ from sqlmodel import Session, col, select
 
 from ...models import Video, VideoAiMeta, VideoEmbedding, utcnow
 from .. import app_settings
+from ..comments import enabled as comments_enabled
+from ..comments import store as comments_store
 from . import text as ai_text
 from . import vector_index
 from .provider import get_embed_provider, resolve_embed_model
@@ -368,6 +370,11 @@ def build_chat_context(session: Session, video: Video, question: str) -> str:
         metadata=meta,
         caption_chunks=chunks,
         summary=summary,
+        comments=(
+            comments_store.chat_lines(session, video.id)
+            if video.id is not None and comments_enabled()
+            else None
+        ),
     )
 
 

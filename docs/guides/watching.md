@@ -33,6 +33,10 @@ Continue watching on the [Library](library.md) and [History](history.md) pages u
 !!! note "Expiry"
     Stale positions are cleared by `progress_expiry_days` (default **14**). The continue-watching *list* only includes recent activity within a fixed **7-day** backend window. See [History](history.md).
 
+## Comments
+
+Under the description, a YouTube video shows its saved top comments, with the most popular discussions' replies; more can be read from YouTube on request, and a stream loads its comments when asked. See [Comments](comments.md).
+
 ## Related videos
 
 When enabled in [Settings → Playback](../settings/playback.md), the watch page shows a **related videos** sidebar (library recommendations / neighbors). Related suggestions improve when AI embeddings are available ([AI features](ai-features.md)): they rank by how similar the videos are as a whole (title, description, tags, then captions), favour the same channel and shared distinctive tags, and push down videos you have already watched.

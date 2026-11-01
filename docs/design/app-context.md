@@ -17,6 +17,7 @@ It holds the things that used to be import-time constants and singletons:
 | `ai` | `AiRuntimeState`: the AI worker's wake event and "blocked" reason |
 | `timedtext` | `TimedtextPacer`: when YouTube's caption endpoint may next be called, by library caption work (the block after a 429 or between retries) and by Ask's indexing (a separate spaced slot that never blocks library work) |
 | `knowledge` | Ask (`KnowledgeRuntime`): the Ask worker's wake event and the per-channel passage vector matrices ([Channel knowledge](channel-knowledge.md)) |
+| `comments` | Saved comments (`CommentsRuntime`): the comment fetcher's wake event, its pause after a rate limit, and comments read live for "Show more" (30 minutes, 16 at most) |
 | `caches` | Request-path caches (`search_cache`, `duplicate_groups`), built by `install_caches`; `app.state` aliases them for the routers |
 | `e2e` | True only in the Playwright process (`HORDE_E2E`) |
 

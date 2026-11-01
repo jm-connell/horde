@@ -62,6 +62,7 @@ nav:
       - Search: guides/search.md
       - Channels: guides/channels.md
       - Watching: guides/watching.md
+      - Comments: guides/comments.md
       - Video player: guides/player.md
       - Downloads: guides/downloads.md
       - Import & review: guides/import-review.md
@@ -131,6 +132,7 @@ nav:
       - 0020 YouTube history from Takeout: adr/0020-youtube-history-from-takeout.md
       - 0021 Ask about Horde actions: adr/0021-help-chat-acts-through-confirmed-tokens.md
       - 0022 Ask channel knowledge: adr/0022-ask-channel-knowledge.md
+      - 0023 Saved comments: adr/0023-saved-comments.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

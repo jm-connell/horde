@@ -138,10 +138,10 @@ function plainSnippet(hits: AskSearchHit[]): string {
 }
 
 function libraryFloor(video: Video): number {
-  // A match by meaning or captions may share no words with the query.
+  // A match by meaning, captions or comments may share no words with the query.
   const source = video.match_reason?.source;
   if (source === "captions") return 0.35;
-  if (source === "related") return 0.25;
+  if (source === "related" || source === "comments") return 0.25;
   return 0;
 }
 
@@ -255,7 +255,9 @@ export function scoreResults(input: {
         title: video.title,
         channel: video.channel ?? "",
         tags: video.tags.join(" "),
-        text: [video.description, video.notes].filter(Boolean).join(" "),
+        text: [video.description, video.notes, video.match_reason?.snippet]
+          .filter(Boolean)
+          .join(" "),
       })
     );
     push(libraryItem(video, relevance, SOURCE_WEIGHT.library, rank, moments));

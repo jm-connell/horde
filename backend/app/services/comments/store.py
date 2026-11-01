@@ -1,0 +1,272 @@
+"""Save a video's fetched comments, record how the fetch went, and read them back."""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import delete, distinct, func
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import OperationalError
+from sqlmodel import Session, col, select
+
+from ...models import Video, VideoComment, VideoCommentState, as_utc, require_id
+from .fetch import (
+    DISABLED,
+    FAILED,
+    LATER,
+    RETRY,
+    SAVED,
+    UNAVAILABLE,
+    FetchedComment,
+    FetchResult,
+)
+
+logger = logging.getLogger(__name__)
+
+#: Comments keep coming while a video is young: after the first fetch, fetch
+#: again when the video is this old (counted from its upload date, or from when
+#: it was added when that is unknown). Ages already past are skipped.
+REFRESH_AGES = (
+    timedelta(days=7),
+    timedelta(days=30),
+    timedelta(days=182),
+    timedelta(days=365),
+)
+#: Past the last age (and for a video added when already older), every this long.
+REFRESH_EVERY = timedelta(days=182)
+#: An age this close to a fetch is skipped: the comments have barely changed.
+REFRESH_MIN_GAP = timedelta(days=3)
+#: A video never fetched that is retried soon (a status of its own, not an outcome).
+PENDING = "pending"
+#: Attempts before a failing fetch waits for the next refresh age (retried 1 h,
+#: then 4 h later).
+MAX_ATTEMPTS = 3
+RETRY_BASE = timedelta(hours=1)
+#: After a rate limit, a bot check, a network error or a busy gate, the same
+#: video is tried again this much later (not counted as an attempt).
+RATE_LIMIT_WAIT = timedelta(hours=1)
+
+
+@dataclass
+class Thread[C: (VideoComment, FetchedComment)]:
+    """A top-level comment and the replies that were saved with it."""
+
+    comment: C
+    replies: list[C] = field(default_factory=list)
+
+
+def threads[C: (VideoComment, FetchedComment)](
+    comments: Sequence[C],
+) -> list[Thread[C]]:
+    """Group comments in fetch order into threads (replies follow their parent)."""
+    out: list[Thread[C]] = []
+    by_id: dict[str, Thread[C]] = {}
+    for comment in comments:
+        if comment.parent_comment_id is None:
+            thread = Thread(comment)
+            by_id[comment.comment_id] = thread
+            out.append(thread)
+        elif comment.parent_comment_id in by_id:
+            by_id[comment.parent_comment_id].replies.append(comment)
+    return out
+
+
+def saved_comments(session: Session, video_id: int) -> list[VideoComment]:
+    return list(
+        session.exec(
+            select(VideoComment)
+            .where(VideoComment.video_id == video_id)
+            .order_by(col(VideoComment.position))
+        ).all()
+    )
+
+
+def refresh_at(video: Video, now: datetime) -> datetime:
+    """When to fetch again after a fetch at ``now``: the next refresh age the
+    video reaches, or ``REFRESH_EVERY`` from now once it is past them all."""
+    born = as_utc(video.published_at) or as_utc(video.added_at)
+    return next(
+        (born + age for age in REFRESH_AGES if born + age > now + REFRESH_MIN_GAP),
+        now + REFRESH_EVERY,
+    )
+
+
+def apply_result(session: Session, video: Video, result: FetchResult) -> None:
+    """Record a fetch: replace the saved comments when it worked. Commits.
+
+    Comments saved before are never replaced by nothing: a later fetch that finds
+    none (or finds them turned off or gone) keeps them.
+    """
+    video_id = require_id(video)
+    now = datetime.now(UTC)
+    # Created race-free: a refresh by hand can save while the fetcher does.
+    session.exec(
+        sqlite_insert(VideoCommentState)
+        .values(video_id=video_id, status=PENDING, attempts=0)
+        .on_conflict_do_nothing()
+    )
+    state = session.get_one(VideoCommentState, video_id)
+    if (
+        result.status == SAVED
+        and not result.comments
+        and session.exec(
+            select(VideoComment.id).where(VideoComment.video_id == video_id).limit(1)
+        ).first()
+        is not None
+    ):
+        state.next_attempt_at = refresh_at(video, now)
+    elif result.status == SAVED:
+        session.exec(delete(VideoComment).where(col(VideoComment.video_id) == video_id))
+        session.add_all(
+            VideoComment(
+                video_id=video_id,
+                comment_id=c.comment_id,
+                parent_comment_id=c.parent_comment_id,
+                position=i,
+                author=c.author,
+                author_is_uploader=c.author_is_uploader,
+                is_pinned=c.is_pinned,
+                is_hearted=c.is_hearted,
+                like_count=c.like_count,
+                text=c.text,
+                published_at=c.published_at,
+            )
+            for i, c in enumerate(result.comments)
+        )
+        state.status = SAVED
+        state.fetched_at = now
+        state.total_count = result.total_count
+        state.attempts = 0
+        state.next_attempt_at = refresh_at(video, now)
+    elif result.status in (DISABLED, UNAVAILABLE):
+        # Comments saved earlier stay: they may be all that is left of them.
+        state.status = result.status
+        state.fetched_at = now
+        state.total_count = result.total_count
+        state.attempts = 0
+        state.next_attempt_at = None
+    elif result.status in (RETRY, LATER):
+        if state.fetched_at is None:
+            state.status = PENDING
+        state.next_attempt_at = now + RATE_LIMIT_WAIT
+    else:
+        state.attempts += 1
+        if state.attempts < MAX_ATTEMPTS:
+            state.next_attempt_at = now + RETRY_BASE * 4 ** (state.attempts - 1)
+            if state.fetched_at is None:
+                state.status = PENDING
+        else:
+            # Given up for now; the next refresh tries again from scratch.
+            state.attempts = 0
+            state.next_attempt_at = refresh_at(video, now)
+            if state.fetched_at is None:
+                state.status = FAILED
+    session.add(state)
+    session.commit()
+
+
+#: Room the video chat gives saved comments, and one comment at most.
+CHAT_COMMENTS_CHARS = 3_000
+_CHAT_COMMENT_CHARS = 400
+
+
+def _chat_line(comment: VideoComment, *, reply: bool) -> str:
+    marks = [
+        mark
+        for mark, on in (
+            ("the creator", comment.author_is_uploader),
+            ("pinned", comment.is_pinned),
+            ("hearted by the creator", comment.is_hearted),
+        )
+        if on
+    ]
+    head = "  - reply" if reply else "-"
+    if marks:
+        head += f" [{', '.join(marks)}]"
+    text = " ".join(comment.text.split())
+    if len(text) > _CHAT_COMMENT_CHARS:
+        text = text[: _CHAT_COMMENT_CHARS - 1].rstrip() + "…"
+    likes = f" ({comment.like_count} likes)" if comment.like_count else ""
+    return f"{head} {text}{likes}"
+
+
+def chat_lines(session: Session, video_id: int) -> list[str]:
+    """The top saved comments for the video chat, with the creator's replies."""
+    lines: list[str] = []
+    used = 0
+    for thread in threads(saved_comments(session, video_id)):
+        group = [_chat_line(thread.comment, reply=False)] + [
+            _chat_line(r, reply=True) for r in thread.replies if r.author_is_uploader
+        ]
+        size = sum(len(line) + 1 for line in group)
+        if used + size > CHAT_COMMENTS_CHARS:
+            continue  # a long thread; a shorter one further down may still fit
+        lines.extend(group)
+        used += size
+    return lines
+
+
+@dataclass
+class Storage:
+    """What the saved comments take: how many, of how many videos, in bytes."""
+
+    videos: int
+    comments: int
+    bytes: int
+
+
+#: Comment rows deleted per transaction (the search index trigger runs per row).
+_DELETE_BATCH = 2000
+
+
+def _bytes(session: Session) -> int:
+    """Database pages of the comment tables, their indexes and search index."""
+    conn = session.connection()
+    names = [
+        str(r[0])
+        for r in conn.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type IN ('table', 'index') AND "
+            "(tbl_name IN ('video_comments', 'video_comment_state') "
+            "OR tbl_name LIKE 'video_comments_fts%')"
+        )
+    ]
+    try:
+        return sum(
+            int(
+                conn.exec_driver_sql(
+                    "SELECT coalesce(sum(pgsize), 0) FROM dbstat WHERE name = ?",
+                    (name,),
+                ).scalar()
+                or 0
+            )
+            for name in names
+        )
+    except OperationalError:
+        # An SQLite built without the dbstat table: about twice the text (rows
+        # plus the search index), close enough for "a few MB".
+        logger.debug("dbstat unavailable; estimating comment storage", exc_info=True)
+        text = conn.exec_driver_sql(
+            "SELECT coalesce(sum(length(text) + coalesce(length(author), 0) + 60), 0) "
+            "FROM video_comments"
+        ).scalar()
+        return int(text or 0) * 2
+
+
+def storage(session: Session) -> Storage:
+    comments, videos = session.exec(
+        select(func.count(), func.count(distinct(col(VideoComment.video_id))))
+    ).one()
+    return Storage(videos=int(videos), comments=int(comments), bytes=_bytes(session))
+
+
+def delete_all(session: Session) -> None:
+    """Delete every saved comment and fetch state, a batch per commit so other
+    writers are not held up. Turning comments on again fetches them afresh."""
+    while ids := list(session.exec(select(VideoComment.id).limit(_DELETE_BATCH)).all()):
+        session.exec(delete(VideoComment).where(col(VideoComment.id).in_(ids)))
+        session.commit()
+    session.exec(delete(VideoCommentState))
+    session.commit()

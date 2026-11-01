@@ -361,6 +361,11 @@ def _queue_follow_up_work(
             "could not queue AI enrichment for video %s", video_id, exc_info=True
         )
 
+    # Its comments are saved next (a video without saved comments goes first).
+    from ..comments import worker as comments_worker
+
+    comments_worker.wake()
+
     # Index channel library in the background on first download from a channel.
     try:
         if committed.channel_url:
