@@ -43,41 +43,47 @@ from .candidates import (
     library_candidates,
 )
 from .feedback import (
+    IMPRESSION_STEP,
     Exclusions,
     earlier_visits,
     exclusions,
     impression_penalty,
-    worn_out,
 )
-from .history import Watch, watches
+from .history import PastFavorite, Watch, counts_as_taste, past_favorites, watches
 from .interests import (
+    DEFAULT_WINDOW,
     RECENT_HALF_LIFE_DAYS,
     Interest,
+    TasteWindow,
     interests,
     split_history,
     watch_vectors,
     watch_weight,
 )
 from .runtime import DiscoveryRuntime
+from .tuning import DEFAULTS, Tuning
+from .tuning import for_user as load_tuning
 
 logger = logging.getLogger(__name__)
 
-SHARES = {"subscriptions": 0.30, "similar": 0.30, "new": 0.25, "throwback": 0.15}
-#: An upload counts as new for "subscriptions" this long after it is published.
-SUBSCRIPTION_WINDOW = timedelta(days=21)
+#: The Balanced shares (a user's own come from their ``tuning.Tuning``).
+SHARES = DEFAULTS.shares.normalized()
 #: A channel this strong in the recent history counts like a followed one.
 WATCHED_CHANNEL_LEVEL = 0.25
 #: A channel this strong long ago, and absent lately, is a throwback channel.
 DORMANT_CHANNEL_LEVEL = 0.3
-#: The same channel appears at most once in any this many slots...
-CHANNEL_GAP = 5
+#: The same channel appears at most once in any this many slots (by default)...
+CHANNEL_GAP = DEFAULTS.channel_gap
 #: ...and at most this often in the whole feed in these buckets (the channel
-#: suggestions show more of a new channel).
-CHANNEL_CAPS = {"new": 2, "throwback": 3}
+#: suggestions show more of a new channel; ``new`` is the user's own setting).
+CHANNEL_CAPS = {"new": DEFAULTS.new_channel_cap, "throwback": 3, "rewatch": 2}
 #: While other buckets have picks left, none takes more than this times its share.
 OVERFILL = 1.3
-#: What new channels and throwbacks may grow to when another bucket is empty.
-SHARE_CAPS = {"new": 0.35, "throwback": 0.18}
+#: How far past their asked-for share new channels, throwbacks and rewatches
+#: may grow when another bucket is empty (the rest goes to the familiar ones).
+SHARE_CAP_RATIO = {"new": 1.4, "throwback": 1.3, "rewatch": 1.5}
+#: The Balanced caps, for reference.
+SHARE_CAPS = {k: SHARES[k] * v for k, v in SHARE_CAP_RATIO.items()}
 #: See ``mix``: how strongly an under-served interest is pulled forward, and the
 #: least share any recent interest is owed.
 TOPIC_BONUS = 0.06
@@ -94,13 +100,18 @@ TASTE_FLOORS = {"similar": 0.15, "new": 0.3, "throwback": 0.3}
 JITTER = 0.02
 NEW_JITTER = 0.06
 FEED_MAX = 800
+#: A video this short counts as a Short (``hide_shorts``), as does a /shorts/ URL.
+SHORTS_MAX_SEC = 60
+PAST_LIVE = frozenset({"was_live", "post_live"})
+#: How many of the top picks the target-vs-actual mix is measured over.
+MIX_STATS_TOP = 60
 #: Seeds read from the recent history (by weight).
 MAX_SEEDS = 40
 
 
 @dataclass
 class Reason:
-    kind: str  # subscription | similar | new_channel | throwback | library
+    kind: str  # subscription | similar | new_channel | throwback | rewatch | library
     text: str
     detail: str | None = None
 
@@ -115,6 +126,12 @@ class FeedItem:
     topic: int | None = None
     #: From a channel the user follows.
     followed: bool = False
+    #: What the score is made of, for "Why this?" (they add up to ``score``).
+    parts: list[tuple[str, float]] = field(default_factory=list)
+    #: Where the candidate came from (a search, an up next list, the library).
+    found_by: str | None = None
+    #: Close enough to the user's taste for its bucket (else it waits at the end).
+    eligible: bool = True
 
 
 @dataclass
@@ -129,10 +146,20 @@ class ChannelStat:
 
 
 @dataclass
+class MixStat:
+    bucket: str
+    #: The share the user asked for (0..1).
+    target: float
+    #: The share it got among the top ``MIX_STATS_TOP`` picks.
+    actual: float
+
+
+@dataclass
 class Feed:
     items: list[FeedItem]
     new_channels: dict[str, ChannelStat]
     cold: bool
+    mix: list[MixStat] = field(default_factory=list)
 
 
 def _name(text: str) -> str:
@@ -226,10 +253,10 @@ def taste_history(session: Session, user_id: int) -> tuple[list[Watch], bool]:
 
 
 def _channel_maps(
-    history: list[Watch], now: datetime
+    history: list[Watch], now: datetime, window: TasteWindow = DEFAULT_WINDOW
 ) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
     """(recent, all-time, long-ago) channel strengths by lowercased name, 0..1."""
-    recent, older = split_history(history, now)
+    recent, older = split_history(history, now, window)
     recent_w: dict[str, float] = defaultdict(float)
     for w in recent:
         recent_w[_name(w.channel)] += watch_weight(w, now, RECENT_HALF_LIFE_DAYS)
@@ -392,12 +419,13 @@ def _similarity(
     cands: list[Candidate],
     history: list[Watch],
     now: datetime,
+    window: TasteWindow = DEFAULT_WINDOW,
 ) -> _Similarity | None:
     """Embedding fit, or None without embeddings."""
     if get_embed_provider() is None or app_settings.ai_settings().get("paused"):
         return None
-    recent_groups, dormant_groups = interests(session, runtime, history, now)
-    recent, older = split_history(history, now)
+    recent_groups, dormant_groups = interests(session, runtime, history, now, window)
+    recent, older = split_history(history, now, window)
     vectors = watch_vectors(session, runtime, recent + older)
     mine = _interest_matrix(
         recent_groups, vectors, lambda x: watch_weight(x, now, RECENT_HALF_LIFE_DAYS)
@@ -497,14 +525,107 @@ def _hits(session: Session, user_id: int) -> dict[int, _Hit]:
     return best
 
 
+def _allowed(c: Candidate, t: Tuning, now: datetime, *, rewatch: bool = False) -> bool:
+    """The user's hard filters: sources, Shorts, past live streams, length, age."""
+    if not rewatch:
+        if c.pool == "library" and not t.use_library:
+            return False
+        if c.pool == "catalog" and not t.use_catalogs:
+            return False
+        if c.pool == "discovery" and not t.use_youtube:
+            return False
+        if t.max_age_days and (
+            c.published is None or now - c.published > timedelta(days=t.max_age_days)
+        ):
+            return False
+    duration = c.duration
+    if t.hide_shorts and (
+        (duration is not None and duration <= SHORTS_MAX_SEC) or "/shorts/" in c.url
+    ):
+        return False
+    if t.hide_past_live and c.live_status in PAST_LIVE:
+        return False
+    if duration is not None:
+        if t.min_minutes and duration < 60 * t.min_minutes:
+            return False
+        if t.max_minutes and duration > 60 * t.max_minutes:
+            return False
+    return True
+
+
+def _popularity(base: float, quality: float, t: Tuning) -> float:
+    """A bucket's popularity prior plus the user's lean: toward popular videos
+    (positive) or hidden gems (negative); an unknown view count is neutral."""
+    return base * quality + t.popularity_delta * (2 * quality - 1)
+
+
+def _wear(seen: int, t: Tuning) -> tuple[float, bool]:
+    """(score penalty, worn out) for a pick shown on ``seen`` earlier visits."""
+    if t.worn_after == 0:
+        return impression_penalty(seen), False
+    return IMPRESSION_STEP * min(seen, t.worn_after), seen >= t.worn_after
+
+
+def _ago(when: datetime, now: datetime) -> str:
+    days = max(0, (now - when).days)
+    if days >= 730:
+        return f"{days // 365} years ago"
+    if days >= 365:
+        return "a year ago"
+    if days >= 60:
+        return f"{days // 30} months ago"
+    return f"{max(days // 7, 1)} weeks ago"
+
+
+def _found_by(c: Candidate, hit: _Hit | None) -> str:
+    if c.pool == "library":
+        return "Your library"
+    if c.pool == "history":
+        return "Your watch history"
+    if c.pool == "catalog":
+        return f"The indexed uploads of {c.channel}" if c.channel else "A channel index"
+    if hit is not None:
+        if hit.source == "search":
+            return f"YouTube search: {hit.seed}"
+        if hit.seed_title:
+            return f"Up next from {_short(hit.seed_title, 50)}"
+        return "YouTube's up next"
+    return "Found on YouTube"
+
+
+def _history_candidate(fav: PastFavorite) -> Candidate:
+    w = fav.watch
+    yt_id = w.yt_id or ""
+    return Candidate(
+        key=w.key,
+        pool="history",
+        title=w.title,
+        channel=w.channel,
+        channel_url=w.channel_url,
+        yt_id=yt_id or None,
+        url=f"https://www.youtube.com/watch?v={yt_id}",
+        source_channel_url=w.channel_url or None,
+    )
+
+
 def build_feed(
-    session: Session, runtime: DiscoveryRuntime, user_id: int, seed: int
+    session: Session,
+    runtime: DiscoveryRuntime,
+    user_id: int,
+    seed: int,
+    tuning: Tuning = DEFAULTS,
 ) -> Feed:
+    t = tuning
     now = utcnow()
+    scale = t.half_life_scale
+    window = t.window
+    shares = t.shares.normalized()
     history, cold = taste_history(session, user_id)
-    own = watches(session, user_id)
+    history = [w for w in history if counts_as_taste(w, t.min_watched_pct)]
+    own_all = watches(session, user_id)
+    own = [w for w in own_all if counts_as_taste(w, t.min_watched_pct)]
     # Everything watched on YouTube is seen, not only the newest part ``own`` holds.
-    own_keys = {w.key for w in own} | takeout_history.cached_profile(
+    own_keys = {w.key for w in own_all} | takeout_history.cached_profile(
         session, user_id
     ).watched
     excluded: Exclusions = exclusions(session, user_id)
@@ -517,16 +638,34 @@ def build_feed(
             followed_names.add(_name(f.channel_name))
 
     hits = _hits(session, user_id)
-    cands = library_candidates(session)
-    taken = {c.yt_id for c in cands if c.yt_id}
-    cands += catalog_candidates(session, taken)
-    cands += discovered_candidates(session, taken, set(hits))
+    pool = library_candidates(session)
+    taken = {c.yt_id for c in pool if c.yt_id}
+    pool += catalog_candidates(session, taken)
+    pool += discovered_candidates(session, taken, set(hits))
     cands = [
         c
-        for c in cands
+        for c in pool
         if c.key not in own_keys
         and not excluded.blocks(c.key, c.channel_url, c.channel)
+        and _allowed(c, t, now)
     ]
+    # Old favorites come back only through the rewatch bucket.
+    favorite_of: dict[str, PastFavorite] = {}
+    if shares["rewatch"] > 0:
+        before = now - timedelta(days=t.rewatch_after_days)
+        recent_keys = {w.key for w in own_all if w.watched_at >= before}
+        by_key = {c.key: c for c in pool}
+        for favorite in past_favorites(session, user_id, before=before):
+            key = favorite.watch.key
+            if key in recent_keys or key in favorite_of:
+                continue
+            c = by_key.get(key) or _history_candidate(favorite)
+            if excluded.blocks(key, c.channel_url, c.channel) or not _allowed(
+                c, t, now, rewatch=True
+            ):
+                continue
+            favorite_of[key] = favorite
+            cands.append(c)
     hit_of = {
         c.key: hits[c.discovery_id]
         for c in cands
@@ -535,8 +674,9 @@ def build_feed(
 
     # Channel strengths (and the reasons that name them) come from the user's
     # own watching, even when the household stands in for a short history.
-    recent_ch, all_ch, old_ch = _channel_maps(own, now)
-    sim = _similarity(session, runtime, cands, history, now)
+    recent_ch, all_ch, old_ch = _channel_maps(own, now, window)
+    sim = _similarity(session, runtime, cands, history, now, window)
+    base_floors: dict[str, float]
     if sim is None:
         relevance = _taste_relevance(session, cands, history, all_ch)
         has_vector = np.zeros(len(cands), dtype=bool)
@@ -545,7 +685,7 @@ def build_feed(
         dormant_seed: list[str | None] = [None] * len(cands)
         topic: list[int | None] = [None] * len(cands)
         topic_shares: dict[int, float] = {}
-        floors = TASTE_FLOORS
+        base_floors = TASTE_FLOORS
     else:
         relevance, has_vector = sim.recent, np.isfinite(sim.recent_raw)
         recent_seed, dormant, dormant_seed = (
@@ -554,8 +694,9 @@ def build_feed(
             sim.dormant_seed,
         )
         topic, topic_shares = sim.topic, sim.topic_shares
-        floors = FLOORS
-    cowatch = _cowatch(session, user_id) if not cold else {}
+        base_floors = FLOORS
+    floors = {k: v * t.floor_multiplier(k) for k, v in base_floors.items()}
+    cowatch = _cowatch(session, user_id) if not cold and t.use_household else {}
 
     rng = _rng(user_id, seed)
     jitter = rng.normal(0.0, 1.0, size=len(cands))
@@ -563,6 +704,7 @@ def build_feed(
     leftovers: list[FeedItem] = []
     worn: list[FeedItem] = []
     new_channels: dict[str, ChannelStat] = {}
+    sub_window = timedelta(days=t.subscription_window_days)
 
     for i, c in enumerate(cands):
         name = _name(c.channel)
@@ -581,16 +723,34 @@ def build_feed(
             rel = max(rel, floors["new"] + 0.3 * 0.9**hit.rank)
         quality = _quality(c.view_count)
         published = c.published
-        recent_upload = published is not None and now - published <= SUBSCRIPTION_WINDOW
+        recent_upload = published is not None and now - published <= sub_window
         seed_title = recent_seed[i] or (hit.seed_title if hit else None)
-
-        if (followed or lately >= WATCHED_CHANNEL_LEVEL) and recent_upload:
-            bucket = "subscriptions"
-            score = (
-                0.55 * _fresh(published, now, 10.0)
-                + 0.25 * max(lately, 0.6 if followed else 0.0)
-                + 0.20 * min(rel, 1.0)
+        fav = favorite_of.get(c.key)
+        parts: list[tuple[str, float]] = []
+        if fav is not None:
+            bucket = "rewatch"
+            age = (now - fav.watch.watched_at).days
+            parts += [
+                ("Match to your taste", 0.45 * min(rel, 1.0)),
+                ("A channel you watch", 0.25 * known),
+                ("Watched more than once", 0.15 if fav.views > 1 else 0.0),
+                ("Time since you watched it", 0.15 * min(1.0, age / 365)),
+            ]
+            reason = Reason(
+                "rewatch", f"You watched this {_ago(fav.watch.watched_at, now)}"
             )
+            eligible = True
+        elif (followed or lately >= WATCHED_CHANNEL_LEVEL) and recent_upload:
+            bucket = "subscriptions"
+            parts += [
+                ("Freshness", 0.55 * _fresh(published, now, 10.0 * scale)),
+                (
+                    "Followed channel" if followed else "A channel you watch lately",
+                    0.25 * max(lately, 0.6 if followed else 0.0),
+                ),
+                ("Match to your taste", 0.20 * min(rel, 1.0)),
+            ]
+            parts.append(("Popularity", _popularity(0.0, quality, t)))
             text = (
                 f"New from {c.channel}"
                 if followed
@@ -600,7 +760,12 @@ def build_feed(
             eligible = True
         elif long_ago >= DORMANT_CHANNEL_LEVEL and lately == 0 and not followed:
             bucket = "throwback"
-            score = 0.45 * long_ago + 0.35 * back + 0.2 * _fresh(published, now, 180.0)
+            parts += [
+                ("How much you used to watch this channel", 0.45 * long_ago),
+                ("Match to an older interest", 0.35 * back),
+                ("Freshness", 0.2 * _fresh(published, now, 180.0 * scale)),
+            ]
+            parts.append(("Popularity", _popularity(0.0, quality, t)))
             reason = Reason("throwback", f"You used to watch {c.channel}")
             eligible = True
         elif (back >= floors["throwback"] and back > rel + 0.15) or (
@@ -610,11 +775,11 @@ def build_feed(
         ):
             bucket = "throwback"
             title = dormant_seed[i] or (hit.seed_title if hit else None)
-            score = (
-                0.7 * max(back, rel)
-                + 0.15 * quality
-                + 0.15 * _fresh(published, now, 365.0)
-            )
+            parts += [
+                ("Match to an older interest", 0.7 * max(back, rel)),
+                ("Freshness", 0.15 * _fresh(published, now, 365.0 * scale)),
+            ]
+            parts.append(("Popularity", _popularity(0.15, quality, t)))
             reason = Reason(
                 "throwback",
                 f"Like {_short(title, 50)}, from a while back"
@@ -624,7 +789,11 @@ def build_feed(
             eligible = max(back, rel) >= floors["throwback"]
         elif known == 0 and not followed:
             bucket = "new"
-            score = rel + 0.08 * quality + 0.05 * _fresh(published, now, 90.0)
+            parts += [
+                ("Match to your taste", rel),
+                ("Freshness", 0.05 * _fresh(published, now, 90.0 * scale)),
+            ]
+            parts.append(("Popularity", _popularity(0.08, quality, t)))
             reason = Reason(
                 "new_channel",
                 "New channel for you",
@@ -633,24 +802,16 @@ def build_feed(
                 else None,
             )
             eligible = rel >= floors["new"]
-            if eligible:
-                stat = new_channels.setdefault(
-                    c.channel_url or name, ChannelStat(c.channel, c.channel_url)
-                )
-                stat.scores.append(score)
-                stat.items.append(c)
-                if seed_title:
-                    stat.seeds.add(seed_title)
         else:
             bucket = "similar"
             boost = 0.1 * cowatch.get(c.video_id, 0.0) if c.video_id else 0.0
-            score = (
-                rel
-                + 0.08 * known
-                + 0.04 * _fresh(published, now, 60.0)
-                + 0.04 * quality
-                + boost
-            )
+            parts += [
+                ("Match to your taste", rel),
+                ("A channel you watch", 0.08 * known),
+                ("Freshness", 0.04 * _fresh(published, now, 60.0 * scale)),
+                ("Liked by people here", boost),
+            ]
+            parts.append(("Popularity", _popularity(0.04, quality, t)))
             if cold:
                 reason = (
                     Reason("library", "Picked from your library")
@@ -665,11 +826,38 @@ def build_feed(
                 )
             eligible = rel >= floors["similar"] or boost >= 0.05
 
-        score += float(jitter[i]) * (NEW_JITTER if bucket == "new" else JITTER)
-        seen = visits.get(c.key, 0)
-        score -= impression_penalty(seen)
-        item = FeedItem(c, bucket, score, reason, topic[i], followed)
-        if worn_out(seen):
+        if c.pool == "library" and t.library_bonus:
+            parts.append(("Already downloaded", t.library_bonus))
+        spread = (NEW_JITTER if bucket == "new" else JITTER) * t.jitter_scale
+        if spread:
+            parts.append(("Shuffle", float(jitter[i]) * spread))
+        penalty, tired = _wear(visits.get(c.key, 0), t)
+        if penalty:
+            parts.append(("Shown before without a watch", -penalty))
+        parts = [(label, value) for label, value in parts if value]
+        score = sum(value for _label, value in parts)
+        item = FeedItem(
+            c,
+            bucket,
+            score,
+            reason,
+            topic[i],
+            followed,
+            parts=parts,
+            found_by=_found_by(c, hit),
+            eligible=eligible,
+        )
+        if shares[bucket] <= 0:
+            continue  # The user turned this kind of pick off.
+        if bucket == "new" and eligible:
+            stat = new_channels.setdefault(
+                c.channel_url or name, ChannelStat(c.channel, c.channel_url)
+            )
+            stat.scores.append(score)
+            stat.items.append(c)
+            if seed_title:
+                stat.seeds.add(seed_title)
+        if tired:
             worn.append(item)
         elif eligible:
             buckets[bucket].append(item)
@@ -680,29 +868,49 @@ def build_feed(
         items.sort(key=lambda it: -it.score)
     leftovers.sort(key=lambda it: -it.score)
     worn.sort(key=lambda it: -it.score)
-    mixed = mix(buckets, topic_shares)
+    mixed = mix(buckets, topic_shares, t)
     _vary_reasons(mixed, all_ch)
+    placed = len(mixed)
     mixed.extend(leftovers[: max(0, FEED_MAX - len(mixed))])
     mixed.extend(worn[: max(0, FEED_MAX - len(mixed))])
-    return Feed(mixed[:FEED_MAX], new_channels, cold)
+    return Feed(
+        mixed[:FEED_MAX], new_channels, cold, _mix_stats(mixed[:placed], shares)
+    )
 
 
-def effective_shares(present: set[str]) -> dict[str, float]:
-    """``SHARES`` over the buckets that still have picks, summing to 1.
+def _mix_stats(placed: list[FeedItem], shares: dict[str, float]) -> list[MixStat]:
+    """What the user asked each bucket to get, and what the top of the feed got."""
+    top = placed[:MIX_STATS_TOP]
+    counts = Counter(item.bucket for item in top)
+    return [
+        MixStat(bucket, target, counts[bucket] / len(top) if top else 0.0)
+        for bucket, target in shares.items()
+        if target > 0
+    ]
+
+
+def effective_shares(present: set[str], tuning: Tuning = DEFAULTS) -> dict[str, float]:
+    """The user's shares over the buckets that still have picks, summing to 1.
 
     The share of an empty bucket goes to the others in proportion, except that
-    new channels and throwbacks stay a sprinkle (``SHARE_CAPS``): what they
-    cannot take goes to the familiar buckets.
+    new channels, throwbacks and rewatches stay near what was asked for
+    (``SHARE_CAP_RATIO``): what they cannot take goes to the familiar buckets.
     """
-    total = sum(SHARES[n] for n in present)
-    out = {n: SHARES[n] / total for n in present}
+    asked = tuning.shares.normalized()
+    total = sum(asked[n] for n in present)
+    if total <= 0:
+        return {n: 1.0 / len(present) for n in present}
+    out = {n: asked[n] / total for n in present}
+    familiar = [n for n in ("subscriptions", "similar") if out.get(n, 0.0) > 0]
+    if not familiar:
+        return out
     spare = 0.0
-    for name, cap in SHARE_CAPS.items():
+    for name, ratio in SHARE_CAP_RATIO.items():
+        cap = asked[name] * ratio
         if name in out and out[name] > cap:
             spare += out[name] - cap
             out[name] = cap
-    familiar = [n for n in ("subscriptions", "similar") if n in out]
-    if spare and familiar:
+    if spare:
         base = sum(out[n] for n in familiar)
         for n in familiar:
             out[n] += spare * out[n] / base
@@ -710,20 +918,24 @@ def effective_shares(present: set[str]) -> dict[str, float]:
 
 
 def mix(
-    buckets: dict[str, list[FeedItem]], topic_shares: dict[int, float] | None = None
+    buckets: dict[str, list[FeedItem]],
+    topic_shares: dict[int, float] | None = None,
+    tuning: Tuning = DEFAULTS,
 ) -> list[FeedItem]:
-    """Interleave the buckets by ``SHARES`` (smooth weighted round robin).
+    """Interleave the buckets by the user's shares (smooth weighted round robin).
 
-    A pick must keep its channel ``CHANNEL_GAP`` slots from its last showing and
+    A pick must keep its channel ``channel_gap`` slots from its last showing and
     its bucket within ``OVERFILL`` times its share; when no bucket can pick that
-    way, the spacing and share give way, but ``CHANNEL_CAPS`` never do: picks
-    past a cap wait at the end, best first.
+    way, the spacing and share give way, but the per-channel caps never do:
+    picks past a cap wait at the end, best first.
 
     Within a bucket, a pick from an interest that has had less than its share
     of the history (``topic_shares``, at least ``MIN_TOPIC_SHARE``) gets
     ``TOPIC_BONUS`` per missing slot, so a smaller interest still shows up
     between the big ones.
     """
+    gap = tuning.channel_gap
+    caps = {**CHANNEL_CAPS, "new": tuning.new_channel_cap}
     shares = {t: max(v, MIN_TOPIC_SHARE) for t, v in (topic_shares or {}).items()}
     topic_picks: Counter[int] = Counter()
     #: Picks past their channel's cap: they go after everything else.
@@ -736,13 +948,13 @@ def mix(
     last_channels: list[str] = []
 
     def capped(item: FeedItem) -> bool:
-        cap = CHANNEL_CAPS.get(item.bucket)
+        cap = caps.get(item.bucket)
         name = _name(item.candidate.channel)
         return cap is not None and bool(name) and shown[item.bucket][name] >= cap
 
     def spaced(item: FeedItem) -> bool:
         name = _name(item.candidate.channel)
-        return not name or name not in last_channels[-(CHANNEL_GAP - 1) :]
+        return gap <= 1 or not name or name not in last_channels[-(gap - 1) :]
 
     def within_share(bucket: str) -> bool:
         if len(queues) == 1:
@@ -771,7 +983,7 @@ def mix(
 
     share: dict[str, float] = {}
     while queues:
-        share = effective_shares(set(queues))
+        share = effective_shares(set(queues), tuning)
         for name in queues:
             credit[name] += share[name]
         order = sorted(queues, key=lambda n: -credit[n])
@@ -863,6 +1075,7 @@ def ranked_feed(
     seed: int,
     *,
     fresh: bool = True,
+    tuning: Tuning | None = None,
 ) -> Feed:
     """The feed for this user and seed.
 
@@ -870,7 +1083,10 @@ def ranked_feed(
     Otherwise (the next pages of a visit) the visit's ranking is kept even if
     the user watched something meanwhile, so an offset cursor never skips.
     """
-    key = (user_id, seed)
+    tuned = tuning if tuning is not None else load_tuning(session, user_id)
+    # A different tuning is a different feed: changing a slider never pages
+    # through a ranking made with the old values.
+    key = (user_id, seed, tuned.model_dump_json())
     fingerprint = history_fingerprint(session, user_id)
     cached = runtime.feed(key)
     if (
@@ -879,6 +1095,6 @@ def ranked_feed(
         and (not fresh or cached[0] == fingerprint)
     ):
         return cached[1]
-    feed = build_feed(session, runtime, user_id, seed)
+    feed = build_feed(session, runtime, user_id, seed, tuned)
     runtime.store_feed(key, (fingerprint, feed))
     return feed

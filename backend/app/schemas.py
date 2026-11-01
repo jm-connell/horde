@@ -11,6 +11,7 @@ from .models import (
     PlaylistVisibility,
     VideoStatus,
 )
+from .services.discovery.tuning import Tuning
 
 #: Largest list a bulk endpoint accepts (video ids, pasted URLs).
 MAX_BULK_ITEMS = 1000
@@ -1517,6 +1518,14 @@ class StreamWatchWrite(BaseModel):
     position_sec: float = Field(ge=0, le=7 * 86400)
     duration_sec: float | None = Field(default=None, ge=0, le=7 * 86400)
     finished: bool = False
+
+
+class RecTuningWrite(BaseModel):
+    """Rank Recommended+ with a preset, or with the user's own values."""
+
+    #: A preset id, or "custom" (then ``custom`` holds the values).
+    active: str = Field(min_length=1, max_length=40)
+    custom: Tuning | None = None
 
 
 class RecFeedbackWrite(BaseModel):

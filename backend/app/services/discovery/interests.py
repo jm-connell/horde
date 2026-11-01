@@ -53,6 +53,26 @@ MAX_THROWBACK_INTERESTS = 3
 #: Watches that barely say anything (opened, left) do not seed a group alone.
 MIN_GROUP_WEIGHT = 0.3
 
+
+@dataclass(frozen=True)
+class TasteWindow:
+    """Which watches are recent taste and how far back throwbacks reach.
+
+    A user's Recommended+ settings choose it (``tuning.Tuning.window``); the
+    defaults are the constants above.
+    """
+
+    recent_days: int = RECENT_DAYS
+    throwback_max_days: int = THROWBACK_MAX_DAYS
+
+    @property
+    def throwback_after_days(self) -> int:
+        """Older than this is "back then" (never closer than the default 60 days)."""
+        return max(THROWBACK_AFTER_DAYS, 2 * self.recent_days)
+
+
+DEFAULT_WINDOW = TasteWindow()
+
 _WORD_RE = re.compile(r"[^\W\d_]{3,}", re.UNICODE)
 _STOPWORDS = frozenset(
     """
@@ -100,22 +120,22 @@ def watch_weight(watch: Watch, now: datetime, half_life_days: float) -> float:
 
 
 def split_history(
-    watches: list[Watch], now: datetime
+    watches: list[Watch], now: datetime, window: TasteWindow = DEFAULT_WINDOW
 ) -> tuple[list[Watch], list[Watch]]:
     """(recent, older) watches, newest first, as described in the module docstring."""
-    recent_cut = now - timedelta(days=RECENT_DAYS)
+    recent_cut = now - timedelta(days=window.recent_days)
     recent = [w for w in watches if w.watched_at >= recent_cut][:RECENT_MAX]
     if len(recent) < RECENT_MIN:
         # A quiet month: look back as far as the throwback line, never past it,
         # or old interests would pass for current ones.
-        wider = now - timedelta(days=THROWBACK_AFTER_DAYS)
+        wider = now - timedelta(days=window.throwback_after_days)
         recent = [w for w in watches if w.watched_at >= wider][:RECENT_MAX]
     if not recent:
         # Nothing for months: the last watches are what the user is "into".
         recent = watches[:RECENT_MIN]
     taken = {w.key for w in recent}
-    old_cut = now - timedelta(days=THROWBACK_AFTER_DAYS)
-    oldest = now - timedelta(days=THROWBACK_MAX_DAYS)
+    old_cut = now - timedelta(days=window.throwback_after_days)
+    oldest = now - timedelta(days=window.throwback_max_days)
     older = [
         w for w in watches if w.key not in taken and oldest <= w.watched_at <= old_cut
     ][:THROWBACK_MAX]
@@ -257,9 +277,10 @@ def interests(
     runtime: DiscoveryRuntime,
     history: list[Watch],
     now: datetime,
+    window: TasteWindow = DEFAULT_WINDOW,
 ) -> tuple[list[Interest], list[Interest]]:
     """(recent, dormant older) interests, heaviest first."""
-    recent, older = split_history(history, now)
+    recent, older = split_history(history, now, window)
     vectors = watch_vectors(session, runtime, recent + older)
     recent_groups = group(
         recent,

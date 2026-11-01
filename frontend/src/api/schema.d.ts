@@ -1488,6 +1488,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/tuning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tuning
+         * @description How this user ranks Recommended+: a preset or their own values.
+         */
+        get: operations["get_tuning_api_discover_tuning_get"];
+        /**
+         * Put Tuning
+         * @description Pick a preset, or rank with your own values (``active`` "custom").
+         *
+         *     Your own values are kept when you pick a preset, so you can switch back.
+         */
+        put: operations["put_tuning_api_discover_tuning_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads": {
         parameters: {
             query?: never;
@@ -5835,6 +5861,8 @@ export interface components {
         DiscoverFeedRead: {
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
+            /** Mix */
+            mix?: components["schemas"]["DiscoverMixRead"][];
             /** Next Cursor */
             next_cursor?: string | null;
             status: components["schemas"]["DiscoverStatusRead"];
@@ -5854,6 +5882,16 @@ export interface components {
             source: "library" | "channels" | "new";
             stream?: components["schemas"]["ChannelFeedEntry"] | null;
             video?: components["schemas"]["VideoRead"] | null;
+            why?: components["schemas"]["DiscoverWhyRead"] | null;
+        };
+        /** DiscoverMixRead */
+        DiscoverMixRead: {
+            /** Actual */
+            actual: number;
+            /** Bucket */
+            bucket: string;
+            /** Target */
+            target: number;
         };
         /** DiscoverReasonRead */
         DiscoverReasonRead: {
@@ -5871,6 +5909,13 @@ export interface components {
             /** Queued */
             queued: boolean;
         };
+        /** DiscoverScorePartRead */
+        DiscoverScorePartRead: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: number;
+        };
         /** DiscoverStatusRead */
         DiscoverStatusRead: {
             /** Backing Off */
@@ -5885,6 +5930,25 @@ export interface components {
             gathering: boolean;
             /** Last Run At */
             last_run_at?: string | null;
+        };
+        /**
+         * DiscoverWhyRead
+         * @description How the feed placed one pick: its bucket and what its score is made of.
+         */
+        DiscoverWhyRead: {
+            /** Bucket */
+            bucket: string;
+            /**
+             * Eligible
+             * @default true
+             */
+            eligible: boolean;
+            /** Found By */
+            found_by?: string | null;
+            /** Parts */
+            parts: components["schemas"]["DiscoverScorePartRead"][];
+            /** Score */
+            score: number;
         };
         /** DiskUsage */
         DiskUsage: {
@@ -7378,6 +7442,38 @@ export interface components {
             /** Label */
             label?: string | null;
         };
+        /** RecTuningPresetRead */
+        RecTuningPresetRead: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            values: components["schemas"]["Tuning"];
+        };
+        /**
+         * RecTuningRead
+         * @description The user's Recommended+ settings and the presets they can pick from.
+         */
+        RecTuningRead: {
+            /** Active */
+            active: string;
+            custom?: components["schemas"]["Tuning"] | null;
+            defaults: components["schemas"]["Tuning"];
+            /** Presets */
+            presets: components["schemas"]["RecTuningPresetRead"][];
+            values: components["schemas"]["Tuning"];
+        };
+        /**
+         * RecTuningWrite
+         * @description Rank Recommended+ with a preset, or with the user's own values.
+         */
+        RecTuningWrite: {
+            /** Active */
+            active: string;
+            custom?: components["schemas"]["Tuning"] | null;
+        };
         /**
          * RecommendationItemRead
          * @description A library video (``video``) or an upload that is not downloaded (``stream``).
@@ -7560,6 +7656,37 @@ export interface components {
             last_seen_at: string;
             /** User Agent */
             user_agent?: string | null;
+        };
+        /**
+         * Shares
+         * @description How much of the feed each kind of pick gets (any scale; normalized).
+         */
+        Shares: {
+            /**
+             * New
+             * @default 24
+             */
+            new: number;
+            /**
+             * Rewatch
+             * @default 4
+             */
+            rewatch: number;
+            /**
+             * Similar
+             * @default 29
+             */
+            similar: number;
+            /**
+             * Subscriptions
+             * @default 29
+             */
+            subscriptions: number;
+            /**
+             * Throwback
+             * @default 14
+             */
+            throwback: number;
         };
         /** SpriteGenerateResult */
         SpriteGenerateResult: {
@@ -7762,6 +7889,27 @@ export interface components {
             title?: string | null;
             /** Url */
             url: string;
+        };
+        /**
+         * Strictness
+         * @description How close a pick must be to the user's taste, per bucket (50 = default).
+         */
+        Strictness: {
+            /**
+             * New
+             * @default 50
+             */
+            new: number;
+            /**
+             * Similar
+             * @default 50
+             */
+            similar: number;
+            /**
+             * Throwback
+             * @default 50
+             */
+            throwback: number;
         };
         /** SubtitleTrack */
         SubtitleTrack: {
@@ -8048,6 +8196,119 @@ export interface components {
             retention_days: number;
             /** Total Bytes */
             total_bytes: number;
+        };
+        /**
+         * Tuning
+         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         */
+        Tuning: {
+            /**
+             * Channel Gap
+             * @default 5
+             */
+            channel_gap: number;
+            /**
+             * Freshness
+             * @default 50
+             */
+            freshness: number;
+            /**
+             * Hide Past Live
+             * @default false
+             */
+            hide_past_live: boolean;
+            /**
+             * Hide Shorts
+             * @default false
+             */
+            hide_shorts: boolean;
+            /**
+             * Library Boost
+             * @default 0
+             */
+            library_boost: number;
+            /**
+             * Max Age Days
+             * @default 0
+             * @enum {integer}
+             */
+            max_age_days: 0 | 7 | 30 | 90 | 365 | 1095;
+            /**
+             * Max Minutes
+             * @default 0
+             */
+            max_minutes: number;
+            /**
+             * Min Minutes
+             * @default 0
+             */
+            min_minutes: number;
+            /**
+             * Min Watched Pct
+             * @default 0
+             */
+            min_watched_pct: number;
+            /**
+             * New Channel Cap
+             * @default 2
+             */
+            new_channel_cap: number;
+            /**
+             * Popularity
+             * @default 0
+             */
+            popularity: number;
+            /**
+             * Recent Days
+             * @default 30
+             * @enum {integer}
+             */
+            recent_days: 14 | 30 | 60 | 90;
+            /**
+             * Rewatch After Days
+             * @default 60
+             * @enum {integer}
+             */
+            rewatch_after_days: 30 | 60 | 180 | 365;
+            shares?: components["schemas"]["Shares"];
+            /**
+             * Shuffle
+             * @default 50
+             */
+            shuffle: number;
+            strictness?: components["schemas"]["Strictness"];
+            /**
+             * Throwback Years
+             * @default 3
+             * @enum {integer}
+             */
+            throwback_years: 0 | 1 | 3;
+            /**
+             * Use Catalogs
+             * @default true
+             */
+            use_catalogs: boolean;
+            /**
+             * Use Household
+             * @default true
+             */
+            use_household: boolean;
+            /**
+             * Use Library
+             * @default true
+             */
+            use_library: boolean;
+            /**
+             * Use Youtube
+             * @default true
+             */
+            use_youtube: boolean;
+            /**
+             * Worn After
+             * @default 6
+             * @enum {integer}
+             */
+            worn_after: 0 | 3 | 6 | 12;
         };
         /** TwoFactorConfirm */
         TwoFactorConfirm: {
@@ -11940,6 +12201,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverStatusRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_tuning_api_discover_tuning_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTuningRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_tuning_api_discover_tuning_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTuningWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTuningRead"];
                 };
             };
             /** @description Validation error */

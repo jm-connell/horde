@@ -55,8 +55,9 @@ from ..ytdlp_common import (
     classify_ytdlp_error,
 )
 from ..ytdlp_extract import search_youtube_for_discovery, youtube_up_next
+from . import tuning
 from .feedback import exclusions, forget_old_impressions
-from .history import Watch, watches
+from .history import Watch, counts_as_taste, watches
 from .interests import Interest, interests, keyword_queries, llm_queries
 from .runtime import DiscoveryRuntime
 
@@ -471,16 +472,23 @@ def gather_for(
     now = utcnow()
     state = _state(session, user_id)
     asked = _asked(state)
-    history = watches(session, user_id)
+    tuned = tuning.for_user(session, user_id)
+    history = [
+        w
+        for w in watches(session, user_id)
+        if counts_as_taste(w, tuned.min_watched_pct)
+    ]
     found = 0
     error: str | None = None
     try:
+        if not tuned.use_youtube:
+            raise _Halt("the user turned off videos found on YouTube")
         in_library = {yt for yt in session.exec(select(Video.youtube_id)).all() if yt}
         remember_streams(
             session, user_id, in_library | set(runtime.vectors.matrix(session).index)
         )
         embed_pending(session)
-        recent, dormant = interests(session, runtime, history, now)
+        recent, dormant = interests(session, runtime, history, now, tuned.window)
         groups = recent + dormant
         if not (_may_use_ai(session, user_id) and llm_queries(groups)):
             keyword_queries(session, groups, history)

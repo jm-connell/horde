@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .schemas import ChannelFeedEntry, TagStat, VideoRead
+from .services.discovery.tuning import Tuning
 
 
 class ErrorField(BaseModel):
@@ -476,6 +477,26 @@ class DiscoverReasonRead(BaseModel):
     detail: str | None = None
 
 
+class DiscoverScorePartRead(BaseModel):
+    label: str
+    value: float
+
+
+class DiscoverWhyRead(BaseModel):
+    """How the feed placed one pick: its bucket and what its score is made of."""
+
+    #: subscriptions | similar | new | throwback | rewatch
+    bucket: str
+    score: float
+    #: The parts add up to ``score``.
+    parts: list[DiscoverScorePartRead]
+    #: Where it came from: a YouTube search, an up next list, the library, ...
+    found_by: str | None = None
+    #: False when it was not close enough to the user's taste for its bucket
+    #: and waits at the end of the feed.
+    eligible: bool = True
+
+
 class DiscoverItemRead(BaseModel):
     """A library video (``video``) or a video that is not downloaded (``stream``)."""
 
@@ -488,6 +509,8 @@ class DiscoverItemRead(BaseModel):
     #: library (downloaded), channels (not downloaded, from a channel the user
     #: follows or that is indexed) or new (from any other channel).
     source: Literal["library", "channels", "new"]
+    #: Why the feed placed it (live broadcasts have none).
+    why: DiscoverWhyRead | None = None
 
 
 class DiscoverStatusRead(BaseModel):
@@ -504,10 +527,41 @@ class DiscoverStatusRead(BaseModel):
     backing_off: bool
 
 
+class DiscoverMixRead(BaseModel):
+    bucket: str
+    #: The share the user asked for (0..1).
+    target: float
+    #: The share it got among the top picks (0..1).
+    actual: float
+
+
 class DiscoverFeedRead(BaseModel):
     items: list[DiscoverItemRead]
     next_cursor: str | None = None
     status: DiscoverStatusRead
+    #: Asked-for and actual share of each kind of pick (first page only).
+    mix: list[DiscoverMixRead] = Field(default_factory=list)
+
+
+class RecTuningPresetRead(BaseModel):
+    id: str
+    name: str
+    description: str
+    values: Tuning
+
+
+class RecTuningRead(BaseModel):
+    """The user's Recommended+ settings and the presets they can pick from."""
+
+    #: A preset id, or "custom".
+    active: str
+    #: What the feed ranks with now.
+    values: Tuning
+    #: The user's own values (kept while a preset is picked).
+    custom: Tuning | None = None
+    presets: list[RecTuningPresetRead]
+    #: Balanced, for "reset".
+    defaults: Tuning
 
 
 class SuggestedChannelRead(BaseModel):

@@ -4823,6 +4823,13 @@
             "title": "Items",
             "type": "array"
           },
+          "mix": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverMixRead"
+            },
+            "title": "Mix",
+            "type": "array"
+          },
           "next_cursor": {
             "anyOf": [
               {
@@ -4883,6 +4890,16 @@
                 "type": "null"
               }
             ]
+          },
+          "why": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DiscoverWhyRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4891,6 +4908,29 @@
           "source"
         ],
         "title": "DiscoverItemRead",
+        "type": "object"
+      },
+      "DiscoverMixRead": {
+        "properties": {
+          "actual": {
+            "title": "Actual",
+            "type": "number"
+          },
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "number"
+          }
+        },
+        "required": [
+          "bucket",
+          "target",
+          "actual"
+        ],
+        "title": "DiscoverMixRead",
         "type": "object"
       },
       "DiscoverReasonRead": {
@@ -4940,6 +4980,24 @@
         "title": "DiscoverRefreshRead",
         "type": "object"
       },
+      "DiscoverScorePartRead": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "title": "DiscoverScorePartRead",
+        "type": "object"
+      },
       "DiscoverStatusRead": {
         "properties": {
           "backing_off": {
@@ -4982,6 +5040,49 @@
           "backing_off"
         ],
         "title": "DiscoverStatusRead",
+        "type": "object"
+      },
+      "DiscoverWhyRead": {
+        "description": "How the feed placed one pick: its bucket and what its score is made of.",
+        "properties": {
+          "bucket": {
+            "title": "Bucket",
+            "type": "string"
+          },
+          "eligible": {
+            "default": true,
+            "title": "Eligible",
+            "type": "boolean"
+          },
+          "found_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Found By"
+          },
+          "parts": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverScorePartRead"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "bucket",
+          "score",
+          "parts"
+        ],
+        "title": "DiscoverWhyRead",
         "type": "object"
       },
       "DiskUsage": {
@@ -9329,6 +9430,99 @@
         "title": "RecFeedbackWrite",
         "type": "object"
       },
+      "RecTuningPresetRead": {
+        "properties": {
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "values": {
+            "$ref": "#/components/schemas/Tuning"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "values"
+        ],
+        "title": "RecTuningPresetRead",
+        "type": "object"
+      },
+      "RecTuningRead": {
+        "description": "The user's Recommended+ settings and the presets they can pick from.",
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "string"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tuning"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "defaults": {
+            "$ref": "#/components/schemas/Tuning"
+          },
+          "presets": {
+            "items": {
+              "$ref": "#/components/schemas/RecTuningPresetRead"
+            },
+            "title": "Presets",
+            "type": "array"
+          },
+          "values": {
+            "$ref": "#/components/schemas/Tuning"
+          }
+        },
+        "required": [
+          "active",
+          "values",
+          "presets",
+          "defaults"
+        ],
+        "title": "RecTuningRead",
+        "type": "object"
+      },
+      "RecTuningWrite": {
+        "description": "Rank Recommended+ with a preset, or with the user's own values.",
+        "properties": {
+          "active": {
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Active",
+            "type": "string"
+          },
+          "custom": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tuning"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "active"
+        ],
+        "title": "RecTuningWrite",
+        "type": "object"
+      },
       "RecommendationItemRead": {
         "description": "A library video (``video``) or an upload that is not downloaded (``stream``).",
         "properties": {
@@ -9786,6 +9980,49 @@
           "current"
         ],
         "title": "SessionRead",
+        "type": "object"
+      },
+      "Shares": {
+        "additionalProperties": false,
+        "description": "How much of the feed each kind of pick gets (any scale; normalized).",
+        "properties": {
+          "new": {
+            "default": 24,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "New",
+            "type": "integer"
+          },
+          "rewatch": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rewatch",
+            "type": "integer"
+          },
+          "similar": {
+            "default": 29,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similar",
+            "type": "integer"
+          },
+          "subscriptions": {
+            "default": 29,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Subscriptions",
+            "type": "integer"
+          },
+          "throwback": {
+            "default": 14,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Throwback",
+            "type": "integer"
+          }
+        },
+        "title": "Shares",
         "type": "object"
       },
       "SpriteGenerateResult": {
@@ -10346,6 +10583,35 @@
           "position_sec"
         ],
         "title": "StreamWatchWrite",
+        "type": "object"
+      },
+      "Strictness": {
+        "additionalProperties": false,
+        "description": "How close a pick must be to the user's taste, per bucket (50 = default).",
+        "properties": {
+          "new": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "New",
+            "type": "integer"
+          },
+          "similar": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similar",
+            "type": "integer"
+          },
+          "throwback": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Throwback",
+            "type": "integer"
+          }
+        },
+        "title": "Strictness",
         "type": "object"
       },
       "SubtitleTrack": {
@@ -11222,6 +11488,169 @@
           "retention_days"
         ],
         "title": "TrashSummary",
+        "type": "object"
+      },
+      "Tuning": {
+        "additionalProperties": false,
+        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "properties": {
+          "channel_gap": {
+            "default": 5,
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Channel Gap",
+            "type": "integer"
+          },
+          "freshness": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Freshness",
+            "type": "integer"
+          },
+          "hide_past_live": {
+            "default": false,
+            "title": "Hide Past Live",
+            "type": "boolean"
+          },
+          "hide_shorts": {
+            "default": false,
+            "title": "Hide Shorts",
+            "type": "boolean"
+          },
+          "library_boost": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Library Boost",
+            "type": "integer"
+          },
+          "max_age_days": {
+            "default": 0,
+            "enum": [
+              0,
+              7,
+              30,
+              90,
+              365,
+              1095
+            ],
+            "title": "Max Age Days",
+            "type": "integer"
+          },
+          "max_minutes": {
+            "default": 0,
+            "maximum": 600.0,
+            "minimum": 0.0,
+            "title": "Max Minutes",
+            "type": "integer"
+          },
+          "min_minutes": {
+            "default": 0,
+            "maximum": 600.0,
+            "minimum": 0.0,
+            "title": "Min Minutes",
+            "type": "integer"
+          },
+          "min_watched_pct": {
+            "default": 0,
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Min Watched Pct",
+            "type": "integer"
+          },
+          "new_channel_cap": {
+            "default": 2,
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "New Channel Cap",
+            "type": "integer"
+          },
+          "popularity": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": -100.0,
+            "title": "Popularity",
+            "type": "integer"
+          },
+          "recent_days": {
+            "default": 30,
+            "enum": [
+              14,
+              30,
+              60,
+              90
+            ],
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "rewatch_after_days": {
+            "default": 60,
+            "enum": [
+              30,
+              60,
+              180,
+              365
+            ],
+            "title": "Rewatch After Days",
+            "type": "integer"
+          },
+          "shares": {
+            "$ref": "#/components/schemas/Shares"
+          },
+          "shuffle": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Shuffle",
+            "type": "integer"
+          },
+          "strictness": {
+            "$ref": "#/components/schemas/Strictness"
+          },
+          "throwback_years": {
+            "default": 3,
+            "enum": [
+              0,
+              1,
+              3
+            ],
+            "title": "Throwback Years",
+            "type": "integer"
+          },
+          "use_catalogs": {
+            "default": true,
+            "title": "Use Catalogs",
+            "type": "boolean"
+          },
+          "use_household": {
+            "default": true,
+            "title": "Use Household",
+            "type": "boolean"
+          },
+          "use_library": {
+            "default": true,
+            "title": "Use Library",
+            "type": "boolean"
+          },
+          "use_youtube": {
+            "default": true,
+            "title": "Use Youtube",
+            "type": "boolean"
+          },
+          "worn_after": {
+            "default": 6,
+            "enum": [
+              0,
+              3,
+              6,
+              12
+            ],
+            "title": "Worn After",
+            "type": "integer"
+          }
+        },
+        "title": "Tuning",
         "type": "object"
       },
       "TwoFactorConfirm": {
@@ -17281,6 +17710,98 @@
           }
         },
         "summary": "Discover Status",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/tuning": {
+      "get": {
+        "description": "How this user ranks Recommended+: a preset or their own values.",
+        "operationId": "get_tuning_api_discover_tuning_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTuningRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Tuning",
+        "tags": [
+          "discover"
+        ]
+      },
+      "put": {
+        "description": "Pick a preset, or rank with your own values (``active`` \"custom\").\n\nYour own values are kept when you pick a preset, so you can switch back.",
+        "operationId": "put_tuning_api_discover_tuning_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecTuningWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTuningRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Put Tuning",
         "tags": [
           "discover"
         ]

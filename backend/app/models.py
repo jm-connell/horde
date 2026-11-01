@@ -730,6 +730,9 @@ class UserSettings(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
     ui_json: str = Field(default="{}")
+    #: The user's Recommended+ settings (``services/discovery/tuning.py``); kept
+    #: out of ``ui_json`` so a UI save can never overwrite them unvalidated.
+    rec_tuning_json: str | None = None
     updated_at: datetime = Field(default_factory=utcnow)
 
 

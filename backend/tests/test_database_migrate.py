@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0023_video_comments"
+HEAD = "0024_rec_tuning"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -986,6 +986,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
     try:
         con.executescript(
             """
+            ALTER TABLE user_settings DROP COLUMN rec_tuning_json;
             DROP TRIGGER trg_video_comments_fts_insert;
             DROP TRIGGER trg_video_comments_fts_update;
             DROP TRIGGER trg_video_comments_fts_delete;

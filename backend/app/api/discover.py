@@ -16,20 +16,30 @@ from ..models import DiscoveryHit, DiscoveryState, RecFeedback, Video, as_utc
 from ..response_schemas import (
     DiscoverFeedRead,
     DiscoverItemRead,
+    DiscoverMixRead,
     DiscoverReasonRead,
     DiscoverRefreshRead,
+    DiscoverScorePartRead,
     DiscoverStatusRead,
+    DiscoverWhyRead,
     RecFeedbackListRead,
     RecFeedbackRead,
+    RecTuningPresetRead,
+    RecTuningRead,
     StreamWatchRead,
     SuggestedChannelRead,
     SuggestedChannelsRead,
 )
-from ..schemas import ChannelFeedEntry, RecFeedbackWrite, StreamWatchWrite
+from ..schemas import (
+    ChannelFeedEntry,
+    RecFeedbackWrite,
+    RecTuningWrite,
+    StreamWatchWrite,
+)
 from ..services.auth.accounts import AuthUser
-from ..services.discovery import feedback, gather, history, suggest
+from ..services.discovery import feedback, gather, history, suggest, tuning
 from ..services.discovery.candidates import Candidate
-from ..services.discovery.feed import ranked_feed
+from ..services.discovery.feed import FeedItem, ranked_feed
 from ..services.live import picks as live_picks
 from ..services.pagination import (
     SEED_RANGE,
@@ -64,6 +74,19 @@ def _entry(c: Candidate) -> ChannelFeedEntry:
         channel=c.channel or None,
         channel_url=c.source_channel_url,
         live_status=c.live_status,
+    )
+
+
+def _why(item: FeedItem) -> DiscoverWhyRead:
+    return DiscoverWhyRead(
+        bucket=item.bucket,
+        score=round(item.score, 4),
+        parts=[
+            DiscoverScorePartRead(label=label, value=round(value, 4))
+            for label, value in item.parts
+        ],
+        found_by=item.found_by,
+        eligible=item.eligible,
     )
 
 
@@ -172,7 +195,13 @@ def discover_feed(
             if read is None:
                 continue  # Deleted since the feed was ranked.
             items.append(
-                DiscoverItemRead(key=c.key, video=read, reason=reason, source="library")
+                DiscoverItemRead(
+                    key=c.key,
+                    video=read,
+                    reason=reason,
+                    source="library",
+                    why=_why(item),
+                )
             )
         else:
             items.append(
@@ -181,8 +210,9 @@ def discover_feed(
                     stream=_entry(c),
                     reason=reason,
                     source="channels"
-                    if item.followed or c.pool == "catalog"
+                    if item.followed or c.pool in ("catalog", "history")
                     else "new",
+                    why=_why(item),
                 )
             )
     if not cursor:
@@ -201,7 +231,64 @@ def discover_feed(
         if more
         else None,
         status=_status(session, ctx, user.id, cold=feed.cold),
+        mix=[
+            DiscoverMixRead(bucket=m.bucket, target=m.target, actual=m.actual)
+            for m in feed.mix
+        ]
+        if not cursor
+        else [],
     )
+
+
+def _tuning_read(selection: tuning.Selection) -> RecTuningRead:
+    return RecTuningRead(
+        active=selection.active,
+        values=tuning.resolve(selection),
+        custom=selection.custom,
+        presets=[
+            RecTuningPresetRead(
+                id=p.id, name=p.name, description=p.description, values=p.tuning
+            )
+            for p in tuning.PRESETS
+        ],
+        defaults=tuning.DEFAULTS,
+    )
+
+
+@router.get("/tuning", response_model=RecTuningRead)
+def get_tuning(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """How this user ranks Recommended+: a preset or their own values."""
+    return _tuning_read(tuning.load(session, user.id))
+
+
+@router.put("/tuning", response_model=RecTuningRead)
+def put_tuning(
+    payload: RecTuningWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Pick a preset, or rank with your own values (``active`` "custom").
+
+    Your own values are kept when you pick a preset, so you can switch back.
+    """
+    current = tuning.load(session, user.id)
+    custom = payload.custom if payload.custom is not None else current.custom
+    if payload.active == "custom":
+        if custom is None:
+            raise CodedHTTPException(
+                400, "Custom settings need their values", "missing_values"
+            )
+    elif payload.active not in tuning.PRESET_IDS:
+        raise CodedHTTPException(400, "No such preset", "unknown_preset")
+    saved = tuning.save(
+        session, user.id, tuning.Selection(active=payload.active, custom=custom)
+    )
+    ctx.discovery.forget_feeds(user.id)
+    return _tuning_read(saved)
 
 
 @router.get("/status", response_model=DiscoverStatusRead)

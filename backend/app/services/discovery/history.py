@@ -102,6 +102,8 @@ class Watch:
     #: How much the watch says about taste (0.35 opened and left .. 1 finished).
     engagement: float
     finished: bool
+    #: How far it got (0..1); None when unknown (a YouTube import).
+    fraction: float | None = None
 
 
 def library_engagement(position_sec: float, duration_sec: float | None) -> float:
@@ -118,6 +120,33 @@ def library_engagement(position_sec: float, duration_sec: float | None) -> float
             return 0.35  # Opened and abandoned.
         return 0.7
     return 0.35 if position_sec < 60 else 0.8
+
+
+def library_fraction(position_sec: float, duration_sec: float | None) -> float | None:
+    """How far a library watch got (a saved 0 means finished, see above)."""
+    if position_sec <= 0:
+        return 1.0
+    if duration_sec and duration_sec > 0:
+        return min(1.0, position_sec / duration_sec)
+    return None
+
+
+def stream_fraction(row: UserStreamState) -> float | None:
+    if row.finished_at is not None:
+        return 1.0
+    if row.duration_sec and row.duration_sec > 0:
+        return min(1.0, row.watched_sec / row.duration_sec)
+    return None
+
+
+def counts_as_taste(watch: Watch, min_watched_pct: int) -> bool:
+    """Whether a watch got far enough to say something about taste.
+
+    A watch whose progress is unknown (a YouTube import) always counts.
+    """
+    if min_watched_pct <= 0 or watch.fraction is None:
+        return True
+    return watch.fraction * 100 >= min_watched_pct
 
 
 def stream_engagement(row: UserStreamState) -> float:
@@ -171,6 +200,7 @@ def watches(
                 watched_at=as_utc(state.last_watched_at),
                 engagement=library_engagement(state.position_sec, video.duration_sec),
                 finished=state.finished_at is not None or state.position_sec <= 0,
+                fraction=library_fraction(state.position_sec, video.duration_sec),
             )
         )
     seen = {w.key for w in out}
@@ -193,6 +223,7 @@ def watches(
                 watched_at=as_utc(row.last_watched_at),
                 engagement=stream_engagement(row),
                 finished=row.finished_at is not None,
+                fraction=stream_fraction(row),
             )
         )
     if include_youtube:
@@ -217,3 +248,100 @@ def watches(
             )
     out.sort(key=lambda w: w.watched_at, reverse=True)
     return out[:limit]
+
+
+@dataclass
+class PastFavorite:
+    """A video the user finished (or watched again) a while ago: a rewatch pick."""
+
+    watch: Watch
+    #: Views known (a YouTube import counts them; 1 otherwise).
+    views: int = 1
+
+
+def past_favorites(
+    session: Session, user_id: int, *, before: datetime, limit: int = 300
+) -> list[PastFavorite]:
+    """Videos finished, or watched more than once on YouTube, last seen before
+    ``before``, the most recently seen first; a video counts once."""
+    out: dict[str, PastFavorite] = {}
+    for video, state in session.exec(
+        select(Video, UserVideoState)
+        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
+        .where(
+            UserVideoState.user_id == user_id,
+            col(UserVideoState.last_watched_at).is_not(None),
+            col(UserVideoState.last_watched_at) < before,
+            col(UserVideoState.finished_at).is_not(None)
+            | (col(UserVideoState.position_sec) <= 0),
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+        .order_by(col(UserVideoState.last_watched_at).desc())
+        .limit(limit)
+    ).all():
+        if state.last_watched_at is None:
+            continue
+        key = library_key(video.id, video.youtube_id)
+        out[key] = PastFavorite(
+            Watch(
+                key=key,
+                yt_id=video.youtube_id,
+                video_id=video.id,
+                title=video.title or "",
+                channel=(video.channel or "").strip(),
+                channel_url=normalize_channel_url(video.channel_url or ""),
+                watched_at=as_utc(state.last_watched_at),
+                engagement=1.0,
+                finished=True,
+                fraction=1.0,
+            )
+        )
+    for row in session.exec(
+        select(UserStreamState)
+        .where(
+            UserStreamState.user_id == user_id,
+            col(UserStreamState.finished_at).is_not(None),
+            col(UserStreamState.last_watched_at) < before,
+        )
+        .order_by(col(UserStreamState.last_watched_at).desc())
+        .limit(limit)
+    ).all():
+        out.setdefault(
+            row.yt_id,
+            PastFavorite(
+                Watch(
+                    key=row.yt_id,
+                    yt_id=row.yt_id,
+                    video_id=None,
+                    title=row.title or "",
+                    channel=(row.channel or "").strip(),
+                    channel_url=row.channel_url or "",
+                    watched_at=as_utc(row.last_watched_at),
+                    engagement=1.0,
+                    finished=True,
+                    fraction=1.0,
+                )
+            ),
+        )
+    rewatched, _more = takeout_history.rewatched_page(
+        session, user_id, offset=0, limit=limit
+    )
+    for viewed in rewatched:
+        if viewed.last_watched_at >= before or viewed.yt_id in out:
+            continue
+        out[viewed.yt_id] = PastFavorite(
+            Watch(
+                key=viewed.yt_id,
+                yt_id=viewed.yt_id,
+                video_id=None,
+                title=viewed.title or "",
+                channel=(viewed.channel or "").strip(),
+                channel_url=viewed.channel_url or "",
+                watched_at=viewed.last_watched_at,
+                engagement=YOUTUBE_REWATCH_ENGAGEMENT,
+                finished=False,
+            ),
+            views=viewed.views,
+        )
+    picks = sorted(out.values(), key=lambda p: p.watch.watched_at, reverse=True)
+    return picks[:limit]
