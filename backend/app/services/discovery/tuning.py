@@ -34,7 +34,10 @@ FLOORED = ("similar", "new", "throwback")
 class Shares(BaseModel):
     """How much of the feed each kind of pick gets (any scale; normalized)."""
 
-    model_config = ConfigDict(extra="forbid")
+    # Read back, every field is present: say so in the response schema.
+    model_config = ConfigDict(
+        extra="forbid", json_schema_serialization_defaults_required=True
+    )
 
     subscriptions: int = Field(default=29, ge=0, le=100)
     similar: int = Field(default=29, ge=0, le=100)
@@ -54,7 +57,10 @@ class Shares(BaseModel):
 class Strictness(BaseModel):
     """How close a pick must be to the user's taste, per bucket (50 = default)."""
 
-    model_config = ConfigDict(extra="forbid")
+    # Read back, every field is present: say so in the response schema.
+    model_config = ConfigDict(
+        extra="forbid", json_schema_serialization_defaults_required=True
+    )
 
     similar: int = Field(default=50, ge=0, le=100)
     new: int = Field(default=50, ge=0, le=100)
@@ -69,7 +75,10 @@ class Strictness(BaseModel):
 class Tuning(BaseModel):
     """One complete set of Recommended+ settings (what a preset or a save holds)."""
 
-    model_config = ConfigDict(extra="forbid")
+    # Read back, every field is present: say so in the response schema.
+    model_config = ConfigDict(
+        extra="forbid", json_schema_serialization_defaults_required=True
+    )
 
     shares: Shares = Field(default_factory=lambda: Shares())
     strictness: Strictness = Field(default_factory=lambda: Strictness())

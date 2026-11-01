@@ -7450,7 +7450,7 @@ export interface components {
             id: string;
             /** Name */
             name: string;
-            values: components["schemas"]["Tuning"];
+            values: components["schemas"]["Tuning-Output"];
         };
         /**
          * RecTuningRead
@@ -7459,11 +7459,11 @@ export interface components {
         RecTuningRead: {
             /** Active */
             active: string;
-            custom?: components["schemas"]["Tuning"] | null;
-            defaults: components["schemas"]["Tuning"];
+            custom?: components["schemas"]["Tuning-Output"] | null;
+            defaults: components["schemas"]["Tuning-Output"];
             /** Presets */
             presets: components["schemas"]["RecTuningPresetRead"][];
-            values: components["schemas"]["Tuning"];
+            values: components["schemas"]["Tuning-Output"];
         };
         /**
          * RecTuningWrite
@@ -7472,7 +7472,7 @@ export interface components {
         RecTuningWrite: {
             /** Active */
             active: string;
-            custom?: components["schemas"]["Tuning"] | null;
+            custom?: components["schemas"]["Tuning-Input"] | null;
         };
         /**
          * RecommendationItemRead
@@ -7661,7 +7661,38 @@ export interface components {
          * Shares
          * @description How much of the feed each kind of pick gets (any scale; normalized).
          */
-        Shares: {
+        "Shares-Input": {
+            /**
+             * New
+             * @default 24
+             */
+            new: number;
+            /**
+             * Rewatch
+             * @default 4
+             */
+            rewatch: number;
+            /**
+             * Similar
+             * @default 29
+             */
+            similar: number;
+            /**
+             * Subscriptions
+             * @default 29
+             */
+            subscriptions: number;
+            /**
+             * Throwback
+             * @default 14
+             */
+            throwback: number;
+        };
+        /**
+         * Shares
+         * @description How much of the feed each kind of pick gets (any scale; normalized).
+         */
+        "Shares-Output": {
             /**
              * New
              * @default 24
@@ -7894,7 +7925,28 @@ export interface components {
          * Strictness
          * @description How close a pick must be to the user's taste, per bucket (50 = default).
          */
-        Strictness: {
+        "Strictness-Input": {
+            /**
+             * New
+             * @default 50
+             */
+            new: number;
+            /**
+             * Similar
+             * @default 50
+             */
+            similar: number;
+            /**
+             * Throwback
+             * @default 50
+             */
+            throwback: number;
+        };
+        /**
+         * Strictness
+         * @description How close a pick must be to the user's taste, per bucket (50 = default).
+         */
+        "Strictness-Output": {
             /**
              * New
              * @default 50
@@ -8201,7 +8253,7 @@ export interface components {
          * Tuning
          * @description One complete set of Recommended+ settings (what a preset or a save holds).
          */
-        Tuning: {
+        "Tuning-Input": {
             /**
              * Channel Gap
              * @default 5
@@ -8270,13 +8322,126 @@ export interface components {
              * @enum {integer}
              */
             rewatch_after_days: 30 | 60 | 180 | 365;
-            shares?: components["schemas"]["Shares"];
+            shares?: components["schemas"]["Shares-Input"];
             /**
              * Shuffle
              * @default 50
              */
             shuffle: number;
-            strictness?: components["schemas"]["Strictness"];
+            strictness?: components["schemas"]["Strictness-Input"];
+            /**
+             * Throwback Years
+             * @default 3
+             * @enum {integer}
+             */
+            throwback_years: 0 | 1 | 3;
+            /**
+             * Use Catalogs
+             * @default true
+             */
+            use_catalogs: boolean;
+            /**
+             * Use Household
+             * @default true
+             */
+            use_household: boolean;
+            /**
+             * Use Library
+             * @default true
+             */
+            use_library: boolean;
+            /**
+             * Use Youtube
+             * @default true
+             */
+            use_youtube: boolean;
+            /**
+             * Worn After
+             * @default 6
+             * @enum {integer}
+             */
+            worn_after: 0 | 3 | 6 | 12;
+        };
+        /**
+         * Tuning
+         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         */
+        "Tuning-Output": {
+            /**
+             * Channel Gap
+             * @default 5
+             */
+            channel_gap: number;
+            /**
+             * Freshness
+             * @default 50
+             */
+            freshness: number;
+            /**
+             * Hide Past Live
+             * @default false
+             */
+            hide_past_live: boolean;
+            /**
+             * Hide Shorts
+             * @default false
+             */
+            hide_shorts: boolean;
+            /**
+             * Library Boost
+             * @default 0
+             */
+            library_boost: number;
+            /**
+             * Max Age Days
+             * @default 0
+             * @enum {integer}
+             */
+            max_age_days: 0 | 7 | 30 | 90 | 365 | 1095;
+            /**
+             * Max Minutes
+             * @default 0
+             */
+            max_minutes: number;
+            /**
+             * Min Minutes
+             * @default 0
+             */
+            min_minutes: number;
+            /**
+             * Min Watched Pct
+             * @default 0
+             */
+            min_watched_pct: number;
+            /**
+             * New Channel Cap
+             * @default 2
+             */
+            new_channel_cap: number;
+            /**
+             * Popularity
+             * @default 0
+             */
+            popularity: number;
+            /**
+             * Recent Days
+             * @default 30
+             * @enum {integer}
+             */
+            recent_days: 14 | 30 | 60 | 90;
+            /**
+             * Rewatch After Days
+             * @default 60
+             * @enum {integer}
+             */
+            rewatch_after_days: 30 | 60 | 180 | 365;
+            shares: components["schemas"]["Shares-Output"];
+            /**
+             * Shuffle
+             * @default 50
+             */
+            shuffle: number;
+            strictness: components["schemas"]["Strictness-Output"];
             /**
              * Throwback Years
              * @default 3

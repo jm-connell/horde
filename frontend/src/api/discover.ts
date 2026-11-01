@@ -5,6 +5,8 @@ import type {
   RecFeedback,
   RecFeedbackKind,
   RecFeedbackList,
+  RecTuningState,
+  RecTuningWrite,
   StreamWatch,
   StreamWatchWrite,
   SuggestedChannels,
@@ -40,6 +42,18 @@ export const discoverApi = {
   refreshDiscover(): Promise<DiscoverRefresh> {
     return request<DiscoverRefresh>("/api/discover/refresh", {
       method: "POST",
+    });
+  },
+
+  getRecTuning(opts?: ReadOptions): Promise<RecTuningState> {
+    return request<RecTuningState>("/api/discover/tuning", opts);
+  },
+
+  saveRecTuning(payload: RecTuningWrite): Promise<RecTuningState> {
+    return request<RecTuningState>("/api/discover/tuning", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
     });
   },
 

@@ -2,14 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { FlipMenuPanel, useFlipMenu } from "../../hooks/useFlipMenu";
 import { MoreIcon } from "../icons";
 
-/** "Not interested" / "Don't recommend this channel" on a recommendation card. */
+/**
+ * "Why this video?", "Not interested" and "Don't recommend this channel" on a
+ * recommendation card.
+ */
 export default function RecMenu({
   channel,
+  onWhy,
   onNotInterested,
   onBlockChannel,
   className,
 }: {
   channel: string | null;
+  /** Show how the feed placed it (Recommended+ only). */
+  onWhy?: () => void;
   onNotInterested: () => void;
   onBlockChannel: () => void;
   /** Positions the trigger; it must be a positioned box (relative by default). */
@@ -63,6 +69,19 @@ export default function RecMenu({
           triggerRef,
         }}
       >
+        {onWhy && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              setOpen(false);
+              onWhy();
+            }}
+          >
+            Why this video?
+          </button>
+        )}
         <button
           type="button"
           role="menuitem"

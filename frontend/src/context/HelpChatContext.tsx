@@ -9,7 +9,9 @@ import {
   type ReactNode,
 } from "react";
 import ErrorBoundary from "../components/ErrorBoundary";
+import TuningPanel from "../components/discover/TuningPanel";
 import HelpChatPanel from "../components/HelpChatPanel";
+import SidePanelFrame, { type PanelTab } from "../components/SidePanelFrame";
 import type { HelpFrame } from "../components/helpChatLayout";
 import {
   type AskScopeChannel,
@@ -31,6 +33,11 @@ interface HelpChatValue {
   askChannel: (channel: AskScopeChannel) => void;
   /** Set by a page about one channel (see `useAskPageChannel`). */
   setPageChannel: (page: PageChannel | null) => void;
+  /** The Recommended+ algorithm panel (shown only while that feed is). */
+  algorithmOpen: boolean;
+  setAlgorithmOpen: (open: boolean) => void;
+  /** Called by the Recommended+ feed while it is on screen (see `useAlgorithmPanelHere`). */
+  setAlgorithmHere: (here: boolean) => void;
 }
 
 /** The channel (and video) a page is about, for routing Ask questions. */
@@ -43,6 +50,10 @@ export interface PageChannel {
 }
 
 interface HostValue {
+  tab: PanelTabId;
+  setTab: (tab: PanelTabId) => void;
+  /** The algorithm panel is open and the Recommended+ feed is on screen. */
+  algorithmShown: boolean;
   frame: HelpFrame | null;
   setFrame: (frame: HelpFrame) => void;
   docked: boolean;
@@ -78,8 +89,14 @@ export interface PageDetail {
 const Ctx = createContext<HelpChatValue | null>(null);
 const HostCtx = createContext<HostValue | null>(null);
 
+type PanelTabId = "ask" | "algorithm";
+
 interface PanelState {
   open: boolean;
+  /** The Recommended+ algorithm panel is open (it shares the frame). */
+  algorithm?: boolean;
+  /** Which body shows when both are open. */
+  tab?: PanelTabId;
   frame: HelpFrame | null;
   /** Docked as a full-height side panel the page makes room for (desktop). */
   docked?: boolean;
@@ -100,6 +117,8 @@ function isPanelState(v: unknown): v is PanelState {
   const s = v as Record<string, unknown>;
   return (
     typeof s.open === "boolean" &&
+    (s.algorithm === undefined || typeof s.algorithm === "boolean") &&
+    (s.tab === undefined || s.tab === "ask" || s.tab === "algorithm") &&
     (s.frame === null || isFrame(s.frame)) &&
     (s.docked === undefined || typeof s.docked === "boolean") &&
     (s.dockWidth == null ||
@@ -129,8 +148,24 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [openedHere, setOpenedHere] = useState(false);
   const setOpen = useCallback((open: boolean) => {
     if (open) setOpenedHere(true);
-    setState((s) => ({ ...s, open }));
+    setState((s) => ({
+      ...s,
+      open,
+      tab: open ? "ask" : s.algorithm ? "algorithm" : s.tab,
+    }));
   }, []);
+  const setAlgorithmOpen = useCallback((algorithm: boolean) => {
+    setState((s) => ({
+      ...s,
+      algorithm,
+      tab: algorithm ? "algorithm" : s.open ? "ask" : s.tab,
+    }));
+  }, []);
+  const setTab = useCallback(
+    (tab: PanelTabId) => setState((s) => ({ ...s, tab })),
+    []
+  );
+  const [algorithmHere, setAlgorithmHere] = useState(false);
   const detail = useRef<PageDetail | null>(null);
   const setDetail = useCallback((next: PageDetail) => {
     detail.current = next;
@@ -181,12 +216,27 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       clearDetail,
       askChannel,
       setPageChannel,
+      algorithmOpen: !!state.algorithm,
+      setAlgorithmOpen,
+      setAlgorithmHere,
     }),
-    [available, state.open, setOpen, setDetail, clearDetail, askChannel]
+    [
+      available,
+      state.open,
+      setOpen,
+      setDetail,
+      clearDetail,
+      askChannel,
+      state.algorithm,
+      setAlgorithmOpen,
+    ]
   );
 
   const host = useMemo(
     () => ({
+      tab: state.tab ?? "ask",
+      setTab,
+      algorithmShown: !!state.algorithm && algorithmHere,
       frame: state.frame,
       setFrame,
       docked: !!state.docked,
@@ -201,6 +251,10 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       consumeChannelRequest,
     }),
     [
+      state.tab,
+      setTab,
+      state.algorithm,
+      algorithmHere,
       state.frame,
       setFrame,
       state.docked,
@@ -223,32 +277,64 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
 }
 
 /**
- * The panel itself, mounted by the app shell once setup is done (not over the
- * loading screen or the setup wizard). Its own error boundary keeps a bad
- * answer from taking down the page.
+ * The side panel, mounted by the app shell once setup is done (not over the
+ * loading screen or the setup wizard): Ask about Horde, the Recommended+
+ * algorithm, or both as tabs. Each body has its own error boundary, so a bad
+ * answer cannot take down the page (or the other body).
  */
 export function HelpChatHost() {
-  const { open, setOpen } = useHelpChat();
+  const { open, setOpen, setAlgorithmOpen } = useHelpChat();
   const host = useContext(HostCtx);
-  if (!open || !host) return null;
+  if (!host) return null;
+  const tabs: PanelTab[] = [];
+  if (open) {
+    tabs.push({
+      id: "ask",
+      label: "Ask",
+      content: (
+        <ErrorBoundary scope="help-chat">
+          <HelpChatPanel
+            pageDetail={host.pageDetail}
+            focusOnOpen={host.openedHere}
+            channelRequest={host.channelRequest}
+            pageChannel={host.pageChannel}
+            pendingChannelRequest={host.pendingChannelRequest}
+            consumeChannelRequest={host.consumeChannelRequest}
+            onClose={() => setOpen(false)}
+          />
+        </ErrorBoundary>
+      ),
+    });
+  }
+  if (host.algorithmShown) {
+    tabs.push({
+      id: "algorithm",
+      label: "Algorithm",
+      content: (
+        <ErrorBoundary scope="algorithm-panel">
+          <TuningPanel />
+        </ErrorBoundary>
+      ),
+    });
+  }
+  if (!tabs.length) return null;
   return (
-    <ErrorBoundary scope="help-chat">
-      <HelpChatPanel
-        frame={host.frame}
-        docked={host.docked}
-        onDockedChange={host.setDocked}
-        dockWidth={host.dockWidth}
-        onDockWidthChange={host.setDockWidth}
-        onFrameChange={host.setFrame}
-        pageDetail={host.pageDetail}
-        focusOnOpen={host.openedHere}
-        channelRequest={host.channelRequest}
-        pageChannel={host.pageChannel}
-        pendingChannelRequest={host.pendingChannelRequest}
-        consumeChannelRequest={host.consumeChannelRequest}
-        onClose={() => setOpen(false)}
-      />
-    </ErrorBoundary>
+    <SidePanelFrame
+      tabs={tabs}
+      activeTab={host.tab}
+      onTabChange={(id) =>
+        host.setTab(id === "algorithm" ? "algorithm" : "ask")
+      }
+      onCloseTab={(id) =>
+        id === "algorithm" ? setAlgorithmOpen(false) : setOpen(false)
+      }
+      frame={host.frame}
+      onFrameChange={host.setFrame}
+      docked={host.docked}
+      onDockedChange={host.setDocked}
+      dockWidth={host.dockWidth}
+      onDockWidthChange={host.setDockWidth}
+    />
   );
 }
 
@@ -293,4 +379,16 @@ export function useAskPageChannel(
     });
     return () => setPageChannel(null);
   }, [pathname, channelUrl, channelName, videoId, setPageChannel]);
+}
+
+/**
+ * The Recommended+ feed is on screen: the algorithm panel may show (it hides,
+ * but stays open, while the user is elsewhere).
+ */
+export function useAlgorithmPanelHere() {
+  const { setAlgorithmHere } = useHelpChat();
+  useEffect(() => {
+    setAlgorithmHere(true);
+    return () => setAlgorithmHere(false);
+  }, [setAlgorithmHere]);
 }

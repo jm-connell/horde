@@ -9445,7 +9445,7 @@
             "type": "string"
           },
           "values": {
-            "$ref": "#/components/schemas/Tuning"
+            "$ref": "#/components/schemas/Tuning-Output"
           }
         },
         "required": [
@@ -9467,7 +9467,7 @@
           "custom": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Tuning"
+                "$ref": "#/components/schemas/Tuning-Output"
               },
               {
                 "type": "null"
@@ -9475,7 +9475,7 @@
             ]
           },
           "defaults": {
-            "$ref": "#/components/schemas/Tuning"
+            "$ref": "#/components/schemas/Tuning-Output"
           },
           "presets": {
             "items": {
@@ -9485,7 +9485,7 @@
             "type": "array"
           },
           "values": {
-            "$ref": "#/components/schemas/Tuning"
+            "$ref": "#/components/schemas/Tuning-Output"
           }
         },
         "required": [
@@ -9509,7 +9509,7 @@
           "custom": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/Tuning"
+                "$ref": "#/components/schemas/Tuning-Input"
               },
               {
                 "type": "null"
@@ -9982,7 +9982,7 @@
         "title": "SessionRead",
         "type": "object"
       },
-      "Shares": {
+      "Shares-Input": {
         "additionalProperties": false,
         "description": "How much of the feed each kind of pick gets (any scale; normalized).",
         "properties": {
@@ -10022,6 +10022,56 @@
             "type": "integer"
           }
         },
+        "title": "Shares",
+        "type": "object"
+      },
+      "Shares-Output": {
+        "additionalProperties": false,
+        "description": "How much of the feed each kind of pick gets (any scale; normalized).",
+        "properties": {
+          "new": {
+            "default": 24,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "New",
+            "type": "integer"
+          },
+          "rewatch": {
+            "default": 4,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Rewatch",
+            "type": "integer"
+          },
+          "similar": {
+            "default": 29,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similar",
+            "type": "integer"
+          },
+          "subscriptions": {
+            "default": 29,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Subscriptions",
+            "type": "integer"
+          },
+          "throwback": {
+            "default": 14,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Throwback",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "subscriptions",
+          "similar",
+          "new",
+          "throwback",
+          "rewatch"
+        ],
         "title": "Shares",
         "type": "object"
       },
@@ -10585,7 +10635,7 @@
         "title": "StreamWatchWrite",
         "type": "object"
       },
-      "Strictness": {
+      "Strictness-Input": {
         "additionalProperties": false,
         "description": "How close a pick must be to the user's taste, per bucket (50 = default).",
         "properties": {
@@ -10611,6 +10661,40 @@
             "type": "integer"
           }
         },
+        "title": "Strictness",
+        "type": "object"
+      },
+      "Strictness-Output": {
+        "additionalProperties": false,
+        "description": "How close a pick must be to the user's taste, per bucket (50 = default).",
+        "properties": {
+          "new": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "New",
+            "type": "integer"
+          },
+          "similar": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Similar",
+            "type": "integer"
+          },
+          "throwback": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Throwback",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "similar",
+          "new",
+          "throwback"
+        ],
         "title": "Strictness",
         "type": "object"
       },
@@ -11490,7 +11574,7 @@
         "title": "TrashSummary",
         "type": "object"
       },
-      "Tuning": {
+      "Tuning-Input": {
         "additionalProperties": false,
         "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
         "properties": {
@@ -11596,7 +11680,7 @@
             "type": "integer"
           },
           "shares": {
-            "$ref": "#/components/schemas/Shares"
+            "$ref": "#/components/schemas/Shares-Input"
           },
           "shuffle": {
             "default": 50,
@@ -11606,7 +11690,7 @@
             "type": "integer"
           },
           "strictness": {
-            "$ref": "#/components/schemas/Strictness"
+            "$ref": "#/components/schemas/Strictness-Input"
           },
           "throwback_years": {
             "default": 3,
@@ -11650,6 +11734,193 @@
             "type": "integer"
           }
         },
+        "title": "Tuning",
+        "type": "object"
+      },
+      "Tuning-Output": {
+        "additionalProperties": false,
+        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "properties": {
+          "channel_gap": {
+            "default": 5,
+            "maximum": 12.0,
+            "minimum": 1.0,
+            "title": "Channel Gap",
+            "type": "integer"
+          },
+          "freshness": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Freshness",
+            "type": "integer"
+          },
+          "hide_past_live": {
+            "default": false,
+            "title": "Hide Past Live",
+            "type": "boolean"
+          },
+          "hide_shorts": {
+            "default": false,
+            "title": "Hide Shorts",
+            "type": "boolean"
+          },
+          "library_boost": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Library Boost",
+            "type": "integer"
+          },
+          "max_age_days": {
+            "default": 0,
+            "enum": [
+              0,
+              7,
+              30,
+              90,
+              365,
+              1095
+            ],
+            "title": "Max Age Days",
+            "type": "integer"
+          },
+          "max_minutes": {
+            "default": 0,
+            "maximum": 600.0,
+            "minimum": 0.0,
+            "title": "Max Minutes",
+            "type": "integer"
+          },
+          "min_minutes": {
+            "default": 0,
+            "maximum": 600.0,
+            "minimum": 0.0,
+            "title": "Min Minutes",
+            "type": "integer"
+          },
+          "min_watched_pct": {
+            "default": 0,
+            "maximum": 90.0,
+            "minimum": 0.0,
+            "title": "Min Watched Pct",
+            "type": "integer"
+          },
+          "new_channel_cap": {
+            "default": 2,
+            "maximum": 6.0,
+            "minimum": 1.0,
+            "title": "New Channel Cap",
+            "type": "integer"
+          },
+          "popularity": {
+            "default": 0,
+            "maximum": 100.0,
+            "minimum": -100.0,
+            "title": "Popularity",
+            "type": "integer"
+          },
+          "recent_days": {
+            "default": 30,
+            "enum": [
+              14,
+              30,
+              60,
+              90
+            ],
+            "title": "Recent Days",
+            "type": "integer"
+          },
+          "rewatch_after_days": {
+            "default": 60,
+            "enum": [
+              30,
+              60,
+              180,
+              365
+            ],
+            "title": "Rewatch After Days",
+            "type": "integer"
+          },
+          "shares": {
+            "$ref": "#/components/schemas/Shares-Output"
+          },
+          "shuffle": {
+            "default": 50,
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Shuffle",
+            "type": "integer"
+          },
+          "strictness": {
+            "$ref": "#/components/schemas/Strictness-Output"
+          },
+          "throwback_years": {
+            "default": 3,
+            "enum": [
+              0,
+              1,
+              3
+            ],
+            "title": "Throwback Years",
+            "type": "integer"
+          },
+          "use_catalogs": {
+            "default": true,
+            "title": "Use Catalogs",
+            "type": "boolean"
+          },
+          "use_household": {
+            "default": true,
+            "title": "Use Household",
+            "type": "boolean"
+          },
+          "use_library": {
+            "default": true,
+            "title": "Use Library",
+            "type": "boolean"
+          },
+          "use_youtube": {
+            "default": true,
+            "title": "Use Youtube",
+            "type": "boolean"
+          },
+          "worn_after": {
+            "default": 6,
+            "enum": [
+              0,
+              3,
+              6,
+              12
+            ],
+            "title": "Worn After",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "shares",
+          "strictness",
+          "freshness",
+          "popularity",
+          "channel_gap",
+          "new_channel_cap",
+          "shuffle",
+          "worn_after",
+          "recent_days",
+          "throwback_years",
+          "min_watched_pct",
+          "rewatch_after_days",
+          "hide_shorts",
+          "hide_past_live",
+          "min_minutes",
+          "max_minutes",
+          "max_age_days",
+          "library_boost",
+          "use_library",
+          "use_catalogs",
+          "use_youtube",
+          "use_household"
+        ],
         "title": "Tuning",
         "type": "object"
       },
