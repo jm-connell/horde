@@ -27,6 +27,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0019](0019-recommended-plus.md) | Recommended+: a mixed feed of four kinds of picks, fed by a slow YouTube gatherer | Accepted |
 | [0020](0020-youtube-history-from-takeout.md) | YouTube history comes from Takeout and is kept apart from Horde's own | Accepted |
 | [0021](0021-help-chat-acts-through-confirmed-tokens.md) | Ask about Horde links and acts through tokens the user confirms | Accepted |
+| [0022](0022-ask-channel-knowledge.md) | Ask: channels' captions as a knowledge base in SQLite, cited to the moment | Accepted |
 
 ## Writing a new record
 

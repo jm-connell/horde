@@ -10,6 +10,7 @@ Background and on-demand AI for search, tags, chat, recommendations, and catalog
 | `enrich_tags` | LLM tag enrichment into `video_ai_meta` / `videos.tags` |
 | `refresh_categories` | Rebuild `ai_categories` shelves |
 | `embed_catalog_video` | Embed a channel-catalog upload |
+| `embed_kb_channel` | Embed one batch (25 videos) of an [Ask](../design/channel-knowledge.md) channel's passages, then queue the next. Picked only when no library job is runnable |
 | `summarize` | Generate a Watch summary from captions (after download) |
 | `chapters` | Generate Watch chapter markers from a timed transcript (after download when `ai_chapters_mode` is `on_download`, or from Watch) |
 

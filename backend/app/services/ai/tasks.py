@@ -1017,8 +1017,15 @@ def dispatch(
     video_id: int | None,
     *,
     catalog_video_id: int | None = None,
+    kb_channel_id: int | None = None,
 ) -> SkipReason | None:
     """Run a job. Returns None on success, or a skip reason (caller → cancelled)."""
+    if kind == AiJobKind.embed_kb_channel:
+        from ..knowledge import embed as kb_embed
+
+        if kb_channel_id is None:
+            return "no channel"
+        return kb_embed.embed_channel_batch(session, kb_channel_id)
     if kind == AiJobKind.embed_video:
         return run_embed_video(session, video_id)
     if kind == AiJobKind.embed_catalog_video:

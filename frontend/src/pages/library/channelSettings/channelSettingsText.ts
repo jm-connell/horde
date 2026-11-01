@@ -4,7 +4,7 @@ import { formatSize } from "../../../utils";
 
 /** The sections of the channel settings sheet, in order. */
 export type ChannelSettingsSection =
-  "autodownload" | "retention" | "following" | "search" | "manage";
+  "autodownload" | "retention" | "following" | "search" | "ask" | "manage";
 
 /** The DOM id of a section, for scrolling a chip's section into view. */
 export const sectionId = (id: ChannelSettingsSection) =>

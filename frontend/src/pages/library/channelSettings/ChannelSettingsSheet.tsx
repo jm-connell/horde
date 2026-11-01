@@ -5,6 +5,7 @@ import { useFocusTrap } from "../../../hooks/useFocusTrap";
 import type { ChannelAutodownload } from "../../../types";
 import { backdropClick } from "../../../utils";
 import type { useChannelCatalog } from "../useChannelCatalog";
+import AskSection from "./AskSection";
 import AutoDownloadSection from "./AutoDownloadSection";
 import FollowSection from "./FollowSection";
 import ManageSection from "./ManageSection";
@@ -127,6 +128,7 @@ export default function ChannelSettingsSheet({
               onChange={(value) => void catalog.setChannelYoutubeSearch(value)}
             />
           )}
+          {youtube && <AskSection channel={channel} channelUrl={channelUrl} />}
           <ManageSection
             key={channel}
             channel={channel}

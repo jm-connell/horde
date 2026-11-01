@@ -1,5 +1,5 @@
 import { expectNoSeriousViolations } from "./axe";
-import { expect, test } from "./fixtures";
+import { expect, test, videoCard } from "./fixtures";
 
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
@@ -24,8 +24,9 @@ test("the footer links to the docs and the GitHub issue tracker", async ({
 test("Ask about Horde opens in the corner, follows the user and moves", async ({
   page,
 }) => {
-  const bodies: { message: string; history: unknown[]; page: string }[] = [];
-  await page.route(/\/api\/ai\/help\/chat$/, (route) => {
+  const bodies: { message: string; thread_id: number | null; page: string }[] =
+    [];
+  await page.route(/\/api\/ask\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
     const answer =
@@ -36,6 +37,8 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
       status: 200,
       contentType: "text/event-stream",
       body: sse([
+        { type: "thread", id: 7, title: "How do I set up AI?" },
+        { type: "scope", channels: [] },
         {
           type: "user",
           message: { id: null, role: "user", content: body.message },
@@ -104,13 +107,9 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   await input.press("Enter");
   await expect(panel.getByText("Yes, local models work too.")).toBeVisible();
   expect(bodies[1].page).toBe("History (/history)");
-  expect(bodies[1].history).toEqual([
-    { role: "user", content: "How do I set up AI?" },
-    {
-      role: "assistant",
-      content: expect.stringContaining("Settings → AI") as unknown as string,
-    },
-  ]);
+  // The server keeps the conversation: the follow-up names its thread.
+  expect(bodies[0].thread_id).toBeNull();
+  expect(bodies[1].thread_id).toBe(7);
 
   // Drag it by the header, then resize it from the top-left corner.
   const before = (await panel.boundingBox())!;
@@ -145,7 +144,7 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   const reopened = (await panel.boundingBox())!;
   expect(reopened.x).toBeCloseTo(resized.x, 0);
   expect(reopened.width).toBeCloseTo(resized.width, 0);
-  await panel.getByRole("button", { name: "Clear" }).click();
+  await panel.getByRole("button", { name: "New chat" }).click();
   await expect(panel.getByText("Yes, local models work too.")).toBeHidden();
   // The sample questions change each time; "What can you do?" is always first.
   await expect(
@@ -194,7 +193,7 @@ async function stubAnswer(
   answer: string | ((n: number) => string)
 ) {
   const bodies: { message: string; data_consent?: string }[] = [];
-  await page.route(/\/api\/ai\/help\/chat$/, (route) => {
+  await page.route(/\/api\/ask\/chat$/, (route) => {
     const body = route.request().postDataJSON() as (typeof bodies)[number];
     bodies.push(body);
     const text = typeof answer === "string" ? answer : answer(bodies.length);
@@ -313,7 +312,7 @@ test("Use my data is a setting, not a switch in the chat", async ({ page }) => {
   expect(bodies[0].data_consent).toBe("off");
 
   // The capabilities answer links the setting; it opens on the Library tab.
-  await panel.getByRole("button", { name: "Clear" }).click();
+  await panel.getByRole("button", { name: "New chat" }).click();
   await panel.getByRole("button", { name: "What can you do?" }).click();
   await panel.getByRole("link", { name: "Use my data" }).click();
   await expect(page).toHaveURL(/\/settings\?tab=library$/);
@@ -475,4 +474,117 @@ test("a link that leaves Horde names the site it goes to", async ({ page }) => {
     "href",
     "/history"
   );
+});
+
+test("the chat docks at the side and the page makes room for it", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const main = page.locator('[data-horde="main"]');
+  const fullWidth = (await main.boundingBox())!.width;
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await expect(panel).toHaveAttribute("data-docked", "true");
+
+  // A full-height column on the right, below the full-width nav.
+  const nav = (await page.locator('[data-horde="nav"]').boundingBox())!;
+  const box = (await panel.boundingBox())!;
+  expect(nav.width).toBeGreaterThan(1400);
+  expect(box.x + box.width).toBeCloseTo(1440, 0);
+  expect(box.y).toBeCloseTo(nav.y + nav.height, 0);
+  expect(box.y + box.height).toBeCloseTo(900, 0);
+  // The page sits beside it instead of under it.
+  const beside = (await main.boundingBox())!;
+  expect(beside.x + beside.width).toBeLessThanOrEqual(box.x + 1);
+  expect(beside.width).toBeLessThan(fullWidth);
+
+  // Dragging its left edge makes it wider and the page narrower.
+  const handle = panel.getByRole("separator", { name: "Resize the chat" });
+  const edge = (await handle.boundingBox())!;
+  await page.mouse.move(edge.x + edge.width / 2, edge.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(edge.x - 200, edge.y + 200, { steps: 8 });
+  await page.mouse.up();
+  const wider = (await panel.boundingBox())!;
+  expect(wider.width).toBeGreaterThan(box.width + 150);
+  expect((await main.boundingBox())!.width).toBeLessThan(beside.width - 150);
+  // Arrow keys nudge it (right is narrower).
+  await handle.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect
+    .poll(async () => (await panel.boundingBox())!.width)
+    .toBeCloseTo(wider.width - 16, 0);
+
+  // It stays docked, at its width, on the next page; floating again gives the
+  // room back.
+  await page.getByRole("link", { name: "History" }).first().click();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(panel).toHaveAttribute("data-docked", "true");
+  await expectNoSeriousViolations(
+    page,
+    "docked chat",
+    '[data-horde="help-chat"]'
+  );
+  expect((await panel.boundingBox())!.width).toBeCloseTo(wider.width - 16, 0);
+  await panel.getByRole("button", { name: "Float the chat" }).click();
+  await expect(panel).not.toHaveAttribute("data-docked", "true");
+  await expect
+    .poll(async () => (await main.boundingBox())!.width)
+    .toBeCloseTo(fullWidth, 0);
+});
+
+test("watching with the chat docked shows the player as theater", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const theater = page.getByRole("button", { name: "Theater", exact: true });
+  // `hover:text-accent` is on every button; the active one has it bare.
+  const active = /(^|\s)text-accent(\s|$)/;
+  const reveal = async () => {
+    const box = (await page.locator("video").first().boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.move(box.x + box.width / 2 + 3, box.y + box.height / 2);
+  };
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
+
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await reveal();
+  await expect(theater).toHaveClass(active);
+  // Full bleed stops at the chat, so the player's own controls stay clickable.
+  await expect
+    .poll(async () => {
+      const video = (await page.locator("video").first().boundingBox())!;
+      const chat = (await panel.boundingBox())!;
+      return video.x + video.width - chat.x;
+    })
+    .toBeLessThanOrEqual(1);
+
+  // Floating it again brings back the saved standard layout.
+  await panel.getByRole("button", { name: "Float the chat" }).click();
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
+
+  // Docked again, leaving theater from the player floats the chat.
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await reveal();
+  await expect(theater).toHaveClass(active);
+  await reveal();
+  await theater.click();
+  await expect(panel).not.toHaveAttribute("data-docked", "true");
+  await reveal();
+  await expect(theater).not.toHaveClass(active);
 });

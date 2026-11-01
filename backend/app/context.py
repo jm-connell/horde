@@ -35,9 +35,11 @@ if TYPE_CHECKING:
     from .services.discovery.runtime import DiscoveryRuntime
     from .services.downloads.ffmpeg_queue import FfmpegQueue
     from .services.downloads.queue import DownloadQueue
+    from .services.knowledge.runtime import KnowledgeRuntime
     from .services.live.runtime import LiveRuntime
     from .services.media_sidecars import SidecarJobs
     from .services.notifications.notifier import Notifier
+    from .services.timedtext import TimedtextPacer
     from .services.watch_stats import WatchRefs
     from .services.workers import WorkerRegistry
 
@@ -132,6 +134,10 @@ class AppContext:
     watch_refs: WatchRefs = field(default_factory=lambda: _new_watch_refs())
     #: Recommended+: the gatherer's back-off, the vector matrix, ranked feeds.
     discovery: DiscoveryRuntime = field(default_factory=lambda: _new_discovery())
+    #: Pacing of YouTube caption requests (library first, then Ask indexing).
+    timedtext: TimedtextPacer = field(default_factory=lambda: _new_timedtext())
+    #: Ask (channel knowledge): the worker's wake event.
+    knowledge: KnowledgeRuntime = field(default_factory=lambda: _new_knowledge())
     #: The app's ``AuthRuntime`` (``install_context`` copies it from ``app.state``).
     auth: AuthRuntime | None = None
     #: Request-path caches (search results, duplicate groups); filled by whoever
@@ -177,6 +183,18 @@ def _new_discovery() -> DiscoveryRuntime:
     from .services.discovery.runtime import DiscoveryRuntime
 
     return DiscoveryRuntime()
+
+
+def _new_timedtext() -> TimedtextPacer:
+    from .services.timedtext import TimedtextPacer
+
+    return TimedtextPacer()
+
+
+def _new_knowledge() -> KnowledgeRuntime:
+    from .services.knowledge.runtime import KnowledgeRuntime
+
+    return KnowledgeRuntime()
 
 
 def _new_registry() -> WorkerRegistry:

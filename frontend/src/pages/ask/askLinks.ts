@@ -1,0 +1,113 @@
+import type { AskChannel, AskSearchHit } from "../../types";
+import { normalizeChannelUrl } from "../../utils/followUrl";
+
+/**
+ * Where an Ask reference opens: the library copy when it is downloaded,
+ * otherwise the stream, at the moment it points to.
+ */
+export function askWatchPath(ref: {
+  yt_id: string;
+  start_sec: number;
+  library_video_id?: number | null;
+}): string {
+  const t = Math.max(0, Math.floor(ref.start_sec));
+  if (ref.library_video_id != null) {
+    return `/watch/${ref.library_video_id}?t=${t}`;
+  }
+  const url = `https://www.youtube.com/watch?v=${ref.yt_id}`;
+  return `/watch?url=${encodeURIComponent(url)}&t=${t}`;
+}
+
+const MARK_START = String.fromCharCode(2);
+const MARK_END = String.fromCharCode(3);
+
+/**
+ * Clicking a link to the page already open does not change `?t=`, so the
+ * player would not move: seek it directly instead.
+ */
+export function seekIfOpen(path: string): void {
+  const here = window.location.pathname + window.location.search;
+  if (here !== path) return;
+  const t = Number(new URL(path, window.location.origin).searchParams.get("t"));
+  if (Number.isFinite(t)) {
+    window.dispatchEvent(new CustomEvent("horde:seek", { detail: { sec: t } }));
+  }
+}
+
+/** Text split into plain and highlighted parts (search marks matches with \u0002…\u0003). */
+export function snippetParts(
+  snippet: string
+): { text: string; mark: boolean }[] {
+  const parts: { text: string; mark: boolean }[] = [];
+  let rest = snippet;
+  while (rest) {
+    const start = rest.indexOf(MARK_START);
+    const end = start < 0 ? -1 : rest.indexOf(MARK_END, start + 1);
+    if (start < 0 || end < 0) {
+      parts.push({ text: rest.split(MARK_START).join(""), mark: false });
+      break;
+    }
+    if (start > 0) parts.push({ text: rest.slice(0, start), mark: false });
+    parts.push({ text: rest.slice(start + 1, end), mark: true });
+    rest = rest.slice(end + 1);
+  }
+  return parts;
+}
+
+/** "312 of 412 videos indexed · 20 without captions". */
+export function askProgressText(c: AskChannel): string {
+  if (c.videos === 0) return c.status === "error" ? "" : "No videos listed yet";
+  const parts = [
+    `${c.fetched.toLocaleString()} of ${c.videos.toLocaleString()} videos indexed`,
+  ];
+  if (c.no_captions)
+    parts.push(`${c.no_captions.toLocaleString()} without captions`);
+  if (c.unavailable)
+    parts.push(`${c.unavailable.toLocaleString()} unavailable`);
+  return parts.join(" · ");
+}
+
+/** The Ask channel for a library channel, by URL or, failing that, by name. */
+export function findAskChannel(
+  channels: AskChannel[],
+  channelUrl: string | null | undefined,
+  channelName: string | null | undefined
+): AskChannel | null {
+  const url = normalizeChannelUrl(channelUrl ?? "");
+  const name = (channelName ?? "").trim().toLowerCase();
+  return (
+    channels.find((c) => url && normalizeChannelUrl(c.channel_url) === url) ??
+    channels.find(
+      (c) => name && (c.channel_name ?? "").trim().toLowerCase() === name
+    ) ??
+    null
+  );
+}
+
+export interface VideoGroup {
+  yt_id: string;
+  title: string | null | undefined;
+  channel: string | null | undefined;
+  published: string | null | undefined;
+  hits: AskSearchHit[];
+}
+
+/** Passages in rank order, gathered under the video each comes from. */
+export function groupByVideo(hits: AskSearchHit[]): VideoGroup[] {
+  const groups = new Map<string, VideoGroup>();
+  for (const hit of hits) {
+    let group = groups.get(hit.yt_id);
+    if (!group) {
+      group = {
+        yt_id: hit.yt_id,
+        title: hit.title,
+        channel: hit.channel_name,
+        published: hit.published_at,
+        hits: [],
+      };
+      groups.set(hit.yt_id, group);
+    }
+    group.hits.push(hit);
+  }
+  return [...groups.values()];
+}

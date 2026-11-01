@@ -3,7 +3,10 @@ import { Link } from "react-router-dom";
 import { isYoutubeChannelUrl } from "../../components/channelFeedYoutubeSearch";
 import { useAuth } from "../../context/AuthContext";
 import ChannelAvatar from "../../components/ChannelAvatar";
+import { useHelpChat } from "../../context/HelpChatContext";
+import { useAskChannels } from "../../queries/ask";
 import { useChannelFollow } from "../../queries/follows";
+import { findAskChannel } from "../ask/askLinks";
 import type { ChannelAutodownload, ChannelStat } from "../../types";
 import { formatCompactCount, joinDotList } from "../../utils";
 import {
@@ -89,6 +92,9 @@ export default function ChannelHeader({
             />
           )}
           {youtube && (
+            <AskChannelButton channel={channel} channelUrl={channelUrl} />
+          )}
+          {youtube && (
             <FollowButton channel={channel} channelUrl={channelUrl} />
           )}
           {youtube && channelUrl && can("download") && (
@@ -124,6 +130,32 @@ export default function ChannelHeader({
         </ul>
       )}
     </div>
+  );
+}
+
+/** "Ask <channel>": opens the chat panel about this channel once it has passages. */
+function AskChannelButton({
+  channel,
+  channelUrl,
+}: {
+  channel: string;
+  channelUrl: string | null;
+}) {
+  const { available, askChannel } = useHelpChat();
+  const { data } = useAskChannels(available);
+  const found = findAskChannel(data?.items ?? [], channelUrl, channel);
+  if (!available || !found || found.passages === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        askChannel({ id: found.id, name: found.channel_name ?? channel })
+      }
+      title={`Ask what ${found.channel_name ?? channel} said in its videos`}
+      className={actionButton}
+    >
+      Ask {found.channel_name ?? channel}
+    </button>
   );
 }
 

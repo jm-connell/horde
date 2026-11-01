@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from .api import (
     ai,
     app_settings,
+    ask,
     backgrounds,
     channels,
     compat,
@@ -176,6 +177,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
     )
     from .services.ai import worker as ai_worker
     from .services.discovery import gather as discovery_gather
+    from .services.knowledge import worker as knowledge_worker
     from .services.live import directory as live_directory
     from .services.metadata_sync import create_sync_worker
     from .services.sprites import sprite_pool
@@ -207,6 +209,7 @@ def _start_workers(app_: FastAPI, ctx: AppContext) -> None:
         ctx.live.poller = live_directory.create_worker()
         registry.start(ctx.live.poller)
     registry.start(subtitle_retry.create_worker())
+    registry.start(knowledge_worker.create_worker())
     registry.start(stream_ai.create_worker())
     registry.start(discovery_gather.create_worker(ctx.discovery))
     registry.start(job_metadata.create_worker())
@@ -568,6 +571,7 @@ def include_api(target: FastAPI) -> None:
         notifications,
         app_settings,
         ai,
+        ask,
         system,
         backgrounds,
         fonts,

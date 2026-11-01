@@ -1,12 +1,7 @@
 import VideoCard from "../../components/VideoCard";
 import { videoGridClassName } from "./videoGridClassName";
 import type { Video } from "../../types";
-
-function videoProgress(video: Video): number | undefined {
-  if (!video.duration_sec || video.duration_sec <= 0) return undefined;
-  if (video.last_position_sec <= 0) return undefined;
-  return Math.min(1, video.last_position_sec / video.duration_sec);
-}
+import { videoProgress } from "./videoProgress";
 
 /** What every grid of library cards on the page shares. */
 export interface LibraryGridOptions {

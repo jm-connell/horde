@@ -66,6 +66,14 @@ PERMISSION_TABLE: tuple[Permission, ...] = (
         "provider).",
         True,
     ),
+    Permission(
+        "manage_ask",
+        "Manage Ask channels",
+        "Turn Ask on or off for channels and pause or resume their indexing. "
+        "Indexing fetches every upload's captions from YouTube for hours and "
+        "uses disk space.",
+        False,
+    ),
 )
 
 ALL_PERMISSIONS: frozenset[str] = frozenset(p.name for p in PERMISSION_TABLE)

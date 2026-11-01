@@ -49,6 +49,8 @@ export interface VideoList {
   partial: boolean;
   /** Nothing could be loaded at all. */
   failed: boolean;
+  /** Every page of these filters is loaded (not the previous filters' rows). */
+  settled: boolean;
 }
 
 /**
@@ -92,7 +94,18 @@ export function useVideoList(filters: VideoFilters, enabled = true): VideoList {
     }
   }, [failed, partial, showError]);
 
-  return { videos, loading: enabled && query.isPending, partial, failed };
+  const settled =
+    !enabled ||
+    failed ||
+    partial ||
+    (query.isSuccess && !query.isPlaceholderData && !hasNextPage);
+  return {
+    videos,
+    loading: enabled && query.isPending,
+    partial,
+    failed,
+    settled,
+  };
 }
 
 /** Change a video wherever the cached lists hold it (rows that match a filter stay). */

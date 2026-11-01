@@ -266,6 +266,23 @@ def load_timed_cues(video: Video) -> list[tuple[float, str]]:
     return []
 
 
+def caption_lines(raw_vtt: str, window_sec: float = 5.0) -> list[tuple[float, str]]:
+    """Short timed lines of a WebVTT track, with YouTube's rolling repeats removed.
+
+    Each line holds only the words new since the previous one, so joining the
+    lines gives the transcript once (Ask stores these to cite exact moments).
+    """
+    lines: list[tuple[float, str]] = []
+    prev = ""
+    for start, text in _downsample_cues(parse_vtt_cues(raw_vtt), window_sec):
+        merged = _merge_rolling(prev, text)
+        fresh = merged.split()[len(prev.split()) :]
+        if fresh:
+            lines.append((start, " ".join(fresh)))
+        prev = text
+    return lines
+
+
 def format_timed_transcript(cues: list[tuple[float, str]], *, max_chars: int) -> str:
     windows = _downsample_cues(cues, CUE_WINDOW_SEC)
     if not windows:

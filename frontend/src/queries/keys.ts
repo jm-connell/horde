@@ -96,4 +96,10 @@ export const queryKeys = {
     summary: ["trash", "summary"] as const,
     list: ["trash", "list"] as const,
   },
+  ask: {
+    channels: ["ask", "channels"] as const,
+    threads: ["ask", "threads"] as const,
+    search: (q: string, channelIds: number[]) =>
+      ["ask", "search", q, channelIds] as const,
+  },
 };

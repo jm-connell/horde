@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0021_youtube_watch_events"
+HEAD = "0022_ask_knowledge"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -791,6 +791,9 @@ EXPECTED_TRIGGERS = {
     "trg_videos_fts_insert",
     "trg_videos_fts_update",
     "trg_videos_fts_delete",
+    "trg_kb_chunks_fts_insert",
+    "trg_kb_chunks_fts_update",
+    "trg_kb_chunks_fts_delete",
 }
 
 
@@ -980,6 +983,43 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
     try:
         con.executescript(
             """
+            DROP TRIGGER trg_kb_chunks_fts_insert;
+            DROP TRIGGER trg_kb_chunks_fts_update;
+            DROP TRIGGER trg_kb_chunks_fts_delete;
+            DROP TABLE kb_chunks_fts;
+            DROP TABLE kb_chunk_vectors;
+            DROP TABLE kb_chunks;
+            DROP TABLE kb_videos;
+            DROP TABLE ask_messages;
+            DROP TABLE ask_threads;
+            -- ai_jobs as it was before kb_channel_id (a column with a foreign key
+            -- cannot be dropped in place)
+            DROP TABLE ai_jobs;
+            CREATE TABLE ai_jobs (
+                id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                kind VARCHAR(19) NOT NULL,
+                video_id INTEGER,
+                catalog_video_id INTEGER,
+                status VARCHAR(9) NOT NULL,
+                attempts INTEGER NOT NULL,
+                run_after DATETIME,
+                error VARCHAR,
+                created_at DATETIME NOT NULL,
+                updated_at DATETIME NOT NULL,
+                CONSTRAINT fk_ai_jobs_video_id_videos
+                    FOREIGN KEY(video_id) REFERENCES videos (id) ON DELETE CASCADE,
+                CONSTRAINT fk_ai_jobs_catalog_video_id_channel_catalog_videos
+                    FOREIGN KEY(catalog_video_id) REFERENCES channel_catalog_videos (id)
+                    ON DELETE CASCADE
+            );
+            CREATE INDEX ix_ai_jobs_status ON ai_jobs (status);
+            CREATE INDEX ix_ai_jobs_video_id ON ai_jobs (video_id);
+            CREATE INDEX ix_ai_jobs_run_after ON ai_jobs (run_after);
+            CREATE INDEX ix_ai_jobs_kind ON ai_jobs (kind);
+            CREATE INDEX ix_ai_jobs_catalog_video_id ON ai_jobs (catalog_video_id);
+            CREATE INDEX ix_ai_jobs_video_id_kind_status
+                ON ai_jobs (video_id, kind, status);
+            DROP TABLE kb_channels;
             DROP TABLE youtube_watch_events;
             DROP TRIGGER trg_videos_tags_delete;
             ALTER TABLE download_jobs DROP COLUMN clip_end_sec;

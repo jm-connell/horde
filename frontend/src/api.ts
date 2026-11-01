@@ -33,6 +33,7 @@ import { channelsApi } from "./api/channels";
 import { compatApi } from "./api/compat";
 import { discoverApi } from "./api/discover";
 import { downloadsApi } from "./api/downloads";
+import { askApi } from "./api/ask";
 import { notificationsApi } from "./api/notifications";
 import { playlistsApi } from "./api/playlists";
 import { reviewApi } from "./api/review";
@@ -50,6 +51,7 @@ export const api = {
   ...channelsApi,
   ...settingsApi,
   ...aiApi,
+  ...askApi,
   ...discoverApi,
   ...compatApi,
   ...systemApi,

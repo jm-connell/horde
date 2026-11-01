@@ -88,6 +88,8 @@ export interface StreamSession {
   /** For the user's stream history (Recommended+). */
   durationSec?: number | null;
   channelUrl?: string | null;
+  /** Start here (seconds) instead of the beginning: `?t=` on the watch page. */
+  startSec?: number | null;
 }
 
 function watchedStream(stream: StreamSession): WatchedStream {
@@ -138,6 +140,12 @@ export interface PlaybackLayout {
 
 export interface PlaybackActions {
   setMode: (mode: ViewMode) => void;
+  /**
+   * The chat is docked at the side (pass how to float it) or not (null).
+   * While docked, standard playback shows as theater, and choosing standard
+   * floats the chat.
+   */
+  setChatDocked: (floatChat: (() => void) | null) => void;
   playVideo: (video: Video, opts?: { queue?: QueueEntry[] }) => void;
   playStream: (session: StreamSession) => void;
   /** Latest stream playback position (seconds). */
@@ -244,17 +252,31 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     miniPosLiveRef.current = pos;
   }, []);
 
+  // How to float the docked chat (null while it is not docked).
+  const floatChatRef = useRef<(() => void) | null>(null);
   // Persist the chosen view mode so it is remembered across sessions.
   const setMode = useCallback(
     (next: ViewMode) => {
+      // Leaving the theater the docked chat forces: float the chat too.
+      if (next === "standard") floatChatRef.current?.();
       setModeState(next);
       updateSettings({ playbackMode: next });
     },
     [updateSettings]
   );
 
+  // With the chat docked at the side the page is narrow, so a standard
+  // player (video beside the related list) shows as theater instead; the
+  // saved choice is untouched and comes back when the chat floats again.
+  const [chatDocked, setChatDockedState] = useState(false);
+  const setChatDocked = useCallback((floatChat: (() => void) | null) => {
+    floatChatRef.current = floatChat;
+    setChatDockedState(floatChat !== null);
+  }, []);
+  const shownMode: ViewMode =
+    chatDocked && mode === "standard" ? "theater" : mode;
   // Mobile always uses the inline standard layout (no theater/fullscreen).
-  const effectiveMode: ViewMode = isMobile ? "standard" : mode;
+  const effectiveMode: ViewMode = isMobile ? "standard" : shownMode;
 
   const hostRef = useRef<HTMLDivElement | null>(null);
   if (hostRef.current === null) {
@@ -785,8 +807,8 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   }, [pollCurrentVideo, refreshCurrentVideo]);
 
   const session = useMemo<PlaybackSession>(
-    () => ({ current, stream, queue, mode, miniPlayerActive }),
-    [current, stream, queue, mode, miniPlayerActive]
+    () => ({ current, stream, queue, mode: shownMode, miniPlayerActive }),
+    [current, stream, queue, shownMode, miniPlayerActive]
   );
   const layout = useMemo<PlaybackLayout>(
     () => ({
@@ -800,6 +822,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const actions = useMemo<PlaybackActions>(
     () => ({
       setMode,
+      setChatDocked,
       playVideo,
       playStream,
       getStreamPosition,
@@ -819,6 +842,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       setMode,
+      setChatDocked,
       playVideo,
       playStream,
       getStreamPosition,
@@ -1035,6 +1059,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         streamType="dash"
         live={Boolean(stream.liveVideoId)}
         progressiveFallbackSrc={previewStreamUrl(stream.url)}
+        initialPosition={stream.startSec ?? 0}
         mimeType={
           stream.liveVideoId
             ? "application/vnd.apple.mpegurl"

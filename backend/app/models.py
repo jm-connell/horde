@@ -320,6 +320,7 @@ class AiJobKind(str, Enum):
     embed_catalog_video = "embed_catalog_video"
     summarize = "summarize"
     chapters = "chapters"
+    embed_kb_channel = "embed_kb_channel"
 
 
 class ChannelCatalogStatus(str, Enum):
@@ -586,6 +587,9 @@ class AiJob(SQLModel, table=True):
         foreign_key="channel_catalog_videos.id",
         index=True,
         ondelete="CASCADE",
+    )
+    kb_channel_id: int | None = Field(
+        default=None, foreign_key="kb_channels.id", index=True, ondelete="CASCADE"
     )
     status: AiJobStatus = Field(default=AiJobStatus.queued, index=True)
     attempts: int = 0
@@ -1009,3 +1013,136 @@ class YoutubeWatchEvent(SQLModel, table=True):
     # Normalized (services/follows.normalize_channel_url).
     channel_url: str | None = None
     imported_at: datetime = Field(default_factory=utcnow)
+
+
+class KbChannelStatus(str, Enum):
+    queued = "queued"
+    listing = "listing"
+    indexing = "indexing"
+    ready = "ready"
+    paused = "paused"
+    error = "error"
+
+
+class KbChannel(SQLModel, table=True):
+    """A YouTube channel whose captions Ask indexes (``services/knowledge``).
+
+    Independent of the channel catalog: the catalog trims, merges and can be off,
+    and captions take hours to fetch, so nothing here cascades from catalog rows.
+    """
+
+    __tablename__ = "kb_channels"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    channel_url: str = Field(index=True, unique=True)
+    channel_name: str | None = None
+    include_streams: bool = Field(default=False)
+    # None = every upload.
+    max_videos: int | None = None
+    status: KbChannelStatus = Field(default=KbChannelStatus.queued, index=True)
+    # Embedding model and dimension of this channel's vectors (one per channel).
+    embed_model: str | None = None
+    embed_dim: int = 0
+    last_listed_at: datetime | None = None
+    last_error: str | None = None
+    added_by: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class KbVideo(SQLModel, table=True):
+    """One upload of an Ask channel and the state of its captions."""
+
+    __tablename__ = "kb_videos"
+    __table_args__ = (
+        UniqueConstraint("kb_channel_id", "yt_id"),
+        Index("ix_kb_videos_channel_status", "kb_channel_id", "fetch_status"),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    kb_channel_id: int = Field(
+        foreign_key="kb_channels.id", index=True, ondelete="CASCADE"
+    )
+    yt_id: str = Field(index=True)
+    title: str | None = None
+    description: str | None = None
+    published_at: str | None = None
+    duration: float | None = None
+    is_stream: bool = Field(default=False)
+    # Order in the channel's feed, 0 = newest (fetched first).
+    position: int = Field(default=0)
+    # pending | fetched | no_captions | members_only | failed
+    fetch_status: str = Field(default="pending")
+    attempts: int = 0
+    next_attempt_at: datetime | None = None
+    caption_auto: bool | None = None
+    # zlib-compressed JSON ``[[start_sec, text], ...]`` of the cleaned captions, kept
+    # so re-chunking never fetches again and citations can find the exact line.
+    cues: bytes | None = None
+    # Model the chunks were embedded with (None until embedded).
+    embedded_model: str | None = None
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class KbChunk(SQLModel, table=True):
+    """A time-aligned passage of a video's captions. ``chunk_index`` -1 is the
+    title and description. ``kb_chunks_fts`` indexes ``text`` (triggers)."""
+
+    __tablename__ = "kb_chunks"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    kb_video_id: int = Field(foreign_key="kb_videos.id", index=True, ondelete="CASCADE")
+    kb_channel_id: int = Field(
+        foreign_key="kb_channels.id", index=True, ondelete="CASCADE"
+    )
+    chunk_index: int = 0
+    start_sec: float = 0.0
+    end_sec: float = 0.0
+    text: str = Field(default="")
+
+
+class KbChunkVector(SQLModel, table=True):
+    """A passage's embedding as float16 (model and dimension are on the channel)."""
+
+    __tablename__ = "kb_chunk_vectors"
+
+    chunk_id: int = Field(
+        primary_key=True, foreign_key="kb_chunks.id", ondelete="CASCADE"
+    )
+    vector: bytes = Field(default=b"")
+
+
+class AskThread(SQLModel, table=True):
+    """One user's Ask conversation (private to that user)."""
+
+    __tablename__ = "ask_threads"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    title: str = Field(default="")
+    # JSON ``{"channel_ids": [...], "auto": bool}``.
+    scope: str = Field(default="{}")
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow, index=True)
+
+
+class AskMessage(SQLModel, table=True):
+    """One turn of an Ask conversation. ``sources`` snapshots the references."""
+
+    __tablename__ = "ask_messages"
+
+    id: int | None = Field(default=None, primary_key=True)
+    thread_id: int = Field(foreign_key="ask_threads.id", index=True, ondelete="CASCADE")
+    role: str = Field(default="user")  # user | assistant
+    content: str = Field(default="")
+    # JSON list of references: [{n, channel, title, yt_id, start_sec, passage}].
+    sources: str | None = None
+    cost: float | None = None
+    model: str | None = None
+    created_at: datetime = Field(default_factory=utcnow)

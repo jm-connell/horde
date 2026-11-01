@@ -288,6 +288,14 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   cards. A legend of dots sits above the grid. Only the theme's accent, so the
   marks follow every theme; why a card is there is its hover title, not a line
   under it.
+- **Search placeholder card.** Holds a late result's place in a grid (YouTube
+  in mixed search results) so nothing moves when it lands: the video card's
+  frame, a thumbnail of `accent/15` fading into `ink-800`/`ink-900` with a
+  slow light sheen (none with reduced motion), the user's loading mark in the
+  middle, and a line saying what it waits for (`SearchPlaceholderCard`). Not a
+  grey skeleton. A moment under a card (captions that match) is a quiet
+  `text-xs` line: an `accent` mono timestamp link, then the caption with the
+  query's words marked.
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a
@@ -306,7 +314,18 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
-  corner like the mini player, and becomes a bottom sheet on phones. Escape
+  corner like the mini player, and becomes a bottom sheet on phones. On
+  desktop its header button docks it: a full-height column on the right
+  (`ink-900`, `border-l ink-700`, no radius or shadow) from the bottom of the
+  full-width nav to the bottom of the window, about 30% of the width
+  (360–520 px) until its left edge is dragged (a focusable separator, accent
+  on hover; arrows nudge, Home resets; at least 320 px, leaving the page at
+  least 480 px). The page and footer make room for it (`--horde-chat-dock`,
+  set on the root while docked), the corner mini player moves left of it, and
+  a standard player shows as theater, full bleed up to the chat (the related
+  list moves under it instead of squeezing the video; leaving theater from the
+  player floats the chat, and the saved mode returns when it floats);
+  it stays docked across pages until floated again. Escape
   closes it while focus is inside; the page behind stays usable. Its replies
   link settings, pages and videos as small inline chips (`ink-950` fill,
   `ink-700` border, accent text), and put each offered action (Apply a

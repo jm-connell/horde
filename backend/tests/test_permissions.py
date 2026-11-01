@@ -160,6 +160,21 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/ai/help/chat"),
             ("GET", "/api/ai/help/catalog"),
             ("GET", "/api/ai/help/info"),
+            ("POST", "/api/ask/chat"),
+            ("GET", "/api/ask/threads"),
+            ("GET", "/api/ask/threads/{thread_id}"),
+            ("DELETE", "/api/ask/threads/{thread_id}"),
+        ]
+    },
+    **{
+        (m, p): "manage_ask"
+        for m, p in [
+            ("GET", "/api/ask/channels/preview"),
+            ("POST", "/api/ask/channels"),
+            ("PATCH", "/api/ask/channels/{channel_id}"),
+            ("DELETE", "/api/ask/channels/{channel_id}"),
+            ("POST", "/api/ask/channels/{channel_id}/pause"),
+            ("POST", "/api/ask/channels/{channel_id}/resume"),
         ]
     },
 }

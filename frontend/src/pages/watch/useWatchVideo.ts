@@ -23,11 +23,14 @@ export function useWatchVideo({
   libraryValid,
   streamUrlParam,
   channelParam,
+  startParam = null,
 }: {
   libraryId: number;
   libraryValid: boolean;
   streamUrlParam: string;
   channelParam: string;
+  /** `?t=`: start here instead of the saved position. */
+  startParam?: number | null;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -57,6 +60,11 @@ export function useWatchVideo({
     },
   });
   const handedOffRef = useRef<number | null>(null);
+  /** The `?t=` already handed to the player (a different one seeks). */
+  const appliedStartRef = useRef<number | null>(null);
+  // Read by the load effects without restarting them: a new `t` only seeks.
+  const startRef = useRef(startParam);
+  startRef.current = startParam;
 
   useEffect(() => {
     if (!libraryValid) return;
@@ -90,15 +98,28 @@ export function useWatchVideo({
       fromHandoff ??
       (typeof navResume === "number" && navResume > 1 ? navResume : null);
     const merged =
-      resumeAt != null && resumeAt > 1
-        ? { ...v, last_position_sec: resumeAt }
-        : v;
+      startParam != null
+        ? { ...v, last_position_sec: startParam }
+        : resumeAt != null && resumeAt > 1
+          ? { ...v, last_position_sec: resumeAt }
+          : v;
+    appliedStartRef.current = startParam;
     clearWatchResume(libraryId);
     setSource({ kind: "library", video: merged });
     playVideo(merged);
     setLoading(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional handoff once per video; the resume position comes from the navigation state at that moment
   }, [libraryQuery.data, libraryQuery.isLoadingError, libraryId, libraryValid]);
+
+  // A new `?t=` for the video that is already playing seeks instead of reloading.
+  useEffect(() => {
+    if (startParam == null || appliedStartRef.current === startParam) return;
+    if (!source) return;
+    appliedStartRef.current = startParam;
+    window.dispatchEvent(
+      new CustomEvent("horde:seek", { detail: { sec: startParam } })
+    );
+  }, [startParam, source]);
 
   // --- Load stream meta ---
   const streamMode = !libraryValid && !!streamUrlParam;
@@ -132,9 +153,12 @@ export function useWatchVideo({
     const meta = metaQuery.data;
     if (!meta) return;
     if (meta.library_video_id != null) {
-      navigate(`/watch/${meta.library_video_id}`, { replace: true });
+      const t = startRef.current;
+      const start = t != null ? `?t=${t}` : "";
+      navigate(`/watch/${meta.library_video_id}${start}`, { replace: true });
       return;
     }
+    appliedStartRef.current = startRef.current;
     setSource({ kind: "stream", url: streamUrlParam, meta });
     setLoading(false);
   }, [
@@ -164,6 +188,7 @@ export function useWatchVideo({
       storyboard: source.meta.storyboard ?? null,
       durationSec: source.meta.duration ?? null,
       channelUrl: source.meta.channel_url ?? null,
+      startSec: appliedStartRef.current,
     });
   }, [source, channelParam, playStream]);
 

@@ -163,7 +163,7 @@ test("Home clears the search and its results", async ({ page }) => {
   const box = await openSearchBox(page);
   await box.fill("Aurora");
   await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
-  const heading = page.getByRole("button", { name: /In your library/ });
+  const heading = page.getByRole("region", { name: /^Results/ });
   await expect(heading).toBeVisible();
 
   await openNav(page, "Home");

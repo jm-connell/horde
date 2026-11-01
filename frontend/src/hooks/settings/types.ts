@@ -199,6 +199,8 @@ export interface Settings {
   compatCopyResolution: CompatCopyResolution;
   channelSort: ChannelSort;
   channelOrder: "asc" | "desc";
+  /** Home search: one mixed list of every source, or a section per source. */
+  searchLayout: "mixed" | "sections";
   defaultLibrarySort: LibrarySort;
   showProgressOnContinueWatching: boolean;
   showProgressOnAllVideos: boolean;

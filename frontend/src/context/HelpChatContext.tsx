@@ -11,7 +11,10 @@ import {
 import ErrorBoundary from "../components/ErrorBoundary";
 import HelpChatPanel from "../components/HelpChatPanel";
 import type { HelpFrame } from "../components/helpChatLayout";
-import { HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY } from "../components/helpChat";
+import {
+  type AskScopeChannel,
+  HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY,
+} from "../components/helpChat";
 import { getJson, setJson } from "../storage";
 import { useAuth } from "./AuthContext";
 
@@ -24,14 +27,45 @@ interface HelpChatValue {
   setDetail: (detail: PageDetail) => void;
   /** Drop `detail` unless another page has replaced it already. */
   clearDetail: (detail: PageDetail) => void;
+  /** Open the panel on a new conversation about this Ask channel. */
+  askChannel: (channel: AskScopeChannel) => void;
+  /** Set by a page about one channel (see `useAskPageChannel`). */
+  setPageChannel: (page: PageChannel | null) => void;
+}
+
+/** The channel (and video) a page is about, for routing Ask questions. */
+export interface PageChannel {
+  pathname: string;
+  channelUrl: string | null;
+  channelName: string | null;
+  /** The YouTube id of the video being watched. */
+  videoId: string | null;
 }
 
 interface HostValue {
   frame: HelpFrame | null;
   setFrame: (frame: HelpFrame) => void;
+  docked: boolean;
+  setDocked: (docked: boolean) => void;
+  dockWidth: number | null;
+  setDockWidth: (width: number) => void;
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
+  /** The latest "Ask <channel>" request; a new one starts a new conversation. */
+  channelRequest: ChannelRequest | null;
+  /** The channel the current page is about, if any. */
+  pageChannel: PageChannel | null;
+  /** The request the panel has not acted on yet (null once it has). */
+  pendingChannelRequest: () => ChannelRequest | null;
+  /** The panel acted on this request. */
+  consumeChannelRequest: (seq: number) => void;
+}
+
+/** A request to start a conversation about a channel (`seq` tells repeats apart). */
+export interface ChannelRequest {
+  channel: AskScopeChannel;
+  seq: number;
 }
 
 /** A page's own note on what is showing, e.g. the selected Settings tab. */
@@ -47,6 +81,10 @@ const HostCtx = createContext<HostValue | null>(null);
 interface PanelState {
   open: boolean;
   frame: HelpFrame | null;
+  /** Docked as a full-height side panel the page makes room for (desktop). */
+  docked?: boolean;
+  /** The docked panel's width, once the user has dragged it. */
+  dockWidth?: number | null;
 }
 
 function isFrame(v: unknown): v is HelpFrame {
@@ -60,7 +98,13 @@ function isFrame(v: unknown): v is HelpFrame {
 function isPanelState(v: unknown): v is PanelState {
   if (!v || typeof v !== "object") return false;
   const s = v as Record<string, unknown>;
-  return typeof s.open === "boolean" && (s.frame === null || isFrame(s.frame));
+  return (
+    typeof s.open === "boolean" &&
+    (s.frame === null || isFrame(s.frame)) &&
+    (s.docked === undefined || typeof s.docked === "boolean") &&
+    (s.dockWidth == null ||
+      (typeof s.dockWidth === "number" && Number.isFinite(s.dockWidth)))
+  );
 }
 
 /**
@@ -94,8 +138,38 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const clearDetail = useCallback((mine: PageDetail) => {
     if (detail.current === mine) detail.current = null;
   }, []);
+  const [channelRequest, setChannelRequest] = useState<ChannelRequest | null>(
+    null
+  );
+  const [pageChannel, setPageChannel] = useState<PageChannel | null>(null);
+  // Kept here, not in the panel: the panel mounts on open, after the request.
+  const consumedSeq = useRef(0);
+  const latestRequest = useRef<ChannelRequest | null>(null);
+  latestRequest.current = channelRequest;
+  const pendingChannelRequest = useCallback(() => {
+    const req = latestRequest.current;
+    return req && req.seq > consumedSeq.current ? req : null;
+  }, []);
+  const consumeChannelRequest = useCallback((seq: number) => {
+    consumedSeq.current = Math.max(consumedSeq.current, seq);
+  }, []);
+  const askChannel = useCallback(
+    (channel: AskScopeChannel) => {
+      setChannelRequest((prev) => ({ channel, seq: (prev?.seq ?? 0) + 1 }));
+      setOpen(true);
+    },
+    [setOpen]
+  );
   const setFrame = useCallback(
     (frame: HelpFrame) => setState((s) => ({ ...s, frame })),
+    []
+  );
+  const setDocked = useCallback(
+    (docked: boolean) => setState((s) => ({ ...s, docked })),
+    []
+  );
+  const setDockWidth = useCallback(
+    (dockWidth: number) => setState((s) => ({ ...s, dockWidth })),
     []
   );
   const value = useMemo(
@@ -105,18 +179,40 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setOpen,
       setDetail,
       clearDetail,
+      askChannel,
+      setPageChannel,
     }),
-    [available, state.open, setOpen, setDetail, clearDetail]
+    [available, state.open, setOpen, setDetail, clearDetail, askChannel]
   );
 
   const host = useMemo(
     () => ({
       frame: state.frame,
       setFrame,
+      docked: !!state.docked,
+      setDocked,
+      dockWidth: state.dockWidth ?? null,
+      setDockWidth,
       pageDetail: () => detail.current,
       openedHere,
+      channelRequest,
+      pageChannel,
+      pendingChannelRequest,
+      consumeChannelRequest,
     }),
-    [state.frame, setFrame, openedHere]
+    [
+      state.frame,
+      setFrame,
+      state.docked,
+      setDocked,
+      state.dockWidth,
+      setDockWidth,
+      openedHere,
+      channelRequest,
+      pageChannel,
+      pendingChannelRequest,
+      consumeChannelRequest,
+    ]
   );
 
   return (
@@ -139,9 +235,17 @@ export function HelpChatHost() {
     <ErrorBoundary scope="help-chat">
       <HelpChatPanel
         frame={host.frame}
+        docked={host.docked}
+        onDockedChange={host.setDocked}
+        dockWidth={host.dockWidth}
+        onDockWidthChange={host.setDockWidth}
         onFrameChange={host.setFrame}
         pageDetail={host.pageDetail}
         focusOnOpen={host.openedHere}
+        channelRequest={host.channelRequest}
+        pageChannel={host.pageChannel}
+        pendingChannelRequest={host.pendingChannelRequest}
+        consumeChannelRequest={host.consumeChannelRequest}
         onClose={() => setOpen(false)}
       />
     </ErrorBoundary>
@@ -166,4 +270,27 @@ export function useHelpPageDetail(pathname: string, text: string | null) {
     setDetail(mine);
     return () => clearDetail(mine);
   }, [pathname, text, setDetail, clearDetail]);
+}
+
+/**
+ * Tell the chat which channel (and video) this page is about. A question that
+ * names no channel and is not about Horde is then answered from it.
+ */
+export function useAskPageChannel(
+  pathname: string,
+  channelUrl: string | null | undefined,
+  channelName: string | null | undefined,
+  videoId: string | null = null
+) {
+  const { setPageChannel } = useHelpChat();
+  useEffect(() => {
+    if (!channelUrl && !channelName) return;
+    setPageChannel({
+      pathname,
+      channelUrl: channelUrl ?? null,
+      channelName: channelName ?? null,
+      videoId,
+    });
+    return () => setPageChannel(null);
+  }, [pathname, channelUrl, channelName, videoId, setPageChannel]);
 }

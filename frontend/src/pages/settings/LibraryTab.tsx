@@ -20,6 +20,7 @@ import {
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
+import AskChannelsSection from "./AskChannelsSection";
 import FollowedChannelsSection from "./FollowedChannelsSection";
 import HelpDataSection from "./HelpDataSection";
 import MediaServerFiles from "./MediaServerFiles";
@@ -37,6 +38,16 @@ const YOUTUBE_HISTORY_TERMS = [
   "subscriptions",
   "watch history",
   "history stats",
+];
+
+const ASK_CHANNEL_TERMS = [
+  "ask",
+  "ask channels",
+  "captions",
+  "transcripts",
+  "knowledge",
+  "index",
+  "live streams",
 ];
 
 const HELP_DATA_TERMS = [
@@ -643,6 +654,15 @@ export default function LibraryTab() {
             onRemove={() => void removeMediaSidecars()}
           />
         </div>
+      </Section>
+
+      <Section
+        anchor="ask-channels"
+        title="Ask channels"
+        description="Horde indexes what these channels say in their videos. Everyone can search it from the search bar, and ask about it in the chat by naming a channel."
+        hidden={!can("manage_ask") || !match(...ASK_CHANNEL_TERMS)}
+      >
+        <AskChannelsSection />
       </Section>
 
       <TrashSection />

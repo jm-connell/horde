@@ -17,7 +17,7 @@ import os
 import re
 import threading
 from collections import Counter, defaultdict
-from collections.abc import Generator, Iterator
+from collections.abc import Callable, Generator, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
@@ -673,8 +673,10 @@ class _HelpChat:
         page: str = "",
         use_data: bool = False,
         semantic: bool = False,
+        store: Callable[..., Any] | None = None,
     ) -> None:
         self._history = trim_history(history)
+        self._store = store
         self._user = user
         self._page = page
         self._use_data = use_data
@@ -709,6 +711,16 @@ class _HelpChat:
         cost: float | None = None,
         model: str | None = None,
     ) -> Any:
+        if self._store is not None:
+            # Ask keeps the conversation (``services/knowledge/threads``).
+            sources = {"kind": "help", "sources": self.sources or []}
+            return self._store(
+                role=role,
+                content=content,
+                cost=cost,
+                model=model,
+                sources=sources if role == "assistant" else None,
+            )
         return SimpleNamespace(
             id=None,
             role=role,
@@ -781,8 +793,12 @@ def stream_help_events(
     page: str | None = None,
     data_consent: str = "off",
     authorized: ai_chat.Authorized | None = None,
+    store: Callable[..., Any] | None = None,
 ) -> Generator[str]:
     """SSE events for one help turn; a ``sources`` event precedes the reply.
+
+    ``store`` saves each turn (Ask's saved conversations); without it the
+    client keeps the thread.
 
     ``page`` is the client's description of the screen the user is on;
     ``data_consent`` is what the user allowed of their own data: ``local``
@@ -798,7 +814,12 @@ def stream_help_events(
     # Search words go to the embedding provider, which may be elsewhere.
     semantic = use_data and (cloud_ok or embed is None or help_model.is_local(embed))
     target = _HelpChat(
-        history, user=user, page=where, use_data=use_data, semantic=semantic
+        history,
+        user=user,
+        page=where,
+        use_data=use_data,
+        semantic=semantic,
+        store=store,
     )
     sent_sources = False
     prompt = system_prompt(

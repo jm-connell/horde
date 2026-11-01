@@ -72,6 +72,45 @@ def prepare(ctx: AppContext, mode: str) -> None:
     _seed_library(paths.downloads, engine)
     _seed_discovery(engine)
     _seed_live(ctx)
+    _seed_ask(engine)
+
+
+#: An Ask channel: "the timing belt" is said at 0:42 of e2ecedar001, which is
+#: also the library's "Cedar Notes" (so its references open the library copy).
+E2E_ASK_VTT = "WEBVTT\n\n" + "\n".join(
+    f"00:00:{s:02d}.000 --> 00:00:{s + 3:02d}.000\n"
+    + ("change the timing belt before it snaps" if s == 42 else f"talking {s}")
+    + "\n"
+    for s in range(0, 60, 3)
+)
+
+
+def _seed_ask(engine: Engine) -> None:
+    from sqlmodel import Session
+
+    from .models import KbChannel, KbChannelStatus, KbVideo, require_id
+    from .services.knowledge import captions, indexing
+
+    with Session(engine) as session:
+        channel = KbChannel(
+            channel_url="https://youtube.com/@northwind",
+            channel_name="Northwind",
+            status=KbChannelStatus.ready,
+        )
+        session.add(channel)
+        session.commit()
+        session.refresh(channel)
+        video = KbVideo(
+            kb_channel_id=require_id(channel),
+            yt_id="e2ecedar001",
+            title="Cedar Notes",
+            published_at="2023-04-01T00:00:00Z",
+        )
+        session.add(video)
+        session.commit()
+        indexing.apply_result(
+            session, video, captions.CaptionResult(captions.FETCHED, vtt=E2E_ASK_VTT)
+        )
 
 
 #: Videos Recommended+ "found on YouTube" for the admin: (id, title, channel).

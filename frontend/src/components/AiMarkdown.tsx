@@ -14,13 +14,15 @@ export interface InlineRenderers {
   token?: (raw: string, key: string) => ReactNode;
   /** A markdown link; return null for the default (opens in a new tab). */
   link?: (href: string, label: string, key: string) => ReactNode | null;
+  /** A `[3]` reference marker (Ask channel answers); without this it shows as typed. */
+  cite?: (n: number, key: string) => ReactNode;
 }
 
 function parseInline(text: string, render: InlineRenderers = {}): ReactNode[] {
   const out: ReactNode[] = [];
   // Tokens, then links, then ** / __ / ` before single * / _.
   const re =
-    /(\[\[(?:(?!\]\])[^\n]){1,1000}\]\]|\[[^\]\n]+\]\([^)\s]+\)|\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
+    /(\[\[(?:(?!\]\])[^\n]){1,1000}\]\]|\[[^\]\n]+\]\([^)\s]+\)|\[\d{1,3}\]|\*\*[^*\n]+?\*\*|__[^_\n]+?__|`[^`\n]+?`|\*[^*\n]+?\*|_[^_\n]+?_)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let key = 0;
@@ -33,8 +35,13 @@ function parseInline(text: string, render: InlineRenderers = {}): ReactNode[] {
     const custom = link
       ? render.link?.(link[2], link[1], `l-${key++}`)
       : undefined;
+    const cite = /^\[(\d{1,3})\]$/.exec(token);
     if (token.startsWith("[[")) {
       out.push(render.token ? render.token(token, `t-${key++}`) : token);
+    } else if (cite) {
+      out.push(
+        render.cite ? render.cite(Number(cite[1]), `c-${key++}`) : token
+      );
     } else if (custom) {
       out.push(custom);
     } else if (link) {
