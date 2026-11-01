@@ -274,6 +274,8 @@
      "about": "Authenticator app codes and recovery codes", "keywords": "2fa totp authenticator"},
     {"id": "account-devices", "label": "Devices", "path": "/account", "anchor": "devices", "chat": "link",
      "about": "Where you are signed in; sign other devices out", "keywords": "sessions sign out"},
+    {"id": "account-algorithm", "label": "Recommended+ algorithm", "path": "/account", "anchor": "recommended-algorithm", "chat": "link",
+     "about": "How your Recommended+ feed is picked: presets, the mix, strictness, freshness, filters and sources (also the Algorithm button on the feed)", "keywords": "recommendations algorithm tune sliders shorts rewatch"},
     {"id": "account-recommendations", "label": "Hidden recommendations", "path": "/account", "anchor": "recommendations", "chat": "link",
      "about": "Channels and videos you asked not to be recommended", "keywords": "not interested hidden channels"},
     {"id": "account-users", "label": "Accounts", "path": "/account", "anchor": "users", "access": "admin", "chat": "link",

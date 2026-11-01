@@ -106,11 +106,25 @@ The home page has three tabs:
 
 - **Library**: your normal grid, tags, continue watching, and search results.
 - **Recommended**: "For you" from your library and the uploads of every channel you have indexed (turn off **Include not downloaded** for the library alone), plus category shelves when AI is set up. It works without AI, ranked from your watch history.
-- **Recommended+** (while looking on YouTube is on): the place to browse when you don't know what to watch. It mixes four kinds of picks: new uploads from channels you follow or watch a lot, more like what you have watched lately, videos from channels you have never watched (found on YouTube in the background), and the odd throwback to something you used to watch. A **Channels you might like** row suggests channels to follow; following one also indexes its uploads.
+- **Recommended+** (while looking on YouTube is on): the place to browse when you don't know what to watch. It mixes five kinds of picks: new uploads from channels you follow or watch a lot, more like what you have watched lately, videos from channels you have never watched (found on YouTube in the background), the odd throwback to something you used to watch, and now and then a video you finished a while ago (rewatch). A **Channels you might like** row suggests channels to follow; following one also indexes its uploads.
 
 Followed channels that are live right now lead Recommended (with **Include not downloaded** on) and Recommended+ when you watched them in the last two weeks, and appear a few cards in otherwise (up to three of each).
 
-Hover a Recommended+ card to see why it is there; its **⋯** menu offers **Not interested** and **Don't recommend** the channel (with Undo). Account settings → **Hidden from recommendations** lists them and can take them back. **Sources** outlines each card in your theme's accent by where it comes from: a solid outline for a video you have downloaded, a faded one for a video from a channel you follow or have indexed, and none for a channel new to you, with a legend above the feed; turn it off for plain cards. **Refresh** reshuffles the less certain picks and asks for new videos (at most every 20 minutes).
+Hover a Recommended+ card to see why it is there; its **⋯** menu offers **Why this video?** (the kind of pick, where it was found and every part of its score), **Not interested** and **Don't recommend** the channel (with Undo). Account settings → **Hidden from recommendations** lists them and can take them back. **Sources** outlines each card in your theme's accent by where it comes from: a solid outline for a video you have downloaded, a faded one for a video from a channel you follow or have indexed, and none for a channel new to you, with a legend above the feed; turn it off for plain cards. **Refresh** reshuffles the less certain picks and asks for new videos (at most every 20 minutes).
+
+### Tuning Recommended+
+
+**Algorithm** above the feed opens the settings that pick it, beside the feed (with Ask about Horde open too, the two share the panel as tabs). Start from a preset (**Balanced**, **Catch up**, **Familiar**, **Explorer**, **Nostalgia**) or move anything to make your own (**Custom**, kept while you try a preset). The feed re-ranks a moment after each change. The same settings are in Account settings → **Recommended+ algorithm**.
+
+- **Mix**: how much of the feed each kind of pick gets; 0 turns one off. The bar shows what you asked for and, under it, what the top of your feed got: when there are not enough close matches of one kind, the rest goes to the others and the panel says so.
+- **Ranking**: match strictness (take chances, or close matches only), freshness (any age, or recent uploads), popularity (hidden gems, or popular) and shuffle.
+- **Variety and repeats**: how far apart the same channel shows, how many videos one new channel may have, and after how many visits a video you keep scrolling past drops to the end.
+- **Your taste**: how many weeks count as your recent taste, and how far back throwbacks reach.
+- **Filters**: hide Shorts (a minute or less) and past live streams, a shortest and longest length, and an upload age.
+- **Sources**: your library, indexed channels, videos found on YouTube (off also stops Horde searching YouTube for you) and the household lift.
+- **Advanced**: strictness per kind of pick, how much of a video you must have watched for it to shape your recommendations, how old a finished video must be to come back as a rewatch, and a preference for downloaded videos.
+
+Only your own feed changes. How it works: [ADR 0024](../adr/0024-tunable-recommended-plus.md).
 
 Videos you watch without downloading count too: Recommended+ learns from them and stops suggesting them. Looking on YouTube can be turned off in [Settings → Library](../settings/library.md); the Recommended+ tab is then hidden, since Recommended already covers your library and indexed channels. How it works: [ADR 0019](../adr/0019-recommended-plus.md).
 

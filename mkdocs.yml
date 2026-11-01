@@ -133,6 +133,7 @@ nav:
       - 0021 Ask about Horde actions: adr/0021-help-chat-acts-through-confirmed-tokens.md
       - 0022 Ask channel knowledge: adr/0022-ask-channel-knowledge.md
       - 0023 Saved comments: adr/0023-saved-comments.md
+      - 0024 Tunable Recommended+: adr/0024-tunable-recommended-plus.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

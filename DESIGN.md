@@ -333,6 +333,17 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
+  The Recommended+ **Algorithm** panel uses the same frame (it shows only
+  while that feed is on screen). With both open there is still one frame: its
+  header turns into tabs (`ink-800` fill on the selected one, `text-muted`
+  otherwise; arrow keys move between them), each body stays mounted while
+  hidden, and the close button closes the showing tab. Settings in it are
+  compact: uppercase `text-[11px]` section labels, range sliders with the
+  value on the right and the two ends named under them, `Toggle` switches,
+  compact `ThemedSelect`s, and preset chips (rounded-full, accent fill when
+  picked). Its mix bar is a 10px rounded bar in accent tints (strongest for
+  your channels, `ink-600` for rewatch) with a 4px bar under it for what the
+  feed really got.
 - **Found setting.** A link that points at one setting (`?find=`) scrolls it
   to the middle of the screen, focuses it and rings it with a 2px accent
   outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
