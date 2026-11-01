@@ -4,9 +4,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Toggle } from "../../pages/settings/ui";
-import { useRecTuning, useSaveRecTuning } from "../../queries/discover";
+import {
+  useRecTopics,
+  useRecTuning,
+  useSaveRecTuning,
+} from "../../queries/discover";
 import { queryKeys } from "../../queries/keys";
-import type { DiscoverMix, RecTuning } from "../../types";
+import type { DiscoverMix, RecTopic, RecTuning } from "../../types";
 import Collapse from "../Collapse";
 import { PanelHeader } from "../SidePanelFrame";
 import ThemedSelect from "../ThemedSelect";
@@ -195,14 +199,49 @@ function MinutesInput({
 }
 
 /** The asked-for mix as a bar, and what the feed's top picks really got. */
+/** Your interests' share comes first (see ``STRENGTH_SHARE`` in topics.py). */
+const INTEREST_SHARE = { low: 0.04, normal: 0.08, high: 0.14 } as const;
+const INTEREST_SHARE_CAP = 0.35;
+const INTEREST_TINT = "bg-accent-deep";
+
+function interestShare(topics: RecTopic[] | undefined): number {
+  const now = Date.now();
+  const total = (topics ?? [])
+    .filter((t) => t.kind === "interest" && t.active)
+    .filter((t) => !t.expires_at || new Date(t.expires_at).getTime() > now)
+    .reduce((sum, t) => sum + INTEREST_SHARE[t.strength], 0);
+  return Math.min(INTEREST_SHARE_CAP, total);
+}
+
 function MixBar({
   shares,
+  interest,
   actual,
 }: {
   shares: RecTuning["shares"];
+  /** Your interests' share (0..1), taken before the rest. */
+  interest: number;
   actual: DiscoverMix[] | undefined;
 }) {
-  const pct = sharePercents(shares);
+  const own = sharePercents(shares);
+  const segments = [
+    ...(interest > 0
+      ? [
+          {
+            id: "interest",
+            label: BUCKET_LABEL.interest,
+            tint: INTEREST_TINT,
+            pct: Math.round(interest * 100),
+          },
+        ]
+      : []),
+    ...BUCKETS.map((b) => ({
+      id: b.id as string,
+      label: b.label,
+      tint: BUCKET_TINT[b.id],
+      pct: Math.round(own[b.id] * (1 - interest)),
+    })),
+  ];
   const got = new Map((actual ?? []).map((m) => [m.bucket, m.actual]));
   const short = (actual ?? []).filter((m) => m.target - m.actual > 0.06);
   return (
@@ -210,14 +249,14 @@ function MixBar({
       <div
         className="flex h-2.5 w-full overflow-hidden rounded-full bg-ink-800"
         role="img"
-        aria-label={`Asked for: ${BUCKETS.map((b) => `${b.label} ${pct[b.id]}%`).join(", ")}`}
+        aria-label={`Asked for: ${segments.map((g) => `${g.label} ${g.pct}%`).join(", ")}`}
       >
-        {BUCKETS.map((b) =>
-          pct[b.id] > 0 ? (
+        {segments.map((g) =>
+          g.pct > 0 ? (
             <span
-              key={b.id}
-              className={BUCKET_TINT[b.id]}
-              style={{ width: `${pct[b.id]}%` }}
+              key={g.id}
+              className={g.tint}
+              style={{ width: `${g.pct}%` }}
             />
           ) : null
         )}
@@ -226,18 +265,14 @@ function MixBar({
         <div
           className="flex h-1 w-full overflow-hidden rounded-full bg-ink-800"
           role="img"
-          aria-label={`The top of your feed got: ${BUCKETS.map(
-            (b) => `${b.label} ${Math.round((got.get(b.id) ?? 0) * 100)}%`
-          ).join(", ")}`}
+          aria-label={`The top of your feed got: ${segments
+            .map((g) => `${g.label} ${Math.round((got.get(g.id) ?? 0) * 100)}%`)
+            .join(", ")}`}
         >
-          {BUCKETS.map((b) => {
-            const w = Math.round((got.get(b.id) ?? 0) * 100);
+          {segments.map((g) => {
+            const w = Math.round((got.get(g.id) ?? 0) * 100);
             return w > 0 ? (
-              <span
-                key={b.id}
-                className={BUCKET_TINT[b.id]}
-                style={{ width: `${w}%` }}
-              />
+              <span key={g.id} className={g.tint} style={{ width: `${w}%` }} />
             ) : null;
           })}
         </div>
@@ -275,6 +310,7 @@ export default function TuningPanel({
   const { showError } = useToast();
   const queryClient = useQueryClient();
   const query = useRecTuning();
+  const topics = useRecTopics().data?.items;
   const save = useSaveRecTuning();
   const [draft, setDraft] = useState<RecTuning | null>(null);
   const [advanced, setAdvanced] = useState(false);
@@ -367,6 +403,7 @@ export default function TuningPanel({
     );
   };
 
+  const interest = interestShare(topics);
   const shares = sharePercents(values.shares);
   const strict = values.strictness;
   const strictAll = Math.round(
@@ -416,7 +453,17 @@ export default function TuningPanel({
         <Heading>
           <span id="tuning-mix">Mix</span>
         </Heading>
-        <MixBar shares={values.shares} actual={mix} />
+        <MixBar shares={values.shares} interest={interest} actual={mix} />
+        {interest > 0 && (
+          <p className="flex items-center gap-2 text-xs text-muted">
+            <span
+              aria-hidden="true"
+              className={`inline-block h-2 w-2 rounded-full ${INTEREST_TINT}`}
+            />
+            Your interests take {Math.round(interest * 100)}% first; the rest is
+            shared as below.
+          </p>
+        )}
         {BUCKETS.map((b) => (
           <SliderRow
             key={b.id}
@@ -426,7 +473,11 @@ export default function TuningPanel({
             value={values.shares[b.id]}
             min={0}
             max={100}
-            display={values.shares[b.id] === 0 ? "Off" : pct(shares[b.id])}
+            display={
+              values.shares[b.id] === 0
+                ? "Off"
+                : pct(Math.round(shares[b.id] * (1 - interest)))
+            }
             onChange={(v) =>
               change((t) => ({ ...t, shares: { ...t.shares, [b.id]: v } }))
             }
