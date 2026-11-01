@@ -19,7 +19,7 @@ from sqlmodel import Session
 from ...context import get_engine
 from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
-from ..ffmpeg_bin import ffmpeg_available
+from ..ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from ..fsutil import safe_rel
 from ..live.sessions import is_live_info
 from ..outtmpl import windows_filenames_ok
@@ -220,6 +220,10 @@ class DownloadRun:
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),
         }
+        if ffmpeg_available():
+            # yt-dlp searches only PATH and caches a failed lookup per path for the
+            # life of the process: a resolved path also picks up a later install.
+            self.base_opts["ffmpeg_location"] = ffmpeg_bin()
 
     def _download_and_hand_off(self) -> None:
         if self._run_formats():
