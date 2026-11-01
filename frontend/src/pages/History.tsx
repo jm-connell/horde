@@ -114,10 +114,15 @@ export default function History() {
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  const entries = useMemo(
-    () => query.data?.pages.flatMap((p) => p.items) ?? [],
-    [query.data]
-  );
+  // Pages are by offset: a watch recorded while scrolling can repeat one.
+  const entries = useMemo(() => {
+    const seen = new Set<string>();
+    return (query.data?.pages.flatMap((p) => p.items) ?? []).filter((e) => {
+      if (seen.has(e.key)) return false;
+      seen.add(e.key);
+      return true;
+    });
+  }, [query.data]);
   const total = query.data?.pages[0]?.total ?? entries.length;
 
   const groups = useMemo(() => {
@@ -239,6 +244,8 @@ export default function History() {
       >
         <div
           className={`relative transition-opacity duration-200 ${entry.excluded ? "opacity-50" : ""}`}
+          // Selecting: the card's own links and buttons are out of reach.
+          inert={selecting}
         >
           {entry.video ? (
             <VideoCard video={entry.video} />
@@ -294,7 +301,7 @@ export default function History() {
   };
 
   return (
-    <div className={selecting ? "pb-24" : undefined}>
+    <div className={selecting ? "pb-44 sm:pb-24" : undefined}>
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-gray-100">History</h1>
         {entries.length > 0 && (

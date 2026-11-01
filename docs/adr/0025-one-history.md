@@ -16,5 +16,6 @@ Status: Accepted (amends [0020](0020-youtube-history-from-takeout.md))
 ## Consequences
 
 - An imported view no longer sits apart in the UI; the rest of 0020 (Takeout as the source, separate storage, what reads it) stands.
-- Removal is permanent; the UI asks first. Excluding is undone from the same menu.
+- Removal is permanent; the UI asks first. Excluding is undone from the same menu. A removed watch also stops protecting the file from a channel's retention rule, as any unwatched video.
+- Excluding drops a watch from the videos that seed recommendations. Channel totals built from the whole YouTube import (how much you watch a channel there, which For you and the live picks read) still count it.
 - The listing pages by offset over a `UNION ALL` of the three tables grouped by key; a watch recorded while paging can shift a later page by one.

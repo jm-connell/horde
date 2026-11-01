@@ -30,6 +30,15 @@ export function useHistoryStats(range: HistoryStatsRange, enabled = true) {
 }
 
 const WATCH_PAGE = 48;
+/** The most keys one request takes (the server's bulk limit). */
+const KEYS_PER_REQUEST = 1000;
+
+function chunks<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
+  return out;
+}
 
 /** Everything the account watched (library, streamed, imported), a page at a time. */
 export function useHistoryWatches() {
@@ -57,7 +66,10 @@ function useInvalidateHistory() {
 export function useRemoveHistory() {
   const invalidate = useInvalidateHistory();
   return useMutation({
-    mutationFn: (keys: string[]) => api.removeHistory(keys),
+    mutationFn: async (keys: string[]) => {
+      for (const part of chunks(keys, KEYS_PER_REQUEST))
+        await api.removeHistory(part);
+    },
     onSuccess: invalidate,
   });
 }
@@ -65,8 +77,10 @@ export function useRemoveHistory() {
 export function useSetHistoryTaste() {
   const invalidate = useInvalidateHistory();
   return useMutation({
-    mutationFn: ({ keys, use }: { keys: string[]; use: boolean }) =>
-      api.setHistoryTaste(keys, use),
+    mutationFn: async ({ keys, use }: { keys: string[]; use: boolean }) => {
+      for (const part of chunks(keys, KEYS_PER_REQUEST))
+        await api.setHistoryTaste(part, use);
+    },
     onSuccess: invalidate,
   });
 }
