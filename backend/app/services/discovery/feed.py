@@ -677,7 +677,12 @@ def build_feed(
         taken_keys = {c.key for c in cands}
         for favorite in past_favorites(session, user_id, before=before):
             key = favorite.watch.key
-            if key in recent_keys or key in favorite_of or key in taken_keys:
+            if (
+                key in recent_keys
+                or key in favorite_of
+                or key in taken_keys
+                or key in excluded.taste
+            ):
                 continue
             c = by_key.get(key) or _history_candidate(favorite)
             if excluded.blocks(key, c.channel_url, c.channel) or not _allowed(

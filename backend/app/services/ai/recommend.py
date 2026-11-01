@@ -502,9 +502,13 @@ def _throwback_topics(
     library_by_yt: dict[str, int],
     uploads: dict[int, _Upload],
     allowed: set[int],
+    left_out: set[str],
 ) -> list[int]:
-    """With AI: the few keys in ``allowed`` closest to what the user watched long ago."""
-    old = [yt_id for yt_id, _when in yt.profile.old_videos[:THROWBACK_SEEDS]]
+    """With AI: the few keys in ``allowed`` closest to what the user watched long
+    ago (not the watches they took out of their taste in History)."""
+    old = [yt_id for yt_id, _when in yt.profile.old_videos if yt_id not in left_out][
+        :THROWBACK_SEEDS
+    ]
     vectors = list(_youtube_vectors(session, old, library_by_yt).values())
     if not vectors:
         return []
@@ -566,7 +570,12 @@ def _place_throwbacks(
         pool.extend(
             key
             for key in _throwback_topics(
-                session, yt, library_by_yt, uploads, allowed - set(pool)
+                session,
+                yt,
+                library_by_yt,
+                uploads,
+                allowed - set(pool),
+                feedback.exclusions(session, user_id).taste,
             )
             if key not in pool
         )

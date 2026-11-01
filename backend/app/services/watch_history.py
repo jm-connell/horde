@@ -33,6 +33,7 @@ from ..models import (
     Video,
     YoutubeWatchEvent,
     as_utc,
+    require_id,
 )
 from .discovery import feedback
 from .discovery.history import library_fraction, library_key, stream_fraction
@@ -129,19 +130,28 @@ def _fill(session: Session, user_id: int, entries: list[Entry]) -> None:
     video_ids = [int(k[6:]) for k in by_key if k.startswith("video:")]
     seen: dict[str, list[tuple[datetime, str]]] = {k: [] for k in by_key}
 
-    lib_rows = session.exec(
-        select(Video, UserVideoState)
-        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
-        .where(
-            UserVideoState.user_id == user_id,
-            col(UserVideoState.last_watched_at).is_not(None),
+    # Every library video an entry names, watched here or not (one watched only
+    # on YouTube may be downloaded since); not those still under review.
+    videos = session.exec(
+        select(Video).where(
             col(Video.youtube_id).in_(yt_ids) | col(Video.id).in_(video_ids),
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
         )
     ).all()
-    for video, state in lib_rows:
+    states = {
+        state.video_id: state
+        for state in session.exec(
+            select(UserVideoState).where(
+                UserVideoState.user_id == user_id,
+                col(UserVideoState.video_id).in_([v.id for v in videos]),
+                col(UserVideoState.last_watched_at).is_not(None),
+            )
+        ).all()
+    }
+    for video in videos:
         key = library_key(video.id, video.youtube_id)
         entry = by_key.get(key)
-        if entry is None or state.last_watched_at is None:
+        if entry is None:
             continue
         entry.video_id = video.id
         entry.yt_id = video.youtube_id
@@ -149,8 +159,10 @@ def _fill(session: Session, user_id: int, entries: list[Entry]) -> None:
         entry.channel = video.channel
         entry.channel_url = video.channel_url
         entry.duration = video.duration_sec
-        entry.fraction = library_fraction(state.position_sec, video.duration_sec)
-        seen[key].append((as_utc(state.last_watched_at), "library"))
+        state = states.get(require_id(video))
+        if state is not None and state.last_watched_at is not None:
+            entry.fraction = library_fraction(state.position_sec, video.duration_sec)
+            seen[key].append((as_utc(state.last_watched_at), "library"))
 
     for row in session.exec(
         select(UserStreamState).where(
@@ -160,11 +172,12 @@ def _fill(session: Session, user_id: int, entries: list[Entry]) -> None:
     ).all():
         entry = by_key[row.yt_id]
         entry.yt_id = row.yt_id
-        if entry.video_id is None:
-            entry.title = entry.title or row.title
-            entry.channel = entry.channel or row.channel
-            entry.channel_url = entry.channel_url or row.channel_url
-            entry.duration = entry.duration or row.duration_sec
+        entry.title = entry.title or row.title
+        entry.channel = entry.channel or row.channel
+        entry.channel_url = entry.channel_url or row.channel_url
+        entry.duration = entry.duration or row.duration_sec
+        # The library watch's progress wins when there is one.
+        if entry.fraction is None:
             entry.fraction = stream_fraction(row)
         seen[row.yt_id].append((as_utc(row.last_watched_at), "stream"))
 
@@ -224,6 +237,15 @@ def remove(session: Session, user_id: int, keys: Iterable[str]) -> Removed:
     video_ids = {
         int(k[6:]) for k in wanted if k.startswith("video:") and k[6:].isdigit()
     }
+    # A library key names the video's other records too (by its YouTube id).
+    if video_ids:
+        yt_ids |= {
+            yt
+            for yt in session.exec(
+                select(Video.youtube_id).where(col(Video.id).in_(list(video_ids)))
+            ).all()
+            if yt
+        }
     if yt_ids:
         video_ids |= {
             vid

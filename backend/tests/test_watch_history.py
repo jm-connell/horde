@@ -188,3 +188,46 @@ def test_recent_youtube_views_join_continue_watching(
     # The five newest, not in the library, inside the Continue watching window.
     assert keys == [f"recentview{n}" for n in range(5)]
     assert body["items"][0]["url"] == _yt("recentview0")
+
+
+def test_an_excluded_watch_does_not_come_back_as_a_rewatch(
+    client, session, admin_user, add_video, set_watch
+):
+    old = add_video(title="Old favorite", yt_id="excludedfav")
+    set_watch(admin_user, old, 0, _ago(days=400))
+    assert "excludedfav" in [i["key"] for i in _items(client)]
+    client.post(
+        "/api/history/watches/taste", json={"keys": ["excludedfav"], "use": False}
+    )
+    assert "excludedfav" not in [i["key"] for i in _items(client)]
+
+
+def test_videos_under_review_stay_out_of_history(
+    client, session, admin_user, add_video, set_watch
+):
+    video = add_video(title="Under review", yt_id="nrvideo0001", needs_review=True)
+    set_watch(admin_user, video, 100, _ago(hours=1))
+    _stream(session, admin_user, "nrvideo0001", when=_ago(days=2))
+    (entry,) = _history(client)["items"]
+    assert entry["key"] == "nrvideo0001"
+    assert entry["video"] is None and entry["sources"] == ["stream"]
+
+
+def test_a_downloaded_video_watched_elsewhere_shows_as_downloaded(
+    client, session, admin_user, add_video
+):
+    add_video(title="Downloaded later", yt_id="dlvideo0001")
+    _youtube(session, admin_user, "dlvideo0001", when=_ago(days=1))
+    (entry,) = _history(client)["items"]
+    assert entry["video"]["title"] == "Downloaded later"
+    assert entry["stream"] is None and entry["sources"] == ["youtube"]
+
+
+def test_removing_by_library_key_forgets_the_other_records_too(
+    client, session, admin_user, add_video, set_watch
+):
+    video = add_video(title="Both ways", yt_id="bothways001")
+    set_watch(admin_user, video, 0, _ago(days=1))
+    _youtube(session, admin_user, "bothways001", when=_ago(days=3))
+    client.post("/api/history/watches/remove", json={"keys": [f"video:{video.id}"]})
+    assert _history(client)["items"] == []
