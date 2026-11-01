@@ -67,3 +67,25 @@ export function undismissContinueWatching(id: number) {
   next.delete(id);
   saveDismissed(next);
 }
+
+const YT_STORAGE_KEY = "horde.continue-watching-dismissed-youtube";
+
+const isKeyList = (v: unknown): v is string[] =>
+  Array.isArray(v) && v.every((k) => typeof k === "string");
+
+/** Imported YouTube views dismissed from Continue watching, by YouTube id. */
+export function useContinueYoutubeDismiss() {
+  const [dismissed, setDismissed] = useState<Set<string>>(
+    () => new Set(getJson(YT_STORAGE_KEY, isKeyList, []))
+  );
+  const dismiss = useCallback((ids: string[]) => {
+    setDismissed((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.add(id));
+      // Only the newest few can show; keep the list from growing for ever.
+      setJson(YT_STORAGE_KEY, [...next].slice(-200));
+      return next;
+    });
+  }, []);
+  return { dismissedYoutube: dismissed, dismissYoutube: dismiss };
+}

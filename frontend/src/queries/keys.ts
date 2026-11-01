@@ -87,6 +87,8 @@ export const queryKeys = {
     all: ["history"] as const,
     stats: (range: string, youtube: boolean) =>
       ["history", "stats", range, youtube] as const,
+    watches: ["history", "watches"] as const,
+    continueYoutube: ["history", "continue-youtube"] as const,
   },
   takeout: {
     all: ["takeout"] as const,

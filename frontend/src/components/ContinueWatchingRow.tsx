@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Video } from "../types";
+import type { ChannelFeedEntry, Video } from "../types";
+import ChannelFeedCard from "./ChannelFeedCard";
 import VideoCard from "./VideoCard";
 import { ChevronIcon, CloseIcon } from "./icons";
 
 interface Props {
   videos: Video[];
+  /** Videos watched on YouTube lately (from the import), after the library's. */
+  youtube?: ChannelFeedEntry[];
   showProgress?: boolean;
   onDismiss: (id: number) => void;
   onDismissAll: (ids: number[]) => void;
+  onDismissYoutube?: (ids: string[]) => void;
+  onDownloadYoutube?: (entry: ChannelFeedEntry) => void;
 }
 
 function watchProgress(video: Video): number | undefined {
@@ -21,9 +26,12 @@ const arrowClass =
 
 export default function ContinueWatchingRow({
   videos,
+  youtube = [],
   showProgress = true,
   onDismiss,
   onDismissAll,
+  onDismissYoutube,
+  onDownloadYoutube,
 }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const scrollingRef = useRef(false);
@@ -81,7 +89,7 @@ export default function ContinueWatchingRow({
     globalThis.setTimeout(done, 500);
   };
 
-  if (videos.length === 0) return null;
+  if (videos.length === 0 && youtube.length === 0) return null;
 
   return (
     <section className="mb-6">
@@ -90,7 +98,10 @@ export default function ContinueWatchingRow({
           Continue watching
         </h2>
         <button
-          onClick={() => onDismissAll(videos.map((v) => v.id))}
+          onClick={() => {
+            onDismissAll(videos.map((v) => v.id));
+            onDismissYoutube?.(youtube.map((e) => e.id ?? e.url));
+          }}
           className="text-xs text-muted hover:text-accent"
         >
           Clear all
@@ -138,6 +149,33 @@ export default function ContinueWatchingRow({
                   video={v}
                   progress={showProgress ? watchProgress(v) : undefined}
                 />
+              </div>
+            ))}
+            {youtube.map((e) => (
+              <div
+                key={e.url}
+                className="group relative w-56 shrink-0 sm:w-64"
+                data-continue-youtube={e.id ?? undefined}
+              >
+                <button
+                  onClick={() => onDismissYoutube?.([e.id ?? e.url])}
+                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                  title="Remove from continue watching"
+                  aria-label="Remove from continue watching"
+                >
+                  <CloseIcon />
+                </button>
+                <ChannelFeedCard
+                  entry={e}
+                  channelName={e.channel || "Unknown channel"}
+                  layout="grid"
+                  inLibrary={false}
+                  onDownload={() => onDownloadYoutube?.(e)}
+                  skipRemotePreview
+                />
+                <p className="mt-1 px-1 text-xs text-muted">
+                  Watched on YouTube
+                </p>
               </div>
             ))}
           </div>

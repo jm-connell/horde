@@ -30,6 +30,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0022](0022-ask-channel-knowledge.md) | Ask: channels' captions as a knowledge base in SQLite, cited to the moment | Accepted |
 | [0023](0023-saved-comments.md) | Saved comments: the top threads per video, fetched slowly, read live past that | Accepted |
 | [0024](0024-tunable-recommended-plus.md) | Recommended+ is tuned per user, with every value on show | Accepted |
+| [0025](0025-one-history.md) | History shows every watch, and each can be removed or kept out of recommendations | Accepted |
 
 ## Writing a new record
 

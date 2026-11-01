@@ -10,10 +10,16 @@ import RecommendedHome from "../components/RecommendedHome";
 import { useAskPageChannel } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
-import { useContinueWatchingDismiss } from "../hooks/useContinueWatchingDismiss";
+import { useDownloads } from "../context/DownloadContext";
+import { useToast } from "../context/ToastContext";
+import {
+  useContinueWatchingDismiss,
+  useContinueYoutubeDismiss,
+} from "../hooks/useContinueWatchingDismiss";
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
+import { useContinueYoutube } from "../queries/history";
 import { useDiscoverStatus } from "../queries/status";
 import type { HomeTab } from "./libraryStorage";
 import { OfflinePage } from "./lazy";
@@ -196,13 +202,25 @@ function OnlineLibrary() {
     () => continueWatching.filter((v) => !isDismissed(v.id)),
     [continueWatching, isDismissed]
   );
+  // Videos watched on YouTube lately (the import): after the library's.
+  const { dismissedYoutube, dismissYoutube } = useContinueYoutubeDismiss();
+  const youtubeRecent = useContinueYoutube(settings.showContinueWatching).data;
+  const continueYoutube = useMemo(
+    () =>
+      (youtubeRecent?.items ?? []).filter(
+        (e) => !dismissedYoutube.has(e.id ?? e.url)
+      ),
+    [youtubeRecent, dismissedYoutube]
+  );
+  const { submitDownload } = useDownloads();
+  const { showToast, showError } = useToast();
   const showContinueRow =
     settings.showContinueWatching &&
     !activeChannel &&
     !activeTag &&
     !onRecommendedTab &&
     !debouncedSearch &&
-    visibleContinueWatching.length > 0;
+    visibleContinueWatching.length + continueYoutube.length > 0;
 
   const queueDock = useQueueDock({
     selectMode: selection.selectMode,
@@ -354,9 +372,25 @@ function OnlineLibrary() {
         {showContinueRow && !onChannelPage && !onRecommendedTab && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
+            youtube={continueYoutube}
             showProgress={settings.showProgressOnContinueWatching}
             onDismiss={dismiss}
             onDismissAll={dismissAll}
+            onDismissYoutube={dismissYoutube}
+            onDownloadYoutube={(e) =>
+              void submitDownload(e.url, "1080p", {
+                title: e.title ?? undefined,
+                channel: e.channel ?? "Unknown channel",
+              })
+                .then(() => showToast("Download queued"))
+                .catch((err: unknown) =>
+                  showError(
+                    err instanceof Error
+                      ? err.message
+                      : "Could not start download"
+                  )
+                )
+            }
           />
         )}
 

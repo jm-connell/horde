@@ -991,8 +991,9 @@ class RecImpression(SQLModel, table=True):
 class YoutubeWatchEvent(SQLModel, table=True):
     """One view in a user's YouTube watch history, read from a Google Takeout export.
 
-    Kept apart from ``user_video_state`` (Horde's own history): these views never
-    show in History or Continue watching. Recommendations, channel pages, the
+    Kept apart from ``user_video_state`` (Horde's own history). History lists them
+    beside Horde's own watches, and the newest few join Continue watching
+    (``services/watch_history.py``). Recommendations, channel pages, the
     Download page and (when the user opts in) the History stats read them
     (``services/takeout/history.py``). One row per view, so importing an export
     that overlaps an earlier one only adds the views that are new.

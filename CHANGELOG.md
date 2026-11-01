@@ -17,6 +17,11 @@ All notable changes to Horde are documented here. The format follows
   feed re-ranks as you go; Account settings shows the same settings. A new
   kind of pick brings back videos you finished a while ago (rewatch), and
   each card's menu says **Why this video?** with every part of its score.
+- **One history.** History now lists videos you streamed and your imported
+  YouTube history beside library watches. Remove videos from it (one at a
+  time or with **Select**, a whole day at once), or keep them in it but out
+  of your recommendations (their cards fade). Recent YouTube views join
+  Continue watching (up to five).
 - **Comments.** Horde saves the top 100 YouTube comments of every video in
   the library, with replies to the most popular threads, in the background
   (new downloads first, one video every 30 seconds), and fetches them again

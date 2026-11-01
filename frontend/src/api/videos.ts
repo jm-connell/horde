@@ -1,8 +1,11 @@
 import type {
   MediaToken,
   NextPart,
+  ContinueYoutube,
+  HistoryRemoved,
   HistoryStats,
   HistoryStatsRange,
+  HistoryWatchList,
   TagStat,
   Video,
   VideoUpdate,
@@ -270,6 +273,40 @@ export const videosApi = {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (tz) params.set("tz", tz);
     return request<HistoryStats>(`/api/history/stats?${params}`, opts);
+  },
+
+  /** Everything the account watched, newest first, one entry per video. */
+  historyWatches(
+    params: { cursor?: string | null; limit?: number },
+    opts?: ReadOptions
+  ): Promise<HistoryWatchList> {
+    const q = new URLSearchParams();
+    if (params.cursor) q.set("cursor", params.cursor);
+    if (params.limit) q.set("limit", String(params.limit));
+    return request<HistoryWatchList>(`/api/history/watches?${q}`, opts);
+  },
+
+  /** Forget videos from the history: they count as unwatched again. */
+  removeHistory(keys: string[]): Promise<HistoryRemoved> {
+    return request<HistoryRemoved>("/api/history/watches/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys }),
+    });
+  },
+
+  /** Let watches shape recommendations (`use`), or stop them. */
+  setHistoryTaste(keys: string[], use: boolean): Promise<void> {
+    return request<void>("/api/history/watches/taste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keys, use }),
+    });
+  },
+
+  /** The newest imported YouTube views for Continue watching (at most five). */
+  continueYoutube(opts?: ReadOptions): Promise<ContinueYoutube> {
+    return request<ContinueYoutube>("/api/history/continue-youtube", opts);
   },
 
   bulkUpdateNotes(ids: number[], notes: string): Promise<void> {
