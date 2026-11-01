@@ -31,9 +31,10 @@ export const BUCKETS: { id: Bucket; label: string; hint: string }[] = [
   },
 ];
 
-export const BUCKET_LABEL: Record<string, string> = Object.fromEntries(
-  BUCKETS.map((b) => [b.id, b.label])
-);
+export const BUCKET_LABEL: Record<string, string> = {
+  ...Object.fromEntries(BUCKETS.map((b) => [b.id, b.label])),
+  interest: "Your interests",
+};
 
 /** Each share as a whole percent of the total (all zero reads as even). */
 export function sharePercents(

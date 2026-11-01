@@ -5,6 +5,9 @@ import type {
   RecFeedback,
   RecFeedbackKind,
   RecFeedbackList,
+  RecTopic,
+  RecTopicUpdate,
+  RecTopicWrite,
   RecTuningState,
   RecTuningWrite,
   StreamWatch,
@@ -54,6 +57,32 @@ export const discoverApi = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    });
+  },
+
+  listRecTopics(opts?: ReadOptions): Promise<{ items: RecTopic[] }> {
+    return request<{ items: RecTopic[] }>("/api/discover/topics", opts);
+  },
+
+  addRecTopic(payload: RecTopicWrite): Promise<RecTopic> {
+    return request<RecTopic>("/api/discover/topics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateRecTopic(id: number, payload: RecTopicUpdate): Promise<RecTopic> {
+    return request<RecTopic>(`/api/discover/topics/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecTopic(id: number): Promise<RecTopic> {
+    return request<RecTopic>(`/api/discover/topics/${id}`, {
+      method: "DELETE",
     });
   },
 

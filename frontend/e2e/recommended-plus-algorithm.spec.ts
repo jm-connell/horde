@@ -30,6 +30,12 @@ test.afterEach(async ({ page }) => {
     headers: CSRF_HEADERS,
     data: { active: "balanced" },
   });
+  const topics = await page.request.get("/api/discover/topics");
+  for (const t of (await topics.json()).items as { id: number }[]) {
+    await page.request.delete(`/api/discover/topics/${t.id}`, {
+      headers: CSRF_HEADERS,
+    });
+  }
 });
 
 test("the algorithm panel re-ranks the feed and stays in step with Account", async ({
@@ -177,4 +183,34 @@ test("Escape closes an open list in the panel before the panel", async ({
   await panel.getByLabel("Longest (minutes)").fill("45");
   await expect(panel.getByRole("alert")).toHaveCount(0);
   await expect(panel.getByLabel("Shortest (minutes)")).toHaveValue("20");
+});
+
+test("interests and blocked topics change the feed", async ({ page }) => {
+  await openRecommendedPlus(page);
+  await page.getByRole("button", { name: "Algorithm" }).click();
+  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+
+  await panel.getByLabel("Add an interest").fill("night sky");
+  await panel.getByRole("button", { name: "Add", exact: true }).click();
+  await expect(panel.locator('[data-topic="night sky"]')).toContainText(
+    "Always"
+  );
+  await expect(page.locator('[data-rec-key="discover001"]')).toHaveAttribute(
+    "title",
+    "For your interest: night sky"
+  );
+
+  // A block for two weeks.
+  await panel.getByLabel("Block a topic").fill("aurora");
+  await panel.getByRole("button", { name: "How long the block lasts" }).click();
+  await page.getByRole("option", { name: "For 2 weeks" }).click();
+  await panel.getByRole("button", { name: "Block", exact: true }).click();
+  const row = panel.locator('[data-topic="aurora"]');
+  await expect(row).toContainText("Until");
+  await expect(page.getByText("Tracking the aurora by hand")).toHaveCount(0);
+  await expect(row).toContainText("Hid 1 video");
+
+  await row.getByRole("button", { name: "Delete aurora" }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByText("Tracking the aurora by hand")).toBeVisible();
 });

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { RecTuningWrite } from "../types";
+import type { RecTopicUpdate, RecTopicWrite, RecTuningWrite } from "../types";
 import { queryKeys } from "./keys";
 
 /** The signed-in user's Recommended+ algorithm: a preset or their own values. */
@@ -19,5 +19,45 @@ export function useSaveRecTuning() {
     mutationFn: (payload: RecTuningWrite) => api.saveRecTuning(payload),
     onSuccess: (state) =>
       queryClient.setQueryData(queryKeys.discover.tuning, state),
+  });
+}
+
+/** The user's typed-in interests and blocked topics. */
+export function useRecTopics() {
+  return useQuery({
+    queryKey: queryKeys.discover.topics,
+    queryFn: ({ signal }) => api.listRecTopics({ signal }),
+    staleTime: 60_000,
+  });
+}
+
+function useInvalidateTopics() {
+  const queryClient = useQueryClient();
+  return () =>
+    queryClient.invalidateQueries({ queryKey: queryKeys.discover.topics });
+}
+
+export function useAddRecTopic() {
+  const invalidate = useInvalidateTopics();
+  return useMutation({
+    mutationFn: (payload: RecTopicWrite) => api.addRecTopic(payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateRecTopic() {
+  const invalidate = useInvalidateTopics();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: RecTopicUpdate }) =>
+      api.updateRecTopic(id, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteRecTopic() {
+  const invalidate = useInvalidateTopics();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteRecTopic(id),
+    onSuccess: invalidate,
   });
 }

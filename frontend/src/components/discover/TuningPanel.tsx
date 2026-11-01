@@ -10,6 +10,7 @@ import type { DiscoverMix, RecTuning } from "../../types";
 import Collapse from "../Collapse";
 import { PanelHeader } from "../SidePanelFrame";
 import ThemedSelect from "../ThemedSelect";
+import TopicsSection from "./TopicsSection";
 import { BUCKET_LABEL, BUCKET_TINT, BUCKETS, sharePercents } from "./buckets";
 
 /** Slider moves are saved this long after the last one (the feed re-ranks). */
@@ -432,6 +433,8 @@ export default function TuningPanel({
           />
         ))}
       </section>
+
+      <TopicsSection />
 
       <section className="space-y-3" aria-labelledby="tuning-ranking">
         <Heading>

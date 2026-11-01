@@ -6,7 +6,7 @@ import { useDownloads } from "../context/DownloadContext";
 import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
-import { useRecTuning } from "../queries/discover";
+import { useRecTopics, useRecTuning } from "../queries/discover";
 import { queryKeys } from "../queries/keys";
 import type {
   ChannelFeedEntry,
@@ -112,7 +112,9 @@ export default function DiscoverHome({
   useAlgorithmPanelHere();
   const [whyItem, setWhyItem] = useState<DiscoverItem | null>(null);
   // Re-rank when the algorithm changes (the panel saves it; not on first load).
-  const tuningKey = JSON.stringify(useRecTuning().data?.values ?? null);
+  const tuning = useRecTuning().data?.values;
+  const topics = useRecTopics().data?.items;
+  const tuningKey = JSON.stringify(tuning && topics ? [tuning, topics] : null);
   const lastTuning = useRef<string | null>(null);
   useEffect(() => {
     if (tuningKey === "null") return;
@@ -160,6 +162,10 @@ export default function DiscoverHome({
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
         queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
+        queryClient.setQueryData(
+          queryKeys.discover.blocked,
+          page.blocked ?? []
+        );
         runAtLoad.current = page.status.last_run_at ?? null;
       })
       .catch(() => {
