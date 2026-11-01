@@ -704,9 +704,17 @@ def _ranked_for_you_ids(
     # Without AI, or before any watch has vectors, the taste ranks instead.
     seed_vectors: list[list[float]] = []
     weights: list[float] = []
+    # Watches the user took out of their taste (History) seed nothing.
+    seeding = [
+        (video, state)
+        for video, state in history
+        if library_key(video.id, video.youtube_id) not in excluded.taste
+    ]
     if get_embed_provider() is not None:
-        recent = history[:FOR_YOU_SEEDS]
-        profiles = vector_index.profile_vectors(session, watched[:FOR_YOU_SEEDS])
+        recent = seeding[:FOR_YOU_SEEDS]
+        profiles = vector_index.profile_vectors(
+            session, [require_id(video) for video, _state in recent]
+        )
         for rank, (video, state) in enumerate(recent):
             vec = profiles.get(require_id(video))
             if vec is None or (seed_vectors and len(vec) != len(seed_vectors[0])):
@@ -718,7 +726,11 @@ def _ranked_for_you_ids(
             )
         if not yt.empty:
             now = datetime.now(UTC)
-            picks = yt.profile.recent_videos[:YT_SEEDS]
+            picks = [
+                pick
+                for pick in yt.profile.recent_videos
+                if pick[0] not in excluded.taste
+            ][:YT_SEEDS]
             vectors = _youtube_vectors(
                 session, [yt_id for yt_id, _when in picks], library_by_yt
             )
@@ -755,7 +767,7 @@ def _ranked_for_you_ids(
                 score_rows(keys, matrix @ seeds.T, followed_uploads.__contains__)
     else:
         now = datetime.now(UTC)
-        taste = _taste(session, history)
+        taste = _taste(session, seeding)
         tags_of: dict[int, list[str]] = defaultdict(list)
         for tagged, tag in session.exec(select(VideoTag.video_id, VideoTag.tag)).all():
             tags_of[tagged].append(tag.lower())

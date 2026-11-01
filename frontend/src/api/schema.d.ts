@@ -1894,6 +1894,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/history/continue-youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Continue Youtube
+         * @description The newest videos watched on YouTube (imported history) within the
+         *     Continue watching window, at most five, not in the library.
+         */
+        get: operations["continue_youtube_api_history_continue_youtube_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history/stats": {
         parameters: {
             query?: never;
@@ -1908,6 +1929,71 @@ export interface paths {
         get: operations["history_stats_api_history_stats_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Watches
+         * @description Everything the user watched, newest first, one entry per video: library
+         *     videos, videos played without downloading and the imported YouTube history.
+         */
+        get: operations["list_watches_api_history_watches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Watches
+         * @description Forget these videos from your history: they count as unwatched again.
+         *
+         *     Removes every record of each one (library progress, the streamed watch and
+         *     imported YouTube views); your watch time totals stay.
+         */
+        post: operations["remove_watches_api_history_watches_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches/taste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Watch Taste
+         * @description Stop these watches shaping your recommendations (``use`` false), or let
+         *     them again. They stay in your history and still count as watched.
+         */
+        post: operations["set_watch_taste_api_history_watches_taste_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5849,6 +5935,16 @@ export interface components {
             /** Videos */
             videos: number;
         };
+        /**
+         * ContinueYoutubeRead
+         * @description Videos watched on YouTube lately (from the import), for Continue watching.
+         */
+        ContinueYoutubeRead: {
+            /** Items */
+            items: components["schemas"]["ChannelFeedEntry"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ConvertLibraryRequest */
         ConvertLibraryRequest: {
             /**
@@ -6544,6 +6640,25 @@ export interface components {
              */
             role: "user" | "assistant";
         };
+        /**
+         * HistoryKeysWrite
+         * @description History entries by key (a YouTube id, or ``video:<id>``).
+         */
+        HistoryKeysWrite: {
+            /** Keys */
+            keys: string[];
+        };
+        /** HistoryRemovedRead */
+        HistoryRemovedRead: {
+            /** Library */
+            library: number;
+            /** Streams */
+            streams: number;
+            /** Videos */
+            videos: number;
+            /** Youtube Views */
+            youtube_views: number;
+        };
         /** HistoryStats */
         HistoryStats: {
             best_day: components["schemas"]["HistoryStatsDay"] | null;
@@ -6643,6 +6758,58 @@ export interface components {
             videos_started: number;
             /** Watch Seconds */
             watch_seconds: number;
+            /**
+             * Youtube Views
+             * @default 0
+             */
+            youtube_views: number;
+        };
+        /** HistoryTasteRead */
+        HistoryTasteRead: {
+            /** Excluded */
+            excluded: boolean;
+            /** Keys */
+            keys: string[];
+        };
+        /**
+         * HistoryTasteWrite
+         * @description Let these watches shape recommendations (``use``), or stop them.
+         */
+        HistoryTasteWrite: {
+            /** Keys */
+            keys: string[];
+            /** Use */
+            use: boolean;
+        };
+        /** HistoryWatchListRead */
+        HistoryWatchListRead: {
+            /** Items */
+            items: components["schemas"]["HistoryWatchRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * HistoryWatchRead
+         * @description One video in the user's history, at its latest watch.
+         */
+        HistoryWatchRead: {
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
+            /** Fraction */
+            fraction?: number | null;
+            /** Key */
+            key: string;
+            /** Sources */
+            sources: ("library" | "stream" | "youtube")[];
+            stream?: components["schemas"]["ChannelFeedEntry"] | null;
+            video?: components["schemas"]["VideoRead"] | null;
+            /** Watched At */
+            watched_at: string;
             /**
              * Youtube Views
              * @default 0
@@ -13548,6 +13715,44 @@ export interface operations {
             };
         };
     };
+    continue_youtube_api_history_continue_youtube_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinueYoutubeRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     history_stats_api_history_stats_get: {
         parameters: {
             query?: {
@@ -13570,6 +13775,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryStats"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_watches_api_history_watches_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryWatchListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_watches_api_history_watches_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryKeysWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryRemovedRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_watch_taste_api_history_watches_taste_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryTasteWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryTasteRead"];
                 };
             };
             /** @description Validation error */

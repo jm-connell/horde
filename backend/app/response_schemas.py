@@ -543,6 +543,55 @@ class DiscoverFeedRead(BaseModel):
     mix: list[DiscoverMixRead] = Field(default_factory=list)
 
 
+class HistoryWatchRead(BaseModel):
+    """One video in the user's history, at its latest watch."""
+
+    #: The YouTube id, or ``video:<id>`` for a library video without one.
+    key: str
+    watched_at: str
+    #: Where it was watched, newest first: library, stream (played without
+    #: downloading) or youtube (imported from Takeout).
+    sources: list[Literal["library", "stream", "youtube"]]
+    #: The library video, when it is downloaded.
+    video: VideoRead | None = None
+    #: How to show and play it otherwise.
+    stream: ChannelFeedEntry | None = None
+    #: How far the latest Horde watch got (0..1); unknown for a YouTube view.
+    fraction: float | None = None
+    #: Views imported from YouTube.
+    youtube_views: int = 0
+    #: Left out of recommendations by the user ("don't use for recommendations").
+    excluded: bool = False
+
+
+class HistoryWatchListRead(BaseModel):
+    items: list[HistoryWatchRead]
+    next_cursor: str | None = None
+    #: Videos in the whole history (first page only).
+    total: int | None = None
+
+
+class HistoryRemovedRead(BaseModel):
+    #: Videos asked for.
+    videos: int
+    #: Records removed: library progress, streamed watches, imported views.
+    library: int
+    streams: int
+    youtube_views: int
+
+
+class HistoryTasteRead(BaseModel):
+    keys: list[str]
+    excluded: bool
+
+
+class ContinueYoutubeRead(BaseModel):
+    """Videos watched on YouTube lately (from the import), for Continue watching."""
+
+    items: list[ChannelFeedEntry]
+    next_cursor: str | None = None
+
+
 class RecTuningPresetRead(BaseModel):
     id: str
     name: str

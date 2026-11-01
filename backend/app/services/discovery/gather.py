@@ -473,10 +473,11 @@ def gather_for(
     state = _state(session, user_id)
     asked = _asked(state)
     tuned = tuning.for_user(session, user_id)
+    left_out = exclusions(session, user_id).taste
     history = [
         w
         for w in watches(session, user_id)
-        if counts_as_taste(w, tuned.min_watched_pct)
+        if counts_as_taste(w, tuned.min_watched_pct) and w.key not in left_out
     ]
     found = 0
     error: str | None = None

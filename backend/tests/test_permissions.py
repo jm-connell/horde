@@ -220,6 +220,8 @@ OPEN_MUTATIONS = {
     ("DELETE", "/api/discover/feedback/{feedback_id}"),
     ("POST", "/api/discover/refresh"),
     ("PUT", "/api/discover/tuning"),  # your own Recommended+ settings
+    ("POST", "/api/history/watches/remove"),  # your own history
+    ("POST", "/api/history/watches/taste"),
     ("POST", "/api/videos/{video_id}/compat"),  # playback compatibility copies
     ("POST", "/api/videos/{video_id}/compat/safari"),
     ("POST", "/api/videos/{video_id}/sprites/generate"),  # seek previews

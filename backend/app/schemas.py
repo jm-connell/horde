@@ -1520,6 +1520,25 @@ class StreamWatchWrite(BaseModel):
     finished: bool = False
 
 
+class HistoryKeysWrite(BaseModel):
+    """History entries by key (a YouTube id, or ``video:<id>``)."""
+
+    keys: list[str] = Field(min_length=1, max_length=MAX_BULK_ITEMS)
+
+    @field_validator("keys")
+    @classmethod
+    def _short_keys(cls, keys: list[str]) -> list[str]:
+        if any(not k or len(k) > 64 for k in keys):
+            raise ValueError("Each key must be 1 to 64 characters")
+        return keys
+
+
+class HistoryTasteWrite(HistoryKeysWrite):
+    """Let these watches shape recommendations (``use``), or stop them."""
+
+    use: bool
+
+
 class RecTuningWrite(BaseModel):
     """Rank Recommended+ with a preset, or with the user's own values."""
 

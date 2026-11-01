@@ -4803,6 +4803,34 @@
         "title": "CompatSummaryRead",
         "type": "object"
       },
+      "ContinueYoutubeRead": {
+        "description": "Videos watched on YouTube lately (from the import), for Continue watching.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelFeedEntry"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ContinueYoutubeRead",
+        "type": "object"
+      },
       "ConvertLibraryRequest": {
         "properties": {
           "confirm": {
@@ -7013,6 +7041,53 @@
         "title": "HelpChatTurn",
         "type": "object"
       },
+      "HistoryKeysWrite": {
+        "description": "History entries by key (a YouTube id, or ``video:<id>``).",
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys"
+        ],
+        "title": "HistoryKeysWrite",
+        "type": "object"
+      },
+      "HistoryRemovedRead": {
+        "properties": {
+          "library": {
+            "title": "Library",
+            "type": "integer"
+          },
+          "streams": {
+            "title": "Streams",
+            "type": "integer"
+          },
+          "videos": {
+            "title": "Videos",
+            "type": "integer"
+          },
+          "youtube_views": {
+            "title": "Youtube Views",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "videos",
+          "library",
+          "streams",
+          "youtube_views"
+        ],
+        "title": "HistoryRemovedRead",
+        "type": "object"
+      },
       "HistoryStats": {
         "properties": {
           "best_day": {
@@ -7291,6 +7366,162 @@
           "current_streak_days"
         ],
         "title": "HistoryStatsTotals",
+        "type": "object"
+      },
+      "HistoryTasteRead": {
+        "properties": {
+          "excluded": {
+            "title": "Excluded",
+            "type": "boolean"
+          },
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Keys",
+            "type": "array"
+          }
+        },
+        "required": [
+          "keys",
+          "excluded"
+        ],
+        "title": "HistoryTasteRead",
+        "type": "object"
+      },
+      "HistoryTasteWrite": {
+        "description": "Let these watches shape recommendations (``use``), or stop them.",
+        "properties": {
+          "keys": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "title": "Keys",
+            "type": "array"
+          },
+          "use": {
+            "title": "Use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "keys",
+          "use"
+        ],
+        "title": "HistoryTasteWrite",
+        "type": "object"
+      },
+      "HistoryWatchListRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HistoryWatchRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "HistoryWatchListRead",
+        "type": "object"
+      },
+      "HistoryWatchRead": {
+        "description": "One video in the user's history, at its latest watch.",
+        "properties": {
+          "excluded": {
+            "default": false,
+            "title": "Excluded",
+            "type": "boolean"
+          },
+          "fraction": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fraction"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "enum": [
+                "library",
+                "stream",
+                "youtube"
+              ],
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "stream": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelFeedEntry"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VideoRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "watched_at": {
+            "title": "Watched At",
+            "type": "string"
+          },
+          "youtube_views": {
+            "default": 0,
+            "title": "Youtube Views",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "watched_at",
+          "sources"
+        ],
+        "title": "HistoryWatchRead",
         "type": "object"
       },
       "JobStatus": {
@@ -19416,6 +19647,48 @@
         "summary": "Health"
       }
     },
+    "/api/history/continue-youtube": {
+      "get": {
+        "description": "The newest videos watched on YouTube (imported history) within the\nContinue watching window, at most five, not in the library.",
+        "operationId": "continue_youtube_api_history_continue_youtube_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinueYoutubeRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Continue Youtube",
+        "tags": [
+          "history"
+        ]
+      }
+    },
     "/api/history/stats": {
       "get": {
         "description": "Watch time, streaks, top channels and tags of the signed-in user only.",
@@ -19502,6 +19775,182 @@
           }
         },
         "summary": "History Stats",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/history/watches": {
+      "get": {
+        "description": "Everything the user watched, newest first, one entry per video: library\nvideos, videos played without downloading and the imported YouTube history.",
+        "operationId": "list_watches_api_history_watches_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 48,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryWatchListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Watches",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/history/watches/remove": {
+      "post": {
+        "description": "Forget these videos from your history: they count as unwatched again.\n\nRemoves every record of each one (library progress, the streamed watch and\nimported YouTube views); your watch time totals stay.",
+        "operationId": "remove_watches_api_history_watches_remove_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryKeysWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryRemovedRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Remove Watches",
+        "tags": [
+          "history"
+        ]
+      }
+    },
+    "/api/history/watches/taste": {
+      "post": {
+        "description": "Stop these watches shaping your recommendations (``use`` false), or let\nthem again. They stay in your history and still count as watched.",
+        "operationId": "set_watch_taste_api_history_watches_taste_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HistoryTasteWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryTasteRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set Watch Taste",
         "tags": [
           "history"
         ]

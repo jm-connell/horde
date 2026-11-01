@@ -633,16 +633,20 @@ def build_feed(
     scale = t.half_life_scale
     window = t.window
     shares = t.shares.normalized()
+    excluded: Exclusions = exclusions(session, user_id)
+
+    def shapes_taste(w: Watch) -> bool:
+        return counts_as_taste(w, t.min_watched_pct) and w.key not in excluded.taste
+
     history, cold = taste_history(session, user_id)
-    history = [w for w in history if counts_as_taste(w, t.min_watched_pct)]
+    history = [w for w in history if shapes_taste(w)]
     own_all = watches(session, user_id)
-    own = [w for w in own_all if counts_as_taste(w, t.min_watched_pct)]
+    own = [w for w in own_all if shapes_taste(w)]
     # Everything watched on YouTube is seen, not only the newest part ``own`` holds.
     own_keys = (
         watched_keys(session, user_id)
         | takeout_history.cached_profile(session, user_id).watched
     )
-    excluded: Exclusions = exclusions(session, user_id)
     visits = earlier_visits(session, user_id)
     followed_urls: set[str] = set()
     followed_names: set[str] = set()
