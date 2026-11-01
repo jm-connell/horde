@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  keepPreviousData,
   useInfiniteQuery,
   useMutation,
   useQuery,
@@ -21,7 +22,7 @@ export function isAskChannelBusy(channel: AskChannel): boolean {
 
 /**
  * Ask channels with their progress. `poll` refreshes it every few seconds
- * while a channel is indexing (the Ask page); the nav and buttons only need
+ * while a channel is indexing (Settings, the channel sheet); search and buttons only need
  * to know which channels exist, so they do not poll.
  */
 export function useAskChannels(enabled = true, { poll = false } = {}) {
@@ -80,6 +81,8 @@ export function useAskSearch(q: string, channelIds: number[]) {
     getNextPageParam: (last: Page<AskSearchHit>) =>
       last.next_cursor ?? undefined,
     enabled: q.trim().length > 0,
+    // A new query keeps the last results showing until its own arrive.
+    placeholderData: keepPreviousData,
   });
   const hits = useMemo(
     () => query.data?.pages.flatMap((p) => p.items) ?? NO_HITS,

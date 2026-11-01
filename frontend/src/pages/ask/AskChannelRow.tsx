@@ -1,4 +1,3 @@
-import { useAuth } from "../../context/AuthContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { button } from "../../components/buttons";
 import { isAskChannelBusy, useAskChannelActions } from "../../queries/ask";
@@ -15,8 +14,6 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 export default function AskChannelRow({ channel }: { channel: AskChannel }) {
-  const { can } = useAuth();
-  const manage = can("manage_ask");
   const confirm = useConfirm();
   const { pause, resume, remove, setStreams } = useAskChannelActions();
   const done = channel.videos - channel.pending;
@@ -63,34 +60,32 @@ export default function AskChannelRow({ channel }: { channel: AskChannel }) {
             {channel.include_streams && " · includes live streams"}
           </p>
         </div>
-        {manage && (
-          <div className="flex flex-wrap gap-2">
-            {channel.status === "paused" ? (
-              <button
-                type="button"
-                className={button("secondary", "xs")}
-                onClick={() => resume.mutate(channel.id)}
-              >
-                Resume
-              </button>
-            ) : (
-              <button
-                type="button"
-                className={button("secondary", "xs")}
-                onClick={() => pause.mutate(channel.id)}
-              >
-                Pause
-              </button>
-            )}
+        <div className="flex flex-wrap gap-2">
+          {channel.status === "paused" ? (
             <button
               type="button"
-              className={button("danger", "xs")}
-              onClick={onRemove}
+              className={button("secondary", "xs")}
+              onClick={() => resume.mutate(channel.id)}
             >
-              Turn off
+              Resume
             </button>
-          </div>
-        )}
+          ) : (
+            <button
+              type="button"
+              className={button("secondary", "xs")}
+              onClick={() => pause.mutate(channel.id)}
+            >
+              Pause
+            </button>
+          )}
+          <button
+            type="button"
+            className={button("danger", "xs")}
+            onClick={onRemove}
+          >
+            Turn off
+          </button>
+        </div>
       </div>
       {channel.videos > 0 && (
         <div
@@ -111,17 +106,15 @@ export default function AskChannelRow({ channel }: { channel: AskChannel }) {
       {channel.last_error && (
         <p className="mt-1 text-xs text-danger">{channel.last_error}</p>
       )}
-      {manage && (
-        <label className="mt-3 flex items-center gap-2 text-xs text-gray-300">
-          <input
-            type="checkbox"
-            checked={channel.include_streams}
-            disabled={setStreams.isPending}
-            onChange={(e) => void onStreams(e.target.checked)}
-          />
-          Index past live streams
-        </label>
-      )}
+      <label className="mt-3 flex items-center gap-2 text-xs text-gray-300">
+        <input
+          type="checkbox"
+          checked={channel.include_streams}
+          disabled={setStreams.isPending}
+          onChange={(e) => void onStreams(e.target.checked)}
+        />
+        Index past live streams
+      </label>
     </li>
   );
 }

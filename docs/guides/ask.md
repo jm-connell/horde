@@ -2,18 +2,18 @@
 
 Ask turns YouTube channels into something you can question. Horde fetches the captions of every upload of a channel (not the videos), indexes what was said, and then:
 
-- the **Ask** page searches it: every passage that mentions your words, grouped by video, each with a link that opens the video at that moment;
+- the **search bar** finds it: a search on the home page adds a **Said in videos** section with every passage that mentions your words, grouped by video, each with a link that opens the video at that moment;
 - the **chat** answers questions about it, such as *"What does The Car Care Nut say about the 2004 4Runner?"*, from those passages only, with a numbered reference for every point.
 
 ## Turning Ask on for a channel
 
-Open **Ask** in the top bar and press **Add channel**, or open a channel's settings (the gear on its page) and use the **Ask** section. Paste the channel's link or its `@handle` and press **Look up**: Horde shows the channel's name and how many videos it has. If the channel has past live streams you can also index them; it is off by default, because streams are long and often off-topic.
+Open **Settings → Library → Ask channels** and press **Add channel**, or open a channel's settings (the gear on its page) and use the **Ask** section. Paste the channel's link or its `@handle` and press **Look up**: Horde shows the channel's name and how many videos it has. If the channel has past live streams you can also index them; it is off by default, because streams are long and often off-topic.
 
 Indexing runs in the background and can take hours: Horde fetches about four videos' captions a minute, waits when YouTube rate-limits it, and always lets your own library's caption fetches go first. The newest uploads are indexed first, so Ask is useful long before it finishes. New uploads are picked up once a day. Videos you have downloaded use their caption file, with no request to YouTube.
 
-The Ask page shows each channel's progress: videos indexed, videos without captions (Ask cannot use those) and videos it could not fetch (members-only, removed). **Pause** stops fetching; **Turn off** deletes everything indexed for the channel.
+**Ask channels** in Settings shows each channel's progress: videos indexed, videos without captions (Ask cannot use those) and videos it could not fetch (members-only, removed). **Pause** stops fetching; **Turn off** deletes everything indexed for the channel.
 
-Only the administrator, and members given **Manage Ask channels** (Account → Users), can add or remove channels. Everyone can search and, with the **Use AI** permission, ask.
+Only the administrator, and members given **Manage Ask channels** (Account → Users), see **Ask channels** in Settings and add or remove channels. Everyone can search and, with the **Use AI** permission, ask.
 
 ## Asking in the chat
 
@@ -37,7 +37,7 @@ Conversations are saved on the server for your account (nobody else sees them). 
 
 | Part | Needs |
 |------|-------|
-| Indexing and the Ask page's search | Nothing beyond Horde: no AI provider |
+| Indexing and **Said in videos** in search results | Nothing beyond Horde: no AI provider |
 | Asking in the chat | A chat model (Settings → AI). It uses the **Assistant model** when one is set |
 | Finding passages by meaning, not just words | An embedding model; without one Ask searches by keyword (and by the spellings the chat model suggests) |
 

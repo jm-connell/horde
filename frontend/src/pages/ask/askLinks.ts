@@ -1,4 +1,4 @@
-import type { AskChannel } from "../../types";
+import type { AskChannel, AskSearchHit } from "../../types";
 import { normalizeChannelUrl } from "../../utils/followUrl";
 
 /**
@@ -82,4 +82,32 @@ export function findAskChannel(
     ) ??
     null
   );
+}
+
+export interface VideoGroup {
+  yt_id: string;
+  title: string | null | undefined;
+  channel: string | null | undefined;
+  published: string | null | undefined;
+  hits: AskSearchHit[];
+}
+
+/** Passages in rank order, gathered under the video each comes from. */
+export function groupByVideo(hits: AskSearchHit[]): VideoGroup[] {
+  const groups = new Map<string, VideoGroup>();
+  for (const hit of hits) {
+    let group = groups.get(hit.yt_id);
+    if (!group) {
+      group = {
+        yt_id: hit.yt_id,
+        title: hit.title,
+        channel: hit.channel_name,
+        published: hit.published_at,
+        hits: [],
+      };
+      groups.set(hit.yt_id, group);
+    }
+    group.hits.push(hit);
+  }
+  return [...groups.values()];
 }

@@ -145,6 +145,10 @@ Writes `.nfo` files and thumbnails next to your videos so Jellyfin, Kodi or Plex
 
 Everyone has it, for their own account. The line sums up your imported YouTube history (views, videos, the period it covers and when you last imported). **Import from Google Takeout** (**Import a newer export** once you have one) opens the import dialog; **Forget** deletes the imported views after a confirm. **Include YouTube in History stats** (`historyIncludeYoutube`, off) counts those views in the [History stats](../guides/history.md#youtube-views-in-the-stats). Details: [YouTube history](../guides/youtube-history.md).
 
+## Ask channels
+
+Shown to anyone with the `manage_ask` permission (and administrators). The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone.
+
 ## Trash
 
 Shown to anyone with the `delete_videos` permission (and administrators). The summary line gives the number of videos in the [trash](../guides/library.md#trash), their size and how many days the trash keeps them (`HORDE_TRASH_DAYS`; with `0` it says deletes are permanent). **Empty trash** erases everything after a confirm. **Show videos in the trash** opens the list: thumbnail, title, channel, size, who deleted it and when, and the days left, with **Restore** and **Delete forever** per video. A restore that would collide with the library (the same video downloaded again, or a download of it running) is refused with the reason.

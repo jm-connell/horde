@@ -8,13 +8,24 @@ Type in the search field in the navigation bar, just left of your account button
 
 On a **channel page**, the box in the header searches that channel’s **indexed catalog** and **downloaded library videos**. A compact **YT** control inside that box (the same default as [YouTube results in channel search](../settings/library.md)) queries YouTube for extra matches from **that channel only**. Combined results follow the page’s **Recent / Popular** sort. That in-channel fallback is separate from **YouTube results in library search** in the main search bar.
 
+## Mixed results
+
+By default the results are **one list**, best first: library matches (including videos found through their saved comments), catalog videos you can stream, moments from [Ask](ask.md) channels' captions and live YouTube hits, mixed. Every result is scored the same way, by how much of your query its title (most), channel, tags and description or caption text contain, with a bonus for the whole phrase. That score is weighted by source: your library counts most (and gets a fixed lead on top), then what Ask channels said, then catalog videos, then YouTube. A strong stream or YouTube match can still beat a weak library match. Being near the top of its own source adds a little, and a video whose captions also match gets a bonus.
+
+A video appears once: when its captions match too, the moment (timestamp and the line, linking there) shows under its card. A downloaded video found only by what it says shows as the library copy. Caption hits on videos you do not have become cards you can stream or download.
+
+YouTube answers a second or two after the rest, so its best four results have fixed places in the list (5th, 10th, 15th and 20th, or straight after the last result when there are fewer). Until they arrive those places hold a card that says **Searching YouTube…** with the app's loading mark. When they land, the cards around them stay where they are: further YouTube hits join at the end, and if YouTube has fewer than four new results, each empty place takes the last card of the list instead (empty places at the very end just go). The layout also holds while results reload (after a download finishes, a streamed video's card turns into its library card in the same place), and new results, such as **More of what was said** or YouTube's next page, are added at the end. A new search lays everything out afresh once your library, the catalogs and the captions have answered; until then the grid shows loading cards. **Rest of your library** (videos that did not match) follows, collapsed.
+
+The **Mixed / Sections** switch beside the results changes the layout; your choice is saved with your account (`searchLayout`).
+
 ## Result sections
 
-Matches are grouped into up to four sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
+With **Sections**, matches are grouped into up to five sections, in a fixed order. A row of chips above them shows each section's count (a pulsing dot while it is still searching); click one to jump to that section. **On YouTube** is shown whenever YouTube search is on and the query is at least two characters, so it never pops in later; its heading reads **Searching…** until the live results arrive. Empty sections keep a short message.
 
 | Section | Meaning | Empty copy |
 |---------|---------|------------|
 | **In your library** | Videos already downloaded / approved into your library, including videos found only through their saved [comments](comments.md) (after the others) | Nothing in your library matches. |
+| **Said in videos** | Moments in the captions of [Ask](ask.md) channels that mention your words, grouped by video; each timestamp opens the video there. Shown once an Ask channel has captions indexed; needs no AI | Nothing in the indexed captions mentions that. |
 | **Available to stream** | Undownloaded catalog hits from channels you’ve indexed or already downloaded from | No matches in indexed channels. |
 | **On YouTube** | Live YouTube video search (not limited to channels you already follow) | No other matches on YouTube. |
 | **Rest of your library** | Downloaded library videos that did not match the query | No other videos in your library. |

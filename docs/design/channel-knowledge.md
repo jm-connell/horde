@@ -2,7 +2,7 @@
 
 Status: **Built** ([ADR 0022](../adr/0022-ask-channel-knowledge.md)). User guide: [Ask](../guides/ask.md).
 
-Ask indexes what YouTube channels say in their videos (captions only), lets anyone search it, and answers questions about it in the chat panel with a numbered reference to the moment for every point. Code: `backend/app/services/knowledge/`, `backend/app/api/ask.py`, `frontend/src/pages/Ask.tsx`, `frontend/src/pages/ask/`, the chat panel (`components/HelpChatPanel.tsx`).
+Ask indexes what YouTube channels say in their videos (captions only), lets anyone search it, and answers questions about it in the chat panel with a numbered reference to the moment for every point. Code: `backend/app/services/knowledge/`, `backend/app/api/ask.py`, the **Ask channels** section of Settings → Library (`frontend/src/pages/settings/AskChannelsSection.tsx`, `frontend/src/pages/ask/`), the **Said in videos** section of home search results (`frontend/src/pages/library/SaidInVideos.tsx`), the chat panel (`components/HelpChatPanel.tsx`).
 
 ## Data (revision `0022_ask_knowledge`)
 
@@ -30,7 +30,7 @@ Removing a channel deletes its passages in batches of 500 (the FTS triggers fire
 
 ## Search
 
-`knowledge/search.py` builds every MATCH expression itself: each term is a quoted phrase (a lone word of four letters or more also matches its endings), stop words are dropped, terms are ORed and ranked by `bm25`, always with a `LIMIT`. Hostile input never reaches FTS5 syntax. `GET /api/ask/search` links each hit to the caption line within the passage that shares the most words with the query (`knowledge/moments.py`), two seconds early.
+`knowledge/search.py` builds every MATCH expression itself: each term is a quoted phrase (a lone word of four letters or more also matches its endings), stop words are dropped, terms are ORed and ranked by `bm25`, always with a `LIMIT`. Hostile input never reaches FTS5 syntax. `GET /api/ask/search` serves the **Said in videos** section of the home page's search results (every Ask channel; shown once one has passages); it links each hit to the caption line within the passage that shares the most words with the query (`knowledge/moments.py`), two seconds early.
 
 ## Chat
 

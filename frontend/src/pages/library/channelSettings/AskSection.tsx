@@ -21,7 +21,7 @@ export default function AskSection({
     <SettingsSection
       id="ask"
       title="Ask"
-      description="Index what this channel says in its videos, so you can search it and ask questions about it."
+      description="Index what this channel says in its videos, so the search bar finds it and you can ask questions about it."
       readOnlyNote={
         found || manage
           ? null
@@ -30,10 +30,18 @@ export default function AskSection({
     >
       {found ? (
         <p className="text-sm text-gray-300">
-          On · {askProgressText(found)}.{" "}
-          <Link to="/ask" className="text-accent hover:underline">
-            Manage in Ask
-          </Link>
+          On · {askProgressText(found)}.
+          {manage && (
+            <>
+              {" "}
+              <Link
+                to="/settings?tab=library&find=ask-channels"
+                className="text-accent hover:underline"
+              >
+                Manage in Settings
+              </Link>
+            </>
+          )}
         </p>
       ) : manage && channelUrl ? (
         <AddAskChannel initialUrl={channelUrl} />

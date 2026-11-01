@@ -66,7 +66,7 @@ export const CSS_SELECTORS: CssHookRow[] = [
   {
     selector: 'html[data-page="home"]',
     meaning:
-      "Library home. Also: watch, settings, history, download, import, playlists, ask",
+      "Library home. Also: watch, settings, history, download, import, playlists",
   },
   { selector: '[data-horde="nav"]', meaning: "Top navigation bar" },
   { selector: '[data-horde="main"]', meaning: "Page content shell" },
@@ -120,7 +120,6 @@ export const PAGE_IDS = [
   "download",
   "import",
   "playlists",
-  "ask",
   /** @deprecated Dedicated playlist pages redirected to `/playlists?open=`. Kept so old custom CSS still type-checks. */
   "playlist",
 ] as const;
@@ -133,7 +132,6 @@ export function pageIdFromPath(pathname: string): PageId {
   if (pathname.startsWith("/settings")) return "settings";
   if (pathname.startsWith("/playlists")) return "playlists";
   if (pathname.startsWith("/history")) return "history";
-  if (pathname.startsWith("/ask")) return "ask";
   if (pathname.startsWith("/download")) return "download";
   if (pathname.startsWith("/import") || pathname.startsWith("/review")) {
     return "import";

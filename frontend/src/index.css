@@ -1366,6 +1366,16 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   }
 }
 
+/* A YouTube result's place while it is still being searched for. */
+@keyframes horde-search-sheen {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes horde-load-dot {
   0%,
   70%,

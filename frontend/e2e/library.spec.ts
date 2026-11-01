@@ -40,9 +40,7 @@ test("home shows the library, continue watching, tags, and search", async ({
     ).toHaveAttribute("aria-checked", "false");
   }
   await (await openSearchBox(page)).fill("Harbor");
-  const matches = page.locator("section").filter({
-    has: page.getByRole("button", { name: /In your library/ }),
-  });
+  const matches = page.getByRole("region", { name: /^Results/ });
   await expect(videoCard(matches, "Harbor Lights")).toBeVisible();
   await expect(videoCard(matches, "Aurora Drift")).toHaveCount(0);
   await expect(
@@ -379,10 +377,72 @@ test("on a phone a feed card does not reserve a second title line", async ({
   expect(title!.height).toBeLessThan(30);
 });
 
-test("search keeps the YouTube section in place while it loads", async ({
+test("search keeps YouTube's places while it loads", async ({ page }) => {
+  // Force YouTube search on and answer it only when the test says so.
+  await page.route("**/api/settings", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    await route.fulfill({
+      response,
+      json: { ...body, youtube_video_search: true },
+    });
+  });
+  // Enough catalog results that YouTube's places fall between cards.
+  await page.route("**/api/channels/catalog/search**", (route) =>
+    route.fulfill({
+      json: {
+        channel: null,
+        entries: Array.from({ length: 8 }, (_, i) => ({
+          id: `harborstr0${i}`,
+          url: `https://www.youtube.com/watch?v=harborstr0${i}`,
+          title: `Harbor stream ${i}`,
+          channel: "Coastal Walks",
+          in_library: false,
+        })),
+        has_more: false,
+      },
+    })
+  );
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  await page.route("**/api/youtube/search**", async (route) => {
+    await gate;
+    await route.fulfill({ json: YOUTUBE_HARBOR });
+  });
+  await page.goto("/");
+  await expect(videoCard(page, "Kiln fire")).toBeVisible();
+  await (await openSearchBox(page)).fill("Harbor");
+
+  // Mixed results hold YouTube's places with loading cards.
+  const results = page.getByRole("region", { name: /^Results/ });
+  const items = results.locator('[data-horde="mixed-item"]');
+  const placeholders = results.locator('[data-horde="search-placeholder"]');
+  await expect(placeholders.first()).toContainText("Searching YouTube…");
+  await expect(results).toHaveAttribute("aria-busy", "true");
+  const keysNow = () =>
+    items.evaluateAll((els) => els.map((el) => el.getAttribute("data-key")));
+  const before = await keysNow();
+  expect(before.filter((k) => k?.startsWith("slot-"))).toHaveLength(4);
+
+  release();
+  await expect(feedCard(results, "Harbor ferry ride")).toBeVisible();
+  await expect(placeholders).toHaveCount(0);
+  const after = await keysNow();
+  // One YouTube result: it takes the first place, the places left empty take
+  // the last card (or go, at the very end), and every other card stays put.
+  expect(after[before.indexOf("slot-0")]).toBe("yt:ytharbor001");
+  const cards = before.filter((k) => !k?.startsWith("slot-"));
+  const lastCard = cards[cards.length - 1];
+  before.forEach((key, i) => {
+    if (key?.startsWith("slot-") || key === lastCard) return;
+    expect(after[i]).toBe(key);
+  });
+  expect(after).toHaveLength(before.length - 3);
+});
+
+test("in sections, the YouTube heading says it is searching", async ({
   page,
 }) => {
-  // Force YouTube search on and answer it only when the test says so.
   await page.route("**/api/settings", async (route) => {
     const response = await route.fetch();
     const body = await response.json();
@@ -395,25 +455,15 @@ test("search keeps the YouTube section in place while it loads", async ({
   const gate = new Promise<void>((resolve) => (release = resolve));
   await page.route("**/api/youtube/search**", async (route) => {
     await gate;
-    await route.fulfill({
-      json: {
-        entries: [
-          {
-            id: "ytharbor001",
-            url: "https://www.youtube.com/watch?v=ytharbor001",
-            title: "Harbor ferry ride",
-            channel: "Coastal Walks",
-            in_library: false,
-          },
-        ],
-        has_more: false,
-        youtube_video_search_effective: true,
-      },
-    });
+    await route.fulfill({ json: YOUTUBE_HARBOR });
   });
   await page.goto("/");
   await expect(videoCard(page, "Kiln fire")).toBeVisible();
   await (await openSearchBox(page)).fill("Harbor");
+  await page
+    .getByRole("group", { name: "Results layout" })
+    .getByRole("button", { name: "Sections" })
+    .click();
   const heading = page.getByRole("button", { name: /On YouTube/ });
   await expect(heading).toContainText("Searching…");
   const nav = page.getByRole("navigation", { name: "Search results" });
@@ -426,3 +476,17 @@ test("search keeps the YouTube section in place while it loads", async ({
   await expect(heading).not.toContainText("Searching…");
   await expect(feedCard(page, "Harbor ferry ride")).toBeVisible();
 });
+
+const YOUTUBE_HARBOR = {
+  entries: [
+    {
+      id: "ytharbor001",
+      url: "https://www.youtube.com/watch?v=ytharbor001",
+      title: "Harbor ferry ride",
+      channel: "Coastal Walks",
+      in_library: false,
+    },
+  ],
+  has_more: false,
+  youtube_video_search_effective: true,
+};

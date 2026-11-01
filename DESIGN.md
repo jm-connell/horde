@@ -288,6 +288,14 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   cards. A legend of dots sits above the grid. Only the theme's accent, so the
   marks follow every theme; why a card is there is its hover title, not a line
   under it.
+- **Search placeholder card.** Holds a late result's place in a grid (YouTube
+  in mixed search results) so nothing moves when it lands: the video card's
+  frame, a thumbnail of `accent/15` fading into `ink-800`/`ink-900` with a
+  slow light sheen (none with reduced motion), the user's loading mark in the
+  middle, and a line saying what it waits for (`SearchPlaceholderCard`). Not a
+  grey skeleton. A moment under a card (captions that match) is a quiet
+  `text-xs` line: an `accent` mono timestamp link, then the caption with the
+  query's words marked.
 - **Download job card.** Panel with title, status, thumbnail, progress and
   actions. Cards in Active downloads carry an accent bar on the outline: 4px
   down the left edge, fading out a few pixels into the rounded corners (a

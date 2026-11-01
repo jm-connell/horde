@@ -83,6 +83,12 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
+    access: "manage_ask",
+    keywords:
+      "ask ask channels captions transcripts knowledge index channel live streams",
+  },
+  {
+    tab: "library",
     access: "delete_videos",
     keywords:
       "trash bin recycle deleted videos restore undo empty trash delete forever",
