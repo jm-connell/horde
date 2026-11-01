@@ -34,6 +34,7 @@ function Heading({ children }: { children: ReactNode }) {
 
 function SliderRow({
   label,
+  tint,
   hint,
   value,
   min,
@@ -44,6 +45,8 @@ function SliderRow({
   onChange,
 }: {
   label: string;
+  /** A swatch tying the slider to its part of the mix bar. */
+  tint?: string;
   hint?: string;
   value: number;
   min: number;
@@ -57,31 +60,48 @@ function SliderRow({
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-3">
-        <label htmlFor={id} className="text-sm text-gray-200">
+        <label
+          htmlFor={id}
+          className="flex items-center gap-2 text-sm text-gray-200"
+        >
+          {tint && (
+            <span
+              aria-hidden="true"
+              className={`inline-block h-2 w-2 shrink-0 rounded-full ${tint}`}
+            />
+          )}
           {label}
         </label>
         <span className="shrink-0 text-xs tabular-nums text-muted">
           {display}
         </span>
       </div>
-      <input
-        id={id}
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        aria-valuetext={display}
-        onChange={(e) => onChange(Number(e.target.value))}
-        className="accent-scrubber w-full"
-      />
+      {hint && <p className="text-xs text-muted">{hint}</p>}
+      {/* Room for the thumb, which is taller than the 4px track. */}
+      <div className="py-1.5">
+        <input
+          id={id}
+          type="range"
+          min={min}
+          max={max}
+          step={step}
+          value={value}
+          aria-valuetext={display}
+          onChange={(e) => onChange(Number(e.target.value))}
+          className="accent-scrubber accent-scrubber--fill w-full"
+          style={
+            {
+              "--fill": `${((value - min) / (max - min)) * 100}%`,
+            } as React.CSSProperties
+          }
+        />
+      </div>
       {ends && (
         <div className="flex justify-between text-[11px] text-muted">
           <span>{ends[0]}</span>
           <span>{ends[1]}</span>
         </div>
       )}
-      {hint && <p className="text-xs text-muted">{hint}</p>}
     </div>
   );
 }
@@ -376,6 +396,7 @@ export default function TuningPanel({
           <SliderRow
             key={b.id}
             label={b.label}
+            tint={BUCKET_TINT[b.id]}
             hint={b.hint}
             value={values.shares[b.id]}
             min={0}

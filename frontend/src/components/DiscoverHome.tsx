@@ -408,7 +408,10 @@ export default function DiscoverHome({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 text-sm text-muted" aria-live="polite">
+        <p
+          className="min-w-0 flex-1 basis-full text-sm text-muted sm:basis-0"
+          aria-live="polite"
+        >
           {statusLine ??
             "From your channels, more like what you watch, and channels new to you."}
         </p>
