@@ -14,6 +14,8 @@ from .candidates import VectorStore
 #: Ranked feeds kept for paging (one per user and refresh).
 FEED_CACHE_SIZE = 16
 FEED_CACHE_TTL_SEC = 15 * 60
+#: Hand-added topics' vectors kept (every user's together).
+TOPIC_VECTOR_CACHE_SIZE = 512
 
 
 @dataclass
@@ -43,6 +45,19 @@ class DiscoveryRuntime:
         self.recent_requests: list[float] = []
         #: The user being gathered for now (status for the UI).
         self.gathering_for: int | None = None
+        #: Vectors of hand-added topics by (embed model, text); see ``topics``.
+        self._topic_vectors: OrderedDict[tuple[str, str], Any] = OrderedDict()
+
+    def topic_vector(self, key: tuple[str, str]) -> Any | None:
+        with self._lock:
+            return self._topic_vectors.get(key)
+
+    def store_topic_vector(self, key: tuple[str, str], value: Any) -> None:
+        with self._lock:
+            self._topic_vectors[key] = value
+            self._topic_vectors.move_to_end(key)
+            while len(self._topic_vectors) > TOPIC_VECTOR_CACHE_SIZE:
+                self._topic_vectors.popitem(last=False)
 
     def wake(self) -> None:
         if self.worker is not None:

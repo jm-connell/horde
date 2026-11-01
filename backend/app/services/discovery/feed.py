@@ -36,6 +36,7 @@ from .. import app_settings, follows
 from ..ai import vector_index
 from ..ai.provider import get_embed_provider
 from ..takeout import history as takeout_history
+from . import topics as topic_store
 from .candidates import (
     Candidate,
     catalog_candidates,
@@ -83,14 +84,19 @@ DORMANT_CHANNEL_LEVEL = 0.3
 CHANNEL_GAP = DEFAULTS.channel_gap
 #: ...and at most this often in the whole feed in these buckets (the channel
 #: suggestions show more of a new channel; ``new`` is the user's own setting).
-CHANNEL_CAPS = {"new": DEFAULTS.new_channel_cap, "throwback": 3, "rewatch": 2}
+CHANNEL_CAPS = {
+    "new": DEFAULTS.new_channel_cap,
+    "throwback": 3,
+    "rewatch": 2,
+    "interest": 3,
+}
 #: While other buckets have picks left, none takes more than this times its share.
 OVERFILL = 1.3
 #: How far past their asked-for share new channels, throwbacks and rewatches
 #: may grow when another bucket is empty (the rest goes to the familiar ones).
-SHARE_CAP_RATIO = {"new": 1.4, "throwback": 1.3, "rewatch": 1.5}
+SHARE_CAP_RATIO = {"new": 1.4, "throwback": 1.3, "rewatch": 1.5, "interest": 1.3}
 #: The Balanced caps, for reference.
-SHARE_CAPS = {k: SHARES[k] * v for k, v in SHARE_CAP_RATIO.items()}
+SHARE_CAPS = {k: SHARES[k] * v for k, v in SHARE_CAP_RATIO.items() if k in SHARES}
 #: See ``mix``: how strongly an under-served interest is pulled forward, and the
 #: least share any recent interest is owed.
 TOPIC_BONUS = 0.06
@@ -167,6 +173,8 @@ class Feed:
     new_channels: dict[str, ChannelStat]
     cold: bool
     mix: list[MixStat] = field(default_factory=list)
+    #: Candidates each block (by topic id) left out of this ranking.
+    blocked: dict[int, int] = field(default_factory=dict)
 
 
 def _name(text: str) -> str:
@@ -621,6 +629,55 @@ def _history_candidate(fav: PastFavorite) -> Candidate:
     )
 
 
+def _topic_fits(
+    session: Session,
+    runtime: DiscoveryRuntime,
+    cands: list[Candidate],
+    topics: topic_store.Topics,
+    hit_of: dict[str, _Hit],
+) -> tuple[list[topic_store.Topic | None], np.ndarray, list[topic_store.Topic | None]]:
+    """Per candidate: the interest it matches best and how well (0..1), and the
+    "similar" block that leaves it out, if any (see ``topics``)."""
+    n = len(cands)
+    best: list[topic_store.Topic | None] = [None] * n
+    fit = np.zeros(n, dtype=np.float32)
+    blocked: list[topic_store.Topic | None] = [None] * n
+    if not topics.interests and not topics.blocks:
+        return best, fit, blocked
+    # Words, and searches made for the interest, are sure matches.
+    for i, c in enumerate(cands):
+        text = topic_store.haystack(c.title, c.channel, c.tags)
+        hit = hit_of.get(c.key)
+        for t in topics.interests:
+            sure = t.in_text(text) or (
+                hit is not None and hit.seed.strip().lower() == t.text.strip().lower()
+            )
+            if sure and fit[i] < 1.0:
+                best[i], fit[i] = t, 1.0
+    meaning = [*topics.interests, *(t for t in topics.blocks if t.match == "similar")]
+    if not meaning or get_embed_provider() is None:
+        return best, fit, blocked
+    vectors = [(t, topic_store.topic_vector(runtime, t.text)) for t in meaning]
+    usable = [(t, v) for t, v in vectors if v is not None]
+    if not usable:
+        return best, fit, blocked
+    dim = Counter(len(v) for _t, v in usable).most_common(1)[0][0]
+    usable = [(t, v) for t, v in usable if len(v) == dim]
+    matrix = np.asarray([v for _t, v in usable], dtype=np.float32)
+    z = topic_store.standout(_candidate_sims(session, runtime, cands, matrix))
+    for j, (t, _v) in enumerate(usable):
+        column = np.nan_to_num(z[:, j], nan=-np.inf)
+        if t.kind == "block":
+            for row in np.flatnonzero(column >= topic_store.BLOCK_Z).tolist():
+                blocked[row] = blocked[row] or t
+            continue
+        for row in np.flatnonzero(column >= topic_store.INTEREST_Z).tolist():
+            close = float(min(1.0, 0.5 + (column[row] - topic_store.INTEREST_Z) / 2))
+            if close > fit[row]:
+                best[row], fit[row] = t, close
+    return best, fit, blocked
+
+
 def build_feed(
     session: Session,
     runtime: DiscoveryRuntime,
@@ -632,7 +689,19 @@ def build_feed(
     now = utcnow()
     scale = t.half_life_scale
     window = t.window
-    shares = t.shares.normalized()
+    topics = topic_store.active(session, user_id, now)
+    # Hand-added interests get their own share; the rest scales down to fit.
+    interest_share = topics.interest_share
+    shares = {k: v * (1 - interest_share) for k, v in t.shares.normalized().items()}
+    shares["interest"] = interest_share
+    blocked: Counter[int] = Counter()
+
+    def word_blocked(c: Candidate) -> bool:
+        hit = topics.word_block(topic_store.haystack(c.title, c.channel, c.tags))
+        if hit is not None:
+            blocked[hit.id] += 1
+        return hit is not None
+
     excluded: Exclusions = exclusions(session, user_id)
 
     def shapes_taste(w: Watch) -> bool:
@@ -666,6 +735,7 @@ def build_feed(
         if c.key not in own_keys
         and not excluded.blocks(c.key, c.channel_url, c.channel)
         and _allowed(c, t, now)
+        and not word_blocked(c)
     ]
     # Old favorites come back only through the rewatch bucket.
     favorite_of: dict[str, PastFavorite] = {}
@@ -685,8 +755,10 @@ def build_feed(
             ):
                 continue
             c = by_key.get(key) or _history_candidate(favorite)
-            if excluded.blocks(key, c.channel_url, c.channel) or not _allowed(
-                c, t, now, rewatch=True
+            if (
+                excluded.blocks(key, c.channel_url, c.channel)
+                or not _allowed(c, t, now, rewatch=True)
+                or word_blocked(c)
             ):
                 continue
             favorite_of[key] = favorite
@@ -721,11 +793,14 @@ def build_feed(
         topic, topic_shares = sim.topic, sim.topic_shares
         base_floors = FLOORS
     floors = {k: v * t.floor_multiplier(k) for k, v in base_floors.items()}
+    interest_of, interest_fit, similar_block = _topic_fits(
+        session, runtime, cands, topics, hit_of
+    )
     cowatch = _cowatch(session, user_id) if not cold and t.use_household else {}
 
     rng = _rng(user_id, seed)
     jitter = rng.normal(0.0, 1.0, size=len(cands))
-    buckets: dict[str, list[FeedItem]] = {name: [] for name in SHARES}
+    buckets: dict[str, list[FeedItem]] = {name: [] for name in shares}
     leftovers: list[FeedItem] = []
     worn: list[FeedItem] = []
     new_channels: dict[str, ChannelStat] = {}
@@ -752,6 +827,11 @@ def build_feed(
         seed_title = recent_seed[i] or (hit.seed_title if hit else None)
         fav = favorite_of.get(c.key)
         parts: list[tuple[str, float]] = []
+        block = similar_block[i]
+        if block is not None:
+            blocked[block.id] += 1
+            continue
+        interest = interest_of[i]
         if fav is not None:
             bucket = "rewatch"
             age = (now - fav.watch.watched_at).days
@@ -782,6 +862,17 @@ def build_feed(
                 else f"New from {c.channel}, which you watch"
             )
             reason = Reason("subscription", text)
+            eligible = True
+        elif interest is not None:
+            bucket = "interest"
+            fit = float(interest_fit[i])
+            parts += [
+                (f"Match to your interest “{_short(interest.text, 40)}”", 0.6 * fit),
+                ("Match to your taste", 0.2 * min(rel, 1.0)),
+                ("Freshness", 0.1 * _fresh(published, now, 90.0 * scale)),
+            ]
+            parts.append(("Popularity", _popularity(0.06, quality, t)))
+            reason = Reason("interest", f"For your interest: {interest.text}")
             eligible = True
         elif long_ago >= DORMANT_CHANNEL_LEVEL and lately == 0 and not followed:
             bucket = "throwback"
@@ -893,13 +984,17 @@ def build_feed(
         items.sort(key=lambda it: -it.score)
     leftovers.sort(key=lambda it: -it.score)
     worn.sort(key=lambda it: -it.score)
-    mixed = mix(buckets, topic_shares, t)
+    mixed = mix(buckets, topic_shares, t, interest_share)
     _vary_reasons(mixed, all_ch)
     placed = len(mixed)
     mixed.extend(leftovers[: max(0, FEED_MAX - len(mixed))])
     mixed.extend(worn[: max(0, FEED_MAX - len(mixed))])
     return Feed(
-        mixed[:FEED_MAX], new_channels, cold, _mix_stats(mixed[:placed], shares)
+        mixed[:FEED_MAX],
+        new_channels,
+        cold,
+        _mix_stats(mixed[:placed], shares),
+        dict(blocked),
     )
 
 
@@ -914,14 +1009,17 @@ def _mix_stats(placed: list[FeedItem], shares: dict[str, float]) -> list[MixStat
     ]
 
 
-def effective_shares(present: set[str], tuning: Tuning = DEFAULTS) -> dict[str, float]:
+def effective_shares(
+    present: set[str], tuning: Tuning = DEFAULTS, interest_share: float = 0.0
+) -> dict[str, float]:
     """The user's shares over the buckets that still have picks, summing to 1.
 
     The share of an empty bucket goes to the others in proportion, except that
     new channels, throwbacks and rewatches stay near what was asked for
     (``SHARE_CAP_RATIO``): what they cannot take goes to the familiar buckets.
     """
-    asked = tuning.shares.normalized()
+    asked = {k: v * (1 - interest_share) for k, v in tuning.shares.normalized().items()}
+    asked["interest"] = interest_share
     total = sum(asked[n] for n in present)
     if total <= 0:
         return {n: 1.0 / len(present) for n in present}
@@ -946,6 +1044,7 @@ def mix(
     buckets: dict[str, list[FeedItem]],
     topic_shares: dict[int, float] | None = None,
     tuning: Tuning = DEFAULTS,
+    interest_share: float = 0.0,
 ) -> list[FeedItem]:
     """Interleave the buckets by the user's shares (smooth weighted round robin).
 
@@ -1008,7 +1107,7 @@ def mix(
 
     share: dict[str, float] = {}
     while queues:
-        share = effective_shares(set(queues), tuning)
+        share = effective_shares(set(queues), tuning, interest_share)
         for name in queues:
             credit[name] += share[name]
         order = sorted(queues, key=lambda n: -credit[n])

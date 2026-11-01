@@ -220,6 +220,9 @@ OPEN_MUTATIONS = {
     ("DELETE", "/api/discover/feedback/{feedback_id}"),
     ("POST", "/api/discover/refresh"),
     ("PUT", "/api/discover/tuning"),  # your own Recommended+ settings
+    ("POST", "/api/discover/topics"),  # your own interests and blocks
+    ("PATCH", "/api/discover/topics/{topic_id}"),
+    ("DELETE", "/api/discover/topics/{topic_id}"),
     ("POST", "/api/history/watches/remove"),  # your own history
     ("POST", "/api/history/watches/taste"),
     ("POST", "/api/videos/{video_id}/compat"),  # playback compatibility copies

@@ -1539,6 +1539,49 @@ class HistoryTasteWrite(HistoryKeysWrite):
     use: bool
 
 
+def _topic_text(text: str) -> str:
+    text = " ".join(text.split())
+    if not any(ch.isalnum() for ch in text):
+        raise ValueError("A topic needs at least one word")
+    return text
+
+
+def _aware(when: datetime | None) -> datetime | None:
+    if when is not None and when.tzinfo is None:
+        raise ValueError("Give the expiry with a time zone (UTC)")
+    return when
+
+
+class RecTopicWrite(BaseModel):
+    """An interest (shown more, searched for) or a blocked topic, typed in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["interest", "block"]
+    text: Annotated[str, AfterValidator(_topic_text)] = Field(
+        min_length=1, max_length=80
+    )
+    #: Blocks: ``words`` (the words themselves) or ``similar`` (close in meaning).
+    match: Literal["words", "similar"] = "words"
+    #: Interests: how much of the feed they get.
+    strength: Literal["low", "normal", "high"] = "normal"
+    #: When it switches off by itself (null: never).
+    expires_at: Annotated[datetime | None, AfterValidator(_aware)] = None
+
+
+class RecTopicUpdate(BaseModel):
+    """Change a topic; send only what changes (``expires_at`` null: never)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: Annotated[str, AfterValidator(_topic_text)] | None = Field(
+        default=None, min_length=1, max_length=80
+    )
+    match: Literal["words", "similar"] | None = None
+    strength: Literal["low", "normal", "high"] | None = None
+    expires_at: Annotated[datetime | None, AfterValidator(_aware)] = None
+
+
 class RecTuningWrite(BaseModel):
     """Rank Recommended+ with a preset, or with the user's own values."""
 

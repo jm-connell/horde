@@ -950,12 +950,37 @@ class DiscoveryState(SQLModel, table=True):
     asked_json: str = Field(default="{}")
 
 
+class RecTopic(SQLModel, table=True):
+    """A topic a user added to Recommended+ by hand (``services/discovery/topics.py``).
+
+    ``kind``: ``interest`` (shown more, and searched for on YouTube) or
+    ``block`` (left out). A topic past ``expires_at`` stays listed, switched
+    off, until the user turns it on again or deletes it.
+    """
+
+    __tablename__ = "rec_topics"
+    __table_args__ = (_AUTOINCREMENT,)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    kind: str
+    text: str
+    #: Blocks: ``words`` (the words, in a title, channel or tag) or ``similar``
+    #: (close in meaning, with embeddings). Interests match both ways.
+    match: str = "words"
+    #: Interests: ``low`` | ``normal`` | ``high``; how much of the feed they get.
+    strength: str = "normal"
+    expires_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class RecFeedback(SQLModel, table=True):
     """What a user told recommendations to leave out.
 
     ``kind``: ``video`` (key: YouTube id, or ``video:<id>`` for a library video
     without one), ``channel`` (key: normalized channel URL, or ``name:<lowercased
-    name>``) or ``suggestion`` (a suggested channel dismissed, same keys as channel).
+    name>``), ``suggestion`` (a suggested channel dismissed, same keys as channel)
+    or ``taste`` (a watch, by the video's key, kept out of what shapes them).
     """
 
     __tablename__ = "rec_feedback"

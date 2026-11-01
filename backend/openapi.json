@@ -4842,8 +4842,33 @@
         "title": "ConvertLibraryRequest",
         "type": "object"
       },
+      "DiscoverBlockedRead": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "topic_id": {
+            "title": "Topic Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "topic_id",
+          "count"
+        ],
+        "title": "DiscoverBlockedRead",
+        "type": "object"
+      },
       "DiscoverFeedRead": {
         "properties": {
+          "blocked": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverBlockedRead"
+            },
+            "title": "Blocked",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/DiscoverItemRead"
@@ -9659,6 +9684,221 @@
           "kind"
         ],
         "title": "RecFeedbackWrite",
+        "type": "object"
+      },
+      "RecTopicListRead": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecTopicRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecTopicListRead",
+        "type": "object"
+      },
+      "RecTopicRead": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "interest",
+              "block"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "match": {
+            "enum": [
+              "words",
+              "similar"
+            ],
+            "title": "Match",
+            "type": "string"
+          },
+          "strength": {
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "title": "Strength",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "match",
+          "strength",
+          "active",
+          "created_at"
+        ],
+        "title": "RecTopicRead",
+        "type": "object"
+      },
+      "RecTopicUpdate": {
+        "additionalProperties": false,
+        "description": "Change a topic; send only what changes (``expires_at`` null: never).",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "match": {
+            "anyOf": [
+              {
+                "enum": [
+                  "words",
+                  "similar"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "enum": [
+                  "low",
+                  "normal",
+                  "high"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Strength"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          }
+        },
+        "title": "RecTopicUpdate",
+        "type": "object"
+      },
+      "RecTopicWrite": {
+        "additionalProperties": false,
+        "description": "An interest (shown more, searched for) or a blocked topic, typed in.",
+        "properties": {
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "kind": {
+            "enum": [
+              "interest",
+              "block"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "match": {
+            "default": "words",
+            "enum": [
+              "words",
+              "similar"
+            ],
+            "title": "Match",
+            "type": "string"
+          },
+          "strength": {
+            "default": "normal",
+            "enum": [
+              "low",
+              "normal",
+              "high"
+            ],
+            "title": "Strength",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "RecTopicWrite",
         "type": "object"
       },
       "RecTuningPresetRead": {
@@ -18212,6 +18452,212 @@
           }
         },
         "summary": "Discover Status",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/topics": {
+      "get": {
+        "description": "Your interests and blocked topics, interests first.",
+        "operationId": "list_topics_api_discover_topics_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTopicListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Topics",
+        "tags": [
+          "discover"
+        ]
+      },
+      "post": {
+        "description": "Add an interest (shown more, searched for on YouTube) or block a topic,\nfor good or until ``expires_at``.",
+        "operationId": "add_topic_api_discover_topics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecTopicWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTopicRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Add Topic",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/topics/{topic_id}": {
+      "delete": {
+        "description": "Delete one of your topics.",
+        "operationId": "delete_topic_api_discover_topics__topic_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTopicRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Topic",
+        "tags": [
+          "discover"
+        ]
+      },
+      "patch": {
+        "description": "Change a topic; a new ``expires_at`` (or null, never) turns an expired one on.",
+        "operationId": "update_topic_api_discover_topics__topic_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "topic_id",
+            "required": true,
+            "schema": {
+              "title": "Topic Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecTopicUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecTopicRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Topic",
         "tags": [
           "discover"
         ]

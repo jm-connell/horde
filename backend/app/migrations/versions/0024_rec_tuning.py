@@ -26,5 +26,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("user_settings", schema=None) as batch_op:
-        batch_op.drop_column("rec_tuning_json")
+    raise NotImplementedError(
+        "Horde migrations are forward-only. To go back, restore horde.db from "
+        "a backup taken before the upgrade (see docs/design/sqlite-and-migrations.md)."
+    )

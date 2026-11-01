@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -12,8 +12,18 @@ from sqlmodel import Session, col, select
 from ..auth import current_user
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
-from ..models import DiscoveryHit, DiscoveryState, RecFeedback, Video, as_utc
+from ..models import (
+    DiscoveryHit,
+    DiscoveryState,
+    RecFeedback,
+    RecTopic,
+    Video,
+    as_utc,
+    require_id,
+    utcnow,
+)
 from ..response_schemas import (
+    DiscoverBlockedRead,
     DiscoverFeedRead,
     DiscoverItemRead,
     DiscoverMixRead,
@@ -24,6 +34,8 @@ from ..response_schemas import (
     DiscoverWhyRead,
     RecFeedbackListRead,
     RecFeedbackRead,
+    RecTopicListRead,
+    RecTopicRead,
     RecTuningPresetRead,
     RecTuningRead,
     StreamWatchRead,
@@ -33,11 +45,20 @@ from ..response_schemas import (
 from ..schemas import (
     ChannelFeedEntry,
     RecFeedbackWrite,
+    RecTopicUpdate,
+    RecTopicWrite,
     RecTuningWrite,
     StreamWatchWrite,
 )
 from ..services.auth.accounts import AuthUser
-from ..services.discovery import feedback, gather, history, suggest, tuning
+from ..services.discovery import (
+    feedback,
+    gather,
+    history,
+    suggest,
+    topics,
+    tuning,
+)
 from ..services.discovery.candidates import Candidate
 from ..services.discovery.feed import FeedItem, ranked_feed
 from ..services.live import picks as live_picks
@@ -234,6 +255,12 @@ def discover_feed(
         mix=[
             DiscoverMixRead(bucket=m.bucket, target=m.target, actual=m.actual)
             for m in feed.mix
+        ]
+        if not cursor
+        else [],
+        blocked=[
+            DiscoverBlockedRead(topic_id=tid, count=n)
+            for tid, n in sorted(feed.blocked.items())
         ]
         if not cursor
         else [],
@@ -442,3 +469,111 @@ def record_stream_watch(
         watched_sec=row.watched_sec,
         finished=row.finished_at is not None,
     )
+
+
+def _topic_read(row: RecTopic) -> RecTopicRead:
+    return RecTopicRead(
+        id=require_id(row),
+        kind=row.kind,  # type: ignore[arg-type]  # stored from the validated write model
+        text=row.text,
+        match=row.match,  # type: ignore[arg-type]  # stored from the validated write model
+        strength=row.strength,  # type: ignore[arg-type]  # stored from the validated write model
+        expires_at=as_utc(row.expires_at).isoformat() if row.expires_at else None,
+        active=topics.is_active(row, utcnow()),
+        created_at=as_utc(row.created_at).isoformat(),
+    )
+
+
+def _topics_changed(
+    session: Session, ctx: AppContext, user_id: int, row: RecTopic
+) -> None:
+    """Re-rank; an interest that is on is searched for soon."""
+    ctx.discovery.forget_feeds(user_id)
+    if row.kind == "interest" and topics.is_active(row, utcnow()) and gather.enabled():
+        gather.request_refresh(session, ctx.discovery, user_id)
+
+
+@router.get("/topics", response_model=RecTopicListRead)
+def list_topics(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Your interests and blocked topics, interests first."""
+    return RecTopicListRead(
+        items=[_topic_read(r) for r in topics.listed(session, user.id)]
+    )
+
+
+@router.post("/topics", response_model=RecTopicRead)
+def add_topic(
+    payload: RecTopicWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Add an interest (shown more, searched for on YouTube) or block a topic,
+    for good or until ``expires_at``."""
+    if payload.expires_at is not None and payload.expires_at <= utcnow():
+        raise CodedHTTPException(400, "That time has passed", "expired")
+    try:
+        row = topics.create(
+            session,
+            user.id,
+            kind=payload.kind,
+            text=payload.text,
+            match=payload.match,
+            strength=payload.strength,
+            expires_at=payload.expires_at,
+        )
+    except topics.TooMany as exc:
+        raise CodedHTTPException(409, str(exc), "too_many_topics") from exc
+    _topics_changed(session, ctx, user.id, row)
+    return _topic_read(row)
+
+
+@router.patch("/topics/{topic_id}", response_model=RecTopicRead)
+def update_topic(
+    topic_id: int,
+    payload: RecTopicUpdate,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Change a topic; a new ``expires_at`` (or null, never) turns an expired one on."""
+    row = session.get(RecTopic, topic_id)
+    if row is None or row.user_id != user.id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("text") is None:
+        changes.pop("text", None)
+    for key in ("match", "strength"):
+        if key in changes and changes[key] is None:
+            changes.pop(key)
+    expires = changes.get("expires_at")
+    if isinstance(expires, datetime) and expires <= utcnow():
+        raise CodedHTTPException(400, "That time has passed", "expired")
+    try:
+        row = topics.update(session, row, changes)
+    except topics.TooMany as exc:
+        session.rollback()
+        raise CodedHTTPException(409, str(exc), "too_many_topics") from exc
+    _topics_changed(session, ctx, user.id, row)
+    return _topic_read(row)
+
+
+@router.delete("/topics/{topic_id}", response_model=RecTopicRead)
+def delete_topic(
+    topic_id: int,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Delete one of your topics."""
+    row = session.get(RecTopic, topic_id)
+    if row is None or row.user_id != user.id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    read = _topic_read(row)
+    session.delete(row)
+    session.commit()
+    ctx.discovery.forget_feeds(user.id)
+    return read

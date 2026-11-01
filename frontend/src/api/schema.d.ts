@@ -1488,6 +1488,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Topics
+         * @description Your interests and blocked topics, interests first.
+         */
+        get: operations["list_topics_api_discover_topics_get"];
+        put?: never;
+        /**
+         * Add Topic
+         * @description Add an interest (shown more, searched for on YouTube) or block a topic,
+         *     for good or until ``expires_at``.
+         */
+        post: operations["add_topic_api_discover_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/topics/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Topic
+         * @description Delete one of your topics.
+         */
+        delete: operations["delete_topic_api_discover_topics__topic_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Topic
+         * @description Change a topic; a new ``expires_at`` (or null, never) turns an expired one on.
+         */
+        patch: operations["update_topic_api_discover_topics__topic_id__patch"];
+        trace?: never;
+    };
     "/api/discover/tuning": {
         parameters: {
             query?: never;
@@ -5953,8 +6002,17 @@ export interface components {
              */
             confirm: boolean;
         };
+        /** DiscoverBlockedRead */
+        DiscoverBlockedRead: {
+            /** Count */
+            count: number;
+            /** Topic Id */
+            topic_id: number;
+        };
         /** DiscoverFeedRead */
         DiscoverFeedRead: {
+            /** Blocked */
+            blocked?: components["schemas"]["DiscoverBlockedRead"][];
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
             /** Mix */
@@ -7608,6 +7666,82 @@ export interface components {
             kind: "video" | "channel" | "suggestion";
             /** Label */
             label?: string | null;
+        };
+        /** RecTopicListRead */
+        RecTopicListRead: {
+            /** Items */
+            items: components["schemas"]["RecTopicRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** RecTopicRead */
+        RecTopicRead: {
+            /** Active */
+            active: boolean;
+            /** Created At */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "interest" | "block";
+            /**
+             * Match
+             * @enum {string}
+             */
+            match: "words" | "similar";
+            /**
+             * Strength
+             * @enum {string}
+             */
+            strength: "low" | "normal" | "high";
+            /** Text */
+            text: string;
+        };
+        /**
+         * RecTopicUpdate
+         * @description Change a topic; send only what changes (``expires_at`` null: never).
+         */
+        RecTopicUpdate: {
+            /** Expires At */
+            expires_at?: string | null;
+            /** Match */
+            match?: ("words" | "similar") | null;
+            /** Strength */
+            strength?: ("low" | "normal" | "high") | null;
+            /** Text */
+            text?: string | null;
+        };
+        /**
+         * RecTopicWrite
+         * @description An interest (shown more, searched for) or a blocked topic, typed in.
+         */
+        RecTopicWrite: {
+            /** Expires At */
+            expires_at?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "interest" | "block";
+            /**
+             * Match
+             * @default words
+             * @enum {string}
+             */
+            match: "words" | "similar";
+            /**
+             * Strength
+             * @default normal
+             * @enum {string}
+             */
+            strength: "low" | "normal" | "high";
+            /** Text */
+            text: string;
         };
         /** RecTuningPresetRead */
         RecTuningPresetRead: {
@@ -12533,6 +12667,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverStatusRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_topics_api_discover_topics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_topic_api_discover_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTopicWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_topic_api_discover_topics__topic_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_topic_api_discover_topics__topic_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTopicUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
                 };
             };
             /** @description Validation error */

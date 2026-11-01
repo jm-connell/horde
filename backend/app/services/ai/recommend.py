@@ -46,7 +46,7 @@ from ...models import (
 )
 from .. import app_settings, follows
 from ..channel_catalog import query as catalog_query
-from ..discovery import feedback
+from ..discovery import feedback, topics
 from ..discovery.history import library_key
 from ..takeout import history as takeout_history
 from . import embeddings, vector_index
@@ -659,6 +659,22 @@ def _ranked_for_you_ids(
         and follows.normalize_channel_url(row[2]) in followed
     }
     excluded = feedback.exclusions(session, user_id)
+    # Topics the user blocked by their words leave videos out here too.
+    typed = topics.active(session, user_id)
+
+    def word_blocked(title: str | None, channel: str | None) -> bool:
+        return typed.word_block(topics.haystack(title, channel, [])) is not None
+
+    titles: dict[int, str | None] = (
+        {
+            vid: title
+            for vid, title in session.exec(select(Video.id, Video.title)).all()
+            if vid is not None
+        }
+        if typed.blocks
+        else {}
+    )
+
     streamed = set(
         session.exec(
             select(UserStreamState.yt_id).where(UserStreamState.user_id == user_id)
@@ -676,7 +692,9 @@ def _ranked_for_you_ids(
             )
         for upload in _catalog_uploads(session, downloaded | streamed):
             key = -require_id(upload.row)
-            if excluded.blocks(upload.row.yt_id, upload.url, upload.channel):
+            if excluded.blocks(
+                upload.row.yt_id, upload.url, upload.channel
+            ) or word_blocked(upload.row.title, upload.channel):
                 continue
             uploads[key] = upload
             channels[key] = upload.channel
@@ -688,8 +706,11 @@ def _ranked_for_you_ids(
         int(row[0])
         for row in library_rows
         if row[0] is not None
-        and excluded.blocks(
-            library_key(row[0], row[3]), row[2], channels.get(int(row[0]))
+        and (
+            excluded.blocks(
+                library_key(row[0], row[3]), row[2], channels.get(int(row[0]))
+            )
+            or (bool(typed.blocks) and word_blocked(titles.get(row[0]), row[1]))
         )
     }
     for vid in blocked:

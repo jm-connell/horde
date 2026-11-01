@@ -541,6 +541,8 @@ class DiscoverFeedRead(BaseModel):
     status: DiscoverStatusRead
     #: Asked-for and actual share of each kind of pick (first page only).
     mix: list[DiscoverMixRead] = Field(default_factory=list)
+    #: What each blocked topic left out (first page only).
+    blocked: list[DiscoverBlockedRead] = Field(default_factory=list)
 
 
 class HistoryWatchRead(BaseModel):
@@ -590,6 +592,29 @@ class ContinueYoutubeRead(BaseModel):
 
     items: list[ChannelFeedEntry]
     next_cursor: str | None = None
+
+
+class RecTopicRead(BaseModel):
+    id: int
+    kind: Literal["interest", "block"]
+    text: str
+    match: Literal["words", "similar"]
+    strength: Literal["low", "normal", "high"]
+    expires_at: str | None = None
+    #: False once it expired (it stays listed until turned on again or deleted).
+    active: bool
+    created_at: str
+
+
+class RecTopicListRead(BaseModel):
+    items: list[RecTopicRead]
+    next_cursor: str | None = None
+
+
+class DiscoverBlockedRead(BaseModel):
+    topic_id: int
+    #: Candidates the block left out of this ranking.
+    count: int
 
 
 class RecTuningPresetRead(BaseModel):
