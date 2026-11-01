@@ -69,6 +69,9 @@ class FakeYtdlp:
         # Reported to the logger the runner passed in, the way yt-dlp reports a
         # failure it was told to ignore (``ignoreerrors``).
         self.log_error: str | None = None
+        # False leaves the separate streams unmerged and returns without error,
+        # the way yt-dlp behaves when ffmpeg is not installed.
+        self.merge = True
 
     def add(self, url: str, info: dict[str, Any]) -> dict[str, Any]:
         self.infos[url] = info
@@ -148,6 +151,8 @@ class FakeYtdlp:
                         )
                 if fake.before_merge is not None:
                     fake.before_merge(path, info)
+                if not fake.merge:
+                    return info
                 merged = path.with_suffix(".mp4")
                 merged.write_bytes(b"\x00" * fake.merged_bytes)
                 fake.written.append(merged)

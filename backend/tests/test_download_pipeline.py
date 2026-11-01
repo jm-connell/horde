@@ -33,6 +33,7 @@ from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
+    ERROR_KIND_POSTPROCESS,
     ERROR_KIND_UNKNOWN,
 )
 
@@ -213,6 +214,30 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     assert job.error_kind == ERROR_KIND_UNKNOWN
     assert job.error
     assert progress.progress_store[job_id]["status"] == "error"
+    assert _videos(init_db) == []
+    assert not _staging(init_db, job_id).exists()
+
+
+@pytest.mark.parametrize("has_ffmpeg", [False, True])
+def test_unmerged_streams_without_ffmpeg_say_ffmpeg_is_missing(
+    init_db, fake, monkeypatch, has_ffmpeg
+):
+    # Without ffmpeg yt-dlp leaves the video and audio streams apart and
+    # reports no error, so the attempts end with no file at all.
+    fake.merge = False
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: has_ffmpeg)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.error
+    if has_ffmpeg:
+        assert job.error_kind == ERROR_KIND_UNKNOWN
+        assert "Download produced no file" in job.error
+    else:
+        assert job.error_kind == ERROR_KIND_POSTPROCESS
+        assert "ffmpeg is not installed" in job.error
+        assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_POSTPROCESS
     assert _videos(init_db) == []
     assert not _staging(init_db, job_id).exists()
 

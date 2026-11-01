@@ -19,6 +19,7 @@ from sqlmodel import Session
 from ...context import get_engine
 from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
+from ..ffmpeg_bin import ffmpeg_available
 from ..fsutil import safe_rel
 from ..live.sessions import is_live_info
 from ..outtmpl import windows_filenames_ok
@@ -28,6 +29,7 @@ from ..ytdlp_common import (
     ERROR_KIND_MEMBERS,
     ERROR_KIND_UNKNOWN,
     EXTRACT_PRIORITY_DOWNLOAD,
+    FfmpegMissingError,
     MembersOnlyError,
     QuietYtdlpLogger,
     apply_cookie_opts,
@@ -242,7 +244,12 @@ class DownloadRun:
             path = resolve_merged_video(self.prepared, self.active_paths)
         path = reject_unplayable(path, self.active_paths)
         if path is None or not path.exists() or path.stat().st_size <= 0:
-            raise self.last_exc or RuntimeError("Download produced no file")
+            if self.last_exc is not None:
+                raise self.last_exc
+            if not ffmpeg_available():
+                # yt-dlp only warns (silenced here) and leaves the streams apart.
+                raise FfmpegMissingError("ffmpeg not found")
+            raise RuntimeError("Download produced no file")
         return path
 
     # -- the attempt loop ------------------------------------------------------
