@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Toggle } from "../../pages/settings/ui";
@@ -23,6 +23,11 @@ const QUIET_BTN =
   "rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40";
 
 type Updater = (t: RecTuning) => RecTuning;
+
+/** A longest length under the shortest: not saved until the user fixes it. */
+function badLengths(t: RecTuning): boolean {
+  return t.max_minutes > 0 && t.max_minutes < t.min_minutes;
+}
 
 function Heading({ children }: { children: ReactNode }) {
   return (
@@ -267,6 +272,7 @@ export default function TuningPanel({
   variant?: "panel" | "page";
 }) {
   const { showError } = useToast();
+  const queryClient = useQueryClient();
   const query = useRecTuning();
   const save = useSaveRecTuning();
   const [draft, setDraft] = useState<RecTuning | null>(null);
@@ -285,13 +291,18 @@ export default function TuningPanel({
   useEffect(
     () => () => {
       if (timer.current != null) window.clearTimeout(timer.current);
-      if (pending.current) {
+      const unsaved = pending.current;
+      if (unsaved && !badLengths(unsaved)) {
         void api
-          .saveRecTuning({ active: "custom", custom: pending.current })
+          .saveRecTuning({ active: "custom", custom: unsaved })
+          .then((saved) =>
+            // The feed and the other copy of this panel follow the cache.
+            queryClient.setQueryData(queryKeys.discover.tuning, saved)
+          )
           .catch(() => undefined);
       }
     },
-    []
+    [queryClient]
   );
 
   const state = query.data;
@@ -312,6 +323,10 @@ export default function TuningPanel({
     save.mutate(
       { active: "custom", custom: next },
       {
+        // Saved, and nothing newer waiting: show the server's copy again.
+        onSuccess: () => {
+          if (pending.current === null) setDraft(null);
+        },
         onError: () => {
           showError("Could not save your Recommended+ settings");
           setDraft(null);
@@ -325,7 +340,9 @@ export default function TuningPanel({
     setDraft(next);
     pending.current = next;
     if (timer.current != null) window.clearTimeout(timer.current);
-    timer.current = window.setTimeout(() => flush(next), SAVE_DELAY_MS);
+    timer.current = badLengths(next)
+      ? null
+      : window.setTimeout(() => flush(next), SAVE_DELAY_MS);
   };
   const set = <K extends keyof RecTuning>(key: K, value: RecTuning[K]) =>
     change((t) => ({ ...t, [key]: value }));
@@ -333,11 +350,18 @@ export default function TuningPanel({
   const pick = (id: string) => {
     if (timer.current != null) window.clearTimeout(timer.current);
     timer.current = null;
+    // A move still waiting to be saved is kept as the user's own values.
+    const unsaved =
+      pending.current && !badLengths(pending.current) ? pending.current : null;
     pending.current = null;
+    if (id === "custom") {
+      if (unsaved) flush(unsaved);
+      else setDraft(null);
+      if (unsaved || !state.custom) return;
+    }
     setDraft(null);
-    if (id === "custom" && !state.custom) return;
     save.mutate(
-      { active: id },
+      { active: id, ...(unsaved ? { custom: unsaved } : {}) },
       { onError: () => showError("Could not switch the algorithm") }
     );
   };
@@ -556,27 +580,20 @@ export default function TuningPanel({
           <MinutesInput
             label="Shortest (minutes)"
             value={values.min_minutes}
-            onChange={(v) =>
-              change((t) => ({
-                ...t,
-                min_minutes: v,
-                max_minutes:
-                  t.max_minutes && t.max_minutes < v ? v : t.max_minutes,
-              }))
-            }
+            onChange={(v) => set("min_minutes", v)}
           />
           <MinutesInput
             label="Longest (minutes)"
             value={values.max_minutes}
-            onChange={(v) =>
-              change((t) => ({
-                ...t,
-                max_minutes: v,
-                min_minutes: v && t.min_minutes > v ? v : t.min_minutes,
-              }))
-            }
+            onChange={(v) => set("max_minutes", v)}
           />
         </div>
+        {badLengths(values) && (
+          <p role="alert" className="text-xs text-warning">
+            The longest is shorter than the shortest; this is not saved until
+            you fix it.
+          </p>
+        )}
         <SelectRow
           label="Uploaded within"
           value={String(values.max_age_days)}

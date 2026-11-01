@@ -155,3 +155,26 @@ test("with the chat open too, the panel shows tabs instead of two panels", async
     page.getByRole("dialog", { name: "Recommended+ algorithm" })
   ).toBeVisible();
 });
+
+test("Escape closes an open list in the panel before the panel", async ({
+  page,
+}) => {
+  await openRecommendedPlus(page);
+  await page.getByRole("button", { name: "Algorithm" }).click();
+  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  const select = panel.getByRole("button", {
+    name: "Recent taste is the last",
+  });
+  await select.click();
+  await expect(select).toHaveAttribute("aria-expanded", "true");
+  await page.keyboard.press("Escape");
+  await expect(select).toHaveAttribute("aria-expanded", "false");
+  await expect(panel).toBeVisible();
+  // A longest length under the shortest is pointed out, not saved.
+  await panel.getByLabel("Shortest (minutes)").fill("20");
+  await panel.getByLabel("Longest (minutes)").fill("4");
+  await expect(panel.getByRole("alert")).toContainText("not saved");
+  await panel.getByLabel("Longest (minutes)").fill("45");
+  await expect(panel.getByRole("alert")).toHaveCount(0);
+  await expect(panel.getByLabel("Shortest (minutes)")).toHaveValue("20");
+});

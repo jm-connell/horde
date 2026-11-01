@@ -191,6 +191,13 @@ export default function SidePanelFrame({
     if (!el) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
+      // An open menu or list inside the panel closes first (ThemedSelect).
+      const target = e.target as HTMLElement | null;
+      if (
+        e.defaultPrevented ||
+        target?.closest('[aria-expanded="true"], [role="listbox"]')
+      )
+        return;
       e.stopPropagation();
       closeRef.current();
     };
