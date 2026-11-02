@@ -168,7 +168,7 @@ export default function SavedAlgorithms({
                 }
                 className="accent-[rgb(var(--accent))]"
               />
-              Share with other accounts
+              Share “{own.name}” with other accounts
             </label>
             <button
               type="button"
