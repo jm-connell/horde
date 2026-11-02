@@ -1336,6 +1336,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/algorithms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Algorithms
+         * @description Your saved algorithms, then the ones other accounts share.
+         */
+        get: operations["list_algorithms_api_discover_algorithms_get"];
+        put?: never;
+        /**
+         * Save Algorithm
+         * @description Save values under a name (shared with every account if ``shared``) and
+         *     rank with it.
+         */
+        post: operations["save_algorithm_api_discover_algorithms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/algorithms/{algo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Algorithm
+         * @description Delete one of your algorithms. Anyone ranking with it (you included)
+         *     keeps its values as their own.
+         */
+        delete: operations["delete_algorithm_api_discover_algorithms__algo_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Algorithm
+         * @description Rename, share or stop sharing, or overwrite one of your algorithms.
+         *
+         *     New ``values`` also put you back on it. Stopping sharing leaves everyone
+         *     else who used it on their own copy of its values.
+         */
+        patch: operations["update_algorithm_api_discover_algorithms__algo_id__patch"];
+        trace?: never;
+    };
     "/api/discover/channels": {
         parameters: {
             query?: never;
@@ -1546,14 +1599,17 @@ export interface paths {
         };
         /**
          * Get Tuning
-         * @description How this user ranks Recommended+: a preset or their own values.
+         * @description How this user ranks Recommended+: a preset, a saved algorithm or their
+         *     own values.
          */
         get: operations["get_tuning_api_discover_tuning_get"];
         /**
          * Put Tuning
-         * @description Pick a preset, or rank with your own values (``active`` "custom").
+         * @description Pick a preset, a saved algorithm (``algo:<id>``, yours or shared), or
+         *     rank with your own values (``active`` "custom").
          *
-         *     Your own values are kept when you pick a preset, so you can switch back.
+         *     Your own values are kept when you pick something else, so you can switch
+         *     back; moving a slider on a saved algorithm makes your own values from it.
          */
         put: operations["put_tuning_api_discover_tuning_put"];
         post?: never;
@@ -7630,6 +7686,57 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * RecAlgorithmListRead
+         * @description Your saved algorithms, then those others share.
+         */
+        RecAlgorithmListRead: {
+            /** Items */
+            items: components["schemas"]["RecAlgorithmRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** RecAlgorithmRead */
+        RecAlgorithmRead: {
+            /** Id */
+            id: number;
+            /** Mine */
+            mine: boolean;
+            /** Name */
+            name: string;
+            /** Owner */
+            owner: string;
+            /** Shared */
+            shared: boolean;
+            /** Updated At */
+            updated_at: string;
+            values: components["schemas"]["Tuning-Output"];
+        };
+        /**
+         * RecAlgorithmUpdate
+         * @description Rename, share or unshare, or overwrite one of your algorithms.
+         */
+        RecAlgorithmUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Shared */
+            shared?: boolean | null;
+            values?: components["schemas"]["Tuning-Input"] | null;
+        };
+        /**
+         * RecAlgorithmWrite
+         * @description Save values as a named algorithm (picked at once).
+         */
+        RecAlgorithmWrite: {
+            /** Name */
+            name: string;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
+            values: components["schemas"]["Tuning-Input"];
+        };
         /** RecFeedbackListRead */
         RecFeedbackListRead: {
             /** Items */
@@ -7760,6 +7867,8 @@ export interface components {
         RecTuningRead: {
             /** Active */
             active: string;
+            algorithm?: components["schemas"]["RecAlgorithmRead"] | null;
+            based_on?: components["schemas"]["RecAlgorithmRead"] | null;
             custom?: components["schemas"]["Tuning-Output"] | null;
             defaults: components["schemas"]["Tuning-Output"];
             /** Presets */
@@ -7768,7 +7877,7 @@ export interface components {
         };
         /**
          * RecTuningWrite
-         * @description Rank Recommended+ with a preset, or with the user's own values.
+         * @description Rank Recommended+ with a preset, a saved algorithm, or your own values.
          */
         RecTuningWrite: {
             /** Active */
@@ -12346,6 +12455,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CompatSummaryRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_algorithms_api_discover_algorithms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_algorithm_api_discover_algorithms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecAlgorithmWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_algorithm_api_discover_algorithms__algo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                algo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_algorithm_api_discover_algorithms__algo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                algo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecAlgorithmUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
                 };
             };
             /** @description Validation error */

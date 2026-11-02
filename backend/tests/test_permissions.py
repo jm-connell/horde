@@ -221,6 +221,9 @@ OPEN_MUTATIONS = {
     ("POST", "/api/discover/refresh"),
     ("PUT", "/api/discover/tuning"),  # your own Recommended+ settings
     ("POST", "/api/discover/topics"),  # your own interests and blocks
+    ("POST", "/api/discover/algorithms"),  # your own saved algorithms
+    ("PATCH", "/api/discover/algorithms/{algo_id}"),
+    ("DELETE", "/api/discover/algorithms/{algo_id}"),
     ("PATCH", "/api/discover/topics/{topic_id}"),
     ("DELETE", "/api/discover/topics/{topic_id}"),
     ("POST", "/api/history/watches/remove"),  # your own history

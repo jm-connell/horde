@@ -950,6 +950,29 @@ class DiscoveryState(SQLModel, table=True):
     asked_json: str = Field(default="{}")
 
 
+class RecAlgorithm(SQLModel, table=True):
+    """A named set of Recommended+ settings a user saved (``discovery/algorithms.py``).
+
+    ``tuning_json`` holds a ``tuning.Tuning``. A shared one shows in everyone's
+    algorithm picker; only its owner changes or deletes it. Someone ranking with
+    another person's algorithm keeps its last values when it goes away.
+    """
+
+    __tablename__ = "rec_algorithms"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_rec_algorithms_owner_name"),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    name: str
+    shared: bool = False
+    tuning_json: str
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
 class RecTopic(SQLModel, table=True):
     """A topic a user added to Recommended+ by hand (``services/discovery/topics.py``).
 

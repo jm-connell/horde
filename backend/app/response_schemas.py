@@ -617,6 +617,25 @@ class DiscoverBlockedRead(BaseModel):
     count: int
 
 
+class RecAlgorithmRead(BaseModel):
+    id: int
+    name: str
+    shared: bool
+    #: The owner's username.
+    owner: str
+    #: Your own (you may change or delete it).
+    mine: bool
+    values: Tuning
+    updated_at: str
+
+
+class RecAlgorithmListRead(BaseModel):
+    """Your saved algorithms, then those others share."""
+
+    items: list[RecAlgorithmRead]
+    next_cursor: str | None = None
+
+
 class RecTuningPresetRead(BaseModel):
     id: str
     name: str
@@ -627,10 +646,14 @@ class RecTuningPresetRead(BaseModel):
 class RecTuningRead(BaseModel):
     """The user's Recommended+ settings and the presets they can pick from."""
 
-    #: A preset id, or "custom".
+    #: A preset id, "custom" or "algo:<id>".
     active: str
     #: What the feed ranks with now.
     values: Tuning
+    #: The saved algorithm in use, when one is.
+    algorithm: RecAlgorithmRead | None = None
+    #: Your saved algorithm the own values started from ("Save" writes to it).
+    based_on: RecAlgorithmRead | None = None
     #: The user's own values (kept while a preset is picked).
     custom: Tuning | None = None
     presets: list[RecTuningPresetRead]

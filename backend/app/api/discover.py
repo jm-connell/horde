@@ -15,6 +15,7 @@ from ..errors import CodedHTTPException
 from ..models import (
     DiscoveryHit,
     DiscoveryState,
+    RecAlgorithm,
     RecFeedback,
     RecTopic,
     Video,
@@ -32,6 +33,8 @@ from ..response_schemas import (
     DiscoverScorePartRead,
     DiscoverStatusRead,
     DiscoverWhyRead,
+    RecAlgorithmListRead,
+    RecAlgorithmRead,
     RecFeedbackListRead,
     RecFeedbackRead,
     RecTopicListRead,
@@ -44,6 +47,8 @@ from ..response_schemas import (
 )
 from ..schemas import (
     ChannelFeedEntry,
+    RecAlgorithmUpdate,
+    RecAlgorithmWrite,
     RecFeedbackWrite,
     RecTopicUpdate,
     RecTopicWrite,
@@ -52,6 +57,7 @@ from ..schemas import (
 )
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import (
+    algorithms,
     feedback,
     gather,
     history,
@@ -267,10 +273,37 @@ def discover_feed(
     )
 
 
-def _tuning_read(selection: tuning.Selection) -> RecTuningRead:
+def _algorithm_read(a: algorithms.Listed) -> RecAlgorithmRead:
+    return RecAlgorithmRead(
+        id=require_id(a.row),
+        name=a.row.name,
+        shared=a.row.shared,
+        owner=a.owner,
+        mine=a.mine,
+        values=a.values,
+        updated_at=as_utc(a.row.updated_at).isoformat(),
+    )
+
+
+def _listed_one(
+    session: Session, user_id: int, algo_id: int | None
+) -> RecAlgorithmRead | None:
+    if algo_id is None:
+        return None
+    for a in algorithms.listed(session, user_id):
+        if a.row.id == algo_id:
+            return _algorithm_read(a)
+    return None
+
+
+def _tuning_read(session: Session, user_id: int) -> RecTuningRead:
+    selection, values = algorithms.current(session, user_id)
+    based_on = _listed_one(session, user_id, selection.based_on)
     return RecTuningRead(
         active=selection.active,
-        values=tuning.resolve(selection),
+        values=values,
+        algorithm=_listed_one(session, user_id, tuning.algorithm_id(selection.active)),
+        based_on=based_on if based_on is not None and based_on.mine else None,
         custom=selection.custom,
         presets=[
             RecTuningPresetRead(
@@ -287,8 +320,9 @@ def get_tuning(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """How this user ranks Recommended+: a preset or their own values."""
-    return _tuning_read(tuning.load(session, user.id))
+    """How this user ranks Recommended+: a preset, a saved algorithm or their
+    own values."""
+    return _tuning_read(session, user.id)
 
 
 @router.put("/tuning", response_model=RecTuningRead)
@@ -298,24 +332,148 @@ def put_tuning(
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Pick a preset, or rank with your own values (``active`` "custom").
+    """Pick a preset, a saved algorithm (``algo:<id>``, yours or shared), or
+    rank with your own values (``active`` "custom").
 
-    Your own values are kept when you pick a preset, so you can switch back.
+    Your own values are kept when you pick something else, so you can switch
+    back; moving a slider on a saved algorithm makes your own values from it.
     """
     current = tuning.load(session, user.id)
     custom = payload.custom if payload.custom is not None else current.custom
+    selection = tuning.Selection(active=payload.active, custom=custom)
+    algo_id = tuning.algorithm_id(payload.active)
     if payload.active == "custom":
         if custom is None:
             raise CodedHTTPException(
                 400, "Custom settings need their values", "missing_values"
             )
+        # Remember which of your algorithms these values came from.
+        selection.based_on = tuning.algorithm_id(current.active) or (
+            current.based_on if current.active == "custom" else None
+        )
+    elif algo_id is not None:
+        row = algorithms.available(session, user.id, algo_id)
+        if row is None:
+            raise CodedHTTPException(404, "No such algorithm", "unknown_algorithm")
+        selection.snapshot = algorithms.values_of(row)
     elif payload.active not in tuning.PRESET_IDS:
         raise CodedHTTPException(400, "No such preset", "unknown_preset")
-    saved = tuning.save(
-        session, user.id, tuning.Selection(active=payload.active, custom=custom)
+    tuning.save(session, user.id, selection)
+    ctx.discovery.forget_feeds(user.id)
+    return _tuning_read(session, user.id)
+
+
+@router.get("/algorithms", response_model=RecAlgorithmListRead)
+def list_algorithms(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Your saved algorithms, then the ones other accounts share."""
+    return RecAlgorithmListRead(
+        items=[_algorithm_read(a) for a in algorithms.listed(session, user.id)]
+    )
+
+
+@router.post("/algorithms", response_model=RecAlgorithmRead)
+def save_algorithm(
+    payload: RecAlgorithmWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Save values under a name (shared with every account if ``shared``) and
+    rank with it."""
+    try:
+        row = algorithms.create(
+            session,
+            user.id,
+            name=payload.name,
+            shared=payload.shared,
+            values=payload.values,
+        )
+    except algorithms.NameTaken as exc:
+        raise CodedHTTPException(409, str(exc), "name_taken") from exc
+    except algorithms.TooMany as exc:
+        raise CodedHTTPException(409, str(exc), "too_many_algorithms") from exc
+    current = tuning.load(session, user.id)
+    tuning.save(
+        session,
+        user.id,
+        tuning.Selection(
+            active=f"{tuning.ALGORITHM_PREFIX}{require_id(row)}",
+            custom=current.custom,
+            snapshot=payload.values,
+        ),
     )
     ctx.discovery.forget_feeds(user.id)
-    return _tuning_read(saved)
+    read = _listed_one(session, user.id, row.id)
+    assert read is not None  # noqa: S101 - just created, and it is the user's own
+    return read
+
+
+def _own_algorithm(session: Session, user_id: int, algo_id: int) -> RecAlgorithm:
+    row = session.get(RecAlgorithm, algo_id)
+    if row is None or row.owner_id != user_id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    return row
+
+
+@router.patch("/algorithms/{algo_id}", response_model=RecAlgorithmRead)
+def update_algorithm(
+    algo_id: int,
+    payload: RecAlgorithmUpdate,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Rename, share or stop sharing, or overwrite one of your algorithms.
+
+    New ``values`` also put you back on it. Stopping sharing leaves everyone
+    else who used it on their own copy of its values.
+    """
+    row = _own_algorithm(session, user.id, algo_id)
+    try:
+        row = algorithms.update(
+            session,
+            row,
+            name=payload.name,
+            shared=payload.shared,
+            values=payload.values,
+        )
+    except algorithms.NameTaken as exc:
+        raise CodedHTTPException(409, str(exc), "name_taken") from exc
+    if payload.values is not None:
+        current = tuning.load(session, user.id)
+        tuning.save(
+            session,
+            user.id,
+            tuning.Selection(
+                active=f"{tuning.ALGORITHM_PREFIX}{algo_id}",
+                custom=current.custom,
+                snapshot=payload.values,
+            ),
+        )
+    ctx.discovery.forget_feeds(user.id)
+    read = _listed_one(session, user.id, algo_id)
+    assert read is not None  # noqa: S101 - the user's own, just saved
+    return read
+
+
+@router.delete("/algorithms/{algo_id}", response_model=RecAlgorithmRead)
+def delete_algorithm(
+    algo_id: int,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Delete one of your algorithms. Anyone ranking with it (you included)
+    keeps its values as their own."""
+    row = _own_algorithm(session, user.id, algo_id)
+    read = _listed_one(session, user.id, algo_id)
+    assert read is not None  # noqa: S101 - the user's own
+    algorithms.delete(session, row)
+    ctx.discovery.forget_feeds(user.id)
+    return read
 
 
 @router.get("/status", response_model=DiscoverStatusRead)

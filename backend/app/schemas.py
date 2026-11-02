@@ -1585,10 +1585,43 @@ class RecTopicUpdate(BaseModel):
     expires_at: Annotated[datetime | None, AfterValidator(_aware)] = None
 
 
-class RecTuningWrite(BaseModel):
-    """Rank Recommended+ with a preset, or with the user's own values."""
+def _algorithm_name(name: str) -> str:
+    name = " ".join(name.split())
+    if not name:
+        raise ValueError("Give the algorithm a name")
+    return name
 
-    #: A preset id, or "custom" (then ``custom`` holds the values).
+
+class RecAlgorithmWrite(BaseModel):
+    """Save values as a named algorithm (picked at once)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, AfterValidator(_algorithm_name)] = Field(
+        min_length=1, max_length=60
+    )
+    #: Offered to every account in their algorithm picker.
+    shared: bool = False
+    values: Tuning
+
+
+class RecAlgorithmUpdate(BaseModel):
+    """Rename, share or unshare, or overwrite one of your algorithms."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, AfterValidator(_algorithm_name)] | None = Field(
+        default=None, min_length=1, max_length=60
+    )
+    shared: bool | None = None
+    #: New values ("Save"); you then rank with the algorithm again.
+    values: Tuning | None = None
+
+
+class RecTuningWrite(BaseModel):
+    """Rank Recommended+ with a preset, a saved algorithm, or your own values."""
+
+    #: A preset id, "custom" (then ``custom`` holds the values) or "algo:<id>".
     active: str = Field(min_length=1, max_length=40)
     custom: Tuning | None = None
 

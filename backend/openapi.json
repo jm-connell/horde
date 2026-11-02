@@ -9594,6 +9594,144 @@
         "title": "ReauthRequest",
         "type": "object"
       },
+      "RecAlgorithmListRead": {
+        "description": "Your saved algorithms, then those others share.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecAlgorithmRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "RecAlgorithmListRead",
+        "type": "object"
+      },
+      "RecAlgorithmRead": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "mine": {
+            "title": "Mine",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "shared": {
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          },
+          "values": {
+            "$ref": "#/components/schemas/Tuning-Output"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "shared",
+          "owner",
+          "mine",
+          "values",
+          "updated_at"
+        ],
+        "title": "RecAlgorithmRead",
+        "type": "object"
+      },
+      "RecAlgorithmUpdate": {
+        "additionalProperties": false,
+        "description": "Rename, share or unshare, or overwrite one of your algorithms.",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "shared": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shared"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Tuning-Input"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "RecAlgorithmUpdate",
+        "type": "object"
+      },
+      "RecAlgorithmWrite": {
+        "additionalProperties": false,
+        "description": "Save values as a named algorithm (picked at once).",
+        "properties": {
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "shared": {
+            "default": false,
+            "title": "Shared",
+            "type": "boolean"
+          },
+          "values": {
+            "$ref": "#/components/schemas/Tuning-Input"
+          }
+        },
+        "required": [
+          "name",
+          "values"
+        ],
+        "title": "RecAlgorithmWrite",
+        "type": "object"
+      },
       "RecFeedbackListRead": {
         "properties": {
           "items": {
@@ -9935,6 +10073,26 @@
             "title": "Active",
             "type": "string"
           },
+          "algorithm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecAlgorithmRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "based_on": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RecAlgorithmRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "custom": {
             "anyOf": [
               {
@@ -9969,7 +10127,7 @@
         "type": "object"
       },
       "RecTuningWrite": {
-        "description": "Rank Recommended+ with a preset, or with the user's own values.",
+        "description": "Rank Recommended+ with a preset, a saved algorithm, or your own values.",
         "properties": {
           "active": {
             "maxLength": 40,
@@ -18022,6 +18180,212 @@
         ]
       }
     },
+    "/api/discover/algorithms": {
+      "get": {
+        "description": "Your saved algorithms, then the ones other accounts share.",
+        "operationId": "list_algorithms_api_discover_algorithms_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecAlgorithmListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Algorithms",
+        "tags": [
+          "discover"
+        ]
+      },
+      "post": {
+        "description": "Save values under a name (shared with every account if ``shared``) and\nrank with it.",
+        "operationId": "save_algorithm_api_discover_algorithms_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecAlgorithmWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecAlgorithmRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Save Algorithm",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
+    "/api/discover/algorithms/{algo_id}": {
+      "delete": {
+        "description": "Delete one of your algorithms. Anyone ranking with it (you included)\nkeeps its values as their own.",
+        "operationId": "delete_algorithm_api_discover_algorithms__algo_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "algo_id",
+            "required": true,
+            "schema": {
+              "title": "Algo Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecAlgorithmRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Delete Algorithm",
+        "tags": [
+          "discover"
+        ]
+      },
+      "patch": {
+        "description": "Rename, share or stop sharing, or overwrite one of your algorithms.\n\nNew ``values`` also put you back on it. Stopping sharing leaves everyone\nelse who used it on their own copy of its values.",
+        "operationId": "update_algorithm_api_discover_algorithms__algo_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "algo_id",
+            "required": true,
+            "schema": {
+              "title": "Algo Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecAlgorithmUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecAlgorithmRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Algorithm",
+        "tags": [
+          "discover"
+        ]
+      }
+    },
     "/api/discover/channels": {
       "get": {
         "description": "Channels new to the user that their Recommended+ feed leans on most.",
@@ -18665,7 +19029,7 @@
     },
     "/api/discover/tuning": {
       "get": {
-        "description": "How this user ranks Recommended+: a preset or their own values.",
+        "description": "How this user ranks Recommended+: a preset, a saved algorithm or their\nown values.",
         "operationId": "get_tuning_api_discover_tuning_get",
         "responses": {
           "200": {
@@ -18705,7 +19069,7 @@
         ]
       },
       "put": {
-        "description": "Pick a preset, or rank with your own values (``active`` \"custom\").\n\nYour own values are kept when you pick a preset, so you can switch back.",
+        "description": "Pick a preset, a saved algorithm (``algo:<id>``, yours or shared), or\nrank with your own values (``active`` \"custom\").\n\nYour own values are kept when you pick something else, so you can switch\nback; moving a slider on a saved algorithm makes your own values from it.",
         "operationId": "put_tuning_api_discover_tuning_put",
         "requestBody": {
           "content": {

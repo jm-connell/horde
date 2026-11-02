@@ -253,19 +253,38 @@ PRESETS: list[Preset] = [
 PRESET_IDS = frozenset(p.id for p in PRESETS)
 
 
+ALGORITHM_PREFIX = "algo:"
+
+
+def algorithm_id(active: str) -> int | None:
+    """The saved algorithm an ``active`` value names (``algo:<id>``), if any."""
+    if (
+        active.startswith(ALGORITHM_PREFIX)
+        and active[len(ALGORITHM_PREFIX) :].isdigit()
+    ):
+        return int(active[len(ALGORITHM_PREFIX) :])
+    return None
+
+
 class Selection(BaseModel):
-    """What a user has picked: a preset, or their own values (``custom``)."""
+    """What a user has picked: a preset, a saved algorithm, or their own values."""
 
     model_config = ConfigDict(extra="ignore")
 
-    #: A preset id, or "custom".
+    #: A preset id, "custom", or "algo:<id>" (a saved algorithm, theirs or shared).
     active: str = "balanced"
     #: The user's own values (kept when they switch to a preset and back).
     custom: Tuning | None = None
+    #: The last values of the saved algorithm in use, for when it goes away.
+    snapshot: Tuning | None = None
+    #: The saved algorithm the own values started from ("Save" writes back to it).
+    based_on: int | None = None
 
 
-def resolve(selection: Selection) -> Tuning:
-    """The values a selection ranks with."""
+def resolve(selection: Selection, algorithm: Tuning | None = None) -> Tuning:
+    """The values a selection ranks with (``algorithm``: the saved one it names)."""
+    if algorithm_id(selection.active) is not None:
+        return algorithm or selection.snapshot or DEFAULTS
     if selection.active == "custom" and selection.custom is not None:
         return selection.custom
     for preset in PRESETS:
@@ -290,7 +309,11 @@ def load(session: Session, user_id: int) -> Selection:
             exc_info=True,
         )
         return Selection()
-    if selection.active != "custom" and selection.active not in PRESET_IDS:
+    if (
+        selection.active != "custom"
+        and selection.active not in PRESET_IDS
+        and algorithm_id(selection.active) is None
+    ):
         selection.active = "balanced"
     return selection
 
@@ -307,4 +330,6 @@ def save(session: Session, user_id: int, selection: Selection) -> Selection:
 
 
 def for_user(session: Session, user_id: int) -> Tuning:
-    return resolve(load(session, user_id))
+    from . import algorithms  # The algorithms service builds on this module.
+
+    return algorithms.current(session, user_id)[1]
