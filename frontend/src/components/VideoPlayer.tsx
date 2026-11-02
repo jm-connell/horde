@@ -86,7 +86,6 @@ export default function VideoPlayer({
   singleKeyShortcuts = true,
   hotkeys = DEFAULT_HOTKEYS,
   onAutoplayRelatedChange,
-  onActiveQualityChange,
   onFrameInsetChange,
   mediaSuspended = false,
   blockingOverlay,
@@ -237,7 +236,6 @@ export default function VideoPlayer({
     pendingSeekRef,
     defaultStreamQuality: settings.defaultStreamQuality,
     showQualityNotice,
-    onActiveQualityChange,
   });
 
   useEffect(() => {

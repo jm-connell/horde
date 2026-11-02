@@ -132,8 +132,6 @@ export interface PlaybackLayout {
   miniPlayerRect: MiniPlayerRect | null;
   /** True until the user drags the mini player; then it keeps that pixel position. */
   miniPlayerCornerAnchor: boolean;
-  /** Live DASH/file track quality (YouTube ladder), null until known. */
-  activeStreamQuality: number | null;
   /** Pillarbox inset (px) of the visible picture inside the player box. */
   videoFrameInset: number;
 }
@@ -233,9 +231,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   currentRef.current = current;
   streamRef.current = stream;
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
-    null
-  );
-  const [activeStreamQuality, setActiveStreamQuality] = useState<number | null>(
     null
   );
   const [videoFrameInset, setVideoFrameInset] = useState(0);
@@ -495,7 +490,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         return video;
       });
       setStream(null);
-      setActiveStreamQuality(null);
       streamPosRef.current = 0;
       streamBehindLiveRef.current = null;
       libraryPosRef.current = video.last_position_sec || 0;
@@ -511,7 +505,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
     setMediaSuspended(false);
-    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
@@ -565,7 +558,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setCurrent(null);
     setStream(null);
     setMediaSuspended(false);
-    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
@@ -814,10 +806,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     () => ({
       miniPlayerRect,
       miniPlayerCornerAnchor: miniCornerAnchor,
-      activeStreamQuality,
       videoFrameInset,
     }),
-    [miniPlayerRect, miniCornerAnchor, activeStreamQuality, videoFrameInset]
+    [miniPlayerRect, miniCornerAnchor, videoFrameInset]
   );
   const actions = useMemo<PlaybackActions>(
     () => ({
@@ -1043,7 +1034,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onAutoplayRelatedChange={(enabled) =>
           updateSettings({ autoplayRelated: enabled })
         }
-        onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
         clipMarkers={clipMarkers}
@@ -1104,7 +1094,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniMoveEnd={handleMiniMoveEnd}
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
-        onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
       />
