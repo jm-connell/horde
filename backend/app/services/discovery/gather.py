@@ -223,18 +223,23 @@ def plan_requests(
         for q in (typed or [])
         if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN)
     ][:TOPIC_SEARCHES_PER_RUN]
+    typed_keys = {q.lower() for q in (typed or [])}
     # One slot in four for a dormant interest, the rest by weight, round robin.
     throwback = [
         _Request("search", q, "throwback")
         for g in dormant
         for q in g.queries
-        if fresh(f"q:{q.lower()}", ASK_COOLDOWN)
+        if fresh(f"q:{q.lower()}", ASK_COOLDOWN) and q.lower() not in typed_keys
     ]
     rounds = max((len(g.queries) for g in recent), default=0)
     recent_qs: list[_Request] = []
     for r in range(rounds):
         for g in recent:
-            if r < len(g.queries) and fresh(f"q:{g.queries[r].lower()}", ASK_COOLDOWN):
+            if (
+                r < len(g.queries)
+                and fresh(f"q:{g.queries[r].lower()}", ASK_COOLDOWN)
+                and g.queries[r].lower() not in typed_keys
+            ):
                 # A group's first search looks at this year; the second at any age.
                 recent_qs.append(
                     _Request("search", g.queries[r], "recent", this_year=r == 0)

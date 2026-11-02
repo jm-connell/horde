@@ -56,6 +56,13 @@ function expiryLabel(topic: RecTopic): string {
   })}`;
 }
 
+/** Today in the browser's own calendar, as a date input wants it. */
+function localToday(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function errorText(err: unknown, fallback: string): string {
   return err instanceof ApiError && err.message ? err.message : fallback;
 }
@@ -69,7 +76,7 @@ function AddTopic({ kind }: { kind: Kind }) {
   const [expiry, setExpiry] = useState<Expiry>("never");
   const [date, setDate] = useState("");
   const [match, setMatch] = useState<RecTopic["match"]>("words");
-  const today = new Date().toISOString().slice(0, 10);
+  const today = localToday();
   const ready = text.trim().length > 0 && (expiry !== "date" || date >= today);
 
   const submit = () => {

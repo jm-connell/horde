@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
@@ -1543,6 +1544,8 @@ def _topic_text(text: str) -> str:
     text = " ".join(text.split())
     if not any(ch.isalnum() for ch in text):
         raise ValueError("A topic needs at least one word")
+    if not any(len(w) > 1 for w in re.findall(r"\w+", text)):
+        raise ValueError("Use a word of two letters or more")
     return text
 
 

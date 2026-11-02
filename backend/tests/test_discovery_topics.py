@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime, timedelta
 
 from sqlmodel import select
@@ -79,7 +80,9 @@ def test_ten_interests_can_be_on_at_once(client, session, admin_user):
 
     for n in range(10):
         _add(client, kind="interest", text=f"topic {n}")
-    resp = client.post("/api/discover/topics", json={"kind": "interest", "text": "x"})
+    resp = client.post(
+        "/api/discover/topics", json={"kind": "interest", "text": "extra"}
+    )
     assert resp.status_code == 409 and resp.json()["code"] == "too_many_topics"
     # An expired one does not count, and turning it on again checks the limit.
     row = session.get(RecTopic, 1)
@@ -211,3 +214,70 @@ def test_typed_interests_are_searched_first_and_blocks_filter_results(
     calls.clear()
     gather.gather_for(session, runtime, admin_user.id)
     assert "kayak camping" not in [q for kind, q in calls if kind == "search"]
+
+
+def test_an_unrelated_pool_matches_no_topic_by_meaning(
+    client, session, admin_user, monkeypatch, ai_on
+):
+    from app.services.discovery import topics
+
+    monkeypatch.setattr(topics, "get_embed_provider", lambda: object())
+    monkeypatch.setattr(topics, "resolve_embed_model", lambda _p: "m")
+    monkeypatch.setattr(topics, "embed_query", lambda _text: _vec(0.0, axis=2))
+    # Nothing is close to the topic: a little of it in each (cosine 0.03 to
+    # 0.2), so some stand out from the rest without being about it.
+    for n in range(20):
+        part = 0.03 + 0.0085 * n
+        vec = [math.sqrt(1 - part * part), 0.0, part, 0.0]
+        if n == 19:
+            vec = [math.sqrt(1 - 0.3 * 0.3), 0.0, 0.3, 0.0]
+        _discovered(session, admin_user, f"unrel{n:06d}", f"U {n}", f"C{n}", vec)
+    _add(client, kind="block", text="crypto", match="similar")
+    _add(client, kind="interest", text="kayaks")
+    body = client.get("/api/discover/feed", params={"limit": 60}).json()
+    assert len(body["items"]) == 20
+    assert body["blocked"] == []
+    assert not [i for i in body["items"] if i["reason"]["kind"] == "interest"]
+
+
+def test_a_failed_topic_embedding_is_not_retried_at_once(
+    client, session, admin_user, monkeypatch, ai_on
+):
+    from app.services.discovery import topics
+
+    calls: list[str] = []
+
+    def failing(text):
+        calls.append(text)
+        return None
+
+    monkeypatch.setattr(topics, "get_embed_provider", lambda: object())
+    monkeypatch.setattr(topics, "resolve_embed_model", lambda _p: "m")
+    monkeypatch.setattr(topics, "embed_query", failing)
+    for n in range(5):
+        _add(client, kind="block", text=f"topic number {n}", match="similar")
+    _discovered(session, admin_user, "anyvideo001", "Any", "C", _vec(0.1))
+    _items(client)
+    # At most a few new topics per ranking...
+    assert len(calls) == topics.EMBEDS_PER_RANKING
+    client.put("/api/discover/tuning", json={"active": "explorer"})
+    _items(client)
+    # ...and a failure waits before it is tried again.
+    assert len(set(calls)) == len(calls) == 5
+
+
+def test_a_block_counts_each_video_once(
+    client, session, admin_user, set_watch, add_video
+):
+    old = add_video(title="Crypto history", yt_id="cryptofav01")
+    set_watch(admin_user, old, 0, datetime.now(UTC) - timedelta(days=300))
+    _discovered(session, admin_user, "cryptonew01", "Crypto today", "Coins")
+    block = _add(client, kind="block", text="crypto")
+    body = client.get("/api/discover/feed", params={"limit": 60}).json()
+    assert body["blocked"] == [{"topic_id": block["id"], "count": 2}]
+
+
+def test_one_letter_topics_are_refused(client):
+    for text in ["c++", "C#", "a"]:
+        resp = client.post("/api/discover/topics", json={"kind": "block", "text": text})
+        assert resp.status_code == 422, text

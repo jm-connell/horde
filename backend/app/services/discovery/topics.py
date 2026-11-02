@@ -6,8 +6,8 @@ the interest's words are in its title, channel or tags, when it was found by
 searching for the interest, or (with embeddings) when it stands out as close
 to the interest's text among the candidates.
 
-A **block** leaves videos out: by its words (everywhere recommendations are
-shown) or, with embeddings, by meaning (Recommended+, which reads the
+A **block** leaves videos out: by its words (Recommended+, the Recommended
+shelves and what the gatherer stores; not the live row) or, with embeddings, by meaning (Recommended+, which reads the
 vectors). Meaning is judged against the pool: a candidate counts as close when
 its similarity to the topic is far above the pool's (``BLOCK_Z``), since raw
 similarities mean different things on different embed models.
@@ -18,6 +18,7 @@ Topics past ``expires_at`` are kept, switched off, until turned on again.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 
@@ -43,11 +44,19 @@ INTEREST_SHARE_CAP = 0.35
 #: to match an interest by meaning, or to be left out by a "similar" block.
 INTEREST_Z = 2.0
 BLOCK_Z = 2.5
+#: ...and in any case at least this similar: a pool with nothing about the
+#: topic has outliers too. Unrelated text sits well below it on the usual embed
+#: models; this is a floor, not the line that decides.
+MIN_TOPIC_COSINE = 0.35
+#: A topic whose embedding failed is not tried again for this long, and one
+#: ranking embeds at most this many new topics (the rest wait for the next).
+EMBED_RETRY_SEC = 600
+EMBEDS_PER_RANKING = 3
 
 
 def _pattern(text: str) -> re.Pattern[str] | None:
     """The topic's words, in order, as whole words (any separators between)."""
-    words = re.findall(r"\w+", text.lower())
+    words = re.findall(r"\w+", text.casefold())
     if not words:
         return None
     return re.compile(r"\b" + r"\W+".join(re.escape(w) for w in words) + r"\b")
@@ -88,7 +97,7 @@ class Topics:
 
 def haystack(title: str | None, channel: str | None, tags: list[str]) -> str:
     """What a video's words are matched against."""
-    return " ".join([title or "", channel or "", *tags]).lower()
+    return " ".join([title or "", channel or "", *tags]).casefold()
 
 
 def is_active(row: RecTopic, now: datetime) -> bool:
@@ -120,23 +129,66 @@ def active(session: Session, user_id: int, now: datetime | None = None) -> Topic
     return out
 
 
-def topic_vector(runtime: DiscoveryRuntime, text: str) -> np.ndarray | None:
-    """The unit vector of ``text`` with the current embed model (kept in memory)."""
+def topic_vector(
+    runtime: DiscoveryRuntime, text: str, *, may_embed: bool = True
+) -> np.ndarray | None:
+    """The unit vector of ``text`` with the current embed model (kept in memory).
+
+    Asks the provider only when ``may_embed`` and it did not fail on this text in
+    the last ``EMBED_RETRY_SEC``; otherwise None until a later ranking.
+    """
     provider = get_embed_provider()
     if provider is None:
         return None
-    key = (resolve_embed_model(provider), text.strip().lower())
+    key = (resolve_embed_model(provider), text.strip().casefold())
     cached = runtime.topic_vector(key)
     if cached is not None:
-        return cached if cached.size else None
+        vec, at = cached
+        if vec.size or time.monotonic() - at < EMBED_RETRY_SEC:
+            return vec if vec.size else None
+    if not may_embed:
+        return None
     raw = embed_query(text)
     vec = np.asarray(raw or [], dtype=np.float32)
     norm = float(np.linalg.norm(vec)) if vec.size else 0.0
     vec = vec / norm if norm > 0 else np.zeros(0, dtype=np.float32)
-    if raw is not None:
-        # A failed call is not remembered: the next ranking tries again.
-        runtime.store_topic_vector(key, vec)
+    # A failure (empty) is remembered too, for EMBED_RETRY_SEC.
+    runtime.store_topic_vector(key, (vec, time.monotonic()))
     return vec if vec.size else None
+
+
+def topic_vectors(
+    runtime: DiscoveryRuntime, texts: list[str]
+) -> list[np.ndarray | None]:
+    """``topic_vector`` of each text, asking the provider for at most
+    ``EMBEDS_PER_RANKING`` of them (so a slow provider cannot stall a ranking)."""
+    out: list[np.ndarray | None] = []
+    budget = EMBEDS_PER_RANKING
+    for text in texts:
+        vec = topic_vector(runtime, text, may_embed=False)
+        if vec is None and budget > 0 and not _failed_lately(runtime, text):
+            budget -= 1
+            vec = topic_vector(runtime, text)
+        out.append(vec)
+    return out
+
+
+def _failed_lately(runtime: DiscoveryRuntime, text: str) -> bool:
+    provider = get_embed_provider()
+    if provider is None:
+        return True
+    cached = runtime.topic_vector(
+        (resolve_embed_model(provider), text.strip().casefold())
+    )
+    return cached is not None and not cached[0].size
+
+
+def active_ids(session: Session, user_id: int) -> tuple[int, ...]:
+    """The ids of the user's switched-on topics (changes when one expires)."""
+    now = utcnow()
+    return tuple(
+        sorted(r.id for r in listed(session, user_id) if r.id and is_active(r, now))
+    )
 
 
 def standout(sims: np.ndarray) -> np.ndarray:

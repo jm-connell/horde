@@ -657,21 +657,35 @@ def _topic_fits(
     meaning = [*topics.interests, *(t for t in topics.blocks if t.match == "similar")]
     if not meaning or get_embed_provider() is None:
         return best, fit, blocked
-    vectors = [(t, topic_store.topic_vector(runtime, t.text)) for t in meaning]
+    vectors = list(
+        zip(
+            meaning,
+            topic_store.topic_vectors(runtime, [t.text for t in meaning]),
+            strict=True,
+        )
+    )
     usable = [(t, v) for t, v in vectors if v is not None]
     if not usable:
         return best, fit, blocked
     dim = Counter(len(v) for _t, v in usable).most_common(1)[0][0]
     usable = [(t, v) for t, v in usable if len(v) == dim]
     matrix = np.asarray([v for _t, v in usable], dtype=np.float32)
-    z = topic_store.standout(_candidate_sims(session, runtime, cands, matrix))
+    sims = _candidate_sims(session, runtime, cands, matrix)
+    z = topic_store.standout(sims)
+    raw = np.nan_to_num(sims, nan=-1.0)
     for j, (t, _v) in enumerate(usable):
         column = np.nan_to_num(z[:, j], nan=-np.inf)
         if t.kind == "block":
-            for row in np.flatnonzero(column >= topic_store.BLOCK_Z).tolist():
+            for row in np.flatnonzero(
+                (column >= topic_store.BLOCK_Z)
+                & (raw[:, j] >= topic_store.MIN_TOPIC_COSINE)
+            ).tolist():
                 blocked[row] = blocked[row] or t
             continue
-        for row in np.flatnonzero(column >= topic_store.INTEREST_Z).tolist():
+        for row in np.flatnonzero(
+            (column >= topic_store.INTEREST_Z)
+            & (raw[:, j] >= topic_store.MIN_TOPIC_COSINE)
+        ).tolist():
             close = float(min(1.0, 0.5 + (column[row] - topic_store.INTEREST_Z) / 2))
             if close > fit[row]:
                 best[row], fit[row] = t, close
@@ -694,12 +708,13 @@ def build_feed(
     interest_share = topics.interest_share
     shares = {k: v * (1 - interest_share) for k, v in t.shares.normalized().items()}
     shares["interest"] = interest_share
-    blocked: Counter[int] = Counter()
+    #: Per block (topic id), the candidates it left out (each once).
+    blocked: defaultdict[int, set[str]] = defaultdict(set)
 
     def word_blocked(c: Candidate) -> bool:
         hit = topics.word_block(topic_store.haystack(c.title, c.channel, c.tags))
         if hit is not None:
-            blocked[hit.id] += 1
+            blocked[hit.id].add(c.key)
         return hit is not None
 
     excluded: Exclusions = exclusions(session, user_id)
@@ -829,7 +844,7 @@ def build_feed(
         parts: list[tuple[str, float]] = []
         block = similar_block[i]
         if block is not None:
-            blocked[block.id] += 1
+            blocked[block.id].add(c.key)
             continue
         interest = interest_of[i]
         if fav is not None:
@@ -994,7 +1009,7 @@ def build_feed(
         new_channels,
         cold,
         _mix_stats(mixed[:placed], shares),
-        dict(blocked),
+        {tid: len(keys) for tid, keys in blocked.items()},
     )
 
 
@@ -1210,7 +1225,9 @@ def ranked_feed(
     tuned = tuning if tuning is not None else load_tuning(session, user_id)
     # A different tuning is a different feed: changing a slider never pages
     # through a ranking made with the old values.
-    key = (user_id, seed, tuned.model_dump_json())
+    # Topics too: one that expires (or is added) ranks the feed again.
+    topic_ids = topic_store.active_ids(session, user_id)
+    key = (user_id, seed, tuned.model_dump_json(), topic_ids)
     fingerprint = history_fingerprint(session, user_id)
     cached = runtime.feed(key)
     if (

@@ -113,8 +113,12 @@ export default function DiscoverHome({
   const [whyItem, setWhyItem] = useState<DiscoverItem | null>(null);
   // Re-rank when the algorithm changes (the panel saves it; not on first load).
   const tuning = useRecTuning().data?.values;
-  const topics = useRecTopics().data?.items;
-  const tuningKey = JSON.stringify(tuning && topics ? [tuning, topics] : null);
+  const topicsQuery = useRecTopics();
+  // Topics settled (loaded, or failed: then tuning changes still re-rank).
+  const topicsSettled = topicsQuery.isSuccess || topicsQuery.isError;
+  const tuningKey = JSON.stringify(
+    tuning && topicsSettled ? [tuning, topicsQuery.data?.items ?? []] : null
+  );
   const lastTuning = useRef<string | null>(null);
   useEffect(() => {
     if (tuningKey === "null") return;
