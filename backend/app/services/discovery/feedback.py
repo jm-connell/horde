@@ -17,7 +17,9 @@ from sqlmodel import Session, col, delete, select
 from ...models import RecFeedback, RecImpression, as_utc, utcnow
 from ..follows import normalize_channel_url
 
-KINDS = frozenset({"video", "channel", "suggestion"})
+#: video / channel / suggestion: leave out of recommendations. taste: a watch
+#: (by its key) that must not shape them; set from the History page.
+KINDS = frozenset({"video", "channel", "suggestion", "taste"})
 #: Shows closer together than this are one visit (paging, a refresh).
 VISIT_GAP = timedelta(hours=1)
 #: Each earlier visit a recommendation was shown on lowers it by this much...
@@ -46,6 +48,8 @@ class Exclusions:
     channel_names: set[str] = field(default_factory=set)
     dismissed_urls: set[str] = field(default_factory=set)
     dismissed_names: set[str] = field(default_factory=set)
+    #: Watches (keys) left out of the taste recommendations read.
+    taste: set[str] = field(default_factory=set)
 
     def blocks_channel(self, channel_url: str | None, channel: str | None) -> bool:
         url = normalize_channel_url(channel_url or "")
@@ -72,6 +76,9 @@ def exclusions(session: Session, user_id: int) -> Exclusions:
     ).all():
         if row.kind == "video":
             out.videos.add(row.key)
+            continue
+        if row.kind == "taste":
+            out.taste.add(row.key)
             continue
         urls, names = (
             (out.channel_urls, out.channel_names)
@@ -136,10 +143,11 @@ def remove(session: Session, user_id: int, feedback_id: int) -> bool:
 
 
 def listed(session: Session, user_id: int) -> list[RecFeedback]:
+    """What the user hid (watches kept out of the taste are listed in History)."""
     return list(
         session.exec(
             select(RecFeedback)
-            .where(RecFeedback.user_id == user_id)
+            .where(RecFeedback.user_id == user_id, RecFeedback.kind != "taste")
             .order_by(col(RecFeedback.created_at).desc(), col(RecFeedback.id).desc())
         ).all()
     )

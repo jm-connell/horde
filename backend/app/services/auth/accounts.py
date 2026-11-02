@@ -455,6 +455,10 @@ def delete_user(
         )
         successor_id = heir
     covers = playlist_owners.hand_over(session, user_id, successor_id)
+    # Whoever ranks with this account's shared algorithms keeps a copy.
+    from ..discovery import algorithms
+
+    algorithms.release_owner(session, user_id)
     # Explicit deletes as well as the FK cascades, matching delete_video_cascade.
     _delete_sessions(session, user_id)
     session.execute(

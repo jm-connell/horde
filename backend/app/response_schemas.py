@@ -13,6 +13,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 from .schemas import ChannelFeedEntry, TagStat, VideoRead
+from .services.discovery.tuning import Tuning
 
 
 class ErrorField(BaseModel):
@@ -476,6 +477,26 @@ class DiscoverReasonRead(BaseModel):
     detail: str | None = None
 
 
+class DiscoverScorePartRead(BaseModel):
+    label: str
+    value: float
+
+
+class DiscoverWhyRead(BaseModel):
+    """How the feed placed one pick: its bucket and what its score is made of."""
+
+    #: subscriptions | similar | new | throwback | rewatch
+    bucket: str
+    score: float
+    #: The parts add up to ``score``.
+    parts: list[DiscoverScorePartRead]
+    #: Where it came from: a YouTube search, an up next list, the library, ...
+    found_by: str | None = None
+    #: False when it was not close enough to the user's taste for its bucket
+    #: and waits at the end of the feed.
+    eligible: bool = True
+
+
 class DiscoverItemRead(BaseModel):
     """A library video (``video``) or a video that is not downloaded (``stream``)."""
 
@@ -488,6 +509,8 @@ class DiscoverItemRead(BaseModel):
     #: library (downloaded), channels (not downloaded, from a channel the user
     #: follows or that is indexed) or new (from any other channel).
     source: Literal["library", "channels", "new"]
+    #: Why the feed placed it (live broadcasts have none).
+    why: DiscoverWhyRead | None = None
 
 
 class DiscoverStatusRead(BaseModel):
@@ -504,10 +527,138 @@ class DiscoverStatusRead(BaseModel):
     backing_off: bool
 
 
+class DiscoverMixRead(BaseModel):
+    bucket: str
+    #: The share the user asked for (0..1).
+    target: float
+    #: The share it got among the top picks (0..1).
+    actual: float
+
+
 class DiscoverFeedRead(BaseModel):
     items: list[DiscoverItemRead]
     next_cursor: str | None = None
     status: DiscoverStatusRead
+    #: Asked-for and actual share of each kind of pick (first page only).
+    mix: list[DiscoverMixRead] = Field(default_factory=list)
+    #: What each blocked topic left out (first page only).
+    blocked: list[DiscoverBlockedRead] = Field(default_factory=list)
+
+
+class HistoryWatchRead(BaseModel):
+    """One video in the user's history, at its latest watch."""
+
+    #: The YouTube id, or ``video:<id>`` for a library video without one.
+    key: str
+    watched_at: str
+    #: Where it was watched, newest first: library, stream (played without
+    #: downloading) or youtube (imported from Takeout).
+    sources: list[Literal["library", "stream", "youtube"]]
+    #: The library video, when it is downloaded.
+    video: VideoRead | None = None
+    #: How to show and play it otherwise.
+    stream: ChannelFeedEntry | None = None
+    #: How far the latest Horde watch got (0..1); unknown for a YouTube view.
+    fraction: float | None = None
+    #: Views imported from YouTube.
+    youtube_views: int = 0
+    #: Left out of recommendations by the user ("don't use for recommendations").
+    excluded: bool = False
+
+
+class HistoryWatchListRead(BaseModel):
+    items: list[HistoryWatchRead]
+    next_cursor: str | None = None
+    #: Videos in the whole history (first page only).
+    total: int | None = None
+
+
+class HistoryRemovedRead(BaseModel):
+    #: Videos asked for.
+    videos: int
+    #: Records removed: library progress, streamed watches, imported views.
+    library: int
+    streams: int
+    youtube_views: int
+
+
+class HistoryTasteRead(BaseModel):
+    keys: list[str]
+    excluded: bool
+
+
+class ContinueYoutubeRead(BaseModel):
+    """Videos watched on YouTube lately (from the import), for Continue watching."""
+
+    items: list[ChannelFeedEntry]
+    next_cursor: str | None = None
+
+
+class RecTopicRead(BaseModel):
+    id: int
+    kind: Literal["interest", "block"]
+    text: str
+    match: Literal["words", "similar"]
+    strength: Literal["low", "normal", "high"]
+    expires_at: str | None = None
+    #: False once it expired (it stays listed until turned on again or deleted).
+    active: bool
+    created_at: str
+
+
+class RecTopicListRead(BaseModel):
+    items: list[RecTopicRead]
+    next_cursor: str | None = None
+
+
+class DiscoverBlockedRead(BaseModel):
+    topic_id: int
+    #: Candidates the block left out of this ranking.
+    count: int
+
+
+class RecAlgorithmRead(BaseModel):
+    id: int
+    name: str
+    shared: bool
+    #: The owner's username.
+    owner: str
+    #: Your own (you may change or delete it).
+    mine: bool
+    values: Tuning
+    updated_at: str
+
+
+class RecAlgorithmListRead(BaseModel):
+    """Your saved algorithms, then those others share."""
+
+    items: list[RecAlgorithmRead]
+    next_cursor: str | None = None
+
+
+class RecTuningPresetRead(BaseModel):
+    id: str
+    name: str
+    description: str
+    values: Tuning
+
+
+class RecTuningRead(BaseModel):
+    """The user's Recommended+ settings and the presets they can pick from."""
+
+    #: A preset id, "custom" or "algo:<id>".
+    active: str
+    #: What the feed ranks with now.
+    values: Tuning
+    #: The saved algorithm in use, when one is.
+    algorithm: RecAlgorithmRead | None = None
+    #: Your saved algorithm the own values started from ("Save" writes to it).
+    based_on: RecAlgorithmRead | None = None
+    #: The user's own values (kept while a preset is picked).
+    custom: Tuning | None = None
+    presets: list[RecTuningPresetRead]
+    #: Balanced, for "reset".
+    defaults: Tuning
 
 
 class SuggestedChannelRead(BaseModel):

@@ -7,14 +7,23 @@ Horde tracks what you’ve watched and where you left off so you can jump back w
 
 ## History page (`/history`)
 
-The History page lists videos with watch activity:
+The History page lists everything you watched, one card per video at its latest watch:
 
 | Behavior | Detail |
 |----------|--------|
-| Filter | `watched_only` — videos that have been watched |
-| Sort | `last_watched_at` descending (most recent first) |
+| What | Library videos you watched, videos you played without downloading (**Streamed**) and, if you [imported it](youtube-history.md), your YouTube history (**On YouTube**, with its view count) |
+| Sort | Latest watch first, a page at a time as you scroll |
 | Grouping | **By calendar day** — Today, Yesterday, then weekday / month / day labels |
-| Cards | Open the [watch](watching.md) page; progress overlays show leftover position when present |
+| Cards | A library video opens the [watch](watching.md) page; any other plays as a stream and offers a download |
+
+### Removing and excluding
+
+A card's **⋯** menu, or **Select** for many at once (**Select day** picks a whole day), offers:
+
+- **Don't use for recommendations**: the video stays in your history and still counts as watched (it is not recommended again), but it no longer shapes Recommended or Recommended+. Its card fades and says so; **Use for recommendations again** undoes it. Useful for a one-off, or something someone else watched on your account. In the [Recommended+ algorithm](library.md#tuning-recommended), **Advanced → Watched at least this much to count** does this for every video you left early.
+- **Remove from history**: forgets the video entirely, after a confirmation: its resume position, the streamed watch and every imported YouTube view of it. It counts as unwatched again, so it may be recommended and leaves Continue watching, and it no longer keeps a download safe from a channel's [retention rule](channels.md#retention) the way a recent watch does. Your watch time totals stay. This cannot be undone.
+
+API: `GET /api/history/watches`, `POST /api/history/watches/remove` and `POST /api/history/watches/taste` (`{keys, use}`), for the signed-in account only. A key is the video's YouTube id, or `video:<id>` for a library video without one.
 
 Times are interpreted as UTC when the API returns naive timestamps, then shown in your local timezone for day buckets and clock labels.
 
@@ -52,7 +61,7 @@ API: `GET /api/history/stats?range=7d|30d|365d|all&tz=<IANA zone>` (the signed-i
 
 ### YouTube views in the stats
 
-If you [imported your YouTube history](youtube-history.md), **Include YouTube in History stats** (Settings → Library → YouTube history, remembered per account) adds those views to videos started, active days, the streak, top channels and the weekday × hour grid. They never add watch time: Takeout does not record how long a video played. The History list itself never shows them. API: `include_youtube=true`.
+If you [imported your YouTube history](youtube-history.md), **Include YouTube in History stats** (Settings → Library → YouTube history, remembered per account) adds those views to videos started, active days, the streak, top channels and the weekday × hour grid. They never add watch time: Takeout does not record how long a video played. The History list shows them whether or not this is on. API: `include_youtube=true`.
 
 ## Continue watching
 
@@ -67,6 +76,8 @@ If you [imported your YouTube history](youtube-history.md), **Include YouTube in
 Roughly: videos with a saved resume position for you that still look in-progress (enough watched to matter, and not past the finished threshold). The list is also limited by the continue-watching time window (below).
 
 Clicking a card opens `/watch/:id` and seeks to the saved position.
+
+After those come up to five videos you watched on YouTube inside the same window, newest first, if you [imported your YouTube history](youtube-history.md) (marked **Watched on YouTube**; Takeout does not say how far one played, so any recent view counts). Downloaded videos follow the library's rules instead. Dismissing one hides it on this device. API: `GET /api/history/continue-youtube`.
 
 ## How progress works
 

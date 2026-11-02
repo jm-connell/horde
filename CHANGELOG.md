@@ -9,6 +9,23 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
+- **Tune Recommended+.** **Algorithm** above the feed opens every setting
+  behind it: presets (Balanced, Catch up, Familiar, Explorer, Nostalgia) or
+  your own mix of kinds of picks, match strictness, freshness, popularity
+  (hidden gems to popular), variety, shuffle, repeats, your taste window,
+  filters (Shorts, past live streams, length, upload age) and sources. The
+  feed re-ranks as you go; Account settings shows the same settings. A new
+  kind of pick brings back videos you finished a while ago (rewatch), and
+  each card's menu says **Why this video?** with every part of its score.
+  Type in interests to get more of a topic (Horde searches YouTube for
+  them) and block topics by their words or by meaning, each for good or
+  until a date. Save your settings under a name and, if you like, share
+  them with the other accounts.
+- **One history.** History now lists videos you streamed and your imported
+  YouTube history beside library watches. Remove videos from it (one at a
+  time or with **Select**, a whole day at once), or keep them in it but out
+  of your recommendations (their cards fade). Recent YouTube views join
+  Continue watching (up to five).
 - **Comments.** Horde saves the top 100 YouTube comments of every video in
   the library, with replies to the most popular threads, in the background
   (new downloads first, one video every 30 seconds), and fetches them again

@@ -5,6 +5,14 @@ import type {
   RecFeedback,
   RecFeedbackKind,
   RecFeedbackList,
+  RecAlgorithm,
+  RecAlgorithmUpdate,
+  RecAlgorithmWrite,
+  RecTopic,
+  RecTopicUpdate,
+  RecTopicWrite,
+  RecTuningState,
+  RecTuningWrite,
   StreamWatch,
   StreamWatchWrite,
   SuggestedChannels,
@@ -40,6 +48,73 @@ export const discoverApi = {
   refreshDiscover(): Promise<DiscoverRefresh> {
     return request<DiscoverRefresh>("/api/discover/refresh", {
       method: "POST",
+    });
+  },
+
+  getRecTuning(opts?: ReadOptions): Promise<RecTuningState> {
+    return request<RecTuningState>("/api/discover/tuning", opts);
+  },
+
+  saveRecTuning(payload: RecTuningWrite): Promise<RecTuningState> {
+    return request<RecTuningState>("/api/discover/tuning", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  listRecAlgorithms(opts?: ReadOptions): Promise<{ items: RecAlgorithm[] }> {
+    return request<{ items: RecAlgorithm[] }>("/api/discover/algorithms", opts);
+  },
+
+  saveRecAlgorithm(payload: RecAlgorithmWrite): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>("/api/discover/algorithms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateRecAlgorithm(
+    id: number,
+    payload: RecAlgorithmUpdate
+  ): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>(`/api/discover/algorithms/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecAlgorithm(id: number): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>(`/api/discover/algorithms/${id}`, {
+      method: "DELETE",
+    });
+  },
+
+  listRecTopics(opts?: ReadOptions): Promise<{ items: RecTopic[] }> {
+    return request<{ items: RecTopic[] }>("/api/discover/topics", opts);
+  },
+
+  addRecTopic(payload: RecTopicWrite): Promise<RecTopic> {
+    return request<RecTopic>("/api/discover/topics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateRecTopic(id: number, payload: RecTopicUpdate): Promise<RecTopic> {
+    return request<RecTopic>(`/api/discover/topics/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecTopic(id: number): Promise<RecTopic> {
+    return request<RecTopic>(`/api/discover/topics/${id}`, {
+      method: "DELETE",
     });
   },
 

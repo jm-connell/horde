@@ -15,6 +15,13 @@ export const queryKeys = {
   },
   discover: {
     status: ["discover", "status"] as const,
+    tuning: ["discover", "tuning"] as const,
+    /** The latest feed's asked-for and actual mix (written by the feed page). */
+    mix: ["discover", "mix"] as const,
+    topics: ["discover", "topics"] as const,
+    algorithms: ["discover", "algorithms"] as const,
+    /** What each blocked topic left out of the latest feed (the feed page writes it). */
+    blocked: ["discover", "blocked"] as const,
   },
   ai: {
     status: ["ai", "status"] as const,
@@ -84,6 +91,8 @@ export const queryKeys = {
     all: ["history"] as const,
     stats: (range: string, youtube: boolean) =>
       ["history", "stats", range, youtube] as const,
+    watches: ["history", "watches"] as const,
+    continueYoutube: ["history", "continue-youtube"] as const,
   },
   takeout: {
     all: ["takeout"] as const,

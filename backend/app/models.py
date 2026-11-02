@@ -730,6 +730,9 @@ class UserSettings(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
     ui_json: str = Field(default="{}")
+    #: The user's Recommended+ settings (``services/discovery/tuning.py``); kept
+    #: out of ``ui_json`` so a UI save can never overwrite them unvalidated.
+    rec_tuning_json: str | None = None
     updated_at: datetime = Field(default_factory=utcnow)
 
 
@@ -947,12 +950,60 @@ class DiscoveryState(SQLModel, table=True):
     asked_json: str = Field(default="{}")
 
 
+class RecAlgorithm(SQLModel, table=True):
+    """A named set of Recommended+ settings a user saved (``discovery/algorithms.py``).
+
+    ``tuning_json`` holds a ``tuning.Tuning``. A shared one shows in everyone's
+    algorithm picker; only its owner changes or deletes it. Someone ranking with
+    another person's algorithm keeps its last values when it goes away.
+    """
+
+    __tablename__ = "rec_algorithms"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_rec_algorithms_owner_name"),
+        _AUTOINCREMENT,
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    owner_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    name: str
+    shared: bool = False
+    tuning_json: str
+    created_at: datetime = Field(default_factory=utcnow)
+    updated_at: datetime = Field(default_factory=utcnow)
+
+
+class RecTopic(SQLModel, table=True):
+    """A topic a user added to Recommended+ by hand (``services/discovery/topics.py``).
+
+    ``kind``: ``interest`` (shown more, and searched for on YouTube) or
+    ``block`` (left out). A topic past ``expires_at`` stays listed, switched
+    off, until the user turns it on again or deletes it.
+    """
+
+    __tablename__ = "rec_topics"
+    __table_args__ = (_AUTOINCREMENT,)
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="users.id", index=True, ondelete="CASCADE")
+    kind: str
+    text: str
+    #: Blocks: ``words`` (the words, in a title, channel or tag) or ``similar``
+    #: (close in meaning, with embeddings). Interests match both ways.
+    match: str = "words"
+    #: Interests: ``low`` | ``normal`` | ``high``; how much of the feed they get.
+    strength: str = "normal"
+    expires_at: datetime | None = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
 class RecFeedback(SQLModel, table=True):
     """What a user told recommendations to leave out.
 
     ``kind``: ``video`` (key: YouTube id, or ``video:<id>`` for a library video
     without one), ``channel`` (key: normalized channel URL, or ``name:<lowercased
-    name>``) or ``suggestion`` (a suggested channel dismissed, same keys as channel).
+    name>``), ``suggestion`` (a suggested channel dismissed, same keys as channel)
+    or ``taste`` (a watch, by the video's key, kept out of what shapes them).
     """
 
     __tablename__ = "rec_feedback"
@@ -988,8 +1039,9 @@ class RecImpression(SQLModel, table=True):
 class YoutubeWatchEvent(SQLModel, table=True):
     """One view in a user's YouTube watch history, read from a Google Takeout export.
 
-    Kept apart from ``user_video_state`` (Horde's own history): these views never
-    show in History or Continue watching. Recommendations, channel pages, the
+    Kept apart from ``user_video_state`` (Horde's own history). History lists them
+    beside Horde's own watches, and the newest few join Continue watching
+    (``services/watch_history.py``). Recommendations, channel pages, the
     Download page and (when the user opts in) the History stats read them
     (``services/takeout/history.py``). One row per view, so importing an export
     that overlaps an earlier one only adds the views that are new.

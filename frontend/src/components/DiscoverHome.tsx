@@ -1,9 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useDownloads } from "../context/DownloadContext";
+import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
+import { useRecTopics, useRecTuning } from "../queries/discover";
+import { queryKeys } from "../queries/keys";
 import type {
   ChannelFeedEntry,
   DiscoverItem,
@@ -14,6 +18,7 @@ import { button } from "./buttons";
 import ChannelFeedCard from "./ChannelFeedCard";
 import RecMenu from "./discover/RecMenu";
 import SuggestedChannels from "./discover/SuggestedChannels";
+import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 
@@ -102,6 +107,25 @@ export default function DiscoverHome({
   const { submitDownload } = useDownloads();
   const [settings, updateSettings] = useSettings();
   const marks = settings.recSourceMarks;
+  const queryClient = useQueryClient();
+  const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
+  useAlgorithmPanelHere();
+  const [whyItem, setWhyItem] = useState<DiscoverItem | null>(null);
+  // Re-rank when the algorithm changes (the panel saves it; not on first load).
+  const tuning = useRecTuning().data?.values;
+  const topicsQuery = useRecTopics();
+  // Topics settled (loaded, or failed: then tuning changes still re-rank).
+  const topicsSettled = topicsQuery.isSuccess || topicsQuery.isError;
+  const tuningKey = JSON.stringify(
+    tuning && topicsSettled ? [tuning, topicsQuery.data?.items ?? []] : null
+  );
+  const lastTuning = useRef<string | null>(null);
+  useEffect(() => {
+    if (tuningKey === "null") return;
+    if (lastTuning.current !== null && lastTuning.current !== tuningKey)
+      setReloadKey((k) => k + 1);
+    lastTuning.current = tuningKey;
+  }, [tuningKey]);
   // Undefined: the server's seed of the day, so a plain reload keeps the order.
   const [seed, setSeed] = useState<number | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
@@ -110,6 +134,10 @@ export default function DiscoverHome({
   const [status, setStatus] = useState<DiscoverStatus | null>(null);
   const [channels, setChannels] = useState<SuggestedChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  /** Re-ranking with cards on screen: keep them, dimmed, instead of a spinner. */
+  const [updating, setUpdating] = useState(false);
+  const hasItems = useRef(false);
+  hasItems.current = items.length > 0;
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [freshReady, setFreshReady] = useState(false);
@@ -126,7 +154,8 @@ export default function DiscoverHome({
   useEffect(() => {
     let active = true;
     generation.current += 1;
-    setLoading(true);
+    if (hasItems.current) setUpdating(true);
+    else setLoading(true);
     setError(null);
     setFreshReady(false);
     api
@@ -136,13 +165,21 @@ export default function DiscoverHome({
         setItems(page.items);
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
+        queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
+        queryClient.setQueryData(
+          queryKeys.discover.blocked,
+          page.blocked ?? []
+        );
         runAtLoad.current = page.status.last_run_at ?? null;
       })
       .catch(() => {
         if (active) setError("Could not load recommendations.");
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) {
+          setLoading(false);
+          setUpdating(false);
+        }
       });
     api
       .getSuggestedChannels(seed)
@@ -153,7 +190,7 @@ export default function DiscoverHome({
     return () => {
       active = false;
     };
-  }, [seed, reloadKey]);
+  }, [seed, reloadKey, queryClient]);
 
   // While the gatherer works for us, watch for it to finish: an empty feed
   // reloads by itself, a full one offers the new picks.
@@ -369,6 +406,7 @@ export default function DiscoverHome({
         )}
         <RecMenu
           channel={channel.name || null}
+          onWhy={() => setWhyItem(item)}
           onNotInterested={() => notInterested(item)}
           onBlockChannel={() => blockChannel(item)}
           className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
@@ -380,7 +418,10 @@ export default function DiscoverHome({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
-        <p className="min-w-0 flex-1 text-sm text-muted" aria-live="polite">
+        <p
+          className="min-w-0 flex-1 basis-full text-sm text-muted sm:basis-0"
+          aria-live="polite"
+        >
           {statusLine ??
             "From your channels, more like what you watch, and channels new to you."}
         </p>
@@ -401,6 +442,16 @@ export default function DiscoverHome({
           title="Outline each video by where it comes from"
         >
           Sources
+        </button>
+        <button
+          type="button"
+          aria-pressed={algorithmOpen}
+          onClick={() => setAlgorithmOpen(!algorithmOpen)}
+          className={`${button("secondary", "sm")} ${algorithmOpen ? "border-accent text-accent" : ""}`}
+          title="See and change how this feed is picked"
+          data-horde="open-algorithm"
+        >
+          Algorithm
         </button>
         <button
           type="button"
@@ -446,7 +497,10 @@ export default function DiscoverHome({
         </div>
       ) : (
         <>
-          <div className={gridClass}>
+          <div
+            className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
+            aria-busy={updating || undefined}
+          >
             {items.slice(0, SUGGESTIONS_AFTER).map(card)}
             <SuggestedChannels
               channels={channels}
@@ -459,6 +513,16 @@ export default function DiscoverHome({
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}
         </>
+      )}
+      {whyItem && (
+        <WhyDialog
+          item={whyItem}
+          onClose={() => setWhyItem(null)}
+          onOpenAlgorithm={() => {
+            setWhyItem(null);
+            setAlgorithmOpen(true);
+          }}
+        />
       )}
     </div>
   );

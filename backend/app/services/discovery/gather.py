@@ -55,8 +55,9 @@ from ..ytdlp_common import (
     classify_ytdlp_error,
 )
 from ..ytdlp_extract import search_youtube_for_discovery, youtube_up_next
+from . import topics, tuning
 from .feedback import exclusions, forget_old_impressions
-from .history import Watch, watches
+from .history import Watch, counts_as_taste, watches
 from .interests import Interest, interests, keyword_queries, llm_queries
 from .runtime import DiscoveryRuntime
 
@@ -77,6 +78,10 @@ HOURLY_REQUEST_CAP = 30
 REQUEST_PAUSE_SEC = 20.0
 ASK_COOLDOWN = timedelta(days=4)
 SEED_COOLDOWN = timedelta(days=7)
+#: Interests the user typed in are searched first, at most this many a run,
+#: and again after a day (they may be for something coming up soon).
+TOPIC_SEARCHES_PER_RUN = 2
+TOPIC_COOLDOWN = timedelta(days=1)
 BACKOFF_START_SEC = 30 * 60.0
 BACKOFF_MAX_SEC = 12 * 3600.0
 #: Found videos stop being candidates after this; a later run finds new ones.
@@ -196,8 +201,13 @@ def plan_requests(
     history: list[Watch],
     asked: dict[str, str],
     now: datetime,
+    typed: list[str] | None = None,
 ) -> list[_Request]:
-    """This run's searches and up next lists, best first, skipping recent repeats."""
+    """This run's searches and up next lists, best first, skipping recent repeats.
+
+    ``typed``: the user's own interests (strongest first), searched before the
+    rest. They share the run's searches, so YouTube is asked no more often.
+    """
 
     def fresh(key: str, cooldown: timedelta) -> bool:
         when = asked.get(key)
@@ -208,24 +218,33 @@ def plan_requests(
         except ValueError:
             return True
 
-    searches: list[_Request] = []
+    searches: list[_Request] = [
+        _Request("search", q, "recent")
+        for q in (typed or [])
+        if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN)
+    ][:TOPIC_SEARCHES_PER_RUN]
+    typed_keys = {q.lower() for q in (typed or [])}
     # One slot in four for a dormant interest, the rest by weight, round robin.
     throwback = [
         _Request("search", q, "throwback")
         for g in dormant
         for q in g.queries
-        if fresh(f"q:{q.lower()}", ASK_COOLDOWN)
+        if fresh(f"q:{q.lower()}", ASK_COOLDOWN) and q.lower() not in typed_keys
     ]
     rounds = max((len(g.queries) for g in recent), default=0)
     recent_qs: list[_Request] = []
     for r in range(rounds):
         for g in recent:
-            if r < len(g.queries) and fresh(f"q:{g.queries[r].lower()}", ASK_COOLDOWN):
+            if (
+                r < len(g.queries)
+                and fresh(f"q:{g.queries[r].lower()}", ASK_COOLDOWN)
+                and g.queries[r].lower() not in typed_keys
+            ):
                 # A group's first search looks at this year; the second at any age.
                 recent_qs.append(
                     _Request("search", g.queries[r], "recent", this_year=r == 0)
                 )
-    if throwback:
+    if throwback and len(searches) < SEARCHES_PER_RUN:
         searches.append(throwback[0])
     searches.extend(recent_qs[: SEARCHES_PER_RUN - len(searches)])
     if len(searches) < SEARCHES_PER_RUN:
@@ -294,6 +313,7 @@ def store_results(
     *,
     in_library: set[str],
     blocked: Callable[[str, str | None, str | None], bool],
+    title_blocked: Callable[[str], bool] = lambda _text: False,
 ) -> int:
     """Upsert the found videos and this user's hits on them; returns new hits."""
     now = utcnow()
@@ -303,6 +323,8 @@ def store_results(
         if not yt_id or yt_id in in_library or yt_id == request.key:
             continue
         if blocked(yt_id, entry.get("channel_url"), entry.get("channel")):
+            continue
+        if title_blocked(topics.haystack(entry.get("title"), entry.get("channel"), [])):
             continue
         row = session.exec(
             select(DiscoveryVideo).where(DiscoveryVideo.yt_id == yt_id)
@@ -471,7 +493,13 @@ def gather_for(
     now = utcnow()
     state = _state(session, user_id)
     asked = _asked(state)
-    history = watches(session, user_id)
+    tuned = tuning.for_user(session, user_id)
+    left_out = exclusions(session, user_id).taste
+    history = [
+        w
+        for w in watches(session, user_id)
+        if counts_as_taste(w, tuned.min_watched_pct) and w.key not in left_out
+    ]
     found = 0
     error: str | None = None
     try:
@@ -480,13 +508,19 @@ def gather_for(
             session, user_id, in_library | set(runtime.vectors.matrix(session).index)
         )
         embed_pending(session)
-        recent, dormant = interests(session, runtime, history, now)
+        # Streamed watches are remembered (and embedded) for taste either way.
+        if not tuned.use_youtube:
+            raise _Halt("the user turned off videos found on YouTube")
+        recent, dormant = interests(session, runtime, history, now, tuned.window)
         groups = recent + dormant
         if not (_may_use_ai(session, user_id) and llm_queries(groups)):
             keyword_queries(session, groups, history)
         excluded = exclusions(session, user_id)
+        typed = topics.active(session, user_id, now)
         for n, request in enumerate(
-            plan_requests(recent, dormant, history, asked, now)
+            plan_requests(
+                recent, dormant, history, asked, now, [t.text for t in typed.interests]
+            )
         ):
             if stopping() or (n and pause(REQUEST_PAUSE_SEC)):
                 raise _Halt("stopping")
@@ -524,6 +558,7 @@ def gather_for(
                 entries,
                 in_library=in_library,
                 blocked=excluded.blocks,
+                title_blocked=lambda text: typed.word_block(text) is not None,
             )
         runtime.backoff_sec = 0.0
     except _Halt as halt:

@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from typing import Annotated, Literal
 from urllib.parse import urlsplit
@@ -11,6 +12,7 @@ from .models import (
     PlaylistVisibility,
     VideoStatus,
 )
+from .services.discovery.tuning import Tuning
 
 #: Largest list a bulk endpoint accepts (video ids, pasted URLs).
 MAX_BULK_ITEMS = 1000
@@ -1517,6 +1519,111 @@ class StreamWatchWrite(BaseModel):
     position_sec: float = Field(ge=0, le=7 * 86400)
     duration_sec: float | None = Field(default=None, ge=0, le=7 * 86400)
     finished: bool = False
+
+
+class HistoryKeysWrite(BaseModel):
+    """History entries by key (a YouTube id, or ``video:<id>``)."""
+
+    keys: list[str] = Field(min_length=1, max_length=MAX_BULK_ITEMS)
+
+    @field_validator("keys")
+    @classmethod
+    def _short_keys(cls, keys: list[str]) -> list[str]:
+        if any(not k or len(k) > 64 for k in keys):
+            raise ValueError("Each key must be 1 to 64 characters")
+        return keys
+
+
+class HistoryTasteWrite(HistoryKeysWrite):
+    """Let these watches shape recommendations (``use``), or stop them."""
+
+    use: bool
+
+
+def _topic_text(text: str) -> str:
+    text = " ".join(text.split())
+    if not any(ch.isalnum() for ch in text):
+        raise ValueError("A topic needs at least one word")
+    if not any(len(w) > 1 for w in re.findall(r"\w+", text)):
+        raise ValueError("Use a word of two letters or more")
+    return text
+
+
+def _aware(when: datetime | None) -> datetime | None:
+    if when is not None and when.tzinfo is None:
+        raise ValueError("Give the expiry with a time zone (UTC)")
+    return when
+
+
+class RecTopicWrite(BaseModel):
+    """An interest (shown more, searched for) or a blocked topic, typed in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["interest", "block"]
+    text: Annotated[str, AfterValidator(_topic_text)] = Field(
+        min_length=1, max_length=80
+    )
+    #: Blocks: ``words`` (the words themselves) or ``similar`` (close in meaning).
+    match: Literal["words", "similar"] = "words"
+    #: Interests: how much of the feed they get.
+    strength: Literal["low", "normal", "high"] = "normal"
+    #: When it switches off by itself (null: never).
+    expires_at: Annotated[datetime | None, AfterValidator(_aware)] = None
+
+
+class RecTopicUpdate(BaseModel):
+    """Change a topic; send only what changes (``expires_at`` null: never)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    text: Annotated[str, AfterValidator(_topic_text)] | None = Field(
+        default=None, min_length=1, max_length=80
+    )
+    match: Literal["words", "similar"] | None = None
+    strength: Literal["low", "normal", "high"] | None = None
+    expires_at: Annotated[datetime | None, AfterValidator(_aware)] = None
+
+
+def _algorithm_name(name: str) -> str:
+    name = " ".join(name.split())
+    if not name:
+        raise ValueError("Give the algorithm a name")
+    return name
+
+
+class RecAlgorithmWrite(BaseModel):
+    """Save values as a named algorithm (picked at once)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, AfterValidator(_algorithm_name)] = Field(
+        min_length=1, max_length=60
+    )
+    #: Offered to every account in their algorithm picker.
+    shared: bool = False
+    values: Tuning
+
+
+class RecAlgorithmUpdate(BaseModel):
+    """Rename, share or unshare, or overwrite one of your algorithms."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Annotated[str, AfterValidator(_algorithm_name)] | None = Field(
+        default=None, min_length=1, max_length=60
+    )
+    shared: bool | None = None
+    #: New values ("Save"); you then rank with the algorithm again.
+    values: Tuning | None = None
+
+
+class RecTuningWrite(BaseModel):
+    """Rank Recommended+ with a preset, a saved algorithm, or your own values."""
+
+    #: A preset id, "custom" (then ``custom`` holds the values) or "algo:<id>".
+    active: str = Field(min_length=1, max_length=40)
+    custom: Tuning | None = None
 
 
 class RecFeedbackWrite(BaseModel):

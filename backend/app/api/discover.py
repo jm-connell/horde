@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from datetime import date
+from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
@@ -12,24 +12,61 @@ from sqlmodel import Session, col, select
 from ..auth import current_user
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
-from ..models import DiscoveryHit, DiscoveryState, RecFeedback, Video, as_utc
+from ..models import (
+    DiscoveryHit,
+    DiscoveryState,
+    RecAlgorithm,
+    RecFeedback,
+    RecTopic,
+    Video,
+    as_utc,
+    require_id,
+    utcnow,
+)
 from ..response_schemas import (
+    DiscoverBlockedRead,
     DiscoverFeedRead,
     DiscoverItemRead,
+    DiscoverMixRead,
     DiscoverReasonRead,
     DiscoverRefreshRead,
+    DiscoverScorePartRead,
     DiscoverStatusRead,
+    DiscoverWhyRead,
+    RecAlgorithmListRead,
+    RecAlgorithmRead,
     RecFeedbackListRead,
     RecFeedbackRead,
+    RecTopicListRead,
+    RecTopicRead,
+    RecTuningPresetRead,
+    RecTuningRead,
     StreamWatchRead,
     SuggestedChannelRead,
     SuggestedChannelsRead,
 )
-from ..schemas import ChannelFeedEntry, RecFeedbackWrite, StreamWatchWrite
+from ..schemas import (
+    ChannelFeedEntry,
+    RecAlgorithmUpdate,
+    RecAlgorithmWrite,
+    RecFeedbackWrite,
+    RecTopicUpdate,
+    RecTopicWrite,
+    RecTuningWrite,
+    StreamWatchWrite,
+)
 from ..services.auth.accounts import AuthUser
-from ..services.discovery import feedback, gather, history, suggest
+from ..services.discovery import (
+    algorithms,
+    feedback,
+    gather,
+    history,
+    suggest,
+    topics,
+    tuning,
+)
 from ..services.discovery.candidates import Candidate
-from ..services.discovery.feed import ranked_feed
+from ..services.discovery.feed import FeedItem, ranked_feed
 from ..services.live import picks as live_picks
 from ..services.pagination import (
     SEED_RANGE,
@@ -64,6 +101,19 @@ def _entry(c: Candidate) -> ChannelFeedEntry:
         channel=c.channel or None,
         channel_url=c.source_channel_url,
         live_status=c.live_status,
+    )
+
+
+def _why(item: FeedItem) -> DiscoverWhyRead:
+    return DiscoverWhyRead(
+        bucket=item.bucket,
+        score=round(item.score, 4),
+        parts=[
+            DiscoverScorePartRead(label=label, value=round(value, 4))
+            for label, value in item.parts
+        ],
+        found_by=item.found_by,
+        eligible=item.eligible,
     )
 
 
@@ -172,7 +222,13 @@ def discover_feed(
             if read is None:
                 continue  # Deleted since the feed was ranked.
             items.append(
-                DiscoverItemRead(key=c.key, video=read, reason=reason, source="library")
+                DiscoverItemRead(
+                    key=c.key,
+                    video=read,
+                    reason=reason,
+                    source="library",
+                    why=_why(item),
+                )
             )
         else:
             items.append(
@@ -181,8 +237,9 @@ def discover_feed(
                     stream=_entry(c),
                     reason=reason,
                     source="channels"
-                    if item.followed or c.pool == "catalog"
+                    if item.followed or c.pool in ("catalog", "history")
                     else "new",
+                    why=_why(item),
                 )
             )
     if not cursor:
@@ -201,7 +258,222 @@ def discover_feed(
         if more
         else None,
         status=_status(session, ctx, user.id, cold=feed.cold),
+        mix=[
+            DiscoverMixRead(bucket=m.bucket, target=m.target, actual=m.actual)
+            for m in feed.mix
+        ]
+        if not cursor
+        else [],
+        blocked=[
+            DiscoverBlockedRead(topic_id=tid, count=n)
+            for tid, n in sorted(feed.blocked.items())
+        ]
+        if not cursor
+        else [],
     )
+
+
+def _algorithm_read(a: algorithms.Listed) -> RecAlgorithmRead:
+    return RecAlgorithmRead(
+        id=require_id(a.row),
+        name=a.row.name,
+        shared=a.row.shared,
+        owner=a.owner,
+        mine=a.mine,
+        values=a.values,
+        updated_at=as_utc(a.row.updated_at).isoformat(),
+    )
+
+
+def _listed_one(
+    session: Session, user_id: int, algo_id: int | None
+) -> RecAlgorithmRead | None:
+    if algo_id is None:
+        return None
+    for a in algorithms.listed(session, user_id):
+        if a.row.id == algo_id:
+            return _algorithm_read(a)
+    return None
+
+
+def _tuning_read(session: Session, user_id: int) -> RecTuningRead:
+    selection, values = algorithms.current(session, user_id)
+    based_on = _listed_one(session, user_id, selection.based_on)
+    return RecTuningRead(
+        active=selection.active,
+        values=values,
+        algorithm=_listed_one(session, user_id, tuning.algorithm_id(selection.active)),
+        based_on=based_on if based_on is not None and based_on.mine else None,
+        custom=selection.custom,
+        presets=[
+            RecTuningPresetRead(
+                id=p.id, name=p.name, description=p.description, values=p.tuning
+            )
+            for p in tuning.PRESETS
+        ],
+        defaults=tuning.DEFAULTS,
+    )
+
+
+@router.get("/tuning", response_model=RecTuningRead)
+def get_tuning(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """How this user ranks Recommended+: a preset, a saved algorithm or their
+    own values."""
+    return _tuning_read(session, user.id)
+
+
+@router.put("/tuning", response_model=RecTuningRead)
+def put_tuning(
+    payload: RecTuningWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Pick a preset, a saved algorithm (``algo:<id>``, yours or shared), or
+    rank with your own values (``active`` "custom").
+
+    Your own values are kept when you pick something else, so you can switch
+    back; moving a slider on a saved algorithm makes your own values from it.
+    """
+    current = tuning.load(session, user.id)
+    custom = payload.custom if payload.custom is not None else current.custom
+    selection = tuning.Selection(active=payload.active, custom=custom)
+    algo_id = tuning.algorithm_id(payload.active)
+    if payload.active == "custom":
+        if custom is None:
+            raise CodedHTTPException(
+                400, "Custom settings need their values", "missing_values"
+            )
+        # Remember which of your algorithms these values came from.
+        selection.based_on = tuning.algorithm_id(current.active) or (
+            current.based_on if current.active == "custom" else None
+        )
+    elif algo_id is not None:
+        row = algorithms.available(session, user.id, algo_id)
+        if row is None:
+            raise CodedHTTPException(404, "No such algorithm", "unknown_algorithm")
+        selection.snapshot = algorithms.values_of(row)
+    elif payload.active not in tuning.PRESET_IDS:
+        raise CodedHTTPException(400, "No such preset", "unknown_preset")
+    tuning.save(session, user.id, selection)
+    ctx.discovery.forget_feeds(user.id)
+    return _tuning_read(session, user.id)
+
+
+@router.get("/algorithms", response_model=RecAlgorithmListRead)
+def list_algorithms(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Your saved algorithms, then the ones other accounts share."""
+    return RecAlgorithmListRead(
+        items=[_algorithm_read(a) for a in algorithms.listed(session, user.id)]
+    )
+
+
+@router.post("/algorithms", response_model=RecAlgorithmRead)
+def save_algorithm(
+    payload: RecAlgorithmWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Save values under a name (shared with every account if ``shared``) and
+    rank with it."""
+    try:
+        row = algorithms.create(
+            session,
+            user.id,
+            name=payload.name,
+            shared=payload.shared,
+            values=payload.values,
+        )
+    except algorithms.NameTaken as exc:
+        raise CodedHTTPException(409, str(exc), "name_taken") from exc
+    except algorithms.TooMany as exc:
+        raise CodedHTTPException(409, str(exc), "too_many_algorithms") from exc
+    current = tuning.load(session, user.id)
+    tuning.save(
+        session,
+        user.id,
+        tuning.Selection(
+            active=f"{tuning.ALGORITHM_PREFIX}{require_id(row)}",
+            custom=current.custom,
+            snapshot=payload.values,
+        ),
+    )
+    ctx.discovery.forget_feeds(user.id)
+    read = _listed_one(session, user.id, row.id)
+    assert read is not None  # noqa: S101 - just created, and it is the user's own
+    return read
+
+
+def _own_algorithm(session: Session, user_id: int, algo_id: int) -> RecAlgorithm:
+    row = session.get(RecAlgorithm, algo_id)
+    if row is None or row.owner_id != user_id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    return row
+
+
+@router.patch("/algorithms/{algo_id}", response_model=RecAlgorithmRead)
+def update_algorithm(
+    algo_id: int,
+    payload: RecAlgorithmUpdate,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Rename, share or stop sharing, or overwrite one of your algorithms.
+
+    New ``values`` also put you back on it. Stopping sharing leaves everyone
+    else who used it on their own copy of its values.
+    """
+    row = _own_algorithm(session, user.id, algo_id)
+    try:
+        row = algorithms.update(
+            session,
+            row,
+            name=payload.name,
+            shared=payload.shared,
+            values=payload.values,
+        )
+    except algorithms.NameTaken as exc:
+        raise CodedHTTPException(409, str(exc), "name_taken") from exc
+    if payload.values is not None:
+        current = tuning.load(session, user.id)
+        tuning.save(
+            session,
+            user.id,
+            tuning.Selection(
+                active=f"{tuning.ALGORITHM_PREFIX}{algo_id}",
+                custom=current.custom,
+                snapshot=payload.values,
+            ),
+        )
+    ctx.discovery.forget_feeds(user.id)
+    read = _listed_one(session, user.id, algo_id)
+    assert read is not None  # noqa: S101 - the user's own, just saved
+    return read
+
+
+@router.delete("/algorithms/{algo_id}", response_model=RecAlgorithmRead)
+def delete_algorithm(
+    algo_id: int,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Delete one of your algorithms. Anyone ranking with it (you included)
+    keeps its values as their own."""
+    row = _own_algorithm(session, user.id, algo_id)
+    read = _listed_one(session, user.id, algo_id)
+    assert read is not None  # noqa: S101 - the user's own
+    algorithms.delete(session, row)
+    ctx.discovery.forget_feeds(user.id)
+    return read
 
 
 @router.get("/status", response_model=DiscoverStatusRead)
@@ -355,3 +627,111 @@ def record_stream_watch(
         watched_sec=row.watched_sec,
         finished=row.finished_at is not None,
     )
+
+
+def _topic_read(row: RecTopic) -> RecTopicRead:
+    return RecTopicRead(
+        id=require_id(row),
+        kind=row.kind,  # type: ignore[arg-type]  # stored from the validated write model
+        text=row.text,
+        match=row.match,  # type: ignore[arg-type]  # stored from the validated write model
+        strength=row.strength,  # type: ignore[arg-type]  # stored from the validated write model
+        expires_at=as_utc(row.expires_at).isoformat() if row.expires_at else None,
+        active=topics.is_active(row, utcnow()),
+        created_at=as_utc(row.created_at).isoformat(),
+    )
+
+
+def _topics_changed(
+    session: Session, ctx: AppContext, user_id: int, row: RecTopic
+) -> None:
+    """Re-rank; an interest that is on is searched for soon."""
+    ctx.discovery.forget_feeds(user_id)
+    if row.kind == "interest" and topics.is_active(row, utcnow()) and gather.enabled():
+        gather.request_refresh(session, ctx.discovery, user_id)
+
+
+@router.get("/topics", response_model=RecTopicListRead)
+def list_topics(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Your interests and blocked topics, interests first."""
+    return RecTopicListRead(
+        items=[_topic_read(r) for r in topics.listed(session, user.id)]
+    )
+
+
+@router.post("/topics", response_model=RecTopicRead)
+def add_topic(
+    payload: RecTopicWrite,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Add an interest (shown more, searched for on YouTube) or block a topic,
+    for good or until ``expires_at``."""
+    if payload.expires_at is not None and payload.expires_at <= utcnow():
+        raise CodedHTTPException(400, "That time has passed", "expired")
+    try:
+        row = topics.create(
+            session,
+            user.id,
+            kind=payload.kind,
+            text=payload.text,
+            match=payload.match,
+            strength=payload.strength,
+            expires_at=payload.expires_at,
+        )
+    except topics.TooMany as exc:
+        raise CodedHTTPException(409, str(exc), "too_many_topics") from exc
+    _topics_changed(session, ctx, user.id, row)
+    return _topic_read(row)
+
+
+@router.patch("/topics/{topic_id}", response_model=RecTopicRead)
+def update_topic(
+    topic_id: int,
+    payload: RecTopicUpdate,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Change a topic; a new ``expires_at`` (or null, never) turns an expired one on."""
+    row = session.get(RecTopic, topic_id)
+    if row is None or row.user_id != user.id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    changes = payload.model_dump(exclude_unset=True)
+    if changes.get("text") is None:
+        changes.pop("text", None)
+    for key in ("match", "strength"):
+        if key in changes and changes[key] is None:
+            changes.pop(key)
+    expires = changes.get("expires_at")
+    if isinstance(expires, datetime) and expires <= utcnow():
+        raise CodedHTTPException(400, "That time has passed", "expired")
+    try:
+        row = topics.update(session, row, changes)
+    except topics.TooMany as exc:
+        session.rollback()
+        raise CodedHTTPException(409, str(exc), "too_many_topics") from exc
+    _topics_changed(session, ctx, user.id, row)
+    return _topic_read(row)
+
+
+@router.delete("/topics/{topic_id}", response_model=RecTopicRead)
+def delete_topic(
+    topic_id: int,
+    session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
+    user: AuthUser = Depends(current_user),
+):
+    """Delete one of your topics."""
+    row = session.get(RecTopic, topic_id)
+    if row is None or row.user_id != user.id:
+        raise CodedHTTPException(404, "Not found", "not_found")
+    read = _topic_read(row)
+    session.delete(row)
+    session.commit()
+    ctx.discovery.forget_feeds(user.id)
+    return read

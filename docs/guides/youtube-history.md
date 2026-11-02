@@ -31,7 +31,7 @@ Keep using YouTube and Horde side by side, then import a newer export whenever y
 
 ## What Horde does with it
 
-The imported views never appear in **History** or **Continue watching**; those stay what you watched in Horde. They are used here:
+The imported views appear in **History** (marked **On YouTube**), where you can remove them one by one or keep them out of your recommendations, and the newest few from the last week join **Continue watching** (see [History](history.md)). They are also used here:
 
 | Where | What changes |
 |-------|--------------|

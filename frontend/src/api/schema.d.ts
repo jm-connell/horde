@@ -1336,6 +1336,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/discover/algorithms": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Algorithms
+         * @description Your saved algorithms, then the ones other accounts share.
+         */
+        get: operations["list_algorithms_api_discover_algorithms_get"];
+        put?: never;
+        /**
+         * Save Algorithm
+         * @description Save values under a name (shared with every account if ``shared``) and
+         *     rank with it.
+         */
+        post: operations["save_algorithm_api_discover_algorithms_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/algorithms/{algo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Algorithm
+         * @description Delete one of your algorithms. Anyone ranking with it (you included)
+         *     keeps its values as their own.
+         */
+        delete: operations["delete_algorithm_api_discover_algorithms__algo_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Algorithm
+         * @description Rename, share or stop sharing, or overwrite one of your algorithms.
+         *
+         *     New ``values`` also put you back on it. Stopping sharing leaves everyone
+         *     else who used it on their own copy of its values.
+         */
+        patch: operations["update_algorithm_api_discover_algorithms__algo_id__patch"];
+        trace?: never;
+    };
     "/api/discover/channels": {
         parameters: {
             query?: never;
@@ -1481,6 +1534,84 @@ export interface paths {
          */
         get: operations["discover_status_api_discover_status_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/topics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Topics
+         * @description Your interests and blocked topics, interests first.
+         */
+        get: operations["list_topics_api_discover_topics_get"];
+        put?: never;
+        /**
+         * Add Topic
+         * @description Add an interest (shown more, searched for on YouTube) or block a topic,
+         *     for good or until ``expires_at``.
+         */
+        post: operations["add_topic_api_discover_topics_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/discover/topics/{topic_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Topic
+         * @description Delete one of your topics.
+         */
+        delete: operations["delete_topic_api_discover_topics__topic_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Topic
+         * @description Change a topic; a new ``expires_at`` (or null, never) turns an expired one on.
+         */
+        patch: operations["update_topic_api_discover_topics__topic_id__patch"];
+        trace?: never;
+    };
+    "/api/discover/tuning": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tuning
+         * @description How this user ranks Recommended+: a preset, a saved algorithm or their
+         *     own values.
+         */
+        get: operations["get_tuning_api_discover_tuning_get"];
+        /**
+         * Put Tuning
+         * @description Pick a preset, a saved algorithm (``algo:<id>``, yours or shared), or
+         *     rank with your own values (``active`` "custom").
+         *
+         *     Your own values are kept when you pick something else, so you can switch
+         *     back; moving a slider on a saved algorithm makes your own values from it.
+         */
+        put: operations["put_tuning_api_discover_tuning_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1868,6 +1999,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/history/continue-youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Continue Youtube
+         * @description The newest videos watched on YouTube (imported history) within the
+         *     Continue watching window, at most five, not in the library.
+         */
+        get: operations["continue_youtube_api_history_continue_youtube_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history/stats": {
         parameters: {
             query?: never;
@@ -1882,6 +2034,71 @@ export interface paths {
         get: operations["history_stats_api_history_stats_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Watches
+         * @description Everything the user watched, newest first, one entry per video: library
+         *     videos, videos played without downloading and the imported YouTube history.
+         */
+        get: operations["list_watches_api_history_watches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches/remove": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove Watches
+         * @description Forget these videos from your history: they count as unwatched again.
+         *
+         *     Removes every record of each one (library progress, the streamed watch and
+         *     imported YouTube views); your watch time totals stay.
+         */
+        post: operations["remove_watches_api_history_watches_remove_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/watches/taste": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set Watch Taste
+         * @description Stop these watches shaping your recommendations (``use`` false), or let
+         *     them again. They stay in your history and still count as watched.
+         */
+        post: operations["set_watch_taste_api_history_watches_taste_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5823,6 +6040,16 @@ export interface components {
             /** Videos */
             videos: number;
         };
+        /**
+         * ContinueYoutubeRead
+         * @description Videos watched on YouTube lately (from the import), for Continue watching.
+         */
+        ContinueYoutubeRead: {
+            /** Items */
+            items: components["schemas"]["ChannelFeedEntry"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
         /** ConvertLibraryRequest */
         ConvertLibraryRequest: {
             /**
@@ -5831,10 +6058,21 @@ export interface components {
              */
             confirm: boolean;
         };
+        /** DiscoverBlockedRead */
+        DiscoverBlockedRead: {
+            /** Count */
+            count: number;
+            /** Topic Id */
+            topic_id: number;
+        };
         /** DiscoverFeedRead */
         DiscoverFeedRead: {
+            /** Blocked */
+            blocked?: components["schemas"]["DiscoverBlockedRead"][];
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
+            /** Mix */
+            mix?: components["schemas"]["DiscoverMixRead"][];
             /** Next Cursor */
             next_cursor?: string | null;
             status: components["schemas"]["DiscoverStatusRead"];
@@ -5854,6 +6092,16 @@ export interface components {
             source: "library" | "channels" | "new";
             stream?: components["schemas"]["ChannelFeedEntry"] | null;
             video?: components["schemas"]["VideoRead"] | null;
+            why?: components["schemas"]["DiscoverWhyRead"] | null;
+        };
+        /** DiscoverMixRead */
+        DiscoverMixRead: {
+            /** Actual */
+            actual: number;
+            /** Bucket */
+            bucket: string;
+            /** Target */
+            target: number;
         };
         /** DiscoverReasonRead */
         DiscoverReasonRead: {
@@ -5871,6 +6119,13 @@ export interface components {
             /** Queued */
             queued: boolean;
         };
+        /** DiscoverScorePartRead */
+        DiscoverScorePartRead: {
+            /** Label */
+            label: string;
+            /** Value */
+            value: number;
+        };
         /** DiscoverStatusRead */
         DiscoverStatusRead: {
             /** Backing Off */
@@ -5885,6 +6140,25 @@ export interface components {
             gathering: boolean;
             /** Last Run At */
             last_run_at?: string | null;
+        };
+        /**
+         * DiscoverWhyRead
+         * @description How the feed placed one pick: its bucket and what its score is made of.
+         */
+        DiscoverWhyRead: {
+            /** Bucket */
+            bucket: string;
+            /**
+             * Eligible
+             * @default true
+             */
+            eligible: boolean;
+            /** Found By */
+            found_by?: string | null;
+            /** Parts */
+            parts: components["schemas"]["DiscoverScorePartRead"][];
+            /** Score */
+            score: number;
         };
         /** DiskUsage */
         DiskUsage: {
@@ -6480,6 +6754,25 @@ export interface components {
              */
             role: "user" | "assistant";
         };
+        /**
+         * HistoryKeysWrite
+         * @description History entries by key (a YouTube id, or ``video:<id>``).
+         */
+        HistoryKeysWrite: {
+            /** Keys */
+            keys: string[];
+        };
+        /** HistoryRemovedRead */
+        HistoryRemovedRead: {
+            /** Library */
+            library: number;
+            /** Streams */
+            streams: number;
+            /** Videos */
+            videos: number;
+            /** Youtube Views */
+            youtube_views: number;
+        };
         /** HistoryStats */
         HistoryStats: {
             best_day: components["schemas"]["HistoryStatsDay"] | null;
@@ -6579,6 +6872,58 @@ export interface components {
             videos_started: number;
             /** Watch Seconds */
             watch_seconds: number;
+            /**
+             * Youtube Views
+             * @default 0
+             */
+            youtube_views: number;
+        };
+        /** HistoryTasteRead */
+        HistoryTasteRead: {
+            /** Excluded */
+            excluded: boolean;
+            /** Keys */
+            keys: string[];
+        };
+        /**
+         * HistoryTasteWrite
+         * @description Let these watches shape recommendations (``use``), or stop them.
+         */
+        HistoryTasteWrite: {
+            /** Keys */
+            keys: string[];
+            /** Use */
+            use: boolean;
+        };
+        /** HistoryWatchListRead */
+        HistoryWatchListRead: {
+            /** Items */
+            items: components["schemas"]["HistoryWatchRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
+        /**
+         * HistoryWatchRead
+         * @description One video in the user's history, at its latest watch.
+         */
+        HistoryWatchRead: {
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
+            /** Fraction */
+            fraction?: number | null;
+            /** Key */
+            key: string;
+            /** Sources */
+            sources: ("library" | "stream" | "youtube")[];
+            stream?: components["schemas"]["ChannelFeedEntry"] | null;
+            video?: components["schemas"]["VideoRead"] | null;
+            /** Watched At */
+            watched_at: string;
             /**
              * Youtube Views
              * @default 0
@@ -7341,6 +7686,57 @@ export interface components {
             /** Password */
             password: string;
         };
+        /**
+         * RecAlgorithmListRead
+         * @description Your saved algorithms, then those others share.
+         */
+        RecAlgorithmListRead: {
+            /** Items */
+            items: components["schemas"]["RecAlgorithmRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** RecAlgorithmRead */
+        RecAlgorithmRead: {
+            /** Id */
+            id: number;
+            /** Mine */
+            mine: boolean;
+            /** Name */
+            name: string;
+            /** Owner */
+            owner: string;
+            /** Shared */
+            shared: boolean;
+            /** Updated At */
+            updated_at: string;
+            values: components["schemas"]["Tuning-Output"];
+        };
+        /**
+         * RecAlgorithmUpdate
+         * @description Rename, share or unshare, or overwrite one of your algorithms.
+         */
+        RecAlgorithmUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Shared */
+            shared?: boolean | null;
+            values?: components["schemas"]["Tuning-Input"] | null;
+        };
+        /**
+         * RecAlgorithmWrite
+         * @description Save values as a named algorithm (picked at once).
+         */
+        RecAlgorithmWrite: {
+            /** Name */
+            name: string;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
+            values: components["schemas"]["Tuning-Input"];
+        };
         /** RecFeedbackListRead */
         RecFeedbackListRead: {
             /** Items */
@@ -7377,6 +7773,116 @@ export interface components {
             kind: "video" | "channel" | "suggestion";
             /** Label */
             label?: string | null;
+        };
+        /** RecTopicListRead */
+        RecTopicListRead: {
+            /** Items */
+            items: components["schemas"]["RecTopicRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** RecTopicRead */
+        RecTopicRead: {
+            /** Active */
+            active: boolean;
+            /** Created At */
+            created_at: string;
+            /** Expires At */
+            expires_at?: string | null;
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "interest" | "block";
+            /**
+             * Match
+             * @enum {string}
+             */
+            match: "words" | "similar";
+            /**
+             * Strength
+             * @enum {string}
+             */
+            strength: "low" | "normal" | "high";
+            /** Text */
+            text: string;
+        };
+        /**
+         * RecTopicUpdate
+         * @description Change a topic; send only what changes (``expires_at`` null: never).
+         */
+        RecTopicUpdate: {
+            /** Expires At */
+            expires_at?: string | null;
+            /** Match */
+            match?: ("words" | "similar") | null;
+            /** Strength */
+            strength?: ("low" | "normal" | "high") | null;
+            /** Text */
+            text?: string | null;
+        };
+        /**
+         * RecTopicWrite
+         * @description An interest (shown more, searched for) or a blocked topic, typed in.
+         */
+        RecTopicWrite: {
+            /** Expires At */
+            expires_at?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "interest" | "block";
+            /**
+             * Match
+             * @default words
+             * @enum {string}
+             */
+            match: "words" | "similar";
+            /**
+             * Strength
+             * @default normal
+             * @enum {string}
+             */
+            strength: "low" | "normal" | "high";
+            /** Text */
+            text: string;
+        };
+        /** RecTuningPresetRead */
+        RecTuningPresetRead: {
+            /** Description */
+            description: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            values: components["schemas"]["Tuning-Output"];
+        };
+        /**
+         * RecTuningRead
+         * @description The user's Recommended+ settings and the presets they can pick from.
+         */
+        RecTuningRead: {
+            /** Active */
+            active: string;
+            algorithm?: components["schemas"]["RecAlgorithmRead"] | null;
+            based_on?: components["schemas"]["RecAlgorithmRead"] | null;
+            custom?: components["schemas"]["Tuning-Output"] | null;
+            defaults: components["schemas"]["Tuning-Output"];
+            /** Presets */
+            presets: components["schemas"]["RecTuningPresetRead"][];
+            values: components["schemas"]["Tuning-Output"];
+        };
+        /**
+         * RecTuningWrite
+         * @description Rank Recommended+ with a preset, a saved algorithm, or your own values.
+         */
+        RecTuningWrite: {
+            /** Active */
+            active: string;
+            custom?: components["schemas"]["Tuning-Input"] | null;
         };
         /**
          * RecommendationItemRead
@@ -7560,6 +8066,68 @@ export interface components {
             last_seen_at: string;
             /** User Agent */
             user_agent?: string | null;
+        };
+        /**
+         * Shares
+         * @description How much of the feed each kind of pick gets (any scale; normalized).
+         */
+        "Shares-Input": {
+            /**
+             * New
+             * @default 24
+             */
+            new: number;
+            /**
+             * Rewatch
+             * @default 4
+             */
+            rewatch: number;
+            /**
+             * Similar
+             * @default 29
+             */
+            similar: number;
+            /**
+             * Subscriptions
+             * @default 29
+             */
+            subscriptions: number;
+            /**
+             * Throwback
+             * @default 14
+             */
+            throwback: number;
+        };
+        /**
+         * Shares
+         * @description How much of the feed each kind of pick gets (any scale; normalized).
+         */
+        "Shares-Output": {
+            /**
+             * New
+             * @default 24
+             */
+            new: number;
+            /**
+             * Rewatch
+             * @default 4
+             */
+            rewatch: number;
+            /**
+             * Similar
+             * @default 29
+             */
+            similar: number;
+            /**
+             * Subscriptions
+             * @default 29
+             */
+            subscriptions: number;
+            /**
+             * Throwback
+             * @default 14
+             */
+            throwback: number;
         };
         /** SpriteGenerateResult */
         SpriteGenerateResult: {
@@ -7762,6 +8330,48 @@ export interface components {
             title?: string | null;
             /** Url */
             url: string;
+        };
+        /**
+         * Strictness
+         * @description How close a pick must be to the user's taste, per bucket (50 = default).
+         */
+        "Strictness-Input": {
+            /**
+             * New
+             * @default 50
+             */
+            new: number;
+            /**
+             * Similar
+             * @default 50
+             */
+            similar: number;
+            /**
+             * Throwback
+             * @default 50
+             */
+            throwback: number;
+        };
+        /**
+         * Strictness
+         * @description How close a pick must be to the user's taste, per bucket (50 = default).
+         */
+        "Strictness-Output": {
+            /**
+             * New
+             * @default 50
+             */
+            new: number;
+            /**
+             * Similar
+             * @default 50
+             */
+            similar: number;
+            /**
+             * Throwback
+             * @default 50
+             */
+            throwback: number;
         };
         /** SubtitleTrack */
         SubtitleTrack: {
@@ -8048,6 +8658,232 @@ export interface components {
             retention_days: number;
             /** Total Bytes */
             total_bytes: number;
+        };
+        /**
+         * Tuning
+         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         */
+        "Tuning-Input": {
+            /**
+             * Channel Gap
+             * @default 5
+             */
+            channel_gap: number;
+            /**
+             * Freshness
+             * @default 50
+             */
+            freshness: number;
+            /**
+             * Hide Past Live
+             * @default false
+             */
+            hide_past_live: boolean;
+            /**
+             * Hide Shorts
+             * @default false
+             */
+            hide_shorts: boolean;
+            /**
+             * Library Boost
+             * @default 0
+             */
+            library_boost: number;
+            /**
+             * Max Age Days
+             * @default 0
+             * @enum {integer}
+             */
+            max_age_days: 0 | 7 | 30 | 90 | 365 | 1095;
+            /**
+             * Max Minutes
+             * @default 0
+             */
+            max_minutes: number;
+            /**
+             * Min Minutes
+             * @default 0
+             */
+            min_minutes: number;
+            /**
+             * Min Watched Pct
+             * @default 0
+             */
+            min_watched_pct: number;
+            /**
+             * New Channel Cap
+             * @default 2
+             */
+            new_channel_cap: number;
+            /**
+             * Popularity
+             * @default 0
+             */
+            popularity: number;
+            /**
+             * Recent Days
+             * @default 30
+             * @enum {integer}
+             */
+            recent_days: 14 | 30 | 60 | 90;
+            /**
+             * Rewatch After Days
+             * @default 60
+             * @enum {integer}
+             */
+            rewatch_after_days: 30 | 60 | 180 | 365;
+            shares?: components["schemas"]["Shares-Input"];
+            /**
+             * Shuffle
+             * @default 50
+             */
+            shuffle: number;
+            strictness?: components["schemas"]["Strictness-Input"];
+            /**
+             * Throwback Years
+             * @default 3
+             * @enum {integer}
+             */
+            throwback_years: 0 | 1 | 3;
+            /**
+             * Use Catalogs
+             * @default true
+             */
+            use_catalogs: boolean;
+            /**
+             * Use Household
+             * @default true
+             */
+            use_household: boolean;
+            /**
+             * Use Library
+             * @default true
+             */
+            use_library: boolean;
+            /**
+             * Use Youtube
+             * @default true
+             */
+            use_youtube: boolean;
+            /**
+             * Worn After
+             * @default 6
+             * @enum {integer}
+             */
+            worn_after: 0 | 3 | 6 | 12;
+        };
+        /**
+         * Tuning
+         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         */
+        "Tuning-Output": {
+            /**
+             * Channel Gap
+             * @default 5
+             */
+            channel_gap: number;
+            /**
+             * Freshness
+             * @default 50
+             */
+            freshness: number;
+            /**
+             * Hide Past Live
+             * @default false
+             */
+            hide_past_live: boolean;
+            /**
+             * Hide Shorts
+             * @default false
+             */
+            hide_shorts: boolean;
+            /**
+             * Library Boost
+             * @default 0
+             */
+            library_boost: number;
+            /**
+             * Max Age Days
+             * @default 0
+             * @enum {integer}
+             */
+            max_age_days: 0 | 7 | 30 | 90 | 365 | 1095;
+            /**
+             * Max Minutes
+             * @default 0
+             */
+            max_minutes: number;
+            /**
+             * Min Minutes
+             * @default 0
+             */
+            min_minutes: number;
+            /**
+             * Min Watched Pct
+             * @default 0
+             */
+            min_watched_pct: number;
+            /**
+             * New Channel Cap
+             * @default 2
+             */
+            new_channel_cap: number;
+            /**
+             * Popularity
+             * @default 0
+             */
+            popularity: number;
+            /**
+             * Recent Days
+             * @default 30
+             * @enum {integer}
+             */
+            recent_days: 14 | 30 | 60 | 90;
+            /**
+             * Rewatch After Days
+             * @default 60
+             * @enum {integer}
+             */
+            rewatch_after_days: 30 | 60 | 180 | 365;
+            shares: components["schemas"]["Shares-Output"];
+            /**
+             * Shuffle
+             * @default 50
+             */
+            shuffle: number;
+            strictness: components["schemas"]["Strictness-Output"];
+            /**
+             * Throwback Years
+             * @default 3
+             * @enum {integer}
+             */
+            throwback_years: 0 | 1 | 3;
+            /**
+             * Use Catalogs
+             * @default true
+             */
+            use_catalogs: boolean;
+            /**
+             * Use Household
+             * @default true
+             */
+            use_household: boolean;
+            /**
+             * Use Library
+             * @default true
+             */
+            use_library: boolean;
+            /**
+             * Use Youtube
+             * @default true
+             */
+            use_youtube: boolean;
+            /**
+             * Worn After
+             * @default 6
+             * @enum {integer}
+             */
+            worn_after: 0 | 3 | 6 | 12;
         };
         /** TwoFactorConfirm */
         TwoFactorConfirm: {
@@ -11641,6 +12477,170 @@ export interface operations {
             };
         };
     };
+    list_algorithms_api_discover_algorithms_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    save_algorithm_api_discover_algorithms_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecAlgorithmWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_algorithm_api_discover_algorithms__algo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                algo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_algorithm_api_discover_algorithms__algo_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                algo_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecAlgorithmUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecAlgorithmRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     discover_channels_api_discover_channels_get: {
         parameters: {
             query?: {
@@ -11940,6 +12940,250 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DiscoverStatusRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_topics_api_discover_topics_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_topic_api_discover_topics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTopicWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_topic_api_discover_topics__topic_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_topic_api_discover_topics__topic_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topic_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTopicUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTopicRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_tuning_api_discover_tuning_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTuningRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_tuning_api_discover_tuning_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecTuningWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecTuningRead"];
                 };
             };
             /** @description Validation error */
@@ -13042,6 +14286,44 @@ export interface operations {
             };
         };
     };
+    continue_youtube_api_history_continue_youtube_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinueYoutubeRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     history_stats_api_history_stats_get: {
         parameters: {
             query?: {
@@ -13064,6 +14346,131 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HistoryStats"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_watches_api_history_watches_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryWatchListRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    remove_watches_api_history_watches_remove_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryKeysWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryRemovedRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_watch_taste_api_history_watches_taste_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HistoryTasteWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistoryTasteRead"];
                 };
             };
             /** @description Validation error */
