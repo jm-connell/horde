@@ -258,11 +258,14 @@ ALGORITHM_PREFIX = "algo:"
 
 def algorithm_id(active: str) -> int | None:
     """The saved algorithm an ``active`` value names (``algo:<id>``), if any."""
+    digits = active[len(ALGORITHM_PREFIX) :]
     if (
         active.startswith(ALGORITHM_PREFIX)
-        and active[len(ALGORITHM_PREFIX) :].isdigit()
+        and digits.isascii()
+        and digits.isdigit()
+        and len(digits) <= 15
     ):
-        return int(active[len(ALGORITHM_PREFIX) :])
+        return int(digits)
     return None
 
 

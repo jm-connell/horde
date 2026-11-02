@@ -102,38 +102,91 @@ def test_shared_algorithms_are_offered_to_everyone_and_follow_their_owner(
     assert client.get("/api/discover/tuning").json()["values"]["freshness"] == 70
 
 
-def test_unsharing_or_deleting_leaves_others_on_their_own_copy(client, member_client):
+def test_unsharing_or_deleting_gives_others_a_private_copy(client, member_client):
     shared = _save(client, "Weekend", shared=True, freshness=90)
+    # The member had own values before picking it: they stay.
+    member_client.put(
+        "/api/discover/tuning",
+        json={"active": "custom", "custom": _values(member_client, freshness=11)},
+    )
     member_client.put("/api/discover/tuning", json={"active": f"algo:{shared['id']}"})
-    client.patch(f"/api/discover/algorithms/{shared['id']}", json={"shared": False})
+    # Unsharing while changing it: the member keeps what was shared.
+    client.patch(
+        f"/api/discover/algorithms/{shared['id']}",
+        json={"shared": False, "values": _values(client, freshness=3)},
+    )
     state = member_client.get("/api/discover/tuning").json()
-    assert state["active"] == "custom" and state["values"]["freshness"] == 90
-    # The owner keeps ranking with it.
+    assert state["algorithm"]["name"] == "Weekend (from admin)"
+    assert state["algorithm"]["mine"] is True and state["algorithm"]["shared"] is False
+    assert state["values"]["freshness"] == 90
+    assert state["custom"]["freshness"] == 11
+    # The owner keeps ranking with theirs.
     assert client.get("/api/discover/tuning").json()["active"] == f"algo:{shared['id']}"
 
     client.patch(f"/api/discover/algorithms/{shared['id']}", json={"shared": True})
     member_client.put("/api/discover/tuning", json={"active": f"algo:{shared['id']}"})
     assert client.delete(f"/api/discover/algorithms/{shared['id']}").status_code == 200
-    for c in (client, member_client):
-        state = c.get("/api/discover/tuning").json()
-        assert state["active"] == "custom" and state["values"]["freshness"] == 90
+    state = member_client.get("/api/discover/tuning").json()
+    assert state["algorithm"]["name"] == "Weekend (from admin) 2"
+    assert state["values"]["freshness"] == 3
+    owner = client.get("/api/discover/tuning").json()
+    assert owner["active"] == "custom" and owner["values"]["freshness"] == 3
     assert client.get("/api/discover/algorithms").json()["items"] == []
 
 
-def test_an_owner_who_is_gone_leaves_the_last_values(
-    client, member_client, session, admin_user
+def test_an_owner_who_is_deleted_leaves_copies(
+    client, member_client, session, admin_user, member_user
 ):
-    from app.models import RecAlgorithm
+    from app.services.auth import accounts
+
+    shared = _save(member_client, "Weekend", shared=True, freshness=90)
+    client.put("/api/discover/tuning", json={"active": f"algo:{shared['id']}"})
+    accounts.delete_user(session, member_user.id, successor_id=admin_user.id)
+    session.commit()
+    state = client.get("/api/discover/tuning").json()
+    assert state["algorithm"]["name"] == "Weekend (from member)"
+    assert state["values"]["freshness"] == 90
+
+
+def test_reading_settings_writes_nothing(client, member_client, session, member_user):
+    from app.models import UserSettings
 
     shared = _save(client, "Weekend", shared=True, freshness=90)
     member_client.put("/api/discover/tuning", json={"active": f"algo:{shared['id']}"})
-    member_client.get("/api/discover/tuning")
-    # As when the owner's account is deleted (the rows cascade away).
-    row = session.get(RecAlgorithm, shared["id"])
-    session.delete(row)
-    session.commit()
-    state = member_client.get("/api/discover/tuning").json()
-    assert state["active"] == "custom" and state["values"]["freshness"] == 90
+    row = session.get(UserSettings, member_user.id)
+    assert row is not None
+    before = row.rec_tuning_json
+    client.patch(
+        f"/api/discover/algorithms/{shared['id']}",
+        json={"values": _values(client, freshness=70)},
+    )
+    assert member_client.get("/api/discover/tuning").json()["values"]["freshness"] == 70
+    assert member_client.get("/api/discover/feed").status_code == 200
+    session.expire_all()
+    row = session.get(UserSettings, member_user.id)
+    assert row is not None and row.rec_tuning_json == before
+
+
+def test_deleting_the_algorithm_values_came_from_forgets_it(
+    client, session, admin_user
+):
+    from app.models import UserSettings
+
+    algo = _save(client, "Mine", freshness=80)
+    client.put(
+        "/api/discover/tuning",
+        json={"active": "custom", "custom": _values(client, freshness=20)},
+    )
+    client.delete(f"/api/discover/algorithms/{algo['id']}")
+    session.expire_all()
+    row = session.get(UserSettings, admin_user.id)
+    assert row is not None and '"based_on":null' in (row.rec_tuning_json or "")
+
+
+def test_odd_algorithm_ids_are_refused(client):
+    for active in ["algo:²", "algo:" + "9" * 30, "algo:-1", "algo:"]:
+        resp = client.put("/api/discover/tuning", json={"active": active})
+        assert resp.status_code in (400, 404), (active, resp.status_code)
 
 
 def test_algorithm_names_are_validated(client):

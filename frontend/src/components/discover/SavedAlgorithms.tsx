@@ -31,6 +31,7 @@ export default function SavedAlgorithms({
   values,
   onPick,
   beforeSave,
+  afterSave,
 }: {
   state: RecTuningState;
   /** What is picked now ("custom" while a move is waiting to be saved). */
@@ -38,8 +39,10 @@ export default function SavedAlgorithms({
   /** The values on screen (saved or not). */
   values: RecTuning;
   onPick: (id: string) => void;
-  /** Drop a move waiting to be saved: the save below stores these values. */
+  /** A save of these values starts: no debounced save of them after it. */
   beforeSave: () => void;
+  /** It succeeded: nothing of these values is waiting any more. */
+  afterSave: () => void;
 }) {
   const { showToast, showError } = useToast();
   const list = useRecAlgorithms().data?.items ?? [];
@@ -63,6 +66,7 @@ export default function SavedAlgorithms({
       { name: name.trim(), shared: share, values },
       {
         onSuccess: (algo) => {
+          afterSave();
           setNaming(false);
           setName("");
           setShare(false);
@@ -84,7 +88,10 @@ export default function SavedAlgorithms({
     update.mutate(
       { id: target.id, payload: { values } },
       {
-        onSuccess: () => showToast(`Saved to “${target.name}”`),
+        onSuccess: () => {
+          afterSave();
+          showToast(`Saved to “${target.name}”`);
+        },
         onError: (err) => showError(errorText(err, "Could not save that")),
       }
     );
@@ -242,7 +249,7 @@ export default function SavedAlgorithms({
           title={`Delete “${own.name}”?`}
           body={
             own.shared
-              ? "You and anyone using it keep its settings as their own."
+              ? "Anyone else using it gets a private copy; you keep its settings as your own."
               : "You keep its settings as your own."
           }
           confirmLabel="Delete"
@@ -252,7 +259,8 @@ export default function SavedAlgorithms({
           onConfirm={() =>
             remove.mutate(own.id, {
               onSuccess: () => setConfirmDelete(false),
-              onError: () => showError("Could not delete that"),
+              onError: (err) =>
+                showError(errorText(err, "Could not delete that")),
             })
           }
         />

@@ -79,10 +79,11 @@ def listed(session: Session, user_id: int) -> list[Listed]:
 
 
 def current(session: Session, user_id: int) -> tuple[Selection, Tuning]:
-    """The user's selection and the values it ranks with right now.
+    """The user's selection and the values it ranks with right now (reads only).
 
-    A saved algorithm that went away (deleted, or no longer shared) leaves the
-    user on their own copy of its last values.
+    A saved algorithm that is no longer there (or no longer shared) ranks with
+    the values it had when picked; ``_release`` normally moved its users onto a
+    copy already.
     """
     selection = tuning.load(session, user_id)
     algo_id = tuning.algorithm_id(selection.active)
@@ -90,17 +91,8 @@ def current(session: Session, user_id: int) -> tuple[Selection, Tuning]:
         return selection, tuning.resolve(selection)
     row = available(session, user_id, algo_id)
     if row is None:
-        selection = Selection(
-            active="custom",
-            custom=selection.snapshot or selection.custom or tuning.DEFAULTS,
-        )
-        tuning.save(session, user_id, selection)
         return selection, tuning.resolve(selection)
-    values = values_of(row)
-    if selection.snapshot != values:
-        selection.snapshot = values
-        tuning.save(session, user_id, selection)
-    return selection, values
+    return selection, values_of(row)
 
 
 def _clean_name(name: str) -> str:
@@ -154,6 +146,8 @@ def update(
     values: Tuning | None = None,
 ) -> RecAlgorithm:
     unshared = shared is False and row.shared
+    # What the others were using: the values before this change.
+    last = values_of(row)
     if name is not None:
         _check_name(session, row.owner_id, _clean_name(name), row.id)
         row.name = _clean_name(name)
@@ -170,7 +164,7 @@ def update(
         raise NameTaken(f"You already have an algorithm called {row.name}") from exc
     session.refresh(row)
     if unshared:
-        _release(session, row, values_of(row))
+        _release(session, row, last)
     return row
 
 
@@ -182,28 +176,79 @@ def delete(session: Session, row: RecAlgorithm) -> None:
     _release(session, row, last, deleted_id=algo_id)
 
 
+def _copy_name(session: Session, user_id: int, name: str, owner: str) -> str:
+    taken = {
+        n.casefold()
+        for n in session.exec(
+            select(RecAlgorithm.name).where(RecAlgorithm.owner_id == user_id)
+        ).all()
+    }
+    base = _clean_name(f"{name} (from {owner})")
+    candidate, n = base, 2
+    while candidate.casefold() in taken:
+        candidate = _clean_name(f"{base[: MAX_NAME - 4]} {n}")
+        n += 1
+    return candidate
+
+
 def _release(
     session: Session, row: RecAlgorithm, last: Tuning, *, deleted_id: int | None = None
 ) -> list[int]:
-    """Put everyone else ranking with ``row`` on their own copy of ``last``;
-    the owner too when it was deleted. Returns their user ids."""
+    """Give everyone else ranking with ``row`` a private copy of ``last`` and
+    put them on it (the owner too when it was deleted: their own values stay as
+    they were). Returns their user ids."""
     algo_id = deleted_id if deleted_id is not None else require_id(row)
     active = f"{tuning.ALGORITHM_PREFIX}{algo_id}"
+    owner = session.get(User, row.owner_id)
+    owner_name = owner.username if owner is not None else "someone"
     moved: list[int] = []
     for settings in session.exec(
         select(UserSettings).where(
             col(UserSettings.rec_tuning_json).contains(f'"{active}"')
+            | col(UserSettings.rec_tuning_json).contains(f'"based_on":{algo_id}')
         )
     ).all():
-        if deleted_id is None and settings.user_id == row.owner_id:
-            continue
-        selection = tuning.load(session, settings.user_id)
-        if selection.active == active:
-            tuning.save(
-                session, settings.user_id, Selection(active="custom", custom=last)
-            )
-            moved.append(settings.user_id)
-        elif selection.based_on == algo_id:
+        uid = settings.user_id
+        selection = tuning.load(session, uid)
+        if selection.based_on == algo_id and (
+            deleted_id is not None or uid != row.owner_id
+        ):
             selection.based_on = None
-            tuning.save(session, settings.user_id, selection)
+        if selection.active != active or (deleted_id is None and uid == row.owner_id):
+            tuning.save(session, uid, selection)
+            continue
+        if uid == row.owner_id:
+            # Deleted by its owner: their own values, as they were.
+            selection.active = "custom"
+            selection.custom = selection.custom or last
+            tuning.save(session, uid, selection)
+            moved.append(uid)
+            continue
+        try:
+            copy = create(
+                session,
+                uid,
+                name=_copy_name(session, uid, row.name, owner_name),
+                shared=False,
+                values=last,
+            )
+            selection.active = f"{tuning.ALGORITHM_PREFIX}{require_id(copy)}"
+            selection.snapshot = last
+        except TooMany, NameTaken:
+            logger.info("No room for a copy of algorithm %s for user %s", algo_id, uid)
+            selection.active = "custom"
+            selection.custom = selection.custom or last
+        tuning.save(session, uid, selection)
+        moved.append(uid)
     return moved
+
+
+def release_owner(session: Session, user_id: int) -> None:
+    """Before an account is deleted: everyone using its shared algorithms gets
+    their own copy (the rows themselves go with the account)."""
+    for row in session.exec(
+        select(RecAlgorithm).where(
+            RecAlgorithm.owner_id == user_id, col(RecAlgorithm.shared)
+        )
+    ).all():
+        _release(session, row, values_of(row), deleted_id=require_id(row))

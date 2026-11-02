@@ -407,7 +407,15 @@ export default function TuningPanel({
     setDraft(null);
     save.mutate(
       { active: id, ...(unsaved ? { custom: unsaved } : {}) },
-      { onError: () => showError("Could not switch the algorithm") }
+      {
+        onError: () => {
+          showError("Could not switch the algorithm");
+          // Perhaps it was just unshared or deleted: show the list as it is.
+          void queryClient.invalidateQueries({
+            queryKey: queryKeys.discover.algorithms,
+          });
+        },
+      }
     );
   };
 
@@ -463,8 +471,13 @@ export default function TuningPanel({
           values={values}
           onPick={pick}
           beforeSave={() => {
+            // The save below stores these values; no debounced save after it.
             if (timer.current != null) window.clearTimeout(timer.current);
             timer.current = null;
+          }}
+          afterSave={() => {
+            // Saved: nothing is waiting any more (a failed save keeps the
+            // move, which is then saved on the way out like any other).
             pending.current = null;
           }}
         />

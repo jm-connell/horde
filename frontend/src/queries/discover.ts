@@ -82,7 +82,9 @@ function useInvalidateAlgorithms() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.discover.algorithms }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.discover.algorithms,
+      }),
       queryClient.invalidateQueries({ queryKey: queryKeys.discover.tuning }),
     ]);
 }
@@ -98,8 +100,13 @@ export function useSaveRecAlgorithm() {
 export function useUpdateRecAlgorithm() {
   const invalidate = useInvalidateAlgorithms();
   return useMutation({
-    mutationFn: ({ id, payload }: { id: number; payload: RecAlgorithmUpdate }) =>
-      api.updateRecAlgorithm(id, payload),
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: number;
+      payload: RecAlgorithmUpdate;
+    }) => api.updateRecAlgorithm(id, payload),
     onSuccess: invalidate,
   });
 }
