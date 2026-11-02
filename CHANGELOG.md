@@ -19,7 +19,8 @@ All notable changes to Horde are documented here. The format follows
   each card's menu says **Why this video?** with every part of its score.
   Type in interests to get more of a topic (Horde searches YouTube for
   them) and block topics by their words or by meaning, each for good or
-  until a date.
+  until a date. Save your settings under a name and, if you like, share
+  them with the other accounts.
 - **One history.** History now lists videos you streamed and your imported
   YouTube history beside library watches. Remove videos from it (one at a
   time or with **Select**, a whole day at once), or keep them in it but out

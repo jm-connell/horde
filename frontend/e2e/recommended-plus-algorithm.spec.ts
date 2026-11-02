@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expectNoSeriousViolations } from "./axe";
-import { CSRF_HEADERS, expect, test } from "./fixtures";
+import { contextAs, CSRF_HEADERS, expect, test } from "./fixtures";
 
 /** A seeded video found on YouTube, from a channel the admin never watched. */
 const FOUND = "Night sky timelapse from a lighthouse";
@@ -30,6 +30,16 @@ test.afterEach(async ({ page }) => {
     headers: CSRF_HEADERS,
     data: { active: "balanced" },
   });
+  const saved = await page.request.get("/api/discover/algorithms");
+  for (const a of (await saved.json()).items as {
+    id: number;
+    mine: boolean;
+  }[]) {
+    if (a.mine)
+      await page.request.delete(`/api/discover/algorithms/${a.id}`, {
+        headers: CSRF_HEADERS,
+      });
+  }
   const topics = await page.request.get("/api/discover/topics");
   for (const t of (await topics.json()).items as { id: number }[]) {
     await page.request.delete(`/api/discover/topics/${t.id}`, {
@@ -213,4 +223,56 @@ test("interests and blocked topics change the feed", async ({ page }) => {
   await row.getByRole("button", { name: "Delete aurora" }).click();
   await expect(row).toHaveCount(0);
   await expect(page.getByText("Tracking the aurora by hand")).toBeVisible();
+});
+
+test("save an algorithm, share it, and save changes back to it", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await openRecommendedPlus(page);
+  await page.getByRole("button", { name: "Algorithm" }).click();
+  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  await panel.getByRole("button", { name: "Explorer" }).click();
+  await expect(
+    panel.getByRole("button", { name: "Explorer", pressed: true })
+  ).toBeVisible();
+  await panel.getByRole("button", { name: "Save as…" }).click();
+  await panel.getByLabel("Name").fill("Weekend");
+  await panel.getByLabel("Share with other accounts").check();
+  await panel.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(
+    panel.getByRole("button", { name: "Weekend", pressed: true })
+  ).toBeVisible();
+  await expect(
+    panel.getByText("Yours, shared with other accounts.")
+  ).toBeVisible();
+
+  // Another account sees it, with its owner, and can pick it.
+  const ctx = await contextAs(browser, baseURL, "member");
+  const other = await ctx.newPage();
+  await other.goto("/account");
+  const section = other.getByRole("region", { name: "Recommended+ algorithm" });
+  const chip = section.getByRole("button", { name: "Weekend · admin" });
+  await chip.click();
+  await expect(chip).toHaveAttribute("aria-pressed", "true");
+  await expect(section.getByText("Shared by admin.")).toBeVisible();
+  await other.request.put("/api/discover/tuning", {
+    headers: CSRF_HEADERS,
+    data: { active: "balanced" },
+  });
+  await ctx.close();
+
+  // Moving a setting, then saving back to it.
+  await panel.getByLabel("New channels", { exact: true }).fill("10");
+  await expect(
+    panel.getByRole("button", { name: "Custom", pressed: true })
+  ).toBeVisible();
+  await panel.getByRole("button", { name: "Save to “Weekend”" }).click();
+  await expect(
+    panel.getByRole("button", { name: "Weekend", pressed: true })
+  ).toBeVisible();
+  await expect(panel.getByLabel("New channels", { exact: true })).toHaveValue(
+    "10"
+  );
 });

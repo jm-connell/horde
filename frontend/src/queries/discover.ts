@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
-import type { RecTopicUpdate, RecTopicWrite, RecTuningWrite } from "../types";
+import type {
+  RecAlgorithmUpdate,
+  RecAlgorithmWrite,
+  RecTopicUpdate,
+  RecTopicWrite,
+  RecTuningWrite,
+} from "../types";
 import { queryKeys } from "./keys";
 
 /** The signed-in user's Recommended+ algorithm: a preset or their own values. */
@@ -58,6 +64,50 @@ export function useDeleteRecTopic() {
   const invalidate = useInvalidateTopics();
   return useMutation({
     mutationFn: (id: number) => api.deleteRecTopic(id),
+    onSuccess: invalidate,
+  });
+}
+
+/** Your saved algorithms, then the ones other accounts share. */
+export function useRecAlgorithms() {
+  return useQuery({
+    queryKey: queryKeys.discover.algorithms,
+    queryFn: ({ signal }) => api.listRecAlgorithms({ signal }),
+    staleTime: 60_000,
+  });
+}
+
+/** After saving, sharing or deleting: the list and what you rank with. */
+function useInvalidateAlgorithms() {
+  const queryClient = useQueryClient();
+  return () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.discover.algorithms }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.discover.tuning }),
+    ]);
+}
+
+export function useSaveRecAlgorithm() {
+  const invalidate = useInvalidateAlgorithms();
+  return useMutation({
+    mutationFn: (payload: RecAlgorithmWrite) => api.saveRecAlgorithm(payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useUpdateRecAlgorithm() {
+  const invalidate = useInvalidateAlgorithms();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: RecAlgorithmUpdate }) =>
+      api.updateRecAlgorithm(id, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteRecAlgorithm() {
+  const invalidate = useInvalidateAlgorithms();
+  return useMutation({
+    mutationFn: (id: number) => api.deleteRecAlgorithm(id),
     onSuccess: invalidate,
   });
 }

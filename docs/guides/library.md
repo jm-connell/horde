@@ -128,6 +128,8 @@ Hover a Recommended+ card to see why it is there; its **⋯** menu offers **Why 
 - **Sources**: your library, indexed channels, videos found on YouTube (off also stops Horde searching YouTube for you) and the household lift.
 - **Advanced**: strictness per kind of pick, how much of a video you must have watched for it to shape your recommendations, how old a finished video must be to come back as a rewatch, and a preference for downloaded videos.
 
+**Save as…** names your settings ("Weeknight", "Learning") so you can switch between them from the picker; tick **Share with other accounts** to offer one to everyone here (they see your name beside it). Someone using your shared algorithm gets your later changes; if they move a setting, it becomes their own copy, so nobody changes yours. After moving a setting on one of your own, **Save to “name”** writes the change back. When you delete an algorithm or stop sharing it, anyone using it keeps its settings as their own. Your interests and blocked topics are never part of a saved algorithm.
+
 Only your own feed changes. How it works: [ADR 0024](../adr/0024-tunable-recommended-plus.md).
 
 Videos you watch without downloading count too: Recommended+ learns from them and stops suggesting them. Looking on YouTube can be turned off in [Settings → Library](../settings/library.md); the Recommended+ tab is then hidden, since Recommended already covers your library and indexed channels. How it works: [ADR 0019](../adr/0019-recommended-plus.md).

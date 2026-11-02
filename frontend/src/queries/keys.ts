@@ -19,6 +19,7 @@ export const queryKeys = {
     /** The latest feed's asked-for and actual mix (written by the feed page). */
     mix: ["discover", "mix"] as const,
     topics: ["discover", "topics"] as const,
+    algorithms: ["discover", "algorithms"] as const,
     /** What each blocked topic left out of the latest feed (the feed page writes it). */
     blocked: ["discover", "blocked"] as const,
   },

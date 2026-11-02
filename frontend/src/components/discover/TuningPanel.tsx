@@ -14,6 +14,7 @@ import type { DiscoverMix, RecTopic, RecTuning } from "../../types";
 import Collapse from "../Collapse";
 import { PanelHeader } from "../SidePanelFrame";
 import ThemedSelect from "../ThemedSelect";
+import SavedAlgorithms from "./SavedAlgorithms";
 import TopicsSection from "./TopicsSection";
 import { BUCKET_LABEL, BUCKET_TINT, BUCKETS, sharePercents } from "./buckets";
 
@@ -324,6 +325,13 @@ export default function TuningPanel({
     staleTime: Infinity,
   }).data;
 
+  // What is saved changed (a save, a pick, the other copy of this panel):
+  // show it, unless a move of ours is still waiting.
+  const savedKey = JSON.stringify([query.data?.active, query.data?.values]);
+  useEffect(() => {
+    if (pending.current === null) setDraft(null);
+  }, [savedKey]);
+
   // Leaving with a move not saved yet: save it now.
   useEffect(
     () => () => {
@@ -442,11 +450,24 @@ export default function TuningPanel({
             Custom
           </button>
         </div>
-        <p className="text-xs text-muted">
-          {preset
-            ? preset.description
-            : "Your own settings. Pick a preset to start over from it."}
-        </p>
+        {!active.startsWith("algo:") && (
+          <p className="text-xs text-muted">
+            {preset
+              ? preset.description
+              : "Your own settings. Pick a preset to start over from it, or save them."}
+          </p>
+        )}
+        <SavedAlgorithms
+          state={state}
+          active={active}
+          values={values}
+          onPick={pick}
+          beforeSave={() => {
+            if (timer.current != null) window.clearTimeout(timer.current);
+            timer.current = null;
+            pending.current = null;
+          }}
+        />
       </section>
 
       <section className="space-y-3" aria-labelledby="tuning-mix">

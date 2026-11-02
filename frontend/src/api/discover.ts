@@ -5,6 +5,9 @@ import type {
   RecFeedback,
   RecFeedbackKind,
   RecFeedbackList,
+  RecAlgorithm,
+  RecAlgorithmUpdate,
+  RecAlgorithmWrite,
   RecTopic,
   RecTopicUpdate,
   RecTopicWrite,
@@ -57,6 +60,35 @@ export const discoverApi = {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
+    });
+  },
+
+  listRecAlgorithms(opts?: ReadOptions): Promise<{ items: RecAlgorithm[] }> {
+    return request<{ items: RecAlgorithm[] }>("/api/discover/algorithms", opts);
+  },
+
+  saveRecAlgorithm(payload: RecAlgorithmWrite): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>("/api/discover/algorithms", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  updateRecAlgorithm(
+    id: number,
+    payload: RecAlgorithmUpdate
+  ): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>(`/api/discover/algorithms/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  },
+
+  deleteRecAlgorithm(id: number): Promise<RecAlgorithm> {
+    return request<RecAlgorithm>(`/api/discover/algorithms/${id}`, {
+      method: "DELETE",
     });
   },
 
