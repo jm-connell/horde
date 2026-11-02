@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CAPTION_LINGER_SEC,
   findCaptionLineIndex,
   parseVttLines,
   parseVttTimestamp,
@@ -102,5 +103,30 @@ World
     expect(revealedWordCount(lines[0], 1.05)).toBe(1);
     expect(revealedWordCount(lines[0], 1.4)).toBe(1);
     expect(revealedWordCount(lines[0], 1.6)).toBe(2);
+  });
+
+  it("clears an auto caption line a moment after its last word, through silence", () => {
+    const lines = parseVttLines(`WEBVTT
+
+00:00:01.000 --> 00:01:00.000
+<00:00:01.000><c>Look</c> <00:00:01.400><c>at</c> <00:00:01.800><c>this</c>
+
+00:01:00.000 --> 00:01:02.000
+<00:01:00.000><c>Back</c>
+`);
+    expect(lines[0].endSec).toBeCloseTo(1.8 + CAPTION_LINGER_SEC);
+    expect(findCaptionLineIndex(lines, 2)).toBe(0);
+    expect(findCaptionLineIndex(lines, 10)).toBe(-1);
+    expect(shouldHoldCaption(lines, 0, 10)).toBe(false);
+    expect(findCaptionLineIndex(lines, 60.5)).toBe(1);
+  });
+
+  it("keeps a manual cue up for its whole span", () => {
+    const lines = parseVttLines(`WEBVTT
+
+00:00:01.000 --> 00:00:09.000
+A long subtitle the author meant to stay up
+`);
+    expect(lines[0].endSec).toBe(9);
   });
 });

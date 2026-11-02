@@ -48,7 +48,7 @@ Theater mode is remembered in playback settings and should survive leaving watch
 
 ## Subtitles
 
-External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c++. Cue styling supports size options in settings. Subtitle overlays are **draggable** so you can reposition them on screen. On phones they sit centred near the bottom, sized to the player, and are not draggable.
+External **VTT** tracks (downloaded captions / uploaded) can be toggled with ++c++. Cue styling supports size options in settings. YouTube auto captions (word-timed) clear 2.5 seconds after the last word, so a line does not stay up through a long silence; manual subtitles keep their own timing. Subtitle overlays are **draggable** so you can reposition them on screen. On phones they sit centred near the bottom, sized to the player, and are not draggable.
 
 ## Chapters
 
