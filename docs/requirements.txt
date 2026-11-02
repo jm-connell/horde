@@ -1,2 +1,2 @@
 # Pinned docs toolchain used by the Dockerfile, CI and the Pages workflow.
-mkdocs-material==9.7.7
+mkdocs-material==9.8.0
