@@ -1,4 +1,10 @@
-import { CSRF_HEADERS, contextAs, expect, test } from "./fixtures";
+import {
+  CSRF_HEADERS,
+  contextAs,
+  expect,
+  openSearchBox,
+  test,
+} from "./fixtures";
 import type { Page, Request } from "@playwright/test";
 
 const STREAM_URL = "https://video.example.test/watch?v=abc123";
@@ -223,6 +229,42 @@ test("a streamed video links to its original page", async ({ page }) => {
   const original = page.getByRole("link", { name: /^Source$/ });
   await expect(original).toHaveAttribute("href", STREAM_URL);
   await expect(original).toHaveAttribute("target", "_blank");
+});
+
+test("stream details leave length and resolution to the player", async ({
+  page,
+}) => {
+  await mockStream(page);
+  await page.goto(WATCH);
+  const details = page
+    .getByRole("link", { name: "Test Channel" })
+    .locator("xpath=..");
+  await expect(details).toContainText("1.2K views");
+  await expect(details).not.toContainText("10:00");
+  await expect(details).not.toContainText(/\d{3,4}p/);
+});
+
+test("the channel link on a stream reached from a search opens the channel", async ({
+  page,
+}) => {
+  await mockStream(page);
+  await page.goto(WATCH);
+  const channelLink = page.getByRole("link", { name: "Test Channel" });
+  await expect(channelLink).toBeVisible();
+  // Searching goes to the results; Back returns to the stream with the query
+  // still set, as after opening a result.
+  await (await openSearchBox(page)).fill("ridge");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goBack();
+
+  await channelLink.click();
+  await expect(page).toHaveURL(/\?channel=Test%20Channel/);
+  await expect(page.getByPlaceholder("Search this channel")).toBeVisible();
+  for (const box of await page
+    .getByPlaceholder("Search", { exact: true })
+    .all()) {
+    await expect(box).toHaveValue("");
+  }
 });
 
 test("a stream's AI is hidden when the server does not support it", async ({
