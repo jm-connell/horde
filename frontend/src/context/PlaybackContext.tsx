@@ -596,6 +596,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const queueRef = useRef(queue);
   queueRef.current = queue;
+  /** What is playing now, so a late up-next answer for an earlier item is dropped. */
+  const playingKey = stream
+    ? `s:${stream.url}`
+    : current
+      ? `v:${current.id}`
+      : "";
+  const playingKeyRef = useRef(playingKey);
+  playingKeyRef.current = playingKey;
 
   // A related library video, or the channel's next part (maybe not downloaded).
   const [upNext, setUpNext] = useState<QueueEntry | null>(null);
@@ -678,6 +686,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
+    const endedKey = playingKeyRef.current;
     /** Count down to the next part, when there is one and nothing is queued. */
     const playNextPart = (
       found: Promise<NextPart>,
@@ -687,6 +696,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       found
         .then(({ entry }) => {
           if (queueRef.current.length > 0) return;
+          if (playingKeyRef.current !== endedKey) return;
           const href = entry ? watchHref(entry, entry.channel ?? "") : null;
           if (
             !entry ||
@@ -745,6 +755,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         .getRelatedVideos(endedId, 12)
         .then((rows) => {
           if (queueRef.current.length > 0) return;
+          if (playingKeyRef.current !== endedKey) return;
           const next = rows.find((v) => !exclude.has(v.id));
           if (next) startUpNextCountdown(next);
         })
