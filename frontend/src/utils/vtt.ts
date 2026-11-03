@@ -199,26 +199,27 @@ export function parseVttLines(text: string): CaptionLine[] {
     const words = parseWordsFromPayload(payload, startSec, hasWordTags);
     if (words.length === 0) continue;
     const lineText = words.map((w) => w.text).join(" ");
-    raw.push({ startSec, endSec, words, text: lineText });
+    const shownUntil = autoCaptions
+      ? Math.min(endSec, words[words.length - 1].startSec + CAPTION_LINGER_SEC)
+      : endSec;
+    raw.push({ startSec, endSec: shownUntil, words, text: lineText });
   }
 
   // Dedupe consecutive identical plain text (rollup can emit duplicates),
   // keeping the union of their time ranges so coverage doesn't go hollow.
+  // The same words said again after a pause stay a line of their own.
   const deduped: CaptionLine[] = [];
   for (const line of raw) {
     const prev = deduped[deduped.length - 1];
-    if (prev && prev.text === line.text) {
+    if (
+      prev &&
+      prev.text === line.text &&
+      line.startSec <= prev.endSec + CUE_GAP_FILL_SEC
+    ) {
       prev.endSec = Math.max(prev.endSec, line.endSec);
       continue;
     }
     deduped.push(line);
-  }
-
-  if (autoCaptions) {
-    for (const line of deduped) {
-      const lastWord = line.words[line.words.length - 1].startSec;
-      line.endSec = Math.min(line.endSec, lastWord + CAPTION_LINGER_SEC);
-    }
   }
 
   // Fill small forward gaps so word reveal doesn't drop out between cues.

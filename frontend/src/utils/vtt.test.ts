@@ -129,4 +129,18 @@ A long subtitle the author meant to stay up
 `);
     expect(lines[0].endSec).toBe(9);
   });
+
+  it("shows auto-caption words said again after a pause", () => {
+    const lines = parseVttLines(`WEBVTT
+
+00:00:10.000 --> 00:00:20.000
+<00:00:10.000><c>yeah</c>
+
+00:00:20.000 --> 00:00:22.000
+<00:00:20.000><c>yeah</c>
+`);
+    expect(lines).toHaveLength(2);
+    expect(findCaptionLineIndex(lines, 15)).toBe(-1);
+    expect(findCaptionLineIndex(lines, 20.5)).toBe(1);
+  });
 });
