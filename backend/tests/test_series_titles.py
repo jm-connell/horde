@@ -22,6 +22,12 @@ REACTS = [
         ("Elden Ring Blind Playthrough #7", "Elden Ring Blind Playthrough #8"),
         ("NoPixel 4.0 | Chang Gang Returns", "NoPixel 4.0 | Heist Planning"),
         ("[Skunkworks Build] Draining the Loop", "[Skunkworks Build] New Distro Plate"),
+        # The series name before the episode number, whatever the episode is called.
+        (
+            "I Created A City Full Of Intersections | Cities: Skylines #2",
+            "The Biggest Roundabout of All Time | Cities Skylines #3",
+        ),
+        ("Minecraft Hardcore Ep 41: The Nether", "Minecraft Hardcore Ep 42: Home"),
     ],
 )
 def test_clear_continuations_are_recognised(prev, nxt):
@@ -41,6 +47,10 @@ def test_clear_continuations_are_recognised(prev, nxt):
         ("Top 10 Cars of 2024", "Top 10 Phones of 2024"),
         # A re-upload with the same title.
         ("GTA RP Day 12", "GTA RP Day 12"),
+        # A number one up after a different name, or no name at all.
+        ("Cities: Skylines #2 | Highways", "Planet Coaster #3 | Rides"),
+        ("Top 10 Cars", "Top 11 Phones"),
+        ("Part 3: The Bridge", "Part 4: A Quiet Night"),
     ],
 )
 def test_weak_or_unrelated_titles_are_not(prev, nxt):

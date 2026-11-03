@@ -1,10 +1,11 @@
 """Is one upload clearly the next part of another? Decided from titles alone.
 
 Used to autoplay a channel's next upload after a video ends, which is only
-wanted when that upload continues the same series ("Day 12" -> "Day 13", or the
-same "GTA RP | ..." series tag). Anything weaker returns ``None`` and the
-player falls back to a related recommendation, so the rules are deliberately
-strict: a wrong guess plays an unrelated video.
+wanted when that upload continues the same series ("Day 12" -> "Day 13", the
+same series name before a number one up, or the same "GTA RP | ..." series
+tag). Anything weaker returns ``None`` and the player falls back to a related
+recommendation, so the rules are deliberately strict: a wrong guess plays an
+unrelated video.
 """
 
 from __future__ import annotations
@@ -22,6 +23,19 @@ MAX_TAG_SHARE = 0.4
 #: Stems (the title with its numbers blanked) must overlap at least this much.
 MIN_STEM_OVERLAP = 0.5
 _FILLER = {"the", "a", "an", "of", "and", "in", "on", "to", "with", "ft", "feat"}
+#: Words before an episode number that say what is counted, not which series.
+_COUNTERS = {
+    "part",
+    "pt",
+    "ep",
+    "episode",
+    "day",
+    "chapter",
+    "ch",
+    "no",
+    "vol",
+    "volume",
+}
 
 
 def _words(text: str) -> list[str]:
@@ -55,6 +69,46 @@ def _sequential(prev: str, nxt: str) -> str | None:
     return None
 
 
+def _episodes(title: str) -> list[tuple[int, list[str]]]:
+    """Each number in the title with the words before it."""
+    words = _words(title)
+    return [
+        (int(w), words[:i]) for i, w in enumerate(words) if w.isdigit() and len(w) <= 4
+    ]
+
+
+def _shared_ending(a: list[str], b: list[str]) -> list[str]:
+    n = 0
+    while n < min(len(a), len(b)) and a[-1 - n] == b[-1 - n]:
+        n += 1
+    return a[len(a) - n :]
+
+
+def numbered_next(prev: str, nxt: str) -> str | None:
+    """Why ``nxt`` is clearly the next numbered part of ``prev``, or None.
+
+    Either the same title with one number up ('Part 3' -> 'Part 4'), or the
+    same series name right before a number one up, whatever else the titles
+    say ('City of Intersections | Cities: Skylines #2' -> 'Biggest Roundabout
+    | Cities Skylines #3'). The name needs 2+ words or 5+ letters.
+    """
+    reason = _sequential(prev, nxt)
+    if reason:
+        return reason
+    for a, before_a in _episodes(prev):
+        for b, before_b in _episodes(nxt):
+            if b != a + 1:
+                continue
+            name = [
+                w
+                for w in _shared_ending(before_a, before_b)
+                if w not in _COUNTERS and w not in _FILLER and not w.isdigit()
+            ]
+            if len(name) >= 2 or (name and len(name[0]) >= 5):
+                return f"{' '.join(name)} {b} follows {a}"
+    return None
+
+
 def series_tags(title: str) -> set[str]:
     """Title segments that could name a series: 2+ words or 5+ letters, not the whole title."""
     whole = " ".join(_words(title))
@@ -84,7 +138,7 @@ def next_part_reason(
         return None
     if " ".join(_words(prev_title)) == " ".join(_words(next_title)):
         return None
-    reason = _sequential(prev_title, next_title)
+    reason = numbered_next(prev_title, next_title)
     if reason:
         return reason
     channel = set(_words(channel_name or ""))
