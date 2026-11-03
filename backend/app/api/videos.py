@@ -22,7 +22,6 @@ from ..schemas import (
     BulkMetadataRefresh,
     BulkVideoDelete,
     BulkVideoNotes,
-    ChannelFeedEntry,
     MetadataRefreshResult,
     MetadataSyncStatus,
     NextPartRead,
@@ -447,21 +446,7 @@ def next_part(
     found = next_part_svc.find_next_part(session, video)
     if found is None:
         return NextPartRead()
-    return NextPartRead(
-        entry=ChannelFeedEntry(
-            id=found.yt_id,
-            url=found.url,
-            title=found.title,
-            duration=found.duration,
-            thumbnail_url=found.thumbnail_url,
-            published_at=found.published_at,
-            channel=found.channel,
-            channel_url=found.channel_url,
-            in_library=found.video_id is not None,
-            video_id=found.video_id,
-        ),
-        reason=found.reason,
-    )
+    return NextPartRead(entry=found.to_entry(), reason=found.reason)
 
 
 @router.patch(

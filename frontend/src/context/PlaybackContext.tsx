@@ -43,7 +43,7 @@ import {
   miniPlayerHostInsets,
   type MiniPos,
 } from "../utils/miniPlayerLayout";
-import type { Storyboard, SubtitleTrack, Video } from "../types";
+import type { NextPart, Storyboard, SubtitleTrack, Video } from "../types";
 import {
   isQueuedStream,
   type QueueEntry,
@@ -132,8 +132,6 @@ export interface PlaybackLayout {
   miniPlayerRect: MiniPlayerRect | null;
   /** True until the user drags the mini player; then it keeps that pixel position. */
   miniPlayerCornerAnchor: boolean;
-  /** Live DASH/file track quality (YouTube ladder), null until known. */
-  activeStreamQuality: number | null;
   /** Pillarbox inset (px) of the visible picture inside the player box. */
   videoFrameInset: number;
 }
@@ -233,9 +231,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   currentRef.current = current;
   streamRef.current = stream;
   const [miniPlayerRect, setMiniPlayerRect] = useState<MiniPlayerRect | null>(
-    null
-  );
-  const [activeStreamQuality, setActiveStreamQuality] = useState<number | null>(
     null
   );
   const [videoFrameInset, setVideoFrameInset] = useState(0);
@@ -495,7 +490,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         return video;
       });
       setStream(null);
-      setActiveStreamQuality(null);
       streamPosRef.current = 0;
       streamBehindLiveRef.current = null;
       libraryPosRef.current = video.last_position_sec || 0;
@@ -511,7 +505,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   const playStream = useCallback((session: StreamSession) => {
     setCurrent(null);
     setMediaSuspended(false);
-    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
@@ -565,7 +558,6 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     setCurrent(null);
     setStream(null);
     setMediaSuspended(false);
-    setActiveStreamQuality(null);
     streamPosRef.current = 0;
     streamBehindLiveRef.current = null;
     libraryPosRef.current = 0;
@@ -604,6 +596,14 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
 
   const queueRef = useRef(queue);
   queueRef.current = queue;
+  /** What is playing now, so a late up-next answer for an earlier item is dropped. */
+  const playingKey = stream
+    ? `s:${stream.url}`
+    : current
+      ? `v:${current.id}`
+      : "";
+  const playingKeyRef = useRef(playingKey);
+  playingKeyRef.current = playingKey;
 
   // A related library video, or the channel's next part (maybe not downloaded).
   const [upNext, setUpNext] = useState<QueueEntry | null>(null);
@@ -686,11 +686,52 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
+    const endedKey = playingKeyRef.current;
+    /** Count down to the next part, when there is one and nothing is queued. */
+    const playNextPart = (
+      found: Promise<NextPart>,
+      exclude: Set<number>,
+      otherwise: () => void
+    ) =>
+      found
+        .then(({ entry }) => {
+          if (queueRef.current.length > 0) return;
+          if (playingKeyRef.current !== endedKey) return;
+          const href = entry ? watchHref(entry, entry.channel ?? "") : null;
+          if (
+            !entry ||
+            !href ||
+            (entry.video_id != null && exclude.has(entry.video_id))
+          ) {
+            otherwise();
+            return;
+          }
+          startUpNextCountdown({
+            queue_kind: "stream",
+            url: entry.url,
+            href,
+            title: entry.title || "Untitled",
+            channel: entry.channel ?? null,
+            thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
+            duration: entry.duration ?? null,
+          });
+        })
+        .catch(otherwise);
+
     if (stream) {
-      // A not-downloaded video goes to the stream history, has no related
-      // up-next, and the queue still moves on.
+      // A not-downloaded video goes to the stream history and the queue
+      // still moves on. Its up-next is only the series' next part.
       streamWatch.finish(watchedStream(stream));
-      if (queueRef.current.length > 0) advance();
+      if (queueRef.current.length > 0) {
+        advance();
+        return;
+      }
+      if (!settings.autoplayRelated || stream.liveVideoId) return;
+      void playNextPart(
+        api.getStreamNextPart(stream.url),
+        new Set(),
+        () => undefined
+      );
       return;
     }
     if (current) {
@@ -714,6 +755,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         .getRelatedVideos(endedId, 12)
         .then((rows) => {
           if (queueRef.current.length > 0) return;
+          if (playingKeyRef.current !== endedKey) return;
           const next = rows.find((v) => !exclude.has(v.id));
           if (next) startUpNextCountdown(next);
         })
@@ -721,30 +763,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
     // The channel's next upload first, when it clearly continues the series;
     // otherwise a related video as before.
-    api
-      .getNextPart(endedId)
-      .then(({ entry }) => {
-        if (queueRef.current.length > 0) return;
-        const href = entry ? watchHref(entry, entry.channel ?? "") : null;
-        if (
-          !entry ||
-          !href ||
-          (entry.video_id != null && exclude.has(entry.video_id))
-        ) {
-          playRelated();
-          return;
-        }
-        startUpNextCountdown({
-          queue_kind: "stream",
-          url: entry.url,
-          href,
-          title: entry.title || "Untitled",
-          channel: entry.channel ?? null,
-          thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
-          duration: entry.duration ?? null,
-        });
-      })
-      .catch(playRelated);
+    void playNextPart(api.getNextPart(endedId), exclude, playRelated);
   }, [
     current,
     stream,
@@ -814,10 +833,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     () => ({
       miniPlayerRect,
       miniPlayerCornerAnchor: miniCornerAnchor,
-      activeStreamQuality,
       videoFrameInset,
     }),
-    [miniPlayerRect, miniCornerAnchor, activeStreamQuality, videoFrameInset]
+    [miniPlayerRect, miniCornerAnchor, videoFrameInset]
   );
   const actions = useMemo<PlaybackActions>(
     () => ({
@@ -952,6 +970,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     !libraryRendition.safariPreparing &&
     libraryRendition.rendition == null;
 
+  const upNextProps = {
+    upNext: upNext
+      ? {
+          title: upNext.title,
+          channel: upNext.channel,
+          poster: isQueuedStream(upNext)
+            ? upNext.thumbnail
+            : thumbnailUrl(upNext),
+          note: isQueuedStream(upNext)
+            ? upNext.href.startsWith("/watch?")
+              ? "Next part · not downloaded"
+              : "Next part"
+            : null,
+          seconds: upNextSeconds ?? 0,
+        }
+      : null,
+    onCancelUpNext: clearUpNext,
+    onPlayUpNext: upNext ? () => playSuggested(upNext) : undefined,
+    autoplayRelated: settings.autoplayRelated,
+    onAutoplayRelatedChange: (enabled: boolean) =>
+      updateSettings({ autoplayRelated: enabled }),
+  };
+
   // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
   // instance as library progressive playback, or as a different preview URL.
   // Updating src in place leaves MediaSource attached and hangs on a spinner.
@@ -1018,32 +1059,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
-        upNext={
-          upNext
-            ? {
-                title: upNext.title,
-                channel: upNext.channel,
-                poster: isQueuedStream(upNext)
-                  ? upNext.thumbnail
-                  : thumbnailUrl(upNext),
-                note: isQueuedStream(upNext)
-                  ? upNext.href.startsWith("/watch?")
-                    ? "Next part · not downloaded"
-                    : "Next part"
-                  : null,
-                seconds: upNextSeconds ?? 0,
-              }
-            : null
-        }
-        onCancelUpNext={clearUpNext}
-        onPlayUpNext={upNext ? () => playSuggested(upNext) : undefined}
-        autoplayRelated={settings.autoplayRelated}
+        {...upNextProps}
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
-        onAutoplayRelatedChange={(enabled) =>
-          updateSettings({ autoplayRelated: enabled })
-        }
-        onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
         clipMarkers={clipMarkers}
@@ -1102,9 +1120,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
+        {...upNextProps}
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
-        onActiveQualityChange={setActiveStreamQuality}
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
       />

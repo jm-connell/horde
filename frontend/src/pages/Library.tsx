@@ -50,7 +50,7 @@ import { useTagDrawer } from "./library/useTagDrawer";
 
 function OnlineLibrary() {
   const [settings, update] = useSettings();
-  const { search } = useSearch();
+  const { search, clearSearch } = useSearch();
   const [showAllChannels, setShowAllChannels] = useState(false);
 
   const {
@@ -77,9 +77,16 @@ function OnlineLibrary() {
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
   // there closes it here (channel pages search their feed in their own box).
+  // Opening a channel while a search is still in the box (a channel link on a
+  // watch page reached from search results) clears the search instead.
+  const lastSearchRef = useRef(search);
   useEffect(() => {
-    if (search.trim() && activeChannel) setActiveChannel(null);
-  }, [search, activeChannel, setActiveChannel]);
+    const typed = search !== lastSearchRef.current;
+    lastSearchRef.current = search;
+    if (!search.trim() || !activeChannel) return;
+    if (typed) setActiveChannel(null);
+    else clearSearch();
+  }, [search, activeChannel, setActiveChannel, clearSearch]);
 
   const isHome = !activeChannel && !activeTag;
   const onChannelPage = Boolean(activeChannel);

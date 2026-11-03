@@ -23115,6 +23115,60 @@
         ]
       }
     },
+    "/api/preview/next-part": {
+      "get": {
+        "description": "The channel's next upload when it clearly continues this stream's series.\n\nFor \"autoplay the next part\" when a stream ends. Read from the channel's\nindex only (nothing is fetched), so an unindexed channel has none.",
+        "operationId": "preview_next_part_api_preview_next_part_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "maxLength": 4000,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NextPartRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Next Part",
+        "tags": [
+          "preview"
+        ]
+      }
+    },
     "/api/preview/related": {
       "get": {
         "description": "Library and indexed-channel videos related to a stream.",

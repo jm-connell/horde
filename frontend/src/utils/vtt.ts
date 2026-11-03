@@ -22,6 +22,12 @@ const MIN_CUE_DURATION_SEC = 0.05;
 export const CUE_GAP_FILL_SEC = 0.5;
 /** Keep the last line visible this long after it ends, unless the next cue starts. */
 export const CUE_HOLD_SEC = 0.85;
+/**
+ * Auto captions (per-word timings) keep a line's cue open until the next
+ * speech, which leaves it on screen through a long silence. Such a line ends
+ * this long after its last word instead. Manual cues keep their own end.
+ */
+export const CAPTION_LINGER_SEC = 2.5;
 
 export function parseVttTimestamp(ts: string): number {
   const m = TS_RE.exec(ts.trim());
@@ -158,6 +164,8 @@ function parseWordsFromPayload(
  */
 export function parseVttLines(text: string): CaptionLine[] {
   const normalized = text.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n");
+  const autoCaptions = WORD_TAG_RE.test(normalized);
+  WORD_TAG_RE.lastIndex = 0;
   const blocks = normalized.split(/\n\n+/);
   const raw: CaptionLine[] = [];
 
@@ -191,15 +199,23 @@ export function parseVttLines(text: string): CaptionLine[] {
     const words = parseWordsFromPayload(payload, startSec, hasWordTags);
     if (words.length === 0) continue;
     const lineText = words.map((w) => w.text).join(" ");
-    raw.push({ startSec, endSec, words, text: lineText });
+    const shownUntil = autoCaptions
+      ? Math.min(endSec, words[words.length - 1].startSec + CAPTION_LINGER_SEC)
+      : endSec;
+    raw.push({ startSec, endSec: shownUntil, words, text: lineText });
   }
 
   // Dedupe consecutive identical plain text (rollup can emit duplicates),
   // keeping the union of their time ranges so coverage doesn't go hollow.
+  // The same words said again after a pause stay a line of their own.
   const deduped: CaptionLine[] = [];
   for (const line of raw) {
     const prev = deduped[deduped.length - 1];
-    if (prev && prev.text === line.text) {
+    if (
+      prev &&
+      prev.text === line.text &&
+      line.startSec <= prev.endSec + CUE_GAP_FILL_SEC
+    ) {
       prev.endSec = Math.max(prev.endSec, line.endSec);
       continue;
     }

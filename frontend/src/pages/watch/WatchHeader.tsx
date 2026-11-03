@@ -1,8 +1,6 @@
 import { Link } from "react-router-dom";
-import { usePlaybackLayout } from "../../context/PlaybackContext";
 import {
   formatDate,
-  formatDuration,
   formatResolution,
   formatSize,
   formatViewCount,
@@ -16,7 +14,11 @@ import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
 import { ArrowIcon, ExternalIcon } from "../../components/icons";
 
-/** Title, channel, size/date/resolution line and (for a stream) the download control. */
+/**
+ * Title, channel, size/date/resolution line and (for a stream) the download
+ * control. A stream shows no length or resolution here: the player and the
+ * download control already show both.
+ */
 export default function WatchHeader({
   source,
   channelParam,
@@ -26,7 +28,6 @@ export default function WatchHeader({
   channelParam: string;
   streamDownload: StreamDownload;
 }) {
-  const { activeStreamQuality } = usePlaybackLayout();
   const isLibrary = source.kind === "library";
   const isLive = !isLibrary && Boolean(source.meta.is_live);
   const title = isLibrary
@@ -35,10 +36,9 @@ export default function WatchHeader({
   const channelName = isLibrary
     ? source.video.channel
     : source.meta.channel || channelParam;
-  // Live track quality for streams; file height for library.
   const resolution = isLibrary
     ? formatResolution(source.video.height_px)
-    : formatResolution(activeStreamQuality);
+    : null;
   const processingLabel = isLibrary ? watchProcessingLabel(source.video) : null;
   const channelHref = channelName
     ? `/?channel=${encodeURIComponent(channelName)}`
@@ -94,9 +94,6 @@ export default function WatchHeader({
               />
               Live
             </span>
-          )}
-          {!isLibrary && !isLive && source.meta.duration != null && (
-            <span>{formatDuration(source.meta.duration)}</span>
           )}
           {!isLibrary && source.meta.view_count != null && (
             <span>{formatViewCount(source.meta.view_count)}</span>

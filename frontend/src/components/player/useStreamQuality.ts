@@ -34,8 +34,6 @@ interface Options {
   defaultStreamQuality: StreamQuality;
   /** Tell the viewer why the quality changed. */
   showQualityNotice: (msg: string) => void;
-  /** Fires when the live track quality changes (null when unknown). */
-  onActiveQualityChange?: (quality: number | null) => void;
 }
 
 /**
@@ -55,7 +53,6 @@ export function useStreamQuality({
   pendingSeekRef,
   defaultStreamQuality,
   showQualityNotice,
-  onActiveQualityChange,
 }: Options) {
   const capabilityMaxHeightRef = useRef<number>(2160);
   const [qualityChoice, setQualityChoice] = useState<QualityChoice>(() =>
@@ -85,7 +82,6 @@ export function useStreamQuality({
   useEffect(() => {
     if (effectiveStreamType !== "dash" || !shakaReady) {
       setActiveQuality(null);
-      onActiveQualityChange?.(null);
       return;
     }
     const p = shakaPlayerRef.current;
@@ -98,7 +94,6 @@ export function useStreamQuality({
         const active = tracks.find((t) => t.active);
         const q = active ? trackQuality(active) : null;
         setActiveQuality(q);
-        onActiveQualityChange?.(q);
       } catch {
         // player may be mid-destroy
       }
@@ -112,19 +107,13 @@ export function useStreamQuality({
       p.removeEventListener("variantchanged", sync);
       window.clearInterval(id);
     };
-    // The caller passes a stable callback (a state setter); do not list it
-    // here, or an unstable one would re-subscribe and restart the poll.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; re-subscribing on its identity would reset the poll
-  }, [effectiveStreamType, shakaReady, dashReloadToken, src]);
+  }, [effectiveStreamType, shakaReady, dashReloadToken, src, shakaPlayerRef]);
 
   // Progressive / compat: report video element's decoded size when known.
   useEffect(() => {
     if (effectiveStreamType === "dash" && !compatMode) return;
     const el = videoRef.current;
-    if (!el) {
-      onActiveQualityChange?.(null);
-      return;
-    }
+    if (!el) return;
     const sync = () => {
       const q = trackQuality({
         width: el.videoWidth || null,
@@ -132,7 +121,6 @@ export function useStreamQuality({
       });
       const next = q > 0 ? q : null;
       setActiveQuality(next);
-      onActiveQualityChange?.(next);
     };
     sync();
     el.addEventListener("loadedmetadata", sync);
@@ -141,8 +129,7 @@ export function useStreamQuality({
       el.removeEventListener("loadedmetadata", sync);
       el.removeEventListener("resize", sync);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- onActiveQualityChange is a stable setter; listeners re-bind only per stream/src
-  }, [effectiveStreamType, compatMode, src]);
+  }, [effectiveStreamType, compatMode, src, videoRef]);
 
   const applyQualityChoice = useApplyShakaQuality(
     shakaPlayerRef,

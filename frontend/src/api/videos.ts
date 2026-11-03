@@ -86,6 +86,13 @@ export const videosApi = {
     return request<NextPart>(`/api/videos/${videoId}/next-part`);
   },
 
+  /** The same for a stream, from its channel's index. */
+  getStreamNextPart(url: string): Promise<NextPart> {
+    return request<NextPart>(
+      `/api/preview/next-part?url=${encodeURIComponent(url)}`
+    );
+  },
+
   getMediaToken(videoId: number): Promise<MediaToken> {
     return request<MediaToken>(`/api/videos/${videoId}/media-token`);
   },

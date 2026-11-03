@@ -104,8 +104,6 @@ export interface VideoPlayerProps {
   /** Key for each shortcut; the defaults when not given. */
   hotkeys?: HotkeyMap;
   onAutoplayRelatedChange?: (enabled: boolean) => void;
-  /** Fires when the live DASH track quality changes (YouTube ladder height). */
-  onActiveQualityChange?: (quality: number | null) => void;
   /** Fires with the pillarbox inset (px) when the picture doesn't fill its box. */
   onFrameInsetChange?: (inset: number) => void;
   /**

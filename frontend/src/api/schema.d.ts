@@ -2775,6 +2775,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/preview/next-part": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Next Part
+         * @description The channel's next upload when it clearly continues this stream's series.
+         *
+         *     For "autoplay the next part" when a stream ends. Read from the channel's
+         *     index only (nothing is fetched), so an unindexed channel has none.
+         */
+        get: operations["preview_next_part_api_preview_next_part_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/preview/related": {
         parameters: {
             query?: never;
@@ -16230,6 +16253,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamPreviewMeta"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_next_part_api_preview_next_part_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NextPartRead"];
                 };
             };
             /** @description Validation error */

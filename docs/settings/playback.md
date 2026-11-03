@@ -8,7 +8,7 @@ Controls under **Settings → Playback** (`?tab=playback`). All of these keys sy
 |---------|-----|---------|--------|
 | Show description | `showDescription` | `true` | Description block on the watch page |
 | Show related videos in sidebar | `showRelatedVideos` | `true` | Desktop normal view: recommendations to the right of the player |
-| Autoplay related | `autoplayRelated` | `true` | When a video ends and the queue is empty, count down and play the [next part](../guides/watching.md#autoplay-the-next-part) of a series if there is one, otherwise a related video (also toggled in player controls) |
+| Autoplay related | `autoplayRelated` | `true` | When a video ends and the queue is empty, count down and play the [next part](../guides/watching.md#autoplay-the-next-part) of a series if there is one, otherwise (library videos) a related video (also toggled in player controls) |
 | Show undownloaded on channel pages | `showUndownloadedOnChannel` | `true` | Include uploads not yet in the library; off = downloaded only |
 | Default stream quality | `defaultStreamQuality` | `auto` | Starting quality for streamed (not downloaded) video |
 

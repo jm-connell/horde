@@ -11,6 +11,7 @@ videos, each marked with whether it is in the library:
 
 A live stream first lists the channel's other broadcasts that are live now, so
 a tournament's A and B streams sit side by side (``live_now_on_channel``).
+Otherwise the channel's next part of the same series leads (``next_part``).
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from sqlmodel import Session, col, select
 
 from ..models import ChannelCatalogVideo, Video, as_utc, require_id
 from ..schemas import ChannelFeedEntry
-from . import app_settings, library, ytdlp_extract
+from . import app_settings, library, next_part, ytdlp_extract
 from .ai import embeddings as ai_embeddings
 from .ai.provider import get_embed_provider
 from .channel_catalog import query as catalog_query
@@ -174,6 +175,9 @@ def related_for_stream(
     lib_map = _LibraryIds(session)
     for entry in live_now or []:
         out.add(entry)
+    following = next_part.find_stream_next_part(session, youtube_id)
+    if following is not None:
+        out.add(following.to_entry())
     skipped_by_catalog: dict[int, set[str]] = {}
 
     def visible(video: ChannelCatalogVideo) -> bool:
