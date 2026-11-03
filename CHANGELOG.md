@@ -19,8 +19,8 @@ All notable changes to Horde are documented here. The format follows
   with a numbered reference that opens the video at that moment. Search
   works without AI; asking needs a chat model, and an embedding model helps
   it find meaning. Conversations are saved for your account (**History** in
-  the chat panel). Members need the new **Manage Ask channels** permission to add
-  channels.
+  the chat panel). Members need the new **Manage Ask channels** permission
+  to add channels.
 - The chat panel can dock as a full-height column at the side of the page
   (drag its edge to resize); a video plays in theater layout while it is
   docked.
