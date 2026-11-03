@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.services.series_titles import next_part_reason
+from app.services.series_titles import next_part_reason, numbered_next
 
 REACTS = [
     "Bratty Karen Tries Fleeing Traffic Stop | xQc Reacts",
@@ -51,6 +51,16 @@ def test_clear_continuations_are_recognised(prev, nxt):
         ("Cities: Skylines #2 | Highways", "Planet Coaster #3 | Rides"),
         ("Top 10 Cars", "Top 11 Phones"),
         ("Part 3: The Bridge", "Part 4: A Quiet Night"),
+        # A number with more of its segment after it, a decimal or a year.
+        (
+            "Reacting to Episode 4 of Arcane: Ending Explained",
+            "Reacting to Episode 5 of The Boys Season Finale",
+        ),
+        ("iPhone 15 Pro Review", "iPhone 16 Unboxing"),
+        ("Minecraft 1.20 Trailer Reaction", "Minecraft 1.21 Is Finally Here"),
+        ("Hitman 2 Part 2", "Hitman 3 Part 1"),
+        ("Cities: Skylines 2 Ep 1", "Cities Skylines 3 Announced"),
+        ("Top Moments of 2023", "Worst Moments of 2024"),
     ],
 )
 def test_weak_or_unrelated_titles_are_not(prev, nxt):
@@ -73,4 +83,27 @@ def test_a_common_tag_counts_on_a_channel_that_uses_it_rarely():
             "Road Trip | Utah", "Road Trip | Nevada", channel_titles=others
         )
         is not None
+    )
+
+
+def test_a_numbered_name_that_is_the_channel_is_not_a_series():
+    assert (
+        numbered_next(
+            "Clips | Ludwig Moments 7",
+            "Best of | Ludwig Moments 8",
+            channel_name="Ludwig Moments",
+        )
+        is None
+    )
+    assert numbered_next("Clips | Ludwig Moments 7", "Best of | Ludwig Moments 8")
+
+
+def test_only_a_named_number_is_looked_for_past_other_uploads():
+    # A loose title match is fine for the very next upload, not further on.
+    assert next_part_reason(
+        "Spending 24 Hours in Minecraft", "Spending 25 Hours in Minecraft"
+    )
+    assert (
+        numbered_next("Spending 24 Hours in Minecraft", "Spending 25 Hours in Fortnite")
+        is None
     )

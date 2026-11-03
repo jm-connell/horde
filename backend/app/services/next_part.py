@@ -2,11 +2,11 @@
 
 Looked up in the channel's catalog (the indexed uploads, ``position`` 0 =
 newest) when the channel is indexed, otherwise among the channel's downloaded
-videos by publish date. The first later upload that is the next numbered part
-(``series_titles.numbered_next``: "#2" -> "#3" of the same series) wins, even
-past unrelated uploads in between. Failing that, only the very next upload is
-considered, and only when its title shares a series tag: a channel whose next
-upload is something else gets no next part, and the player falls back to a
+videos by publish date. The very next upload counts when its title continues
+the series by any rule (``series_titles.next_part_reason``). Failing that, the
+first later upload that is the next numbered part of a named series
+(``numbered_next``: "Cities Skylines #2" -> "#3") wins, past unrelated uploads
+in between. Otherwise there is no next part, and the player falls back to a
 related recommendation.
 """
 
@@ -68,33 +68,46 @@ def _pick[T](
 ) -> tuple[T, str] | None:
     """The next part among ``later`` (oldest first) and why, or None.
 
-    ``channel_titles`` reads the channel's recent titles, needed only for the
-    series-tag check of the very next upload.
+    The very next upload may continue by any rule (``next_part_reason``);
+    later ones only as the next numbered part of a named series.
+    ``channel_titles`` reads the channel's recent titles for the tag rule.
     """
-    for item in later:
+    if not later:
+        return None
+    first_title = title_of(later[0])
+    if first_title:
+        reason = next_part_reason(
+            prev_title,
+            first_title,
+            channel_name=channel_name,
+            channel_titles=[
+                t for t in channel_titles() if t and t not in (prev_title, first_title)
+            ],
+        )
+        if reason:
+            return later[0], reason
+    for item in later[1:]:
         title = title_of(item)
-        reason = numbered_next(prev_title, title) if title else None
+        reason = (
+            numbered_next(prev_title, title, channel_name=channel_name)
+            if title
+            else None
+        )
         if reason:
             return item, reason
-    if not later or not title_of(later[0]):
-        return None
-    first = later[0]
-    first_title = title_of(first) or ""
-    reason = next_part_reason(
-        prev_title,
-        first_title,
-        channel_name=channel_name,
-        channel_titles=[
-            t for t in channel_titles() if t and t not in (prev_title, first_title)
-        ],
-    )
-    return (first, reason) if reason else None
+    return None
 
 
 def _library_id(session: Session, yt_id: str | None) -> int | None:
     if not yt_id:
         return None
-    row = session.exec(select(Video.id).where(Video.youtube_id == yt_id)).first()
+    # A video still waiting in Import review is not in the library yet.
+    row = session.exec(
+        select(Video.id).where(
+            Video.youtube_id == yt_id,
+            Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+    ).first()
     return row
 
 
