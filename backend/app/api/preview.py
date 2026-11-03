@@ -23,8 +23,8 @@ from ..openapi_responses import (
     SUBTITLES,
     VIDEO_STREAM,
 )
-from ..schemas import StreamPreviewMeta, StreamRelatedPage
-from ..services import library, stream_preview, stream_related
+from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
+from ..services import library, next_part, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
@@ -538,6 +538,24 @@ async def preview_related(
         _related, youtube_id, meta, limit, user.can("use_ai"), live_now
     )
     return StreamRelatedPage(items=items)
+
+
+@router.get("/next-part", response_model=NextPartRead)
+def preview_next_part(
+    url: str = Query(..., max_length=4000),
+    session: Session = Depends(get_session),
+    _user: AuthUser = Depends(current_user),
+):
+    """The channel's next upload when it clearly continues this stream's series.
+
+    For "autoplay the next part" when a stream ends. Read from the channel's
+    index only (nothing is fetched), so an unindexed channel has none.
+    """
+    youtube_id = youtube_video_id(url)
+    found = next_part.find_stream_next_part(session, youtube_id) if youtube_id else None
+    if found is None:
+        return NextPartRead()
+    return NextPartRead(entry=found.to_entry(), reason=found.reason)
 
 
 def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now):

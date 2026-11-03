@@ -43,7 +43,7 @@ import {
   miniPlayerHostInsets,
   type MiniPos,
 } from "../utils/miniPlayerLayout";
-import type { Storyboard, SubtitleTrack, Video } from "../types";
+import type { NextPart, Storyboard, SubtitleTrack, Video } from "../types";
 import {
   isQueuedStream,
   type QueueEntry,
@@ -678,11 +678,50 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Reset saved progress when a video finishes so it leaves Continue watching.
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
+    /** Count down to the next part, when there is one and nothing is queued. */
+    const playNextPart = (
+      found: Promise<NextPart>,
+      exclude: Set<number>,
+      otherwise: () => void
+    ) =>
+      found
+        .then(({ entry }) => {
+          if (queueRef.current.length > 0) return;
+          const href = entry ? watchHref(entry, entry.channel ?? "") : null;
+          if (
+            !entry ||
+            !href ||
+            (entry.video_id != null && exclude.has(entry.video_id))
+          ) {
+            otherwise();
+            return;
+          }
+          startUpNextCountdown({
+            queue_kind: "stream",
+            url: entry.url,
+            href,
+            title: entry.title || "Untitled",
+            channel: entry.channel ?? null,
+            thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
+            duration: entry.duration ?? null,
+          });
+        })
+        .catch(otherwise);
+
     if (stream) {
-      // A not-downloaded video goes to the stream history, has no related
-      // up-next, and the queue still moves on.
+      // A not-downloaded video goes to the stream history and the queue
+      // still moves on. Its up-next is only the series' next part.
       streamWatch.finish(watchedStream(stream));
-      if (queueRef.current.length > 0) advance();
+      if (queueRef.current.length > 0) {
+        advance();
+        return;
+      }
+      if (!settings.autoplayRelated || stream.liveVideoId) return;
+      void playNextPart(
+        api.getStreamNextPart(stream.url),
+        new Set(),
+        () => undefined
+      );
       return;
     }
     if (current) {
@@ -713,30 +752,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     };
     // The channel's next upload first, when it clearly continues the series;
     // otherwise a related video as before.
-    api
-      .getNextPart(endedId)
-      .then(({ entry }) => {
-        if (queueRef.current.length > 0) return;
-        const href = entry ? watchHref(entry, entry.channel ?? "") : null;
-        if (
-          !entry ||
-          !href ||
-          (entry.video_id != null && exclude.has(entry.video_id))
-        ) {
-          playRelated();
-          return;
-        }
-        startUpNextCountdown({
-          queue_kind: "stream",
-          url: entry.url,
-          href,
-          title: entry.title || "Untitled",
-          channel: entry.channel ?? null,
-          thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
-          duration: entry.duration ?? null,
-        });
-      })
-      .catch(playRelated);
+    void playNextPart(api.getNextPart(endedId), exclude, playRelated);
   }, [
     current,
     stream,
@@ -943,6 +959,29 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     !libraryRendition.safariPreparing &&
     libraryRendition.rendition == null;
 
+  const upNextProps = {
+    upNext: upNext
+      ? {
+          title: upNext.title,
+          channel: upNext.channel,
+          poster: isQueuedStream(upNext)
+            ? upNext.thumbnail
+            : thumbnailUrl(upNext),
+          note: isQueuedStream(upNext)
+            ? upNext.href.startsWith("/watch?")
+              ? "Next part · not downloaded"
+              : "Next part"
+            : null,
+          seconds: upNextSeconds ?? 0,
+        }
+      : null,
+    onCancelUpNext: clearUpNext,
+    onPlayUpNext: upNext ? () => playSuggested(upNext) : undefined,
+    autoplayRelated: settings.autoplayRelated,
+    onAutoplayRelatedChange: (enabled: boolean) =>
+      updateSettings({ autoplayRelated: enabled }),
+  };
+
   // Distinct keys so DASH (Shaka/MSE) does not reuse the same VideoPlayer
   // instance as library progressive playback, or as a different preview URL.
   // Updating src in place leaves MediaSource attached and hangs on a spinner.
@@ -1009,31 +1048,9 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
-        upNext={
-          upNext
-            ? {
-                title: upNext.title,
-                channel: upNext.channel,
-                poster: isQueuedStream(upNext)
-                  ? upNext.thumbnail
-                  : thumbnailUrl(upNext),
-                note: isQueuedStream(upNext)
-                  ? upNext.href.startsWith("/watch?")
-                    ? "Next part · not downloaded"
-                    : "Next part"
-                  : null,
-                seconds: upNextSeconds ?? 0,
-              }
-            : null
-        }
-        onCancelUpNext={clearUpNext}
-        onPlayUpNext={upNext ? () => playSuggested(upNext) : undefined}
-        autoplayRelated={settings.autoplayRelated}
+        {...upNextProps}
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
-        onAutoplayRelatedChange={(enabled) =>
-          updateSettings({ autoplayRelated: enabled })
-        }
         onFrameInsetChange={setVideoFrameInset}
         mediaSuspended={mediaSuspended}
         clipMarkers={clipMarkers}
@@ -1092,6 +1109,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         onMiniResize={handleMiniResize}
         onMiniMove={handleMiniMove}
         onMiniMoveEnd={handleMiniMoveEnd}
+        {...upNextProps}
         singleKeyShortcuts={settings.playerShortcuts}
         hotkeys={hotkeys}
         onFrameInsetChange={setVideoFrameInset}

@@ -14,6 +14,7 @@ from sqlalchemy.orm import Mapped
 from sqlmodel import Session, col, select
 
 from ..models import ChannelRetention, UserVideoState, Video, VideoTag, require_id
+from . import next_part
 from .pagination import PageRequest, random_key
 from .search_text import fts_match_expression, keyword_match_clause
 
@@ -624,7 +625,8 @@ def related_videos(
 ) -> list[Video]:
     """Return related library videos.
 
-    Ranked by embedding similarity of the whole videos when AI is ready,
+    The channel's next part of the same series leads when it is downloaded.
+    Then ranked by embedding similarity of the whole videos when AI is ready,
     nudged up for the same channel and for shared tags (rare tags count more),
     and down for videos ``user_id`` has already watched. Same-channel, shared-tag
     and random videos fill the rest. Every page slices the same ranking.
@@ -648,6 +650,12 @@ def related_videos(
             picked.append(video)
             if len(picked) >= pool_limit:
                 return
+
+    following = next_part.find_next_part(session, source)
+    if following is not None and following.video_id is not None:
+        following_video = session.get(Video, following.video_id)
+        if following_video is not None:
+            add_candidates([following_video])
 
     try:
         add_candidates(_embedding_related(session, source, user_id))

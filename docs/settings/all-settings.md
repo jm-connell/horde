@@ -148,7 +148,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 |------------|---------|------|--------|---------|
 | `showDescription` | `true` | bool | | UI blob |
 | `showRelatedVideos` | `true` | bool | | UI blob |
-| `autoplayRelated` | `true` | bool | Up-next countdown: next part of a series, else a related video | UI blob |
+| `autoplayRelated` | `true` | bool | Up-next countdown: next part of a series, else (library videos) a related video | UI blob |
 | `previewOnHover` | `true` | bool | Thumbnail previews (hover, or centered card on touch screens) | UI blob |
 | `playerShortcuts` | `true` | bool | Single-character hotkeys on/off | UI blob |
 | `hotkeys` | `{}` | object | Rebound hotkeys: action id → keys; missing actions use defaults | UI blob |

@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlmodel import select
-
 from app.models import ChannelCatalog, ChannelCatalogVideo
+from app.services import stream_related
 
 
 def _catalog(session, name, titles):
@@ -48,21 +47,88 @@ def test_the_next_uploaded_part_is_returned_even_when_not_downloaded(
     res = client.get(f"/api/videos/{watched.id}/next-part")
     assert res.status_code == 200
     body = res.json()
-    # "Q&A with chat" sits between them; it is not a part, so nothing plays.
-    assert body["entry"] is None
-
-    # Drop the unrelated upload in between: now Day 13 is next in line.
-    row = session.exec(
-        select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == ids[2])
-    ).one()
-    session.delete(row)
-    session.commit()
-
-    body = client.get(f"/api/videos/{watched.id}/next-part").json()
+    # "Q&A with chat" sits between them; the numbered next part is found past it.
     assert body["entry"]["title"] == "GTA RP Day 13"
     assert body["entry"]["url"].endswith(ids[3])
     assert body["entry"]["in_library"] is False
     assert "13" in body["reason"]
+
+
+def test_only_a_numbered_part_is_found_past_other_uploads(client, session, add_video):
+    ids = _catalog(
+        session,
+        "Tagger",
+        ["Road Trip | Utah", "Studio Tour", "Road Trip | Nevada"],
+    )
+    watched = add_video(title="Road Trip | Utah", channel="Tagger", yt_id=ids[0])
+    # A shared tag only counts for the very next upload.
+    assert client.get(f"/api/videos/{watched.id}/next-part").json()["entry"] is None
+
+
+CITIES = [
+    "I Created A City Full Of Intersections | Cities: Skylines #2",
+    "Reacting to Your Builds",
+    "Q&A Livestream Highlights",
+    "The Biggest Roundabout of All Time | Cities Skylines #3",
+    "Cities Skylines #4 - Metro",
+]
+
+
+def test_a_stream_gets_its_next_part_from_the_index(client, session):
+    ids = _catalog(session, "Planner", CITIES)
+    res = client.get(
+        "/api/preview/next-part",
+        params={"url": f"https://www.youtube.com/watch?v={ids[0]}"},
+    )
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["entry"]["title"] == CITIES[3]
+    assert body["entry"]["id"] == ids[3]
+    assert body["entry"]["channel"] == "Planner"
+    assert "3" in body["reason"]
+
+
+def test_a_stream_off_the_index_has_no_next_part(client):
+    res = client.get(
+        "/api/preview/next-part",
+        params={"url": "https://www.youtube.com/watch?v=zzzzzzzzzzz"},
+    )
+    assert res.json() == {"entry": None, "reason": None}
+    res = client.get("/api/preview/next-part", params={"url": "https://example.com/x"})
+    assert res.json()["entry"] is None
+
+
+def test_the_next_part_leads_a_streams_related_videos(session):
+    ids = _catalog(session, "Planner", CITIES)
+    items = stream_related.related_for_stream(
+        session,
+        ids[0],
+        {"channel_url": "https://www.youtube.com/@Planner"},
+        may_embed=False,
+    )
+    assert items[0].title == CITIES[3]
+    assert {i.title for i in items[1:]} >= {CITIES[1], CITIES[4]}
+
+
+def test_a_downloaded_next_part_leads_a_videos_related_videos(client, add_video):
+    first = add_video(
+        title=CITIES[0],
+        channel="Planner",
+        published_at=datetime(2022, 1, 1, tzinfo=UTC),
+    )
+    third = add_video(
+        title=CITIES[3],
+        channel="Planner",
+        published_at=datetime(2022, 1, 9, tzinfo=UTC),
+    )
+    # Downloaded last, so the channel fill alone would list it first.
+    add_video(
+        title=CITIES[1],
+        channel="Planner",
+        published_at=datetime(2022, 1, 5, tzinfo=UTC),
+    )
+    related = client.get(f"/api/videos/{first.id}/related").json()
+    assert related[0]["id"] == third.id
 
 
 def test_a_downloaded_next_part_points_at_the_library(client, session, add_video):

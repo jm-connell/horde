@@ -267,6 +267,38 @@ test("the channel link on a stream reached from a search opens the channel", asy
   }
 });
 
+test("when a stream ends, the next part of its series comes up next", async ({
+  page,
+}) => {
+  await mockStream(page);
+  const NEXT_URL = "https://www.youtube.com/watch?v=part0000003";
+  const asked: string[] = [];
+  await page.route(/\/api\/preview\/next-part\?/, (route) => {
+    asked.push(new URL(route.request().url()).searchParams.get("url") ?? "");
+    return route.fulfill({
+      json: {
+        entry: {
+          id: "part0000003",
+          url: NEXT_URL,
+          title: "Ridge at dusk #3",
+          channel: "Test Channel",
+          in_library: false,
+        },
+        reason: "ridge at dusk 3 follows 2",
+      },
+    });
+  });
+  await page.goto(WATCH);
+  const video = page.locator("video").first();
+  await expect(video).toBeAttached();
+  await video.evaluate((el) => el.dispatchEvent(new Event("ended")));
+
+  await expect(page.getByText(/^Playing next/)).toBeVisible();
+  await expect(page.getByText("Ridge at dusk #3")).toBeVisible();
+  await expect(page.getByText("Next part · not downloaded")).toBeVisible();
+  expect(asked).toEqual([STREAM_URL]);
+});
+
 test("a stream's AI is hidden when the server does not support it", async ({
   page,
 }) => {
