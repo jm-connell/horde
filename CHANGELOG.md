@@ -7,8 +7,23 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-03
+
 ### Added
 
+- **Ask: search and question what channels say.** Turn on Ask for a YouTube
+  channel (Settings → Library → Ask channels, or the channel's settings) and
+  Horde indexes the captions of its videos in the background. The search
+  bar's results then show **Said in videos** moments that mention your
+  words, and naming the channel in the chat panel answers from what it said,
+  with a numbered reference that opens the video at that moment. Search
+  works without AI; asking needs a chat model, and an embedding model helps
+  it find meaning. Conversations are saved for your account (**History** in
+  the chat panel). Members need the new **Manage Ask channels** permission
+  to add channels.
+- The chat panel can dock as a full-height column at the side of the page
+  (drag its edge to resize); a video plays in theater layout while it is
+  docked.
 - **Tune Recommended+.** **Algorithm** above the feed opens every setting
   behind it: presets (Balanced, Catch up, Familiar, Explorer, Nostalgia) or
   your own mix of kinds of picks, match strictness, freshness, popularity
@@ -40,6 +55,9 @@ All notable changes to Horde are documented here. The format follows
   how viewers reacted. Saved comments stay when a video leaves YouTube. Turn
   it all off with Settings → Library → **Comments**; saved comments are
   kept, and the setting shows how much space they take and can delete them.
+- A streamed episode finds the next part of its series among the channel's
+  next 50 uploads, leads Up next with it and autoplays it.
+- "Channels you might like" cards show each channel's profile picture.
 
 ### Changed
 
@@ -50,10 +68,24 @@ All notable changes to Horde are documented here. The format follows
   links the setting when a question needs your data and it is off.
 - Ask about Horde has a one-line header (no subtitle) and suggests five
   questions when it opens instead of three.
+- Search results are one list ranked across the library, streams and
+  YouTube (the library leads) instead of a section per source.
+- YouTube auto captions clear 2.5 seconds after the last word instead of
+  staying on screen through a silence.
+- Stream details no longer repeat the length and resolution.
+
+### Fixed
+
+- On iPhone and iPad, the chat panel and the search bar stay visible above
+  the on-screen keyboard.
+- Following a channel link from a video opened from search results opens the
+  channel instead of the search results.
 
 ### Upgrade notes
 
-- Database migration `0023_video_comments` adds new tables only.
+- Database migrations `0022_ask_knowledge` to `0026_rec_algorithms` add new
+  tables and one column to user settings; nothing existing is rewritten.
+  Ask needs SQLite with FTS5 (the official image has it).
 
 ## [1.2.1] - 2026-10-30
 
@@ -922,7 +954,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.1...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.2...main
+[1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
 [1.1.1]: https://github.com/jm-connell/horde/compare/v1.1.0...v1.1.1
