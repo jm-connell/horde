@@ -924,7 +924,7 @@ def _discovery_entry(raw: dict[str, Any]) -> dict[str, Any] | None:
 def search_youtube_for_discovery(
     query: str, *, this_year: bool, limit: int = 20
 ) -> list[dict[str, Any]]:
-    """One page of YouTube's video search for Recommended+ (no Shorts, no live).
+    """One page of YouTube's video search for Recommended (no Shorts, no live).
 
     Raises on failure: the gatherer backs off on a bot check or rate limit, so
     errors must reach it. ``limit`` stays within the first results page, so this

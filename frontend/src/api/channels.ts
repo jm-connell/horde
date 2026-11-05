@@ -270,6 +270,18 @@ export const channelsApi = {
     });
   },
 
+  /** Show or hide a followed channel's live streams (it stays followed). */
+  setFollowHideLive(
+    channelUrl: string,
+    hideLive: boolean
+  ): Promise<FollowedChannel> {
+    return request<FollowedChannel>("/api/follows", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ channel_url: channelUrl, hide_live: hideLive }),
+    });
+  },
+
   unfollowChannel(channelUrl: string): Promise<UnfollowResult> {
     return request<UnfollowResult>(
       `/api/follows?channel_url=${encodeURIComponent(channelUrl)}`,

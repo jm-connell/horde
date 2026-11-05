@@ -281,31 +281,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai/recommendations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ai Recommendations
-         * @description The home page's "For you" shelf, or one category's videos.
-         *
-         *     "For you" works without AI (ranked from the watch history alone); the
-         *     category shelves need it. With ``include_streams``, the first page also
-         *     carries followed channels' live broadcasts (``reason: live``), which the
-         *     client leaves out of its ``offset``.
-         */
-        get: operations["ai_recommendations_api_ai_recommendations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai/resume": {
         parameters: {
             query?: never;
@@ -1480,7 +1455,7 @@ export interface paths {
         };
         /**
          * Discover Channels
-         * @description Channels new to the user that their Recommended+ feed leans on most.
+         * @description Channels new to the user that their Recommended feed leans on most.
          */
         get: operations["discover_channels_api_discover_channels_get"];
         put?: never;
@@ -1500,12 +1475,14 @@ export interface paths {
         };
         /**
          * Discover Feed
-         * @description One page of the Recommended+ feed.
+         * @description One page of the Recommended feed.
          *
          *     The first page also tells the gatherer this user is active (it starts at once
          *     the first time). It also carries followed channels' live broadcasts, the
          *     ones from channels watched lately first. Each page counts as shown for its
-         *     videos.
+         *     videos, unless it is a ``prefetch`` (the home page loading it before the
+         *     user opens the tab): that neither counts as shown nor as a visit for the
+         *     gatherer; opening the tab asks again and counts then.
          */
         get: operations["discover_feed_api_discover_feed_get"];
         put?: never;
@@ -1681,7 +1658,7 @@ export interface paths {
         };
         /**
          * Get Tuning
-         * @description How this user ranks Recommended+: a preset, a saved algorithm or their
+         * @description How this user ranks Recommended: a preset, a saved algorithm or their
          *     own values.
          */
         get: operations["get_tuning_api_discover_tuning_get"];
@@ -2022,7 +1999,11 @@ export interface paths {
         delete: operations["unfollow_channel_api_follows_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Follow
+         * @description Show or hide a followed channel's live streams, without unfollowing it.
+         */
+        patch: operations["update_follow_api_follows_patch"];
         trace?: never;
     };
     "/api/fonts": {
@@ -6273,6 +6254,8 @@ export interface components {
         DiscoverFeedRead: {
             /** Blocked */
             blocked?: components["schemas"]["DiscoverBlockedRead"][];
+            /** Categories */
+            categories?: string[];
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
             /** Mix */
@@ -6692,6 +6675,16 @@ export interface components {
             /** Channel Url */
             channel_url: string;
         };
+        /**
+         * FollowUpdate
+         * @description Change how a followed channel shows (it stays followed).
+         */
+        FollowUpdate: {
+            /** Channel Url */
+            channel_url: string;
+            /** Hide Live */
+            hide_live: boolean;
+        };
         /** FollowedChannelRead */
         FollowedChannelRead: {
             /** Channel Name */
@@ -6703,6 +6696,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Hide Live
+             * @default false
+             */
+            hide_live: boolean;
             /** Source */
             source: string;
         };
@@ -8186,7 +8184,7 @@ export interface components {
         };
         /**
          * RecTuningRead
-         * @description The user's Recommended+ settings and the presets they can pick from.
+         * @description The user's Recommended settings and the presets they can pick from.
          */
         RecTuningRead: {
             /** Active */
@@ -8201,52 +8199,12 @@ export interface components {
         };
         /**
          * RecTuningWrite
-         * @description Rank Recommended+ with a preset, a saved algorithm, or your own values.
+         * @description Rank Recommended with a preset, a saved algorithm, or your own values.
          */
         RecTuningWrite: {
             /** Active */
             active: string;
             custom?: components["schemas"]["Tuning-Input"] | null;
-        };
-        /**
-         * RecommendationItemRead
-         * @description A library video (``video``) or an upload that is not downloaded (``stream``).
-         */
-        RecommendationItemRead: {
-            /** Reason */
-            reason?: ("throwback" | "live") | null;
-            stream?: components["schemas"]["ChannelFeedEntry"] | null;
-            video?: components["schemas"]["VideoRead"] | null;
-        };
-        /** RecommendationSectionRead */
-        RecommendationSectionRead: {
-            /**
-             * Items
-             * @default []
-             */
-            items: components["schemas"]["RecommendationItemRead"][];
-            /** Kind */
-            kind?: string | null;
-            /** Seed Video Id */
-            seed_video_id?: number | null;
-            /** Title */
-            title: string;
-            /** Videos */
-            videos: components["schemas"]["VideoRead"][];
-        };
-        /** RecommendationsRead */
-        RecommendationsRead: {
-            /** Categories */
-            categories: string[];
-            /**
-             * Has More
-             * @default false
-             */
-            has_more: boolean;
-            /** Hint */
-            hint?: string | null;
-            /** Sections */
-            sections: components["schemas"]["RecommendationSectionRead"][];
         };
         /** ResetRequest */
         ResetRequest: {
@@ -8917,6 +8875,12 @@ export interface components {
             name: string;
             /** Reason */
             reason?: string | null;
+            /** Tags */
+            tags?: string[];
+            /** Typical Minutes */
+            typical_minutes?: number | null;
+            /** Typical Views */
+            typical_views?: number | null;
             /** Url */
             url: string;
             /** Videos */
@@ -9187,7 +9151,7 @@ export interface components {
         };
         /**
          * Tuning
-         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         * @description One complete set of Recommended settings (what a preset or a save holds).
          */
         "Tuning-Input": {
             /**
@@ -9300,7 +9264,7 @@ export interface components {
         };
         /**
          * Tuning
-         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         * @description One complete set of Recommended settings (what a preset or a save holds).
          */
         "Tuning-Output": {
             /**
@@ -10463,50 +10427,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiProcessResult"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_recommendations_api_ai_recommendations_get: {
-        parameters: {
-            query?: {
-                category?: string | null;
-                limit?: number;
-                offset?: number;
-                /** @description Mix in indexed channels' uploads that are not downloaded. */
-                include_streams?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationsRead"];
                 };
             };
             /** @description Validation error */
@@ -13377,6 +13297,10 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Ordering seed; a new one reshuffles the less certain picks. */
                 seed?: number | null;
+                /** @description Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page. */
+                category?: string | null;
+                /** @description Loaded ahead of time, not shown yet: its videos do not count as shown. */
+                prefetch?: boolean;
             };
             header?: never;
             path?: never;
@@ -14754,6 +14678,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnfollowResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_follow_api_follows_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowedChannelRead"];
                 };
             };
             /** @description Validation error */

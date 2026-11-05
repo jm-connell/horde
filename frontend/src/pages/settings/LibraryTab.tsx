@@ -478,8 +478,8 @@ export default function LibraryTab() {
           />
           <SettingRow
             anchor="discovery"
-            title="Recommended+ looks on YouTube"
-            description="Recommended+ searches YouTube for videos and channels new to each person, built from what they watch. Needs YouTube results in library search."
+            title="Recommended looks on YouTube"
+            description="Recommended searches YouTube for videos and channels new to each person, built from what they watch. Needs YouTube results in library search."
             control={
               <div className="flex items-center gap-2">
                 <HelpTip text={DISCOVERY_TIP} />
@@ -499,7 +499,7 @@ export default function LibraryTab() {
           <SettingRow
             anchor="discovery-household"
             title="Recommendations learn from the household"
-            description="Recommended+ gives a small lift to library videos that people here with similar taste liked. It never says who watched what."
+            description="Recommended gives a small lift to library videos that people here with similar taste liked. It never says who watched what."
             control={
               <Toggle
                 checked={appSettings?.discovery_household ?? true}

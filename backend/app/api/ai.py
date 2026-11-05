@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Literal
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -11,8 +11,7 @@ from pydantic import BaseModel, Field
 from sqlmodel import Session
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
-from ..context import AppContext, get_ctx, get_session
-from ..models import require_id
+from ..context import get_session
 from ..openapi_responses import EVENT_STREAM, RAW
 from ..response_schemas import (
     AiApplyWorkloadResult,
@@ -23,10 +22,8 @@ from ..response_schemas import (
     AiJobAction,
     AiRetryFailedResult,
     PausedResponse,
-    RecommendationsRead,
 )
 from ..schemas import (
-    ChannelFeedEntry,
     HelpAssistantInfo,
     HelpCatalog,
     HelpChatRequest,
@@ -47,10 +44,6 @@ from ..services.ai.provider import (
     test_connection,
 )
 from ..services.auth.accounts import AuthUser
-from ..services.discovery import feedback
-from ..services.discovery.history import library_key
-from ..services.live import picks as live_picks
-from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
@@ -575,117 +568,6 @@ def ai_cancel_job(job_id: int):
     if not worker.cancel_job(job_id):
         raise HTTPException(status_code=404, detail="Job not found or not cancellable")
     return {"ok": True, "id": job_id}
-
-
-@router.get("/recommendations", response_model=RecommendationsRead)
-def ai_recommendations(
-    category: str | None = Query(default=None),
-    limit: int = Query(default=24, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    include_streams: bool = Query(
-        default=False,
-        description="Mix in indexed channels' uploads that are not downloaded.",
-    ),
-    session: Session = Depends(get_session),
-    ctx: AppContext = Depends(get_ctx),
-    user: AuthUser = Depends(current_user),
-):
-    """The home page's "For you" shelf, or one category's videos.
-
-    "For you" works without AI (ranked from the watch history alone); the
-    category shelves need it. With ``include_streams``, the first page also
-    carries followed channels' live broadcasts (``reason: live``), which the
-    client leaves out of its ``offset``.
-    """
-    ai_ready = build_status().ready
-    if category:
-        if not ai_ready:
-            raise HTTPException(status_code=503, detail="AI not ready")
-        result = recommend.videos_for_category(
-            session, category, limit=limit, offset=offset
-        )
-        sections: list[dict[str, Any]] = []
-        if result.videos:
-            reads = _to_read_many(result.videos, session, viewer=user)
-            sections.append(
-                {
-                    "title": "",
-                    "kind": "category",
-                    "seed_video_id": None,
-                    "videos": reads,
-                    "items": [{"video": r} for r in reads],
-                }
-            )
-        return {
-            "categories": result.categories,
-            "sections": sections,
-            "has_more": result.has_more,
-        }
-
-    page = recommend.homepage_recommendations_page(
-        session,
-        user_id=user.id,
-        limit=limit,
-        offset=offset,
-        include_streams=include_streams,
-    )
-    reads = _to_read_many(page.videos, session, viewer=user)
-    read_by_id = {r.id: r for r in reads}
-    items: list[dict[str, Any]] = []
-    for item in page.items:
-        if item.video is not None:
-            items.append(
-                {"video": read_by_id[require_id(item.video)], "reason": item.reason}
-            )
-        elif item.stream is not None:
-            items.append(
-                {
-                    "reason": item.reason,
-                    "stream": ChannelFeedEntry(
-                        id=item.stream.yt_id,
-                        url=item.stream.url,
-                        title=item.stream.title,
-                        duration=item.stream.duration,
-                        thumbnail_url=item.stream.thumbnail_url,
-                        view_count=item.stream.view_count,
-                        published_at=item.stream.published_at,
-                        channel=item.channel or None,
-                        live_status=item.stream.live_status,
-                    ),
-                }
-            )
-    if include_streams and offset == 0:
-        items = live_picks.merge(
-            items,
-            live_picks.live_picks(session, ctx.live.directory, user.id),
-            lambda p: {"reason": "live", "stream": live_picks.feed_entry(p)},
-            lambda i: i["stream"].id if i.get("stream") else None,
-        )
-    feedback.record_shown(
-        session,
-        user.id,
-        [
-            library_key(i.video.id, i.video.youtube_id)
-            for i in page.items
-            if i.video is not None
-        ]
-        + [i.stream.yt_id for i in page.items if i.stream is not None],
-    )
-    return {
-        "categories": recommend.list_categories(session) if ai_ready else [],
-        "sections": [
-            {
-                "title": "",
-                "kind": "for_you",
-                "seed_video_id": None,
-                "videos": reads,
-                "items": items,
-            }
-        ]
-        if items
-        else [],
-        "has_more": page.has_more,
-    }
 
 
 @router.get("/categories", response_model=AiCategoriesRead)

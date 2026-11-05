@@ -27,7 +27,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Ask about Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
 | **[Ask](ask.md)** | Answers questions about what indexed YouTube channels said, citing each point to the moment, from the same chat panel when you name a channel | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
-| **Recommended tab** | Better "For you" ranking (by content) and category shelves | Embed + categories ready |
+| **Recommended tab** | Better ranking (by content) and category chips | Embed + categories ready |
 | **Duplicate confirmation** | Score heuristic duplicate groups on Import | Chat (+ optional embed similarity) |
 
 ## Summaries
@@ -65,7 +65,7 @@ When an answer mentions a setting or a page it links it. Following a setting lin
 
 ### Changing settings for you
 
-Ask for a change ("make the text bigger", "turn on SponsorBlock") and the answer comes with a card: **Change Text size to Large** and an **Apply** button, then **Undo**. Nothing changes until you press it. The assistant may change your own appearance, library and playback preferences, and (for the administrator) a few server switches such as YouTube search, Recommended+ and the video chat; those cards say they change it for everyone. For anything riskier, such as AI providers and keys, models, budgets, the AI features that run on every download (summaries, chapters, tags), two-step sign-in, the storage limit, the download format or a reset, it only links to the setting. The full list, and which are which, is `backend/app/services/ai/help_catalog.json`.
+Ask for a change ("make the text bigger", "turn on SponsorBlock") and the answer comes with a card: **Change Text size to Large** and an **Apply** button, then **Undo**. Nothing changes until you press it. The assistant may change your own appearance, library and playback preferences, and (for the administrator) a few server switches such as YouTube search, Recommended looking on YouTube and the video chat; those cards say they change it for everyone. For anything riskier, such as AI providers and keys, models, budgets, the AI features that run on every download (summaries, chapters, tags), two-step sign-in, the storage limit, the download format or a reset, it only links to the setting. The full list, and which are which, is `backend/app/services/ai/help_catalog.json`.
 
 ### Your own data
 
@@ -99,16 +99,9 @@ Summaries still require downloaded captions; tag enrichment does not.
 
 ## Recommended tab
 
-The library home shows:
+The home page's **Recommended** tab works with AI off: it then ranks by what your history says (channels you watch, tags, follows, freshness). With embeddings it matches videos by their content to what you watched recently and watched through, which also finds videos from channels you have never opened. How it mixes and how to tune it: [Library → Library and Recommended](library.md#library-and-recommended).
 
-- **Library** — normal grid
-- **Recommended** — "For you", ranked from your own watch history, plus category shelves when AI is ready
-
-**For you** works with AI off too. Without AI it ranks by what your history says: channels you watch a lot (recent and finished watches count most), tags shared with what you watched, channels you follow, and how new a video is. With AI it ranks by how close each video's content is to what you watched recently and watched through, which also finds videos from channels you have never opened. Either way it leaves out what you have already seen (it moves to the end) and mixes channels instead of filling the row from one. An [imported YouTube history](youtube-history.md) counts too: what you watched there is treated as seen, the channels you watch there (recent viewing far more than old) lift their videos, and now and then a **Throwback** pick brings back a channel or topic you watched months ago.
-
-**Include not downloaded** (a chip beside **For you**, remembered per account) also suggests uploads of channels you follow that are not downloaded yet, marked like any other feed card with a **Download** button. They come from the channel's index, so a followed channel takes part once it has been indexed (**Index channel** on its page); with AI they are scored on the same scale as your library, from the index's embeddings.
-
-**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed with **Refresh categories**. A video is shown only under the categories it fits best, so a shelf does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
+**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed under **Settings → AI → Jobs**. They show as chips above Recommended; a video is shown only under the categories it fits best, so a category does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
 
 ## Duplicate confirmation
 

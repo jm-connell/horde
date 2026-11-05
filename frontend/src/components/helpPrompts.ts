@@ -22,7 +22,7 @@ export const SAMPLE_PROMPTS: SamplePrompt[] = [
     needs: "download",
   },
   { text: "Why would a download fail?", area: "help" },
-  { text: "How does Recommended+ pick videos?", area: "help" },
+  { text: "How does Recommended pick videos?", area: "help" },
   { text: "How do I watch videos offline?", area: "help" },
   {
     text: "How do I import videos I already have?",

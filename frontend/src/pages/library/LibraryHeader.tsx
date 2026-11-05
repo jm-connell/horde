@@ -1,38 +1,29 @@
 import type { ReactNode } from "react";
 import type { HomeTab } from "../libraryStorage";
 import type { Settings } from "../../hooks/useSettings";
+import SourceLegend from "../../components/discover/SourceLegend";
 import HomeTabs from "./HomeTabs";
 
 /**
- * The row above the home and tag lists: title, home tabs, the tags button and
- * `children` for the page's search and sort controls. Channel pages have
+ * The row above the home and tag lists: title, home tabs (with the
+ * Recommended outline legend beside them) and `children` for the page's
+ * search and sort controls. Channel pages have
  * their own header (ChannelHeader).
  */
 export default function LibraryHeader({
   headline,
   isHome,
   showHomeTabs,
-  onRecommendedTab,
   homeTab,
   onHomeTab,
-  showDiscover,
-  hasTags,
-  showTags,
-  onToggleTags,
   settings,
   children,
 }: {
   headline: string;
   isHome: boolean;
   showHomeTabs: boolean;
-  onRecommendedTab: boolean;
   homeTab: HomeTab;
   onHomeTab: (tab: HomeTab) => void;
-  showDiscover: boolean;
-  hasTags: boolean;
-  showTags: boolean;
-  /** Called with `true` when the click should also switch to the library tab. */
-  onToggleTags: (leaveRecommended: boolean) => void;
   settings: Settings;
   children: ReactNode;
 }) {
@@ -55,23 +46,9 @@ export default function LibraryHeader({
           homeTab={homeTab}
           navIndicator={settings.navIndicator}
           onSelect={onHomeTab}
-          showDiscover={showDiscover}
         />
       )}
-      {isHome && hasTags && (
-        <button
-          type="button"
-          onClick={() => onToggleTags(onRecommendedTab)}
-          aria-pressed={showTags && !onRecommendedTab}
-          className={`ui-panel ui-interactive shrink-0 rounded-lg border px-2.5 py-1.5 text-sm transition-colors ${
-            showTags && !onRecommendedTab
-              ? "border-accent bg-accent/10 text-accent"
-              : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-          }`}
-        >
-          {showTags && !onRecommendedTab ? "Hide tags" : "Tags"}
-        </button>
-      )}
+      {showHomeTabs && homeTab === "recommended" && <SourceLegend />}
 
       <div
         data-header-filters

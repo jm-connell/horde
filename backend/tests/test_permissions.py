@@ -252,6 +252,7 @@ OPEN_MUTATIONS = {
     ("POST", "/api/auth/avatar"),  # your own profile picture
     ("DELETE", "/api/auth/avatar"),
     ("PUT", "/api/follows"),  # your own followed channels
+    ("PATCH", "/api/follows"),
     ("DELETE", "/api/follows"),
     # Your own YouTube history; apply follows channels and makes private playlists.
     ("POST", "/api/takeout/import"),

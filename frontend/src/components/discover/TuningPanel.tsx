@@ -13,6 +13,7 @@ import { queryKeys } from "../../queries/keys";
 import type { DiscoverMix, RecTopic, RecTuning } from "../../types";
 import Collapse from "../Collapse";
 import { PanelHeader } from "../SidePanelFrame";
+import HelpTip from "../HelpTip";
 import ThemedSelect from "../ThemedSelect";
 import SavedAlgorithms from "./SavedAlgorithms";
 import TopicsSection from "./TopicsSection";
@@ -43,10 +44,18 @@ function Heading({ children }: { children: ReactNode }) {
   );
 }
 
+/** A "(?)" beside a setting's name that explains it. */
+function Tip({ text }: { text: string }) {
+  return <HelpTip text={text} placement="bottom" className="inline-flex" />;
+}
+
 function SliderRow({
   label,
+  srPrefix,
   tint,
   hint,
+  tip,
+  defaultValue,
   value,
   min,
   max,
@@ -56,9 +65,14 @@ function SliderRow({
   onChange,
 }: {
   label: string;
+  /** Read before the label by screen readers (two sliders share a label). */
+  srPrefix?: string;
   /** A swatch tying the slider to its part of the mix bar. */
   tint?: string;
   hint?: string;
+  tip?: string;
+  /** Where Balanced has it: a small tick under the track. */
+  defaultValue?: number;
   value: number;
   min: number;
   max: number;
@@ -68,28 +82,33 @@ function SliderRow({
   onChange: (value: number) => void;
 }) {
   const id = useId();
+  const at = (v: number) => (v - min) / (max - min);
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-3">
-        <label
-          htmlFor={id}
-          className="flex items-center gap-2 text-sm text-gray-200"
-        >
-          {tint && (
-            <span
-              aria-hidden="true"
-              className={`inline-block h-2 w-2 shrink-0 rounded-full ${tint}`}
-            />
-          )}
-          {label}
-        </label>
+        <span className="flex items-center gap-1.5">
+          <label
+            htmlFor={id}
+            className="flex items-center gap-2 text-sm text-gray-200"
+          >
+            {tint && (
+              <span
+                aria-hidden="true"
+                className={`inline-block h-2 w-2 shrink-0 rounded-full ${tint}`}
+              />
+            )}
+            {srPrefix && <span className="sr-only">{srPrefix} </span>}
+            {label}
+          </label>
+          {tip && <Tip text={tip} />}
+        </span>
         <span className="shrink-0 text-xs tabular-nums text-muted">
           {display}
         </span>
       </div>
       {hint && <p className="text-xs text-muted">{hint}</p>}
       {/* Room for the thumb, which is taller than the 4px track. */}
-      <div className="py-1.5">
+      <div className="relative py-1.5">
         <input
           id={id}
           type="range"
@@ -102,10 +121,22 @@ function SliderRow({
           className="accent-scrubber accent-scrubber--fill w-full"
           style={
             {
-              "--fill": `${((value - min) / (max - min)) * 100}%`,
+              "--fill": `${at(value) * 100}%`,
             } as React.CSSProperties
           }
         />
+        {defaultValue !== undefined && (
+          // Under the thumb's centre at the default (it travels 7px in from each end).
+          <span
+            aria-hidden="true"
+            data-horde="slider-default"
+            title="Default"
+            className={`pointer-events-none absolute top-full -mt-0.5 h-1.5 w-px -translate-x-1/2 transition-colors duration-150 ${
+              value === defaultValue ? "bg-accent/60" : "bg-gray-400/50"
+            }`}
+            style={{ left: `calc(7px + (100% - 14px) * ${at(defaultValue)})` }}
+          />
+        )}
       </div>
       {ends && (
         <div className="flex justify-between text-[11px] text-muted">
@@ -119,21 +150,36 @@ function SliderRow({
 
 function SelectRow<T extends string>({
   label,
+  hint,
+  tip,
+  defaultValue,
   value,
   options,
   onChange,
 }: {
   label: string;
+  hint?: string;
+  tip?: string;
+  /** Balanced's choice, marked "(default)" in the list. */
+  defaultValue?: T;
   value: T;
   options: { value: T; label: string }[];
   onChange: (value: T) => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
-      <span className="text-sm text-gray-200">{label}</span>
+      <span className="min-w-0">
+        <span className="flex items-center gap-1.5 text-sm text-gray-200">
+          {label}
+          {tip && <Tip text={tip} />}
+        </span>
+        {hint && <span className="block text-xs text-muted">{hint}</span>}
+      </span>
       <ThemedSelect
         value={value}
-        options={options}
+        options={options.map((o) =>
+          o.value === defaultValue ? { ...o, label: `${o.label} (default)` } : o
+        )}
         onChange={onChange}
         size="compact"
         align="right"
@@ -147,18 +193,23 @@ function SelectRow<T extends string>({
 function ToggleRow({
   label,
   hint,
+  tip,
   checked,
   onChange,
 }: {
   label: string;
   hint?: string;
+  tip?: string;
   checked: boolean;
   onChange: () => void;
 }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <span>
-        <span className="block text-sm text-gray-200">{label}</span>
+        <span className="flex items-center gap-1.5 text-sm text-gray-200">
+          {label}
+          {tip && <Tip text={tip} />}
+        </span>
         {hint && <span className="block text-xs text-muted">{hint}</span>}
       </span>
       <Toggle checked={checked} onChange={onChange} label={label} />
@@ -298,7 +349,7 @@ const lean = (v: number, low: string, high: string, mid = "Default") =>
   v === 50 ? mid : v < 50 ? low : high;
 
 /**
- * The Recommended+ algorithm: presets and every value behind the feed. Shown
+ * The Recommended algorithm: presets and every value behind the feed. Shown
  * in the side panel next to the feed and on the Account page; both read and
  * save the same settings, so they always match. Moving anything switches to
  * "Custom" and saves after a short pause; the feed re-ranks on its own.
@@ -354,7 +405,7 @@ export default function TuningPanel({
   if (!state) {
     return query.isError ? (
       <p className="px-4 py-3 text-sm text-muted">
-        Could not load your Recommended+ settings.
+        Could not load your recommendation settings.
       </p>
     ) : null;
   }
@@ -373,7 +424,7 @@ export default function TuningPanel({
           if (pending.current === null) setDraft(null);
         },
         onError: () => {
-          showError("Could not save your Recommended+ settings");
+          showError("Could not save your recommendation settings");
           setDraft(null);
         },
       }
@@ -419,6 +470,8 @@ export default function TuningPanel({
     );
   };
 
+  // Balanced, which each setting marks as its default.
+  const d = state.defaults;
   const interest = interestShare(topics);
   const shares = sharePercents(values.shares);
   const strict = values.strictness;
@@ -504,6 +557,7 @@ export default function TuningPanel({
             label={b.label}
             tint={BUCKET_TINT[b.id]}
             hint={b.hint}
+            defaultValue={d.shares[b.id]}
             value={values.shares[b.id]}
             min={0}
             max={100}
@@ -527,6 +581,8 @@ export default function TuningPanel({
         </Heading>
         <SliderRow
           label="Match strictness"
+          tip="How close a video must be to what you watch to be picked. Stricter means fewer but safer picks; looser lets in more surprises. Advanced can set it per kind of pick."
+          defaultValue={50}
           value={strictAll}
           min={0}
           max={100}
@@ -543,6 +599,8 @@ export default function TuningPanel({
         />
         <SliderRow
           label="Freshness"
+          tip="How much newer uploads are favored over older ones of the same match."
+          defaultValue={d.freshness}
           value={values.freshness}
           min={0}
           max={100}
@@ -552,6 +610,8 @@ export default function TuningPanel({
         />
         <SliderRow
           label="Popularity"
+          tip="Lean toward videos with many views, or toward little-watched ones."
+          defaultValue={d.popularity}
           value={values.popularity}
           min={-100}
           max={100}
@@ -568,6 +628,8 @@ export default function TuningPanel({
         />
         <SliderRow
           label="Shuffle"
+          tip="A little randomness in the order, so the feed is not the same every visit. Refresh reshuffles."
+          defaultValue={d.shuffle}
           value={values.shuffle}
           min={0}
           max={100}
@@ -576,126 +638,6 @@ export default function TuningPanel({
           }
           ends={["Same order", "More surprises"]}
           onChange={(v) => set("shuffle", v)}
-        />
-      </section>
-
-      <section className="space-y-3" aria-labelledby="tuning-variety">
-        <Heading>
-          <span id="tuning-variety">Variety and repeats</span>
-        </Heading>
-        <SliderRow
-          label="Same channel at most once every"
-          value={values.channel_gap}
-          min={1}
-          max={12}
-          display={
-            values.channel_gap === 1
-              ? "No limit"
-              : `${values.channel_gap} videos`
-          }
-          onChange={(v) => set("channel_gap", v)}
-        />
-        <SliderRow
-          label="Videos per new channel"
-          value={values.new_channel_cap}
-          min={1}
-          max={6}
-          display={String(values.new_channel_cap)}
-          onChange={(v) => set("new_channel_cap", v)}
-        />
-        <SelectRow
-          label="Drop a video shown without a watch after"
-          value={String(values.worn_after)}
-          options={[
-            { value: "3", label: "3 visits" },
-            { value: "6", label: "6 visits" },
-            { value: "12", label: "12 visits" },
-            { value: "0", label: "Never" },
-          ]}
-          onChange={(v) =>
-            set("worn_after", Number(v) as RecTuning["worn_after"])
-          }
-        />
-      </section>
-
-      <section className="space-y-3" aria-labelledby="tuning-taste">
-        <Heading>
-          <span id="tuning-taste">Your taste</span>
-        </Heading>
-        <SelectRow
-          label="Recent taste is the last"
-          value={String(values.recent_days)}
-          options={[
-            { value: "14", label: "2 weeks" },
-            { value: "30", label: "Month" },
-            { value: "60", label: "2 months" },
-            { value: "90", label: "3 months" },
-          ]}
-          onChange={(v) =>
-            set("recent_days", Number(v) as RecTuning["recent_days"])
-          }
-        />
-        <SelectRow
-          label="Throwbacks reach back"
-          value={String(values.throwback_years)}
-          options={[
-            { value: "1", label: "1 year" },
-            { value: "3", label: "3 years" },
-            { value: "0", label: "All time" },
-          ]}
-          onChange={(v) =>
-            set("throwback_years", Number(v) as RecTuning["throwback_years"])
-          }
-        />
-      </section>
-
-      <section className="space-y-3" aria-labelledby="tuning-filters">
-        <Heading>
-          <span id="tuning-filters">Filters</span>
-        </Heading>
-        <ToggleRow
-          label="Hide Shorts"
-          hint="A minute or less, or a /shorts/ link."
-          checked={values.hide_shorts}
-          onChange={() => set("hide_shorts", !values.hide_shorts)}
-        />
-        <ToggleRow
-          label="Hide past live streams"
-          checked={values.hide_past_live}
-          onChange={() => set("hide_past_live", !values.hide_past_live)}
-        />
-        <div className="flex gap-3">
-          <MinutesInput
-            label="Shortest (minutes)"
-            value={values.min_minutes}
-            onChange={(v) => set("min_minutes", v)}
-          />
-          <MinutesInput
-            label="Longest (minutes)"
-            value={values.max_minutes}
-            onChange={(v) => set("max_minutes", v)}
-          />
-        </div>
-        {badLengths(values) && (
-          <p role="alert" className="text-xs text-warning">
-            The longest is shorter than the shortest; this is not saved until
-            you fix it.
-          </p>
-        )}
-        <SelectRow
-          label="Uploaded within"
-          value={String(values.max_age_days)}
-          options={[
-            { value: "0", label: "Any time" },
-            { value: "7", label: "A week" },
-            { value: "30", label: "A month" },
-            { value: "90", label: "3 months" },
-            { value: "365", label: "A year" },
-            { value: "1095", label: "3 years" },
-          ]}
-          onChange={(v) =>
-            set("max_age_days", Number(v) as RecTuning["max_age_days"])
-          }
         />
       </section>
 
@@ -710,6 +652,7 @@ export default function TuningPanel({
         />
         <ToggleRow
           label="Indexed channels"
+          tip="Uploads of channels whose catalog you indexed, downloaded or not."
           checked={values.use_catalogs}
           onChange={() => set("use_catalogs", !values.use_catalogs)}
         />
@@ -725,11 +668,56 @@ export default function TuningPanel({
           checked={values.use_household}
           onChange={() => set("use_household", !values.use_household)}
         />
+        <SliderRow
+          label="Prefer downloaded videos"
+          tip="Downloaded videos move up and take more of the mix. At 100%, every downloaded video qualifies and they lead the feed."
+          defaultValue={d.library_boost}
+          value={values.library_boost}
+          min={0}
+          max={100}
+          step={5}
+          display={
+            values.library_boost === 0 ? "No" : pct(values.library_boost)
+          }
+          onChange={(v) => set("library_boost", v)}
+        />
       </section>
 
-      <section className="space-y-3">
+      <section className="space-y-3" aria-labelledby="tuning-filters">
+        <Heading>
+          <span id="tuning-filters">Filters</span>
+        </Heading>
+        <ToggleRow
+          label="Hide past live streams"
+          hint="Recordings of streams that already ended."
+          checked={values.hide_past_live}
+          onChange={() => set("hide_past_live", !values.hide_past_live)}
+        />
+        <SelectRow
+          label="Uploaded within"
+          defaultValue={String(d.max_age_days)}
+          value={String(values.max_age_days)}
+          options={[
+            { value: "0", label: "Any time" },
+            { value: "7", label: "A week" },
+            { value: "30", label: "A month" },
+            { value: "90", label: "3 months" },
+            { value: "365", label: "A year" },
+            { value: "1095", label: "3 years" },
+          ]}
+          onChange={(v) =>
+            set("max_age_days", Number(v) as RecTuning["max_age_days"])
+          }
+        />
+      </section>
+
+      <section
+        className="space-y-3 border-t border-ink-700 pt-4"
+        aria-labelledby="tuning-advanced"
+      >
         <button
           type="button"
+          id="tuning-advanced"
           aria-expanded={advanced}
           onClick={() => setAdvanced((v) => !v)}
           className="flex w-full items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-gray-400 hover:text-accent"
@@ -742,76 +730,187 @@ export default function TuningPanel({
             ›
           </span>
         </button>
+        {!advanced && (
+          <p className="text-xs text-muted">
+            Fine-tuning: strictness per kind of pick, variety, what counts as
+            your taste, and video length.
+          </p>
+        )}
         <Collapse open={advanced}>
-          <div className="space-y-3 pt-1">
-            {BUCKETS.filter((b) => b.id in strict).map((b) => (
+          <div className="space-y-5 pt-1">
+            <div className="space-y-3">
+              <Heading>Strictness by kind of pick</Heading>
+              <p className="text-xs text-muted">
+                Overrides Match strictness above for one kind only.
+              </p>
+              {BUCKETS.filter((b) => b.id in strict).map((b) => (
+                <SliderRow
+                  key={b.id}
+                  label={b.label}
+                  srPrefix="Strictness for"
+                  defaultValue={d.strictness[b.id as keyof typeof strict]}
+                  value={strict[b.id as keyof typeof strict]}
+                  min={0}
+                  max={100}
+                  display={lean(
+                    strict[b.id as keyof typeof strict],
+                    "Looser",
+                    "Stricter"
+                  )}
+                  onChange={(v) =>
+                    change((t) => ({
+                      ...t,
+                      strictness: { ...t.strictness, [b.id]: v },
+                    }))
+                  }
+                />
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <Heading>Variety and repeats</Heading>
               <SliderRow
-                key={b.id}
-                label={`Strictness: ${b.label.toLowerCase()}`}
-                value={strict[b.id as keyof typeof strict]}
-                min={0}
-                max={100}
-                display={lean(
-                  strict[b.id as keyof typeof strict],
-                  "Looser",
-                  "Stricter"
-                )}
+                label="Space out a channel's videos"
+                tip="The same channel shows at most once in this many videos in a row."
+                defaultValue={d.channel_gap}
+                value={values.channel_gap}
+                min={1}
+                max={12}
+                display={
+                  values.channel_gap === 1
+                    ? "No limit"
+                    : `1 in ${values.channel_gap}`
+                }
+                onChange={(v) => set("channel_gap", v)}
+              />
+              <SliderRow
+                label="Videos per new channel"
+                tip="How many videos one channel you have never watched may have in the feed."
+                defaultValue={d.new_channel_cap}
+                value={values.new_channel_cap}
+                min={1}
+                max={6}
+                display={String(values.new_channel_cap)}
+                onChange={(v) => set("new_channel_cap", v)}
+              />
+              <SelectRow
+                label="Move skipped videos to the end after"
+                tip="A video shown this many visits without being watched drops to the end of the feed."
+                defaultValue={String(d.worn_after)}
+                value={String(values.worn_after)}
+                options={[
+                  { value: "3", label: "3 visits" },
+                  { value: "6", label: "6 visits" },
+                  { value: "12", label: "12 visits" },
+                  { value: "0", label: "Never" },
+                ]}
                 onChange={(v) =>
-                  change((t) => ({
-                    ...t,
-                    strictness: { ...t.strictness, [b.id]: v },
-                  }))
+                  set("worn_after", Number(v) as RecTuning["worn_after"])
                 }
               />
-            ))}
-            <SliderRow
-              label="Watched at least this much to count"
-              hint="Videos you left earlier stop shaping your recommendations. Imported YouTube history always counts."
-              value={values.min_watched_pct}
-              min={0}
-              max={90}
-              step={5}
-              display={
-                values.min_watched_pct === 0
-                  ? "Any"
-                  : pct(values.min_watched_pct)
-              }
-              onChange={(v) => set("min_watched_pct", v)}
-            />
-            <SelectRow
-              label="Rewatch once it is at least"
-              value={String(values.rewatch_after_days)}
-              options={[
-                { value: "30", label: "A month old" },
-                { value: "60", label: "2 months old" },
-                { value: "180", label: "6 months old" },
-                { value: "365", label: "A year old" },
-              ]}
-              onChange={(v) =>
-                set(
-                  "rewatch_after_days",
-                  Number(v) as RecTuning["rewatch_after_days"]
-                )
-              }
-            />
-            <SliderRow
-              label="Prefer downloaded videos"
-              value={values.library_boost}
-              min={0}
-              max={100}
-              step={5}
-              display={
-                values.library_boost === 0 ? "No" : pct(values.library_boost)
-              }
-              onChange={(v) => set("library_boost", v)}
-            />
-            <p className="text-xs text-muted">
-              To remove a watch, or stop one from shaping recommendations, edit{" "}
-              <Link to="/history" className="text-accent hover:underline">
-                your history
-              </Link>
-              .
-            </p>
+            </div>
+
+            <div className="space-y-3">
+              <Heading>Your taste</Heading>
+              <SelectRow
+                label="Recent taste is the last"
+                tip="Watches in this window shape More like what you watch; older ones count toward throwbacks."
+                defaultValue={String(d.recent_days)}
+                value={String(values.recent_days)}
+                options={[
+                  { value: "14", label: "2 weeks" },
+                  { value: "30", label: "Month" },
+                  { value: "60", label: "2 months" },
+                  { value: "90", label: "3 months" },
+                ]}
+                onChange={(v) =>
+                  set("recent_days", Number(v) as RecTuning["recent_days"])
+                }
+              />
+              <SelectRow
+                label="Throwbacks reach back"
+                defaultValue={String(d.throwback_years)}
+                value={String(values.throwback_years)}
+                options={[
+                  { value: "1", label: "1 year" },
+                  { value: "3", label: "3 years" },
+                  { value: "0", label: "All time" },
+                ]}
+                onChange={(v) =>
+                  set(
+                    "throwback_years",
+                    Number(v) as RecTuning["throwback_years"]
+                  )
+                }
+              />
+              <SliderRow
+                label="Watched at least this much to count"
+                hint="Videos you left earlier stop shaping your recommendations. Imported YouTube history always counts."
+                defaultValue={d.min_watched_pct}
+                value={values.min_watched_pct}
+                min={0}
+                max={90}
+                step={5}
+                display={
+                  values.min_watched_pct === 0
+                    ? "Any"
+                    : pct(values.min_watched_pct)
+                }
+                onChange={(v) => set("min_watched_pct", v)}
+              />
+              <SelectRow
+                label="Rewatch once it is at least"
+                tip="How long ago you must have finished a video before it can come back under Rewatch."
+                defaultValue={String(d.rewatch_after_days)}
+                value={String(values.rewatch_after_days)}
+                options={[
+                  { value: "30", label: "A month old" },
+                  { value: "60", label: "2 months old" },
+                  { value: "180", label: "6 months old" },
+                  { value: "365", label: "A year old" },
+                ]}
+                onChange={(v) =>
+                  set(
+                    "rewatch_after_days",
+                    Number(v) as RecTuning["rewatch_after_days"]
+                  )
+                }
+              />
+              <p className="text-xs text-muted">
+                To remove a watch, or stop one from shaping recommendations,
+                edit{" "}
+                <Link to="/history" className="text-accent hover:underline">
+                  your history
+                </Link>
+                .
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <Heading>Video length</Heading>
+              <p className="text-xs text-muted">
+                Leave out videos shorter or longer than this, in minutes. Empty
+                means any length.
+              </p>
+              <div className="flex gap-3">
+                <MinutesInput
+                  label="Shortest (minutes)"
+                  value={values.min_minutes}
+                  onChange={(v) => set("min_minutes", v)}
+                />
+                <MinutesInput
+                  label="Longest (minutes)"
+                  value={values.max_minutes}
+                  onChange={(v) => set("max_minutes", v)}
+                />
+              </div>
+              {badLengths(values) && (
+                <p role="alert" className="text-xs text-warning">
+                  The longest is shorter than the shortest; this is not saved
+                  until you fix it.
+                </p>
+              )}
+            </div>
           </div>
         </Collapse>
       </section>
@@ -839,11 +938,11 @@ export default function TuningPanel({
   }
   return (
     <>
-      <PanelHeader title="Recommended+ algorithm" actions={reset} />
+      <PanelHeader title="Recommendation algorithm" actions={reset} />
       <div
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
         tabIndex={0}
-        aria-label="Recommended+ algorithm"
+        aria-label="Recommendation algorithm"
         className="horde-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
       >
         {body}

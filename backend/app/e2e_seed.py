@@ -163,13 +163,19 @@ def _seed_ask(engine: Engine) -> None:
         )
 
 
-#: Videos Recommended+ "found on YouTube" for the admin: (id, title, channel).
-#: Two channels with two videos each, so both are suggested as channels to follow.
+#: Videos Recommended "found on YouTube" for the admin: (id, title, channel,
+#: the search that found it). Two channels with two videos each, so both are
+#: suggested as channels to follow (tagged with their search).
 E2E_DISCOVERED = (
-    ("discover001", "Night sky timelapse from a lighthouse", "Northern Skies"),
-    ("discover002", "Tracking the aurora by hand", "Northern Skies"),
-    ("discover003", "Rock pools at low tide", "Tidepool Notes"),
-    ("discover004", "What lives under a harbor pier", "Tidepool Notes"),
+    (
+        "discover001",
+        "Night sky timelapse from a lighthouse",
+        "Northern Skies",
+        "night sky",
+    ),
+    ("discover002", "Tracking the aurora by hand", "Northern Skies", "night sky"),
+    ("discover003", "Rock pools at low tide", "Tidepool Notes", "rock pools"),
+    ("discover004", "What lives under a harbor pier", "Tidepool Notes", "rock pools"),
 )
 
 
@@ -185,7 +191,7 @@ def _seed_discovery(engine: Engine) -> None:
         admin = accounts.get_by_username(session, "admin")
         if admin is None:
             raise RuntimeError("the seeded admin account is missing")
-        for rank, (yt_id, title, channel) in enumerate(E2E_DISCOVERED):
+        for rank, (yt_id, title, channel, query) in enumerate(E2E_DISCOVERED):
             row = DiscoveryVideo(
                 yt_id=yt_id,
                 url=f"https://www.youtube.com/watch?v={yt_id}",
@@ -204,7 +210,7 @@ def _seed_discovery(engine: Engine) -> None:
                     user_id=require_id(admin),
                     discovery_video_id=require_id(row),
                     source="search",
-                    seed="night sky",
+                    seed=query,
                     rank=rank,
                 )
             )

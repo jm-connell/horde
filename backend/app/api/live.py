@@ -70,7 +70,7 @@ def live_now(
     user: AuthUser = Depends(current_user),
 ):
     """Followed channels that are live right now (from the background checks)."""
-    followed = follows.followed_urls(session, user.id)
+    followed = follows.live_urls(session, user.id)
     directory = get_ctx(request).live.directory
     items: list[LiveChannelRead] = []
     seen: set[str] = set()

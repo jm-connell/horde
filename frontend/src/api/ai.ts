@@ -7,7 +7,6 @@ import type {
   AiProcessResult,
   AiStatus,
   OpenRouterCosts,
-  RecommendationsResponse,
   StreamAi,
   StreamRelatedPage,
   Video,
@@ -117,19 +116,6 @@ export const aiApi = {
 
   resumeAi(): Promise<ApiResponse<"/api/ai/resume", "post">> {
     return request("/api/ai/resume", { method: "POST" });
-  },
-
-  getRecommendations(
-    category?: string,
-    opts?: { limit?: number; offset?: number; includeStreams?: boolean }
-  ): Promise<RecommendationsResponse> {
-    const params = new URLSearchParams();
-    if (category) params.set("category", category);
-    if (opts?.includeStreams) params.set("include_streams", "true");
-    if (opts?.limit != null) params.set("limit", String(opts.limit));
-    if (opts?.offset != null) params.set("offset", String(opts.offset));
-    const qs = params.toString() ? `?${params}` : "";
-    return request<RecommendationsResponse>(`/api/ai/recommendations${qs}`);
   },
 
   refreshVideoTags(id: number): Promise<Video> {

@@ -156,33 +156,6 @@ class AiJobAction(BaseModel):
     id: int
 
 
-class RecommendationItemRead(BaseModel):
-    """A library video (``video``) or an upload that is not downloaded (``stream``)."""
-
-    video: VideoRead | None = None
-    stream: ChannelFeedEntry | None = None
-    #: ``throwback``: picked from a channel or topic the user watched months ago.
-    #: ``live``: a followed channel's broadcast, live now (not counted in ``offset``).
-    reason: Literal["throwback", "live"] | None = None
-
-
-class RecommendationSectionRead(BaseModel):
-    title: str
-    kind: str | None = None
-    seed_video_id: int | None = None
-    #: The library videos of the section.
-    videos: list[VideoRead]
-    #: The section in order, undownloaded uploads included (``include_streams``).
-    items: list[RecommendationItemRead] = []
-
-
-class RecommendationsRead(BaseModel):
-    categories: list[str]
-    sections: list[RecommendationSectionRead]
-    hint: str | None = None
-    has_more: bool = False
-
-
 class AiCategoriesRead(BaseModel):
     categories: list[str]
 
@@ -466,7 +439,7 @@ class FontList(BaseModel):
     items: list[FontRead]
 
 
-# --- Recommended+ ------------------------------------------------------------
+# --- Recommended ------------------------------------------------------------
 
 
 class DiscoverReasonRead(BaseModel):
@@ -514,7 +487,7 @@ class DiscoverItemRead(BaseModel):
 
 
 class DiscoverStatusRead(BaseModel):
-    #: Recommended+ may ask YouTube for videos (its switch and video search are on).
+    #: Recommended may ask YouTube for videos (its switch and video search are on).
     enabled: bool
     #: The gatherer is working for this user right now, or will on its next pass.
     gathering: bool
@@ -543,6 +516,9 @@ class DiscoverFeedRead(BaseModel):
     mix: list[DiscoverMixRead] = Field(default_factory=list)
     #: What each blocked topic left out (first page only).
     blocked: list[DiscoverBlockedRead] = Field(default_factory=list)
+    #: The AI categories with picks in this feed, by name (first page only;
+    #: empty without AI categories).
+    categories: list[str] = Field(default_factory=list)
 
 
 class HistoryWatchRead(BaseModel):
@@ -644,7 +620,7 @@ class RecTuningPresetRead(BaseModel):
 
 
 class RecTuningRead(BaseModel):
-    """The user's Recommended+ settings and the presets they can pick from."""
+    """The user's Recommended settings and the presets they can pick from."""
 
     #: A preset id, "custom" or "algo:<id>".
     active: str
@@ -669,6 +645,12 @@ class SuggestedChannelRead(BaseModel):
     videos: list[ChannelFeedEntry]
     #: Its catalog is indexed already (following adds its uploads at once).
     indexed: bool
+    #: The median views and length (minutes) of the videos the feed picked.
+    typical_views: int | None = None
+    typical_minutes: int | None = None
+    #: A couple of words on what it is about: AI categories, else the searches
+    #: that found it.
+    tags: list[str] = Field(default_factory=list)
 
 
 class SuggestedChannelsRead(BaseModel):

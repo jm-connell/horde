@@ -1,4 +1,4 @@
-"""Recommended+: the feed, channel suggestions, feedback, and stream history."""
+"""Recommended: the feed, channel suggestions, feedback, and stream history."""
 
 from __future__ import annotations
 
@@ -65,6 +65,7 @@ from ..services.discovery import (
     topics,
     tuning,
 )
+from ..services.discovery import categories as discover_categories
 from ..services.discovery.candidates import Candidate
 from ..services.discovery.feed import FeedItem, ranked_feed
 from ..services.live import picks as live_picks
@@ -170,16 +171,29 @@ def discover_feed(
         lt=SEED_RANGE,
         description="Ordering seed; a new one reshuffles the less certain picks.",
     ),
+    category: str | None = Query(
+        None,
+        max_length=200,
+        description="Only the picks in this AI category (as on Recommended), "
+        "in the feed's order; send it with every page.",
+    ),
+    prefetch: bool = Query(
+        False,
+        description="Loaded ahead of time, not shown yet: its videos do not "
+        "count as shown.",
+    ),
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """One page of the Recommended+ feed.
+    """One page of the Recommended feed.
 
     The first page also tells the gatherer this user is active (it starts at once
     the first time). It also carries followed channels' live broadcasts, the
     ones from channels watched lately first. Each page counts as shown for its
-    videos.
+    videos, unless it is a ``prefetch`` (the home page loading it before the
+    user opens the tab): that neither counts as shown nor as a visit for the
+    gatherer; opening the tab asks again and counts then.
     """
     try:
         page = parse_cursor(
@@ -190,10 +204,15 @@ def discover_feed(
     use_seed = page.seed if page.seed is not None else seed
     if use_seed is None:
         use_seed = _today_seed()
-    if not cursor:
+    if not cursor and not prefetch:
         gather.note_viewed(session, ctx.discovery, user.id)
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
-    window = feed.items[page.offset : page.offset + page.fetch]
+    picks = (
+        discover_categories.in_category(session, ctx.discovery, feed, category)
+        if category
+        else feed.items
+    )
+    window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
 
@@ -242,14 +261,15 @@ def discover_feed(
                     why=_why(item),
                 )
             )
-    if not cursor:
+    if not cursor and not category:
         items = live_picks.merge(
             items,
             live_picks.live_picks(session, ctx.live.directory, user.id),
             _live_item,
             lambda i: i.key,
         )
-    feedback.record_shown(session, user.id, (i.key for i in items))
+    if not prefetch:
+        feedback.record_shown(session, user.id, (i.key for i in items))
     return DiscoverFeedRead(
         items=items,
         next_cursor=offset_cursor(
@@ -268,6 +288,11 @@ def discover_feed(
             DiscoverBlockedRead(topic_id=tid, count=n)
             for tid, n in sorted(feed.blocked.items())
         ]
+        if not cursor
+        else [],
+        categories=sorted(
+            discover_categories.feed_categories(session, ctx.discovery, feed)
+        )
         if not cursor
         else [],
     )
@@ -320,7 +345,7 @@ def get_tuning(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """How this user ranks Recommended+: a preset, a saved algorithm or their
+    """How this user ranks Recommended: a preset, a saved algorithm or their
     own values."""
     return _tuning_read(session, user.id)
 
@@ -494,7 +519,7 @@ def discover_channels(
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Channels new to the user that their Recommended+ feed leans on most."""
+    """Channels new to the user that their Recommended feed leans on most."""
     # Loaded beside the feed's first page: share its ranking when it exists.
     feed = ranked_feed(
         session,
@@ -503,7 +528,11 @@ def discover_channels(
         _today_seed() if seed is None else seed,
         fresh=False,
     )
-    picks = suggest.suggestions(feed, feedback.exclusions(session, user.id))
+    picks = suggest.suggestions(
+        feed,
+        feedback.exclusions(session, user.id),
+        discover_categories.feed_categories(session, ctx.discovery, feed),
+    )
     return SuggestedChannelsRead(
         items=[
             SuggestedChannelRead(
@@ -512,6 +541,9 @@ def discover_channels(
                 reason=s.reason,
                 videos=[_entry(c) for c in s.videos if c.video_id is None],
                 indexed=s.indexed,
+                typical_views=s.typical_views,
+                typical_minutes=s.typical_minutes,
+                tags=s.tags,
             )
             for s in picks
         ]

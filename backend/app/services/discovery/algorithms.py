@@ -1,4 +1,4 @@
-"""Saved Recommended+ algorithms: named ``Tuning`` values, kept or shared.
+"""Saved Recommended algorithms: named ``Tuning`` values, kept or shared.
 
 A user saves their own values under a name ("Weeknight"), optionally shared
 with every account. Picking someone else's shared algorithm ranks with it as it

@@ -10,7 +10,7 @@ import RecommendationsSection from "./account/RecommendationsSection";
 import UsersSection from "./account/UsersSection";
 
 /**
- * Account settings, from the account menu: your profile picture, password, two-step sign-in, your Recommended+ algorithm and signed-in devices,
+ * Account settings, from the account menu: your profile picture, password, two-step sign-in, your Recommended algorithm and signed-in devices,
  * and for administrators everyone's accounts.
  */
 export default function Account() {

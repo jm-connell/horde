@@ -1,4 +1,4 @@
-import { expect, test } from "./fixtures";
+import { CSRF_HEADERS, expect, test } from "./fixtures";
 
 /**
  * Followed channels and the sidebar's live list. The e2e server seeds one live
@@ -54,4 +54,59 @@ test("unfollowing removes the live entry", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Live now" })).toHaveCount(0);
+});
+
+test("a live card can hide a channel's live streams without unfollowing", async ({
+  page,
+}) => {
+  const follow = await page.request.put("/api/follows", {
+    headers: CSRF_HEADERS,
+    data: { channel_url: "https://youtube.com/@hordelive", channel_name: null },
+  });
+  expect(follow.ok()).toBe(true);
+  try {
+    await page.addInitScript(() =>
+      localStorage.setItem("horde.home.tab", "recommended")
+    );
+    await page.goto("/");
+    const card = page
+      .locator(".group\\/rec")
+      .filter({ hasText: "Late night speedruns" });
+    await expect(card).toBeVisible();
+    // Its own red ring only: no source outline inside it.
+    await expect(card.locator('[data-horde="source-outline"]')).toHaveCount(0);
+    await card.hover();
+    await card.getByRole("button", { name: "Tune recommendations" }).click();
+    await page
+      .getByRole("menuitem", { name: "Hide live streams from Horde Live" })
+      .click();
+    await expect(
+      page.getByText("Live streams from Horde Live are hidden")
+    ).toBeVisible();
+    await expect(card).toHaveCount(0);
+
+    // Still followed; the channel's settings can show them again.
+    const items = (
+      (await (await page.request.get("/api/follows")).json()) as {
+        items: { channel_url: string; hide_live: boolean }[];
+      }
+    ).items;
+    expect(items).toContainEqual(
+      expect.objectContaining({
+        channel_url: "https://youtube.com/@hordelive",
+        hide_live: true,
+      })
+    );
+    await page.reload();
+    await expect(
+      page.locator("[data-horde='video-card']").first()
+    ).toBeVisible();
+    await expect(page.getByText("Late night speedruns")).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Live now" })).toHaveCount(0);
+  } finally {
+    await page.request.delete(
+      "/api/follows?channel_url=https%3A%2F%2Fyoutube.com%2F%40hordelive",
+      { headers: CSRF_HEADERS }
+    );
+  }
 });

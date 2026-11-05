@@ -127,9 +127,9 @@ class AppSettingsRead(BaseModel):
     channel_catalog_max_videos: int = 1000
     direct_youtube_search: bool = True
     youtube_video_search: bool = True
-    # Recommended+ looks for videos on YouTube (needs youtube_video_search too).
+    # Recommended looks for videos on YouTube (needs youtube_video_search too).
     discovery_enabled: bool = True
-    # Recommended+ leans a little on what others here with similar taste liked.
+    # Recommended leans a little on what others here with similar taste liked.
     discovery_household: bool = True
     # Downloads wait once the library takes this many bytes; null = no limit.
     max_library_bytes: int | None = None

@@ -3,21 +3,24 @@ import { FlipMenuPanel, useFlipMenu } from "../../hooks/useFlipMenu";
 import { MoreIcon } from "../icons";
 
 /**
- * "Why this video?", "Not interested" and "Don't recommend this channel" on a
- * recommendation card.
+ * "Why this video?", "Not interested", "Don't recommend this channel" and, on
+ * a live card, "Hide live streams from this channel" on a recommendation card.
  */
 export default function RecMenu({
   channel,
   onWhy,
   onNotInterested,
   onBlockChannel,
+  onHideLive,
   className,
 }: {
   channel: string | null;
-  /** Show how the feed placed it (Recommended+ only). */
+  /** Show how the feed placed it (Recommended only). */
   onWhy?: () => void;
-  onNotInterested: () => void;
-  onBlockChannel: () => void;
+  onNotInterested?: () => void;
+  onBlockChannel?: () => void;
+  /** A live card: hide the channel's live streams (it stays followed). */
+  onHideLive?: () => void;
   /** Positions the trigger; it must be a positioned box (relative by default). */
   className?: string;
 }) {
@@ -82,18 +85,33 @@ export default function RecMenu({
             Why this video?
           </button>
         )}
-        <button
-          type="button"
-          role="menuitem"
-          className={itemClass}
-          onClick={() => {
-            setOpen(false);
-            onNotInterested();
-          }}
-        >
-          Not interested
-        </button>
-        {channel && (
+        {onHideLive && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              setOpen(false);
+              onHideLive();
+            }}
+          >
+            Hide live streams from {channel || "this channel"}
+          </button>
+        )}
+        {onNotInterested && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              setOpen(false);
+              onNotInterested();
+            }}
+          >
+            Not interested
+          </button>
+        )}
+        {channel && onBlockChannel && (
           <button
             type="button"
             role="menuitem"

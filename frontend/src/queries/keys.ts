@@ -14,7 +14,6 @@ export const queryKeys = {
     related: (url: string) => ["preview", "related", url] as const,
   },
   discover: {
-    status: ["discover", "status"] as const,
     tuning: ["discover", "tuning"] as const,
     /** The latest feed's asked-for and actual mix (written by the feed page). */
     mix: ["discover", "mix"] as const,
@@ -22,6 +21,10 @@ export const queryKeys = {
     algorithms: ["discover", "algorithms"] as const,
     /** What each blocked topic left out of the latest feed (the feed page writes it). */
     blocked: ["discover", "blocked"] as const,
+    /** The feed's first page (today's order), loaded ahead or last shown. */
+    firstPage: ["discover", "first-page"] as const,
+    /** Channel suggestions for today's order. */
+    channels: ["discover", "channels"] as const,
   },
   ai: {
     status: ["ai", "status"] as const,

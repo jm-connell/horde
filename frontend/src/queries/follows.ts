@@ -34,11 +34,15 @@ export function useSubscriptions() {
 
 function useInvalidateFollows() {
   const queryClient = useQueryClient();
-  return () =>
-    Promise.all([
+  return () => {
+    // Live cards ride on the Recommended page loaded ahead.
+    queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
+    return Promise.all([
+      // "follows" also covers the Subscriptions page.
       queryClient.invalidateQueries({ queryKey: ["follows"] }),
       queryClient.invalidateQueries({ queryKey: queryKeys.live.now }),
     ]);
+  };
 }
 
 export function useFollowMutation() {
@@ -58,6 +62,16 @@ export function useUnfollowMutation() {
   });
 }
 
+/** Hide (or show again) a followed channel's live streams. */
+export function useHideLiveMutation() {
+  const invalidate = useInvalidateFollows();
+  return useMutation({
+    mutationFn: ({ url, hide }: { url: string; hide: boolean }) =>
+      api.setFollowHideLive(url, hide),
+    onSuccess: invalidate,
+  });
+}
+
 /**
  * Follow state of one channel page and a toggle for it. `followable` is false
  * when the channel has no YouTube URL (nothing to follow).
@@ -70,9 +84,12 @@ export function useChannelFollow(
   const { follows } = useFollows(followable);
   const follow = useFollowMutation();
   const unfollow = useUnfollowMutation();
+  const hideLive = useHideLiveMutation();
   const normalized = channelUrl ? normalizeChannelUrl(channelUrl) : null;
-  const followed =
-    !!normalized && follows.some((f) => f.channel_url === normalized);
+  const row = normalized
+    ? follows.find((f) => f.channel_url === normalized)
+    : undefined;
+  const followed = !!row;
   const toggle = () => {
     if (!channelUrl) return;
     if (followed && normalized) unfollow.mutate(normalized);
@@ -81,7 +98,11 @@ export function useChannelFollow(
   return {
     followable,
     followed,
-    pending: follow.isPending || unfollow.isPending,
+    /** Its live streams are hidden (it stays followed). */
+    liveHidden: !!row?.hide_live,
+    setLiveHidden: (hide: boolean) =>
+      normalized && hideLive.mutate({ url: normalized, hide }),
+    pending: follow.isPending || unfollow.isPending || hideLive.isPending,
     toggle,
   };
 }

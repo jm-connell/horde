@@ -138,7 +138,8 @@ nav:
       - 0023 Saved comments: adr/0023-saved-comments.md
       - 0024 Tunable Recommended+: adr/0024-tunable-recommended-plus.md
       - 0025 One history: adr/0025-one-history.md
-      - 0026 Invite links: adr/0026-invite-links.md
+      - 0026 One Recommended tab: adr/0026-one-recommended-tab.md
+      - 0027 Invite links: adr/0027-invite-links.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

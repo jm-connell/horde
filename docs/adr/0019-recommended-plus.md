@@ -1,6 +1,6 @@
 # 0019. Recommended+: a mixed feed of four kinds of picks, fed by a slow YouTube gatherer
 
-Status: Accepted
+Status: Accepted (now the only Recommended tab: [0026](0026-one-recommended-tab.md))
 
 ## Context
 

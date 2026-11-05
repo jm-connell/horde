@@ -108,8 +108,6 @@ export type AiStatus = Omit<S["AiStatusRead"], "pulling"> & {
 };
 export type AiJobFailure = S["AiJobFailure"];
 export type AiJobRow = S["AiJobRow"];
-export type RecommendationSection = S["RecommendationSectionRead"];
-export type RecommendationsResponse = S["RecommendationsRead"];
 export type DiscoverFeed = S["DiscoverFeedRead"];
 export type DiscoverItem = S["DiscoverItemRead"];
 export type DiscoverReason = S["DiscoverReasonRead"];

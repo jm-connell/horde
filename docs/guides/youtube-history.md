@@ -36,9 +36,7 @@ The imported views appear in **History** (marked **On YouTube**), where you can 
 | Where | What changes |
 |-------|--------------|
 | **Channel pages and searches** | Videos you watched on YouTube carry a **Watched** badge. |
-| **Recommended → For you** | Videos you watched on YouTube count as watched (they move to the end). Channels you watch there lift their videos, recent viewing far more than old: a channel's pull halves every 30 days. With AI, your latest YouTube views also seed the content matching. Not-downloaded uploads from indexed channels you watch on YouTube rise the same way. |
-| **Recommended+** | Your YouTube views count as watch history there too: what you watched is not suggested again, channels you watch a lot on YouTube count like ones you follow ("New from …"), the searches it runs on YouTube start from what you watch, and its throwbacks can bring back channels you watched there long ago. |
-| **Throwbacks** | About one pick in twenty, marked **Throwback**, comes from a channel you watched a lot over six months ago and hardly since (with AI, also from a topic you watched back then). The pick changes daily. |
+| **Recommended** | Your YouTube views count as watch history there too: what you watched is not suggested again, channels you watch a lot on YouTube count like ones you follow ("New from …"), the searches it runs on YouTube start from what you watch, and its throwbacks can bring back channels you watched there long ago. |
 | **Download page** | **Watched often on YouTube**, folded under the download form, lists videos you watched at least twice there that you have not downloaded, most-watched first, each with a **Download** button. |
 | **History stats** | Off by default. Turn on **Include YouTube in History stats** (in Settings, or in the import dialog) to count YouTube views too. See below. |
 
@@ -72,6 +70,6 @@ Why the history is stored apart from Horde's own: [ADR 0020](../adr/0020-youtube
 ## Related
 
 - [History & continue watching](history.md)
-- [AI features](ai-features.md): For you
+- [AI features](ai-features.md): Recommended
 - [Channels](channels.md): following
 - [Playlists](playlists.md)

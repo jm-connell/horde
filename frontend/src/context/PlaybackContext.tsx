@@ -85,7 +85,7 @@ export interface StreamSession {
   liveVideoId?: string | null;
   /** YouTube's seek-preview sheets (finished videos only). */
   storyboard?: Storyboard | null;
-  /** For the user's stream history (Recommended+). */
+  /** For the user's stream history (Recommended). */
   durationSec?: number | null;
   channelUrl?: string | null;
   /** Start here (seconds) instead of the beginning: `?t=` on the watch page. */

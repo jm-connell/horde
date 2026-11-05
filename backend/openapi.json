@@ -4889,6 +4889,13 @@
             "title": "Blocked",
             "type": "array"
           },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/DiscoverItemRead"
@@ -6236,6 +6243,27 @@
         "title": "FollowRequest",
         "type": "object"
       },
+      "FollowUpdate": {
+        "description": "Change how a followed channel shows (it stays followed).",
+        "properties": {
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "hide_live": {
+            "title": "Hide Live",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_url",
+          "hide_live"
+        ],
+        "title": "FollowUpdate",
+        "type": "object"
+      },
       "FollowedChannelRead": {
         "properties": {
           "channel_name": {
@@ -6257,6 +6285,11 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "hide_live": {
+            "default": false,
+            "title": "Hide Live",
+            "type": "boolean"
           },
           "source": {
             "title": "Source",
@@ -10402,7 +10435,7 @@
         "type": "object"
       },
       "RecTuningRead": {
-        "description": "The user's Recommended+ settings and the presets they can pick from.",
+        "description": "The user's Recommended settings and the presets they can pick from.",
         "properties": {
           "active": {
             "title": "Active",
@@ -10462,7 +10495,7 @@
         "type": "object"
       },
       "RecTuningWrite": {
-        "description": "Rank Recommended+ with a preset, a saved algorithm, or your own values.",
+        "description": "Rank Recommended with a preset, a saved algorithm, or your own values.",
         "properties": {
           "active": {
             "maxLength": 40,
@@ -10485,139 +10518,6 @@
           "active"
         ],
         "title": "RecTuningWrite",
-        "type": "object"
-      },
-      "RecommendationItemRead": {
-        "description": "A library video (``video``) or an upload that is not downloaded (``stream``).",
-        "properties": {
-          "reason": {
-            "anyOf": [
-              {
-                "enum": [
-                  "throwback",
-                  "live"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          },
-          "stream": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ChannelFeedEntry"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "video": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/VideoRead"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "title": "RecommendationItemRead",
-        "type": "object"
-      },
-      "RecommendationSectionRead": {
-        "properties": {
-          "items": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/RecommendationItemRead"
-            },
-            "title": "Items",
-            "type": "array"
-          },
-          "kind": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Kind"
-          },
-          "seed_video_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seed Video Id"
-          },
-          "title": {
-            "title": "Title",
-            "type": "string"
-          },
-          "videos": {
-            "items": {
-              "$ref": "#/components/schemas/VideoRead"
-            },
-            "title": "Videos",
-            "type": "array"
-          }
-        },
-        "required": [
-          "title",
-          "videos"
-        ],
-        "title": "RecommendationSectionRead",
-        "type": "object"
-      },
-      "RecommendationsRead": {
-        "properties": {
-          "categories": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Categories",
-            "type": "array"
-          },
-          "has_more": {
-            "default": false,
-            "title": "Has More",
-            "type": "boolean"
-          },
-          "hint": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Hint"
-          },
-          "sections": {
-            "items": {
-              "$ref": "#/components/schemas/RecommendationSectionRead"
-            },
-            "title": "Sections",
-            "type": "array"
-          }
-        },
-        "required": [
-          "categories",
-          "sections"
-        ],
-        "title": "RecommendationsRead",
         "type": "object"
       },
       "ResetRequest": {
@@ -12369,6 +12269,35 @@
             ],
             "title": "Reason"
           },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "typical_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Minutes"
+          },
+          "typical_views": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Views"
+          },
           "url": {
             "title": "Url",
             "type": "string"
@@ -13208,7 +13137,7 @@
       },
       "Tuning-Input": {
         "additionalProperties": false,
-        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "description": "One complete set of Recommended settings (what a preset or a save holds).",
         "properties": {
           "channel_gap": {
             "default": 5,
@@ -13371,7 +13300,7 @@
       },
       "Tuning-Output": {
         "additionalProperties": false,
-        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "description": "One complete set of Recommended settings (what a preset or a save holds).",
         "properties": {
           "channel_gap": {
             "default": 5,
@@ -15810,101 +15739,6 @@
           }
         },
         "summary": "Ai Process Library",
-        "tags": [
-          "ai"
-        ]
-      }
-    },
-    "/api/ai/recommendations": {
-      "get": {
-        "description": "The home page's \"For you\" shelf, or one category's videos.\n\n\"For you\" works without AI (ranked from the watch history alone); the\ncategory shelves need it. With ``include_streams``, the first page also\ncarries followed channels' live broadcasts (``reason: live``), which the\nclient leaves out of its ``offset``.",
-        "operationId": "ai_recommendations_api_ai_recommendations_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "category",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Category"
-            }
-          },
-          {
-            "in": "query",
-            "name": "limit",
-            "required": false,
-            "schema": {
-              "default": 24,
-              "maximum": 100,
-              "minimum": 1,
-              "title": "Limit",
-              "type": "integer"
-            }
-          },
-          {
-            "in": "query",
-            "name": "offset",
-            "required": false,
-            "schema": {
-              "default": 0,
-              "minimum": 0,
-              "title": "Offset",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "Mix in indexed channels' uploads that are not downloaded.",
-            "in": "query",
-            "name": "include_streams",
-            "required": false,
-            "schema": {
-              "default": false,
-              "description": "Mix in indexed channels' uploads that are not downloaded.",
-              "title": "Include Streams",
-              "type": "boolean"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RecommendationsRead"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Ai Recommendations",
         "tags": [
           "ai"
         ]
@@ -19609,7 +19443,7 @@
     },
     "/api/discover/channels": {
       "get": {
-        "description": "Channels new to the user that their Recommended+ feed leans on most.",
+        "description": "Channels new to the user that their Recommended feed leans on most.",
         "operationId": "discover_channels_api_discover_channels_get",
         "parameters": [
           {
@@ -19671,7 +19505,7 @@
     },
     "/api/discover/feed": {
       "get": {
-        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos.",
+        "description": "One page of the Recommended feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos, unless it is a ``prefetch`` (the home page loading it before the\nuser opens the tab): that neither counts as shown nor as a visit for the\ngatherer; opening the tab asks again and counts then.",
         "operationId": "discover_feed_api_discover_feed_get",
         "parameters": [
           {
@@ -19720,6 +19554,37 @@
               ],
               "description": "Ordering seed; a new one reshuffles the less certain picks.",
               "title": "Seed"
+            }
+          },
+          {
+            "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+              "title": "Category"
+            }
+          },
+          {
+            "description": "Loaded ahead of time, not shown yet: its videos do not count as shown.",
+            "in": "query",
+            "name": "prefetch",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Loaded ahead of time, not shown yet: its videos do not count as shown.",
+              "title": "Prefetch",
+              "type": "boolean"
             }
           }
         ],
@@ -20250,7 +20115,7 @@
     },
     "/api/discover/tuning": {
       "get": {
-        "description": "How this user ranks Recommended+: a preset, a saved algorithm or their\nown values.",
+        "description": "How this user ranks Recommended: a preset, a saved algorithm or their\nown values.",
         "operationId": "get_tuning_api_discover_tuning_get",
         "responses": {
           "200": {
@@ -21377,6 +21242,56 @@
           }
         },
         "summary": "List Follows",
+        "tags": [
+          "follows"
+        ]
+      },
+      "patch": {
+        "description": "Show or hide a followed channel's live streams, without unfollowing it.",
+        "operationId": "update_follow_api_follows_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowedChannelRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Follow",
         "tags": [
           "follows"
         ]

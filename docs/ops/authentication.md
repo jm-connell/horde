@@ -82,7 +82,7 @@ The server refuses any change that would leave **no enabled administrator** (`co
 
 Instead of choosing someone's password, an administrator can send them a link. Under **Users**, **Invite links → Make an invite link** asks who it is for (optional, shown on the page they open) and which permissions they get, then shows the link once: `https://<your Horde>/join?token=…`. Copy it and send it however you like. The person opens it, picks a username and password, and is signed in as a **member** with those permissions; an invite can never make an administrator. Their first visit to Home shows a short welcome (what is shared, what is theirs, where to start), which **Got it** closes on every device.
 
-A link works **once** and expires after **7 days**. Unused links are listed with a **Revoke** button; a used or expired link says "This invite doesn't work". Only the SHA-256 of the link's 192-bit token is stored, like session tokens. Creating a link counts as a sensitive action ([confirm your password](#reauth) if you signed in more than 10 minutes ago). With `HORDE_AUTH_DISABLED` the join routes are refused, since a proxy decides who gets in. See [ADR 0026](../adr/0026-invite-links.md).
+A link works **once** and expires after **7 days**. Unused links are listed with a **Revoke** button; a used or expired link says "This invite doesn't work". Only the SHA-256 of the link's 192-bit token is stored, like session tokens. Creating a link counts as a sensitive action ([confirm your password](#reauth) if you signed in more than 10 minutes ago). With `HORDE_AUTH_DISABLED` the join routes are refused, since a proxy decides who gets in. See [ADR 0027](../adr/0027-invite-links.md).
 
 ## Passwords and sessions
 

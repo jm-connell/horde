@@ -1,4 +1,4 @@
-"""Followed channels' live broadcasts, for the Recommended and Recommended+ feeds.
+"""Followed channels' live broadcasts, for the Recommended feed.
 
 Read from the background live checks (``directory``). A broadcast from a channel
 the user watched lately leads the first page; the others join it a few cards in.
@@ -15,7 +15,7 @@ from sqlmodel import Session
 from ...models import utcnow
 from ...schemas import ChannelFeedEntry
 from ..discovery import feedback, history
-from ..follows import followed_urls, normalize_channel_url
+from ..follows import live_urls, normalize_channel_url
 from .directory import LiveDirectory
 from .page import LiveBroadcast
 
@@ -42,7 +42,7 @@ def live_picks(
     session: Session, directory: LiveDirectory, user_id: int
 ) -> list[LivePick]:
     """The user's followed channels that are live now, lately watched ones first."""
-    states = directory.live(followed_urls(session, user_id))
+    states = directory.live(live_urls(session, user_id))
     if not states:
         return []
     cutoff = utcnow() - timedelta(days=RECENT_WATCH_DAYS)

@@ -5,8 +5,8 @@ the new account gets, when it expires and who used it. Deleting the account that
 made or used an invite keeps the row (the id becomes NULL). A new table only:
 ``videos`` is not rebuilt, so the tag and full-text triggers are untouched.
 
-Revision ID: 0027_user_invites
-Revises: 0026_rec_algorithms
+Revision ID: 0028_user_invites
+Revises: 0027_follow_hide_live
 """
 
 from collections.abc import Sequence
@@ -14,8 +14,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0027_user_invites"
-down_revision: str | None = "0026_rec_algorithms"
+revision: str = "0028_user_invites"
+down_revision: str | None = "0027_follow_hide_live"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
