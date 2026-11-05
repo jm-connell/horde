@@ -11,7 +11,7 @@ const CHOICES: { value: HelpDataConsent; label: string }[] = [
   { value: "cloud", label: "Any AI, including cloud" },
 ];
 
-/** Settings → Library: what Ask about Horde may read of this account's data. */
+/** Settings → Library: what Ask may read of this account's data. */
 export default function HelpDataSection() {
   const { settings, update } = useSettingsPage();
   const info = useQuery({

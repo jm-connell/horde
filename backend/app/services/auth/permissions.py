@@ -68,7 +68,7 @@ PERMISSION_TABLE: tuple[Permission, ...] = (
     ),
     Permission(
         "manage_ask",
-        "Manage Ask channels",
+        "Manage channel indexing",
         "Turn Ask on or off for channels and pause or resume their indexing. "
         "Indexing fetches every upload's captions from YouTube for hours and "
         "uses disk space.",

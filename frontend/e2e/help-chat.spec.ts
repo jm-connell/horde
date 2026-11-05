@@ -37,7 +37,7 @@ test("the footer links to the docs and the GitHub issue tracker", async ({
   ).toHaveAttribute("href", "https://github.com/jm-connell/horde");
 });
 
-test("Ask about Horde opens in the corner, follows the user and moves", async ({
+test("Ask opens in the corner, follows the user and moves", async ({
   page,
 }) => {
   const bodies: { message: string; thread_id: number | null; page: string }[] =
@@ -81,11 +81,11 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/settings");
   await page.getByRole("tab", { name: "Playback" }).click();
-  const open = page.getByRole("button", { name: "Ask about Horde" });
+  const open = page.getByRole("button", { name: "Ask", exact: true });
   await open.click();
   await expect(open).toHaveAttribute("aria-expanded", "true");
 
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   const input = panel.getByRole("textbox", { name: "Your question" });
   await expect(input).toBeFocused();
   // Docked in the bottom-right corner, not over the middle of the page.
@@ -170,23 +170,21 @@ test("Ask about Horde opens in the corner, follows the user and moves", async ({
   await expect(open).toHaveAttribute("aria-expanded", "false");
 });
 
-test("Ask about Horde fills the bottom of a phone screen", async ({ page }) => {
+test("Ask fills the bottom of a phone screen", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const box = (await page
-    .getByRole("dialog", { name: "Ask about Horde" })
+    .getByRole("dialog", { name: "Ask", exact: true })
     .boundingBox())!;
   expect(box.x).toBeCloseTo(8, 0);
   expect(box.width).toBeCloseTo(390 - 16, 0);
 });
 
-test("Ask about Horde shows the server's reason when no AI is set up", async ({
-  page,
-}) => {
+test("Ask shows the server's reason when no AI is set up", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   const input = panel.getByRole("textbox", { name: "Your question" });
   await input.fill("What is Horde?");
   await input.press("Enter");
@@ -233,7 +231,7 @@ async function stubAnswer(
 }
 
 async function ask(page: import("@playwright/test").Page, question: string) {
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   const input = panel.getByRole("textbox", { name: "Your question" });
   await input.fill(question);
   await input.press("Enter");
@@ -249,7 +247,7 @@ test("a setting link opens its tab and rings it, and Apply changes it", async ({
   );
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = await ask(page, "rain background please");
 
   // The action token became a card, not text.
@@ -296,8 +294,8 @@ test("What can you do? is answered without asking the model", async ({
 }) => {
   const bodies = await stubAnswer(page, "unused");
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await panel.getByRole("button", { name: "What can you do?" }).click();
   await expect(panel.getByText("Here's what I can do:")).toBeVisible();
   await expect(
@@ -320,8 +318,8 @@ test("Use my data is a setting, not a switch in the chat", async ({ page }) => {
     })
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await expect(panel.getByText("Use my data")).toHaveCount(0);
   await ask(page, "how many videos are in my library?");
   await expect(panel.getByText("You have 3 videos.")).toBeVisible();
@@ -369,7 +367,7 @@ test("CSS from the chat previews, reverts by itself or is kept", async ({
   );
   await page.clock.install();
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = await ask(page, "red outline on the top bar with css");
   const preview = page.locator('style[data-horde="custom-css-preview"]');
   const bar = page.getByRole("alertdialog", { name: "CSS preview" });
@@ -451,7 +449,7 @@ test("the chat offers downloads and playlists, and does them on confirm", async 
     return route.fulfill({ json: jobs[0] });
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = await ask(page, "make me a playlist and grab that link");
 
   // The link in the reply; the playlist card lists the same video once the
@@ -477,7 +475,7 @@ test("a link that leaves Horde names the site it goes to", async ({ page }) => {
     "[Open Settings](https://evil.example/steal) or [the wiki](/wiki/) or [History](/history)"
   );
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = await ask(page, "where are my settings?");
   const away = panel.getByRole("link", { name: "Open Settings" });
   await expect(away).toHaveAttribute("href", "https://evil.example/steal");
@@ -499,7 +497,7 @@ test("the chat docks at the side and the page makes room for it", async ({
   await page.goto("/");
   const main = page.locator('[data-horde="main"]');
   const fullWidth = (await main.boundingBox())!.width;
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.locator('[data-horde="help-chat"]');
   await panel
     .getByRole("button", { name: "Dock the chat at the side" })
@@ -576,7 +574,7 @@ test("watching with the chat docked shows the player as theater", async ({
   await reveal();
   await expect(theater).not.toHaveClass(active);
 
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.locator('[data-horde="help-chat"]');
   await panel
     .getByRole("button", { name: "Dock the chat at the side" })
@@ -616,7 +614,7 @@ test("under reduced motion the chat docks without gliding", async ({
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.locator('[data-horde="help-chat"]');
   await panel
     .getByRole("button", { name: "Dock the chat at the side" })
@@ -641,14 +639,14 @@ test.describe("without AI", () => {
     );
   });
 
-  test("Ask about Horde answers with documentation pages", async ({ page }) => {
+  test("Ask answers with documentation pages", async ({ page }) => {
     const chats: string[] = [];
     page.on("request", (req) => {
       if (/\/api\/ask\/chat$/.test(req.url())) chats.push(req.url());
     });
     await page.goto("/");
-    await page.getByRole("button", { name: "Ask about Horde" }).click();
-    const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+    const panel = page.getByRole("dialog", { name: "Ask", exact: true });
     await expect(
       panel.getByText("answers are searches of Horde’s documentation")
     ).toBeVisible();

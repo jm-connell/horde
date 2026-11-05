@@ -127,7 +127,7 @@ function isPanelState(v: unknown): v is PanelState {
 }
 
 /**
- * Ask about Horde, available on every page: the footer opens it and it stays
+ * Ask, available on every page: the footer opens it and it stays
  * open (same conversation, same spot) while the user moves around the app.
  */
 export function HelpChatProvider({ children }: { children: ReactNode }) {
@@ -278,7 +278,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
 
 /**
  * The side panel, mounted by the app shell once setup is done (not over the
- * loading screen or the setup wizard): Ask about Horde, the Recommended
+ * loading screen or the setup wizard): Ask, the Recommended
  * algorithm, or both as tabs. Each body has its own error boundary, so a bad
  * answer cannot take down the page (or the other body).
  */
@@ -345,7 +345,7 @@ export function useHelpChat(): HelpChatValue {
 }
 
 /**
- * Tell Ask about Horde which part of the page is showing (a tab, a pane), so
+ * Tell Ask which part of the page is showing (a tab, a pane), so
  * questions sent from here carry it. Cleared when the page unmounts.
  */
 export function useHelpPageDetail(pathname: string, text: string | null) {

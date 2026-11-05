@@ -63,5 +63,12 @@ describe("saved Ask messages", () => {
   it("accepts only a well-formed tab state", () => {
     expect(isAskState({ threadId: 4, scope: [] })).toBe(true);
     expect(isAskState({ threadId: "4", scope: [] })).toBe(false);
+    // The picked source is kept with it; a malformed one is not trusted.
+    const picked = { scope: [], horde: true };
+    expect(isAskState({ threadId: null, scope: [], picked })).toBe(true);
+    expect(isAskState({ threadId: null, scope: [], horde: "yes" })).toBe(false);
+    expect(
+      isAskState({ threadId: null, scope: [], picked: { scope: 3 } })
+    ).toBe(false);
   });
 });

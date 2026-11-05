@@ -43,20 +43,38 @@ export interface HelpMessage {
 /** This tab's copy of the conversation shown (the server keeps it too). */
 export const HELP_CHAT_STORAGE_KEY = "horde.helpChat";
 
-/** The saved conversation this tab shows and the Ask channels it is about. */
+/** The saved conversation this tab shows and where Ask answers it from. */
 export const ASK_CHAT_STORAGE_KEY = "horde.askChat";
 
-export interface AskChatState {
-  threadId: number | null;
+/** Where Ask answers from: channels, Horde only, or (neither) per question. */
+export interface AskSourceState {
+  /** The channels the chat is about. */
   scope: AskScopeChannel[];
+  /** Horde only: no channel answers, even one the question names. */
+  horde?: boolean;
 }
 
-export function isAskState(value: unknown): value is AskChatState {
+export interface AskChatState extends AskSourceState {
+  threadId: number | null;
+  /** The source last picked (or the channel page it was opened on): New chat starts on it. */
+  picked?: AskSourceState;
+}
+
+function isSourceState(value: unknown): value is AskSourceState {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
+    Array.isArray(v.scope) &&
+    (v.horde === undefined || typeof v.horde === "boolean")
+  );
+}
+
+export function isAskState(value: unknown): value is AskChatState {
+  if (!isSourceState(value)) return false;
+  const v = value as unknown as Record<string, unknown>;
+  return (
     (v.threadId === null || typeof v.threadId === "number") &&
-    Array.isArray(v.scope)
+    (v.picked === undefined || isSourceState(v.picked))
   );
 }
 

@@ -44,7 +44,7 @@ export function SettingRow({
   description?: string;
   control: React.ReactNode;
   hidden?: boolean;
-  /** `data-setting` id that `?find=` links (and Ask about Horde) jump to. */
+  /** `data-setting` id that `?find=` links (and Ask) jump to. */
   anchor?: string;
 }) {
   if (hidden) return null;
@@ -120,7 +120,7 @@ export function Section({
   children?: React.ReactNode;
   first?: boolean;
   hidden?: boolean;
-  /** `data-setting` id that `?find=` links (and Ask about Horde) jump to. */
+  /** `data-setting` id that `?find=` links (and Ask) jump to. */
   anchor?: string;
 }) {
   if (hidden) return null;

@@ -17,7 +17,7 @@ export function flashSetting(el: HTMLElement) {
 }
 
 /**
- * `?find=<anchor>` (from a link or Ask about Horde): once the page has drawn
+ * `?find=<anchor>` (from a link or Ask): once the page has drawn
  * the element marked `data-setting="<anchor>"`, scroll to it and ring it,
  * then drop the parameter. `onMissing` gets the text when nothing on the page
  * carries that anchor (Settings searches for it instead).

@@ -28,7 +28,7 @@ import { HELP_PANEL_ID } from "./helpChat";
 import { CloseIcon, SidePanelIcon } from "./icons";
 import { ActiveCtx, SlotCtx } from "./sidePanelContext";
 
-/** One body the frame shows: Ask about Horde, or the Recommended settings. */
+/** One body the frame shows: Ask, or the Recommended settings. */
 export interface PanelTab {
   id: string;
   /** The tab's label when more than one body is open. */
@@ -158,7 +158,7 @@ interface Props {
 }
 
 /**
- * The floating (or docked) side panel that holds Ask about Horde and the
+ * The floating (or docked) side panel that holds Ask and the
  * Recommended settings. With both open it shows tabs instead of two panels
  * side by side; each body stays mounted while hidden, so a conversation or a
  * half-moved slider survives switching tabs.

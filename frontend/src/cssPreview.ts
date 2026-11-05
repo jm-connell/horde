@@ -5,7 +5,7 @@ import {
 } from "./customCss";
 
 /**
- * CSS Ask about Horde wrote, tried on the page before the user keeps it: a
+ * CSS Ask wrote, tried on the page before the user keeps it: a
  * second style tag after the saved custom CSS (so its rules win), cleaned by
  * the same sanitizer. Nothing is saved until the user keeps it.
  */

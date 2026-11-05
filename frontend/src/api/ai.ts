@@ -172,17 +172,17 @@ export const aiApi = {
     return postEventStream(`/api/videos/${id}/ai/chat`, { message }, opts);
   },
 
-  /** The pages and settings Ask about Horde may link to or change. */
+  /** The pages and settings Ask may link to or change. */
   getHelpCatalog(opts?: ReadOptions): Promise<HelpCatalog> {
     return request<HelpCatalog>("/api/ai/help/catalog", opts);
   },
 
-  /** What Ask about Horde runs on and where questions are sent. */
+  /** What Ask runs on and where questions are sent. */
   getHelpInfo(opts?: ReadOptions): Promise<HelpAssistantInfo> {
     return request<HelpAssistantInfo>("/api/ai/help/info", opts);
   },
 
-  /** Ask about Horde without AI: matching documentation and settings. */
+  /** Ask without AI: matching documentation and settings. */
   searchHelp(q: string, page: string): Promise<HelpSearchResult> {
     const qs = new URLSearchParams({ q, page });
     return request<HelpSearchResult>(`/api/ai/help/search?${qs}`);

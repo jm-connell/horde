@@ -65,13 +65,13 @@ test("the search bar finds the moment an Ask channel said something", async ({
   await expect(page).toHaveURL(/\/watch\/\d+\?t=40$/);
 });
 
-test("Ask channels are managed in Settings, not their own page", async ({
+test("the channels Ask answers from are managed in Settings, not their own page", async ({
   page,
 }) => {
   await page.goto("/settings?tab=library&find=ask-channels");
   const section = page.locator('[data-setting="ask-channels"]');
   await expect(
-    section.getByRole("heading", { name: "Ask channels" })
+    section.getByRole("heading", { name: "Channels Ask can answer from" })
   ).toBeVisible();
   await expect(section.getByRole("link", { name: "Northwind" })).toBeVisible();
   await expect(section.getByText("1 of 1 videos indexed")).toBeVisible();
@@ -89,9 +89,32 @@ test("Ask channels are managed in Settings, not their own page", async ({
 });
 
 test("a channel answer links every point to its moment", async ({ page }) => {
-  const bodies: { message: string; channel_ids: number[] }[] = [];
+  const bodies: {
+    message: string;
+    channel_ids: number[];
+    horde_only: boolean;
+  }[] = [];
   await page.route(/\/api\/ask\/chat$/, (route) => {
-    bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
+    const body = route.request().postDataJSON() as (typeof bodies)[number];
+    bodies.push(body);
+    if (body.horde_only)
+      return route.fulfill({
+        status: 200,
+        contentType: "text/event-stream",
+        body: sse([
+          { type: "thread", id: 3, title: "belt?" },
+          { type: "scope", channels: [] },
+          { type: "token", text: "Turn it off in Settings." },
+          {
+            type: "done",
+            message: {
+              id: 5,
+              role: "assistant",
+              content: "Turn it off in Settings.",
+            },
+          },
+        ]),
+      });
     const answer = "Northwind says to change the timing belt early[1].";
     return route.fulfill({
       status: 200,
@@ -132,20 +155,22 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   });
 
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  // The panel's title follows what it answers from, so find it by its id.
-  const panel = page.locator('[data-horde="help-chat"]');
-  const input = panel.getByRole("textbox", { name: "Your question" });
-  // With an Ask channel on, the hint says a channel can be named.
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const chatPanel = page.getByRole("dialog", { name: "Ask", exact: true });
+  const input = chatPanel.getByRole("textbox", { name: "Your question" });
+  // With an Ask channel on, the hint says a channel can be named or picked.
   await expect(input).toHaveAttribute("placeholder", /name a channel/);
-  // And which channels can be named.
-  await expect(
-    panel.getByText(/Name a channel to ask what it said .*: Northwind\./)
-  ).toBeVisible();
+  await expect(chatPanel.getByText(/name it or pick it below\./)).toBeVisible();
+  const source = (name: string) =>
+    chatPanel.getByRole("button", {
+      name: `Answering from ${name}`,
+      exact: true,
+    });
+  // Nothing picked: Horde, or the channel a question names.
+  await expect(source("Horde or a named channel")).toBeVisible();
   await input.fill("What does Northwind say about the timing belt?");
   await input.press("Enter");
 
-  const chatPanel = page.getByRole("dialog", { name: "Ask Northwind" });
   const cite = chatPanel.getByRole("link", {
     name: /Reference 1: Cedar Notes at 0:40/,
   });
@@ -161,7 +186,10 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   await expect(
     list.getByText("“change the timing belt before it snaps”")
   ).toBeVisible();
-  await expect(chatPanel.getByText("Answering from")).toBeVisible();
+  // The source shows the channel, and so does the answer's byline.
+  await expect(source("Northwind")).toBeVisible();
+  const byline = chatPanel.locator('[data-horde="ask-byline"]').last();
+  await expect(byline).toHaveText("Northwind");
   await expectNoSeriousViolations(page, "ask chat", '[data-horde="help-chat"]');
 
   // A follow-up stays on the channel without naming it again.
@@ -169,20 +197,46 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   await input.press("Enter");
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1].channel_ids).toEqual([1]);
+  expect(bodies[1].horde_only).toBe(false);
 
-  // Clearing the chip goes back to Ask about Horde.
-  await chatPanel
-    .getByRole("button", { name: "Stop answering from these channels" })
-    .click();
+  // Picking Horde answers from Horde, even when a channel is named.
+  await source("Northwind").click();
+  const menu = page.getByRole("menu", { name: "Answer from" });
   await expect(
-    page.getByRole("dialog", { name: "Ask about Horde" })
-  ).toBeVisible();
+    menu.getByRole("menuitemradio", { name: "Northwind", exact: true })
+  ).toHaveAttribute("aria-checked", "true");
+  await expectNoSeriousViolations(
+    page,
+    "ask source menu",
+    '[data-horde="ask-source"]'
+  );
+  await menu.getByRole("menuitemradio", { name: /^Horde/ }).click();
+  await expect(source("Horde")).toBeVisible();
+  await expect(input).toBeFocused();
+  await input.fill("How do I stop indexing Northwind?");
+  await input.press("Enter");
+  await expect.poll(() => bodies.length).toBe(3);
+  expect(bodies[2].channel_ids).toEqual([]);
+  expect(bodies[2].horde_only).toBe(true);
+  await expect(byline).toHaveText("Horde");
+
+  // The pick outlasts closing the panel, and New chat starts on it.
+  await input.press("Escape");
+  await expect(chatPanel).toHaveCount(0);
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(source("Horde")).toBeVisible();
+  await chatPanel.getByRole("button", { name: "New chat" }).click();
+  await expect(source("Horde")).toBeVisible();
+  // Automatic goes back to choosing per question.
+  await source("Horde").click();
+  await menu.getByRole("menuitemradio", { name: /^Automatic/ }).click();
+  await expect(source("Horde or a named channel")).toBeVisible();
 });
 
 test("saved conversations are listed in the chat panel", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await panel.getByRole("button", { name: "History" }).click();
   await expect(panel.getByText("Your conversations")).toBeVisible();
   await expect(panel.getByText("None yet.")).toBeVisible();
@@ -215,21 +269,31 @@ test("Ask <channel> on a channel page opens a chat about it", async ({
   await page.goto("/?channel=Northwind");
   // The panel is closed: the request must survive its mounting.
   await page.getByRole("button", { name: "Ask Northwind" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask Northwind" });
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await expect(panel).toBeVisible();
-  await expect(panel.getByText("Answering from")).toBeVisible();
-  await expect(
-    panel.getByRole("textbox", { name: "Your question" })
-  ).toHaveAttribute("placeholder", "Ask Northwind…");
+  const source = (name: string) =>
+    panel.getByRole("button", { name: `Answering from ${name}`, exact: true });
+  await expect(source("Northwind")).toBeVisible();
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toHaveAttribute("placeholder", "Ask Northwind…");
   // The download box floats over the panel's corner on this page.
   await page.getByRole("button", { name: "Hide download panel" }).click();
-  // Removing the chip goes back to Ask about Horde.
-  await panel
-    .getByRole("button", { name: "Stop answering from these channels" })
+  // Picking Horde stops answering from the channel, even on its page.
+  await source("Northwind").click();
+  const menu = page.getByRole("menu", { name: "Answer from" });
+  await menu.getByRole("menuitemradio", { name: /^Horde/ }).click();
+  await expect(source("Horde")).toBeVisible();
+  await expect(input).toHaveAttribute("placeholder", "Ask how to use Horde…");
+  // Picking the channel goes back to it.
+  await source("Horde").click();
+  await menu
+    .getByRole("menuitemradio", { name: "Northwind", exact: true })
     .click();
-  await expect(
-    page.getByRole("dialog", { name: "Ask about Horde" })
-  ).toBeVisible();
+  await expect(source("Northwind")).toBeVisible();
+  // Automatic, on its page: its videos' questions go to it, the rest to Horde.
+  await source("Northwind").click();
+  await menu.getByRole("menuitemradio", { name: /^Automatic/ }).click();
+  await expect(source("Northwind or Horde")).toBeVisible();
 });
 
 test("on a video of an Ask channel, the chat answers from that channel", async ({
@@ -238,6 +302,7 @@ test("on a video of an Ask channel, the chat answers from that channel", async (
   const bodies: {
     page_channel_id: number | null;
     page_video_id: string | null;
+    horde_only: boolean;
   }[] = [];
   await page.route(/\/api\/ask\/chat$/, (route) => {
     bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
@@ -263,20 +328,24 @@ test("on a video of an Ask channel, the chat answers from that channel", async (
   await page.goto("/");
   await videoCard(page, "Cedar Notes").first().click();
   await expect(page).toHaveURL(/\/watch\//);
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
-  const panel = page.locator('[data-horde="help-chat"]');
-  await expect(panel.locator('[data-horde="ask-page-channel"]')).toContainText(
-    "On this page: Northwind"
-  );
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
+  // Nothing picked: each question goes to the channel or Horde.
+  await expect(
+    panel.getByRole("button", { name: "Answering from Northwind or Horde" })
+  ).toBeVisible();
+  await expect(
+    panel.getByText(
+      "Questions about its videos go to Northwind; the rest to Horde."
+    )
+  ).toBeVisible();
   const input = panel.getByRole("textbox", { name: "Your question" });
-  await expect(input).toHaveAttribute(
-    "placeholder",
-    "Ask Northwind, or about Horde…"
-  );
+  await expect(input).toHaveAttribute("placeholder", "Ask Northwind or Horde…");
   await input.fill("when should the belt be changed?");
   await input.press("Enter");
   await expect(panel.getByText("Change it early.")).toBeVisible();
   // The server is told the page's channel and the video being watched.
   expect(bodies[0].page_channel_id).toBe(1);
   expect(bodies[0].page_video_id).toBe("e2ecedar001");
+  expect(bodies[0].horde_only).toBe(false);
 });

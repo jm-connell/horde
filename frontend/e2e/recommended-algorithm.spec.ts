@@ -144,7 +144,7 @@ test("with the chat open too, the panel shows tabs instead of two panels", async
 }) => {
   await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
-  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
 
   await expect(page.locator('[role="dialog"][aria-modal="false"]')).toHaveCount(
     1

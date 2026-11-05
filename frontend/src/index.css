@@ -1903,7 +1903,7 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   animation: horde-processing-ellipsis 1.2s ease-in-out infinite;
 }
 
-/* A setting a link or Ask about Horde pointed at (`?find=`, hooks/useSettingFind.ts). */
+/* A setting a link or Ask pointed at (`?find=`, hooks/useSettingFind.ts). */
 [data-setting] {
   transition:
     outline-color 300ms var(--ease-fluid),

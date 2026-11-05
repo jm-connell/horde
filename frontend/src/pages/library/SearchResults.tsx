@@ -476,7 +476,7 @@ export default function SearchResults({
         <SearchResultSection
           id="search-said"
           title="Said in videos"
-          source="Captions of Ask channels"
+          source="Captions of indexed channels"
           count={saidGroups.length}
           emptyText="Nothing in the indexed captions mentions that."
           loading={said.isLoading}
