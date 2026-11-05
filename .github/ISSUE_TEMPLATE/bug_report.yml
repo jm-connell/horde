@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in Horde does not work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Check [Troubleshooting](https://jm-connell.github.io/horde/ops/troubleshooting/) first; for YouTube "bot check" or "PO token" errors see [YouTube access](https://jm-connell.github.io/horde/ops/youtube-access/). Leave out passwords, API keys, cookies and private addresses.
+  - type: input
+    id: version
+    attributes:
+      label: Horde version
+      description: Settings → System → Updates, or `curl -s http://<host>:8686/api/health` while signed in. "Report a bug or idea" in Horde's footer fills this in.
+      placeholder: "1.2.2"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is Horde installed?
+      options:
+        - Docker Compose, published image (HORDE_IMAGE)
+        - Docker Compose, built from source
+        - TrueNAS with Dockge
+        - Unraid
+        - Synology Container Manager
+        - Portainer
+        - Plain docker run
+        - Local development (start.sh / dev.bat)
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open …
+        2. Click …
+        3. See …
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: "Firefox 140 on Windows; Safari on iPhone 13; the installed app on Android"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log lines
+      description: "The last lines of `docker compose logs --tail=100 horde` around the problem."
+      render: text

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://jm-connell.github.io/horde/
+    about: Install guides, every setting, troubleshooting and the FAQ.
+  - name: Security problem
+    url: https://github.com/jm-connell/horde/security/advisories/new
+    about: Report a vulnerability privately instead of in a public issue.
