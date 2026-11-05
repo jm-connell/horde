@@ -20,7 +20,7 @@ Settings → System → Resources **GPU** is the card visible to the **`horde` c
 
 ## error_kind
 
-Typed download / preview failure class stored on `download_jobs` and SSE progress (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `cancelled`, `unknown`). The Download UI uses it for labels and fix hints. See [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
+Typed download / preview failure class stored on `download_jobs` and SSE progress (`bot`, `pot`, `cookies`, `members`, `rate_limit`, `unavailable`, `postprocess`, `disk_full`, `network`, `cancelled`, `unknown`). The Download UI uses it for labels and fix hints. See [Troubleshooting](../ops/troubleshooting.md#download-error_kind-values).
 
 ## Review
 

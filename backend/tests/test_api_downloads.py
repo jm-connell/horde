@@ -539,3 +539,24 @@ def test_list_jobs_survives_a_legacy_destination_value(client, init_db):
     assert listed.status_code == 200
     row = next(r for r in listed.json() if r["id"] == job_id)
     assert row["destination"] == "library"
+
+
+def test_preview_network_failure_is_a_502_not_a_500(client, monkeypatch):
+    from yt_dlp.utils import DownloadError
+
+    from app.services import ytdlp_extract
+
+    def unreachable(url: str, *, priority: int = 0):
+        raise DownloadError(
+            "ERROR: Unable to download webpage: <urlopen error [Errno -3] "
+            "Temporary failure in name resolution>"
+        )
+
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", unreachable)
+    res = client.get(
+        "/api/downloads/preview", params={"url": "https://example.com/watch"}
+    )
+    assert res.status_code == 502
+    body = res.json()
+    assert body["extra"]["error_kind"] == "network"
+    assert "could not reach" in body["detail"]

@@ -25,6 +25,7 @@
 | `unavailable` | Removed, geo, no formats |
 | `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
 | `disk_full` | The disk ran out of space while writing. The queue holds for a while instead of failing every following job; free space, then retry. See [Disk limits](../guides/downloads.md#disk-limits) |
+| `network` | The server could not reach the site at all: no internet, DNS, a proxy or firewall, a VPN that blocks the container. The link preview answers `502`. |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
 

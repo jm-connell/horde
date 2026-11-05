@@ -212,3 +212,45 @@ def test_youtube_extractor_args_includes_bgutil(monkeypatch):
     )
     args = youtube_extractor_args()
     assert args["youtubepot-bgutilhttp"]["base_url"] == ["http://bgutil-pot:4416"]
+
+
+_PROXY_FAILURE = (
+    "ERROR: [youtube] dQw4w9WgXcQ: Unable to download API page: <urlopen error "
+    "Tunnel connection failed: 403 Forbidden> (caused by ProxyError('<urlopen "
+    "error Tunnel connection failed: 403 Forbidden>')); please report this "
+    "issue on https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the "
+    "appropriate issue template. Confirm you are on the latest version using "
+    "yt-dlp -U"
+)
+
+
+def test_network_failures_say_the_server_cannot_reach_the_site():
+    from app.services.ytdlp_common import ERROR_KIND_NETWORK
+
+    for raw in (
+        _PROXY_FAILURE,
+        "ERROR: Unable to download webpage: <urlopen error [Errno -3] "
+        "Temporary failure in name resolution>",
+        "ERROR: Unable to download webpage: <urlopen error [Errno 111] "
+        "Connection refused>",
+        "ERROR: [generic] Unable to download webpage: The read operation timed out",
+        "ERROR: Unable to download webpage: <urlopen error [Errno 101] "
+        "Network is unreachable>",
+    ):
+        kind, msg = classify_ytdlp_error(raw)
+        assert kind == ERROR_KIND_NETWORK, raw
+        assert "could not reach" in msg
+        assert "github.com/yt-dlp" not in msg
+
+
+def test_unknown_failures_drop_ytdlps_report_this_boilerplate():
+    kind, msg = classify_ytdlp_error(
+        "ERROR: [weird] abc: Something odd happened; please report this issue "
+        "on https://github.com/yt-dlp/yt-dlp/issues?q= , filling out the "
+        "appropriate issue template. Confirm you are on the latest version "
+        "using yt-dlp -U"
+    )
+    assert kind == ERROR_KIND_UNKNOWN
+    assert "Something odd happened" in msg
+    assert "report this issue" not in msg
+    assert "yt-dlp -U" not in msg

@@ -91,6 +91,30 @@ _UNAVAILABLE_MESSAGE = re.compile(
     r"|is not a valid url"
     r")"
 )
+# The server could not reach the site at all: DNS, proxy, firewall, no internet.
+_NETWORK_MESSAGE = re.compile(
+    r"(?i)("
+    r"tunnel connection failed"
+    r"|proxyerror"
+    r"|name or service not known"
+    r"|temporary failure in name resolution"
+    r"|nodename nor servname"
+    r"|failed to resolve"
+    r"|getaddrinfo failed"
+    r"|connection refused"
+    r"|connection reset by peer"
+    r"|network is unreachable"
+    r"|no route to host"
+    r"|read operation timed out"
+    r"|connection timed out"
+    r"|timed out"
+    r")"
+)
+# yt-dlp's "report this upstream" footer; meaningless to someone using Horde.
+_REPORT_BOILERPLATE = re.compile(
+    r"(?is);?\s*please report this issue on https://github\.com/yt-dlp/yt-dlp/issues\S*"
+    r".*?(?:yt-dlp -U|$)"
+)
 _DISK_FULL_MESSAGE = re.compile(
     r"(?i)("
     r"no space left on device"
@@ -119,6 +143,7 @@ ERROR_KIND_RATE_LIMIT = "rate_limit"
 ERROR_KIND_UNAVAILABLE = "unavailable"
 ERROR_KIND_POSTPROCESS = "postprocess"
 ERROR_KIND_DISK_FULL = "disk_full"
+ERROR_KIND_NETWORK = "network"
 ERROR_KIND_CANCELLED = "cancelled"
 ERROR_KIND_UNKNOWN = "unknown"
 
@@ -427,6 +452,15 @@ def classify_ytdlp_error(
             ERROR_KIND_DISK_FULL,
             "The disk is full, so the download was stopped. Free up space (or raise "
             "the library limit in Settings → System) and retry.",
+        )
+
+    raw = _REPORT_BOILERPLATE.sub("", raw).strip()
+
+    if _NETWORK_MESSAGE.search(raw):
+        return _finish(
+            ERROR_KIND_NETWORK,
+            "Horde could not reach the site from the server. Check the server's "
+            "internet connection, DNS and any proxy or VPN, then retry.",
         )
 
     if _BOT_MESSAGE.search(raw):
