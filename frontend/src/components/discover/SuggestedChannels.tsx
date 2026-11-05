@@ -90,6 +90,21 @@ export default function SuggestedChannels({
                   )}
                 </div>
               </div>
+              {(ch.tags ?? []).length > 0 && (
+                <ul
+                  aria-label={`What ${ch.name} is about`}
+                  className="flex min-w-0 flex-wrap gap-1"
+                >
+                  {(ch.tags ?? []).map((tag) => (
+                    <li
+                      key={tag}
+                      className="max-w-full truncate rounded-full border border-ink-700 px-2 py-0.5 text-[11px] text-gray-300"
+                    >
+                      {tag}
+                    </li>
+                  ))}
+                </ul>
+              )}
               {ch.reason && (
                 <p
                   className="line-clamp-2 text-xs text-muted"

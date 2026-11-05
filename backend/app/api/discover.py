@@ -528,7 +528,11 @@ def discover_channels(
         _today_seed() if seed is None else seed,
         fresh=False,
     )
-    picks = suggest.suggestions(feed, feedback.exclusions(session, user.id))
+    picks = suggest.suggestions(
+        feed,
+        feedback.exclusions(session, user.id),
+        discover_categories.feed_categories(session, ctx.discovery, feed),
+    )
     return SuggestedChannelsRead(
         items=[
             SuggestedChannelRead(
@@ -539,6 +543,7 @@ def discover_channels(
                 indexed=s.indexed,
                 typical_views=s.typical_views,
                 typical_minutes=s.typical_minutes,
+                tags=s.tags,
             )
             for s in picks
         ]

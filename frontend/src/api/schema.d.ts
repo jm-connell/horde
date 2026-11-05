@@ -8372,6 +8372,8 @@ export interface components {
             name: string;
             /** Reason */
             reason?: string | null;
+            /** Tags */
+            tags?: string[];
             /** Typical Minutes */
             typical_minutes?: number | null;
             /** Typical Views */

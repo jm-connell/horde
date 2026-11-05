@@ -154,6 +154,8 @@ class ChannelStat:
     scores: list[float] = field(default_factory=list)
     items: list[Candidate] = field(default_factory=list)
     seeds: set[str] = field(default_factory=set)
+    #: The YouTube searches that found its videos, and how many each found.
+    queries: Counter[str] = field(default_factory=Counter)
 
 
 @dataclass
@@ -988,6 +990,8 @@ def build_feed(
             stat.items.append(c)
             if seed_title:
                 stat.seeds.add(seed_title)
+            if hit is not None and hit.source == "search" and hit.seed:
+                stat.queries[hit.seed] += 1
         if tired:
             worn.append(item)
         elif eligible:

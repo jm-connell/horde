@@ -11266,6 +11266,13 @@
             ],
             "title": "Reason"
           },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
           "typical_minutes": {
             "anyOf": [
               {

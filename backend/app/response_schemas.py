@@ -648,6 +648,9 @@ class SuggestedChannelRead(BaseModel):
     #: The median views and length (minutes) of the videos the feed picked.
     typical_views: int | None = None
     typical_minutes: int | None = None
+    #: A couple of words on what it is about: AI categories, else the searches
+    #: that found it.
+    tags: list[str] = Field(default_factory=list)
 
 
 class SuggestedChannelsRead(BaseModel):

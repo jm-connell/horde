@@ -62,6 +62,10 @@ test("source marks tell downloaded, your channels and new apart", async ({
   await expect(legend).toBeVisible();
   const found = page.locator(`[data-rec-key="discover001"]`);
   await expect(found.getByText("New to you.")).toBeAttached();
+  // Downloaded cards carry the solid outline.
+  await expect(
+    page.locator('[data-horde="source-outline"].border-accent').first()
+  ).toBeAttached();
 
   // Always on: no toggle, and the legend sits beside the home tabs.
   await expect(page.getByRole("button", { name: "Sources" })).toHaveCount(0);
@@ -208,6 +212,10 @@ test("suggested channels can be followed or dismissed", async ({ page }) => {
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.getByText("Northern Skies")).toBeVisible();
   await expect(shelf.getByText("Tidepool Notes")).toBeVisible();
+  // A tag or two on what each channel is about (here, the search that found it).
+  await expect(
+    shelf.getByRole("list", { name: "What Tidepool Notes is about" })
+  ).toHaveText("rock pools");
   // It follows whole rows of cards: none of the rows above it is cut short.
   const above = await page.evaluate(() => {
     const grid = document.querySelector("[data-rec-key]")?.parentElement;

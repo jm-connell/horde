@@ -1088,12 +1088,26 @@ def test_channel_suggestion_says_what_the_channel_is_like():
     stat.items = [cand(1, 1000, 600), cand(2, 3000, 900), cand(3, None, 1200)]
     stat.scores = [0.9, 0.8, 0.7]
     stat.seeds = {"Aurora over the fjord"}
+    stat.queries.update(
+        {"night sky photography tips": 2, "northern lights": 1, "Night Sky": 1}
+    )
     feed = Feed(items=[], new_channels={stat.url: stat}, cold=False)
 
     [pick] = suggestions(feed, Exclusions())
     assert pick.typical_views == 2000
     assert pick.typical_minutes == 15
     assert pick.reason == "Like Aurora over the fjord"
+    # What it is about: the searches that found it, most first, cut short.
+    assert pick.tags == ["night sky photography", "northern lights"]
+
+    # AI categories come first, by how many of its picks are in each.
+    categories = {
+        "Astronomy": {"sky00000001", "sky00000002"},
+        "Travel": {"sky00000003"},
+        "Cooking": {"elsewhere01"},
+    }
+    [pick] = suggestions(feed, Exclusions(), categories)
+    assert pick.tags == ["Astronomy", "Travel"]
 
 
 def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
