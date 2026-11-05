@@ -85,7 +85,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "library",
     access: "manage_ask",
     keywords:
-      "ask ask channels captions transcripts knowledge index channel live streams",
+      "ask channels ask can answer from channel indexing captions transcripts knowledge index live streams",
   },
   {
     tab: "library",

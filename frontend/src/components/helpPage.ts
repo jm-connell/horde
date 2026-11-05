@@ -13,7 +13,7 @@ const PAGES: [prefix: string, label: string][] = [
 const MAX_PATH = 100;
 
 /**
- * One line telling Ask about Horde where the user is, e.g.
+ * One line telling Ask where the user is, e.g.
  * `Settings, AI tab (/settings)`. Sent with each question so "this
  * page" and vague questions have something to go on. At most 200
  * characters, well under the server's 300.

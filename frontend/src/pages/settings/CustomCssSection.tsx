@@ -50,10 +50,10 @@ export default function CustomCssSection() {
             className="text-accent underline underline-offset-2"
             onClick={() => helpChat.setOpen(true)}
           >
-            Ask about Horde
+            Ask
           </button>
         ) : (
-          "Ask about Horde"
+          "Ask"
         )}{" "}
         writes it for you: describe the change, preview it on the page, then
         keep or revert it. If a stylesheet ever hides the page, open Horde in a

@@ -36,7 +36,7 @@ export default function AppFooter() {
           onClick={() => help.setOpen(!help.open)}
           className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 font-medium text-gray-200 hover:border-accent hover:text-accent"
         >
-          Ask about Horde
+          Ask
         </button>
       )}
       <a href="/wiki/" target="_blank" rel="noreferrer" className={LINK}>

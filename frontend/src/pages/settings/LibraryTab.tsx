@@ -43,6 +43,8 @@ const YOUTUBE_HISTORY_TERMS = [
 
 const ASK_CHANNEL_TERMS = [
   "ask",
+  "channels ask can answer from",
+  "channel indexing",
   "ask channels",
   "captions",
   "transcripts",
@@ -52,7 +54,7 @@ const ASK_CHANNEL_TERMS = [
 ];
 
 const HELP_DATA_TERMS = [
-  "use my data",
+  "ask: use my data",
   "ask about horde",
   "assistant",
   "chat",
@@ -326,8 +328,8 @@ export default function LibraryTab() {
 
       <Section
         anchor="help-data"
-        title="Ask about Horde: use my data"
-        description="Let Ask about Horde answer about your own downloads, library, watch history and playlists. Only questions about your own things send any, and only what the question needs."
+        title="Ask: use my data"
+        description="Let Ask answer about your own downloads, library, watch history and playlists. Only questions about your own things send any, and only what the question needs."
         hidden={!helpChat.available || !match(...HELP_DATA_TERMS)}
       >
         <HelpDataSection />
@@ -669,8 +671,8 @@ export default function LibraryTab() {
 
       <Section
         anchor="ask-channels"
-        title="Ask channels"
-        description="Horde indexes what these channels say in their videos. Everyone can search it from the search bar, and ask about it in the chat by naming a channel."
+        title="Channels Ask can answer from"
+        description="Horde indexes what these channels say in their videos. Everyone can search it from the search bar, and Ask answers from a channel when a question names it or it is picked as the source."
         hidden={!can("manage_ask") || !match(...ASK_CHANNEL_TERMS)}
       >
         <AskChannelsSection />

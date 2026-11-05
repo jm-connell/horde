@@ -8,7 +8,7 @@ import { markdownHref, parseBlocks } from "./aiMarkdownParse";
  * Raw HTML is never interpreted.
  */
 
-/** Hooks for a chat that renders more than plain markdown (Ask about Horde). */
+/** Hooks for a chat that renders more than plain markdown (Ask). */
 export interface InlineRenderers {
   /** A `[[kind:...]]` token; without this the token shows as typed. */
   token?: (raw: string, key: string) => ReactNode;

@@ -6,7 +6,7 @@ import type {
 } from "../types";
 
 /**
- * The `[[kind:...]]` tokens Ask about Horde writes (the server's prompt lists
+ * The `[[kind:...]]` tokens Ask writes (the server's prompt lists
  * them, `services/ai/help_chat.py`). Links render where they stand; actions
  * become cards under the reply and do nothing until the user presses them.
  */

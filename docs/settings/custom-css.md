@@ -34,7 +34,7 @@ Cap: **64 000** characters. `</style` sequences are neutralized so the payload
 
 ## Let the assistant write it
 
-Not a CSS person? Describe the change to [Ask about Horde](../guides/ai-features.md#custom-css) ("rounder video cards", "hide the channel sidebar"). It writes CSS against the variables and hooks below, and **Preview** puts it on the page for 20 seconds: **Keep** adds it to your stylesheet, **Revert**, **Escape** or waiting removes it. Larger models write much better CSS; see [which model it uses](../guides/ai-features.md#which-model-it-uses).
+Not a CSS person? Describe the change to [Ask](../guides/ai-features.md#custom-css) ("rounder video cards", "hide the channel sidebar"). It writes CSS against the variables and hooks below, and **Preview** puts it on the page for 20 seconds: **Keep** adds it to your stylesheet, **Revert**, **Escape** or waiting removes it. Larger models write much better CSS; see [which model it uses](../guides/ai-features.md#which-model-it-uses).
 
 ## CSS variables
 

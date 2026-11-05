@@ -27,7 +27,7 @@ All notable changes to Horde are documented here. The format follows
   household, phone and AI, each a link away.
 - The setup wizard asks which devices people watch on and picks the
   playback mode from that, and remembers its step across a reload.
-- **Ask about Horde without AI** answers with the matching documentation
+- **Ask without AI** answers with the matching documentation
   pages and settings instead of an error.
 - Issue forms, a security policy, and a footer bug link with your version
   filled in. New docs: other platforms (Portainer, Synology, Unraid,
@@ -45,6 +45,13 @@ All notable changes to Horde are documented here. The format follows
 - A download that cannot reach the site says so ("Can't reach site") instead
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
+- **One Ask.** Ask about Horde and asking channels are one feature, **Ask**
+  (the footer button and the phone tab, which was Chat). The source shows
+  beside the title, "Ask Automatic", "Ask Horde" or "Ask <channel>"; press
+  it to pick another. Picking Horde keeps answers on Horde even when a
+  question names a channel. Settings → Library → Ask channels is now
+  **Channels Ask can answer from**, and the permission **Manage channel
+  indexing**. The button that docks the chat at the side is an expand arrow.
 
 ### Fixed
 

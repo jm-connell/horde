@@ -288,7 +288,7 @@ def chat(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """One chat turn (SSE): Ask channels when the question names one, else Ask about Horde."""
+    """One Ask turn (SSE): from channels when the question names one, else from Horde."""
     if payload.thread_id is not None:
         threads.owned_or_404(session, payload.thread_id, user.id)
     return StreamingResponse(
@@ -302,6 +302,7 @@ def chat(
             authorized=StreamAuthGuard.of(request).still_valid,
             page_channel_id=payload.page_channel_id,
             page_video_id=payload.page_video_id,
+            horde_only=payload.horde_only,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

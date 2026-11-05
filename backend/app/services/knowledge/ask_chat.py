@@ -1,9 +1,10 @@
-"""One chat for Ask about Horde and Ask channels, saved per user.
+"""Ask: one chat that answers from Horde or from channels, saved per user.
 
 Each turn picks its source (``routing``): channels the question names, else the
 channels the client says the chat is about (opened on a channel page, or the
-previous answer's channels), else Ask about Horde. Both kinds are saved in the
-user's thread (``threads``), so the chat panel has one history.
+previous answer's channels), else Horde (``help_chat``). When the user picked
+Horde as the source (``horde_only``), it is Horde whatever the question names.
+Both kinds are saved in the user's thread (``threads``), so Ask has one history.
 
 A channel turn retrieves numbered excerpts (``retrieval``), streams the answer
 through ``ai.chat.run_chat_turn`` with a prompt that requires ``[n]`` citations,
@@ -363,6 +364,7 @@ def stream_ask_events(
     authorized: ai_chat.Authorized | None = None,
     page_channel_id: int | None = None,
     page_video_id: str | None = None,
+    horde_only: bool = False,
 ) -> Generator[str]:
     """SSE events for one turn (the route has checked ``thread_id`` belongs to ``user``).
 
@@ -381,6 +383,7 @@ def stream_ask_events(
             authorized=authorized,
             page_channel_id=page_channel_id,
             page_video_id=page_video_id,
+            horde_only=horde_only,
         ):
             if started is None and thread_id is None and _event_type(event) == "thread":
                 started = json.loads(event.removeprefix("data: "))["id"]
@@ -401,9 +404,14 @@ def _turn_events(
     authorized: ai_chat.Authorized | None,
     page_channel_id: int | None,
     page_video_id: str | None,
+    horde_only: bool,
 ) -> Generator[str]:
     with Session(get_engine()) as session:
-        channels = pick_scope(session, message, channel_ids, page_channel_id)
+        channels = (
+            []
+            if horde_only
+            else pick_scope(session, message, channel_ids, page_channel_id)
+        )
         if thread_id is None:
             thread_id = require_id(threads.start(session, user.id, message))
         thread = threads.owned_or_404(session, thread_id, user.id)

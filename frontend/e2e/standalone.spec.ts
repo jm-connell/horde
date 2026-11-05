@@ -164,14 +164,14 @@ test("the installed app on a phone has a floating tab bar", async ({
 }) => {
   await launch(page, "/");
   const tabs = page.getByRole("navigation", { name: "Tabs" });
-  // Home, Search, Download and Chat by default; only the current tab shows
+  // Home, Search, Download and Ask by default; only the current tab shows
   // its label, but every tab keeps it as its name (the Download badge adds a
   // count to its text).
   await expect(tabs.locator("a, button")).toHaveText([
     /Home/,
     /Search/,
     /Download/,
-    /Chat/,
+    /Ask/,
   ]);
   await expect(tabs.getByRole("link", { name: "Home" })).toHaveAttribute(
     "aria-current",
@@ -209,7 +209,7 @@ test("the installed app on a phone has a floating tab bar", async ({
   expect(island!.y + island!.height).toBeLessThan(844);
 });
 
-test("the Search tab opens the search box and Chat opens Ask about Horde", async ({
+test("the Search tab opens the search box and Ask opens the chat", async ({
   page,
 }) => {
   await launch(page, "/history");
@@ -221,26 +221,24 @@ test("the Search tab opens the search box and Chat opens Ask about Horde", async
   ).toBeFocused();
   await page.getByRole("button", { name: "Close search" }).click();
 
-  await tabs.getByRole("button", { name: "Chat" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await tabs.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await expect(panel).toBeVisible();
   // Its question box takes focus, so the island steps aside for the keyboard
   // and the panel drops to the bottom of the screen.
   await expect(tabs).toHaveClass(/translate-y-full/);
-  // Once the keyboard is closed the panel sits above the island, so Chat is
+  // Once the keyboard is closed the panel sits above the island, so Ask is
   // there to close it.
   await page.evaluate(() => (document.activeElement as HTMLElement).blur());
   await expect(tabs).not.toHaveClass(/translate-y-full/);
   const panelBox = await panel.boundingBox();
   const island = await tabs.locator(".ui-panel").boundingBox();
   expect(panelBox!.y + panelBox!.height).toBeLessThanOrEqual(island!.y);
-  await tabs.getByRole("button", { name: "Chat" }).click();
+  await tabs.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(panel).toHaveCount(0);
 });
 
-test("a tap in Ask about Horde while typing lands where it was aimed", async ({
-  page,
-}) => {
+test("a tap in Ask while typing lands where it was aimed", async ({ page }) => {
   const answer = "Here is how.";
   // An AI answer: the e2e server has no provider, so say there is one.
   await page.route(/\/api\/ai\/help\/info$/, (route) =>
@@ -271,8 +269,8 @@ test("a tap in Ask about Horde while typing lands where it was aimed", async ({
   );
   await launch(page, "/");
   const tabs = page.getByRole("navigation", { name: "Tabs" });
-  await tabs.getByRole("button", { name: "Chat" }).click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  await tabs.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await panel.getByRole("textbox", { name: "Your question" }).fill("how?");
   // The tap takes focus from the question box. The island must not come
   // back (lifting the panel) under the finger before the tap is done.
@@ -283,7 +281,7 @@ test("a tap in Ask about Horde while typing lands where it was aimed", async ({
 test("Settings chooses the tabs and their order", async ({ page }) => {
   await launch(page, "/settings?tab=appearance");
   const shown = page.getByRole("list", { name: "Tabs shown" });
-  await shown.getByRole("button", { name: "Remove Chat" }).click();
+  await shown.getByRole("button", { name: "Remove Ask" }).click();
   await page.getByRole("button", { name: "Add History" }).click();
   const earlier = shown.getByRole("button", { name: "Move History earlier" });
   await earlier.click();
@@ -312,7 +310,7 @@ test("Settings chooses the tabs and their order", async ({ page }) => {
     /Home/,
     /Search/,
     /Download/,
-    /Chat/,
+    /Ask/,
   ]);
 });
 
@@ -360,16 +358,14 @@ async function showKeyboard(page: Page) {
   );
 }
 
-test("Ask about Horde stays above the keyboard, header and all", async ({
-  page,
-}) => {
+test("Ask stays above the keyboard, header and all", async ({ page }) => {
   await launch(page, "/");
   await fakeKeyboard(page, 200, 420);
   await page
     .getByRole("navigation", { name: "Tabs" })
-    .getByRole("button", { name: "Chat" })
+    .getByRole("button", { name: "Ask", exact: true })
     .click();
-  const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
   await expect(panel).toBeVisible();
   await showKeyboard(page);
   await expect

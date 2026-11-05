@@ -84,8 +84,9 @@ export const askApi = {
   },
 
   /**
-   * One chat turn (SSE): Ask channels when the question names one or
-   * `channelIds` says which, Ask about Horde otherwise. The server saves the
+   * One Ask turn (SSE): from channels when the question names one or
+   * `channelIds` says which, from Horde otherwise (always with `hordeOnly`).
+   * The server saves the
    * turn in `threadId` (a new conversation when null; see the `thread` event).
    */
   streamAsk(
@@ -96,6 +97,8 @@ export const askApi = {
       /** The page's Ask channel and watched video (see `useAskPageChannel`). */
       pageChannelId?: number | null;
       pageVideoId?: string | null;
+      /** The user picked Horde as the source: no channel answers. */
+      hordeOnly?: boolean;
       page: string;
       dataConsent: HelpDataConsent;
     },
@@ -109,6 +112,7 @@ export const askApi = {
         channel_ids: params.channelIds,
         page_channel_id: params.pageChannelId ?? null,
         page_video_id: params.pageVideoId ?? null,
+        horde_only: params.hordeOnly ?? false,
         page: params.page,
         data_consent: params.dataConsent,
       },

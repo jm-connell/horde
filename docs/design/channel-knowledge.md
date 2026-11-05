@@ -2,7 +2,7 @@
 
 Status: **Built** ([ADR 0022](../adr/0022-ask-channel-knowledge.md)). User guide: [Ask](../guides/ask.md).
 
-Ask indexes what YouTube channels say in their videos (captions only), lets anyone search it, and answers questions about it in the chat panel with a numbered reference to the moment for every point. Code: `backend/app/services/knowledge/`, `backend/app/api/ask.py`, the **Ask channels** section of Settings → Library (`frontend/src/pages/settings/AskChannelsSection.tsx`, `frontend/src/pages/ask/`), the **Said in videos** section of home search results (`frontend/src/pages/library/SaidInVideos.tsx`), the chat panel (`components/HelpChatPanel.tsx`).
+Ask indexes what YouTube channels say in their videos (captions only), lets anyone search it, and answers questions about it in the chat panel with a numbered reference to the moment for every point. Code: `backend/app/services/knowledge/`, `backend/app/api/ask.py`, the **Channels Ask can answer from** section of Settings → Library (`frontend/src/pages/settings/AskChannelsSection.tsx`, `frontend/src/pages/ask/`), the **Said in videos** section of home search results (`frontend/src/pages/library/SaidInVideos.tsx`), the Ask panel (`components/HelpChatPanel.tsx`, with its source picker `components/AskSourcePicker.tsx`).
 
 ## Data (revision `0022_ask_knowledge`)
 
@@ -13,7 +13,7 @@ Ask indexes what YouTube channels say in their videos (captions only), lets anyo
 | `kb_chunks` | Passages: `start_sec`, `end_sec`, `text`; `chunk_index` -1 is the title and description. `kb_channel_id` is denormalised for filtering |
 | `kb_chunks_fts` | FTS5, external content on `kb_chunks.text`; triggers `trg_kb_chunks_fts_insert` / `_update` (`AFTER UPDATE OF text`) / `_delete` use the external-content `'delete'` form |
 | `kb_chunk_vectors` | `chunk_id` → float16 vector |
-| `ask_threads`, `ask_messages` | Each user's saved chat (Ask channels and Ask about Horde), with each answer's references or doc sources as JSON |
+| `ask_threads`, `ask_messages` | Each user's saved Ask conversations (answers from channels and from Horde), with each answer's references or doc sources as JSON |
 
 `ai_jobs.kb_channel_id` serves the `embed_kb_channel` job. Nothing references the channel catalog: it trims beyond its cap, merges duplicates by deleting rows, and can be switched off. Progress counts are `COUNT` queries, never stored. Factory reset (erase media) deletes these tables.
 
@@ -36,8 +36,8 @@ Removing a channel deletes its passages in batches of 500 (the FTS triggers fire
 
 `POST /api/ask/chat` (`knowledge/ask_chat.py`) streams one turn:
 
-1. **Source** (`knowledge/routing.py`): "all my channels" → every channel with passages; channels the question names (name or handle, with or without "the", spaces or an `'s`) → those; else the `channel_ids` the client sends (opened with "Ask <channel>", or the previous answer's channels) → those; else the `page_channel_id` (the channel page, or the channel of the video being watched) unless `routing.about_horde` matches (Horde, settings, downloads, playlists and similar) → that channel, with the watched video's (`page_video_id`) matching passages ranked first; else Ask about Horde. Events `thread` and `scope` say which.
-2. **Ask about Horde** runs `help_chat.stream_help_events` with the saved history and a store that writes both turns to the thread.
+1. **Source** (`knowledge/routing.py`): `horde_only` (the user picked **Horde** beside Ask's title) → Horde, whatever the question names; else "all my channels" → every channel with passages; channels the question names (name or handle, with or without "the", spaces or an `'s`) → those; else the `channel_ids` the client sends (opened with "Ask <channel>", or the previous answer's channels) → those; else the `page_channel_id` (the channel page, or the channel of the video being watched) unless `routing.about_horde` matches (Horde, settings, downloads, playlists and similar) → that channel, with the watched video's (`page_video_id`) matching passages ranked first; else Horde. Events `thread` and `scope` say which, and the source beside the panel's title follows `scope`.
+2. **Horde** runs `help_chat.stream_help_events` with the saved history and a store that writes both turns to the thread.
 3. **Channels**: check the AI is allowed and the Assistant model present before any cost; keep the channels with the most matching passages when there are more than the model compares (two for small, four otherwise); expand the question with one JSON call (spellings captions use, generations, part names; skipped for small models); for each channel fuse keyword and vector rankings (reciprocal rank fusion, k = 60) and pick the best videos' best non-overlapping passages within a fair share of the budget (6,000 / 12,000 / 20,000 characters by model tier); number the excerpts in date order, without times. Nothing found → a fixed answer, no model call.
 4. The model (`SYSTEM_PROMPT`) cites `[n]` only and never writes times; several channels → where they agree and disagree; changed views → with years. Its answer is resolved before it is saved (`knowledge/references.py`): numbers it was not given are dropped, the rest renumbered in order of first use, each resolved to the caption line its sentence matches (an excerpt cited for two different moments becomes two references). A `references` event precedes `done`; the expansion call's cost is added to the turn's.
 

@@ -24,7 +24,7 @@ share a video link straight to Horde's Download page; see
 The installed app behaves more like a native app than a browser tab:
 
 - On a phone, a floating bar at the bottom of the screen holds Home, Search,
-  Download and Chat (Ask about Horde). Tap the current tab to jump back to
+  Download and Ask. Tap the current tab to jump back to
   the top. Choose the tabs and their order in **Settings → Appearance → Tab
   bar**; everything else is still in the menu at the top right.
 - On iPhone and iPad, swipe right from the left edge of the screen to go

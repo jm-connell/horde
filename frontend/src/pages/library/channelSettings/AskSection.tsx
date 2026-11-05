@@ -21,11 +21,11 @@ export default function AskSection({
     <SettingsSection
       id="ask"
       title="Ask"
-      description="Index what this channel says in its videos, so the search bar finds it and you can ask questions about it."
+      description="Index what this channel says in its videos, so the search bar finds it and Ask can answer from it."
       readOnlyNote={
         found || manage
           ? null
-          : "Turning Ask on needs the Manage Ask channels permission."
+          : "Turning Ask on needs the Manage channel indexing permission."
       }
     >
       {found ? (

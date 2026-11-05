@@ -39,10 +39,10 @@ const BAR_RETURN_MS = 300;
 
 /**
  * Phone tab bar for the installed app: a floating island at the bottom of the
- * screen with the tabs chosen in Settings (Home, Search, Download and Chat by
+ * screen with the tabs chosen in Settings (Home, Search, Download and Ask by
  * default), as in a native app. A browser tab keeps the header menu only.
  * Tapping the current tab scrolls back to the top; Search opens the header's
- * search box and Chat the Ask about Horde panel; the island slides away while
+ * search box and Ask its chat panel; the island slides away while
  * the keyboard is up. It follows the panel transparency settings (not
  * the legibility boost: it holds icons, not text to read).
  */
@@ -92,7 +92,7 @@ export default function BottomTabBar() {
       }
       // Come back a moment later, not mid-tap: the bar lifts everything
       // fixed above it, so a tap that takes focus from a text box (Send in
-      // Ask about Horde) would end on whatever moved under the finger.
+      // Ask) would end on whatever moved under the finger.
       comeBack = window.setTimeout(
         () => setTyping(opensKeyboard(document.activeElement)),
         BAR_RETURN_MS
@@ -123,7 +123,7 @@ export default function BottomTabBar() {
 
   if (!shown) return null;
 
-  // Chat opens over the page, so while it is open it is the current tab.
+  // Ask opens over the page, so while it is open it is the current tab.
   const chatOpen = help.available && help.open;
   const onHome = location.pathname === "/";
   const searching = onHome && search.trim() !== "";
@@ -199,7 +199,7 @@ export default function BottomTabBar() {
   };
 
   // Tabs this account can use here and now: pages from the nav (permissions,
-  // offline mode), Chat when this account may use AI.
+  // offline mode), Ask when this account may use AI.
   const available = (item: TabBarItem) => {
     if (item === "home" || item === "search") return true;
     if (item === "chat") return help.available;

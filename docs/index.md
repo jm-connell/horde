@@ -58,7 +58,7 @@ Horde is a good fit when you want to **keep** videos: channels you follow, talks
 
 ## Getting help
 
-- **Ask about Horde**, at the bottom of every page, answers from this documentation (with AI it writes the answer; without, it shows the matching pages).
+- **Ask**, at the bottom of every page, answers from this documentation (with AI it writes the answer; without, it shows the matching pages).
 - [Troubleshooting](ops/troubleshooting.md) and the [FAQ](reference/faq.md) cover the common problems.
 - Bugs and ideas: **Report a bug or idea** in Horde's footer opens a [GitHub issue](https://github.com/jm-connell/horde/issues) with your version filled in. Security problems: [report them privately](https://github.com/jm-connell/horde/security/advisories/new).
 

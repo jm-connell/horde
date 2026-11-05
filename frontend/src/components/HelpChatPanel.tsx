@@ -22,9 +22,13 @@ import {
   HelpActionCards,
   HelpTokenLink,
 } from "./HelpChatActions";
+import AskSourcePicker, { type AskSource } from "./AskSourcePicker";
 import {
   ASK_CHAT_STORAGE_KEY,
+  type AskChatState,
   type AskReference,
+  type AskScopeChannel,
+  type AskSourceState,
   HELP_CHAT_STORAGE_KEY,
   type HelpMessage,
   isAskState,
@@ -42,7 +46,6 @@ import {
   WHAT_CAN_YOU_DO,
 } from "./helpPrompts";
 import { cssBlocks, splitActions } from "./helpTokens";
-import { CloseIcon } from "./icons";
 import { PanelHeader } from "./SidePanelFrame";
 import { usePanelFrame } from "./sidePanelContext";
 import TypingDots from "./TypingDots";
@@ -60,6 +63,16 @@ function offSiteHost(href: string): string | null {
 /** Paths the app's router serves (the wiki and the API are not among them). */
 function isAppPath(href: string): boolean {
   return /^\/(?![/\\])/.test(href) && !/^\/(wiki|api)(\/|$)/.test(href);
+}
+
+/** Nothing picked: each question goes to Horde or a channel, by what it asks. */
+const AUTO: AskSourceState = { scope: [], horde: false };
+
+/** Who an answer is from: the channels it quotes, else Horde. */
+function answeredFrom(m: HelpMessage): string {
+  if (!m.references) return "Horde";
+  const names = (m.channels ?? []).map((c) => c.name).filter(Boolean);
+  return names.length ? names.join(", ") : "Channels";
 }
 
 function isWhatCanYouDo(text: string): boolean {
@@ -157,11 +170,13 @@ function AssistantReply({
 }
 
 /**
- * Ask about Horde: a chat in the corner that answers from this server's docs
- * and source. It floats over every page (drag it by its header, resize it
- * from the top-left corner) and tells the server which page the user is on.
- * The conversation lives in this tab (sessionStorage) and is sent with each
- * question.
+ * Ask: a chat in the corner that answers from Horde (this server's docs and
+ * source, its settings, the user's library) or from channels Ask indexes; the
+ * source shows beside the title ("Ask Northwind"), where the user can pick
+ * another. It
+ * floats over every page (drag it by its header, resize it from the top-left
+ * corner) and tells the server which page the user is on. The conversation
+ * lives in this tab (sessionStorage) and on the server.
  */
 export default function HelpChatPanel({
   pageDetail,
@@ -183,21 +198,19 @@ export default function HelpChatPanel({
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     opening ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
-  // The saved conversation this tab shows, and the channels it is about.
-  const [ask, setAsk] = useState(() =>
-    opening
-      ? { threadId: null, scope: [opening.channel] }
-      : getJson(
-          ASK_CHAT_STORAGE_KEY,
-          isAskState,
-          { threadId: null, scope: [] },
-          "session"
-        )
-  );
-  /** The channel "New chat" starts on: the one the panel was opened for, until the chip is removed. */
-  const [openerScope, setOpenerScope] = useState(() =>
-    opening ? [opening.channel] : []
-  );
+  // The saved conversation this tab shows, where it is answered from, and
+  // the source last picked (kept with it, so a reopened panel has it too).
+  const [ask, setAsk] = useState<AskChatState>(() => {
+    if (!opening)
+      return getJson(
+        ASK_CHAT_STORAGE_KEY,
+        isAskState,
+        { threadId: null, scope: [] },
+        "session"
+      );
+    const source = { scope: [opening.channel], horde: false };
+    return { threadId: null, ...source, picked: source };
+  });
   const [showHistory, setShowHistory] = useState(false);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -253,8 +266,8 @@ export default function HelpChatPanel({
     setMessages([]);
     setError(null);
     setShowHistory(false);
-    setAsk({ threadId: null, scope: [req.channel] });
-    setOpenerScope([req.channel]);
+    const source = { scope: [req.channel], horde: false };
+    setAsk({ threadId: null, ...source, picked: source });
     inputRef.current?.focus();
   }, [channelRequest, pendingChannelRequest, consumeChannelRequest, opening]);
 
@@ -322,6 +335,7 @@ export default function HelpChatPanel({
         channelIds: ask.scope.map((c) => c.id),
         pageChannelId: pageAsk?.id ?? null,
         pageVideoId: pageAsk ? (pageChannel?.videoId ?? null) : null,
+        hordeOnly: !!ask.horde,
         page: currentPage(),
         dataConsent: consent,
       };
@@ -333,10 +347,11 @@ export default function HelpChatPanel({
             setAsk((a) => ({ ...a, threadId }));
           } else if (event.type === "scope") {
             const scope = parseScopeChannels(event.channels);
-            setAsk((a) => ({ ...a, scope }));
+            setAsk((a) => ({ ...a, scope, horde: !scope.length && a.horde }));
             // A channel answer: the model's own numbers stay hidden until the
             // renumbered answer and its references arrive.
-            if (scope.length) update((m) => ({ ...m, references: [] }));
+            if (scope.length)
+              update((m) => ({ ...m, references: [], channels: scope }));
           } else if (
             event.type === "status" &&
             typeof event.text === "string"
@@ -414,13 +429,17 @@ export default function HelpChatPanel({
     }
   }
 
-  /** A new conversation; one opened from a channel page stays about that channel. */
+  /** A new conversation, on the source picked (or the channel page's). */
   function clear() {
     if (sending) return;
     setMessages([]);
     setError(null);
     setShowHistory(false);
-    setAsk({ threadId: null, scope: openerScope });
+    setAsk((a) => ({
+      threadId: null,
+      ...(a.picked ?? AUTO),
+      picked: a.picked,
+    }));
     removeItem(HELP_CHAT_STORAGE_KEY, "session");
     inputRef.current?.focus();
   }
@@ -438,12 +457,15 @@ export default function HelpChatPanel({
           ...savedSources(m.sources),
         }))
       );
-      setAsk({
+      const scope = parseScopeChannels(
+        (thread.scope as { channels?: unknown }).channels
+      );
+      setAsk((a) => ({
+        ...a,
         threadId: thread.id,
-        scope: parseScopeChannels(
-          (thread.scope as { channels?: unknown }).channels
-        ),
-      });
+        scope,
+        horde: !scope.length && a.horde,
+      }));
       setShowHistory(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not open it");
@@ -482,25 +504,45 @@ export default function HelpChatPanel({
       : null;
   const pageAsk = pageFound && pageFound.passages > 0 ? pageFound : null;
   const pageName = pageAsk?.channel_name || null;
-  const channelNames = ask.scope
+  // Channel answers need AI; without it every answer is a docs search.
+  const scoped = noAi ? [] : ask.scope;
+  const channelNames = scoped
     .map((c) => c.name)
     .filter(Boolean)
     .join(", ");
-  // The channels a question can name, so nobody has to guess.
-  const askable = (askChannels ?? [])
+  // The channels Ask can answer from, for the source menu.
+  const askable: AskScopeChannel[] = (askChannels ?? [])
     .filter((c) => c.passages > 0)
-    .map((c) => c.channel_name || c.channel_url);
-  const askNames =
-    askable.length > 6
-      ? `${askable.slice(0, 6).join(", ")} and ${askable.length - 6} more`
-      : askable.join(", ");
-  const placeholder = ask.scope.length
+    .map((c) => ({ id: c.id, name: c.channel_name || c.channel_url }));
+  const showSource = !noAi && (askable.length > 0 || ask.scope.length > 0);
+  const auto = !ask.horde && !scoped.length;
+  // Nothing picked on a channel's page: its videos' questions go to it.
+  const pageAuto = !noAi && auto ? pageName : null;
+  const sourceLabel = scoped.length
+    ? channelNames || "a channel"
+    : ask.horde
+      ? "Horde"
+      : pageAuto
+        ? `${pageAuto} or Horde`
+        : "Automatic";
+  const placeholder = scoped.length
     ? `Ask ${channelNames || "this channel"}…`
-    : pageName
-      ? `Ask ${pageName}, or about Horde…`
-      : askChannels?.length
-        ? "Ask about Horde, or name a channel…"
-        : "Ask about Horde…";
+    : pageAuto
+      ? `Ask ${pageAuto} or Horde…`
+      : showSource && auto
+        ? "Ask how to use Horde, or name a channel…"
+        : "Ask how to use Horde…";
+
+  function pickSource(source: AskSource) {
+    const next =
+      source === "auto"
+        ? AUTO
+        : source === "horde"
+          ? { scope: [], horde: true }
+          : { scope: [source], horde: false };
+    setAsk((a) => ({ ...a, ...next, picked: next }));
+    inputRef.current?.focus();
+  }
 
   // On a phone the panel covers the page: get out of the way of a link.
   const onNavigate = () => {
@@ -554,7 +596,31 @@ export default function HelpChatPanel({
   return (
     <>
       <PanelHeader
-        title={ask.scope.length ? `Ask ${channelNames}` : "Ask about Horde"}
+        title="Ask"
+        addon={
+          showSource && (
+            <AskSourcePicker
+              label={sourceLabel}
+              autoDetail={
+                pageName
+                  ? `${pageName} for its videos, Horde for the rest`
+                  : "Horde, or the channel a question names"
+              }
+              channels={askable}
+              selected={
+                ask.scope.length === 1
+                  ? ask.scope[0].id
+                  : ask.scope.length
+                    ? null
+                    : ask.horde
+                      ? "horde"
+                      : "auto"
+              }
+              disabled={sending}
+              onPick={pickSource}
+            />
+          )
+        }
         actions={
           <>
             <button
@@ -622,7 +688,7 @@ export default function HelpChatPanel({
         {!showHistory &&
           messages.length === 0 &&
           !sending &&
-          ask.scope.length > 0 && (
+          scoped.length > 0 && (
             <p className="text-sm text-gray-400">
               Ask what {channelNames || "this channel"} said about something.
               Answers come only from the indexed videos, with a numbered
@@ -632,15 +698,17 @@ export default function HelpChatPanel({
         {!showHistory &&
           messages.length === 0 &&
           !sending &&
-          ask.scope.length === 0 && (
+          scoped.length === 0 && (
             <div className="space-y-3">
               <p className="text-sm text-gray-400">
                 Ask how to use, set up or fix Horde. I can also take you to a
                 setting or change it, look at your downloads and library, make
                 playlists and restyle the app. The page you are on is sent with
                 your question.
-                {askNames
-                  ? ` Name a channel to ask what it said in its videos: ${askNames}.`
+                {showSource
+                  ? ask.horde
+                    ? " To ask what a channel said in its videos, pick it beside Ask at the top."
+                    : " To ask what a channel said in its videos, name it or pick it beside Ask at the top."
                   : ""}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -675,8 +743,11 @@ export default function HelpChatPanel({
                       : "w-fit max-w-full min-w-0 rounded-lg bg-ink-950/80 px-3 py-2 text-sm text-gray-300"
                   }
                 >
-                  <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-                    {m.role === "user" ? "You" : "Horde"}
+                  <p
+                    className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted"
+                    data-horde="ask-byline"
+                  >
+                    {m.role === "user" ? "You" : answeredFrom(m)}
                   </p>
                   {waiting ? (
                     <TypingDots
@@ -733,36 +804,6 @@ export default function HelpChatPanel({
         )}
       </div>
 
-      {ask.scope.length === 0 && pageName && (
-        <p
-          className="border-t border-ink-700 px-3 pt-2 text-xs text-muted"
-          data-horde="ask-page-channel"
-        >
-          On this page: <span className="text-gray-300">{pageName}</span>.
-          Questions about its videos go to it; questions about Horde do not.
-        </p>
-      )}
-      {ask.scope.length > 0 && (
-        <div className="flex items-center gap-2 border-t border-ink-700 px-3 pt-2 text-xs">
-          <span className="text-muted">Answering from</span>
-          <span className="truncate rounded-full bg-ink-800 px-2 py-0.5 text-gray-300">
-            {channelNames || "a channel"}
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setAsk((a) => ({ ...a, scope: [] }));
-              setOpenerScope([]);
-            }}
-            disabled={sending}
-            aria-label="Stop answering from these channels"
-            title="Ask about Horde instead"
-            className="text-muted hover:text-accent disabled:opacity-40"
-          >
-            <CloseIcon />
-          </button>
-        </div>
-      )}
       {noAi && (
         <p
           className="border-t border-ink-700 px-3 pt-2 text-xs text-muted"

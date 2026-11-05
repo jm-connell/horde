@@ -3,6 +3,8 @@ import { createContext, useContext } from "react";
 interface Slots {
   /** Where the active body puts its title (one body open) ... */
   title: HTMLElement | null;
+  /** ... a control beside the title (or the tabs) ... */
+  addon: HTMLElement | null;
   /** ... and its own header buttons. */
   actions: HTMLElement | null;
   /** Phone layout: the frame is a bottom sheet. */
@@ -11,6 +13,7 @@ interface Slots {
 
 export const SlotCtx = createContext<Slots>({
   title: null,
+  addon: null,
   actions: null,
   isMobile: false,
 });

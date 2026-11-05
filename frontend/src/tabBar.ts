@@ -26,7 +26,7 @@ export const TAB_BAR_LABELS: Record<TabBarItem, string> = {
   home: "Home",
   search: "Search",
   download: "Download",
-  chat: "Chat",
+  chat: "Ask",
   playlists: "Playlists",
   history: "History",
   offline: "Offline",

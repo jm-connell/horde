@@ -47,8 +47,8 @@ export default function MemberWelcome() {
           >
             how
           </a>
-          ). <strong className="font-medium">Ask about Horde</strong> at the
-          bottom of every page answers questions.
+          ). <strong className="font-medium">Ask</strong>, at the bottom of
+          every page, answers questions.
         </li>
       </ul>
       <button

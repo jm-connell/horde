@@ -9,13 +9,13 @@ A closer look at what Horde actually does. Each section is a product tour, not a
 
 The top bar has **Home** (the library), **Playlists**, **History**, **Download**, **Import** and **Settings**, plus a search box. The most common tasks:
 
-- **Find what a channel said**: turn on [Ask](guides/ask.md) for it (Settings → Library → Ask channels), then search from the search bar: **Said in videos** lists every moment that mentions your words.
+- **Find what a channel said**: turn on [Ask](guides/ask.md) for it (Settings → Library → Channels Ask can answer from), then search from the search bar: **Said in videos** lists every moment that mentions your words.
 - **Download a video**: open **Download** in the top bar, paste the link, pick a quality and press **Download**.
 - **Upgrade a video you have to a higher resolution** (say 1080p to 4K): open it, then **••• → Change resolution** under the player. The file is replaced; no need to delete and download again.
 - **Edit a video's title, notes or tags, normalize its volume, save it to this device or delete it**: the same **•••** menu on its watch page.
 - **Add files you already have**: **Import**, or drop them in the media folder.
 - **Change how Horde looks, downloads and plays**: **Settings → Appearance / Library / Playback**. **AI** and **System** are there for the administrator.
-- **Have Horde do it for you**: **Ask about Horde** (footer) links and changes settings, answers about your own downloads and library with **Use my data** on, offers downloads and playlists, and writes custom CSS you preview first.
+- **Have Horde do it for you**: **Ask** (footer) links and changes settings, answers about your own downloads and library with **Use my data** on, offers downloads and playlists, and writes custom CSS you preview first.
 
 ## Downloads
 

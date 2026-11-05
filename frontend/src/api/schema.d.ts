@@ -445,7 +445,7 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description One chat turn (SSE): Ask channels when the question names one, else Ask about Horde.
+         * @description One Ask turn (SSE): from channels when the question names one, else from Horde.
          */
         post: operations["chat_api_ask_chat_post"];
         delete?: never;
@@ -5312,7 +5312,7 @@ export interface components {
         };
         /**
          * AskChatRequest
-         * @description One turn of the chat panel (Ask about Horde or Ask channels).
+         * @description One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.
          */
         AskChatRequest: {
             /** Channel Ids */
@@ -5323,6 +5323,11 @@ export interface components {
              * @enum {string}
              */
             data_consent: "off" | "local" | "cloud";
+            /**
+             * Horde Only
+             * @default false
+             */
+            horde_only: boolean;
             /** Message */
             message: string;
             /** Page */

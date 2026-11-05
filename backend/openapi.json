@@ -2400,7 +2400,7 @@
         "type": "object"
       },
       "AskChatRequest": {
-        "description": "One turn of the chat panel (Ask about Horde or Ask channels).",
+        "description": "One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.",
         "properties": {
           "channel_ids": {
             "items": {
@@ -2419,6 +2419,11 @@
             ],
             "title": "Data Consent",
             "type": "string"
+          },
+          "horde_only": {
+            "default": false,
+            "title": "Horde Only",
+            "type": "boolean"
           },
           "message": {
             "maxLength": 4000,
@@ -16239,7 +16244,7 @@
     },
     "/api/ask/chat": {
       "post": {
-        "description": "One chat turn (SSE): Ask channels when the question names one, else Ask about Horde.",
+        "description": "One Ask turn (SSE): from channels when the question names one, else from Horde.",
         "operationId": "chat_api_ask_chat_post",
         "requestBody": {
           "content": {

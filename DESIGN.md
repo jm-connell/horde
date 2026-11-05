@@ -209,7 +209,7 @@ screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 
 Theater mode widens the player to the viewport; the mini player docks bottom
 right and the play queue docks beside it. A quiet footer (centred
-`text-muted` links, one secondary-style "Ask about Horde" button) closes every
+`text-muted` links, one secondary-style "Ask" button) closes every
 page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
@@ -226,7 +226,7 @@ Tab bar, `src/tabBar.ts`, at most 5). It slides down out of the way while
 the on-screen keyboard is up. Its height (with the home-indicator inset) is `--horde-bottom-bar` on
 `<html>` (0 while it is away for the keyboard); anything fixed to the bottom
 of the screen (mini player, queue dock, toasts, floating panels, the phone
-Ask about Horde panel) adds it to its bottom offset. Bottom sheets and the
+Ask panel) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.
 
 ## Elevation & Depth
@@ -311,12 +311,13 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   `ThemedSelect` for custom option lists.
 - **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
   150ms; dialogs centre. Both trap focus and close on Escape.
-- **Floating panels.** The Ask about Horde chat is a non-modal floating
+- **Floating panels.** The Ask chat is a non-modal floating
   panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
   corner like the mini player, and becomes a bottom sheet on phones. On
-  desktop its header button docks it: a full-height column on the right
+  desktop its header's expand button (⤢, ⤡ to float it again) docks it: a
+  full-height column on the right
   (`ink-900`, `border-l ink-700`, no radius or shadow) from the bottom of the
   full-width nav to the bottom of the window, about 30% of the width
   (360–520 px) until its left edge is dragged (a focusable separator, accent
@@ -334,6 +335,18 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
+  Beside the title sits the source, so the header reads "Ask Automatic",
+  "Ask Horde" or "Ask Northwind": accent `text-sm` semibold text with a
+  chevron, `rounded-md` with an `ink-800` hover ("<channel> or Horde" on a
+  channel's page; it truncates first). When the panel has tabs it sits
+  right after the Ask tab, then an `ink-700` hairline and the other tab
+  ("Ask Horde ▾ | Algorithm"); the tabs keep their width. It opens a `MenuFlyout` dropping across the panel under
+  the header (inside the panel rather than floating: the panel's
+  translucency would need a portal, and a phone keyboard moves the panel):
+  `menuitemradio` rows for Automatic and Horde, each with a one-line
+  description, then the channels under an uppercase "Channels" label, the
+  picked one in accent with a check. Each reply's small uppercase byline
+  names its source the same way.
   The Recommended **Algorithm** panel uses the same frame (it shows only
   while that feed is on screen). With both open there is still one frame: its
   header turns into tabs (`ink-800` fill on the selected one, `text-muted`
