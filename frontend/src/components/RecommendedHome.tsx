@@ -6,6 +6,8 @@ import { useAuth } from "../context/AuthContext";
 import { useDownloads } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
+import CategoryChips from "./CategoryChips";
+import { chipClass } from "./chipClass";
 import ChannelFeedCard from "./ChannelFeedCard";
 import RecMenu from "./discover/RecMenu";
 import { useHideLive } from "./discover/useHideLive";
@@ -17,7 +19,6 @@ import type {
   RecommendationsResponse,
   Video,
 } from "../types";
-import { ChevronIcon } from "./icons";
 
 const PAGE_SIZE = 24;
 
@@ -103,42 +104,12 @@ export default function RecommendedHome({
   const [loadingMore, setLoadingMore] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const chipScrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-
-  const chipClass = (selected: boolean) =>
-    `ui-panel ui-interactive shrink-0 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-      selected
-        ? "border-accent bg-accent/10 text-accent"
-        : "border-ink-700 bg-ink-900 text-gray-300 hover:border-accent hover:text-accent"
-    }`;
 
   const gridClass = `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
     sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
   }`;
-
-  const updateChipScroll = useCallback(() => {
-    const el = chipScrollRef.current;
-    if (!el) return;
-    setCanScrollLeft(el.scrollLeft > 4);
-    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
-  }, []);
-
-  useEffect(() => {
-    const el = chipScrollRef.current;
-    if (!el) return;
-    updateChipScroll();
-    el.addEventListener("scroll", updateChipScroll, { passive: true });
-    const ro = new ResizeObserver(updateChipScroll);
-    ro.observe(el);
-    return () => {
-      el.removeEventListener("scroll", updateChipScroll);
-      ro.disconnect();
-    };
-  }, [categories, updateChipScroll]);
 
   useEffect(() => {
     let active = true;
@@ -251,15 +222,6 @@ export default function RecommendedHome({
     setActiveCategory(name);
   };
 
-  const scrollChips = (dir: -1 | 1) => {
-    const el = chipScrollRef.current;
-    if (!el) return;
-    el.scrollBy({
-      left: dir * Math.max(160, el.clientWidth * 0.6),
-      behavior: "smooth",
-    });
-  };
-
   const refreshCategories = async () => {
     if (refreshing) return;
     setRefreshing(true);
@@ -302,49 +264,11 @@ export default function RecommendedHome({
 
   return (
     <div className="space-y-6">
-      <div className="relative flex items-center gap-2">
-        {canScrollLeft && (
-          <button
-            type="button"
-            onClick={() => scrollChips(-1)}
-            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
-            aria-label="Scroll categories left"
-          >
-            <ChevronIcon className="rotate-90" />
-          </button>
-        )}
-        <div
-          ref={chipScrollRef}
-          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden"
-        >
-          <button
-            type="button"
-            onClick={() => selectCategory(null)}
-            className={chipClass(!activeCategory)}
-          >
-            For you
-          </button>
-          {categories.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => selectCategory(name)}
-              className={chipClass(activeCategory === name)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        {canScrollRight && (
-          <button
-            type="button"
-            onClick={() => scrollChips(1)}
-            className="ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent"
-            aria-label="Scroll categories right"
-          >
-            <ChevronIcon className="-rotate-90" />
-          </button>
-        )}
+      <CategoryChips
+        categories={categories}
+        active={activeCategory}
+        onSelect={selectCategory}
+      >
         {showForYou && (
           <button
             type="button"
@@ -369,7 +293,7 @@ export default function RecommendedHome({
             {refreshing ? "…" : "Refresh"}
           </button>
         )}
-      </div>
+      </CategoryChips>
 
       {loading ? (
         <LoadingIndicator />

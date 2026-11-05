@@ -6097,6 +6097,8 @@ export interface components {
         DiscoverFeedRead: {
             /** Blocked */
             blocked?: components["schemas"]["DiscoverBlockedRead"][];
+            /** Categories */
+            categories?: string[];
             /** Items */
             items: components["schemas"]["DiscoverItemRead"][];
             /** Mix */
@@ -12735,6 +12737,8 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Ordering seed; a new one reshuffles the less certain picks. */
                 seed?: number | null;
+                /** @description Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page. */
+                category?: string | null;
                 /** @description Loaded ahead of time, not shown yet: its videos do not count as shown. */
                 prefetch?: boolean;
             };

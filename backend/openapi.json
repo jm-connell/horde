@@ -4869,6 +4869,13 @@
             "title": "Blocked",
             "type": "array"
           },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/DiscoverItemRead"
@@ -18547,6 +18554,25 @@
               ],
               "description": "Ordering seed; a new one reshuffles the less certain picks.",
               "title": "Seed"
+            }
+          },
+          {
+            "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only the picks in this AI category (as on Recommended), in the feed's order; send it with every page.",
+              "title": "Category"
             }
           },
           {

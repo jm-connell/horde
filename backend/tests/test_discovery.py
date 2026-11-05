@@ -1122,3 +1122,39 @@ def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
     _feed(client)
     row = session.get(RecImpression, (admin_user.id, "prefetch001"))
     assert row is not None and row.shown_count == 1
+
+
+def test_recommended_plus_can_be_browsed_by_category(
+    client, session, add_video, admin_user
+):
+    """The AI categories of Recommended apply to every pick with an embedding:
+    found on YouTube and downloaded alike, in the feed's order."""
+    from app.models import AiCategory
+
+    for name, vec in (("Night sky", _vec(0.0)), ("Rock pools", _vec(0.0, axis=2))):
+        session.add(
+            AiCategory(
+                name=name, embedding=embeddings.pack_vector(vec), dim=4, model="m"
+            )
+        )
+    session.commit()
+    _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    _discovered(session, admin_user, "skyfound002", "Aurora", "Sky B", _vec(0.05))
+    _discovered(
+        session, admin_user, "poolfound01", "Crabs", "Pools", _vec(0.03, axis=2)
+    )
+    _discovered(session, admin_user, "novector001", "Unknown", "Plain")
+    downloaded = add_video(title="Milky Way", channel="Sky C", yt_id="milkyway001")
+    _embed(session, downloaded, _vec(0.04))
+
+    body = _feed(client)
+    assert body["categories"] == ["Night sky", "Rock pools"]
+    everything = [i["key"] for i in body["items"]]
+
+    sky = _feed(client, category="Night sky")
+    keys = [i["key"] for i in sky["items"]]
+    assert set(keys) == {"skyfound001", "skyfound002", "milkyway001"}
+    assert keys == [k for k in everything if k in set(keys)]
+    pools = [i["key"] for i in _feed(client, category="Rock pools")["items"]]
+    assert pools == ["poolfound01"]
+    assert _feed(client, category="Nothing like it")["items"] == []

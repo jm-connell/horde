@@ -65,6 +65,7 @@ from ..services.discovery import (
     topics,
     tuning,
 )
+from ..services.discovery import categories as discover_categories
 from ..services.discovery.candidates import Candidate
 from ..services.discovery.feed import FeedItem, ranked_feed
 from ..services.live import picks as live_picks
@@ -170,6 +171,12 @@ def discover_feed(
         lt=SEED_RANGE,
         description="Ordering seed; a new one reshuffles the less certain picks.",
     ),
+    category: str | None = Query(
+        None,
+        max_length=200,
+        description="Only the picks in this AI category (as on Recommended), "
+        "in the feed's order; send it with every page.",
+    ),
     prefetch: bool = Query(
         False,
         description="Loaded ahead of time, not shown yet: its videos do not "
@@ -199,7 +206,12 @@ def discover_feed(
     if not cursor:
         gather.note_viewed(session, ctx.discovery, user.id)
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
-    window = feed.items[page.offset : page.offset + page.fetch]
+    picks = (
+        discover_categories.in_category(session, ctx.discovery, feed, category)
+        if category
+        else feed.items
+    )
+    window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
 
@@ -248,7 +260,7 @@ def discover_feed(
                     why=_why(item),
                 )
             )
-    if not cursor:
+    if not cursor and not category:
         items = live_picks.merge(
             items,
             live_picks.live_picks(session, ctx.live.directory, user.id),
@@ -275,6 +287,11 @@ def discover_feed(
             DiscoverBlockedRead(topic_id=tid, count=n)
             for tid, n in sorted(feed.blocked.items())
         ]
+        if not cursor
+        else [],
+        categories=sorted(
+            discover_categories.feed_categories(session, ctx.discovery, feed)
+        )
         if not cursor
         else [],
     )

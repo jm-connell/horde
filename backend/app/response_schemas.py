@@ -543,6 +543,9 @@ class DiscoverFeedRead(BaseModel):
     mix: list[DiscoverMixRead] = Field(default_factory=list)
     #: What each blocked topic left out (first page only).
     blocked: list[DiscoverBlockedRead] = Field(default_factory=list)
+    #: The AI categories with picks in this feed, by name (first page only;
+    #: empty without AI categories).
+    categories: list[str] = Field(default_factory=list)
 
 
 class HistoryWatchRead(BaseModel):

@@ -218,3 +218,44 @@ test("Recommended+ is loaded ahead and opens at once", async ({ page }) => {
   await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
   release();
 });
+
+test("Recommended+ can be browsed by AI category", async ({ page }) => {
+  // The browser suite has no AI: the server's answer gets a category, and a
+  // category request keeps only the night sky video.
+  const asked: (string | null)[] = [];
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    const url = new URL(route.request().url());
+    const category = url.searchParams.get("category");
+    asked.push(category);
+    url.searchParams.delete("category");
+    let response;
+    let body: { items: { key: string }[]; categories?: string[] };
+    try {
+      response = await route.fetch({ url: url.toString() });
+      body = await response.json();
+    } catch {
+      return; // the page moved on while this answer was in flight
+    }
+    await route.fulfill({
+      response,
+      json: {
+        ...body,
+        categories: ["Night sky"],
+        items: category
+          ? body.items.filter((i) => i.key === "discover001")
+          : body.items,
+      },
+    });
+  });
+  await openRecommendedPlus(page);
+  const shelf = page.getByRole("region", { name: "Channels you might like" });
+  await expect(shelf).toBeVisible();
+  await page.getByRole("button", { name: "Night sky", exact: true }).click();
+  await expect(page.locator("[data-rec-key]")).toHaveCount(1);
+  await expect(page.getByText(FOUND)).toBeVisible();
+  expect(asked).toContain("Night sky");
+  // The channel shelf belongs to the whole feed.
+  await expect(shelf).toHaveCount(0);
+  await page.getByRole("button", { name: "For you", exact: true }).click();
+  await expect(shelf).toBeVisible();
+});

@@ -23,6 +23,7 @@ import type {
   SuggestedChannels as SuggestedChannelsPage,
 } from "../types";
 import { button } from "./buttons";
+import CategoryChips from "./CategoryChips";
 import ChannelFeedCard from "./ChannelFeedCard";
 import RecMenu from "./discover/RecMenu";
 import { SOURCE } from "./discover/sources";
@@ -117,6 +118,8 @@ export default function DiscoverHome({
   // Undefined: the server's seed of the day, so a plain reload keeps the order.
   const [seed, setSeed] = useState<number | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
+  /** The AI category open (null: the whole feed, "For you"). */
+  const [category, setCategory] = useState<string | null>(null);
   // Loaded ahead by the home page: shown at once, then asked for again
   // (quietly) so the visit counts and the order is current.
   const [preview] = useState(() => recentFirstPage(queryClient));
@@ -137,6 +140,9 @@ export default function DiscoverHome({
       )?.items ?? []
   );
   const [loading, setLoading] = useState(!preview);
+  const [categories, setCategories] = useState<string[]>(
+    () => preview?.categories ?? []
+  );
   /** Re-ranking with cards on screen: keep them, dimmed, instead of a spinner. */
   const [updating, setUpdating] = useState(false);
   const hasItems = useRef(false);
@@ -165,10 +171,15 @@ export default function DiscoverHome({
     setError(null);
     setFreshReady(false);
     api
-      .getDiscoverFeed({ limit: DISCOVER_PAGE_SIZE, seed })
+      .getDiscoverFeed({
+        limit: DISCOVER_PAGE_SIZE,
+        seed,
+        category: category ?? undefined,
+      })
       .then((page) => {
         if (!active) return;
         setItems(page.items);
+        setCategories(page.categories ?? []);
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
         queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
@@ -178,7 +189,7 @@ export default function DiscoverHome({
         );
         runAtLoad.current = page.status.last_run_at ?? null;
         // Today's order: shown at once the next time the tab opens.
-        if (seed === undefined)
+        if (seed === undefined && category === null)
           queryClient.setQueryData(queryKeys.discover.firstPage, page);
       })
       .catch(() => {
@@ -190,19 +201,21 @@ export default function DiscoverHome({
           setUpdating(false);
         }
       });
-    api
-      .getSuggestedChannels(seed)
-      .then((data) => {
-        if (!active) return;
-        setChannels(data.items);
-        if (seed === undefined)
-          queryClient.setQueryData(queryKeys.discover.channels, data);
-      })
-      .catch(() => undefined);
+    // The channel shelf is part of the whole feed only.
+    if (category === null)
+      api
+        .getSuggestedChannels(seed)
+        .then((data) => {
+          if (!active) return;
+          setChannels(data.items);
+          if (seed === undefined)
+            queryClient.setQueryData(queryKeys.discover.channels, data);
+        })
+        .catch(() => undefined);
     return () => {
       active = false;
     };
-  }, [seed, reloadKey, queryClient]);
+  }, [seed, reloadKey, category, queryClient]);
 
   // While the gatherer works for us, watch for it to finish: an empty feed
   // reloads by itself, a full one offers the new picks.
@@ -240,6 +253,7 @@ export default function DiscoverHome({
       const page = await api.getDiscoverFeed({
         cursor,
         limit: DISCOVER_PAGE_SIZE,
+        category: category ?? undefined,
       });
       if (gen !== generation.current) return; // The list was reloaded meanwhile.
       setItems((prev) => {
@@ -252,7 +266,7 @@ export default function DiscoverHome({
     } finally {
       setLoadingMore(false);
     }
-  }, [cursor, loadingMore]);
+  }, [cursor, loadingMore, category]);
 
   useEffect(() => {
     if (!cursor) return;
@@ -402,6 +416,38 @@ export default function DiscoverHome({
           ? "Looking on YouTube for videos you might like…"
           : null;
 
+  const actions = (
+    <>
+      {freshReady && (
+        <button
+          type="button"
+          onClick={() => setReloadKey((k) => k + 1)}
+          className={button("secondary", "sm")}
+        >
+          Show new picks
+        </button>
+      )}
+      <button
+        type="button"
+        aria-pressed={algorithmOpen}
+        onClick={() => setAlgorithmOpen(!algorithmOpen)}
+        className={`${button("secondary", "sm")} ${algorithmOpen ? "border-accent text-accent" : ""}`}
+        title="See and change how this feed is picked"
+        data-horde="open-algorithm"
+      >
+        Algorithm
+      </button>
+      <button
+        type="button"
+        onClick={refresh}
+        className={button("secondary", "sm")}
+        title="Reshuffle, and look for new videos on YouTube"
+      >
+        Refresh
+      </button>
+    </>
+  );
+
   const card = (item: DiscoverItem) => {
     const channel = channelOf(item);
     return (
@@ -453,41 +499,24 @@ export default function DiscoverHome({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <p
-          className="min-w-0 flex-1 basis-full text-sm text-muted empty:hidden sm:basis-0"
-          aria-live="polite"
-        >
+      {statusLine && (
+        <p className="text-sm text-muted" aria-live="polite">
           {statusLine}
         </p>
-        {freshReady && (
-          <button
-            type="button"
-            onClick={() => setReloadKey((k) => k + 1)}
-            className={button("secondary", "sm")}
-          >
-            Show new picks
-          </button>
-        )}
-        <button
-          type="button"
-          aria-pressed={algorithmOpen}
-          onClick={() => setAlgorithmOpen(!algorithmOpen)}
-          className={`${button("secondary", "sm")} ${algorithmOpen ? "border-accent text-accent" : ""}`}
-          title="See and change how this feed is picked"
-          data-horde="open-algorithm"
+      )}
+      {categories.length > 0 ? (
+        <CategoryChips
+          categories={categories}
+          active={category}
+          onSelect={setCategory}
         >
-          Algorithm
-        </button>
-        <button
-          type="button"
-          onClick={refresh}
-          className={button("secondary", "sm")}
-          title="Reshuffle, and look for new videos on YouTube"
-        >
-          Refresh
-        </button>
-      </div>
+          {actions}
+        </CategoryChips>
+      ) : (
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          {actions}
+        </div>
+      )}
 
       {loading ? (
         <LoadingIndicator />
@@ -517,7 +546,7 @@ export default function DiscoverHome({
           >
             {items.slice(0, splitAt).map(card)}
             <SuggestedChannels
-              channels={channels}
+              channels={category === null ? channels : []}
               onFollow={followChannel}
               onDismiss={dismissChannel}
               onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}

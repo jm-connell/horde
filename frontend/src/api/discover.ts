@@ -29,11 +29,14 @@ export const discoverApi = {
       seed?: number;
       /** Loaded ahead of time: its videos do not count as shown. */
       prefetch?: boolean;
+      /** Only the picks in this AI category. */
+      category?: string;
     },
     opts?: ReadOptions
   ): Promise<DiscoverFeed> {
     const q = new URLSearchParams();
     if (params.prefetch) q.set("prefetch", "true");
+    if (params.category) q.set("category", params.category);
     if (params.cursor) q.set("cursor", params.cursor);
     if (params.limit) q.set("limit", String(params.limit));
     if (params.seed != null) q.set("seed", String(params.seed));

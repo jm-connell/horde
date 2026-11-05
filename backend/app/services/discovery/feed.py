@@ -175,6 +175,8 @@ class Feed:
     mix: list[MixStat] = field(default_factory=list)
     #: Candidates each block (by topic id) left out of this ranking.
     blocked: dict[int, int] = field(default_factory=dict)
+    #: Each AI category's picks (keys), measured once (``categories.py``).
+    categories: dict[str, set[str]] | None = None
 
 
 def _name(text: str) -> str:
