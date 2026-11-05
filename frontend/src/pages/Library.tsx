@@ -2,6 +2,7 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ChannelFeed from "../components/ChannelFeed";
 import GettingStarted from "../components/GettingStarted";
+import MemberWelcome from "../components/MemberWelcome";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
@@ -419,6 +420,7 @@ function OnlineLibrary() {
           />
         )}
 
+        {isHome && !debouncedSearch && <MemberWelcome />}
         <div
           key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"

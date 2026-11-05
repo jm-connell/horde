@@ -34,6 +34,9 @@ GATES: dict[tuple[str, str], str] = {
             ("DELETE", "/api/users/{user_id}/sessions"),
             ("DELETE", "/api/users/{user_id}/sessions/{session_id}"),
             ("DELETE", "/api/users/{user_id}/two-factor"),
+            ("GET", "/api/users/invites"),
+            ("POST", "/api/users/invites"),
+            ("DELETE", "/api/users/invites/{invite_id}"),
             ("POST", "/api/setup/reset"),
             ("POST", "/api/ai/apply-workload"),
             ("POST", "/api/ai/test"),
@@ -261,6 +264,8 @@ PUBLIC = {
     ("POST", "/api/auth/bootstrap"),
     ("POST", "/api/auth/forgot"),
     ("POST", "/api/auth/reset"),
+    ("POST", "/api/auth/invite/check"),
+    ("POST", "/api/auth/invite/accept"),
 }
 SAFE = {"GET", "HEAD", "OPTIONS"}
 

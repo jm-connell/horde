@@ -10,11 +10,19 @@ from typing import cast
 from fastapi import APIRouter, Depends, Request, Response
 from sqlmodel import Session
 
-from ..auth import ensure_recent_auth, require_admin, require_recent_auth
+from ..auth import (
+    current_user,
+    ensure_recent_auth,
+    require_admin,
+    require_recent_auth,
+)
 from ..context import get_session
 from ..errors import CodedHTTPException
-from ..models import User, as_utc, require_id
+from ..models import User, UserInvite, as_utc, require_id
 from ..schemas import (
+    InviteCreate,
+    InviteCreated,
+    InviteRead,
     PermissionInfo,
     SessionList,
     SessionRead,
@@ -22,7 +30,14 @@ from ..schemas import (
     UserRead,
     UserUpdate,
 )
-from ..services.auth import accounts, avatars, permissions, sessions, two_factor
+from ..services.auth import (
+    accounts,
+    avatars,
+    invites,
+    permissions,
+    sessions,
+    two_factor,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.auth.runtime import AuthRuntime
 
@@ -88,6 +103,52 @@ def create_user(
             share_downloads=payload.share_downloads,
         )
     return _read(user)
+
+
+def _invite_read(invite: UserInvite) -> InviteRead:
+    return InviteRead(
+        id=require_id(invite),
+        label=invite.label,
+        permissions=sorted(permissions.parse(invite.permissions)),
+        created_at=as_utc(invite.created_at),
+        expires_at=as_utc(invite.expires_at),
+    )
+
+
+@router.get("/invites", response_model=list[InviteRead])
+def list_invites(session: Session = Depends(get_session)) -> list[InviteRead]:
+    """Invite links not used yet and not expired, newest first."""
+    return [_invite_read(i) for i in invites.pending(session)]
+
+
+@router.post(
+    "/invites",
+    response_model=InviteCreated,
+    status_code=201,
+    dependencies=[Depends(require_recent_auth)],
+)
+def create_invite(
+    payload: InviteCreate,
+    session: Session = Depends(get_session),
+    admin: AuthUser = Depends(current_user),
+) -> InviteCreated:
+    """A one-time link (for members only) that lets someone pick their own
+    username and password. The token is in this answer and nowhere else."""
+    invite, token = invites.create(
+        session,
+        admin.id,
+        granted=payload.permissions,
+        label=payload.label,
+        days=payload.days,
+    )
+    return InviteCreated(invite=_invite_read(invite), token=token)
+
+
+@router.delete("/invites/{invite_id}", status_code=204)
+def revoke_invite(invite_id: int, session: Session = Depends(get_session)) -> Response:
+    if not invites.revoke(session, invite_id):
+        raise CodedHTTPException(404, "No such unused invite", "invite_not_found")
+    return Response(status_code=204)
 
 
 @router.patch("/{user_id}", response_model=UserRead)

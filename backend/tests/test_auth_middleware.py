@@ -30,6 +30,9 @@ EXPECTED_PUBLIC = {
     # Forgot password: the code only ever goes to the server log.
     ("POST", "/api/auth/forgot"),
     ("POST", "/api/auth/reset"),
+    # Join with an invite link: needs the link's 192-bit token, makes a member.
+    ("POST", "/api/auth/invite/check"),
+    ("POST", "/api/auth/invite/accept"),
 }
 
 

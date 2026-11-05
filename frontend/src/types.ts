@@ -166,6 +166,11 @@ export type PlaylistEntry = S["PlaylistEntry"];
 export type PlaylistServerCopies = S["PlaylistServerCopies"];
 export type PlaylistPreviewEntry = S["PlaylistPreviewEntry"];
 export type PlaylistPreviewData = S["PlaylistPreview"];
+export type Invite = Omit<S["InviteRead"], "permissions"> & {
+  permissions: Permission[];
+};
+export type InviteCreated = { invite: Invite; token: string };
+export type InviteInfo = S["InviteInfo"];
 export type AuthUser = Omit<S["AuthUserRead"], "permissions"> & {
   permissions: Permission[];
 };

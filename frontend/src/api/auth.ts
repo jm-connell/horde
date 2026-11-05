@@ -1,6 +1,10 @@
 import type {
   AuthState,
   AuthUser,
+  Invite,
+  InviteCreated,
+  InviteInfo,
+  Permission,
   SecurityChecklist,
   TwoFactorSetup,
   TwoFactorStatus,
@@ -43,6 +47,40 @@ export const authApi = {
     return request(
       "/api/auth/reset",
       jsonInit("POST", { username, code, new_password: newPassword })
+    );
+  },
+
+  listInvites(): Promise<Invite[]> {
+    return request("/api/users/invites");
+  },
+
+  /** A one-time join link; the token is only in this answer. */
+  createInvite(body: {
+    label?: string | null;
+    permissions?: Permission[];
+    days?: number;
+  }): Promise<InviteCreated> {
+    return request("/api/users/invites", jsonInit("POST", body));
+  },
+
+  revokeInvite(id: number): Promise<void> {
+    return request(`/api/users/invites/${id}`, { method: "DELETE" });
+  },
+
+  /** Whether an invite link still works, and who it is for. */
+  checkInvite(token: string): Promise<InviteInfo> {
+    return request("/api/auth/invite/check", jsonInit("POST", { token }));
+  },
+
+  /** Create a member account with an invite link; signs it in. */
+  acceptInvite(
+    token: string,
+    username: string,
+    password: string
+  ): Promise<{ user: AuthUser }> {
+    return request(
+      "/api/auth/invite/accept",
+      jsonInit("POST", { token, username, password })
     );
   },
 

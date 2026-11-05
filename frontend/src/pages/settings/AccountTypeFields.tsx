@@ -12,6 +12,7 @@ export default function AccountTypeFields({
   onAdminChange,
   onGrantedChange,
   disabled = false,
+  allowAdmin = true,
 }: {
   isAdmin: boolean;
   granted: Permission[];
@@ -19,6 +20,8 @@ export default function AccountTypeFields({
   onAdminChange: (isAdmin: boolean) => void;
   onGrantedChange: (granted: Permission[]) => void;
   disabled?: boolean;
+  /** False for invites: the new account is always a member. */
+  allowAdmin?: boolean;
 }) {
   const group = useId();
   const toggle = (name: Permission) =>
@@ -29,34 +32,36 @@ export default function AccountTypeFields({
     );
   return (
     <>
-      <fieldset className="mb-3" disabled={disabled}>
-        <legend className="mb-1 text-sm text-gray-300">Account type</legend>
-        <div className="flex flex-wrap gap-4 text-sm text-gray-200">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name={group}
-              checked={isAdmin}
-              onChange={() => onAdminChange(true)}
-            />
-            Admin
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name={group}
-              checked={!isAdmin}
-              onChange={() => onAdminChange(false)}
-            />
-            Member
-          </label>
-        </div>
-        <p className="mt-1 text-xs text-muted">
-          {isAdmin
-            ? "Admins can do everything, including managing users and server settings."
-            : "Members can browse, watch and keep their own history. Choose what else they may do."}
-        </p>
-      </fieldset>
+      {allowAdmin && (
+        <fieldset className="mb-3" disabled={disabled}>
+          <legend className="mb-1 text-sm text-gray-300">Account type</legend>
+          <div className="flex flex-wrap gap-4 text-sm text-gray-200">
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name={group}
+                checked={isAdmin}
+                onChange={() => onAdminChange(true)}
+              />
+              Admin
+            </label>
+            <label className="flex items-center gap-2">
+              <input
+                type="radio"
+                name={group}
+                checked={!isAdmin}
+                onChange={() => onAdminChange(false)}
+              />
+              Member
+            </label>
+          </div>
+          <p className="mt-1 text-xs text-muted">
+            {isAdmin
+              ? "Admins can do everything, including managing users and server settings."
+              : "Members can browse, watch and keep their own history. Choose what else they may do."}
+          </p>
+        </fieldset>
+      )}
       {!isAdmin && (
         <fieldset className="mb-3 space-y-2" disabled={disabled}>
           <legend className="mb-3 text-sm text-gray-300">Permissions</legend>

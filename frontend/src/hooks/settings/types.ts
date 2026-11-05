@@ -219,6 +219,8 @@ export interface Settings {
   historyStatsExpanded: boolean;
   /** History stats also count the imported YouTube history (views, never time). */
   historyIncludeYoutube: boolean;
+  /** A member closed the first-sign-in welcome on Home. */
+  memberWelcomeDone: boolean;
   showRelatedVideos: boolean;
   /**
    * When true, show an up-next countdown after a video ends (the queue still

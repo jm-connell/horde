@@ -8,6 +8,7 @@ import { useToast } from "../../context/ToastContext";
 import ShareDownloadsField from "../../components/auth/ShareDownloadsField";
 import type {
   DeviceSession,
+  Invite,
   Permission,
   PermissionInfo,
   UserAccount,
@@ -155,6 +156,7 @@ export default function UsersSection() {
           </ul>
         )}
       </section>
+      <InviteLinks catalog={catalog} />
       {adding && (
         <CreateUser
           catalog={catalog}
@@ -165,6 +167,171 @@ export default function UsersSection() {
         />
       )}
     </div>
+  );
+}
+
+function inviteUrl(token: string): string {
+  return `${window.location.origin}/join?token=${encodeURIComponent(token)}`;
+}
+
+/** One-time links that let someone pick their own username and password. */
+function InviteLinks({ catalog }: { catalog: PermissionInfo[] }) {
+  const { showToast, showError } = useToast();
+  const [invites, setInvites] = useState<Invite[] | null>(null);
+  const [open, setOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [granted, setGranted] = useState<Permission[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [made, setMade] = useState<string | null>(null);
+  const effective = granted ?? defaultsOf(catalog);
+
+  const reload = useCallback(async () => {
+    try {
+      setInvites(await api.listInvites());
+    } catch (err) {
+      showError(`Could not load invites: ${describe(err)}`);
+    }
+  }, [showError]);
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+
+  const create = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await api.createInvite({
+        label: label.trim() || null,
+        permissions: effective,
+      });
+      setMade(inviteUrl(res.token));
+      setLabel("");
+      setGranted(null);
+      await reload();
+    } catch (err) {
+      showError(`Could not make the link: ${describe(err)}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async (url: string) => {
+    try {
+      await navigator.clipboard.writeText(url);
+      showToast("Link copied");
+    } catch {
+      showError("Could not copy; select the link and copy it yourself");
+    }
+  };
+
+  const revoke = async (invite: Invite) => {
+    try {
+      await api.revokeInvite(invite.id);
+      await reload();
+    } catch (err) {
+      showError(describe(err));
+    }
+  };
+
+  return (
+    <section
+      aria-labelledby="invites-heading"
+      data-setting="invites"
+      className="rounded-lg border border-ink-700 p-4"
+    >
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <h3 id="invites-heading" className="text-sm font-medium text-gray-200">
+          Invite links
+        </h3>
+        <button
+          type="button"
+          className={`${PANEL_BTN} ml-auto`}
+          aria-expanded={open}
+          onClick={() => {
+            setOpen((v) => !v);
+            setMade(null);
+          }}
+        >
+          {open ? "Close" : "Make an invite link"}
+        </button>
+      </div>
+      <p className="mb-3 text-xs text-muted">
+        Send someone a link instead of a password: they pick their own username
+        and password and join as a member. A link works once and expires after 7
+        days.
+      </p>
+      {open && (
+        <form onSubmit={create} className="mb-3 max-w-md">
+          <Field
+            label="Who is it for? (optional)"
+            value={label}
+            onChange={setLabel}
+            autoComplete="off"
+            required={false}
+            hint="Shown on the page they open, e.g. “Mum”."
+          />
+          <AccountTypeFields
+            isAdmin={false}
+            granted={effective}
+            catalog={catalog}
+            onAdminChange={() => undefined}
+            onGrantedChange={setGranted}
+            allowAdmin={false}
+          />
+          <button type="submit" disabled={busy} className={PANEL_BTN}>
+            {busy ? "Making…" : "Make link"}
+          </button>
+        </form>
+      )}
+      {made && (
+        <div className="mb-3 rounded-lg bg-ink-900 p-3 ring-1 ring-ink-700">
+          <p className="mb-2 text-xs text-muted">
+            Send this link. It is shown only now.
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              readOnly
+              aria-label="Invite link"
+              value={made}
+              onFocus={(e) => e.currentTarget.select()}
+              className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 font-mono text-xs text-gray-100"
+            />
+            <button
+              type="button"
+              className={PANEL_BTN}
+              onClick={() => void copy(made)}
+            >
+              Copy
+            </button>
+          </div>
+        </div>
+      )}
+      {invites && invites.length > 0 && (
+        <ul className="divide-y divide-ink-700 rounded-lg border border-ink-700 text-sm">
+          {invites.map((invite) => (
+            <li
+              key={invite.id}
+              className="flex flex-wrap items-center gap-2 p-2"
+            >
+              <span className="text-gray-200">
+                {invite.label || "Unnamed invite"}
+              </span>
+              <span className="text-xs text-muted">
+                expires {new Date(invite.expires_at).toLocaleDateString()}
+              </span>
+              <button
+                type="button"
+                className={`${button("quiet", "xs")} ml-auto`}
+                onClick={() => void revoke(invite)}
+              >
+                Revoke
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 

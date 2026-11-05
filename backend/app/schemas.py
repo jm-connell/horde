@@ -1229,6 +1229,47 @@ class UserCreate(BaseModel):
     share_downloads: bool = True
 
 
+class InviteCreate(BaseModel):
+    """A one-time link for a new member to create their own account."""
+
+    #: Who it is for ("Mum"); shown on the join page.
+    label: str | None = Field(default=None, max_length=60)
+    #: Omitted = the default grants (see /api/users/permissions).
+    permissions: list[str] | None = None
+    days: int = Field(default=7, ge=1, le=30)
+
+
+class InviteRead(BaseModel):
+    id: int
+    label: str | None = None
+    permissions: list[str]
+    created_at: datetime
+    expires_at: datetime
+
+
+class InviteCreated(BaseModel):
+    invite: InviteRead
+    #: Shown only now: the link is ``<this server>/join?token=<token>``.
+    token: str
+
+
+class InviteCheckRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+class InviteInfo(BaseModel):
+    """What the join page shows about a valid invite."""
+
+    label: str | None = None
+    expires_at: datetime
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+    username: str = Field(max_length=200)
+    password: str = Field(max_length=2000)
+
+
 class UserUpdate(BaseModel):
     is_admin: bool | None = None
     disabled: bool | None = None
