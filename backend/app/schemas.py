@@ -371,11 +371,6 @@ class StreamAiAction(BaseModel):
     force: bool = False
 
 
-class StreamAiChatRequest(BaseModel):
-    url: str = Field(..., min_length=1, max_length=4000)
-    message: str = Field(..., min_length=1, max_length=4000)
-
-
 class DownloadJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1772,8 +1767,15 @@ class AskSearchPage(BaseModel):
     next_cursor: str | None = None
 
 
+class AskVideoRef(BaseModel):
+    """A video Ask can answer from: a library video, or a stream by its URL."""
+
+    library_id: int | None = None
+    url: str | None = Field(default=None, max_length=4000)
+
+
 class AskChatRequest(BaseModel):
-    """One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels."""
+    """One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video."""
 
     message: str = Field(..., min_length=1, max_length=4000)
     #: Continue this saved conversation; a new one is started when empty.
@@ -1790,6 +1792,10 @@ class AskChatRequest(BaseModel):
     #: The user picked Horde as the source: answer from Horde even when the
     #: question names a channel (``channel_ids`` and the page's are ignored).
     horde_only: bool = False
+    #: The video the chat is about: the one the user picked, or the watch
+    #: page's. Answered from unless the question is about Horde or the user's
+    #: own things, names a channel or is about the page channel as a whole.
+    video: AskVideoRef | None = None
     #: Where the user is in the app (Horde answers only).
     page: str | None = Field(default=None, max_length=300)
     data_consent: Literal["off", "local", "cloud"] = "off"

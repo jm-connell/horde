@@ -12,12 +12,7 @@ import type {
   Video,
 } from "../types";
 import type { ApiResponse } from "./typed";
-import {
-  type ChatStreamOptions,
-  postEventStream,
-  type ReadOptions,
-  request,
-} from "./client";
+import { type ReadOptions, request } from "./client";
 
 export const aiApi = {
   getAiStatus(opts?: ReadOptions): Promise<AiStatus> {
@@ -146,32 +141,6 @@ export const aiApi = {
     });
   },
 
-  getVideoAiChat(
-    id: number
-  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "get">> {
-    return request(`/api/videos/${id}/ai/chat`);
-  },
-
-  clearVideoAiChat(
-    id: number
-  ): Promise<ApiResponse<"/api/videos/{video_id}/ai/chat", "delete">> {
-    return request(`/api/videos/${id}/ai/chat`, {
-      method: "DELETE",
-    });
-  },
-
-  /**
-   * Stream a chat turn via SSE. Calls ``onEvent`` for each parsed payload.
-   * Resolves when the stream ends (done or error event also delivered).
-   */
-  streamVideoAiChat(
-    id: number,
-    message: string,
-    opts: ChatStreamOptions
-  ): Promise<void> {
-    return postEventStream(`/api/videos/${id}/ai/chat`, { message }, opts);
-  },
-
   /** The pages and settings Ask may link to or change. */
   getHelpCatalog(opts?: ReadOptions): Promise<HelpCatalog> {
     return request<HelpCatalog>("/api/ai/help/catalog", opts);
@@ -219,28 +188,6 @@ export const aiApi = {
       body: JSON.stringify({ url, force: !!opts?.force }),
       signal: opts?.signal,
     });
-  },
-
-  getStreamAiChat(
-    url: string
-  ): Promise<ApiResponse<"/api/preview/ai/chat", "get">> {
-    return request(`/api/preview/ai/chat?url=${encodeURIComponent(url)}`);
-  },
-
-  clearStreamAiChat(
-    url: string
-  ): Promise<ApiResponse<"/api/preview/ai/chat", "delete">> {
-    return request(`/api/preview/ai/chat?url=${encodeURIComponent(url)}`, {
-      method: "DELETE",
-    });
-  },
-
-  streamStreamAiChat(
-    url: string,
-    message: string,
-    opts: ChatStreamOptions
-  ): Promise<void> {
-    return postEventStream("/api/preview/ai/chat", { url, message }, opts);
   },
 
   getStreamRelated(

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { api, type ChatStreamOptions } from "../../api";
+import { api } from "../../api";
 import { describeError } from "../../apiErrors";
 import type { AiTarget } from "../../components/aiTarget";
+import type { AskVideo } from "../../components/helpChat";
 import { useAuth } from "../../context/AuthContext";
+import { extractYouTubeId } from "../../hooks/useSponsorBlock";
 import { usePlaybackActions } from "../../context/PlaybackContext";
 import { useToast } from "../../context/ToastContext";
 import { appSettingsQuery } from "../../queries/app";
@@ -53,7 +55,6 @@ export function useWatchAi(
         chapters: false,
         chaptersMode: "on_download" as AiChaptersMode,
         chat: false,
-        costs: false,
       };
     }
     const ai = appSettings.ai;
@@ -65,14 +66,12 @@ export function useWatchAi(
         ? "on_watch"
         : "on_download") as AiChaptersMode,
       chat: llmConnected && !!ai.ai_chat,
-      costs: !!aiStatus.reports_cost && ai.show_costs === true,
     };
   }, [appSettings, aiStatus]);
   const aiSummariesEnabled = aiFeatures.summaries;
   const aiChaptersEnabled = aiFeatures.chapters;
   const aiChaptersMode = aiFeatures.chaptersMode;
   const aiChatEnabled = aiFeatures.chat;
-  const showAiCosts = aiFeatures.costs;
 
   useEffect(() => {
     setChapterError(null);
@@ -228,37 +227,29 @@ export function useWatchAi(
   const showAiSection = canAiSummarize || canAiChat;
 
   // --- The AI panel's view of the video ---
-  const libraryChat = useMemo(
+  // What Ask is told about this video ("Chat" opens Ask on it).
+  const libraryYoutubeId = video?.source_url
+    ? extractYouTubeId(video.source_url, "") || null
+    : null;
+  const streamYoutubeId = stream?.meta.id ?? null;
+  const askVideo = useMemo<AskVideo | null>(
     () =>
-      videoId == null
-        ? null
-        : {
-            list: () => api.getVideoAiChat(videoId),
-            clear: () => api.clearVideoAiChat(videoId),
-            stream: (message: string, opts: ChatStreamOptions) =>
-              api.streamVideoAiChat(videoId, message, opts),
-          },
-    [videoId]
-  );
-  const streamChat = useMemo(
-    () =>
-      !streamUrl
-        ? null
-        : {
-            list: () => api.getStreamAiChat(streamUrl),
-            clear: () => api.clearStreamAiChat(streamUrl),
-            stream: async (message: string, opts: ChatStreamOptions) => {
-              try {
-                await api.streamStreamAiChat(streamUrl, message, opts);
-              } finally {
-                // A turn can create the saved row and push back its expiry.
-                void queryClient.invalidateQueries({
-                  queryKey: queryKeys.preview.ai(streamUrl),
-                });
-              }
-            },
-          },
-    [streamUrl, queryClient]
+      videoId != null
+        ? {
+            library_id: videoId,
+            youtube_id: libraryYoutubeId,
+            url: null,
+            title: mediaTitle ?? "",
+          }
+        : streamUrl
+          ? {
+              library_id: null,
+              youtube_id: streamYoutubeId,
+              url: streamUrl,
+              title: mediaTitle ?? "",
+            }
+          : null,
+    [videoId, libraryYoutubeId, streamUrl, streamYoutubeId, mediaTitle]
   );
   const summarizeLibrary = useCallback(
     async (force: boolean, signal: AbortSignal) => {
@@ -287,17 +278,17 @@ export function useWatchAi(
   const processingSummary = !!video?.processing_summary;
   const expiresAt = streamAi?.expires_at ?? null;
   const target = useMemo<AiTarget | null>(() => {
-    if (videoId != null && libraryChat) {
+    if (videoId != null && askVideo) {
       return {
         key: `video:${videoId}`,
         summary: aiSummary ?? null,
         processingSummary,
         hasSubtitles,
         summarize: summarizeLibrary,
-        chat: libraryChat,
+        askVideo,
       };
     }
-    if (streamUrl && streamChat) {
+    if (streamUrl && askVideo) {
       const until = formatDate(expiresAt);
       return {
         key: `stream:${streamUrl}`,
@@ -308,15 +299,14 @@ export function useWatchAi(
           ? `Saved until ${until} \u2014 downloading the video keeps it.`
           : null,
         summarize: summarizeStream,
-        chat: streamChat,
+        askVideo,
       };
     }
     return null;
   }, [
     videoId,
-    libraryChat,
+    askVideo,
     streamUrl,
-    streamChat,
     aiSummary,
     processingSummary,
     hasSubtitles,
@@ -327,10 +317,11 @@ export function useWatchAi(
 
   return {
     target,
+    // Only when this account may chat about it (Ask ignores it otherwise).
+    askVideo: canAiChat ? askVideo : null,
     streamChapters,
     canAiSummarize,
     canAiChat,
-    showAiCosts,
     showAiSection,
     chaptersSource,
     hasAiChapters,

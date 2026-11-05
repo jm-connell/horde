@@ -82,7 +82,6 @@ export type RewatchedVideo = S["RewatchedVideo"];
 export type TrashRestored = S["TrashRestored"];
 export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
-export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type HelpChatTurn = S["HelpChatTurn"];
 export type HelpCatalog = S["HelpCatalog"];
 export type HelpCatalogSetting = S["HelpCatalogSetting"];

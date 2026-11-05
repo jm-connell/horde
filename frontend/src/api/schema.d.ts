@@ -445,7 +445,8 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description One Ask turn (SSE): from channels when the question names one, else from Horde.
+         * @description One Ask turn (SSE): from the channels a question names, the video the
+         *     chat is about, the page's channel, else Horde (``ask_chat.pick_route``).
          */
         post: operations["chat_api_ask_chat_post"];
         delete?: never;
@@ -2744,25 +2745,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/preview/ai/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Stream Chat */
-        get: operations["get_stream_chat_api_preview_ai_chat_get"];
-        put?: never;
-        /** Post Stream Chat */
-        post: operations["post_stream_chat_api_preview_ai_chat_post"];
-        /** Delete Stream Chat */
-        delete: operations["delete_stream_chat_api_preview_ai_chat_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/preview/ai/summarize": {
         parameters: {
             query?: never;
@@ -3890,25 +3872,6 @@ export interface paths {
         /** Generate Video Chapters */
         post: operations["generate_video_chapters_api_videos__video_id__ai_chapters_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/videos/{video_id}/ai/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Video Ai Chat */
-        get: operations["get_video_ai_chat_api_videos__video_id__ai_chat_get"];
-        put?: never;
-        /** Post Video Ai Chat */
-        post: operations["post_video_ai_chat_api_videos__video_id__ai_chat_post"];
-        /** Delete Video Ai Chat */
-        delete: operations["delete_video_ai_chat_api_videos__video_id__ai_chat_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5312,7 +5275,7 @@ export interface components {
         };
         /**
          * AskChatRequest
-         * @description One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.
+         * @description One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.
          */
         AskChatRequest: {
             /** Channel Ids */
@@ -5338,6 +5301,7 @@ export interface components {
             page_video_id?: string | null;
             /** Thread Id */
             thread_id?: number | null;
+            video?: components["schemas"]["AskVideoRef"] | null;
         };
         /** AskSearchHit */
         AskSearchHit: {
@@ -5428,6 +5392,16 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * AskVideoRef
+         * @description A video Ask can answer from: a library video, or a stream by its URL.
+         */
+        AskVideoRef: {
+            /** Library Id */
+            library_id?: number | null;
+            /** Url */
+            url?: string | null;
         };
         /** AuthLoginResult */
         AuthLoginResult: {
@@ -8655,13 +8629,6 @@ export interface components {
             /** Url */
             url: string;
         };
-        /** StreamAiChatRequest */
-        StreamAiChatRequest: {
-            /** Message */
-            message: string;
-            /** Url */
-            url: string;
-        };
         /**
          * StreamAiRead
          * @description AI results saved for a streamed (not downloaded) video.
@@ -9566,34 +9533,6 @@ export interface components {
             permissions?: string[] | null;
             /** Share Downloads */
             share_downloads?: boolean | null;
-        };
-        /** VideoAiChatHistory */
-        VideoAiChatHistory: {
-            /** Messages */
-            messages: components["schemas"]["VideoAiChatMessageRead"][];
-        };
-        /** VideoAiChatMessageRead */
-        VideoAiChatMessageRead: {
-            /** Content */
-            content: string;
-            /** Cost */
-            cost?: number | null;
-            /** Created At */
-            created_at?: string | null;
-            /** Id */
-            id?: number | null;
-            /** Model */
-            model?: string | null;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "user" | "assistant";
-        };
-        /** VideoAiChatRequest */
-        VideoAiChatRequest: {
-            /** Message */
-            message: string;
         };
         /**
          * VideoCommentsRead
@@ -16584,128 +16523,6 @@ export interface operations {
             };
         };
     };
-    get_stream_chat_api_preview_ai_chat_get: {
-        parameters: {
-            query: {
-                url: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VideoAiChatHistory"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    post_stream_chat_api_preview_ai_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StreamAiChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Server-sent events, one JSON object per event */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_stream_chat_api_preview_ai_chat_delete: {
-        parameters: {
-            query: {
-                url: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     summarize_stream_api_preview_ai_summarize_post: {
         parameters: {
             query?: never;
@@ -19347,130 +19164,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_video_ai_chat_api_videos__video_id__ai_chat_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VideoAiChatHistory"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    post_video_ai_chat_api_videos__video_id__ai_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VideoAiChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Server-sent events, one JSON object per event */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_video_ai_chat_api_videos__video_id__ai_chat_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation error */

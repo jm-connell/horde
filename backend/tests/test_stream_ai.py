@@ -1,4 +1,4 @@
-"""AI summary, chapters, chat and related videos for streamed videos."""
+"""AI summary, chapters, Ask questions and related videos for streamed videos."""
 
 from __future__ import annotations
 
@@ -21,8 +21,9 @@ from app.models import (
 )
 from app.services import stream_ai, stream_preview, ytdlp_extract
 from app.services.ai import chat as ai_chat
-from app.services.ai import tasks
+from app.services.ai import help_model, tasks
 from app.services.auth import accounts
+from app.services.auth.accounts import AuthUser
 
 YT_ID = "dQw4w9WgXcQ"
 URL = f"https://www.youtube.com/watch?v={YT_ID}"
@@ -92,6 +93,7 @@ def stream_env(monkeypatch):
     monkeypatch.setattr(ai_chat, "require_llm_chat_model", lambda *a, **k: None)
     monkeypatch.setattr(ai_chat, "llm_features_allowed", lambda: (True, None))
     monkeypatch.setattr(ai_chat, "ensure_quality_chat_model", lambda: "m")
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "m")
     return meta, llm, seen
 
 
@@ -181,40 +183,28 @@ def test_description_chapters_are_not_replaced(client, stream_env):
     assert "already has chapters" in res.json()["detail"]
 
 
-def test_chat_is_saved_per_user_and_can_be_cleared(
+def _ask(client, message: str = "What?"):
+    """A question to Ask about the stream."""
+    return client.post(
+        "/api/ask/chat", json={"message": message, "video": {"url": URL}}
+    )
+
+
+def test_ask_answers_about_a_stream_and_needs_use_ai(
     client, member_client, member_user, stream_env, session
 ):
-    res = client.post("/api/preview/ai/chat", json={"url": URL, "message": "What?"})
+    res = _ask(client)
     assert res.status_code == 200
     assert '"type": "done"' in res.text
-    history = client.get("/api/preview/ai/chat", params={"url": URL}).json()
-    assert [m["role"] for m in history["messages"]] == ["user", "assistant"]
-    assert history["messages"][1]["content"] == "It is about topics."
-    # Chat is per user: a member sees only their own turns, and clearing theirs
-    # leaves the admin's.
-    assert member_client.get("/api/preview/ai/chat", params={"url": URL}).json() == {
-        "messages": []
-    }
-    member_client.post("/api/preview/ai/chat", json={"url": URL, "message": "Hi"})
-    cleared_own = member_client.delete("/api/preview/ai/chat", params={"url": URL})
-    assert cleared_own.status_code == 200
-    assert (
-        len(client.get("/api/preview/ai/chat", params={"url": URL}).json()["messages"])
-        == 2
-    )
+    thread_id = json.loads(res.text.split("data: ", 2)[1])["id"]
+    thread = client.get(f"/api/ask/threads/{thread_id}").json()
+    assert [m["role"] for m in thread["messages"]] == ["user", "assistant"]
+    assert thread["messages"][1]["content"] == "It is about topics."
+    assert thread["messages"][1]["sources"]["video"]["youtube_id"] == YT_ID
 
-    # Members need use_ai for stream AI, like for library AI.
+    # Members need use_ai for questions about a stream, as for the library.
     accounts.update_user(session, member_user.id, granted=[])
-    assert (
-        member_client.get("/api/preview/ai/chat", params={"url": URL}).status_code
-        == 403
-    )
-
-    cleared = client.delete("/api/preview/ai/chat", params={"url": URL})
-    assert cleared.status_code == 200
-    assert client.get("/api/preview/ai/chat", params={"url": URL}).json() == {
-        "messages": []
-    }
+    assert _ask(member_client).status_code == 403
 
 
 def test_a_url_without_a_youtube_id_is_unsupported(client, stream_env):
@@ -445,8 +435,8 @@ def test_ai_that_is_off_does_no_network_work(client, stream_env, monkeypatch):
     monkeypatch.setattr(stream_ai, "llm_features_allowed", lambda: (False, "AI off"))
     res = client.post("/api/preview/ai/summarize", json={"url": URL})
     assert (res.status_code, res.json()["code"]) == (400, "ai_disabled")
-    chat = client.post("/api/preview/ai/chat", json={"url": URL, "message": "Hi"})
-    assert chat.status_code == 400
+    # Ask answers from Horde instead, without reading the stream.
+    assert _ask(client, "Hi").status_code == 200
     assert seen == {"meta": 0, "vtt": 0}
 
 
@@ -454,7 +444,7 @@ def test_a_saved_stream_is_not_read_again(client, stream_env):
     _meta, llm, seen = stream_env
     llm.replies = [json.dumps({"summary": " ".join(["Word"] * 200)})]
     client.post("/api/preview/ai/summarize", json={"url": URL})
-    client.post("/api/preview/ai/chat", json={"url": URL, "message": "Hi"})
+    _ask(client, "Hi")
     assert seen == {"meta": 1, "vtt": 1}
 
 
@@ -500,9 +490,12 @@ def test_a_download_during_the_summary_keeps_it(
     assert meta is not None and meta.summary == text
 
 
-def test_a_download_during_a_chat_reply_says_so(
+def test_a_download_during_a_reply_keeps_the_reply(
     session, add_video, admin_user, stream_env
 ):
+    """The answer is saved in the Ask conversation, not on the stream's row."""
+    from app.services.knowledge import ask_chat
+
     state = stream_ai.upsert_state(session, YT_ID, stream_env[0])
     llm = stream_env[1]
 
@@ -513,9 +506,21 @@ def test_a_download_during_a_chat_reply_says_so(
         yield "reply."
 
     llm.chat_stream = reply_then_download
-    events = list(stream_ai.stream_chat_events(state.id, YT_ID, "Hi", admin_user.id))
-    assert '"status": 409' in events[-1]
-    assert "downloaded" in events[-1]
+    route = ask_chat.Route(
+        video=ask_chat.VideoRef(youtube_id=YT_ID, url=URL, stream_id=state.id)
+    )
+    events = list(
+        ask_chat.stream_ask_events(
+            AuthUser(id=admin_user.id, username="admin", is_admin=True),
+            "Hi",
+            thread_id=None,
+            route=route,
+            page=None,
+            data_consent="off",
+        )
+    )
+    assert '"type": "done"' in events[-1]
+    assert "Partial reply." in events[-1]
 
 
 def test_finalize_and_the_sweep_adopt(session, add_video, admin_user, monkeypatch):

@@ -31,6 +31,19 @@ _HORDE = re.compile(
 )
 
 
+# Words that make a question about a channel's other videos, not the one on screen.
+_WHOLE_CHANNEL = re.compile(
+    r"\b(this|the|his|her|their|whole|entire) channel\b"
+    r"|\b(other|older|earlier|previous|past|newer|later|more|another|any) "
+    r"(of (his|her|their) )?(videos?|episodes?|uploads?)\b"
+    r"|\b(all|any) (of )?(his|her|their) (videos|episodes|uploads)\b"
+    r"|\bacross (his|her|their|the) (videos|channel)\b"
+    r"|\b(ever|usually|always|before) (said|say|says|mentioned|mention|talked|talk|"
+    r"covered|cover|recommended|recommend)\b",
+    re.IGNORECASE,
+)
+
+
 def _norm(text: str) -> str:
     text = re.sub(r"['’]s\b", "", text.casefold())
     return " ".join(re.findall(r"[^\W_]+", text))
@@ -76,6 +89,11 @@ def named_channels(message: str, channels: list[KbChannel]) -> list[KbChannel]:
 def about_horde(message: str) -> bool:
     """True for a question about the app itself (its settings, downloads, ...)."""
     return bool(_HORDE.search(message or ""))
+
+
+def about_channel(message: str) -> bool:
+    """True for a question about a channel as a whole ("in his other videos")."""
+    return bool(_WHOLE_CHANNEL.search(message or ""))
 
 
 def asks_all_channels(message: str) -> bool:

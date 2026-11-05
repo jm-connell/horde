@@ -317,41 +317,6 @@ def test_members_cannot_manage_users(member_client):
     )
 
 
-# --- AI chat is per user -----------------------------------------------------
-
-
-def test_chat_history_is_private_to_each_user(
-    client, member_client, add_video, init_db, admin_user, member_user
-):
-    video = add_video()
-    with Session(init_db["engine"]) as s:
-        s.add(
-            VideoAiChatMessage(
-                video_id=video.id,
-                user_id=admin_user.id,
-                role="user",
-                content="admin asks",
-            )
-        )
-        s.add(
-            VideoAiChatMessage(
-                video_id=video.id,
-                user_id=member_user.id,
-                role="user",
-                content="member asks",
-            )
-        )
-        s.commit()
-    path = f"/api/videos/{video.id}/ai/chat"
-    assert [m["content"] for m in client.get(path).json()["messages"]] == ["admin asks"]
-    assert [m["content"] for m in member_client.get(path).json()["messages"]] == [
-        "member asks"
-    ]
-    assert member_client.delete(path).status_code == 200
-    assert member_client.get(path).json()["messages"] == []
-    assert len(client.get(path).json()["messages"]) == 1
-
-
 # --- signed media URLs -------------------------------------------------------
 
 

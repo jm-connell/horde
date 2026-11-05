@@ -1,4 +1,5 @@
 import type { HelpDataConsent } from "../hooks/settings/types";
+import type { AskVideo } from "../components/helpChat";
 import type {
   AskChannel,
   AskChannelList,
@@ -85,9 +86,10 @@ export const askApi = {
 
   /**
    * One Ask turn (SSE): from channels when the question names one or
-   * `channelIds` says which, from Horde otherwise (always with `hordeOnly`).
-   * The server saves the
-   * turn in `threadId` (a new conversation when null; see the `thread` event).
+   * `channelIds` says which, from `video` unless the question is about Horde
+   * or a channel, from Horde otherwise (always with `hordeOnly`). The server
+   * saves the turn in `threadId` (a new conversation when null; see the
+   * `thread` event).
    */
   streamAsk(
     message: string,
@@ -99,6 +101,8 @@ export const askApi = {
       pageVideoId?: string | null;
       /** The user picked Horde as the source: no channel answers. */
       hordeOnly?: boolean;
+      /** The video the chat is about: the picked one, or the watch page's. */
+      video?: AskVideo | null;
       page: string;
       dataConsent: HelpDataConsent;
     },
@@ -113,6 +117,9 @@ export const askApi = {
         page_channel_id: params.pageChannelId ?? null,
         page_video_id: params.pageVideoId ?? null,
         horde_only: params.hordeOnly ?? false,
+        video: params.video
+          ? { library_id: params.video.library_id, url: params.video.url }
+          : null,
         page: params.page,
         data_consent: params.dataConsent,
       },

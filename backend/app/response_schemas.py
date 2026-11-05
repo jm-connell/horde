@@ -186,19 +186,6 @@ class ThumbnailCandidates(BaseModel):
     candidates: list[ThumbnailCandidate]
 
 
-class VideoAiChatMessageRead(BaseModel):
-    id: int | None = None
-    role: Literal["user", "assistant"]
-    content: str
-    cost: float | None = None
-    model: str | None = None
-    created_at: str | None = None
-
-
-class VideoAiChatHistory(BaseModel):
-    messages: list[VideoAiChatMessageRead]
-
-
 # --- Compat ------------------------------------------------------------------
 
 

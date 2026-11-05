@@ -1,4 +1,4 @@
-"""AI chat streaming when the caller goes away mid-answer."""
+"""AI chat streaming when the caller goes away mid-answer (Ask's video turns)."""
 
 from __future__ import annotations
 
@@ -7,9 +7,12 @@ import logging
 import pytest
 from sqlmodel import select
 
-from app.models import OpenRouterUsage, VideoAiChatMessage
-from app.services.ai import chat, cost_ledger
+from app.models import AskMessage, OpenRouterUsage
+from app.services import stream_ai
+from app.services.ai import chat, cost_ledger, help_model
 from app.services.auth import accounts
+from app.services.auth.accounts import AuthUser
+from app.services.knowledge import ask_chat
 
 
 @pytest.fixture
@@ -17,10 +20,11 @@ def chat_env(monkeypatch, add_video, session, admin_user):
     """A chat-able video and a user, with the provider and its helpers stubbed."""
     user = accounts.create_user(session, "chatter", "chatter-password")
     video = add_video(title="A video", description="About things")
-    monkeypatch.setattr(chat, "ensure_quality_chat_model", lambda: "m")
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "m")
     monkeypatch.setattr(chat, "require_llm_chat_model", lambda *_: None)
     monkeypatch.setattr(chat, "llm_features_allowed", lambda: (True, None))
-    monkeypatch.setattr(chat.ai_embeddings, "build_chat_context", lambda *_: "")
+    monkeypatch.setattr(stream_ai, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(ask_chat.ai_embeddings, "build_chat_context", lambda *_: "")
 
     def use(provider) -> None:
         monkeypatch.setattr(chat, "get_llm_provider", lambda: provider)
@@ -28,13 +32,27 @@ def chat_env(monkeypatch, add_video, session, admin_user):
     return user, video, use
 
 
-def _assistant_rows(session) -> list[VideoAiChatMessage]:
-    session.expire_all()
+def _ask(user, video, authorized=None) -> list[str]:
+    """One Ask turn about ``video``, as the chat route runs it."""
+    route = ask_chat.Route(
+        video=ask_chat.VideoRef(library_id=video.id, title=video.title)
+    )
     return list(
-        session.exec(
-            select(VideoAiChatMessage).where(VideoAiChatMessage.role == "assistant")
+        ask_chat.stream_ask_events(
+            AuthUser(id=user.id, username=user.username, is_admin=False),
+            "hi",
+            thread_id=None,
+            route=route,
+            page=None,
+            data_consent="off",
+            authorized=authorized,
         )
     )
+
+
+def _assistant_rows(session) -> list[AskMessage]:
+    session.expire_all()
+    return list(session.exec(select(AskMessage).where(AskMessage.role == "assistant")))
 
 
 def test_chat_stream_stops_when_the_caller_is_revoked(chat_env, session):
@@ -50,13 +68,9 @@ def test_chat_stream_stops_when_the_caller_is_revoked(chat_env, session):
 
     use(Provider())
     allowed = iter([True, False])
-    events = list(
-        chat.stream_chat_events(
-            video.id, "hi", user.id, lambda force=False: next(allowed, False)
-        )
-    )
+    events = _ask(user, video, lambda force=False: next(allowed, False))
 
-    assert '"type": "token"' in events[1]
+    assert any('"type": "token"' in e for e in events)
     assert '"status": 401' in events[-1]
     assert not any('"type": "done"' in e for e in events)
     assert _assistant_rows(session) == []
@@ -85,7 +99,7 @@ def test_chat_survives_the_user_being_deleted_mid_answer(chat_env, session, capl
 
     use(Provider())
     with caplog.at_level(logging.WARNING, logger="app.services.ai.chat"):
-        events = list(chat.stream_chat_events(video.id, "hi", user.id))
+        events = _ask(user, video)
 
     assert '"type": "error"' in events[-1]
     assert not any('"type": "done"' in e for e in events)
@@ -121,7 +135,7 @@ def test_chat_error_event_does_not_quote_the_provider_url(chat_env):
             yield ""  # pragma: no cover - makes this a generator
 
     use(Provider())
-    events = list(chat.stream_chat_events(video.id, "hi", user.id))
+    events = _ask(user, video)
 
     body = "".join(events)
     assert '"type": "error"' in events[-1]
@@ -166,11 +180,7 @@ def test_a_revoked_chat_stops_reading_the_provider(chat_env, session):
 
     use(Provider())
     allowed = iter([True, False])
-    list(
-        chat.stream_chat_events(
-            video.id, "hi", user.id, lambda force=False: next(allowed, False)
-        )
-    )
+    _ask(user, video, lambda force=False: next(allowed, False))
 
     assert state == {"closed": True, "yielded": 2}
 
@@ -195,7 +205,10 @@ def test_chat_route_ends_the_stream_when_the_member_is_disabled_midway(
             yield "never sent"
 
     use(Provider())
-    resp = member_client.post(f"/api/videos/{video.id}/ai/chat", json={"message": "hi"})
+    resp = member_client.post(
+        "/api/ask/chat",
+        json={"message": "what is it about?", "video": {"library_id": video.id}},
+    )
 
     assert resp.status_code == 200
     assert '"text": "hello "' in resp.text

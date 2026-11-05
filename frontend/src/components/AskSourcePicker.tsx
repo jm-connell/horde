@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import type { AskScopeChannel } from "./helpChat";
+import { type AskScopeChannel, type AskVideo, askVideoKey } from "./helpChat";
 import { CheckIcon, ChevronIcon } from "./icons";
 import { MenuFlyout, MenuScroll } from "./MenuFlyout";
 
 /**
- * What Ask answers from: "auto" (Horde, or the channel a question names or
- * the page is about), Horde only, or one channel.
+ * What Ask answers from: "auto" (Horde, or the channel or video a question
+ * is about), Horde only, one channel, or one video.
  */
-export type AskSource = "auto" | "horde" | AskScopeChannel;
+export type AskSource =
+  "auto" | "horde" | { channel: AskScopeChannel } | { video: AskVideo };
 
 const ITEM =
   "flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs hover:bg-ink-800";
@@ -21,6 +22,7 @@ const ITEM =
 export default function AskSourcePicker({
   label,
   autoDetail,
+  videos,
   channels,
   selected,
   disabled,
@@ -30,10 +32,15 @@ export default function AskSourcePicker({
   label: string;
   /** What Automatic does here (it depends on the page). */
   autoDetail: string;
+  /** The videos it can answer from here: the page's, the one playing. */
+  videos: { video: AskVideo; detail: string }[];
   /** The channels Ask can answer from. */
   channels: AskScopeChannel[];
-  /** The checked item: a channel id, "auto", "horde", or null (several channels). */
-  selected: "auto" | "horde" | number | null;
+  /**
+   * The checked item: "auto", "horde", a channel id, a video's `askVideoKey`,
+   * or null (several channels).
+   */
+  selected: "auto" | "horde" | number | string | null;
   disabled: boolean;
   onPick: (source: AskSource) => void;
 }) {
@@ -120,23 +127,42 @@ export default function AskSourcePicker({
             () => pick("horde"),
             "Only Horde: using it, its settings and your library"
           )}
-          {channels.length > 0 && (
-            <p
-              aria-hidden="true"
-              className="border-t border-ink-700 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted"
-            >
-              Channels
-            </p>
-          )}
+          {videos.length > 0 && <GroupLabel>Video</GroupLabel>}
+          {videos.map(({ video, detail }) => {
+            const key = askVideoKey(video);
+            return (
+              <Fragment key={key}>
+                {item(
+                  selected === key,
+                  video.title || "Untitled video",
+                  () => pick({ video }),
+                  detail
+                )}
+              </Fragment>
+            );
+          })}
+          {channels.length > 0 && <GroupLabel>Channels</GroupLabel>}
           {channels.map((c) => (
             <Fragment key={c.id}>
               {item(selected === c.id, c.name || "Unnamed channel", () =>
-                pick(c)
+                pick({ channel: c })
               )}
             </Fragment>
           ))}
         </MenuScroll>
       </MenuFlyout>
     </span>
+  );
+}
+
+/** A small uppercase heading over a group of items (not announced: the items say it). */
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <p
+      aria-hidden="true"
+      className="border-t border-ink-700 px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted"
+    >
+      {children}
+    </p>
   );
 }

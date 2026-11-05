@@ -6,8 +6,6 @@ once and compared with the keys the SPA reads.
 
 from __future__ import annotations
 
-from app.models import VideoAiChatMessage
-
 
 def test_health_full_and_public(client, anon_client):
     full = client.get("/api/health")
@@ -161,21 +159,6 @@ def test_rename_channel(client, add_video):
     add_video(channel="Old")
     resp = client.patch("/api/channels", json={"old_name": "Old", "new_name": "New"})
     assert resp.json() == {"updated": 1, "retention_disabled": False}
-
-
-def test_video_ai_chat_history(client, session, add_video, admin_user):
-    video = add_video()
-    session.add(
-        VideoAiChatMessage(
-            video_id=video.id, user_id=admin_user.id, role="user", content="hello"
-        )
-    )
-    session.commit()
-    messages = client.get(f"/api/videos/{video.id}/ai/chat").json()["messages"]
-    assert [m["content"] for m in messages] == ["hello"]
-    assert set(messages[0]) == {"id", "role", "content", "cost", "model", "created_at"}
-    assert client.delete(f"/api/videos/{video.id}/ai/chat").json() == {"ok": True}
-    assert client.get(f"/api/videos/{video.id}/ai/chat").json() == {"messages": []}
 
 
 def test_sprite_generate_status(client, add_video, monkeypatch):

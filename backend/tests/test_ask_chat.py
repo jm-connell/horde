@@ -383,7 +383,7 @@ def test_horde_picked_as_the_source_ignores_a_named_channel(
             },
         ).text
     )
-    assert events[1] == {"type": "scope", "channels": []}
+    assert events[1] == {"type": "scope", "channels": [], "video": None}
     assert "sources" in [e["type"] for e in events]
     assert events[-1]["type"] == "done"
 
@@ -769,3 +769,155 @@ def test_the_watched_video_comes_first(session, init_db, monkeypatch):
     assert "watched0000" not in found()
     # ...unless it is the one being watched.
     assert "watched0000" in found(focus_yt_id="watched0000")
+
+
+# --- a video as the source -----------------------------------------------------
+
+
+@pytest.fixture
+def video_chat(llm, monkeypatch):
+    """The per-video chat checks: AI on, video chat on."""
+    from app.services import stream_ai
+
+    monkeypatch.setattr(chat, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(stream_ai, "llm_features_allowed", lambda: (True, None))
+    return llm
+
+
+def test_a_video_answers_unless_the_question_is_about_horde_or_a_channel(session):
+    nut = _channel(session)
+    fix = _channel(session, "ChrisFix", "https://youtube.com/@chrisfix")
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    _indexed_video(session, fix, "bbbbbbbbbbb", BELT_VTT)
+    video = ask_chat.VideoRef(library_id=1, youtube_id="aaaaaaaaaaa", title="Belt")
+
+    def route(message: str, page: int | None = nut.id, **kw) -> ask_chat.Route:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=page, video=video, **kw
+        )
+
+    assert route("when should I change it?") == ask_chat.Route(video=video)
+    # About Horde, or the user's own things: Horde.
+    assert route("how do I change the theme?") == ask_chat.Route()
+    assert route("what should I watch next?") == ask_chat.Route()
+    # A channel by name, or the whole of the page's channel: the channel.
+    assert route("what does chrisfix say about belts?").channels == [fix]
+    assert route("has he talked about this in other videos?").channels == [nut]
+    assert route("what does this channel say about oil?").channels == [nut]
+    # Not indexed: the video is all there is.
+    assert route("has he talked about this in other videos?", page=None) == (
+        ask_chat.Route(video=video)
+    )
+    # Horde picked wins over everything.
+    assert route("when should I change it?", horde_only=True) == ask_chat.Route()
+
+
+def test_a_question_on_a_library_video_answers_from_it(
+    client, session, video_chat, add_video
+):
+    video = add_video(
+        title="Timing belt basics",
+        description="How often to change a timing belt.",
+        source_url="https://www.youtube.com/watch?v=ccccccccccc",
+    )
+    video_chat["replies"] = ["Every ninety thousand miles."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "how often should it be changed?",
+                "video": {"library_id": video.id},
+            },
+        ).text
+    )
+    ref = {
+        "library_id": video.id,
+        "youtube_id": "ccccccccccc",
+        "url": None,
+        "title": "Timing belt basics",
+    }
+    assert events[1] == {"type": "scope", "channels": [], "video": ref}
+    assert events[-1]["type"] == "done"
+    call = video_chat["calls"][0]
+    assert "Timing belt basics" in call["system"]
+    assert call["model"] == "test-model-14b"
+
+    thread = client.get(f"/api/ask/threads/{events[0]['id']}").json()
+    assert thread["scope"] == {"video": ref}
+    assert [m["role"] for m in thread["messages"]] == ["user", "assistant"]
+    assert thread["messages"][1]["sources"] == {"kind": "video", "video": ref}
+
+
+def test_a_question_on_a_stream_answers_from_it(client, video_chat, monkeypatch):
+    from app.api import stream_ai as stream_ai_api
+    from app.services import stream_preview
+
+    url = "https://www.youtube.com/watch?v=ddddddddddd"
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda u: {
+            "id": "ddddddddddd",
+            "title": "Ridge at dawn",
+            "channel": "Northwind",
+            "description": "A ride up the ridge.",
+            "duration": 600.0,
+            "source_url": url,
+            "subtitles": [],
+        },
+    )
+
+    async def no_vtt(request, cleaned, lang):
+        return b""
+
+    monkeypatch.setattr(stream_ai_api, "fetch_preview_vtt", no_vtt)
+    video_chat["replies"] = ["It climbs the ridge."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={"message": "where does it go?", "video": {"url": url}},
+        ).text
+    )
+    assert events[1]["video"] == {
+        "library_id": None,
+        "youtube_id": "ddddddddddd",
+        "url": url,
+        "title": "Ridge at dawn",
+    }
+    assert "Ridge at dawn" in video_chat["calls"][0]["system"]
+    assert events[-1]["type"] == "done"
+
+
+def test_with_video_chat_off_a_video_question_goes_to_horde(
+    client, session, video_chat, help_index, add_video
+):
+    video = add_video(title="Timing belt basics", description="Belts.")
+    assert (
+        client.patch("/api/settings", json={"ai": {"ai_chat": False}}).status_code
+        == 200
+    )
+    video_chat["replies"] = ["Use the player menu."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "how often should it be changed?",
+                "video": {"library_id": video.id},
+            },
+        ).text
+    )
+    assert events[1] == {"type": "scope", "channels": [], "video": None}
+    assert "sources" in [e["type"] for e in events]
+
+
+def test_a_downloaded_stream_is_asked_about_as_its_library_copy(
+    session, video_chat, add_video
+):
+    """A conversation about a stream keeps going on the video once it is downloaded."""
+    video = add_video(title="Ridge at dawn", yt_id="ddddddddddd")
+    ref = ask_chat.resolve_video(
+        session, None, "https://www.youtube.com/watch?v=ddddddddddd"
+    )
+    assert ref == ask_chat.VideoRef(
+        library_id=video.id, youtube_id="ddddddddddd", title="Ridge at dawn"
+    )

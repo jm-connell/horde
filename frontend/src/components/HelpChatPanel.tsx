@@ -1,14 +1,16 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError, api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { usePlaybackSession } from "../context/PlaybackContext";
 import type {
-  ChannelRequest,
   PageChannel,
   PageDetail,
+  PageVideo,
+  SourceRequest,
 } from "../context/HelpChatContext";
+import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { findAskChannel } from "../pages/ask/askLinks";
 import type { HelpCatalog } from "../types";
 import { useSettings } from "../hooks/useSettings";
@@ -29,10 +31,13 @@ import {
   type AskReference,
   type AskScopeChannel,
   type AskSourceState,
+  type AskVideo,
+  askVideoKey,
   HELP_CHAT_STORAGE_KEY,
   type HelpMessage,
   isAskState,
   isHelpThread,
+  parseAskVideo,
   parseReferences,
   parseScopeChannels,
   parseSources,
@@ -66,10 +71,40 @@ function isAppPath(href: string): boolean {
 }
 
 /** Nothing picked: each question goes to Horde or a channel, by what it asks. */
-const AUTO: AskSourceState = { scope: [], horde: false };
+const AUTO: AskSourceState = { scope: [], horde: false, video: null };
 
-/** Who an answer is from: the channels it quotes, else Horde. */
+/** The source a request starts a conversation on. */
+function requestedSource(req: SourceRequest): AskSourceState {
+  return req.video
+    ? { scope: [], horde: false, video: req.video }
+    : { scope: req.channel ? [req.channel] : [], horde: false, video: null };
+}
+
+/** A library video or a stream as Ask refers to it. */
+function playingVideo(
+  current: { id: number; title: string; source_url?: string | null } | null,
+  stream: { url: string; title: string; sourceUrl?: string | null } | null
+): AskVideo | null {
+  if (current)
+    return {
+      library_id: current.id,
+      youtube_id: extractYouTubeId(current.source_url ?? "", "") || null,
+      url: null,
+      title: current.title,
+    };
+  if (stream)
+    return {
+      library_id: null,
+      youtube_id: extractYouTubeId(stream.sourceUrl || stream.url, "") || null,
+      url: stream.url,
+      title: stream.title,
+    };
+  return null;
+}
+
+/** Who an answer is from: the video or the channels it quotes, else Horde. */
 function answeredFrom(m: HelpMessage): string {
+  if (m.video) return m.video.title || "This video";
   if (!m.references) return "Horde";
   const names = (m.channels ?? []).map((c) => c.name).filter(Boolean);
   return names.length ? names.join(", ") : "Channels";
@@ -89,14 +124,23 @@ interface Props {
   pageDetail: () => PageDetail | null;
   /** Focus the question box (false when restored open after a reload). */
   focusOnOpen: boolean;
-  /** "Ask <channel>" from a channel page: a new conversation about it. */
-  channelRequest?: ChannelRequest | null;
+  /** "Ask <channel>" or the watch page's "Chat": a new conversation about it. */
+  sourceRequest?: SourceRequest | null;
   /** The channel (and video) the current page is about. */
   pageChannel?: PageChannel | null;
-  pendingChannelRequest?: () => ChannelRequest | null;
-  consumeChannelRequest?: (seq: number) => void;
+  /** The video the watch page shows. */
+  pageVideo?: PageVideo | null;
+  pendingSourceRequest?: () => SourceRequest | null;
+  consumeSourceRequest?: (seq: number) => void;
   onClose: () => void;
 }
+
+/** Starters when the chat is about a video. */
+const VIDEO_PROMPTS = [
+  "What is this video about?",
+  "What are the key points?",
+  "What did viewers think?",
+];
 
 const BUTTON =
   "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-xs font-medium text-gray-300 hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-40";
@@ -181,20 +225,21 @@ function AssistantReply({
 export default function HelpChatPanel({
   pageDetail,
   focusOnOpen,
-  channelRequest = null,
+  sourceRequest = null,
   pageChannel = null,
-  pendingChannelRequest = () => null,
-  consumeChannelRequest = () => {},
+  pageVideo = null,
+  pendingSourceRequest = () => null,
+  consumeSourceRequest = () => {},
   onClose,
 }: Props) {
   const inputId = useId();
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  // Opened by "Ask <channel>": start on a new conversation about it. (The
-  // panel mounts on open, so the request is already there; peeking, not
-  // taking, keeps React's doubled initialisers harmless.)
-  const [opening] = useState(() => pendingChannelRequest());
+  // Opened by "Ask <channel>" or "Chat": start on a new conversation about
+  // it. (The panel mounts on open, so the request is already there; peeking,
+  // not taking, keeps React's doubled initialisers harmless.)
+  const [opening] = useState(() => pendingSourceRequest());
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     opening ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
@@ -208,7 +253,7 @@ export default function HelpChatPanel({
         { threadId: null, scope: [] },
         "session"
       );
-    const source = { scope: [opening.channel], horde: false };
+    const source = requestedSource(opening);
     return { threadId: null, ...source, picked: source };
   });
   const [showHistory, setShowHistory] = useState(false);
@@ -221,6 +266,7 @@ export default function HelpChatPanel({
   const [prompts] = useState(() =>
     pickPrompts((p) => promptAllowed(p, { isAdmin, can }))
   );
+  const queryClient = useQueryClient();
   const catalog = useQuery({
     queryKey: queryKeys.ai.helpCatalog,
     queryFn: ({ signal }) => api.getHelpCatalog({ signal }),
@@ -256,20 +302,20 @@ export default function HelpChatPanel({
     setJson(ASK_CHAT_STORAGE_KEY, ask, "session");
   }, [ask]);
 
-  // "Ask <channel>" while the panel is open: a new conversation about it.
+  // "Ask <channel>" or "Chat" while the panel is open: a new conversation.
   useEffect(() => {
-    const req = pendingChannelRequest();
+    const req = pendingSourceRequest();
     if (!req) return;
-    consumeChannelRequest(req.seq);
+    consumeSourceRequest(req.seq);
     if (req.seq === opening?.seq) return; // started on it already
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
     setShowHistory(false);
-    const source = { scope: [req.channel], horde: false };
+    const source = requestedSource(req);
     setAsk({ threadId: null, ...source, picked: source });
     inputRef.current?.focus();
-  }, [channelRequest, pendingChannelRequest, consumeChannelRequest, opening]);
+  }, [sourceRequest, pendingSourceRequest, consumeSourceRequest, opening]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -336,6 +382,8 @@ export default function HelpChatPanel({
         pageChannelId: pageAsk?.id ?? null,
         pageVideoId: pageAsk ? (pageChannel?.videoId ?? null) : null,
         hordeOnly: !!ask.horde,
+        // The picked video, else (nothing picked) the watch page's.
+        video: ask.video ?? (auto ? (pageVideoHere ?? null) : null),
         page: currentPage(),
         dataConsent: consent,
       };
@@ -347,11 +395,23 @@ export default function HelpChatPanel({
             setAsk((a) => ({ ...a, threadId }));
           } else if (event.type === "scope") {
             const scope = parseScopeChannels(event.channels);
-            setAsk((a) => ({ ...a, scope, horde: !scope.length && a.horde }));
+            const video = parseAskVideo(event.video);
+            // A picked video stays the source: an answer from Horde or the
+            // channel does not replace it (the reply's byline says which).
+            setAsk((a) =>
+              a.video ? a : { ...a, scope, horde: !scope.length && a.horde }
+            );
             // A channel answer: the model's own numbers stay hidden until the
             // renumbered answer and its references arrive.
             if (scope.length)
               update((m) => ({ ...m, references: [], channels: scope }));
+            if (video) update((m) => ({ ...m, video }));
+            // A stream's saved AI row is made (or its expiry pushed back)
+            // by a question about it: the watch page shows until when.
+            if (video?.url)
+              void queryClient.invalidateQueries({
+                queryKey: queryKeys.preview.ai(video.url),
+              });
           } else if (
             event.type === "status" &&
             typeof event.text === "string"
@@ -457,14 +517,15 @@ export default function HelpChatPanel({
           ...savedSources(m.sources),
         }))
       );
-      const scope = parseScopeChannels(
-        (thread.scope as { channels?: unknown }).channels
-      );
+      const saved = thread.scope as { channels?: unknown; video?: unknown };
+      const scope = parseScopeChannels(saved.channels);
+      const video = parseAskVideo(saved.video);
       setAsk((a) => ({
         ...a,
         threadId: thread.id,
         scope,
-        horde: !scope.length && a.horde,
+        horde: !scope.length && !video && a.horde,
+        video,
       }));
       setShowHistory(false);
     } catch (err) {
@@ -514,32 +575,68 @@ export default function HelpChatPanel({
   const askable: AskScopeChannel[] = (askChannels ?? [])
     .filter((c) => c.passages > 0)
     .map((c) => ({ id: c.id, name: c.channel_name || c.channel_url }));
-  const showSource = !noAi && (askable.length > 0 || ask.scope.length > 0);
-  const auto = !ask.horde && !scoped.length;
-  // Nothing picked on a channel's page: its videos' questions go to it.
-  const pageAuto = !noAi && auto ? pageName : null;
+  // Video answers need AI too.
+  const pickedVideo = noAi ? null : (ask.video ?? null);
+  const auto = !ask.horde && !scoped.length && !pickedVideo;
+  // The watch page's video, while that page is showing.
+  const pageVideoHere =
+    !noAi && pageVideo && pageVideo.pathname === location.pathname
+      ? pageVideo.video
+      : null;
+  // The videos the menu offers: this page's, the one playing, the picked one.
+  const videoChoices: { video: AskVideo; detail: string }[] = [];
+  const playing = noAi ? null : playingVideo(current, stream);
+  for (const [video, detail] of [
+    [pageVideoHere, "This page's video"],
+    [playing, "Playing now"],
+    [pickedVideo, "Picked"],
+  ] as const) {
+    if (
+      video &&
+      !videoChoices.some((c) => askVideoKey(c.video) === askVideoKey(video))
+    )
+      videoChoices.push({ video, detail });
+  }
+  const showSource =
+    !noAi &&
+    (askable.length > 0 || ask.scope.length > 0 || videoChoices.length > 0);
+  // Nothing picked on the watch page: questions go to its video. On a
+  // channel's page: its videos' questions go to the channel.
+  const pageVideoAuto = auto && !!pageVideoHere;
+  const pageAuto = !noAi && auto && !pageVideoHere ? pageName : null;
+  const videoTitle = pickedVideo?.title || "this video";
   const sourceLabel = scoped.length
     ? channelNames || "a channel"
-    : ask.horde
-      ? "Horde"
-      : pageAuto
-        ? `${pageAuto} or Horde`
-        : "Automatic";
+    : pickedVideo
+      ? pickedVideo.title || "this video"
+      : ask.horde
+        ? "Horde"
+        : pageVideoAuto
+          ? "this video or Horde"
+          : pageAuto
+            ? `${pageAuto} or Horde`
+            : "Automatic";
   const placeholder = scoped.length
     ? `Ask ${channelNames || "this channel"}…`
-    : pageAuto
-      ? `Ask ${pageAuto} or Horde…`
-      : showSource && auto
-        ? "Ask how to use Horde, or name a channel…"
-        : "Ask how to use Horde…";
+    : pickedVideo
+      ? `Ask about ${videoTitle}…`
+      : pageVideoAuto
+        ? "Ask this video or Horde…"
+        : pageAuto
+          ? `Ask ${pageAuto} or Horde…`
+          : showSource && auto
+            ? "Ask how to use Horde, or name a channel…"
+            : "Ask how to use Horde…";
 
   function pickSource(source: AskSource) {
-    const next =
+    const next: AskSourceState =
       source === "auto"
         ? AUTO
         : source === "horde"
-          ? { scope: [], horde: true }
-          : { scope: [source], horde: false };
+          ? { scope: [], horde: true, video: null }
+          : "video" in source
+            ? { scope: [], horde: false, video: source.video }
+            : { scope: [source.channel], horde: false, video: null };
     setAsk((a) => ({ ...a, ...next, picked: next }));
     inputRef.current?.focus();
   }
@@ -602,19 +699,24 @@ export default function HelpChatPanel({
             <AskSourcePicker
               label={sourceLabel}
               autoDetail={
-                pageName
-                  ? `${pageName} for its videos, Horde for the rest`
-                  : "Horde, or the channel a question names"
+                pageVideoHere
+                  ? "This video; Horde or a channel when a question is about them"
+                  : pageName
+                    ? `${pageName} for its videos, Horde for the rest`
+                    : "Horde, or the channel a question names"
               }
+              videos={videoChoices}
               channels={askable}
               selected={
-                ask.scope.length === 1
-                  ? ask.scope[0].id
-                  : ask.scope.length
-                    ? null
-                    : ask.horde
-                      ? "horde"
-                      : "auto"
+                pickedVideo
+                  ? askVideoKey(pickedVideo)
+                  : ask.scope.length === 1
+                    ? ask.scope[0].id
+                    : ask.scope.length
+                      ? null
+                      : ask.horde
+                        ? "horde"
+                        : "auto"
               }
               disabled={sending}
               onPick={pickSource}
@@ -698,7 +800,41 @@ export default function HelpChatPanel({
         {!showHistory &&
           messages.length === 0 &&
           !sending &&
-          scoped.length === 0 && (
+          scoped.length === 0 &&
+          (pickedVideo || pageVideoAuto) && (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-400">
+                Ask about{" "}
+                {pickedVideo ? (
+                  <span className="text-gray-200">{videoTitle}</span>
+                ) : (
+                  "this video"
+                )}
+                : what it covers, what was said in it, what viewers commented.
+                Questions about Horde or your library still go to Horde, and
+                questions about a whole channel to that channel when Ask indexes
+                it.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {VIDEO_PROMPTS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => void send(q)}
+                    className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-950 px-3 py-1.5 text-left text-xs text-gray-300 hover:border-accent hover:text-accent"
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        {!showHistory &&
+          messages.length === 0 &&
+          !sending &&
+          scoped.length === 0 &&
+          !pickedVideo &&
+          !pageVideoAuto && (
             <div className="space-y-3">
               <p className="text-sm text-gray-400">
                 Ask how to use, set up or fix Horde. I can also take you to a
