@@ -68,6 +68,9 @@ export default function SuggestedChannels({
                     }
                     alt=""
                     className="aspect-video w-full rounded-sm bg-ink-800 object-cover"
+                    fallback={
+                      <span className="block aspect-video w-full rounded-sm bg-ink-800" />
+                    }
                   />
                 ))}
               </button>

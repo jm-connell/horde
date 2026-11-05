@@ -24,6 +24,7 @@ import CardPreviewVideo from "./CardPreviewVideo";
 import CardCopy, { type CardFact } from "./CardCopy";
 import CardTitle from "./CardTitle";
 import FadeImage from "./FadeImage";
+import ThumbPlaceholder from "./ThumbPlaceholder";
 import MatchReasonBadge from "./MatchReasonBadge";
 import QueueButton from "./QueueButton";
 import { visibleMatchReasonTip } from "../pages/libraryCatalogProgress";
@@ -217,11 +218,10 @@ function FeedThumbnail({
               alt=""
               loading="lazy"
               className="h-full w-full object-cover"
+              fallback={<ThumbPlaceholder />}
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center text-muted">
-              <PlayIcon className="text-4xl" />
-            </div>
+            <ThumbPlaceholder />
           )}
           {previewSrc && previewVideoId != null ? (
             <CardPreviewVideo

@@ -332,3 +332,16 @@ test("Recommended can be browsed by AI category", async ({ page }) => {
   await page.getByRole("button", { name: "For you", exact: true }).click();
   await expect(shelf).toBeVisible();
 });
+
+test("a thumbnail that fails to load leaves the card's plain placeholder", async ({
+  page,
+}) => {
+  await page.route(/i\.ytimg\.com|\/vi\//, (route) => route.abort());
+  await openRecommended(page);
+  const card = page.locator('[data-rec-key="discover001"]');
+  await expect(card.locator("svg").first()).toBeVisible();
+  await expect(card.locator("img.ui-fade-img")).toHaveCount(0);
+  // Same on the channel suggestions' small thumbnails.
+  const shelf = page.getByRole("region", { name: "Channels you might like" });
+  await expect(shelf.locator("img.ui-fade-img")).toHaveCount(0);
+});
