@@ -252,15 +252,6 @@ function OnlineLibrary() {
       ? `#${activeTag}`
       : "Home";
 
-  const toggleTagsFromHeader = (leaveRecommended: boolean) => {
-    if (leaveRecommended) {
-      setHomeTab("library");
-      setShowTags(true);
-      return;
-    }
-    setShowTags((s) => !s);
-  };
-
   return (
     <div className={`flex gap-6${queueDock.dockedBottom ? " pb-4" : ""}`}>
       {queueDock.showQueuePanel && !queueDock.queueDockedBottom && (
@@ -327,13 +318,9 @@ function OnlineLibrary() {
             headline={headline}
             isHome={isHome}
             showHomeTabs={showHomeTabs}
-            onRecommendedTab={onRecommendedTab}
             homeTab={homeTab}
             onHomeTab={setHomeTab}
             showDiscover={discoverEnabled !== false}
-            hasTags={hasTags}
-            showTags={showTags}
-            onToggleTags={toggleTagsFromHeader}
             settings={settings}
           >
             <HomeControls

@@ -512,6 +512,8 @@ def discover_channels(
                 reason=s.reason,
                 videos=[_entry(c) for c in s.videos if c.video_id is None],
                 indexed=s.indexed,
+                typical_views=s.typical_views,
+                typical_minutes=s.typical_minutes,
             )
             for s in picks
         ]

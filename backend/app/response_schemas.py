@@ -669,6 +669,9 @@ class SuggestedChannelRead(BaseModel):
     videos: list[ChannelFeedEntry]
     #: Its catalog is indexed already (following adds its uploads at once).
     indexed: bool
+    #: The median views and length (minutes) of the videos the feed picked.
+    typical_views: int | None = None
+    typical_minutes: int | None = None
 
 
 class SuggestedChannelsRead(BaseModel):

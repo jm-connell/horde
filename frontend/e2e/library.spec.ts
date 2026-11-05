@@ -8,7 +8,7 @@ import {
   videoCard,
 } from "./fixtures";
 
-test("home shows the library, continue watching, tags, and search", async ({
+test("home shows the library, continue watching, tag pages, and search", async ({
   page,
 }) => {
   await page.goto("/");
@@ -25,8 +25,10 @@ test("home shows the library, continue watching, tags, and search", async ({
     await expect(page.getByRole("button", { name: /Kiln/ })).toBeVisible();
   }
 
-  await page.getByRole("button", { name: "Tags" }).click();
-  await page.getByRole("button", { name: /#ambient/ }).click();
+  // No tags button on home (Recommended has categories); a video's tag links
+  // open a tag page.
+  await expect(page.getByRole("button", { name: "Tags" })).toHaveCount(0);
+  await page.goto("/?tag=ambient");
   await expect(
     page.getByRole("heading", { name: "#ambient", level: 1 })
   ).toBeVisible();

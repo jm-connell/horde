@@ -3,9 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useDownloads } from "../context/DownloadContext";
+import { useGridColumns } from "../hooks/useGridColumns";
 import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
-import { useSettings } from "../hooks/useSettings";
 import { useRecTopics, useRecTuning } from "../queries/discover";
 import { queryKeys } from "../queries/keys";
 import type {
@@ -17,55 +17,25 @@ import type {
 import { button } from "./buttons";
 import ChannelFeedCard from "./ChannelFeedCard";
 import RecMenu from "./discover/RecMenu";
+import { SOURCE } from "./discover/sources";
 import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 
 const PAGE_SIZE = 24;
-/** The channel suggestions sit after this many cards. */
-const SUGGESTIONS_AFTER = 8;
+/**
+ * How many cards come before the channel suggestions: two full rows (four on
+ * a narrow grid), or as many full rows as there are, so no row above them is
+ * left part-empty.
+ */
+function suggestionsAfter(columns: number, cards: number): number {
+  const full = Math.floor(cards / columns) * columns;
+  return Math.min(columns * (columns >= 3 ? 2 : 4), full || cards);
+}
 const STATUS_POLL_MS = 8000;
 /** Stop asking after this long (the gatherer may be waiting on YouTube). */
 const STATUS_POLL_MAX = 40;
-
-type Source = DiscoverItem["source"];
-
-/**
- * Where a card comes from, when source marks are on, in the theme's accent: a
- * downloaded video gets a solid accent outline, one from a channel the user
- * follows or has indexed a faded one, and one from a channel new to them none
- * (the plain card). The legend above the feed spells them out.
- */
-const SOURCE: Record<
-  Source,
-  { label: string; outline: string | null; dot: string }
-> = {
-  library: {
-    label: "Downloaded",
-    outline: "border border-accent",
-    dot: "bg-accent",
-  },
-  channels: {
-    label: "From your channels",
-    outline: "border border-accent/35",
-    dot: "bg-accent/35",
-  },
-  new: {
-    label: "New to you",
-    outline: null,
-    dot: "ring-1 ring-inset ring-muted",
-  },
-};
-
-function SourceDot({ source }: { source: Source }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${SOURCE[source].dot}`}
-    />
-  );
-}
 
 type ChannelHit = { name: string; url: string | null };
 
@@ -105,8 +75,6 @@ export default function DiscoverHome({
   const { showToast, showError } = useToast();
   const { can } = useAuth();
   const { submitDownload } = useDownloads();
-  const [settings, updateSettings] = useSettings();
-  const marks = settings.recSourceMarks;
   const queryClient = useQueryClient();
   const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
   useAlgorithmPanelHere();
@@ -143,6 +111,8 @@ export default function DiscoverHome({
   const [freshReady, setFreshReady] = useState(false);
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const [columns, gridRef] = useGridColumns(4);
+  const splitAt = suggestionsAfter(columns, items.length);
   const runAtLoad = useRef<string | null>(null);
   // Bumped on every reload, so a "load more" answer for an older list is dropped.
   const generation = useRef(0);
@@ -383,7 +353,7 @@ export default function DiscoverHome({
         // Why it is here, on hover; the outline already says where it is from.
         title={item.reason.detail ?? item.reason.text}
       >
-        {marks && <span className="sr-only">{SOURCE[item.source].label}.</span>}
+        <span className="sr-only">{SOURCE[item.source].label}.</span>
         {item.video ? (
           <VideoCard video={item.video} layout="feed" />
         ) : item.stream ? (
@@ -398,7 +368,7 @@ export default function DiscoverHome({
             onChannelClick={onChannelClick}
           />
         ) : null}
-        {marks && SOURCE[item.source].outline && (
+        {SOURCE[item.source].outline && (
           <span
             aria-hidden="true"
             className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
@@ -417,13 +387,12 @@ export default function DiscoverHome({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <p
-          className="min-w-0 flex-1 basis-full text-sm text-muted sm:basis-0"
+          className="min-w-0 flex-1 basis-full text-sm text-muted empty:hidden sm:basis-0"
           aria-live="polite"
         >
-          {statusLine ??
-            "From your channels, more like what you watch, and channels new to you."}
+          {statusLine}
         </p>
         {freshReady && (
           <button
@@ -434,15 +403,6 @@ export default function DiscoverHome({
             Show new picks
           </button>
         )}
-        <button
-          type="button"
-          aria-pressed={marks}
-          onClick={() => updateSettings({ recSourceMarks: !marks })}
-          className={`${button("secondary", "sm")} ${marks ? "border-accent text-accent" : ""}`}
-          title="Outline each video by where it comes from"
-        >
-          Sources
-        </button>
         <button
           type="button"
           aria-pressed={algorithmOpen}
@@ -462,19 +422,6 @@ export default function DiscoverHome({
           Refresh
         </button>
       </div>
-      {marks && items.length > 0 && (
-        <ul
-          aria-label="What the outlines mean"
-          className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted"
-        >
-          {(Object.keys(SOURCE) as Source[]).map((source) => (
-            <li key={source} className="flex items-center gap-1.5">
-              <SourceDot source={source} />
-              {SOURCE[source].label}
-            </li>
-          ))}
-        </ul>
-      )}
 
       {loading ? (
         <LoadingIndicator />
@@ -498,17 +445,18 @@ export default function DiscoverHome({
       ) : (
         <>
           <div
+            ref={gridRef}
             className={`${gridClass} transition-opacity duration-200 ${updating ? "opacity-60" : ""}`}
             aria-busy={updating || undefined}
           >
-            {items.slice(0, SUGGESTIONS_AFTER).map(card)}
+            {items.slice(0, splitAt).map(card)}
             <SuggestedChannels
               channels={channels}
               onFollow={followChannel}
               onDismiss={dismissChannel}
               onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
             />
-            {items.slice(SUGGESTIONS_AFTER).map(card)}
+            {items.slice(splitAt).map(card)}
           </div>
           <div ref={sentinelRef} className="h-4" />
           {loadingMore && <LoadingIndicator />}

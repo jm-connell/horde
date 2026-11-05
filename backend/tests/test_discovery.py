@@ -1066,3 +1066,34 @@ def test_live_picks_are_capped_and_match_streamed_watches(
     live = [k for k in keys if k.startswith("livevideo")]
     assert len(live) == 1 + MAX_OTHER
     assert keys[0] == "livevideo07"
+
+
+def test_channel_suggestion_says_what_the_channel_is_like():
+    """A suggestion carries its picks' typical views and length, and a short
+    reason naming the watch that led to it."""
+    from app.services.discovery.candidates import Candidate
+    from app.services.discovery.feed import ChannelStat, Feed
+    from app.services.discovery.feedback import Exclusions
+    from app.services.discovery.suggest import suggestions
+
+    def cand(i: int, views: int | None, seconds: float | None) -> Candidate:
+        return Candidate(
+            key=f"sky{i:08d}",
+            pool="discovery",
+            title=f"Sky {i}",
+            channel="Northern Skies",
+            channel_url="https://youtube.com/@northernskies",
+            view_count=views,
+            duration=seconds,
+        )
+
+    stat = ChannelStat("Northern Skies", "https://youtube.com/@northernskies")
+    stat.items = [cand(1, 1000, 600), cand(2, 3000, 900), cand(3, None, 1200)]
+    stat.scores = [0.9, 0.8, 0.7]
+    stat.seeds = {"Aurora over the fjord"}
+    feed = Feed(items=[], new_channels={stat.url: stat}, cold=False)
+
+    [pick] = suggestions(feed, Exclusions())
+    assert pick.typical_views == 2000
+    assert pick.typical_minutes == 15
+    assert pick.reason == "Like Aurora over the fjord"

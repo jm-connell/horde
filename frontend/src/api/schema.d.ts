@@ -8414,6 +8414,10 @@ export interface components {
             name: string;
             /** Reason */
             reason?: string | null;
+            /** Typical Minutes */
+            typical_minutes?: number | null;
+            /** Typical Views */
+            typical_views?: number | null;
             /** Url */
             url: string;
             /** Videos */

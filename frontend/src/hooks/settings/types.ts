@@ -186,8 +186,6 @@ export interface Settings {
   showContinueWatching: boolean;
   /** "For you" also lists indexed channels' uploads that are not downloaded. */
   recommendStreams: boolean;
-  /** Recommended+ outlines cards by where they come from (library, followed, other). */
-  recSourceMarks: boolean;
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
   showDownloadNavBadge: boolean;

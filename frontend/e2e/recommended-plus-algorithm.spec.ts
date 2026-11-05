@@ -203,7 +203,7 @@ test("interests and blocked topics change the feed", async ({ page }) => {
   await panel.getByLabel("Add an interest").fill("night sky");
   await panel.getByRole("button", { name: "Add", exact: true }).click();
   await expect(panel.locator('[data-topic="night sky"]')).toContainText(
-    "Always"
+    "Forever"
   );
   await expect(page.locator('[data-rec-key="discover001"]')).toHaveAttribute(
     "title",

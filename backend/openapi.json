@@ -11366,6 +11366,28 @@
             ],
             "title": "Reason"
           },
+          "typical_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Minutes"
+          },
+          "typical_views": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Views"
+          },
           "url": {
             "title": "Url",
             "type": "string"

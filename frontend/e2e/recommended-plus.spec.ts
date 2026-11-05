@@ -63,14 +63,10 @@ test("source marks tell downloaded, your channels and new apart", async ({
   const found = page.locator(`[data-rec-key="discover001"]`);
   await expect(found.getByText("New to you.")).toBeAttached();
 
-  const sources = page.getByRole("button", { name: "Sources" });
-  await expect(sources).toHaveAttribute("aria-pressed", "true");
-  await sources.click();
-  await expect(sources).toHaveAttribute("aria-pressed", "false");
+  // Always on: no toggle, and the legend sits beside the home tabs.
+  await expect(page.getByRole("button", { name: "Sources" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(legend).toHaveCount(0);
-  await page.reload();
-  await expect(page.getByText(FOUND)).toBeVisible();
-  await expect(sources).toHaveAttribute("aria-pressed", "false");
 });
 
 test("Recommended+ is hidden while looking on YouTube is off", async ({
@@ -147,6 +143,18 @@ test("suggested channels can be followed or dismissed", async ({ page }) => {
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.getByText("Northern Skies")).toBeVisible();
   await expect(shelf.getByText("Tidepool Notes")).toBeVisible();
+  // It follows whole rows of cards: none of the rows above it is cut short.
+  const above = await page.evaluate(() => {
+    const grid = document.querySelector("[data-rec-key]")?.parentElement;
+    const shelf = grid?.querySelector('[aria-label="Channels you might like"]');
+    if (!grid || !shelf) return null;
+    const columns =
+      getComputedStyle(grid).gridTemplateColumns.split(" ").length;
+    const before = [...grid.children].indexOf(shelf);
+    return { columns, before };
+  });
+  expect(above).not.toBeNull();
+  expect(above!.before % above!.columns).toBe(0);
 
   await shelf
     .getByRole("button", { name: "Don't suggest Tidepool Notes" })

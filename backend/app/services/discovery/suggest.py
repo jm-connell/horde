@@ -9,6 +9,7 @@ interests point at beats a one-off.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from statistics import median
 
 from .candidates import Candidate
 from .feed import Feed, _short
@@ -27,6 +28,13 @@ class Suggestion:
     reason: str | None
     videos: list[Candidate]
     indexed: bool
+    #: What a typical video of the channel the feed picked is like, when known.
+    typical_views: int | None = None
+    typical_minutes: int | None = None
+
+
+def _typical(values: list[float]) -> float | None:
+    return median(values) if values else None
 
 
 def suggestions(feed: Feed, excluded: Exclusions) -> list[Suggestion]:
@@ -46,14 +54,20 @@ def suggestions(feed: Feed, excluded: Exclusions) -> list[Suggestion]:
         score = sum(w * s for w, s in zip(weights, top, strict=False))
         score += 0.03 * min(len(stat.seeds), 3)
         seed = sorted(stat.seeds)[0] if stat.seeds and not feed.cold else None
+        views = _typical([c.view_count for c in stat.items if c.view_count])
+        seconds = _typical([c.duration for c in stat.items if c.duration])
         out.append(
             Suggestion(
                 name=stat.name or stat.url,
                 url=stat.url,
                 score=score,
-                reason=f"Because you watched {_short(seed)}" if seed else None,
+                reason=f"Like {_short(seed, 50)}" if seed else None,
                 videos=[c for _, c in ranked[:SAMPLES]],
                 indexed=any(c.pool == "catalog" for c in stat.items),
+                typical_views=round(views) if views is not None else None,
+                typical_minutes=max(1, round(seconds / 60))
+                if seconds is not None
+                else None,
             )
         )
     out.sort(key=lambda s: -s.score)
