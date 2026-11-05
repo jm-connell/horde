@@ -4,6 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useDownloads } from "../context/DownloadContext";
 import { useGridColumns } from "../hooks/useGridColumns";
+import { normalizeChannelUrl } from "../utils/followUrl";
 import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
 import {
@@ -25,6 +26,7 @@ import { button } from "./buttons";
 import ChannelFeedCard from "./ChannelFeedCard";
 import RecMenu from "./discover/RecMenu";
 import { SOURCE } from "./discover/sources";
+import { useHideLive } from "./discover/useHideLive";
 import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
@@ -331,6 +333,20 @@ export default function DiscoverHome({
       });
   };
 
+  const hideLive = useHideLive((url) =>
+    setItems((prev) =>
+      prev.filter(
+        (i) =>
+          !(
+            i.reason.kind === "live" &&
+            i.stream?.channel_url &&
+            (normalizeChannelUrl(i.stream.channel_url) ??
+              i.stream.channel_url) === url
+          )
+      )
+    )
+  );
+
   const followChannel = async (ch: SuggestedChannel) => {
     try {
       await api.followChannel(ch.url, ch.name);
@@ -422,6 +438,13 @@ export default function DiscoverHome({
           onWhy={() => setWhyItem(item)}
           onNotInterested={() => notInterested(item)}
           onBlockChannel={() => blockChannel(item)}
+          onHideLive={
+            item.reason.kind === "live" && item.stream?.channel_url
+              ? () =>
+                  item.stream?.channel_url &&
+                  hideLive(item.stream.channel_url, channel.name || null)
+              : undefined
+          }
           className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
         />
       </div>

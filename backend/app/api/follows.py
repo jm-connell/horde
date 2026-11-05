@@ -16,6 +16,7 @@ from ..schemas import (
     FollowedChannelRead,
     FollowListResponse,
     FollowRequest,
+    FollowUpdate,
     UnfollowResult,
 )
 from ..services import follows
@@ -50,6 +51,7 @@ def _read(item: follows.FollowedChannel) -> FollowedChannelRead:
         channel_name=item.channel_name,
         source=item.source,
         created_at=item.created_at,
+        hide_live=item.hide_live,
     )
 
 
@@ -104,6 +106,21 @@ def follow_channel(
     except ValueError as exc:
         raise CodedHTTPException(400, str(exc), "not_followable") from exc
     _wake_poller(request)
+    return _read(item)
+
+
+@router.patch("", response_model=FollowedChannelRead)
+def update_follow(
+    payload: FollowUpdate,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Show or hide a followed channel's live streams, without unfollowing it."""
+    item = follows.set_hide_live(
+        session, user.id, payload.channel_url, payload.hide_live
+    )
+    if item is None:
+        raise CodedHTTPException(404, "You do not follow this channel", "not_followed")
     return _read(item)
 
 

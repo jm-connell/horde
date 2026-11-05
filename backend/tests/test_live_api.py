@@ -111,6 +111,34 @@ def test_live_list_ignores_unfollowed_channels(client, session, admin_user, dire
     assert client.get("/api/live").json()["items"] == []
 
 
+def test_hiding_a_channels_live_streams_keeps_it_followed(
+    client, session, admin_user, directory
+):
+    follows.follow(session, admin_user.id, ADMIN_CHAN, "Admin Chan")
+    directory.record(ADMIN_CHAN, "Admin Chan", _broadcast("aaaaaaaaaaa"))
+    resp = client.patch(
+        "/api/follows", json={"channel_url": ADMIN_CHAN, "hide_live": True}
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["hide_live"] is True
+    assert client.get("/api/live").json()["items"] == []
+    [followed] = client.get("/api/follows").json()["items"]
+    assert followed["channel_url"] == ADMIN_CHAN and followed["hide_live"] is True
+    # And back.
+    client.patch("/api/follows", json={"channel_url": ADMIN_CHAN, "hide_live": False})
+    assert [i["video_id"] for i in client.get("/api/live").json()["items"]] == [
+        "aaaaaaaaaaa"
+    ]
+
+
+def test_hiding_live_streams_needs_a_followed_channel(client):
+    resp = client.patch(
+        "/api/follows", json={"channel_url": OTHER_CHAN, "hide_live": True}
+    )
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "not_followed"
+
+
 def test_live_list_enabled_flag(client, monkeypatch):
     monkeypatch.setattr("app.api.live.LIVE_POLL_SEC", 0)
     body = client.get("/api/live").json()

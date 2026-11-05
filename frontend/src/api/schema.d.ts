@@ -1941,7 +1941,11 @@ export interface paths {
         delete: operations["unfollow_channel_api_follows_delete"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Update Follow
+         * @description Show or hide a followed channel's live streams, without unfollowing it.
+         */
+        patch: operations["update_follow_api_follows_patch"];
         trace?: never;
     };
     "/api/fonts": {
@@ -6512,6 +6516,16 @@ export interface components {
             /** Channel Url */
             channel_url: string;
         };
+        /**
+         * FollowUpdate
+         * @description Change how a followed channel shows (it stays followed).
+         */
+        FollowUpdate: {
+            /** Channel Url */
+            channel_url: string;
+            /** Hide Live */
+            hide_live: boolean;
+        };
         /** FollowedChannelRead */
         FollowedChannelRead: {
             /** Channel Name */
@@ -6523,6 +6537,11 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Hide Live
+             * @default false
+             */
+            hide_live: boolean;
             /** Source */
             source: string;
         };
@@ -14095,6 +14114,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnfollowResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_follow_api_follows_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FollowUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowedChannelRead"];
                 };
             };
             /** @description Validation error */

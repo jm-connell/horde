@@ -126,6 +126,8 @@ Downloading a past livestream longer than two hours asks first, because a record
 
 When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. Live broadcasts of followed channels also lead **Recommended** (with **Include not downloaded** on) and **Recommended+**: first when you watched the channel in the last two weeks, a few cards in otherwise (up to three of each).
 
+To stop seeing one channel's live streams without unfollowing it, open the **⋯** menu on its live card and choose **Hide live streams from …** (with Undo), or turn off **Show its live streams** under **Channel settings → Live & following**. Its broadcasts leave the Live list, Recommended and Recommended+; the channel's own page still shows when it is live.
+
 Leave a live stream (lock the screen, switch apps) and come back a minute or more later, and it reconnects and plays on from where you left it in the live timeline, as if you had paused it there; if that part is older than the seek bar reaches, it starts at the oldest part. Pressing play after a long pause with the page hidden does the same. How it works: [Live streams](../design/live-streams.md).
 
 ## Catalog indexing

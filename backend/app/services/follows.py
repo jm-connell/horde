@@ -67,6 +67,8 @@ class FollowedChannel:
     channel_name: str | None
     source: str
     created_at: datetime
+    #: Its live streams are left out of the Live list and the feeds.
+    hide_live: bool = False
 
 
 def _row(session: Session, user_id: int, channel_url: str) -> ChannelFollow | None:
@@ -91,6 +93,7 @@ def list_follows(session: Session, user_id: int) -> list[FollowedChannel]:
             channel_name=r.channel_name,
             source=r.source,
             created_at=r.created_at,
+            hide_live=r.hide_live,
         )
         for r in rows
     ]
@@ -100,6 +103,32 @@ def list_follows(session: Session, user_id: int) -> list[FollowedChannel]:
 
 def followed_urls(session: Session, user_id: int) -> set[str]:
     return {f.channel_url for f in list_follows(session, user_id)}
+
+
+def live_urls(session: Session, user_id: int) -> set[str]:
+    """Followed channels whose live streams the user wants to see."""
+    return {f.channel_url for f in list_follows(session, user_id) if not f.hide_live}
+
+
+def set_hide_live(
+    session: Session, user_id: int, channel_url: str, hide: bool
+) -> FollowedChannel | None:
+    """Show or hide a followed channel's live streams (None: not followed)."""
+    row = _row(session, user_id, normalize_channel_url(channel_url))
+    if row is None or not row.followed:
+        return None
+    row.hide_live = hide
+    row.updated_at = utcnow()
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return FollowedChannel(
+        channel_url=row.channel_url,
+        channel_name=row.channel_name,
+        source=row.source,
+        created_at=row.created_at,
+        hide_live=row.hide_live,
+    )
 
 
 def all_followed_urls(session: Session) -> dict[str, str | None]:
@@ -154,6 +183,7 @@ def follow(
         channel_name=row.channel_name,
         source=row.source,
         created_at=row.created_at,
+        hide_live=row.hide_live,
     )
 
 

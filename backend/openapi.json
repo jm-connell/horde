@@ -6216,6 +6216,27 @@
         "title": "FollowRequest",
         "type": "object"
       },
+      "FollowUpdate": {
+        "description": "Change how a followed channel shows (it stays followed).",
+        "properties": {
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "hide_live": {
+            "title": "Hide Live",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_url",
+          "hide_live"
+        ],
+        "title": "FollowUpdate",
+        "type": "object"
+      },
       "FollowedChannelRead": {
         "properties": {
           "channel_name": {
@@ -6237,6 +6258,11 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "hide_live": {
+            "default": false,
+            "title": "Hide Live",
+            "type": "boolean"
           },
           "source": {
             "title": "Source",
@@ -20190,6 +20216,56 @@
           }
         },
         "summary": "List Follows",
+        "tags": [
+          "follows"
+        ]
+      },
+      "patch": {
+        "description": "Show or hide a followed channel's live streams, without unfollowing it.",
+        "operationId": "update_follow_api_follows_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowedChannelRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Update Follow",
         "tags": [
           "follows"
         ]

@@ -1018,6 +1018,18 @@ def test_live_broadcasts_lead_recommended_plus_when_watched_lately(
     assert not {"lovedlive01", "followlive1"} & {i["key"] for i in later["items"]}
 
 
+def test_hidden_live_streams_stay_out_of_recommended_plus(
+    app, client, session, admin_user
+):
+    from app.services import follows
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    quiet = _go_live(app, session, admin_user, "Quiet", "quietlive01")
+    follows.set_hide_live(session, admin_user.id, quiet, True)
+    keys = [i["key"] for i in client.get("/api/discover/feed").json()["items"]]
+    assert "quietlive01" not in keys and "found000001" in keys
+
+
 def test_live_broadcasts_join_recommended_with_streams_on(
     app, client, session, add_video, set_watch, admin_user
 ):

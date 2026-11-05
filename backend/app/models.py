@@ -841,6 +841,8 @@ class ChannelFollow(SQLModel, table=True):
     channel_url: str = Field(index=True)
     channel_name: str | None = None
     followed: bool = Field(default=True)
+    # Keep following, but leave its live streams out of the Live list and feeds.
+    hide_live: bool = Field(default=False)
     # download | manual | library (seeded from the library for an administrator)
     source: str = Field(default="manual")
     created_at: datetime = Field(default_factory=utcnow)

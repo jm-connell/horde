@@ -7,6 +7,9 @@ import { useDownloads } from "../context/DownloadContext";
 import { useToast } from "../context/ToastContext";
 import { useSettings } from "../hooks/useSettings";
 import ChannelFeedCard from "./ChannelFeedCard";
+import RecMenu from "./discover/RecMenu";
+import { useHideLive } from "./discover/useHideLive";
+import { normalizeChannelUrl } from "../utils/followUrl";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 import type {
@@ -21,8 +24,9 @@ const PAGE_SIZE = 24;
 /**
  * One card: a library video, or an indexed channel's upload not downloaded.
  * `throwback`: picked from a channel or topic watched months ago on YouTube.
+ * `live`: a followed channel streaming now.
  */
-type RecItem = { key: string; throwback: boolean } & (
+type RecItem = { key: string; throwback: boolean; live: boolean } & (
   | { video: Video; stream?: undefined }
   | { video?: undefined; stream: ChannelFeedEntry }
 );
@@ -36,6 +40,7 @@ function recItems(data: RecommendationsResponse): RecItem[] {
               key: `v${item.video.id}`,
               video: item.video,
               throwback: item.reason === "throwback",
+              live: false,
             },
           ]
         : item.stream
@@ -44,6 +49,7 @@ function recItems(data: RecommendationsResponse): RecItem[] {
                 key: `s${item.stream.id ?? item.stream.url}`,
                 stream: item.stream,
                 throwback: item.reason === "throwback",
+                live: item.reason === "live",
               },
             ]
           : []
@@ -190,6 +196,20 @@ export default function RecommendedHome({
       setLoadingMore(false);
     }
   }, [activeCategory, loadingMore, feedHasMore, feedOffset, includeStreams]);
+
+  const hideLive = useHideLive((url) =>
+    setFeedVideos((prev) =>
+      prev.filter(
+        (i) =>
+          !(
+            i.live &&
+            i.stream?.channel_url &&
+            (normalizeChannelUrl(i.stream.channel_url) ??
+              i.stream.channel_url) === url
+          )
+      )
+    )
+  );
 
   const downloadStream = (entry: ChannelFeedEntry) => {
     if (!entry.url || downloading.has(entry.url)) return;
@@ -370,7 +390,7 @@ export default function RecommendedHome({
         <>
           <div className={gridClass}>
             {feedVideos.map((item) => (
-              <div key={item.key} className="relative grid">
+              <div key={item.key} className="group/rec relative grid">
                 {item.video ? (
                   <VideoCard video={item.video} layout="feed" />
                 ) : (
@@ -385,6 +405,19 @@ export default function RecommendedHome({
                   />
                 )}
                 {item.throwback && <ThrowbackBadge />}
+                {item.live && item.stream?.channel_url && (
+                  <RecMenu
+                    channel={item.stream.channel || null}
+                    onHideLive={() =>
+                      item.stream.channel_url &&
+                      hideLive(
+                        item.stream.channel_url,
+                        item.stream.channel || null
+                      )
+                    }
+                    className="absolute right-2 top-2 z-30 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
+                  />
+                )}
               </div>
             ))}
           </div>
