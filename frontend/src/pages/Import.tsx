@@ -51,11 +51,21 @@ function isReady(item: ReviewItem): boolean {
   return Boolean((item.channel || s?.channel) && (s?.title || item.title));
 }
 
+function isYoutubeUrl(raw: string | null | undefined): boolean {
+  if (!raw) return false;
+  try {
+    const host = new URL(raw).hostname.toLowerCase();
+    return host === "youtube.com" || host.endsWith(".youtube.com");
+  } catch {
+    return false;
+  }
+}
+
 function hasYoutubeSource(item: ReviewItem): boolean {
-  return Boolean(
+  return (
     /\[[A-Za-z0-9_-]{11}\]/.test(item.file_path) ||
-    item.source_url?.includes("youtube.com/") ||
-    item.suggestion?.source_url?.includes("youtube.com/")
+    isYoutubeUrl(item.source_url) ||
+    isYoutubeUrl(item.suggestion?.source_url)
   );
 }
 
