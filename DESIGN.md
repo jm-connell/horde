@@ -284,7 +284,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
 - **Recommendation source marks.** In Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
-  has indexed), none (a channel new to them). Square on phones' edge-to-edge
+  has indexed), none (a channel new to them); a live card keeps its red ring
+  instead. Square on phones' edge-to-edge
   cards. A legend of dots sits beside the home tabs. Only the theme's accent, so the
   marks follow every theme; why a card is there is its hover title, not a line
   under it.

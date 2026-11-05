@@ -73,6 +73,8 @@ test("a live card can hide a channel's live streams without unfollowing", async 
       .locator(".group\\/rec")
       .filter({ hasText: "Late night speedruns" });
     await expect(card).toBeVisible();
+    // Its own red ring only: no source outline inside it.
+    await expect(card.locator('[data-horde="source-outline"]')).toHaveCount(0);
     await card.hover();
     await card.getByRole("button", { name: "Tune recommendations" }).click();
     await page
