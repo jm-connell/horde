@@ -1113,12 +1113,15 @@ def test_channel_suggestion_says_what_the_channel_is_like():
 
 def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
     """The home page loads Recommended+ ahead of time; only opening it counts."""
-    from app.models import RecImpression
+    from app.models import DiscoveryState, RecImpression
 
     _discovered(session, admin_user, "prefetch001", "Found early", "Chan")
     body = _feed(client, prefetch="true")
     assert [i["key"] for i in body["items"]] == ["prefetch001"]
     assert session.get(RecImpression, (admin_user.id, "prefetch001")) is None
+    # Nor does it make the user active for the YouTube gatherer.
+    state = session.get(DiscoveryState, admin_user.id)
+    assert state is None or state.last_viewed_at is None
     _feed(client)
     row = session.get(RecImpression, (admin_user.id, "prefetch001"))
     assert row is not None and row.shown_count == 1
@@ -1158,3 +1161,13 @@ def test_recommended_plus_can_be_browsed_by_category(
     pools = [i["key"] for i in _feed(client, category="Rock pools")["items"]]
     assert pools == ["poolfound01"]
     assert _feed(client, category="Nothing like it")["items"] == []
+
+    # A category refresh (here a rename) is seen without re-ranking the feed.
+    row = session.exec(select(AiCategory).where(AiCategory.name == "Rock pools")).one()
+    row.name = "Tide pools"
+    row.updated_at = datetime.now(UTC)
+    session.add(row)
+    session.commit()
+    assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
+    tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
+    assert tide == ["poolfound01"]

@@ -1424,7 +1424,8 @@ export interface paths {
          *     the first time). It also carries followed channels' live broadcasts, the
          *     ones from channels watched lately first. Each page counts as shown for its
          *     videos, unless it is a ``prefetch`` (the home page loading it before the
-         *     user opens the tab; opening it asks again and counts then).
+         *     user opens the tab): that neither counts as shown nor as a visit for the
+         *     gatherer; opening the tab asks again and counts then.
          */
         get: operations["discover_feed_api_discover_feed_get"];
         put?: never;

@@ -131,6 +131,19 @@ def test_hiding_a_channels_live_streams_keeps_it_followed(
     ]
 
 
+def test_a_new_follow_shows_live_streams_again(client, session, admin_user):
+    follows.follow(session, admin_user.id, ADMIN_CHAN, "Admin Chan")
+    # The handle form works as it does for PUT.
+    resp = client.patch(
+        "/api/follows", json={"channel_url": "@adminchan", "hide_live": True}
+    )
+    assert resp.status_code == 200, resp.text
+    follows.unfollow(session, admin_user.id, ADMIN_CHAN)
+    follows.follow(session, admin_user.id, ADMIN_CHAN, "Admin Chan")
+    [row] = client.get("/api/follows").json()["items"]
+    assert row["hide_live"] is False
+
+
 def test_hiding_live_streams_needs_a_followed_channel(client):
     resp = client.patch(
         "/api/follows", json={"channel_url": OTHER_CHAN, "hide_live": True}

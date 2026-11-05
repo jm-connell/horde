@@ -124,6 +124,8 @@ export default function DiscoverHome({
   // (quietly) so the visit counts and the order is current.
   const [preview] = useState(() => recentFirstPage(queryClient));
   const quietLoad = useRef(Boolean(preview));
+  /** Cards the user took off ("Not interested", a blocked channel). */
+  const removedKeys = useRef(new Set<string>());
   const [items, setItems] = useState<DiscoverItem[]>(
     () => preview?.items ?? []
   );
@@ -178,7 +180,8 @@ export default function DiscoverHome({
       })
       .then((page) => {
         if (!active) return;
-        setItems(page.items);
+        // A card taken off while this was loading stays off.
+        setItems(page.items.filter((i) => !removedKeys.current.has(i.key)));
         setCategories(page.categories ?? []);
         setCursor(page.next_cursor ?? null);
         setStatus(page.status);
@@ -295,15 +298,25 @@ export default function DiscoverHome({
       .catch(() => undefined);
   };
 
+  /** The page loaded ahead no longer matches: the next open asks afresh. */
+  const dropPreview = () => {
+    queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
+    queryClient.removeQueries({ queryKey: queryKeys.discover.channels });
+  };
+
   const notInterested = (item: DiscoverItem) => {
+    dropPreview();
+    removedKeys.current.add(item.key);
     const index = items.findIndex((i) => i.key === item.key);
-    const putBack = () =>
+    const putBack = () => {
+      removedKeys.current.delete(item.key);
       setItems((prev) => {
         if (prev.some((i) => i.key === item.key)) return prev;
         const next = [...prev];
         next.splice(Math.max(0, index), 0, item);
         return next;
       });
+    };
     setItems((prev) => prev.filter((i) => i.key !== item.key));
     api
       .addRecFeedback("video", item.key, titleOf(item))
@@ -327,6 +340,10 @@ export default function DiscoverHome({
   const blockChannel = (item: DiscoverItem) => {
     const { name, url } = channelOf(item);
     const removed = items.filter((i) => channelOf(i).name === name);
+    const forget = () =>
+      removed.forEach((i) => removedKeys.current.delete(i.key));
+    dropPreview();
+    removed.forEach((i) => removedKeys.current.add(i.key));
     setItems((prev) => prev.filter((i) => channelOf(i).name !== name));
     api
       .addRecFeedback("channel", url ?? "", name)
@@ -336,6 +353,7 @@ export default function DiscoverHome({
             label: "Undo",
             onClick: () => {
               void api.removeRecFeedback(row.id).catch(() => undefined);
+              forget();
               setReloadKey((k) => k + 1);
             },
           },
@@ -343,6 +361,7 @@ export default function DiscoverHome({
       )
       .catch(() => {
         showError("Could not save that");
+        forget();
         setItems((prev) => [...prev, ...removed]);
       });
   };
@@ -362,6 +381,7 @@ export default function DiscoverHome({
   );
 
   const followChannel = async (ch: SuggestedChannel) => {
+    dropPreview();
     try {
       await api.followChannel(ch.url, ch.name);
       if (can("download") && !ch.indexed) {
@@ -378,6 +398,7 @@ export default function DiscoverHome({
   };
 
   const dismissChannel = (ch: SuggestedChannel) => {
+    dropPreview();
     setChannels((prev) => prev.filter((c) => c.url !== ch.url));
     api
       .addRecFeedback("suggestion", ch.url, ch.name)

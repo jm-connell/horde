@@ -171,6 +171,8 @@ def follow(
             updated_at=now,
         )
     else:
+        if not row.followed:
+            row.hide_live = False  # A fresh follow starts with its live streams on.
         row.followed = True
         if name:
             row.channel_name = name

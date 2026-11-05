@@ -103,6 +103,8 @@ class Tuning(BaseModel):
     min_watched_pct: int = Field(default=0, ge=0, le=90)
     #: A video finished at least this many days ago may come back as a rewatch.
     rewatch_after_days: Literal[30, 60, 180, 365] = 60
+    #: No longer applied: Horde leaves Shorts out when it collects videos. Kept
+    #: so settings and algorithms saved with it still load.
     hide_shorts: bool = False
     hide_past_live: bool = False
     #: Length limits in minutes (0 = no limit).

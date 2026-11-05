@@ -109,7 +109,9 @@ def test_a_zero_share_turns_a_kind_of_pick_off(client, session, admin_user):
     assert "newchannel1" not in [i["key"] for i in _items(client)]
 
 
-def test_filters_leave_out_shorts_live_replays_and_lengths(client, session, admin_user):
+def test_filters_leave_out_live_replays_and_lengths(client, session, admin_user):
+    """Shorts are left out when Horde collects videos; a ``hide_shorts`` saved
+    by an older version no longer hides anything (the panel has no switch)."""
     _discovered(session, admin_user, "shortvideo1", "A short", "One", duration=45.0)
     _discovered(
         session, admin_user, "livereplay1", "A replay", "Two", live_status="was_live"
@@ -121,8 +123,8 @@ def test_filters_leave_out_shorts_live_replays_and_lengths(client, session, admi
     }
     _custom(client, hide_shorts=True, hide_past_live=True, max_minutes=60)
     keys = {i["key"] for i in _items(client)}
-    assert keys & {"shortvideo1", "livereplay1", "longvideo01"} == set()
-    assert "normalvid01" in keys
+    assert keys & {"livereplay1", "longvideo01"} == set()
+    assert {"normalvid01", "shortvideo1"} <= keys
     _custom(client, min_minutes=30)
     assert {i["key"] for i in _items(client)} >= {"longvideo01"}
     assert "normalvid01" not in {i["key"] for i in _items(client)}
@@ -308,7 +310,7 @@ def test_streamed_favorites_keep_to_the_length_filters(client, session, admin_us
     session.commit()
     keys = {i["key"] for i in _items(client)}
     assert {"oldshort001", "oldlongone1"} <= keys
-    _custom(client, hide_shorts=True)
+    _custom(client, min_minutes=1)
     keys = {i["key"] for i in _items(client)}
     assert "oldshort001" not in keys and "oldlongone1" in keys
 

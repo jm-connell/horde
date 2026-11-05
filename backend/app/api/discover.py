@@ -192,7 +192,8 @@ def discover_feed(
     the first time). It also carries followed channels' live broadcasts, the
     ones from channels watched lately first. Each page counts as shown for its
     videos, unless it is a ``prefetch`` (the home page loading it before the
-    user opens the tab; opening it asks again and counts then).
+    user opens the tab): that neither counts as shown nor as a visit for the
+    gatherer; opening the tab asks again and counts then.
     """
     try:
         page = parse_cursor(
@@ -203,7 +204,7 @@ def discover_feed(
     use_seed = page.seed if page.seed is not None else seed
     if use_seed is None:
         use_seed = _today_seed()
-    if not cursor:
+    if not cursor and not prefetch:
         gather.note_viewed(session, ctx.discovery, user.id)
     feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=not cursor)
     picks = (

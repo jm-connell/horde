@@ -113,8 +113,6 @@ TASTE_FLOORS = {"similar": 0.15, "new": 0.3, "throwback": 0.3}
 JITTER = 0.02
 NEW_JITTER = 0.06
 FEED_MAX = 800
-#: A video this short counts as a Short (``hide_shorts``), as does a /shorts/ URL.
-SHORTS_MAX_SEC = 60
 PAST_LIVE = frozenset({"was_live", "post_live"})
 #: How many of the top picks the target-vs-actual mix is measured over.
 MIX_STATS_TOP = 60
@@ -175,8 +173,9 @@ class Feed:
     mix: list[MixStat] = field(default_factory=list)
     #: Candidates each block (by topic id) left out of this ranking.
     blocked: dict[int, int] = field(default_factory=dict)
-    #: Each AI category's picks (keys), measured once (``categories.py``).
-    categories: dict[str, set[str]] | None = None
+    #: Each AI category's picks (keys), measured once per version of the
+    #: categories (``categories.py``): (version, picks by category).
+    categories: tuple[object, dict[str, set[str]]] | None = None
 
 
 def _name(text: str) -> str:
@@ -543,7 +542,7 @@ def _hits(session: Session, user_id: int) -> dict[int, _Hit]:
 
 
 def _allowed(c: Candidate, t: Tuning, now: datetime, *, rewatch: bool = False) -> bool:
-    """The user's hard filters: sources, Shorts, past live streams, length, age.
+    """The user's hard filters: sources, past live streams, length, age.
 
     A rewatch keeps to the source switches (a library video is a library pick)
     but not to the upload age: an old favorite is old by design.
@@ -561,10 +560,6 @@ def _allowed(c: Candidate, t: Tuning, now: datetime, *, rewatch: bool = False) -
     ):
         return False
     duration = c.duration
-    if t.hide_shorts and (
-        (duration is not None and duration <= SHORTS_MAX_SEC) or "/shorts/" in c.url
-    ):
-        return False
     if t.hide_past_live and c.live_status in PAST_LIVE:
         return False
     if duration is not None:
@@ -840,7 +835,7 @@ def build_feed(
         if hit is not None and not has_vector[i]:
             # Found by a search or an up next list but not embedded (yet): the
             # source's own ranking stands in, just under the "new" floor's reach.
-            rel = max(rel, floor["new"] + 0.3 * 0.9**hit.rank)
+            rel = max(rel, floors["new"] + 0.3 * 0.9**hit.rank)
         quality = _quality(c.view_count)
         published = c.published
         recent_upload = published is not None and now - published <= sub_window

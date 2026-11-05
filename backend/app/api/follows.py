@@ -117,7 +117,10 @@ def update_follow(
 ):
     """Show or hide a followed channel's live streams, without unfollowing it."""
     item = follows.set_hide_live(
-        session, user.id, payload.channel_url, payload.hide_live
+        session,
+        user.id,
+        _channel_url_from_input(payload.channel_url),
+        payload.hide_live,
     )
     if item is None:
         raise CodedHTTPException(404, "You do not follow this channel", "not_followed")
