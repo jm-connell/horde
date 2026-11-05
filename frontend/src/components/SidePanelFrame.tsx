@@ -25,7 +25,7 @@ import {
   resizeFromTopLeft,
 } from "./helpChatLayout";
 import { HELP_PANEL_ID } from "./helpChat";
-import { CloseIcon, SidePanelIcon } from "./icons";
+import { CloseIcon, CollapseIcon, ExpandIcon } from "./icons";
 import { ActiveCtx, SlotCtx } from "./sidePanelContext";
 
 /** One body the frame shows: Ask, or the Recommended settings. */
@@ -475,7 +475,11 @@ export default function SidePanelFrame({
               title={docked ? "Float" : "Dock at the side"}
               className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-accent"
             >
-              <SidePanelIcon docked={docked} className="h-4 w-4" />
+              {docked ? (
+                <CollapseIcon className="h-4 w-4" />
+              ) : (
+                <ExpandIcon className="h-4 w-4" />
+              )}
             </button>
           )}
           <button
