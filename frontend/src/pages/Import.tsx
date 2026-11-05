@@ -198,17 +198,17 @@ export default function Import() {
         trashed.length
           ? `Kept “${keep.title}”, moved ${videoCount(trashed.length)} to the trash`
           : `Kept “${keep.title}”`,
-        () => load()
+        () => load({ silent: true })
       );
-      load();
+      load({ silent: true });
     } catch (err) {
       if (trashed.length) {
         afterDelete(
           trashed,
           `Moved ${videoCount(trashed.length)} to the trash`,
-          () => load()
+          () => load({ silent: true })
         );
-        load();
+        load({ silent: true });
       }
       showError(deleteErrorMessage(err, "Could not delete duplicate(s)"));
     }
@@ -225,19 +225,21 @@ export default function Import() {
     if (!ok) return;
     try {
       const { trashEntryIds } = await api.deleteVideo(v.id, true);
-      load();
+      load({ silent: true });
       afterDelete(
         trashEntryIds,
         trashEntryIds.length
           ? `Moved “${v.title}” to the trash`
           : `Deleted “${v.title}”`,
-        () => load()
+        () => load({ silent: true })
       );
     } catch (err) {
       showError(deleteErrorMessage(err));
     }
   };
 
+  // Reloads after an action are silent: showing the spinner would unmount every
+  // form and drop what was typed into the ones not saved yet.
   const load = useCallback(
     (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoading(true);
@@ -379,7 +381,7 @@ export default function Import() {
       }
 
       uploadingRef.current = false;
-      load();
+      load({ silent: true });
       window.setTimeout(() => {
         setUploads((prev) =>
           prev.every((u) => u.status === "done" || u.status === "error")
@@ -553,7 +555,7 @@ export default function Import() {
                 </div>
               )}
               {items.slice(0, shownForms).map((v) => (
-                <div key={v.id} className="space-y-2">
+                <div key={v.id} data-horde="import-item" className="space-y-2">
                   {(lookups[v.id] ?? v.suggestion) && (
                     <p className="text-xs text-muted">
                       Filled in from{" "}
@@ -568,7 +570,7 @@ export default function Import() {
                     prefill={lookups[v.id] ?? v.suggestion}
                     requireChannel
                     saveLabel="Save & approve"
-                    onSaved={() => load()}
+                    onSaved={() => load({ silent: true })}
                   />
                   <div className="flex flex-wrap gap-2">
                     {hasYoutubeSource(v) && can("edit_metadata") && (
@@ -592,7 +594,7 @@ export default function Import() {
                         } catch (err) {
                           showError(`Could not skip: ${describeError(err)}`);
                         }
-                        load();
+                        load({ silent: true });
                       }}
                       className={button("secondary")}
                       title="Remove from the queue without importing. Scan for new files can pick it up again."

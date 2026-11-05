@@ -9,18 +9,6 @@ from app.models import Video
 from app.services import import_suggest, metadata_sync
 
 
-@pytest.fixture(autouse=True)
-def _no_thumbnail_fetch(monkeypatch):
-    fetched: list[str] = []
-
-    def fake_save(url, video_id, **_kw):
-        fetched.append(url)
-        return None
-
-    monkeypatch.setattr(import_suggest, "save_from_url", fake_save)
-    return fetched
-
-
 def _review_item(add_video, file_path: str, **fields) -> Video:
     return add_video(
         title=Path(file_path).stem,
@@ -132,7 +120,7 @@ def test_fields_already_set_are_not_suggested(client, add_video):
 
 
 def test_approve_suggested_approves_known_items_in_place(
-    client, add_video, init_db, session, _no_thumbnail_fetch
+    client, add_video, init_db, session
 ):
     ready = _review_item(add_video, "Veritasium/2024/Why Clocks Tick [abcdefghijk].mp4")
     unknown = _review_item(add_video, "imports/holiday.mp4")
@@ -151,7 +139,6 @@ def test_approve_suggested_approves_known_items_in_place(
     # The file was not moved or renamed.
     assert row.file_path == "Veritasium/2024/Why Clocks Tick [abcdefghijk].mp4"
     assert (init_db["downloads"] / row.file_path).is_file()
-    assert _no_thumbnail_fetch == ["https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg"]
     still = session.get(Video, unknown.id)
     assert still is not None and still.needs_review is True
     assert list(_queue(client)) == [unknown.id]
@@ -234,3 +221,74 @@ def test_tube_archivist_layout_gives_the_youtube_id(client, add_video):
     assert suggestion["source_url"] == "https://www.youtube.com/watch?v=2tdiKTSdE9Y"
     assert suggestion["title"] is None
     assert suggestion["channel"] is None  # a channel id, not a name
+
+
+def test_a_pathological_sidecar_costs_only_its_own_suggestion(
+    client, add_video, init_db
+):
+    """A deeply nested .info.json raised RecursionError and broke the whole list."""
+    bad = _review_item(add_video, "Chan/2020/deep [abcdefghijk].mp4")
+    good = _review_item(add_video, "Kiln/2021/firing.mp4")
+    (init_db["downloads"] / "Chan/2020/deep [abcdefghijk].info.json").write_text(
+        "[" * 200_000 + "]" * 200_000
+    )
+
+    queue = _queue(client)
+
+    assert queue[good.id]["suggestion"]["channel"] == "Kiln"
+    # The broken sidecar is skipped; the path still speaks.
+    assert queue[bad.id]["suggestion"]["channel"] == "Chan"
+    assert client.post("/api/review/approve-suggested").status_code == 200
+
+
+def test_bulk_approve_keeps_the_thumbnail_the_user_chose(
+    client, add_video, init_db, session, monkeypatch
+):
+    from app.services import thumbnails
+
+    video = _review_item(add_video, "Chan/2020/clip [abcdefghijk].mp4")
+    chosen = init_db["downloads"].parent / "chosen.jpg"
+    chosen.write_bytes(b"my-own-thumbnail")
+    row = session.get(Video, video.id)
+    assert row is not None
+    row.thumbnail_path = str(chosen)
+    session.add(row)
+    session.commit()
+
+    def no_network(*_a, **_k):
+        raise AssertionError("bulk approve must not fetch thumbnails")
+
+    monkeypatch.setattr(thumbnails, "save_from_url", no_network)
+
+    assert client.post("/api/review/approve-suggested").json()["approved"] == 1
+    session.expire_all()
+    row = session.get(Video, video.id)
+    assert row is not None and row.thumbnail_path == str(chosen)
+    assert chosen.read_bytes() == b"my-own-thumbnail"
+
+
+@pytest.mark.parametrize(
+    ("rel", "channel"),
+    [
+        ("Downloads/Video [dQw4w9WgXcQ].mp4", None),
+        ("YouTube/Some Channel/Video [dQw4w9WgXcQ].mp4", "Some Channel"),
+        ("a/b/Veritasium/Video [dQw4w9WgXcQ].mp4", "Veritasium"),
+        ("Archive/Veritasium/2024/Video [dQw4w9WgXcQ].mp4", "Veritasium"),
+        ("videos/2024/Video [dQw4w9WgXcQ].mp4", None),
+    ],
+)
+def test_the_channel_is_the_nearest_meaningful_folder(rel, channel):
+    assert import_suggest._from_path(rel).get("channel") == channel
+
+
+def test_a_sidecar_symlinked_outside_the_media_folder_is_not_read(
+    client, add_video, init_db, tmp_path
+):
+    outside = tmp_path / "secret.info.json"
+    outside.write_text(json.dumps({"title": "Outside secret"}))
+    video = _review_item(add_video, "Chan/2020/clip.mp4")
+    (init_db["downloads"] / "Chan/2020/clip.info.json").symlink_to(outside)
+
+    suggestion = _queue(client)[video.id]["suggestion"]
+
+    assert suggestion is not None and suggestion["title"] != "Outside secret"

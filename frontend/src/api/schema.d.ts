@@ -2992,9 +2992,9 @@ export interface paths {
         put?: never;
         /**
          * Approve Suggested
-         * @description Approve up to 100 review items whose title and channel are known, from the
-         *     video itself or its suggestion. Files stay where they are. Call again while
-         *     ``approved`` is non-zero to work through a large queue.
+         * @description Approve every review item whose title and channel are known, from the
+         *     video itself or its suggestion, in one pass. Files and thumbnails stay as
+         *     they are.
          */
         post: operations["approve_suggested_api_review_approve_suggested_post"];
         delete?: never;

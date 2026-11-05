@@ -1,6 +1,6 @@
 # Moving an existing archive into Horde
 
-Already have a folder of downloaded videos, from yt-dlp, Tube Archivist, Pinchflat, ytdl-sub or anything else? Horde can take them as they are. Nothing is renamed or moved when you approve them in bulk, and the files stay readable without Horde.
+Already have a folder of downloaded videos, from yt-dlp, Tube Archivist, Pinchflat, ytdl-sub or anything else? Horde can take them as they are. Nothing is renamed or moved when you approve them with **Approve N ready**, and the files stay readable without Horde.
 
 ## 1. Put the files where Horde looks
 
@@ -29,7 +29,7 @@ Videos with a YouTube source link then pick up view counts, captions, chapters a
 | Coming from | What to expect |
 |-------------|----------------|
 | **yt-dlp** with `--write-info-json` | Everything is filled in from the `.info.json`. Use **Approve N ready**. |
-| **yt-dlp**, default names (`Title [id].ext`) | Title from the name, YouTube link from `[id]`. The channel comes from the top folder when files sit in `Channel/…` folders with the id in the name. **Fetch details from YouTube** fills in the rest per file. |
+| **yt-dlp**, default names (`Title [id].ext`) | Title from the name, YouTube link from `[id]`. The channel comes from the folder holding the file when files sit in per-channel folders. **Fetch details from YouTube** fills in the rest per file. |
 | **Horde's own layout** (`Channel/Year/Title [id].ext`, for example from another Horde) | Title, channel and YouTube link from the path. Use **Approve N ready**. |
 | **Pinchflat**, **ytdl-sub** or anything that writes `.nfo` files | Title, channel, date, description and tags from the `.nfo`. Turn NFO output on in that tool before you move the files, if it is off. |
 | **Tube Archivist** | Its files are named `<channel id>/<video id>.mp4`, and titles and channels live in its database, not beside the files. Horde recognizes the video id, so **Fetch details from YouTube** works on each file, but there is no bulk lookup yet. For a large library, consider exporting metadata from Tube Archivist first, or re-downloading the channels in Horde with [automatic downloads](channels.md#autodownload). |

@@ -114,3 +114,28 @@ test("Fetch details from YouTube fills the form from the file's id", async ({
   ).toBeVisible();
   await expect(page.getByText("Filled in from YouTube.")).toBeVisible();
 });
+
+test("approving one file keeps what was typed into another", async ({
+  page,
+}) => {
+  dropArchivedFile();
+  await page.goto("/import");
+  await page.getByRole("button", { name: "Scan for new files" }).click();
+  const item = (title: string) =>
+    page
+      .locator('[data-horde="import-item"]')
+      .filter({ has: page.locator(`input[value='${title}']`) });
+  const archived = item("Night Pier");
+  // The suggested channel is corrected by hand.
+  await expect(archived.getByRole("combobox")).toHaveValue("Harbor Archive");
+  await archived.getByRole("combobox").fill("Real Channel");
+
+  // Approving the other (seeded) file reloads the list.
+  const drop = item("Unreviewed drop");
+  await drop.getByRole("combobox").fill("Northwind");
+  await drop.getByRole("combobox").press("Tab");
+  await drop.getByRole("button", { name: "Save & approve" }).click();
+  await expect(item("Unreviewed drop")).toHaveCount(0);
+
+  await expect(archived.getByRole("combobox")).toHaveValue("Real Channel");
+});

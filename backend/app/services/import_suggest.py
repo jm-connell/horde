@@ -22,7 +22,7 @@ from ..context import get_paths
 from ..models import Video
 from ..schemas import ImportSuggestion
 from . import library
-from .thumbnails import save_from_url
+from .fsutil import safe_rel
 from .youtube_id import derive_youtube_id
 
 logger = logging.getLogger(__name__)
@@ -35,8 +35,22 @@ _YEAR_RE = re.compile(r"^(19|20)\d\d$")
 # Tube Archivist's fixed layout: <channel id>/<video id>.<ext>, no brackets.
 _TA_CHANNEL_RE = re.compile(r"^UC[A-Za-z0-9_-]{22}$")
 _BARE_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
-# Folders that hold imports but do not name a channel.
-_NOT_A_CHANNEL = {"imports"}
+# Folder names that say where files were put, not who made them.
+_NOT_A_CHANNEL = {
+    "archive",
+    "download",
+    "downloads",
+    "import",
+    "imports",
+    "inbox",
+    "media",
+    "misc",
+    "new",
+    "unsorted",
+    "video",
+    "videos",
+    "youtube",
+}
 
 
 def youtube_watch_url(video_id: str) -> str:
@@ -55,6 +69,9 @@ def _clean(value: Any, limit: int = 500) -> str | None:
 
 
 def _read_sidecar(path: Path) -> bytes | None:
+    # A symlink may only lead to another file in the media folder.
+    if safe_rel(path) is None:
+        return None
     try:
         if not path.is_file() or path.stat().st_size > _MAX_SIDECAR_BYTES:
             return None
@@ -87,7 +104,7 @@ def _from_info_json(media: Path) -> dict[str, Any]:
         return {}
     try:
         info = json.loads(raw)
-    except ValueError:
+    except ValueError, RecursionError:  # RecursionError: absurdly deep nesting
         logger.debug("ignoring unreadable %s", media.with_suffix(".info.json"))
         return {}
     if not isinstance(info, dict):
@@ -168,19 +185,22 @@ def _from_path(rel_path: str) -> dict[str, Any]:
         out.pop("title", None)  # the id is not a title
     if found:
         out["youtube_id"] = found
-    # A top folder names the channel only in a recognisable layout: a year folder
-    # under it (Channel/2024/...) or a yt-dlp [id] in the name. "inbox/x.mp4" or
-    # "Downloads/x.mp4" says nothing about who made the video.
+    # A folder names the channel only in a recognisable layout: the folder above
+    # a year folder (.../Channel/2024/file), or the folder holding a file with a
+    # yt-dlp [id] (.../Channel/Title [id].mp4). "inbox/x.mp4" says nothing.
     parts = rel.parts[:-1]
-    laid_out = len(parts) >= 2 and _YEAR_RE.match(parts[1]) is not None
+    candidate: str | None = None
+    if len(parts) >= 2 and _YEAR_RE.match(parts[-1]):
+        candidate = parts[-2]
+    elif found and parts:
+        candidate = parts[-1]
     if (
-        parts
-        and (laid_out or found)
-        and parts[0].lower() not in _NOT_A_CHANNEL
-        and not _YEAR_RE.match(parts[0])
-        and not _TA_CHANNEL_RE.match(parts[0])
+        candidate
+        and candidate.lower() not in _NOT_A_CHANNEL
+        and not _YEAR_RE.match(candidate)
+        and not _TA_CHANNEL_RE.match(candidate)
     ):
-        out["channel"] = parts[0]
+        out["channel"] = candidate
     return out
 
 
@@ -230,14 +250,24 @@ def _blank_only(
 
 
 def suggest(video: Video) -> ImportSuggestion | None:
-    """What the files on disk say about ``video``; None when they say nothing new."""
-    media = get_paths().downloads / video.file_path
-    fields, sources = _merge(
-        ("info_json", _from_info_json(media)),
-        ("nfo", _from_nfo(media)),
-        ("path", _from_path(video.file_path)),
-    )
-    suggestion = _blank_only(video, fields, sources)
+    """What the files on disk say about ``video``; None when they say nothing new.
+
+    A sidecar that breaks the parser costs this one item its suggestion, never
+    the whole import list.
+    """
+    try:
+        media = get_paths().downloads / video.file_path
+        fields, sources = _merge(
+            ("info_json", _from_info_json(media)),
+            ("nfo", _from_nfo(media)),
+            ("path", _from_path(video.file_path)),
+        )
+        suggestion = _blank_only(video, fields, sources)
+    except Exception:
+        logger.warning(
+            "could not read the sidecars of %s", video.file_path, exc_info=True
+        )
+        return None
     return None if suggestion.is_empty() else suggestion
 
 
@@ -270,7 +300,7 @@ def approve_with(session: Session, video: Video, suggestion: ImportSuggestion) -
     """Fill ``video``'s blanks from ``suggestion`` and take it out of review.
 
     False (and nothing changed) when it would still lack a title or a channel.
-    The file stays where it is. The caller commits.
+    The file and its thumbnail stay as they are. The caller commits.
     """
     title = suggestion.title or video.title
     channel = video.channel or suggestion.channel
@@ -288,10 +318,9 @@ def approve_with(session: Session, video: Video, suggestion: ImportSuggestion) -
         video.source_url = suggestion.source_url
     if suggestion.tags and video.tags in ("", "[]"):
         video.tags = library.dump_tags(suggestion.tags)
-    if suggestion.thumbnail_url and video.id is not None:
-        thumb = save_from_url(suggestion.thumbnail_url, video.id)
-        if thumb:
-            video.thumbnail_path = thumb
+    # No thumbnail download here: it would replace one the person picked, and a
+    # large batch would wait on the network. The metadata sync fetches it later
+    # for videos with a source link.
     video.needs_review = False
     session.add(video)
     return True

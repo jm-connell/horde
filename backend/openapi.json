@@ -24703,7 +24703,7 @@
     },
     "/api/review/approve-suggested": {
       "post": {
-        "description": "Approve up to 100 review items whose title and channel are known, from the\nvideo itself or its suggestion. Files stay where they are. Call again while\n``approved`` is non-zero to work through a large queue.",
+        "description": "Approve every review item whose title and channel are known, from the\nvideo itself or its suggestion, in one pass. Files and thumbnails stay as\nthey are.",
         "operationId": "approve_suggested_api_review_approve_suggested_post",
         "responses": {
           "200": {

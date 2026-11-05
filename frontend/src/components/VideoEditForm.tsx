@@ -144,9 +144,16 @@ export default function VideoEditForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when switching videos; a refreshed `video` object must not clobber in-progress edits
   }, [video.id]);
 
-  // After the reset above: fill in what Horde suggests, over the draft.
+  // After the reset above: fill in what Horde suggests, over the draft. Once
+  // per distinct suggestion: the list reloads after every approval, and a
+  // reloaded (equal) suggestion must not undo what the user typed since.
+  const appliedPrefill = useRef<string | null>(null);
   useEffect(() => {
-    if (prefill) setDraft((d) => ({ ...d, ...suggestionDraft(prefill) }));
+    if (!prefill) return;
+    const key = `${video.id}:${JSON.stringify(prefill)}`;
+    if (appliedPrefill.current === key) return;
+    appliedPrefill.current = key;
+    setDraft((d) => ({ ...d, ...suggestionDraft(prefill) }));
   }, [prefill, video.id]);
 
   const set = (key: keyof DraftState, value: string) =>

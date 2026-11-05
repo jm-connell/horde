@@ -43,13 +43,15 @@ Horde reads what the files on disk already say and fills in the form; nothing is
 |--------|------------------|
 | yt-dlp `.info.json` beside the video (same name, `.info.json` instead of the extension) | Title, channel and channel link, description, upload date, tags, thumbnail, source link |
 | Kodi / Jellyfin `.nfo` beside the video | `title`, `showtitle` or `studio` (channel), `plot` (description), `aired` / `premiered`, `tag`, and a `uniqueid type="youtube"` |
-| The path | The title is the file name without a `[id]` token. The top folder is the channel when the path is laid out `Channel/2024/…` or the name has a yt-dlp `[id]`. A YouTube id from `[id]`, or Tube Archivist's `<channel id>/<video id>.mp4`, becomes the source link and thumbnail |
+| The path | The title is the file name without a `[id]` token. The channel is the folder above a year folder (`…/Channel/2024/file`), or the folder holding a file with a yt-dlp `[id]` (`…/Channel/Title [id].mp4`). A YouTube id from `[id]`, or Tube Archivist's `<channel id>/<video id>.mp4`, becomes the source link and thumbnail |
 
-Only empty fields are filled: a title you typed, or a channel you set, is kept. Sidecars over 5 MB and files that do not parse are ignored. A folder such as `inbox/` or `Downloads/` is not taken for a channel.
+Only empty fields are filled: a title you typed, or a channel you set, is kept. Sidecars over 5 MB, files that do not parse and sidecars that link outside the media folder are ignored. Folders named for where files were put rather than who made them (`Downloads`, `YouTube`, `Videos`, `Inbox`, `Imports`, `Archive`, `Media`, …) are not taken for a channel. A `[...]` of 11 letters and digits is read as a YouTube id even when a camera wrote it, so check the source link on such files.
 
 ### Approve everything that is ready
 
-When more than one file is waiting and some already have a title and channel (from the table above), **Approve N ready** moves all of those into the library at once, as suggested. Files stay where they are on disk, under their own names. Files without a channel stay in the queue. It works through the queue in batches of 100, so a large archive takes a moment. Needs the `edit_metadata` permission.
+When more than one file is waiting and some already have a title and channel (from the table above), **Approve N ready** moves all of those into the library at once, as suggested. Files stay where they are on disk, under their own names, and keep the thumbnail they have (a video with a YouTube link gets YouTube's later, from the metadata sync). Files without a channel stay in the queue. Needs the `edit_metadata` permission.
+
+**Save & approve** on a single file that has no YouTube link and no `[id]` in its name (a camera file, or one known only from an `.nfo`) moves it to `Channel/Title.ext`, as for any manual import; files with a YouTube link or `[id]` stay where they are.
 
 The form list shows 20 files at a time (**Show more** adds the next 20), because each form takes frame grabs from its video.
 

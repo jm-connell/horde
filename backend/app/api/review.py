@@ -119,10 +119,6 @@ def review_queue(
     )
 
 
-# Each approval may fetch a thumbnail; keep one request short.
-_APPROVE_BATCH = 100
-
-
 @router.post(
     "/approve-suggested",
     response_model=ApproveSuggestedResult,
@@ -131,9 +127,9 @@ _APPROVE_BATCH = 100
 def approve_suggested(
     session: Session = Depends(get_session),
 ) -> ApproveSuggestedResult:
-    """Approve up to 100 review items whose title and channel are known, from the
-    video itself or its suggestion. Files stay where they are. Call again while
-    ``approved`` is non-zero to work through a large queue."""
+    """Approve every review item whose title and channel are known, from the
+    video itself or its suggestion, in one pass. Files and thumbnails stay as
+    they are."""
     rows = session.exec(
         select(Video)
         .where(Video.needs_review == True)  # noqa: E712 - SQL column comparison, not a Python truth test
@@ -141,8 +137,6 @@ def approve_suggested(
     ).all()
     approved: list[int] = []
     for video in rows:
-        if len(approved) >= _APPROVE_BATCH:
-            break
         suggestion = import_suggest.suggest(video) or ImportSuggestion()
         if import_suggest.approve_with(session, video, suggestion):
             approved.append(require_id(video))
