@@ -107,13 +107,14 @@ _NETWORK_MESSAGE = re.compile(
     r"|no route to host"
     r"|read operation timed out"
     r"|connection timed out"
-    r"|timed out"
+    r"|connect timeout"
     r")"
 )
 # yt-dlp's "report this upstream" footer; meaningless to someone using Horde.
 _REPORT_BOILERPLATE = re.compile(
-    r"(?is);?\s*please report this issue on https://github\.com/yt-dlp/yt-dlp/issues\S*"
-    r".*?(?:yt-dlp -U|$)"
+    r"(?i);?\s*please report this issue on https://github\.com/yt-dlp/yt-dlp/issues\S*"
+    r"(?:\s*,?\s*filling out the appropriate issue template\.)?"
+    r"(?:\s*Confirm you are on the latest version using\s+yt-dlp -U)?"
 )
 _DISK_FULL_MESSAGE = re.compile(
     r"(?i)("
@@ -456,13 +457,6 @@ def classify_ytdlp_error(
 
     raw = _REPORT_BOILERPLATE.sub("", raw).strip()
 
-    if _NETWORK_MESSAGE.search(raw):
-        return _finish(
-            ERROR_KIND_NETWORK,
-            "Horde could not reach the site from the server. Check the server's "
-            "internet connection, DNS and any proxy or VPN, then retry.",
-        )
-
     if _BOT_MESSAGE.search(raw):
         if pot_provider_configured():
             msg = (
@@ -524,6 +518,15 @@ def classify_ytdlp_error(
 
     if _UNAVAILABLE_MESSAGE.search(raw):
         return _finish(ERROR_KIND_UNAVAILABLE, raw)
+
+    # After the YouTube-specific kinds: a bot check or a dead PO token provider
+    # often arrives wrapped in a connection error, and those kinds are retried.
+    if _NETWORK_MESSAGE.search(raw):
+        return _finish(
+            ERROR_KIND_NETWORK,
+            "Horde could not reach the site from the server. Check the server's "
+            "internet connection, DNS and any proxy or VPN, then retry.",
+        )
 
     if _POSTPROCESS_MESSAGE.search(raw):
         return _finish(

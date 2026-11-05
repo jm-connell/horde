@@ -254,3 +254,43 @@ def test_unknown_failures_drop_ytdlps_report_this_boilerplate():
     assert "Something odd happened" in msg
     assert "report this issue" not in msg
     assert "yt-dlp -U" not in msg
+
+
+def test_youtube_specific_kinds_win_over_a_wrapped_connection_error():
+    from app.services.ytdlp_common import ERROR_KIND_NETWORK
+
+    for raw, kind in (
+        (
+            "ERROR: [youtube] x: [pot:bgutil:http] Error reaching GET "
+            "http://bgutil-pot:4416/ping: Connection refused",
+            ERROR_KIND_POT,
+        ),
+        (
+            "ERROR: [youtube] x: Sign in to confirm you're not a bot. "
+            "Connection reset by peer",
+            ERROR_KIND_BOT,
+        ),
+        (
+            "ERROR: HTTP Error 429: Too Many Requests; read operation timed out",
+            ERROR_KIND_RATE_LIMIT,
+        ),
+        (
+            "ERROR: [youtube] x: Video unavailable; Connection timed out",
+            ERROR_KIND_UNAVAILABLE,
+        ),
+    ):
+        assert classify_ytdlp_error(raw)[0] == kind, raw
+        assert kind != ERROR_KIND_NETWORK
+    # A bare "timed out" is not a network failure.
+    assert classify_ytdlp_error("ERROR: ffmpeg transcode timed out")[0] != (
+        ERROR_KIND_NETWORK
+    )
+
+
+def test_a_cut_off_report_footer_keeps_what_follows():
+    _, msg = classify_ytdlp_error(
+        "ERROR: [weird] Odd; please report this issue on "
+        "https://github.com/yt-dlp/yt-dlp/issues?q= then later: details kept"
+    )
+    assert "details kept" in msg
+    assert "report this issue" not in msg
