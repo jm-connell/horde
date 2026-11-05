@@ -111,8 +111,12 @@ def test_bootstrap_moves_legacy_history_settings_and_chat_to_the_admin(
     )
     assert row["last_position_sec"] == 33.0
     assert fresh_client.get("/api/settings").json()["ui"]["theme"] == "oled"
-    chat = fresh_client.get(f"/api/videos/{watched.id}/ai/chat").json()["messages"]
-    assert [m["content"] for m in chat] == ["old question"]
+    # The chat from before accounts is the admin's, as an Ask conversation.
+    [thread] = fresh_client.get("/api/ask/threads").json()["items"]
+    assert thread["title"] == "Seen"
+    chat = fresh_client.get(f"/api/ask/threads/{thread['id']}").json()
+    assert [m["content"] for m in chat["messages"]] == ["old question"]
+    assert chat["scope"]["video"]["library_id"] == watched.id
     with Session(init_db["engine"]) as s:
         assert len(s.exec(select(UserVideoState)).all()) == 1
         assert s.exec(select(UserSettings)).one().user_id == 1

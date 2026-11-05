@@ -8,7 +8,15 @@ from typing import Any
 from sqlmodel import Session, col, select
 
 from ...errors import CodedHTTPException
-from ...models import AskMessage, AskThread, require_id, utcnow
+from ...models import (
+    AskMessage,
+    AskThread,
+    Video,
+    VideoAiChatMessage,
+    require_id,
+    utcnow,
+)
+from ..url_clean import youtube_video_id
 
 # Earlier turns sent back to the model with a question (question and answer text).
 HISTORY_TURNS = 12
@@ -22,11 +30,15 @@ def owned_or_404(session: Session, thread_id: int, user_id: int) -> AskThread:
     return thread
 
 
-def start(session: Session, user_id: int, first_question: str) -> AskThread:
-    title = " ".join(first_question.split())
+def _title(text: str) -> str:
+    title = " ".join(text.split())
     if len(title) > _TITLE_CHARS:
         title = title[: _TITLE_CHARS - 1].rstrip() + "…"
-    thread = AskThread(user_id=user_id, title=title)
+    return title
+
+
+def start(session: Session, user_id: int, first_question: str) -> AskThread:
+    thread = AskThread(user_id=user_id, title=_title(first_question))
     session.add(thread)
     session.commit()
     session.refresh(thread)
@@ -113,3 +125,58 @@ def parse_sources(raw: str | None) -> Any:
         return json.loads(raw)
     except ValueError:
         return None
+
+
+def adopt_video_chats(session: Session, user_id: int) -> None:
+    """Give chats about videos from before accounts (no owner) to ``user_id``.
+
+    Each video's chat becomes one Ask conversation about that video, as
+    revision ``0029_video_chats_to_ask`` does for owned ones, and the old rows
+    go. The caller commits.
+    """
+    rows = session.exec(
+        select(VideoAiChatMessage)
+        .where(col(VideoAiChatMessage.user_id).is_(None))
+        .order_by(
+            col(VideoAiChatMessage.video_id),
+            col(VideoAiChatMessage.created_at),
+            col(VideoAiChatMessage.id),
+        )
+    ).all()
+    by_video: dict[int, list[VideoAiChatMessage]] = {}
+    for row in rows:
+        by_video.setdefault(row.video_id, []).append(row)
+    for video_id, chat in by_video.items():
+        video = session.get(Video, video_id)
+        source = (video.source_url if video else None) or ""
+        title = (video.title if video else "") or ""
+        ref = {
+            "library_id": video_id,
+            "youtube_id": youtube_video_id(source) if source else None,
+            "url": None,
+            "title": title,
+        }
+        thread = AskThread(
+            user_id=user_id,
+            title=_title(title) or "Video",
+            scope=json.dumps({"video": ref}),
+            created_at=chat[0].created_at,
+            updated_at=chat[-1].created_at,
+        )
+        session.add(thread)
+        session.flush()
+        for row in chat:
+            session.add(
+                AskMessage(
+                    thread_id=require_id(thread),
+                    role=row.role,
+                    content=row.content,
+                    sources=json.dumps({"kind": "video", "video": ref})
+                    if row.role == "assistant"
+                    else None,
+                    cost=row.cost,
+                    model=row.model,
+                    created_at=row.created_at,
+                )
+            )
+            session.delete(row)

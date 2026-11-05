@@ -280,11 +280,10 @@ def _adopt_legacy_data(session: Session, user: User) -> None:
             ),
         )
     )
-    session.execute(
-        update(VideoAiChatMessage)
-        .where(col(VideoAiChatMessage.user_id).is_(None))
-        .values(user_id=_uid(user))
-    )
+    # Imported here: threads imports app.errors, which imports this module.
+    from ..knowledge import threads as ask_threads
+
+    ask_threads.adopt_video_chats(session, _uid(user))
     ui = app_settings.load().get("ui")
     session.add(
         UserSettings(
