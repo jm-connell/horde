@@ -174,7 +174,7 @@ reads:  hybrid search = keyword hits + embedding neighbours, merged
 - **Providers**: one OpenAI-compatible endpoint (cloud or local) from settings, with an optional second endpoint for embeddings ([ADR 0017](../adr/0017-openai-compatible-provider.md)). Provider calls that cost money are recorded in `openrouter_usage` on a separate session, so jobs commit before the HTTP call; a hard budget pauses the worker.
 - **Single-flight** because homelab GPUs thrash under parallel model calls ([design note](single-flight-ai.md)). Queue state is in SQLite, so a restart recovers it (`running` becomes `queued`).
 - **Vector search** scores every stored chunk with one matrix product. The normalised `float32` matrix lives in `services/ai/vector_index.py`, on the engine object, and is updated incrementally from a cheap per-video fingerprint instead of being rebuilt on every change ([ADR 0007](../adr/0007-fts5-triggers-and-vector-index.md)). It needs `numpy` and about `chunks x dim x 4` bytes.
-- **Per-user vs shared**: summaries, tags, chapters and embeddings are shared library data; chat is per user; "For you" is seeded from the signed-in user's history. Members need `use_ai`.
+- **Per-user vs shared**: summaries, tags, chapters and embeddings are shared library data; chat is per user; Recommended is ranked from the signed-in user's history. Members need `use_ai`.
 
 Detail: [AI pipeline](../architecture/ai-pipeline.md).
 

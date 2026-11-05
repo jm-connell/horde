@@ -13,7 +13,7 @@ function signed(value: number): string {
 }
 
 /**
- * Why Recommended+ placed one video: the kind of pick it is, where it was
+ * Why Recommended placed one video: the kind of pick it is, where it was
  * found, and every part of its score, with a way to open the algorithm.
  */
 export default function WhyDialog({

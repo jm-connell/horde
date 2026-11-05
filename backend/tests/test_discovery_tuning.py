@@ -7,6 +7,7 @@ from datetime import UTC, datetime, timedelta
 from tests.test_discovery import (
     _catalog,
     _discovered,
+    _embed,
     _history,
     _items,
     _vec,
@@ -108,7 +109,9 @@ def test_a_zero_share_turns_a_kind_of_pick_off(client, session, admin_user):
     assert "newchannel1" not in [i["key"] for i in _items(client)]
 
 
-def test_filters_leave_out_shorts_live_replays_and_lengths(client, session, admin_user):
+def test_filters_leave_out_live_replays_and_lengths(client, session, admin_user):
+    """Shorts are left out when Horde collects videos; a ``hide_shorts`` saved
+    by an older version no longer hides anything (the panel has no switch)."""
     _discovered(session, admin_user, "shortvideo1", "A short", "One", duration=45.0)
     _discovered(
         session, admin_user, "livereplay1", "A replay", "Two", live_status="was_live"
@@ -120,8 +123,8 @@ def test_filters_leave_out_shorts_live_replays_and_lengths(client, session, admi
     }
     _custom(client, hide_shorts=True, hide_past_live=True, max_minutes=60)
     keys = {i["key"] for i in _items(client)}
-    assert keys & {"shortvideo1", "livereplay1", "longvideo01"} == set()
-    assert "normalvid01" in keys
+    assert keys & {"livereplay1", "longvideo01"} == set()
+    assert {"normalvid01", "shortvideo1"} <= keys
     _custom(client, min_minutes=30)
     assert {i["key"] for i in _items(client)} >= {"longvideo01"}
     assert "normalvid01" not in {i["key"] for i in _items(client)}
@@ -307,6 +310,54 @@ def test_streamed_favorites_keep_to_the_length_filters(client, session, admin_us
     session.commit()
     keys = {i["key"] for i in _items(client)}
     assert {"oldshort001", "oldlongone1"} <= keys
-    _custom(client, hide_shorts=True)
+    _custom(client, min_minutes=1)
     keys = {i["key"] for i in _items(client)}
     assert "oldshort001" not in keys and "oldlongone1" in keys
+
+
+def test_preferring_downloaded_videos_fills_the_top_with_them(
+    client, session, add_video, set_watch, admin_user, ai_on
+):
+    """At 100%, downloaded videos lead the feed even when videos found on
+    YouTube are closer matches (they used to wait at the end of the feed)."""
+    old = datetime.now(UTC) - timedelta(days=300)
+    # One downloaded video per channel: the channel spacing applies to them too.
+    for c, channel in enumerate(("Lab", "Bench", "Shop", "Desk", "Yard", "Loft")):
+        for n in range(2):
+            _watched(
+                session,
+                add_video,
+                set_watch,
+                admin_user,
+                _vec(0.02 * n + 0.01 * c),
+                channel=channel,
+                title=f"{channel} watched {n}",
+                yt_id=f"watch{c}{n}xxxx",
+            )
+        video = add_video(
+            channel=channel,
+            title=f"{channel} downloaded",
+            yt_id=f"dlvid{c}xxxxx",
+            # Not a new upload: a "more like what you watch" pick.
+            published_at=old,
+            added_at=old,
+        )
+        # Related to what was watched, but less close than the found ones.
+        _embed(session, video, _vec(0.55 + 0.03 * c))
+    for c, channel in enumerate(("Far", "Away", "Else")):
+        for n in range(3):
+            _discovered(
+                session,
+                admin_user,
+                f"found{c}{n}xxxx",
+                f"{channel} found {n}",
+                channel,
+                _vec(0.03 + 0.01 * n + 0.01 * c),
+            )
+
+    def downloaded_on_top() -> int:
+        return sum(1 for i in _items(client)[:6] if i["video"] is not None)
+
+    assert downloaded_on_top() <= 2
+    _custom(client, library_boost=100)
+    assert downloaded_on_top() >= 5

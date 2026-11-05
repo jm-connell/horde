@@ -2,7 +2,7 @@ import type { RecTuning } from "../../types";
 
 export type Bucket = keyof RecTuning["shares"];
 
-/** The kinds of pick Recommended+ mixes, in the order the panel lists them. */
+/** The kinds of pick Recommended mixes, in the order the panel lists them. */
 export const BUCKETS: { id: Bucket; label: string; hint: string }[] = [
   {
     id: "subscriptions",

@@ -137,9 +137,9 @@ Videos added in the last **48 hours** that never got a metadata sync and still h
 
 **Start:** `stream_ai.create_worker()` after subtitle retry. Once an hour it moves the saved AI results of streamed videos (`stream_ai_state`) onto library videos with the same YouTube id (download finalize does this immediately; the sweep covers imports) and deletes results nobody opened for `HORDE_STREAM_AI_RETENTION_DAYS` (default 30). See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
-### Recommended+ gatherer
+### Recommended gatherer
 
-**Start:** `discovery.gather.create_worker(ctx.discovery)` after stream AI. After 90 seconds, and then whenever woken (a person's first visit or a refresh) or every 10 minutes, it runs for each person who opened Recommended+ in the last 3 days and is due (6 hours since their last run, or asked): up to 4 YouTube searches and 3 up next lists through the extract gate at background priority, at most 30 calls an hour in all, 20 seconds apart, pausing 30 minutes (doubling to 12 hours) after a bot check or rate limit. It then embeds what it found and prunes old hits. Off when `discovery_enabled` or `youtube_video_search` is off. See [ADR 0019](../adr/0019-recommended-plus.md).
+**Start:** `discovery.gather.create_worker(ctx.discovery)` after stream AI. After 90 seconds, and then whenever woken (a person's first visit or a refresh) or every 10 minutes, it runs for each person who opened Recommended in the last 3 days and is due (6 hours since their last run, or asked): up to 4 YouTube searches and 3 up next lists through the extract gate at background priority, at most 30 calls an hour in all, 20 seconds apart, pausing 30 minutes (doubling to 12 hours) after a bot check or rate limit. It then embeds what it found and prunes old hits. Off when `discovery_enabled` or `youtube_video_search` is off. See [ADR 0019](../adr/0019-recommended-plus.md).
 
 ## Comments
 

@@ -32,6 +32,24 @@ export default function FollowSection({
               onChange={follow.toggle}
             />
           </label>
+          {follow.followed && (
+            <label className="flex items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-medium text-gray-200">
+                  Show its live streams
+                </span>
+                <span className="block text-xs text-muted">
+                  In the Live list and Recommended.
+                </span>
+              </span>
+              <Toggle
+                label="Show its live streams"
+                checked={!follow.liveHidden}
+                disabled={follow.pending}
+                onChange={() => follow.setLiveHidden(!follow.liveHidden)}
+              />
+            </label>
+          )}
           {!settings.showLiveStreams && (
             <p className="text-xs text-muted">
               The Live list is turned off in{" "}

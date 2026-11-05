@@ -1,4 +1,4 @@
-"""Whole-video scoring: categories, "For you", related videos, and the LLM prompts behind them.
+"""Whole-video scoring: categories, related videos, and the LLM prompts behind them.
 
 Vectors are hand made and tiny (4 dimensions) so the expected order is plain from
 the numbers: ``_unit(c)`` is a unit vector whose cosine to ``[1, 0, 0, 0]`` is ``c``.
@@ -10,14 +10,13 @@ import json
 import math
 import random
 import re
-from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
 import pytest
 from sqlmodel import delete, select
 
 from app.models import AiCategory, Video, VideoEmbedding
-from app.services import follows, library
+from app.services import library
 from app.services.ai import embeddings, recommend, tasks, vector_index
 from app.services.ai import workload as ai_workload
 
@@ -176,12 +175,14 @@ def test_video_belongs_only_to_its_best_category(session, add_video):
     # cosine 0.78 to Alpha and 0.62 to Beta: clears the 0.55 minimum for both.
     mixed = _embedded(session, add_video, [1.0, 0.8, 0.0, 0.0], title="Mostly A")
 
-    alpha = recommend.videos_for_category(session, "Alpha")
-    beta = recommend.videos_for_category(session, "Beta")
+    members = {
+        name: [vid for vid, _score in hits]
+        for name, hits in recommend._category_assignments(session).items()
+    }
 
-    assert {v.id for v in alpha.videos} == {pure_a.id, mixed.id}
-    assert [v.id for v in beta.videos] == [pure_b.id]
-    assert alpha.categories == ["Alpha", "Beta"]
+    assert set(members["Alpha"]) == {pure_a.id, mixed.id}
+    assert members["Beta"] == [pure_b.id]
+    assert list(members) == ["Alpha", "Beta"]
 
 
 def test_category_that_only_loses_its_videos_is_not_listed(session, add_video):
@@ -198,7 +199,7 @@ def test_category_that_only_loses_its_videos_is_not_listed(session, add_video):
         "Beta",
         "Shadow",
     ]
-    assert recommend.videos_for_category(session, "Shadow").videos == []
+    assert "Shadow" not in recommend._category_assignments(session)
 
 
 def test_categories_skip_videos_waiting_for_review(session, add_video):
@@ -213,122 +214,9 @@ def test_categories_skip_videos_waiting_for_review(session, add_video):
     )
 
     assert recommend.list_categories(session) == ["Alpha"]
-    page = recommend.videos_for_category(session, "Alpha")
-    assert [v.id for v in page.videos] == [shown.id]
-    assert hidden_a.id not in {v.id for v in page.videos}
-
-
-# --- "For you" ----------------------------------------------------------------
-
-
-@pytest.fixture
-def for_you(session, admin_user, monkeypatch):
-    monkeypatch.setattr(recommend, "get_embed_provider", lambda: object())
-
-    def ids() -> list[int]:
-        page = recommend.homepage_recommendations_page(
-            session, user_id=admin_user.id, limit=50, offset=0
-        )
-        return [v.id for v in page.videos]
-
-    return ids
-
-
-def test_for_you_lists_watched_videos_after_unwatched_ones(
-    session, add_video, admin_user, set_watch, for_you
-):
-    close = _embedded(session, add_video, _unit(0.8), title="Close", channel="C1")
-    nearish = _embedded(
-        session, add_video, [0.4, 0.9, 0.0, 0.0], title="Nearish", channel="C2"
-    )
-    unrelated = _embedded(
-        session, add_video, [0.0, 0.0, 0.0, 1.0], title="Unrelated", channel="C3"
-    )
-    # Added last, so a recency fill would put them first.
-    seed = _embedded(session, add_video, X_AXIS, title="Seed", channel="C4")
-    twin = _embedded(
-        session, add_video, [1.0, 0.1, 0.0, 0.0], title="Twin", channel="C5"
-    )
-    now = datetime.now(UTC)
-    set_watch(admin_user, seed, 590, now)
-    set_watch(admin_user, twin, 590, now - timedelta(hours=1))
-
-    assert for_you() == [close.id, nearish.id, unrelated.id, seed.id, twin.id]
-
-
-def test_for_you_prefers_recent_and_finished_seeds(
-    session, add_video, admin_user, set_watch, for_you
-):
-    recent_seed = _embedded(
-        session, add_video, X_AXIS, title="Recent", channel="C1", duration_sec=600.0
-    )
-    old_seed = _embedded(
-        session,
-        add_video,
-        [0.0, 1.0, 0.0, 0.0],
-        title="Old",
-        channel="C2",
-        duration_sec=600.0,
-    )
-    # A touch closer to its seed than the other neighbour is to its own...
-    near_old = _embedded(
-        session, add_video, [0.0, 0.85, 0.0, 0.5268], title="Near old", channel="C3"
-    )
-    near_recent = _embedded(
-        session, add_video, [0.8, 0.0, 0.6, 0.0], title="Near recent", channel="C4"
-    )
-    now = datetime.now(UTC)
-    set_watch(admin_user, recent_seed, 580, now)  # watched to the end
-    set_watch(admin_user, old_seed, 10, now - timedelta(days=10))  # abandoned
-
-    # ...yet the neighbour of the fresh, finished watch comes first.
-    assert for_you()[:2] == [near_recent.id, near_old.id]
-
-
-def test_for_you_spreads_a_channel_across_the_shelf(
-    session, add_video, admin_user, set_watch, for_you
-):
-    set_watch(
-        admin_user,
-        _embedded(session, add_video, X_AXIS, title="Seed", channel="Seed channel"),
-        590,
-    )
-    xs = [
-        _embedded(session, add_video, _unit(0.8), title=f"X{i}", channel="X")
-        for i in range(3)
-    ]
-    y = _embedded(session, add_video, _unit(0.78), title="Y", channel="Y")
-
-    order = for_you()[:4]
-    assert order == [xs[0].id, y.id, xs[1].id, xs[2].id]
-
-
-def test_for_you_boosts_followed_channels(
-    session, add_video, admin_user, set_watch, for_you
-):
-    set_watch(
-        admin_user,
-        _embedded(session, add_video, X_AXIS, title="Seed", channel="Seed channel"),
-        590,
-    )
-    url = "https://www.youtube.com/@followed"
-    other = _embedded(session, add_video, _unit(0.79), title="Other", channel="Other")
-    liked = _embedded(
-        session,
-        add_video,
-        _unit(0.77),
-        title="Followed",
-        channel="Followed",
-        channel_url=url,
-    )
-    assert for_you()[:2] == [other.id, liked.id]
-
-    follows.follow(session, admin_user.id, url)
-
-    assert for_you()[:2] == [liked.id, other.id]
-
-
-# --- related videos -----------------------------------------------------------
+    alpha = [vid for vid, _ in recommend._category_assignments(session)["Alpha"]]
+    assert alpha == [shown.id]
+    assert hidden_a.id not in alpha
 
 
 @pytest.fixture
@@ -591,40 +479,6 @@ def test_enrich_tags_keeps_distinct_tags_that_normalise_alike(
 # --- review regressions -------------------------------------------------------
 
 
-def test_finished_seed_counts_fully():
-    # The player records a finished video as position 0.
-    assert recommend._engagement(0.0, 600.0) == recommend._engagement(400.0, 600.0)
-    assert recommend._engagement(10.0, 600.0) < recommend._engagement(0.0, 600.0)
-
-
-def test_diversify_matches_greedy_selection():
-    rng = random.Random(5)  # noqa: S311 - deterministic test data
-    penalty = recommend.CHANNEL_REPEAT_PENALTY
-
-    def greedy(scored, channels):
-        left, picks, out = dict(scored), {}, []
-        while left:
-            vid = min(
-                left,
-                key=lambda v: (
-                    -(left[v] - penalty * picks.get(channels.get(v) or v, 0)),
-                    v,
-                ),
-            )
-            key = channels.get(vid) or vid
-            picks[key] = picks.get(key, 0) + 1
-            out.append(vid)
-            del left[vid]
-        return out
-
-    for _ in range(100):
-        n = rng.randint(0, 30)
-        # Scores on a 1/1024 grid so penalised ties compare exactly.
-        scored = {i: rng.randint(200, 800) / 1024 for i in range(n)}
-        channels = {i: rng.choice(["a", "b", "c", ""]) for i in range(n)}
-        assert recommend._diversify(scored, channels) == greedy(scored, channels)
-
-
 def test_profiles_stay_exact_through_incremental_changes(session, add_video):
     rng = random.Random(1)  # noqa: S311 - deterministic test data
     videos = [add_video(title=f"P{i}") for i in range(40)]
@@ -686,85 +540,3 @@ def test_related_pages_are_one_ranking_when_scores_are_close(
     by_eight = [vid for offset in range(0, 48, 8) for vid in page(offset, 8)]
     assert by_eight == page(0, 24) + page(24, 24)
     assert len(set(by_eight)) == 48
-
-
-# --- "For you" without AI, and followed channels' uploads -----------------------
-
-
-def _for_you_items(client, **params) -> list[tuple[str, str]]:
-    res = client.get("/api/ai/recommendations", params={"limit": 50, **params})
-    assert res.status_code == 200, res.text
-    sections = res.json()["sections"]
-    items = sections[0]["items"] if sections else []
-    return [
-        ("video", i["video"]["title"])
-        if i["video"]
-        else ("stream", i["stream"]["title"])
-        for i in items
-    ]
-
-
-def test_for_you_without_ai_ranks_by_watched_channels_and_tags(
-    client, session, add_video, admin_user, set_watch
-):
-    now = datetime.now(UTC)
-    seen = add_video(title="Seen", channel="Loved", tags=["kiln"])
-    set_watch(admin_user, seen, 0, now)  # finished
-    add_video(title="More from Loved", channel="Loved")
-    add_video(title="Also kilns", channel="Other", tags=["kiln"])
-    add_video(title="Unrelated", channel="Nobody")
-
-    titles = [t for _kind, t in _for_you_items(client)]
-    assert titles == ["More from Loved", "Also kilns", "Unrelated", "Seen"]
-    # Categories need AI; the shelf does not.
-    assert client.get("/api/ai/recommendations").json()["categories"] == []
-
-
-def test_for_you_mixes_in_followed_channels_uploads_on_request(
-    client, session, add_video, admin_user, set_watch
-):
-    from app.models import ChannelCatalog, ChannelCatalogStatus, ChannelCatalogVideo
-    from app.services import follows
-
-    url = "https://www.youtube.com/@loved"
-    seen = add_video(
-        title="Seen", channel="Loved", channel_url=url, source_url=_yt("haveitttt01")
-    )
-    set_watch(admin_user, seen, 0, datetime.now(UTC))
-    follows.follow(session, admin_user.id, url, "Loved")
-    catalog = ChannelCatalog(
-        channel_url=url, channel_name="Loved", status=ChannelCatalogStatus.ready
-    )
-    session.add(catalog)
-    session.commit()
-    recent = datetime.now(UTC).strftime("%Y%m%d")
-    for pos, (yt_id, title, live) in enumerate(
-        [
-            ("liveeeeeee1", "Live right now", "is_live"),  # the Live row has it
-            ("haveitttt01", "Seen", None),  # downloaded: the library copy is listed
-            ("newupload01", "New upload", None),
-        ]
-    ):
-        session.add(
-            ChannelCatalogVideo(
-                catalog_id=catalog.id,
-                yt_id=yt_id,
-                url=_yt(yt_id),
-                title=title,
-                duration=600.0,
-                position=pos,
-                published_at=recent,
-                live_status=live,
-            )
-        )
-    session.commit()
-
-    assert ("stream", "New upload") not in _for_you_items(client)
-    assert _for_you_items(client, include_streams=True) == [
-        ("stream", "New upload"),
-        ("video", "Seen"),
-    ]
-
-
-def _yt(yt_id: str) -> str:
-    return f"https://www.youtube.com/watch?v={yt_id}"

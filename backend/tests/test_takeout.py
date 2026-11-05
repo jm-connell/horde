@@ -7,7 +7,6 @@ import json
 import zipfile
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlmodel import Session, select
 
 from app.models import (
@@ -21,8 +20,6 @@ from app.models import (
     YoutubeWatchEvent,
 )
 from app.services import follows
-from app.services.ai import recommend
-from app.services.takeout import history
 from app.services.takeout.parse import read_export
 
 ROOT = "Takeout/YouTube and YouTube Music"
@@ -420,166 +417,6 @@ def test_rewatched_lists_repeat_views_not_in_the_library(client, add_video):
     assert rest["next_cursor"] is None
 
 
-# --- recommendations ----------------------------------------------------------------
-
-
-def _for_you(client, **params) -> list[tuple[str, str, str | None]]:
-    body = client.get(
-        "/api/ai/recommendations",
-        params={"limit": 50, **{k: str(v).lower() for k, v in params.items()}},
-    ).json()
-    items = [i for s in body["sections"] for i in s["items"]]
-    return [
-        ("video", i["video"]["title"], i.get("reason"))
-        if i["video"]
-        else ("stream", i["stream"]["title"], i.get("reason"))
-        for i in items
-    ]
-
-
-def test_for_you_treats_youtube_views_as_watched_and_follows_recent_taste(
-    client, add_video
-):
-    add_video(title="Seen on YouTube", channel="Loved", yt_id="iiiiiiiiii1")
-    add_video(title="More from Loved", channel="Loved")
-    add_video(title="From Faded", channel="Faded")
-    add_video(title="Unrelated", channel="Nobody")
-    views = [
-        _view(
-            "iiiiiiiiii1",
-            NOW,
-            channel="Loved",
-            channel_url="https://www.youtube.com/@loved",
-        ),
-        # A channel watched as much, but long ago, pulls far less.
-        *[
-            _view(
-                f"jjjjjjjjj{i:02d}",
-                NOW - timedelta(days=120 + i),
-                channel="Faded",
-                channel_url="https://www.youtube.com/@faded",
-            )
-            for i in range(3)
-        ],
-    ]
-    _upload(client, _export(views))
-
-    titles = [t for _kind, t, _r in _for_you(client)]
-    assert titles == ["More from Loved", "From Faded", "Unrelated", "Seen on YouTube"]
-
-
-def test_for_you_suggests_uploads_of_channels_watched_on_youtube(client, session):
-    url = "https://www.youtube.com/@pots"
-    _catalog(session, url, "Pots", ["kkkkkkkkkk1", "kkkkkkkkkk2"])
-    _upload(
-        client, _export([_view("kkkkkkkkkk2", NOW, channel="Pots", channel_url=url)])
-    )
-
-    assert _for_you(client) == []
-    # Not followed, but watched on YouTube: its unwatched upload is suggested.
-    assert _for_you(client, include_streams=True) == [
-        ("stream", "Upload kkkkkkkkkk1", None)
-    ]
-
-
-def test_for_you_brings_back_an_old_channel_now_and_then(client, add_video):
-    # Thirty channels watched lately, each with a video waiting, and one channel
-    # watched a lot over a year ago: on taste alone it would come last.
-    views = []
-    for i in range(30):
-        add_video(title=f"Recent {i:02d}", channel=f"Now {i:02d}")
-        views.append(
-            _view(
-                f"lllllllll{i:02d}",
-                NOW,
-                channel=f"Now {i:02d}",
-                channel_url=f"https://www.youtube.com/@now{i:02d}",
-            )
-        )
-    add_video(title="Old favourite", channel="Back then")
-    views += [
-        _view(
-            f"mmmmmmmmm{i:02d}",
-            NOW - timedelta(days=400 + i),
-            channel="Back then",
-            channel_url="https://www.youtube.com/@backthen",
-        )
-        for i in range(recommend.THROWBACK_MIN_OLD_VIEWS)
-    ]
-    _upload(client, _export(views))
-
-    items = _for_you(client)
-    slot = recommend.THROWBACK_EVERY - 1
-    assert items[slot] == ("video", "Old favourite", "throwback")
-    assert [r for _k, _t, r in items].count("throwback") == 1
-
-
-def test_for_you_with_ai_is_seeded_by_youtube_views(
-    client, session, add_video, monkeypatch
-):
-    from app.models import VideoEmbedding
-    from app.services.ai import embeddings
-
-    monkeypatch.setattr(recommend, "get_embed_provider", lambda: object())
-
-    def embedded(title: str, vec: list[float], **fields):
-        video = add_video(title=title, channel=title, **fields)
-        session.add(
-            VideoEmbedding(
-                video_id=video.id,
-                chunk_index=-1,
-                model="m",
-                dim=4,
-                vector=embeddings.pack_vector(vec),
-                content_hash="h",
-            )
-        )
-        session.commit()
-        return video
-
-    # Added first, so without the seed the newer unrelated video would lead.
-    embedded("Close to it", [0.9, 0.43, 0.0, 0.0])
-    embedded("Watched on YouTube", [1.0, 0.0, 0.0, 0.0], yt_id="pppppppppp1")
-    embedded("Unrelated", [0.0, 0.0, 0.0, 1.0])
-    _upload(client, _export([_view("pppppppppp1", NOW)]))
-
-    titles = [t for _k, t, _r in _for_you(client)]
-    assert titles[0] == "Close to it"
-    assert titles[-1] == "Watched on YouTube"
-
-
-def test_profile_weighs_recent_views_far_above_old_ones(session, admin_user):
-    history.store_views(
-        session,
-        admin_user.id,
-        read_export(
-            [
-                (
-                    "t.zip",
-                    io.BytesIO(
-                        _export(
-                            [
-                                _view("nnnnnnnnnn1", NOW, channel="New"),
-                                _view(
-                                    "nnnnnnnnnn2",
-                                    NOW - timedelta(days=90),
-                                    channel="Old",
-                                    channel_url="https://www.youtube.com/@old",
-                                ),
-                            ]
-                        )
-                    ),
-                )
-            ]
-        ).views,
-    )
-    found = history.profile(session, admin_user.id, NOW)
-    by_name = {c.name: c.recent for c in found.channels.values()}
-    # Views count per day (from its noon), so within a day of the exact weight.
-    assert by_name["New"] == pytest.approx(1.0, abs=0.025)
-    assert by_name["Old"] == pytest.approx(0.125, abs=0.005)  # three half-lives
-
-
 # --- History stats ----------------------------------------------------------------
 
 
@@ -738,19 +575,7 @@ def test_a_long_playlist_title_is_found_again(client, session):
     assert again["videos_added"] == 1
 
 
-def test_recommendations_follow_a_forget_at_once(client, add_video):
-    add_video(title="Other")
-    # Newest, so it leads the unscored shelf unless it counts as watched.
-    add_video(title="Seen on YouTube", yt_id="tttttttttt1")
-    _upload(client, _export([_view("tttttttttt1", NOW)]))
-    assert [t for _k, t, _r in _for_you(client)] == ["Other", "Seen on YouTube"]
-
-    client.delete("/api/takeout/history")
-    # The cached profile is keyed by the history, so the next page sees the change.
-    assert [t for _k, t, _r in _for_you(client)] == ["Seen on YouTube", "Other"]
-
-
-# --- Recommended+ -------------------------------------------------------------------
+# --- Recommended -------------------------------------------------------------------
 
 
 def _discover_items(client) -> dict[str, dict]:

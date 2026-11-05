@@ -25,7 +25,7 @@ The original design assumed a single operator on a private network. Sharing a li
 | Downloads and the queue | Appearance and layout preferences |
 | Server settings (admin) | Password and sessions |
 
-"For you" recommendations are seeded from the signed-in user's history; indexing and category sampling use the latest watch by anyone, because their output is shared.
+Recommended is ranked from the signed-in user's history; indexing and category sampling use the latest watch by anyone, because their output is shared.
 
 ## CORS is limited to the media routes
 

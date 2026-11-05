@@ -1,7 +1,7 @@
 import TuningPanel from "../../components/discover/TuningPanel";
 
 /**
- * Your Recommended+ algorithm: the same settings as the Algorithm panel next
+ * Your Recommended algorithm: the same settings as the Algorithm panel next
  * to the feed (both read and save one copy, so they always match).
  */
 export default function AlgorithmSection() {
@@ -16,10 +16,10 @@ export default function AlgorithmSection() {
           id="algorithm-heading"
           className="text-xs font-semibold uppercase tracking-wider text-gray-400"
         >
-          Recommended+ algorithm
+          Recommendation algorithm
         </h2>
         <p className="mt-1 text-sm text-muted">
-          How your Recommended+ feed is picked. Only your feed changes; open
+          How your Recommended feed is picked. Only your feed changes; open
           Algorithm on the feed to watch it re-rank as you go.
         </p>
       </div>

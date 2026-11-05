@@ -6,7 +6,6 @@ import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
 import DiscoverHome from "../components/DiscoverHome";
-import RecommendedHome from "../components/RecommendedHome";
 import { useAskPageChannel } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
@@ -20,8 +19,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
 import { useContinueYoutube } from "../queries/history";
-import { useDiscoverStatus } from "../queries/status";
-import type { HomeTab } from "./libraryStorage";
+import { usePrefetchDiscover } from "../queries/discover";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
@@ -65,14 +63,7 @@ function OnlineLibrary() {
     handleSortChange,
     toggleOrder,
   } = useLibraryQuery(settings, update);
-  const { homeTab: storedHomeTab, setHomeTab } = useHomeTab(search);
-  // With looking on YouTube off, Recommended+ would show what Recommended
-  // shows: the tab goes, and anyone on it lands on Recommended.
-  const discoverEnabled = useDiscoverStatus().data?.enabled;
-  const homeTab: HomeTab =
-    storedHomeTab === "discover" && discoverEnabled === false
-      ? "recommended"
-      : storedHomeTab;
+  const { homeTab, setHomeTab } = useHomeTab(search);
 
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
@@ -89,12 +80,13 @@ function OnlineLibrary() {
   }, [search, activeChannel, setActiveChannel, clearSearch]);
 
   const isHome = !activeChannel && !activeTag;
+  // On the Library tab, load Recommended ahead so it opens at once.
+  usePrefetchDiscover(isHome && homeTab === "library" && !search.trim());
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;
-  // Either recommendations tab: they render their own data and order.
-  const onRecommendedTab =
-    showHomeTabs && (homeTab === "recommended" || homeTab === "discover");
+  // Recommended renders its own data and order.
+  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
@@ -252,15 +244,6 @@ function OnlineLibrary() {
       ? `#${activeTag}`
       : "Home";
 
-  const toggleTagsFromHeader = (leaveRecommended: boolean) => {
-    if (leaveRecommended) {
-      setHomeTab("library");
-      setShowTags(true);
-      return;
-    }
-    setShowTags((s) => !s);
-  };
-
   return (
     <div className={`flex gap-6${queueDock.dockedBottom ? " pb-4" : ""}`}>
       {queueDock.showQueuePanel && !queueDock.queueDockedBottom && (
@@ -327,13 +310,13 @@ function OnlineLibrary() {
             headline={headline}
             isHome={isHome}
             showHomeTabs={showHomeTabs}
-            onRecommendedTab={onRecommendedTab}
             homeTab={homeTab}
-            onHomeTab={setHomeTab}
-            showDiscover={discoverEnabled !== false}
-            hasTags={hasTags}
-            showTags={showTags}
-            onToggleTags={toggleTagsFromHeader}
+            onHomeTab={(tab) => {
+              // During a search the library's results show; picking a tab
+              // means leaving the search for that tab.
+              if (search.trim()) clearSearch();
+              setHomeTab(tab);
+            }}
             settings={settings}
           >
             <HomeControls
@@ -424,14 +407,10 @@ function OnlineLibrary() {
               }
             />
           ) : onRecommendedTab && !debouncedSearch ? (
-            homeTab === "discover" ? (
-              <DiscoverHome
-                sidebarCollapsed={settings.sidebarCollapsed}
-                onChannelClick={channelNav.openFeedChannel}
-              />
-            ) : (
-              <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
-            )
+            <DiscoverHome
+              sidebarCollapsed={settings.sidebarCollapsed}
+              onChannelClick={channelNav.openFeedChannel}
+            />
           ) : loading ? (
             <LoadingIndicator />
           ) : !debouncedSearch && videos.length === 0 ? (

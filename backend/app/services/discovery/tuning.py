@@ -1,4 +1,4 @@
-"""How one user wants Recommended+ ranked: the values behind its sliders.
+"""How one user wants Recommended ranked: the values behind its sliders.
 
 Every value here maps onto something ``feed.build_feed`` already does, so the
 "Balanced" preset (``DEFAULTS``) ranks almost exactly as the feed did before it
@@ -73,7 +73,7 @@ class Strictness(BaseModel):
 
 
 class Tuning(BaseModel):
-    """One complete set of Recommended+ settings (what a preset or a save holds)."""
+    """One complete set of Recommended settings (what a preset or a save holds)."""
 
     # Read back, every field is present: say so in the response schema.
     model_config = ConfigDict(
@@ -103,6 +103,8 @@ class Tuning(BaseModel):
     min_watched_pct: int = Field(default=0, ge=0, le=90)
     #: A video finished at least this many days ago may come back as a rewatch.
     rewatch_after_days: Literal[30, 60, 180, 365] = 60
+    #: No longer applied: Horde leaves Shorts out when it collects videos. Kept
+    #: so settings and algorithms saved with it still load.
     hide_shorts: bool = False
     hide_past_live: bool = False
     #: Length limits in minutes (0 = no limit).
@@ -163,7 +165,21 @@ class Tuning(BaseModel):
 
     @property
     def library_bonus(self) -> float:
-        return 0.15 * self.library_boost / 100
+        """Added to a downloaded pick's score: enough at 100 to put it ahead of
+        closer matches in its bucket."""
+        return 0.5 * self.library_boost / 100
+
+    @property
+    def library_floor_scale(self) -> float:
+        """A downloaded pick's relevance floors are multiplied by this: 1x at
+        0, none at 100 (every downloaded video qualifies, ranked by its match)."""
+        return 1.0 - self.library_boost / 100
+
+    @property
+    def library_pick_cost(self) -> float:
+        """How much of its bucket's share a downloaded pick uses in the mix:
+        1 at 0, a tenth at 100 (so downloaded picks can fill most slots)."""
+        return 1.0 - 0.9 * self.library_boost / 100
 
 
 DEFAULTS = Tuning()
@@ -307,7 +323,7 @@ def load(session: Session, user_id: int) -> Selection:
         # Saved by an older version with values this one rejects: start over
         # rather than fail every feed request.
         logger.warning(
-            "Unreadable Recommended+ settings for user %s; using Balanced",
+            "Unreadable Recommended settings for user %s; using Balanced",
             user_id,
             exc_info=True,
         )

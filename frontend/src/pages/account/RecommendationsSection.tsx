@@ -10,7 +10,7 @@ const KIND_LABEL: Record<string, string> = {
   suggestion: "Suggestion",
 };
 
-/** What you asked Recommended+ to leave out, and a way to take it back. */
+/** What you asked Recommended to leave out, and a way to take it back. */
 export default function RecommendationsSection() {
   const { showError } = useToast();
   const [items, setItems] = useState<RecFeedback[] | null>(null);
@@ -48,7 +48,7 @@ export default function RecommendationsSection() {
       </h2>
       {items === null ? null : items.length === 0 ? (
         <p className="text-sm text-muted">
-          Nothing hidden. Use the menu on a Recommended+ card to hide a video or
+          Nothing hidden. Use the menu on a Recommended card to hide a video or
           a channel.
         </p>
       ) : (

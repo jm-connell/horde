@@ -24,7 +24,7 @@ interface Pending {
 
 /**
  * Records how far the user got in streamed (not downloaded) videos, so
- * Recommended+ learns from them and leaves them out. Nothing is sent before
+ * Recommended learns from them and leaves them out. Nothing is sent before
  * `STREAM_WATCH_MIN_SEC` (a stream opened and left says little), then at most
  * every `STREAM_WATCH_INTERVAL_MS`, on `flush` (page hidden, another stream)
  * and on `finish`.

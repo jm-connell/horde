@@ -34,18 +34,15 @@ function TabButton({
   );
 }
 
-/** Library / Recommended / Recommended+ switch at the top of the home page. */
+/** Library / Recommended switch at the top of the home page. */
 export default function HomeTabs({
   homeTab,
   navIndicator,
   onSelect,
-  showDiscover,
 }: {
   homeTab: HomeTab;
   navIndicator: NavIndicator;
   onSelect: (tab: HomeTab) => void;
-  /** Recommended+ is offered only while it may look on YouTube. */
-  showDiscover: boolean;
 }) {
   return (
     <LiquidNav
@@ -67,15 +64,6 @@ export default function HomeTabs({
         navIndicator={navIndicator}
         onSelect={onSelect}
       />
-      {showDiscover && (
-        <TabButton
-          tab="discover"
-          current={homeTab}
-          label="Recommended+"
-          navIndicator={navIndicator}
-          onSelect={onSelect}
-        />
-      )}
     </LiquidNav>
   );
 }

@@ -18,7 +18,7 @@ type Kind = RecTopic["kind"];
 type Expiry = "never" | "7" | "14" | "30" | "date";
 
 const EXPIRY_OPTIONS: { value: Expiry; label: string }[] = [
-  { value: "never", label: "Always" },
+  { value: "never", label: "Forever" },
   { value: "7", label: "For a week" },
   { value: "14", label: "For 2 weeks" },
   { value: "30", label: "For a month" },
@@ -30,7 +30,7 @@ const STRENGTH_OPTIONS: { value: RecTopic["strength"]; label: string }[] = [
   { value: "high", label: "A lot" },
 ];
 const MATCH_OPTIONS: { value: RecTopic["match"]; label: string }[] = [
-  { value: "words", label: "These words" },
+  { value: "words", label: "Exact match" },
   { value: "similar", label: "Similar topics" },
 ];
 
@@ -46,7 +46,7 @@ function expiryFor(choice: Expiry, date: string): string | null {
 
 function expiryLabel(topic: RecTopic): string {
   if (!topic.active) return "Expired";
-  if (!topic.expires_at) return "Always";
+  if (!topic.expires_at) return "Forever";
   const when = new Date(topic.expires_at);
   return `Until ${when.toLocaleDateString(undefined, {
     month: "short",
@@ -308,7 +308,8 @@ export default function TopicsSection() {
         </h3>
         <p className="text-xs text-muted">
           Leave a topic out, for good or for a while. Similar topics catch more
-          but are a best guess; the words block also applies to Recommended.
+          but are a best guess; an exact match block also applies to
+          Recommended.
         </p>
         {blocks.length > 0 && (
           <ul className="space-y-1">

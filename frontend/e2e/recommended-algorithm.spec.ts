@@ -5,8 +5,8 @@ import { contextAs, CSRF_HEADERS, expect, test } from "./fixtures";
 /** A seeded video found on YouTube, from a channel the admin never watched. */
 const FOUND = "Night sky timelapse from a lighthouse";
 
-async function openRecommendedPlus(page: Page) {
-  // The suite keeps YouTube search off, which hides Recommended+; report it on.
+async function openRecommended(page: Page) {
+  // The suite keeps YouTube search off (only the status line says so); report it on.
   await page.route(/\/api\/discover\/status$/, async (route) => {
     let response;
     let status: Record<string, unknown>;
@@ -20,7 +20,7 @@ async function openRecommendedPlus(page: Page) {
   });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended+", exact: true }).click();
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
 }
 
@@ -51,11 +51,11 @@ test.afterEach(async ({ page }) => {
 test("the algorithm panel re-ranks the feed and stays in step with Account", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const toggle = page.getByRole("button", { name: "Algorithm" });
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  const panel = page.getByRole("dialog", { name: "Recommendation algorithm" });
   await expect(panel).toBeVisible();
   await expect(
     panel.getByRole("button", { name: "Balanced", pressed: true })
@@ -65,6 +65,17 @@ test("the algorithm panel re-ranks the feed and stays in step with Account", asy
     "algorithm panel",
     '[data-horde="side-panel"]'
   );
+
+  // Each setting marks Balanced's value: a tick under a slider, "(default)"
+  // in a list.
+  await expect(
+    panel.locator('[data-horde="slider-default"]').first()
+  ).toBeAttached();
+  await expect(
+    panel.getByRole("button", { name: "Uploaded within: Any time (default)" })
+  ).toBeVisible();
+  // Shorts never reach Horde, so there is no filter for them.
+  await expect(panel.getByText("Hide Shorts")).toHaveCount(0);
 
   // A preset is one click.
   await panel.getByRole("button", { name: "Explorer" }).click();
@@ -86,7 +97,9 @@ test("the algorithm panel re-ranks the feed and stays in step with Account", asy
 
   // The Account page shows the same settings.
   await page.goto("/account");
-  const section = page.getByRole("region", { name: "Recommended+ algorithm" });
+  const section = page.getByRole("region", {
+    name: "Recommendation algorithm",
+  });
   await expect(
     section.getByRole("button", { name: "Custom", pressed: true })
   ).toBeVisible();
@@ -99,12 +112,12 @@ test("the algorithm panel re-ranks the feed and stays in step with Account", asy
   ).toBeVisible();
 
   // Back on the feed, the found videos are there again.
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await expect(page.locator('[data-rec-key="discover001"]')).toBeVisible();
 });
 
 test("why this video shows what the score is made of", async ({ page }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const card = page.locator('[data-rec-key="discover001"]');
   await card.hover();
   await card.getByRole("button", { name: "Tune recommendations" }).click();
@@ -122,14 +135,14 @@ test("why this video shows what the score is made of", async ({ page }) => {
   await dialog.getByRole("button", { name: "Open algorithm" }).click();
   await expect(dialog).toHaveCount(0);
   await expect(
-    page.getByRole("dialog", { name: "Recommended+ algorithm" })
+    page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toBeVisible();
 });
 
 test("with the chat open too, the panel shows tabs instead of two panels", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
   await page.getByRole("button", { name: "Ask about Horde" }).click();
 
@@ -158,26 +171,28 @@ test("with the chat open too, the panel shows tabs instead of two panels", async
   await page.getByRole("button", { name: "Close Ask" }).click();
   await expect(tabs).toHaveCount(0);
   await expect(
-    page.getByRole("dialog", { name: "Recommended+ algorithm" })
+    page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toBeVisible();
 
   // Elsewhere in the app it hides; back on the feed it is there again.
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "Recommended+ algorithm" })
+    page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Recommended+", exact: true }).click();
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: "Recommended+ algorithm" })
+    page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toBeVisible();
 });
 
 test("Escape closes an open list in the panel before the panel", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
-  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  const panel = page.getByRole("dialog", { name: "Recommendation algorithm" });
+  // The taste window and lengths are advanced settings.
+  await panel.getByRole("button", { name: "Advanced" }).click();
   const select = panel.getByRole("button", {
     name: "Recent taste is the last",
   });
@@ -196,14 +211,14 @@ test("Escape closes an open list in the panel before the panel", async ({
 });
 
 test("interests and blocked topics change the feed", async ({ page }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
-  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  const panel = page.getByRole("dialog", { name: "Recommendation algorithm" });
 
   await panel.getByLabel("Add an interest").fill("night sky");
   await panel.getByRole("button", { name: "Add", exact: true }).click();
   await expect(panel.locator('[data-topic="night sky"]')).toContainText(
-    "Always"
+    "Forever"
   );
   await expect(page.locator('[data-rec-key="discover001"]')).toHaveAttribute(
     "title",
@@ -230,9 +245,9 @@ test("save an algorithm, share it, and save changes back to it", async ({
   browser,
   baseURL,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
-  const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  const panel = page.getByRole("dialog", { name: "Recommendation algorithm" });
   await panel.getByRole("button", { name: "Explorer" }).click();
   await expect(
     panel.getByRole("button", { name: "Explorer", pressed: true })
@@ -252,7 +267,9 @@ test("save an algorithm, share it, and save changes back to it", async ({
   const ctx = await contextAs(browser, baseURL, "member");
   const other = await ctx.newPage();
   await other.goto("/account");
-  const section = other.getByRole("region", { name: "Recommended+ algorithm" });
+  const section = other.getByRole("region", {
+    name: "Recommendation algorithm",
+  });
   const chip = section.getByRole("button", { name: "Weekend · admin" });
   await chip.click();
   await expect(chip).toHaveAttribute("aria-pressed", "true");

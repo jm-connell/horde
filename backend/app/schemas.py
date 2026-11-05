@@ -1243,6 +1243,8 @@ class FollowedChannelRead(BaseModel):
     #: download | manual | library
     source: str
     created_at: datetime
+    #: Its live streams are left out of the Live list and the feeds.
+    hide_live: bool = False
 
 
 class FollowListResponse(BaseModel):
@@ -1256,6 +1258,14 @@ class FollowRequest(BaseModel):
     #: A channel URL or an ``@handle``.
     channel_url: str = Field(min_length=1, max_length=500)
     channel_name: str | None = Field(default=None, max_length=300)
+
+
+class FollowUpdate(BaseModel):
+    """Change how a followed channel shows (it stays followed)."""
+
+    channel_url: str = Field(min_length=1, max_length=500)
+    #: Leave its live streams out of the Live list and the feeds.
+    hide_live: bool
 
 
 class UnfollowResult(BaseModel):
@@ -1619,7 +1629,7 @@ class RecAlgorithmUpdate(BaseModel):
 
 
 class RecTuningWrite(BaseModel):
-    """Rank Recommended+ with a preset, a saved algorithm, or your own values."""
+    """Rank Recommended with a preset, a saved algorithm, or your own values."""
 
     #: A preset id, "custom" (then ``custom`` holds the values) or "algo:<id>".
     active: str = Field(min_length=1, max_length=40)

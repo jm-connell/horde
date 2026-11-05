@@ -1,4 +1,4 @@
-"""Topics a user adds to Recommended+ by hand: interests and blocks.
+"""Topics a user adds to Recommended by hand: interests and blocks.
 
 An **interest** ("europe travel vlogs") gets its own share of the feed, by its
 strength, and becomes a YouTube search for the gatherer. A video matches when
@@ -6,9 +6,9 @@ the interest's words are in its title, channel or tags, when it was found by
 searching for the interest, or (with embeddings) when it stands out as close
 to the interest's text among the candidates.
 
-A **block** leaves videos out: by its words (Recommended+, the Recommended
-shelves and what the gatherer stores; not the live row) or, with embeddings, by meaning (Recommended+, which reads the
-vectors). Meaning is judged against the pool: a candidate counts as close when
+A **block** leaves videos out: by its words (the Recommended feed and what the
+gatherer stores; not the live row) or, with embeddings, by meaning (the feed,
+which reads the vectors). Meaning is judged against the pool: a candidate counts as close when
 its similarity to the topic is far above the pool's (``BLOCK_Z``), since raw
 similarities mean different things on different embed models.
 

@@ -848,7 +848,7 @@ def test_up_next_is_read_with_yt_dlps_own_parsers():
     assert entries[0]["channel_url"] == "https://www.youtube.com/@rackguy"
 
 
-# --- Recommended (library + every catalog) ------------------------------------------
+# --- library + every catalog -------------------------------------------------------
 
 
 def test_recommended_includes_unfollowed_catalogs_but_not_streamed_or_blocked(
@@ -872,14 +872,8 @@ def test_recommended_includes_unfollowed_catalogs_but_not_streamed_or_blocked(
     client.post(
         "/api/discover/feedback", json={"kind": "channel", "key": "", "label": "Spam"}
     )
-    body = client.get(
-        "/api/ai/recommendations", params={"include_streams": True}
-    ).json()
-    titles = [
-        (i["stream"] or i["video"])["title"]
-        for s in body["sections"]
-        for i in s["items"]
-    ]
+    items = _items(client)
+    titles = [(i["stream"] or i["video"])["title"] for i in items]
     assert "Unfollowed upload" in titles
     assert "Streamed" not in titles and "Spam upload" not in titles
 
@@ -1018,7 +1012,19 @@ def test_live_broadcasts_lead_recommended_plus_when_watched_lately(
     assert not {"lovedlive01", "followlive1"} & {i["key"] for i in later["items"]}
 
 
-def test_live_broadcasts_join_recommended_with_streams_on(
+def test_hidden_live_streams_stay_out_of_recommended_plus(
+    app, client, session, admin_user
+):
+    from app.services import follows
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    quiet = _go_live(app, session, admin_user, "Quiet", "quietlive01")
+    follows.set_hide_live(session, admin_user.id, quiet, True)
+    keys = [i["key"] for i in client.get("/api/discover/feed").json()["items"]]
+    assert "quietlive01" not in keys and "found000001" in keys
+
+
+def test_a_blocked_channels_live_broadcast_stays_out(
     app, client, session, add_video, set_watch, admin_user
 ):
     seen = add_video(title="Seen", channel="Loved")
@@ -1029,18 +1035,9 @@ def test_live_broadcasts_join_recommended_with_streams_on(
         "/api/discover/feedback",
         json={"kind": "channel", "key": blocked, "label": "Muted"},
     )
-
-    def live_items(**params):
-        body = client.get("/api/ai/recommendations", params=params).json()
-        return [
-            i for s in body["sections"] for i in s["items"] if i["reason"] == "live"
-        ]
-
-    [item] = live_items(include_streams=True)
-    assert item["stream"]["id"] == "lovedlive01"
-    assert item["stream"]["live_status"] == "is_live"
-    assert live_items() == []
-    assert live_items(include_streams=True, offset=24) == []
+    first = client.get("/api/discover/feed").json()
+    live = [i["key"] for i in first["items"] if i["reason"]["kind"] == "live"]
+    assert live == ["lovedlive01"]
 
 
 def test_live_picks_are_capped_and_match_streamed_watches(
@@ -1066,3 +1063,110 @@ def test_live_picks_are_capped_and_match_streamed_watches(
     live = [k for k in keys if k.startswith("livevideo")]
     assert len(live) == 1 + MAX_OTHER
     assert keys[0] == "livevideo07"
+
+
+def test_channel_suggestion_says_what_the_channel_is_like():
+    """A suggestion carries its picks' typical views and length, and a short
+    reason naming the watch that led to it."""
+    from app.services.discovery.candidates import Candidate
+    from app.services.discovery.feed import ChannelStat, Feed
+    from app.services.discovery.feedback import Exclusions
+    from app.services.discovery.suggest import suggestions
+
+    def cand(i: int, views: int | None, seconds: float | None) -> Candidate:
+        return Candidate(
+            key=f"sky{i:08d}",
+            pool="discovery",
+            title=f"Sky {i}",
+            channel="Northern Skies",
+            channel_url="https://youtube.com/@northernskies",
+            view_count=views,
+            duration=seconds,
+        )
+
+    stat = ChannelStat("Northern Skies", "https://youtube.com/@northernskies")
+    stat.items = [cand(1, 1000, 600), cand(2, 3000, 900), cand(3, None, 1200)]
+    stat.scores = [0.9, 0.8, 0.7]
+    stat.seeds = {"Aurora over the fjord"}
+    stat.queries.update(
+        {"night sky photography tips": 2, "northern lights": 1, "Night Sky": 1}
+    )
+    feed = Feed(items=[], new_channels={stat.url: stat}, cold=False)
+
+    [pick] = suggestions(feed, Exclusions())
+    assert pick.typical_views == 2000
+    assert pick.typical_minutes == 15
+    assert pick.reason == "Like Aurora over the fjord"
+    # What it is about: the searches that found it, most first, cut short.
+    assert pick.tags == ["night sky photography", "northern lights"]
+
+    # AI categories come first, by how many of its picks are in each.
+    categories = {
+        "Astronomy": {"sky00000001", "sky00000002"},
+        "Travel": {"sky00000003"},
+        "Cooking": {"elsewhere01"},
+    }
+    [pick] = suggestions(feed, Exclusions(), categories)
+    assert pick.tags == ["Astronomy", "Travel"]
+
+
+def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
+    """The home page loads Recommended+ ahead of time; only opening it counts."""
+    from app.models import DiscoveryState, RecImpression
+
+    _discovered(session, admin_user, "prefetch001", "Found early", "Chan")
+    body = _feed(client, prefetch="true")
+    assert [i["key"] for i in body["items"]] == ["prefetch001"]
+    assert session.get(RecImpression, (admin_user.id, "prefetch001")) is None
+    # Nor does it make the user active for the YouTube gatherer.
+    state = session.get(DiscoveryState, admin_user.id)
+    assert state is None or state.last_viewed_at is None
+    _feed(client)
+    row = session.get(RecImpression, (admin_user.id, "prefetch001"))
+    assert row is not None and row.shown_count == 1
+
+
+def test_recommended_plus_can_be_browsed_by_category(
+    client, session, add_video, admin_user
+):
+    """The AI categories of Recommended apply to every pick with an embedding:
+    found on YouTube and downloaded alike, in the feed's order."""
+    from app.models import AiCategory
+
+    for name, vec in (("Night sky", _vec(0.0)), ("Rock pools", _vec(0.0, axis=2))):
+        session.add(
+            AiCategory(
+                name=name, embedding=embeddings.pack_vector(vec), dim=4, model="m"
+            )
+        )
+    session.commit()
+    _discovered(session, admin_user, "skyfound001", "Stars", "Sky A", _vec(0.02))
+    _discovered(session, admin_user, "skyfound002", "Aurora", "Sky B", _vec(0.05))
+    _discovered(
+        session, admin_user, "poolfound01", "Crabs", "Pools", _vec(0.03, axis=2)
+    )
+    _discovered(session, admin_user, "novector001", "Unknown", "Plain")
+    downloaded = add_video(title="Milky Way", channel="Sky C", yt_id="milkyway001")
+    _embed(session, downloaded, _vec(0.04))
+
+    body = _feed(client)
+    assert body["categories"] == ["Night sky", "Rock pools"]
+    everything = [i["key"] for i in body["items"]]
+
+    sky = _feed(client, category="Night sky")
+    keys = [i["key"] for i in sky["items"]]
+    assert set(keys) == {"skyfound001", "skyfound002", "milkyway001"}
+    assert keys == [k for k in everything if k in set(keys)]
+    pools = [i["key"] for i in _feed(client, category="Rock pools")["items"]]
+    assert pools == ["poolfound01"]
+    assert _feed(client, category="Nothing like it")["items"] == []
+
+    # A category refresh (here a rename) is seen without re-ranking the feed.
+    row = session.exec(select(AiCategory).where(AiCategory.name == "Rock pools")).one()
+    row.name = "Tide pools"
+    row.updated_at = datetime.now(UTC)
+    session.add(row)
+    session.commit()
+    assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
+    tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
+    assert tide == ["poolfound01"]
