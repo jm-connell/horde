@@ -20,7 +20,7 @@ export function useFollows(enabled = true) {
 function useInvalidateFollows() {
   const queryClient = useQueryClient();
   return () => {
-    // Live cards ride on the Recommended+ page loaded ahead.
+    // Live cards ride on the Recommended page loaded ahead.
     queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
     return Promise.all([
       queryClient.invalidateQueries({ queryKey: queryKeys.follows.list }),

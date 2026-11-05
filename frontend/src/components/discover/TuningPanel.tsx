@@ -349,7 +349,7 @@ const lean = (v: number, low: string, high: string, mid = "Default") =>
   v === 50 ? mid : v < 50 ? low : high;
 
 /**
- * The Recommended+ algorithm: presets and every value behind the feed. Shown
+ * The Recommended algorithm: presets and every value behind the feed. Shown
  * in the side panel next to the feed and on the Account page; both read and
  * save the same settings, so they always match. Moving anything switches to
  * "Custom" and saves after a short pause; the feed re-ranks on its own.
@@ -405,7 +405,7 @@ export default function TuningPanel({
   if (!state) {
     return query.isError ? (
       <p className="px-4 py-3 text-sm text-muted">
-        Could not load your Recommended+ settings.
+        Could not load your recommendation settings.
       </p>
     ) : null;
   }
@@ -424,7 +424,7 @@ export default function TuningPanel({
           if (pending.current === null) setDraft(null);
         },
         onError: () => {
-          showError("Could not save your Recommended+ settings");
+          showError("Could not save your recommendation settings");
           setDraft(null);
         },
       }
@@ -938,11 +938,11 @@ export default function TuningPanel({
   }
   return (
     <>
-      <PanelHeader title="Recommended+ algorithm" actions={reset} />
+      <PanelHeader title="Recommendation algorithm" actions={reset} />
       <div
         // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
         tabIndex={0}
-        aria-label="Recommended+ algorithm"
+        aria-label="Recommendation algorithm"
         className="horde-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
       >
         {body}

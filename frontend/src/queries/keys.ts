@@ -14,7 +14,6 @@ export const queryKeys = {
     related: (url: string) => ["preview", "related", url] as const,
   },
   discover: {
-    status: ["discover", "status"] as const,
     tuning: ["discover", "tuning"] as const,
     /** The latest feed's asked-for and actual mix (written by the feed page). */
     mix: ["discover", "mix"] as const,

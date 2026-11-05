@@ -12,8 +12,8 @@ const ARROW =
   "ui-panel ui-interactive shrink-0 rounded-lg border border-ink-700 bg-ink-900 px-2.5 py-1.5 text-sm text-gray-300 hover:border-accent hover:text-accent";
 
 /**
- * "For you" and the AI categories as a scrolling row of chips (Recommended and
- * Recommended+), with arrows when it overflows. `children` go after the row.
+ * "For you" and the AI categories as a scrolling row of chips on Recommended,
+ * with arrows when it overflows. `children` go after the row.
  */
 export default function CategoryChips({
   categories,

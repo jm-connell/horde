@@ -1,6 +1,6 @@
 import { SOURCE, type Source } from "./sources";
 
-/** What the Recommended+ card outlines mean, beside the home tabs. */
+/** What the Recommended card outlines mean, beside the home tabs. */
 export default function SourceLegend() {
   return (
     <ul

@@ -1,12 +1,12 @@
 import type { Page } from "@playwright/test";
-import { expect, test } from "./fixtures";
+import { expect, openSearchBox, test } from "./fixtures";
 
 /** The seed's discovered videos (backend/app/e2e_seed.py E2E_DISCOVERED). */
 const FOUND = "Night sky timelapse from a lighthouse";
 
 /**
- * The browser suite keeps YouTube search off, which hides Recommended+; report
- * it on (nothing here reaches YouTube: there is no gatherer offline).
+ * The browser suite keeps YouTube search off, which only changes the status
+ * line; report it on (nothing here reaches YouTube: there is no gatherer offline).
  */
 async function lookingOnYoutube(page: Page) {
   await page.route(/\/api\/discover\/status$/, async (route) => {
@@ -22,17 +22,17 @@ async function lookingOnYoutube(page: Page) {
   });
 }
 
-async function openRecommendedPlus(page: Page) {
+async function openRecommended(page: Page) {
   await lookingOnYoutube(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended+", exact: true }).click();
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
 }
 
-test("Recommended+ mixes the library with videos found on YouTube", async ({
+test("Recommended mixes the library with videos found on YouTube", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   // Found videos come from channels the admin never watched.
   const card = page.locator(`[data-rec-key="discover001"]`);
   // Why it is there: on hover, not as a line under every card.
@@ -57,7 +57,7 @@ test("Recommended+ mixes the library with videos found on YouTube", async ({
 test("source marks tell downloaded, your channels and new apart", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const legend = page.getByRole("list", { name: "What the outlines mean" });
   await expect(legend).toBeVisible();
   const found = page.locator(`[data-rec-key="discover001"]`);
@@ -69,30 +69,60 @@ test("source marks tell downloaded, your channels and new apart", async ({
   await expect(legend).toHaveCount(0);
 });
 
-test("Recommended+ is hidden while looking on YouTube is off", async ({
+test("there is one Recommended tab, and an old Recommended+ choice lands on it", async ({
   page,
 }) => {
-  // The suite's settings keep YouTube search off.
+  await lookingOnYoutube(page);
   await page.addInitScript(() =>
     localStorage.setItem("horde.home.tab", "discover")
   );
   await page.goto("/");
+  await expect(page.getByText(FOUND)).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Recommended", exact: true })
-  ).toBeVisible();
+  ).toHaveAttribute("data-liquid-active", "true");
+  await expect(page.getByRole("button", { name: "Recommended+" })).toHaveCount(
+    0
+  );
+});
+
+test("the home tab is remembered between visits, and a search does not change it", async ({
+  page,
+}) => {
+  await lookingOnYoutube(page);
+  await page.goto("/");
+  const recommended = page.getByRole("button", {
+    name: "Recommended",
+    exact: true,
+  });
+  await recommended.click();
+  await expect(page.getByText(FOUND)).toBeVisible();
+  await page.reload();
+  await expect(recommended).toHaveAttribute("data-liquid-active", "true");
+  await expect(page.getByText(FOUND)).toBeVisible();
+
+  // A search lists library results; clearing it goes back to Recommended.
+  const box = await openSearchBox(page);
+  await box.fill("Harbor");
+  await expect(page.getByRole("region", { name: /^Results/ })).toBeVisible();
+  await box.fill("");
+  await expect(page.getByText(FOUND)).toBeVisible();
+  await expect(recommended).toHaveAttribute("data-liquid-active", "true");
+  await page.reload();
+  await expect(recommended).toHaveAttribute("data-liquid-active", "true");
+
+  // Library is remembered the same way.
+  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.reload();
   await expect(
-    page.getByRole("button", { name: "Recommended+", exact: true })
-  ).toHaveCount(0);
-  // Someone who was on it lands on Recommended.
-  await expect(
-    page.getByRole("button", { name: "Include not downloaded" })
-  ).toBeVisible();
+    page.getByRole("button", { name: "Library", exact: true })
+  ).toHaveAttribute("data-liquid-active", "true");
 });
 
 test("not interested removes a video, and undo brings it back", async ({
   page,
 }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const card = page.locator(`[data-rec-key="discover001"]`);
   await card.hover();
   await card.getByRole("button", { name: "Tune recommendations" }).click();
@@ -112,7 +142,7 @@ test("not interested removes a video, and undo brings it back", async ({
 });
 
 test("blocking a channel removes all of its videos", async ({ page }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const card = page.locator(`[data-rec-key="discover003"]`);
   await card.hover();
   await card.getByRole("button", { name: "Tune recommendations" }).click();
@@ -134,12 +164,12 @@ test("blocking a channel removes all of its videos", async ({ page }) => {
     .getByRole("button", { name: "Show Tidepool Notes again" })
     .click();
   await expect(hidden.getByText("Nothing hidden.")).toBeVisible();
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   await expect(page.getByText("Rock pools at low tide")).toBeVisible();
 });
 
 test("suggested channels can be followed or dismissed", async ({ page }) => {
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.getByText("Northern Skies")).toBeVisible();
   await expect(shelf.getByText("Tidepool Notes")).toBeVisible();
@@ -187,14 +217,14 @@ test("suggested channels show the channel's picture", async ({ page }) => {
       ),
     })
   );
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.locator(`img[src="${avatar}"]`)).toBeVisible();
   // A channel without one shows its first letter instead.
   await expect(shelf.getByText("T", { exact: true })).toBeVisible();
 });
 
-test("Recommended+ is loaded ahead and opens at once", async ({ page }) => {
+test("Recommended is loaded ahead and opens at once", async ({ page }) => {
   await lookingOnYoutube(page);
   await page.addInitScript(() =>
     localStorage.setItem("horde.home.tab", "library")
@@ -214,12 +244,12 @@ test("Recommended+ is loaded ahead and opens at once", async ({ page }) => {
     await held;
     await route.continue();
   });
-  await page.getByRole("button", { name: "Recommended+", exact: true }).click();
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
   release();
 });
 
-test("Recommended+ can be browsed by AI category", async ({ page }) => {
+test("Recommended can be browsed by AI category", async ({ page }) => {
   // The browser suite has no AI: the server's answer gets a category, and a
   // category request keeps only the night sky video.
   const asked: (string | null)[] = [];
@@ -247,7 +277,7 @@ test("Recommended+ can be browsed by AI category", async ({ page }) => {
       },
     });
   });
-  await openRecommendedPlus(page);
+  await openRecommended(page);
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf).toBeVisible();
   await page.getByRole("button", { name: "Night sky", exact: true }).click();

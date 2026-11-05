@@ -1,19 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { loadHomeTab, saveHomeTab, type HomeTab } from "../libraryStorage";
 
-/** Library or Recommended on the home page. */
+/**
+ * Library or Recommended on the home page, remembered between visits. A search
+ * always shows the library's results, but does not change the saved choice:
+ * clear the search and you are back where you were.
+ */
 export function useHomeTab(search: string) {
-  const [homeTab, setHomeTabState] = useState<HomeTab>(loadHomeTab);
+  const [saved, setSaved] = useState<HomeTab>(loadHomeTab);
 
   const setHomeTab = useCallback((tab: HomeTab) => {
-    setHomeTabState(tab);
+    setSaved(tab);
     saveHomeTab(tab);
   }, []);
 
-  // Searching always looks in the library.
-  useEffect(() => {
-    if (search.trim()) setHomeTab("library");
-  }, [search, setHomeTab]);
-
-  return { homeTab, setHomeTab };
+  return { homeTab: search.trim() ? "library" : saved, setHomeTab };
 }

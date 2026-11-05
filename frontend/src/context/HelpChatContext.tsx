@@ -33,10 +33,10 @@ interface HelpChatValue {
   askChannel: (channel: AskScopeChannel) => void;
   /** Set by a page about one channel (see `useAskPageChannel`). */
   setPageChannel: (page: PageChannel | null) => void;
-  /** The Recommended+ algorithm panel (shown only while that feed is). */
+  /** The Recommended algorithm panel (shown only while that feed is). */
   algorithmOpen: boolean;
   setAlgorithmOpen: (open: boolean) => void;
-  /** Called by the Recommended+ feed while it is on screen (see `useAlgorithmPanelHere`). */
+  /** Called by the Recommended feed while it is on screen (see `useAlgorithmPanelHere`). */
   setAlgorithmHere: (here: boolean) => void;
 }
 
@@ -52,7 +52,7 @@ export interface PageChannel {
 interface HostValue {
   tab: PanelTabId;
   setTab: (tab: PanelTabId) => void;
-  /** The algorithm panel is open and the Recommended+ feed is on screen. */
+  /** The algorithm panel is open and the Recommended feed is on screen. */
   algorithmShown: boolean;
   frame: HelpFrame | null;
   setFrame: (frame: HelpFrame) => void;
@@ -93,7 +93,7 @@ type PanelTabId = "ask" | "algorithm";
 
 interface PanelState {
   open: boolean;
-  /** The Recommended+ algorithm panel is open (it shares the frame). */
+  /** The Recommended algorithm panel is open (it shares the frame). */
   algorithm?: boolean;
   /** Which body shows when both are open. */
   tab?: PanelTabId;
@@ -278,7 +278,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
 
 /**
  * The side panel, mounted by the app shell once setup is done (not over the
- * loading screen or the setup wizard): Ask about Horde, the Recommended+
+ * loading screen or the setup wizard): Ask about Horde, the Recommended
  * algorithm, or both as tabs. Each body has its own error boundary, so a bad
  * answer cannot take down the page (or the other body).
  */
@@ -382,7 +382,7 @@ export function useAskPageChannel(
 }
 
 /**
- * The Recommended+ feed is on screen: the algorithm panel may show (it hides,
+ * The Recommended feed is on screen: the algorithm panel may show (it hides,
  * but stays open, while the user is elsewhere).
  */
 export function useAlgorithmPanelHere() {

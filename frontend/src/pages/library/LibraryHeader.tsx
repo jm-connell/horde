@@ -6,7 +6,7 @@ import HomeTabs from "./HomeTabs";
 
 /**
  * The row above the home and tag lists: title, home tabs (with the
- * Recommended+ outline legend beside them) and `children` for the page's
+ * Recommended outline legend beside them) and `children` for the page's
  * search and sort controls. Channel pages have
  * their own header (ChannelHeader).
  */
@@ -16,7 +16,6 @@ export default function LibraryHeader({
   showHomeTabs,
   homeTab,
   onHomeTab,
-  showDiscover,
   settings,
   children,
 }: {
@@ -25,7 +24,6 @@ export default function LibraryHeader({
   showHomeTabs: boolean;
   homeTab: HomeTab;
   onHomeTab: (tab: HomeTab) => void;
-  showDiscover: boolean;
   settings: Settings;
   children: ReactNode;
 }) {
@@ -48,10 +46,9 @@ export default function LibraryHeader({
           homeTab={homeTab}
           navIndicator={settings.navIndicator}
           onSelect={onHomeTab}
-          showDiscover={showDiscover}
         />
       )}
-      {showHomeTabs && homeTab === "discover" && <SourceLegend />}
+      {showHomeTabs && homeTab === "recommended" && <SourceLegend />}
 
       <div
         data-header-filters

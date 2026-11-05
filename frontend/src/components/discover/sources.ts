@@ -3,7 +3,7 @@ import type { DiscoverItem } from "../../types";
 export type Source = DiscoverItem["source"];
 
 /**
- * Where a Recommended+ card comes from, in the theme's accent: a downloaded
+ * Where a Recommended card comes from, in the theme's accent: a downloaded
  * video gets a solid accent outline, one from a channel the user follows or
  * has indexed a faded one, and one from a channel new to them none (the plain
  * card). The legend next to the home tabs spells them out.

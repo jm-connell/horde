@@ -82,7 +82,7 @@ function newSeed(): number {
 }
 
 /**
- * Recommended+: the library, indexed channels and videos found on YouTube,
+ * Recommended: the library, indexed channels and videos found on YouTube,
  * mixed into one feed (familiar channels, more like what you watch, new
  * channels, and throwbacks), with channels to follow.
  */

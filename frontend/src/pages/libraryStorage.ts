@@ -4,11 +4,14 @@ const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
 const HOME_TAB_KEY = "horde.home.tab";
 const CHANNEL_URLS_KEY = "horde.channelUrls";
 
-export type HomeTab = "library" | "recommended" | "discover";
+export type HomeTab = "library" | "recommended";
 
+/** The home tab chosen last ("discover" is the old Recommended+ tab). */
 export function loadHomeTab(): HomeTab {
   const stored = getItem(HOME_TAB_KEY);
-  return stored === "recommended" || stored === "discover" ? stored : "library";
+  return stored === "recommended" || stored === "discover"
+    ? "recommended"
+    : "library";
 }
 
 export function saveHomeTab(tab: HomeTab): void {

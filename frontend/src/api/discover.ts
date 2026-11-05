@@ -20,7 +20,7 @@ import type {
 import { unlockedAccountId } from "../offline/unlock";
 import { type ReadOptions, request } from "./client";
 
-/** Recommended+: the feed, channels to follow, feedback and stream history. */
+/** Recommended: the feed, channels to follow, feedback and stream history. */
 export const discoverApi = {
   getDiscoverFeed(
     params: {

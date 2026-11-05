@@ -15,7 +15,7 @@ export default function RecMenu({
   className,
 }: {
   channel: string | null;
-  /** Show how the feed placed it (Recommended+ only). */
+  /** Show how the feed placed it (Recommended only). */
   onWhy?: () => void;
   onNotInterested?: () => void;
   onBlockChannel?: () => void;

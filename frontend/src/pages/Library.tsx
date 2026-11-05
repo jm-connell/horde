@@ -6,7 +6,6 @@ import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
 import DiscoverHome from "../components/DiscoverHome";
-import RecommendedHome from "../components/RecommendedHome";
 import { useAskPageChannel } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
 import { useSearch } from "../context/SearchContext";
@@ -21,8 +20,6 @@ import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
 import { useContinueYoutube } from "../queries/history";
 import { usePrefetchDiscover } from "../queries/discover";
-import { useDiscoverStatus } from "../queries/status";
-import type { HomeTab } from "./libraryStorage";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
@@ -66,14 +63,7 @@ function OnlineLibrary() {
     handleSortChange,
     toggleOrder,
   } = useLibraryQuery(settings, update);
-  const { homeTab: storedHomeTab, setHomeTab } = useHomeTab(search);
-  // With looking on YouTube off, Recommended+ would show what Recommended
-  // shows: the tab goes, and anyone on it lands on Recommended.
-  const discoverEnabled = useDiscoverStatus().data?.enabled;
-  const homeTab: HomeTab =
-    storedHomeTab === "discover" && discoverEnabled === false
-      ? "recommended"
-      : storedHomeTab;
+  const { homeTab, setHomeTab } = useHomeTab(search);
 
   // The nav search searches the whole library from any page. A channel opened
   // from the sidebar is page state, not a URL the nav can leave, so typing
@@ -90,16 +80,13 @@ function OnlineLibrary() {
   }, [search, activeChannel, setActiveChannel, clearSearch]);
 
   const isHome = !activeChannel && !activeTag;
-  // On the other home tabs, load Recommended+ ahead so it opens at once.
-  usePrefetchDiscover(
-    isHome && discoverEnabled === true && homeTab !== "discover" && !search
-  );
+  // On the Library tab, load Recommended ahead so it opens at once.
+  usePrefetchDiscover(isHome && homeTab === "library");
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;
-  // Either recommendations tab: they render their own data and order.
-  const onRecommendedTab =
-    showHomeTabs && (homeTab === "recommended" || homeTab === "discover");
+  // Recommended renders its own data and order.
+  const onRecommendedTab = showHomeTabs && homeTab === "recommended";
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
@@ -325,7 +312,6 @@ function OnlineLibrary() {
             showHomeTabs={showHomeTabs}
             homeTab={homeTab}
             onHomeTab={setHomeTab}
-            showDiscover={discoverEnabled !== false}
             settings={settings}
           >
             <HomeControls
@@ -416,14 +402,10 @@ function OnlineLibrary() {
               }
             />
           ) : onRecommendedTab && !debouncedSearch ? (
-            homeTab === "discover" ? (
-              <DiscoverHome
-                sidebarCollapsed={settings.sidebarCollapsed}
-                onChannelClick={channelNav.openFeedChannel}
-              />
-            ) : (
-              <RecommendedHome sidebarCollapsed={settings.sidebarCollapsed} />
-            )
+            <DiscoverHome
+              sidebarCollapsed={settings.sidebarCollapsed}
+              onChannelClick={channelNav.openFeedChannel}
+            />
           ) : loading ? (
             <LoadingIndicator />
           ) : !debouncedSearch && videos.length === 0 ? (

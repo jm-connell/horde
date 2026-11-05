@@ -10,15 +10,15 @@ import type {
 } from "../types";
 import { queryKeys } from "./keys";
 
-/** Cards per Recommended+ page. */
+/** Cards per Recommended page. */
 export const DISCOVER_PAGE_SIZE = 24;
 /** A first page loaded ahead is shown at once for this long. */
 export const DISCOVER_PREVIEW_MS = 5 * 60_000;
-/** How long the home page waits before loading Recommended+ ahead. */
+/** How long the home page waits before loading Recommended ahead. */
 const PREFETCH_DELAY_MS = 1500;
 
 /**
- * Load Recommended+ (its first page and channel suggestions) shortly after the
+ * Load Recommended (its first page and channel suggestions) shortly after the
  * home page settles, so opening the tab shows it at once. The prefetched page
  * does not count its videos as shown; opening the tab asks again.
  */
@@ -47,7 +47,7 @@ export function usePrefetchDiscover(enabled: boolean) {
   }, [enabled, queryClient]);
 }
 
-/** The signed-in user's Recommended+ algorithm: a preset or their own values. */
+/** The signed-in user's Recommended algorithm: a preset or their own values. */
 export function useRecTuning() {
   return useQuery({
     queryKey: queryKeys.discover.tuning,

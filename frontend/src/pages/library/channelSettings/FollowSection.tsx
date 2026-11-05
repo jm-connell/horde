@@ -39,7 +39,7 @@ export default function FollowSection({
                   Show its live streams
                 </span>
                 <span className="block text-xs text-muted">
-                  In the Live list, Recommended and Recommended+.
+                  In the Live list and Recommended.
                 </span>
               </span>
               <Toggle
