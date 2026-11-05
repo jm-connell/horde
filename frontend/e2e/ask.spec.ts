@@ -1,6 +1,22 @@
 import { expectNoSeriousViolations } from "./axe";
 import { expect, hasDesktopPlayerChrome, test, videoCard } from "./fixtures";
 
+// These specs are about the AI chat: the e2e server has no provider, so say
+// there is one (a spec can still answer /api/ai/help/info differently).
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
+});
+
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 

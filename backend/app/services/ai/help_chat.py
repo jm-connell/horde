@@ -28,6 +28,7 @@ from sqlmodel import Session
 from ... import context as app_context
 from ...context import get_engine
 from ...models import utcnow
+from ...schemas import HelpSearchResult, HelpSource
 from .. import user_settings
 from ..auth.accounts import AuthUser
 from . import chat as ai_chat
@@ -850,3 +851,74 @@ def stream_help_events(
                 payload = {"type": "sources", "sources": target.sources}
                 yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
             yield event
+
+
+_SEARCH_DOCS = 4
+_EXCERPT_CHARS = 220
+_MARKUP_LINE = re.compile(r"^\s*(#|\||!!!|```|<|---|\[\^)")
+_MD_LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+
+
+def _excerpt(text: str) -> str:
+    """The first prose of a chunk, without headings, tables or link targets."""
+    prose = " ".join(
+        line.strip() for line in text.splitlines() if not _MARKUP_LINE.match(line)
+    )
+    prose = _MD_LINK.sub(r"\1", prose).replace("**", "").replace("`", "")
+    prose = " ".join(prose.split())
+    if len(prose) <= _EXCERPT_CHARS:
+        return prose
+    cut = prose[:_EXCERPT_CHARS].rsplit(" ", 1)[0]
+    return cut.rstrip(",;:") + "…"
+
+
+def search_docs(question: str, user: AuthUser, page: str = "") -> HelpSearchResult:
+    """What Ask about Horde can offer with no AI: the documentation pages and
+    settings that best match ``question``, using the same search as the chat."""
+    index = help_index()
+    query = query_terms(question, [], clean_page(page))
+    ref = git_ref()
+    picked: list[Chunk] = []
+    seen_paths: set[str] = set()
+    for chunk in index.search(query):
+        if not (chunk.is_doc and chunk.path.startswith("docs/")):
+            continue
+        if chunk.path.startswith(_INTERNAL_DOCS) or chunk.path in seen_paths:
+            continue
+        picked.append(chunk)
+        seen_paths.add(chunk.path)
+        if len(picked) >= _SEARCH_DOCS:
+            break
+    settings = help_catalog.best_settings(help_catalog.for_user(user), query, limit=3)
+
+    lines = [
+        "AI is not set up on this server, so this is a search of Horde's "
+        "documentation rather than a written answer."
+    ]
+    if picked:
+        lines.append("")
+        for chunk in picked:
+            source = chunk.source(ref)
+            excerpt = _excerpt(chunk.text)
+            lines.append(
+                f"- [{chunk.title}]({source['url']})"
+                + (f": {excerpt}" if excerpt else "")
+            )
+    else:
+        lines += ["", "Nothing in the documentation matched; try other words."]
+    if settings:
+        lines += [
+            "",
+            "Settings that may help: "
+            + " · ".join(f"[[setting:{s.id}]]" for s in settings),
+        ]
+    lines.append("")
+    lines.append(
+        "To get written answers, connect an AI provider in [[setting:ai-provider]]."
+        if user.is_admin
+        else "An administrator can turn on AI for written answers."
+    )
+    return HelpSearchResult(
+        answer="\n".join(lines),
+        sources=[HelpSource(**c.source(ref)) for c in picked],
+    )

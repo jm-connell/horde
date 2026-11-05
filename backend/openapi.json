@@ -7086,6 +7086,51 @@
         "title": "HelpChatTurn",
         "type": "object"
       },
+      "HelpSearchResult": {
+        "description": "Ask about Horde without AI: the best documentation matches, as Markdown\nwith ``[[setting:id]]`` links, and the pages they came from.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HelpSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "HelpSearchResult",
+        "type": "object"
+      },
+      "HelpSource": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "url"
+        ],
+        "title": "HelpSource",
+        "type": "object"
+      },
       "HistoryKeysWrite": {
         "description": "History entries by key (a YouTube id, or ``video:<id>``).",
         "properties": {
@@ -15155,6 +15200,78 @@
           }
         },
         "summary": "Get Help Info",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
+    "/api/ai/help/search": {
+      "get": {
+        "description": "Ask about Horde when no AI is set up: the documentation pages and\nsettings that best match ``q``. Works for anyone signed in.",
+        "operationId": "get_help_search_api_ai_help_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 4000,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpSearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Help Search",
         "tags": [
           "ai"
         ]

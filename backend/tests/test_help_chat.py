@@ -431,3 +431,56 @@ def test_the_users_css_only_goes_with_a_css_question(
     client.post("/api/ai/help/chat", json={"message": "fix my css"})
     assert ".mine{}" not in help_env[0]["system"]
     assert ".mine{}" in help_env[1]["system"]
+
+
+@pytest.fixture
+def no_ai_index(monkeypatch, index, app):
+    """The small tree, with no AI provider at all."""
+    monkeypatch.setattr(help_chat, "help_index", lambda: index)
+    monkeypatch.setattr(
+        help_chat, "llm_features_allowed", lambda: (False, "No AI provider is set up")
+    )
+    return index
+
+
+def test_help_search_answers_from_the_docs_without_ai(client, no_ai_index):
+    resp = client.get(
+        "/api/ai/help/search", params={"q": "How do I pick a quality preset?"}
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["sources"][0] == {
+        "path": "docs/guides/downloads.md",
+        "title": "Downloads › Quality presets",
+        "url": "/wiki/guides/downloads/",
+    }
+    answer = body["answer"]
+    assert answer.startswith("AI is not set up on this server")
+    assert (
+        "- [Downloads › Quality presets](/wiki/guides/downloads/): Pick a quality "
+        "preset such as 1080p before you queue a download." in answer
+    )
+    # Source code is for the chat model, not a reader without one.
+    assert "Download.tsx" not in answer
+    assert "[[setting:ai-provider]]" in answer
+
+
+def test_help_search_works_for_members_without_the_ai_permission(
+    app, init_db, admin_user, no_ai_index
+):
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session
+
+    from app.services.auth import accounts
+
+    with Session(init_db["engine"]) as s:
+        user = accounts.create_user(s, "noai", "member-password", granted=[])
+        token = accounts.start_session(s, user)
+    with TestClient(app, cookies={accounts.SESSION_COOKIE: token}) as c:
+        resp = c.get("/api/ai/help/search", params={"q": "disk full"})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "administrator can turn on AI" in body["answer"]
+    assert "[[setting:ai-provider]]" not in body["answer"]
+    assert body["sources"][0]["url"] == "/wiki/guides/downloads/"

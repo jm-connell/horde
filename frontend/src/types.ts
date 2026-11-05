@@ -88,6 +88,7 @@ export type HelpCatalog = S["HelpCatalog"];
 export type HelpCatalogSetting = S["HelpCatalogSetting"];
 export type HelpCatalogPage = S["HelpCatalogPage"];
 export type HelpAssistantInfo = S["HelpAssistantInfo"];
+export type HelpSearchResult = S["HelpSearchResult"];
 export type OpenRouterCosts = S["AiCostsRead"];
 export type OpenRouterModel = S["AiModelRow"];
 /** `models` / `embedding_models` / `presets` are always sent (defaults in the schema). */

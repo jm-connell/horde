@@ -1424,6 +1424,20 @@ class HelpChatTurn(BaseModel):
     content: str = Field(..., min_length=1, max_length=8000)
 
 
+class HelpSource(BaseModel):
+    path: str
+    title: str
+    url: str
+
+
+class HelpSearchResult(BaseModel):
+    """Ask about Horde without AI: the best documentation matches, as Markdown
+    with ``[[setting:id]]`` links, and the pages they came from."""
+
+    answer: str
+    sources: list[HelpSource] = []
+
+
 class HelpChatRequest(BaseModel):
     """One Ask-about-Horde question and the conversation before it."""
 

@@ -242,6 +242,18 @@ test("a tap in Ask about Horde while typing lands where it was aimed", async ({
   page,
 }) => {
   const answer = "Here is how.";
+  // An AI answer: the e2e server has no provider, so say there is one.
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
   await page.route(/\/api\/ask\/chat$/, (route) =>
     route.fulfill({
       status: 200,

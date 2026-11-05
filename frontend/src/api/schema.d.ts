@@ -141,6 +141,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/help/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Help Search
+         * @description Ask about Horde when no AI is set up: the documentation pages and
+         *     settings that best match ``q``. Works for anyone signed in.
+         */
+        get: operations["get_help_search_api_ai_help_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/jobs": {
         parameters: {
             query?: never;
@@ -6856,6 +6877,29 @@ export interface components {
             role: "user" | "assistant";
         };
         /**
+         * HelpSearchResult
+         * @description Ask about Horde without AI: the best documentation matches, as Markdown
+         *     with ``[[setting:id]]`` links, and the pages they came from.
+         */
+        HelpSearchResult: {
+            /** Answer */
+            answer: string;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["HelpSource"][];
+        };
+        /** HelpSource */
+        HelpSource: {
+            /** Path */
+            path: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
+        /**
          * HistoryKeysWrite
          * @description History entries by key (a YouTube id, or ``video:<id>``).
          */
@@ -9950,6 +9994,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HelpAssistantInfo"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_help_search_api_ai_help_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                page?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelpSearchResult"];
                 };
             };
             /** @description Validation error */

@@ -30,6 +30,7 @@ from ..schemas import (
     HelpAssistantInfo,
     HelpCatalog,
     HelpChatRequest,
+    HelpSearchResult,
 )
 from ..services.ai import (
     embeddings,
@@ -466,6 +467,17 @@ def post_help_chat(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.get("/help/search", response_model=HelpSearchResult)
+def get_help_search(
+    q: str = Query(..., min_length=1, max_length=4000),
+    page: str | None = Query(None, max_length=500),
+    user: AuthUser = Depends(current_user),
+) -> HelpSearchResult:
+    """Ask about Horde when no AI is set up: the documentation pages and
+    settings that best match ``q``. Works for anyone signed in."""
+    return help_chat.search_docs(q, user, page or "")
 
 
 @router.get(
