@@ -891,9 +891,15 @@ def search_docs(question: str, user: AuthUser, page: str = "") -> HelpSearchResu
             break
     settings = help_catalog.best_settings(help_catalog.for_user(user), query, limit=3)
 
+    ai_on = llm_features_allowed()[0]
     lines = [
-        "AI is not set up on this server, so this is a search of Horde's "
-        "documentation rather than a written answer."
+        (
+            "Your account does not use AI here"
+            if ai_on
+            else "AI is not set up on this server"
+        )
+        + ", so this is a search of Horde's documentation rather than a "
+        "written answer."
     ]
     if picked:
         lines.append("")
@@ -913,11 +919,14 @@ def search_docs(question: str, user: AuthUser, page: str = "") -> HelpSearchResu
             + " · ".join(f"[[setting:{s.id}]]" for s in settings),
         ]
     lines.append("")
-    lines.append(
-        "To get written answers, connect an AI provider in [[setting:ai-provider]]."
-        if user.is_admin
-        else "An administrator can turn on AI for written answers."
-    )
+    if not ai_on:
+        lines.append(
+            "To get written answers, connect an AI provider in [[setting:ai-provider]]."
+            if user.is_admin
+            else "An administrator can turn on AI for written answers."
+        )
+    else:
+        lines.append("An administrator can give your account the AI permission.")
     return HelpSearchResult(
         answer="\n".join(lines),
         sources=[HelpSource(**c.source(ref)) for c in picked],

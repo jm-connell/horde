@@ -484,3 +484,22 @@ def test_help_search_works_for_members_without_the_ai_permission(
     assert "administrator can turn on AI" in body["answer"]
     assert "[[setting:ai-provider]]" not in body["answer"]
     assert body["sources"][0]["url"] == "/wiki/guides/downloads/"
+
+
+def test_help_search_for_a_member_without_ai_on_a_server_with_ai(
+    app, init_db, admin_user, index, monkeypatch
+):
+    from fastapi.testclient import TestClient
+    from sqlmodel import Session
+
+    from app.services.auth import accounts
+
+    monkeypatch.setattr(help_chat, "help_index", lambda: index)
+    monkeypatch.setattr(help_chat, "llm_features_allowed", lambda: (True, None))
+    with Session(init_db["engine"]) as s:
+        user = accounts.create_user(s, "noai2", "member-password", granted=[])
+        token = accounts.start_session(s, user)
+    with TestClient(app, cookies={accounts.SESSION_COOKIE: token}) as c:
+        answer = c.get("/api/ai/help/search", params={"q": "presets"}).json()["answer"]
+    assert answer.startswith("Your account does not use AI here")
+    assert "AI permission" in answer
