@@ -115,6 +115,11 @@ test("watch page menus open without violations", async ({ page }) => {
 for (const { name, path, ready } of [
   { name: "download", path: "/download", ready: "Queued night drive" },
   { name: "playlists", path: "/playlists", ready: "Evening set" },
+  {
+    name: "subscriptions",
+    path: "/subscriptions",
+    ready: "Add a YouTube channel",
+  },
   { name: "history", path: "/history", ready: "Today" },
   { name: "import", path: "/import", ready: undefined },
 ]) {

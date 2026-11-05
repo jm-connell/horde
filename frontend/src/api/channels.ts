@@ -12,6 +12,7 @@ import type {
   ChannelAvatar,
   UnfollowResult,
   RetentionLimits,
+  SubscriptionList,
 } from "../types";
 import type { ApiResponse } from "./typed";
 import { type ReadOptions, request } from "./client";
@@ -244,6 +245,11 @@ export const channelsApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ old_name: oldName, new_name: newName }),
     });
+  },
+
+  /** Followed, auto-downloaded and cleaned-up channels, one row each. */
+  listSubscriptions(opts?: ReadOptions): Promise<SubscriptionList> {
+    return request<SubscriptionList>("/api/channels/subscriptions", opts);
   },
 
   listFollows(opts?: ReadOptions): Promise<FollowList> {

@@ -1,11 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { isYoutubeChannelUrl, normalizeChannelUrl } from "../utils/followUrl";
-import type { ChannelFeedEntry, FollowedChannel, LiveChannel } from "../types";
+import type {
+  ChannelFeedEntry,
+  FollowedChannel,
+  LiveChannel,
+  Subscription,
+} from "../types";
 import { queryKeys } from "./keys";
 
 const NO_FOLLOWS: FollowedChannel[] = [];
 const NO_LIVE: LiveChannel[] = [];
+const NO_SUBSCRIPTIONS: Subscription[] = [];
 
 /** Channels the signed-in user follows. */
 export function useFollows(enabled = true) {
@@ -17,11 +23,20 @@ export function useFollows(enabled = true) {
   return { ...query, follows: query.data?.items ?? NO_FOLLOWS };
 }
 
+/** The Subscriptions page: follows, automatic downloads and cleanup rules. */
+export function useSubscriptions() {
+  const query = useQuery({
+    queryKey: queryKeys.follows.subscriptions,
+    queryFn: ({ signal }) => api.listSubscriptions({ signal }),
+  });
+  return { ...query, items: query.data?.items ?? NO_SUBSCRIPTIONS };
+}
+
 function useInvalidateFollows() {
   const queryClient = useQueryClient();
   return () =>
     Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.follows.list }),
+      queryClient.invalidateQueries({ queryKey: ["follows"] }),
       queryClient.invalidateQueries({ queryKey: queryKeys.live.now }),
     ]);
 }

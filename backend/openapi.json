@@ -12018,6 +12018,104 @@
         "title": "Strictness",
         "type": "object"
       },
+      "SubscriptionList": {
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "SubscriptionList",
+        "type": "object"
+      },
+      "SubscriptionRead": {
+        "description": "A channel the user keeps up with, and how.",
+        "properties": {
+          "autodownload": {
+            "default": false,
+            "title": "Autodownload",
+            "type": "boolean"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "following": {
+            "default": false,
+            "title": "Following",
+            "type": "boolean"
+          },
+          "quality_preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Preset"
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelRetentionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_count": {
+            "default": 0,
+            "title": "Video Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscriptionRead",
+        "type": "object"
+      },
       "SubtitleTrack": {
         "properties": {
           "auto": {
@@ -18512,6 +18610,48 @@
           }
         },
         "summary": "Search Channels",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/channels/subscriptions": {
+      "get": {
+        "description": "Followed channels and every channel with automatic downloads or a cleanup\nrule, in one list (one page; ``next_cursor`` is always null).",
+        "operationId": "list_subscriptions_api_channels_subscriptions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Subscriptions",
         "tags": [
           "channels"
         ]

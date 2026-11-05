@@ -1843,3 +1843,26 @@ class ReviewItemRead(VideoRead):
 class ApproveSuggestedResult(BaseModel):
     approved: int = Field(description="Review items moved into the library.")
     remaining: int = Field(description="Review items still waiting.")
+
+
+class SubscriptionRead(BaseModel):
+    """A channel the user keeps up with, and how."""
+
+    channel_url: str
+    channel_name: str | None = None
+    #: The signed-in user follows it (live list, new uploads in Recommended+).
+    following: bool = False
+    #: New uploads download by themselves (server-wide).
+    autodownload: bool = False
+    quality_preset: str | None = None
+    #: The enabled cleanup rule, if any (server-wide).
+    retention: ChannelRetentionSummary | None = None
+    #: Videos of the channel in the library.
+    video_count: int = 0
+    #: When Horde last finished reading the channel's uploads.
+    checked_at: datetime | None = None
+
+
+class SubscriptionList(BaseModel):
+    items: list[SubscriptionRead] = []
+    next_cursor: str | None = None

@@ -15,6 +15,12 @@ export interface NavLinkDef {
 const BASE_LINKS: NavLinkDef[] = [
   { to: "/", label: "Home", end: true },
   { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
+  {
+    to: "/subscriptions",
+    label: "Subscriptions",
+    end: false,
+    serverOnly: true,
+  },
   { to: "/history", label: "History", end: false, serverOnly: true },
   {
     to: "/download",
@@ -51,7 +57,7 @@ export function useNavLinks(): NavLinkDef[] {
     offlineSnap.items.length > 0 || offlineSnap.hidden.length > 0;
   return (
     hasOfflineItems || offlineMode
-      ? [...BASE_LINKS.slice(0, 3), OFFLINE_LINK, ...BASE_LINKS.slice(3)]
+      ? [...BASE_LINKS.slice(0, 4), OFFLINE_LINK, ...BASE_LINKS.slice(4)]
       : BASE_LINKS
   ).filter(
     (link) =>

@@ -6,6 +6,23 @@ import { formatSize } from "../../../utils";
 export type ChannelSettingsSection =
   "autodownload" | "retention" | "following" | "search" | "ask" | "manage";
 
+const SECTIONS: readonly ChannelSettingsSection[] = [
+  "autodownload",
+  "retention",
+  "following",
+  "search",
+  "ask",
+  "manage",
+];
+
+/** The section named by `?settings=` in `search`, if it is one. */
+export function settingsSectionFromUrl(
+  search: string
+): ChannelSettingsSection | undefined {
+  const value = new URLSearchParams(search).get("settings");
+  return SECTIONS.find((section) => section === value);
+}
+
 /** The DOM id of a section, for scrolling a chip's section into view. */
 export const sectionId = (id: ChannelSettingsSection) =>
   `channel-settings-${id}`;

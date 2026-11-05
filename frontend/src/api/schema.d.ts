@@ -1219,6 +1219,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/channels/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Subscriptions
+         * @description Followed channels and every channel with automatic downloads or a cleanup
+         *     rule, in one list (one page; ``next_cursor`` is always null).
+         */
+        get: operations["list_subscriptions_api_channels_subscriptions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/channels/youtube-search": {
         parameters: {
             query?: never;
@@ -8645,6 +8666,46 @@ export interface components {
              */
             throwback: number;
         };
+        /** SubscriptionList */
+        SubscriptionList: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SubscriptionRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * SubscriptionRead
+         * @description A channel the user keeps up with, and how.
+         */
+        SubscriptionRead: {
+            /**
+             * Autodownload
+             * @default false
+             */
+            autodownload: boolean;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Following
+             * @default false
+             */
+            following: boolean;
+            /** Quality Preset */
+            quality_preset?: string | null;
+            retention?: components["schemas"]["ChannelRetentionSummary"] | null;
+            /**
+             * Video Count
+             * @default 0
+             */
+            video_count: number;
+        };
         /** SubtitleTrack */
         SubtitleTrack: {
             /**
@@ -12482,6 +12543,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelSearchResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_subscriptions_api_channels_subscriptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionList"];
                 };
             };
             /** @description Validation error */

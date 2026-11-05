@@ -37,6 +37,7 @@ from ..schemas import (
     ChannelStat,
     RetentionException,
     RetentionPreviewItem,
+    SubscriptionList,
 )
 from ..services import app_settings as app_settings_svc
 from ..services import (
@@ -48,6 +49,7 @@ from ..services import (
     follows,
     library,
     media_sidecars,
+    subscriptions,
     trash,
     ytdlp_extract,
 )
@@ -248,6 +250,16 @@ def _resolve_youtube_channel_url(
             detail="Autodownload is only available for YouTube channels",
         )
     return channel_url, channel_name
+
+
+@router.get("/channels/subscriptions", response_model=SubscriptionList)
+def list_subscriptions(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+) -> SubscriptionList:
+    """Followed channels and every channel with automatic downloads or a cleanup
+    rule, in one list (one page; ``next_cursor`` is always null)."""
+    return SubscriptionList(items=subscriptions.list_for(session, user.id))
 
 
 @router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)
