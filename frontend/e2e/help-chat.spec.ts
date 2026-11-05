@@ -489,6 +489,11 @@ test("the chat docks at the side and the page makes room for it", async ({
     .getByRole("button", { name: "Dock the chat at the side" })
     .click();
   await expect(panel).toHaveAttribute("data-docked", "true");
+  // It glides from where it floated to the side, then settles.
+  expect(await panel.evaluate((el) => el.getAnimations().length)).toBe(1);
+  await panel.evaluate((el) =>
+    Promise.all(el.getAnimations().map((a) => a.finished))
+  );
 
   // A full-height column on the right, below the full-width nav.
   const nav = (await page.locator('[data-horde="nav"]').boundingBox())!;
@@ -587,4 +592,20 @@ test("watching with the chat docked shows the player as theater", async ({
   await expect(panel).not.toHaveAttribute("data-docked", "true");
   await reveal();
   await expect(theater).not.toHaveClass(active);
+});
+
+test("under reduced motion the chat docks without gliding", async ({
+  page,
+}) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask about Horde" }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await expect(panel).toHaveAttribute("data-docked", "true");
+  expect(await panel.evaluate((el) => el.getAnimations().length)).toBe(0);
+  await panel.getByRole("button", { name: "Float the chat" }).click();
 });

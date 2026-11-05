@@ -13,6 +13,7 @@ import {
   usePlaybackLayout,
 } from "../context/PlaybackContext";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { EASE_FLUID } from "../motion";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import {
   clampHelpFrame,
@@ -83,6 +84,48 @@ function useNavBottom(active: boolean): number {
   return bottom;
 }
 
+const MORPH_MS = 250;
+
+function reducedMotion(): boolean {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Docking or floating the panel: glide from where it was to where it lands
+ * (its box, not a scale, so the text stays sharp). Under reduced motion it
+ * just moves.
+ */
+function useDockMorph(
+  panelRef: React.RefObject<HTMLElement | null>,
+  docked: boolean
+) {
+  const lastRect = useRef<DOMRect | null>(null);
+  const wasDocked = useRef(docked);
+  // Every render: the last box must be current when the dock state flips.
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    const from = lastRect.current;
+    const to = el.getBoundingClientRect();
+    if (from && wasDocked.current !== docked && !reducedMotion()) {
+      const box = (r: DOMRect) => ({
+        top: `${r.top}px`,
+        left: `${r.left}px`,
+        width: `${r.width}px`,
+        height: `${r.height}px`,
+        right: "auto",
+        bottom: "auto",
+      });
+      el.animate([box(from), box(to)], {
+        duration: MORPH_MS,
+        easing: EASE_FLUID,
+      });
+    }
+    wasDocked.current = docked;
+    lastRect.current = to;
+  });
+}
+
 function useViewport() {
   const [size, setSize] = useState(() => ({
     vw: window.innerWidth,
@@ -150,6 +193,7 @@ export default function SidePanelFrame({
   const dockedHere = docked && !isMobile;
   const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
+  useDockMorph(panelRef, dockedHere);
   const { setChatDocked } = usePlaybackActions();
   const floatRef = useRef(() => onDockedChange(false));
   floatRef.current = () => onDockedChange(false);
@@ -462,7 +506,12 @@ export default function SidePanelFrame({
               aria-labelledby={tabbed ? `${tabIdBase}-${t.id}` : undefined}
               hidden={!showing}
               // The hidden attribute alone loses to a display class.
-              className={showing ? "flex min-h-0 flex-1 flex-col" : "hidden"}
+              // Switching tabs fades the body in (from display: none).
+              className={
+                showing
+                  ? "flex min-h-0 flex-1 flex-col transition-opacity duration-150 ease-fluid starting:opacity-0"
+                  : "hidden"
+              }
             >
               <ActiveCtx.Provider value={showing}>
                 {t.content}
