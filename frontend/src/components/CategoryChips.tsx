@@ -61,50 +61,57 @@ export default function CategoryChips({
   };
 
   return (
-    <div className="relative flex items-center gap-2">
-      {canScrollLeft && (
-        <button
-          type="button"
-          onClick={() => scroll(-1)}
-          className={ARROW}
-          aria-label="Scroll categories left"
-        >
-          <ChevronIcon className="rotate-90" />
-        </button>
-      )}
-      <div
-        ref={scrollRef}
-        className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden"
-      >
-        <button
-          type="button"
-          onClick={() => onSelect(null)}
-          className={chipClass(!active)}
-        >
-          For you
-        </button>
-        {categories.map((name) => (
+    // On a phone the chips get the full width and `children` wrap below them.
+    <div className="relative flex flex-wrap items-center gap-2">
+      <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
+        {canScrollLeft && (
           <button
-            key={name}
             type="button"
-            onClick={() => onSelect(name)}
-            className={chipClass(active === name)}
+            onClick={() => scroll(-1)}
+            className={ARROW}
+            aria-label="Scroll categories left"
           >
-            {name}
+            <ChevronIcon className="rotate-90" />
           </button>
-        ))}
-      </div>
-      {canScrollRight && (
-        <button
-          type="button"
-          onClick={() => scroll(1)}
-          className={ARROW}
-          aria-label="Scroll categories right"
+        )}
+        <div
+          ref={scrollRef}
+          className="flex min-w-0 flex-1 gap-2 overflow-x-auto pb-1 scrollbar-none [&::-webkit-scrollbar]:hidden"
         >
-          <ChevronIcon className="-rotate-90" />
-        </button>
+          <button
+            type="button"
+            onClick={() => onSelect(null)}
+            className={chipClass(!active)}
+          >
+            For you
+          </button>
+          {categories.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => onSelect(name)}
+              className={chipClass(active === name)}
+            >
+              {name}
+            </button>
+          ))}
+        </div>
+        {canScrollRight && (
+          <button
+            type="button"
+            onClick={() => scroll(1)}
+            className={ARROW}
+            aria-label="Scroll categories right"
+          >
+            <ChevronIcon className="-rotate-90" />
+          </button>
+        )}
+      </div>
+      {children && (
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {children}
+        </div>
       )}
-      {children}
     </div>
   );
 }
