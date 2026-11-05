@@ -808,6 +808,8 @@ def build_feed(
         topic, topic_shares = sim.topic, sim.topic_shares
         base_floors = FLOORS
     floors = {k: v * t.floor_multiplier(k) for k, v in base_floors.items()}
+    # "Prefer downloaded videos" also takes looser matches from the library.
+    library_floors = {k: v * t.library_floor_scale for k, v in floors.items()}
     interest_of, interest_fit, similar_block = _topic_fits(
         session, runtime, cands, topics, hit_of
     )
@@ -823,6 +825,7 @@ def build_feed(
 
     for i, c in enumerate(cands):
         name = _name(c.channel)
+        floor = library_floors if c.pool == "library" else floors
         followed = bool(c.channel_url and c.channel_url in followed_urls) or (
             name in followed_names
         )
@@ -835,7 +838,7 @@ def build_feed(
         if hit is not None and not has_vector[i]:
             # Found by a search or an up next list but not embedded (yet): the
             # source's own ranking stands in, just under the "new" floor's reach.
-            rel = max(rel, floors["new"] + 0.3 * 0.9**hit.rank)
+            rel = max(rel, floor["new"] + 0.3 * 0.9**hit.rank)
         quality = _quality(c.view_count)
         published = c.published
         recent_upload = published is not None and now - published <= sub_window
@@ -899,10 +902,10 @@ def build_feed(
             parts.append(("Popularity", _popularity(0.0, quality, t)))
             reason = Reason("throwback", f"You used to watch {c.channel}")
             eligible = True
-        elif (back >= floors["throwback"] and back > rel + 0.15) or (
+        elif (back >= floor["throwback"] and back > rel + 0.15) or (
             hit is not None
             and hit.era == "throwback"
-            and (not has_vector[i] or rel < floors["similar"])
+            and (not has_vector[i] or rel < floor["similar"])
         ):
             bucket = "throwback"
             title = dormant_seed[i] or (hit.seed_title if hit else None)
@@ -917,7 +920,7 @@ def build_feed(
                 if title and not cold
                 else "From your older interests",
             )
-            eligible = max(back, rel) >= floors["throwback"]
+            eligible = max(back, rel) >= floor["throwback"]
         elif known == 0 and not followed:
             bucket = "new"
             parts += [
@@ -932,7 +935,7 @@ def build_feed(
                 if seed_title and not cold
                 else None,
             )
-            eligible = rel >= floors["new"]
+            eligible = rel >= floor["new"]
         else:
             bucket = "similar"
             boost = 0.1 * cowatch.get(c.video_id, 0.0) if c.video_id else 0.0
@@ -949,13 +952,13 @@ def build_feed(
                     if c.pool == "library"
                     else Reason("similar", "Recommended for you")
                 )
-            elif seed_title and rel >= floors["similar"]:
+            elif seed_title and rel >= floor["similar"]:
                 reason = Reason("similar", f"Because you watched {_short(seed_title)}")
             else:
                 reason = Reason(
                     "similar", f"More from {c.channel}" if c.channel else "For you"
                 )
-            eligible = rel >= floors["similar"] or boost >= 0.05
+            eligible = rel >= floor["similar"] or boost >= 0.05
 
         if c.pool == "library" and t.library_bonus:
             parts.append(("Already downloaded", t.library_bonus))
@@ -1081,7 +1084,7 @@ def mix(
     overflow: list[FeedItem] = []
     queues = {name: list(items) for name, items in buckets.items() if items}
     credit = dict.fromkeys(queues, 0.0)
-    picks: Counter[str] = Counter()
+    picks: defaultdict[str, float] = defaultdict(float)
     shown: dict[str, Counter[str]] = defaultdict(Counter)
     out: list[FeedItem] = []
     last_channels: list[str] = []
@@ -1100,6 +1103,11 @@ def mix(
             return True
         limit = max(1, math.floor(share[bucket] * OVERFILL * (len(out) + 1)))
         return picks[bucket] < limit
+
+    def cost(item: FeedItem) -> float:
+        """What a pick takes of its bucket's share: less for a downloaded one
+        when the user prefers those, so they can fill more of the feed."""
+        return tuning.library_pick_cost if item.candidate.pool == "library" else 1.0
 
     def priority(item: FeedItem) -> float:
         if item.topic is None or item.topic not in shares:
@@ -1140,8 +1148,8 @@ def mix(
             continue
         name, j = picked
         item = queues[name].pop(j)
-        credit[name] -= 1.0
-        picks[name] += 1
+        credit[name] -= cost(item)
+        picks[name] += cost(item)
         out.append(item)
         channel = _name(item.candidate.channel)
         last_channels.append(channel)

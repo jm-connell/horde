@@ -163,7 +163,21 @@ class Tuning(BaseModel):
 
     @property
     def library_bonus(self) -> float:
-        return 0.15 * self.library_boost / 100
+        """Added to a downloaded pick's score: enough at 100 to put it ahead of
+        closer matches in its bucket."""
+        return 0.5 * self.library_boost / 100
+
+    @property
+    def library_floor_scale(self) -> float:
+        """A downloaded pick's relevance floors are multiplied by this: 1x at
+        0, none at 100 (every downloaded video qualifies, ranked by its match)."""
+        return 1.0 - self.library_boost / 100
+
+    @property
+    def library_pick_cost(self) -> float:
+        """How much of its bucket's share a downloaded pick uses in the mix:
+        1 at 0, a tenth at 100 (so downloaded picks can fill most slots)."""
+        return 1.0 - 0.9 * self.library_boost / 100
 
 
 DEFAULTS = Tuning()
