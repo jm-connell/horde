@@ -74,7 +74,9 @@ function SubscriptionRow({ sub }: { sub: Subscription }) {
         url: sub.channel_url,
         channel: sub.channel_name ?? undefined,
         enabled: !sub.autodownload,
-        previous_mode: current.previous_mode,
+        // Turning it on here means new uploads only (as the button says): an
+        // earlier "all older videos" choice must not fill the disk on a click.
+        previous_mode: sub.autodownload ? current.previous_mode : "none",
         previous_count: current.previous_count,
         quality_preset: current.quality_preset,
         include_completed_streams: current.include_completed_streams,

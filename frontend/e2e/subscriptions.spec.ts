@@ -53,3 +53,44 @@ test("Settings on a subscription opens the channel's settings sheet", async ({
     .poll(() => new URL(page.url()).searchParams.has("settings"))
     .toBe(false);
 });
+
+test("turning auto-download on here asks for new uploads only", async ({
+  page,
+}) => {
+  await page.goto("/subscriptions");
+  await page.getByLabel("Add a YouTube channel").fill("@e2ebackfill");
+  await page.getByRole("button", { name: "Follow", exact: true }).click();
+  const row = page
+    .getByRole("list", { name: "Subscriptions" })
+    .getByRole("listitem")
+    .filter({ hasText: "e2ebackfill" });
+  await expect(row.getByRole("button", { name: "Following" })).toBeVisible();
+  // An earlier, switched-off policy that would download every older video.
+  const saved = await page.request.put("/api/channels/autodownload", {
+    headers: { "X-Horde-Request": "1" },
+    data: {
+      url: "https://www.youtube.com/@e2ebackfill",
+      enabled: false,
+      previous_mode: "all",
+      quality_preset: "720p",
+      include_completed_streams: false,
+    },
+  });
+  expect(saved.ok()).toBeTruthy();
+
+  const sent = page.waitForRequest(
+    (r) =>
+      r.url().endsWith("/api/channels/autodownload") && r.method() === "PUT"
+  );
+  await row.getByRole("button", { name: "Auto-download off" }).click();
+  const body = (await sent).postDataJSON() as {
+    enabled: boolean;
+    previous_mode: string;
+    quality_preset: string;
+  };
+  expect(body).toMatchObject({
+    enabled: true,
+    previous_mode: "none",
+    quality_preset: "720p",
+  });
+});
