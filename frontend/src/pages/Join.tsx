@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import {
   AuthCard,
   AUTH_PRIMARY,
@@ -42,12 +42,16 @@ export default function JoinPage({
         if (active) setInvite(info);
       })
       .catch((err) => {
-        if (active)
-          setInvalid(
-            err instanceof Error
-              ? err.message
-              : "This invite link is not valid."
+        if (!active) return;
+        // Only a 404 means the link is dead; anything else (a busy server,
+        // too many tries) says nothing about the invite.
+        if (err instanceof ApiError && err.status === 404) {
+          setInvalid(err.message);
+        } else {
+          setError(
+            `${err instanceof Error ? err.message : "Could not check the invite."} Reload the page to try again.`
           );
+        }
       });
     return () => {
       active = false;

@@ -412,9 +412,11 @@ def _refuse_when_auth_disabled(runtime: AuthRuntime) -> None:
         )
 
 
-# Invite tokens have 192 bits, so guessing is hopeless; the throttle still keeps
-# a client from hammering these public routes. One key for every invite try.
-_INVITE_KEY = "invite:"
+# Invite tokens have 192 bits, so guessing is hopeless; the throttle only keeps a
+# client from hammering these public routes. Keyed per address, so one noisy
+# client cannot slow down everyone else's invites.
+def _invite_key(request: Request) -> str:
+    return f"invite:{_runtime(request).client_address(request)}"
 
 
 @router.post("/invite/check", response_model=InviteInfo)
@@ -425,7 +427,7 @@ def check_invite(
 ) -> InviteInfo:
     """Whether an invite link still works, and who it is for (the join page)."""
     _refuse_when_auth_disabled(_runtime(request))
-    with _begin(request, _INVITE_KEY) as attempt:
+    with _begin(request, _invite_key(request)) as attempt:
         invite = invites.find_valid(session, payload.token)
         if invite is None:
             attempt.failure()
@@ -446,7 +448,7 @@ def accept_invite(
     """Create a member account with an invite link, and sign it in."""
     runtime = _runtime(request)
     _refuse_when_auth_disabled(runtime)
-    with _begin(request, _INVITE_KEY) as attempt:
+    with _begin(request, _invite_key(request)) as attempt:
         if invites.find_valid(session, payload.token) is None:
             attempt.failure()
             raise invites.InvalidInvite(

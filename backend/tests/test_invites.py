@@ -154,3 +154,20 @@ def test_redeem_claims_the_invite_before_making_the_account(init_db, admin_user)
     with Session(init_db["engine"]) as s:
         names = {u.username for u in s.exec(select(User)).all()}
     assert "one" in names and "two" not in names
+
+
+def test_failures_from_one_address_do_not_throttle_another(app, client):
+    """Every invite try shared one throttle name, so one client could stall all."""
+    from fastapi.testclient import TestClient
+
+    token = _invite(client)["token"]
+    noisy = TestClient(app, headers={"X-Horde-Request": "1"}, client=("10.0.0.9", 1))
+    for _ in range(60):
+        noisy.post("/api/auth/invite/check", json={"token": "wrong"})
+    assert (
+        noisy.post("/api/auth/invite/check", json={"token": "wrong"}).status_code == 429
+    )
+    other = TestClient(app, headers={"X-Horde-Request": "1"}, client=("10.0.0.7", 1))
+    assert (
+        other.post("/api/auth/invite/check", json={"token": token}).status_code == 200
+    )

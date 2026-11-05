@@ -127,6 +127,9 @@ def redeem(
         raise InvalidInvite(
             "This invite link is not valid. It may have been used or expired."
         )
+    if accounts.count_users(session) == 0:
+        # create_user makes the first account an administrator; an invite never may.
+        raise InvalidInvite("This invite link is not valid.")
     invite_id = require_id(invite)
     # Claim it first: only one request can turn used_at from NULL to now.
     claimed = session.execute(
