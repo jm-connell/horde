@@ -1,71 +1,74 @@
 # Horde
 
-Horde is a self-hosted media archive, downloader, and player for your homelab. Upload videos directly, or paste a YouTube (or other [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported) link, download it to your server with metadata and thumbnails, then browse and watch everything through a customizable web UI.
-
-Direct YouTube playback is also supported, but somewhat fragile and resolution can vary. Horde is designed to be archive-first, with streaming as a secondary function.
+**Horde is a self-hosted library for the videos you want to keep.** Download from YouTube or any other [yt-dlp](https://github.com/yt-dlp/yt-dlp) site, follow channels so new uploads arrive by themselves, bring in files you already have, and watch it all in a clean player on your desktop, phone or TV. Your videos stay plain files on your own disk (`Channel/Year/Title [id].mp4`), readable without Horde.
 
 ![Library home in Horde, cyan-on-dark with constellation background and a channel sidebar](assets/screenshots/library.webp)
 
-Horde was built because of the features I believe Plex is missing. Plex is great for Movies and TV, but awkward for other videos — long-form YouTube, talks, music videos, random archives you want to keep forever. TubeArchivist and similar projects are solid; but Horde is the version shaped around my homelab setup: **TrueNAS with Dockge**, a single container, files on disk that still make sense over SMB, and an optional AI layer that is cheap to run.
+[Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button } [Unraid, Synology, Portainer](getting-started/other-platforms.md){ .md-button }
 
-Every video watched through Horde instead of YouTube avoids all YouTube pre-roll and mid-roll ads. Baked-in video sponsors can also be skipped with included support for [SponsorBlock](https://github.com/ajayyy/SponsorBlock).
+## Quick start
 
-There are several useful AI features that are fully optional. Horde works with any OpenAI-compatible provider: OpenRouter, OpenAI, Gemini, or your own Ollama / LM Studio server. I prefer OpenRouter as it's fast, low maintenance, and for Horde's use, extremely cheap. Some AI features include summary generation, chat about a video (using metadata and subtitle files), enhanced search and recommendations, and generating tags.
+On a Linux host with Docker and Git:
 
-I strongly recommend using Tailscale (or something similar) if you aren't already. This makes remote access and playback very straightforward, assuming your network has the upload bandwidth necessary.
+```bash
+git clone https://github.com/jm-connell/horde.git && cd horde
+cp .env.example .env    # set PUID, PGID, DOWNLOADS_PATH and DATA_PATH
+docker compose up -d
+```
 
-The majority of this wiki beyond this point is AI-generated, but accurate. It provides a good overview of features and how-to's regarding Horde. If you have more advanced questions then I recommend you clone the repo, open in your IDE of choice, and ask your favorite model.
+Open `http://<server-ip>:8686`, create the administrator account, and the setup wizard does the rest. Step by step, with checks along the way: [Install with Docker](getting-started/install-docker.md).
 
 !!! warning "Trusted network"
-    Horde asks everyone to sign in ([accounts](ops/authentication.md)), but it is built for a trusted LAN or VPN. To reach it from the internet, follow the [internet exposure checklist](ops/internet-exposure.md).
+    Everyone signs in ([accounts](ops/authentication.md)), but Horde is built for a home network or a VPN such as Tailscale. To reach it from the internet, follow the [internet exposure checklist](ops/internet-exposure.md) first.
 
-##  Feature highlights
+## What it does
 
-See the [feature overview](features.md) for screenshots and detail. In short:
+| Area | What you get |
+|------|--------------|
+| **Downloads** | Paste any yt-dlp link, pick a quality, follow a live queue. Whole playlists, and a bookmarklet or share-sheet entry to send links from your phone |
+| **Subscriptions** | Follow channels, download their new uploads automatically, keep only the latest N ([Channels](guides/channels.md#subscriptions)) |
+| **Your existing archive** | Point Horde at folders from yt-dlp, Tube Archivist, Pinchflat or another Horde; it reads their sidecar files ([Moving an existing archive](guides/migrating.md)) |
+| **Library** | Channel sidebar, search across titles, descriptions and captions, tags, continue watching, recommendations |
+| **Player** | Theater and mini player, picture-in-picture, chapters, subtitles, SponsorBlock, Chromecast and AirPlay ([Watch on your TV](guides/tv.md)) |
+| **Household** | One administrator and as many members as you like, each with their own history and look, invited with a link |
+| **Phones** | Installs as an app, keeps videos for offline viewing |
+| **AI (optional)** | Summaries, chapters, chat about a video, smarter search and "what did this channel say about…", with any OpenAI-compatible provider or your own Ollama |
+| **YouTube streaming** | Preview a video before deciding to download it. It works for most videos, but quality varies and it can break when YouTube changes |
 
+Every video watched in Horde plays without YouTube's ads, and [SponsorBlock](https://github.com/ajayyy/SponsorBlock) can skip the sponsor segments baked into them. The [feature overview](features.md) has screenshots of each screen.
 
-| Area              | What you get                                                                                   |
-| ----------------- | ---------------------------------------------------------------------------------------------- |
-| **Downloads**     | URL ingestion, quality presets, live FIFO queue, pause/resume, YouTube playlist import         |
-| **On disk**       | `Channel/Year/Title [id].ext` so SMB browsing matches the UI                                   |
-| **Library**       | Channel sidebar, tags, hybrid search, sorting, bulk select, continue watching                  |
-| **Channels**      | YouTube catalogs: browse, preview, and download uploads you do not have yet                    |
-| **Import**        | Drag-and-drop or drop files on the share; review before they join the library                  |
-| **Player**        | Standard / theater / windowed, mini player, PiP, Chromecast, SponsorBlock, chapters, subtitles |
-| **Playlists**     | Your own lists, imported YouTube playlists, or subscribed lists that pick up new parts         |
-| **AI** (optional) | Any OpenAI-compatible provider (OpenRouter, Ollama, LM Studio, …) for embeddings, tags, summaries, chat, recommendations, duplicates |
+## Is it for you?
 
+Horde is a good fit when you want to **keep** videos: channels you follow, talks and tutorials you return to, things that may disappear. A few neighbours, in short:
 
-Install starts with **cloning this git repo** onto the Docker host (Horde is built from source, not pulled as a Hub image). Then either `docker compose up --build` or Dockge **Scan** + **Deploy**. New to Docker or self-hosting? The install guides spell out every command, explain what it does and how to check it worked.
-
-[Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button }
-
-Want a tour of the UI first? See the [feature overview](features.md).
+| If you want… | Consider |
+|--------------|----------|
+| A YouTube archive with a library and player in one container, plus optional AI | **Horde** |
+| A YouTube archive built around Elasticsearch, with its own browser extension | [Tube Archivist](https://www.tubearchivist.com/) |
+| A downloader that feeds Plex or Jellyfin and has no player of its own | [Pinchflat](https://github.com/kieraneglin/pinchflat) |
+| Films and TV series with apps on every TV | Jellyfin or Plex (Horde can [feed them](guides/media-servers.md) its videos too) |
 
 ## Where to start
 
-1. [Install with Docker](getting-started/install-docker.md) — clone, `.env`, compose — or [TrueNAS / Dockge](getting-started/truenas-dockge.md) from a blank NAS
-2. [First run](getting-started/first-run.md) — download something and browse it
-3. [Updating](getting-started/updating.md) — `git pull` via `bash update.sh` on the host
-4. [Settings](settings/index.md) — appearance, library, playback, AI
-5. [AI setup](ops/ai-setup.md) — when you want recommendations and smarter search
+1. [Install](getting-started/install-docker.md) (or [TrueNAS / Dockge](getting-started/truenas-dockge.md), or [another platform](getting-started/other-platforms.md))
+2. [First run](getting-started/first-run.md): the setup wizard, your first download, and **Get started** on the empty library
+3. [Moving an existing archive](guides/migrating.md), if you already have videos
+4. [Updating](getting-started/updating.md): the **Update now** button, or `bash update.sh`
+5. [AI setup](ops/ai-setup.md), whenever you want it
 
+## Getting help
 
+- **Ask about Horde**, at the bottom of every page, answers from this documentation (with AI it writes the answer; without, it shows the matching pages).
+- [Troubleshooting](ops/troubleshooting.md) and the [FAQ](reference/faq.md) cover the common problems.
+- Bugs and ideas: **Report a bug or idea** in Horde's footer opens a [GitHub issue](https://github.com/jm-connell/horde/issues) with your version filled in. Security problems: [report them privately](https://github.com/jm-connell/horde/security/advisories/new).
 
-## Map of this wiki
+This wiki is also built into every Horde at `/wiki/` (**Settings → System → Documentation**), and the API reference is at `/docs`.
 
-- **Features** — product tour with screenshots
-- **Getting started** — clone, Docker / Dockge from zero, first run, update, local development, [automated testing](getting-started/testing.md)
-- **Using Horde** — day-to-day guides for every major screen
-- **Settings** — every control and what it does
-- **Configuration & ops** — env vars, storage, YouTube bot checks, backups, troubleshooting
-- **Architecture** — how the backend, frontend, workers, and AI pipeline fit together
-- **Design decisions** — why things work the way they do
-- **Reference** — shortcuts, glossary, FAQ
+## About
 
-In a running Horde instance, open **Settings → System → Documentation** to reach this wiki at `/wiki/`. Interactive API docs live at `/docs` (Swagger). The same wiki is published at [jm-connell.github.io/horde](https://jm-connell.github.io/horde/).
+Horde started as one person's answer to a gap in Plex: it handles films and TV well, but not the long tail of "other" video worth keeping. It is built for a homelab first (TrueNAS with Dockge, a single container, files that still make sense over SMB) and has grown accounts, subscriptions and an optional AI layer since. It was written with AI coding assistants, and most of this documentation was too; every change to the code has to pass an automated test suite of the API, the interface and the docs build ([how Horde is built](design/vibecoded.md), [why Horde](design/why-horde.md)).
 
-If you want to change Horde, clone the repo, boot it with an AI-enabled IDE, and go. Questions: open this repo in Cursor and use Ask mode.
+Horde follows tagged releases ([changelog](https://github.com/jm-connell/horde/blob/main/CHANGELOG.md)), and updates back up the database and roll back by themselves if the new version does not start.
 
 ## License
 
