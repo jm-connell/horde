@@ -190,6 +190,15 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
     [queryClient]
   );
 
+  // Jobs this page has seen queued or running. The queue stream replays a
+  // finished job's last state for a while after it ends, so only a job seen
+  // before it finished may toast; otherwise every page load repeats old news.
+  const seenActive = useRef<Set<number>>(new Set());
+  useEffect(() => {
+    for (const job of jobs) {
+      if (!TERMINAL.has(job.status)) seenActive.current.add(job.id);
+    }
+  }, [jobs]);
   const toastedErrors = useRef<Set<number>>(new Set());
   const toastedCancelled = useRef<Set<number>>(new Set());
   const toastedSkipped = useRef<Set<number>>(new Set());
@@ -322,19 +331,24 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         );
       }
 
-      if (!TERMINAL.has(event.status)) return;
+      if (!TERMINAL.has(event.status)) {
+        seenActive.current.add(jobId);
+        return;
+      }
       refreshJob(jobId);
+      const announce = seenActive.current.has(jobId);
       if (event.status === "completed") {
         const videoId = event.video_id ?? null;
         maybeSaveDeviceFile(jobId, event.destination);
         completionListeners.current.forEach((cb) => cb(videoId, event));
-        if (event.quality_warning) {
+        if (announce && event.quality_warning) {
           showToast(event.quality_warning);
         }
         return;
       }
       if (event.status === "cancelled") {
         if (
+          announce &&
           !restartingJobs.current.has(jobId) &&
           !toastedCancelled.current.has(jobId)
         ) {
@@ -343,7 +357,11 @@ export function DownloadProvider({ children }: { children: React.ReactNode }) {
         }
         return;
       }
-      if (event.status === "error" && !toastedErrors.current.has(jobId)) {
+      if (
+        announce &&
+        event.status === "error" &&
+        !toastedErrors.current.has(jobId)
+      ) {
         if (restartingJobs.current.has(jobId)) return;
         toastedErrors.current.add(jobId);
         showToast(downloadErrorToast(event.error_kind, event.error));
