@@ -366,6 +366,28 @@ def test_unnamed_questions_go_to_ask_about_horde_and_are_saved(
     assert thread["messages"][1]["sources"]["kind"] == "help"
 
 
+def test_horde_picked_as_the_source_ignores_a_named_channel(
+    client, session, llm, help_index
+):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    llm["replies"] = ["Settings → Library → Channels Ask can answer from."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "How do I stop indexing the Car Care Nut?",
+                "channel_ids": [nut.id],
+                "page_channel_id": nut.id,
+                "horde_only": True,
+            },
+        ).text
+    )
+    assert events[1] == {"type": "scope", "channels": []}
+    assert "sources" in [e["type"] for e in events]
+    assert events[-1]["type"] == "done"
+
+
 def test_threads_are_private_listed_and_deletable(
     client, member_client, session, llm, help_index
 ):
