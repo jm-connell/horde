@@ -35,6 +35,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Chat about a video is in Ask.** The watch page's AI section is now
+  **Summary** (with Regenerate) and a **Chat ↗** button that opens Ask on
+  the video ("Ask <video>"). On a watch page Ask answers from the video by
+  default, and still sends questions about Horde, your library or a channel
+  where they belong. Your earlier chats about videos are in Ask's History.
 - New installs pull the published image (`HORDE_IMAGE` in `.env.example`)
   instead of building on the host. Existing installs keep building until
   they set it.

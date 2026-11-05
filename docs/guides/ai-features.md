@@ -23,7 +23,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Related videos** | Neighbors on the watch page | Embeddings |
 | **Summaries** | Generate a synopsis for a video | Chat LLM |
 | **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
-| **Chat** | Ask questions about a video (metadata + optional subs) | Chat LLM |
+| **[Ask](ask.md#asking-about-a-video), about a video** | Answers questions about one video from its details, captions and comments; **Chat** in its Summary section opens it | Chat LLM (or the Assistant model); needs **AI video chat** |
 | **[Ask](ask.md), from Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
 | **[Ask](ask.md), from channels** | Answers questions about what indexed YouTube channels said, citing each point to the moment, when you name a channel or pick it | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
@@ -38,9 +38,9 @@ When **AI video summaries** is on, a summary is queued after download once capti
 
 When **AI video chapters** is on, choose **On download** or **Watch page**. On download queues a chapter job after captions exist if the description (and yt-dlp chapter list) do not already provide markers. Watch page only generates when you click the button on a video. Videos under 3 minutes and lyric-heavy captions are skipped automatically; Watch **Generate** still runs for those. After AI markers exist, Watch shows a short “AI generated chapters” note and **Regenerate** on the Description row. Markers are stored beside the video; the description is not rewritten. Description timestamps always win over yt-dlp and AI.
 
-## Chat
+## Chat about a video
 
-Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available, and from the video's saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. Requires a working chat provider. The watch-page AI panel always opens on **Summary**; switching to Chat is not remembered across videos or reloads.
+The watch page's **Summary** section has a **Chat ↗** button next to **Regenerate**: it opens [Ask](ask.md#asking-about-a-video) on that video. Answers are built from the video's metadata and captions when available, and from its saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. A saved summary stays readable in the section even when it cannot be generated again (summaries switched off, or no captions). Requires a working chat provider and **AI video chat**.
 
 ## Ask
 
@@ -52,7 +52,7 @@ Each question also tells Horde which page you are on (for example "Settings, Pla
 
 Answers come from the documentation and the source code shipped with your version of Horde: the wiki pages, `README.md`, `.env.example`, `docker-compose.yml`, the changelog, and the backend and frontend code. For each question Horde picks the best-matching sections (a keyword search, no embeddings needed) and sends them with the features overview to the chat model, so it works with small local models too. Under each answer, **Sources** links the wiki pages and the files on GitHub (at your build's commit) it was given.
 
-- Needs the `use_ai` permission and a working chat provider; it does not depend on the **AI video chat** toggle. With OpenRouter, spend is recorded under `chat` in the cost ledger.
+- Needs the `use_ai` permission and a working chat provider; answers from Horde do not depend on the **AI video chat** toggle (answers about a video do). With OpenRouter, spend is recorded under `chat` in the cost ledger.
 - Members are told when something is an administrator's setting.
 - Where you put the panel is kept in the browser tab only; conversations are saved on the server for your account (see **History**). Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
 - Answers can be wrong. The model only sees the excerpts it was given; check the linked pages before changing anything important.
@@ -87,9 +87,9 @@ The assistant uses the chat model unless the administrator sets an **Assistant m
 
 ## Streamed videos
 
-A video you stream without downloading (`/watch?url=…`) gets the same AI panel: **Summary**, **Chat** and **Generate** chapters work from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be chatted about from its metadata). Only YouTube videos are supported.
+A video you stream without downloading (`/watch?url=…`) gets the same **Summary** section (with **Chat**, which opens Ask on it) and **Generate** chapters, from its title, description and English captions (fetched from the stream the first time you use AI on it; a stream without captions can still be asked about from its metadata). Only YouTube videos are supported.
 
-Results are saved per video. Opening the stream again shows them without spending tokens, and **downloading the video moves them onto the library copy** (its own summary or chapters win if it already has some; your chat joins your conversation about the video, in time order). If nobody opens the stream for `HORDE_STREAM_AI_RETENTION_DAYS` (default **30**) days and it was not downloaded, its saved results are deleted. The AI panel shows the date they are kept until. See [ADR 0010](../adr/0010-stream-ai-retention.md).
+Results are saved per video. Opening the stream again shows them without spending tokens, and **downloading the video moves them onto the library copy** (its own summary or chapters win if it already has some). Questions about it live in Ask, and an Ask conversation about the stream carries on with the library copy. If nobody opens the stream for `HORDE_STREAM_AI_RETENTION_DAYS` (default **30**) days and it was not downloaded, its saved results are deleted. The Summary section shows the date they are kept until. See [ADR 0010](../adr/0010-stream-ai-retention.md).
 
 ## Enrich tags
 

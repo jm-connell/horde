@@ -1,6 +1,6 @@
 # Comments
 
-Horde saves the top YouTube comments of the videos in your library, so they are there to read under the video, they count in search, and the video chat knows how viewers reacted. They stay when a video later goes private or is removed from YouTube.
+Horde saves the top YouTube comments of the videos in your library, so they are there to read under the video, they count in search, and Ask, asked about a video, knows how viewers reacted. They stay when a video later goes private or is removed from YouTube.
 
 ## What is saved
 
