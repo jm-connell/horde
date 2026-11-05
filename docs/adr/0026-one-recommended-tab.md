@@ -11,7 +11,7 @@ The home page had three tabs: Library, Recommended ("For you" from the library a
 - **One tab.** The home page has Library and Recommended. Recommended is the Recommended+ feed (`GET /api/discover/feed`, `services/discovery/`). It is always offered: with looking on YouTube off it simply has no found videos.
 - **The old ranker goes.** `GET /api/ai/recommendations` and the "For you" ranking in `services/ai/recommend.py` are removed. That module keeps the AI category rule, which `GET /api/ai/categories`, Settings -> AI and the feed's category chips (`discovery/categories.py`) use.
 - **What the old tab offered maps onto the feed.** Its **Include not downloaded** chip is the algorithm's **Indexed channels** source (a saved "off" does not carry over: turn the source off in the algorithm); its category shelves are the feed's category chips; its admin **Refresh** is **Settings -> AI -> Jobs**.
-- **The tab choice is remembered per browser** (`horde.home.tab` in local storage). A saved `discover` (Recommended+) opens Recommended. A search shows library results without changing the saved choice.
+- **The tab choice is saved with the account** (`home_tab` in the user's `ui` settings, like other personal preferences), so every device opens on it; there is no switch for it in Settings. A choice a browser saved before (`horde.home.tab`, where `discover` meant Recommended+) carries over once. A search shows library results without changing the saved choice.
 - Internal names stay: the API, tables and code still say `discover` / `discovery`; only what users read changed.
 
 ## Consequences

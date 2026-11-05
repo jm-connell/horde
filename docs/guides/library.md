@@ -10,7 +10,7 @@ The Library is Horde’s home screen: a video grid (or channel feed), channel si
 | **Main grid** | Your library videos (home) or a channel feed |
 | **Toolbar** | Sort, select mode, layout toggles (search is in the nav bar, on every page; see [Search](search.md)) |
 | **Continue watching** | Row of in-progress videos (home only) |
-| **Home tabs** | **Library** / **Recommended** (remembered between visits) |
+| **Home tabs** | **Library** / **Recommended** (remembered with your account) |
 
 On a channel page, the main area switches to that channel’s feed (downloaded videos, and optionally undownloaded catalog entries). See [Channels](channels.md).
 
@@ -102,7 +102,7 @@ On the home Library tab (not Recommended, not a channel page), Horde shows a **C
 
 ## Library and Recommended
 
-The home page has two tabs, and remembers the one you were on: come back later and you land there again. Searching from the nav always lists library results, then clearing the search takes you back to the tab you were on.
+The home page has two tabs, and your account remembers the one you were on: come back later, on any device, and you land there again. Searching from the nav always lists library results, then clearing the search takes you back to the tab you were on.
 
 - **Library**: your normal grid, continue watching, and search results. A video's tag links open a tag page.
 - **Recommended**: the place to browse when you don't know what to watch. It works without AI (ranked from your watch history). It mixes five kinds of picks: new uploads from channels you follow or watch a lot, more like what you have watched lately, videos from channels you have never watched (found on YouTube in the background), the odd throwback to something you used to watch, and now and then a video you finished a while ago (rewatch). Its sources are your library, the uploads of channels you have indexed and, while looking on YouTube is on, videos Horde found there; each can be turned off in the algorithm. While you are on Library, Horde loads Recommended in the background, so the tab opens at once (the videos count as shown only once you open it). A **Channels you might like** row, after the first full rows of cards, suggests channels to follow: each card shows the typical views and length of its videos the feed picked and the watch that led to it ("Like …"); following one also indexes its uploads.

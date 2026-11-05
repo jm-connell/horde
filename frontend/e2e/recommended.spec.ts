@@ -1,5 +1,5 @@
 import type { Page } from "@playwright/test";
-import { expect, openSearchBox, test } from "./fixtures";
+import { contextAs, expect, openSearchBox, test } from "./fixtures";
 
 /** The seed's discovered videos (backend/app/e2e_seed.py E2E_DISCOVERED). */
 const FOUND = "Night sky timelapse from a lighthouse";
@@ -124,6 +124,34 @@ test("the home tab is remembered between visits, and a search does not change it
   await expect(
     page.getByRole("button", { name: "Library", exact: true })
   ).toHaveAttribute("data-liquid-active", "true");
+});
+
+test("the home tab follows the account to another browser", async ({
+  page,
+  browser,
+  baseURL,
+}) => {
+  await lookingOnYoutube(page);
+  await page.goto("/");
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/settings") &&
+      r.request().method() === "PATCH" &&
+      r.ok()
+  );
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await saved;
+
+  const other = await contextAs(browser, baseURL, "admin");
+  try {
+    const elsewhere = await other.newPage();
+    await elsewhere.goto("/");
+    await expect(
+      elsewhere.getByRole("button", { name: "Recommended", exact: true })
+    ).toHaveAttribute("data-liquid-active", "true");
+  } finally {
+    await other.close();
+  }
 });
 
 test("not interested removes a video, and undo brings it back", async ({

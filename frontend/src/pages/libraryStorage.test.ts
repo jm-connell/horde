@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { HOME_TAB_KEY, loadHomeTab, saveHomeTab } from "./libraryStorage";
+import { HOME_TAB_KEY, homeTabOf, takeBrowserHomeTab } from "./libraryStorage";
 
 let saved: Map<string, string>;
 
@@ -15,21 +15,19 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("home tab", () => {
-  it("comes back as it was saved", () => {
-    saveHomeTab("recommended");
-    expect(loadHomeTab()).toBe("recommended");
-    saveHomeTab("library");
-    expect(loadHomeTab()).toBe("library");
+  it("reads what was saved, the old Recommended+ as Recommended", () => {
+    expect(homeTabOf("recommended")).toBe("recommended");
+    expect(homeTabOf("discover")).toBe("recommended");
+    expect(homeTabOf("library")).toBe("library");
+    expect(homeTabOf(undefined)).toBe("library");
+    expect(homeTabOf("elsewhere")).toBe("library");
   });
 
-  it("opens Recommended for the old Recommended+ choice", () => {
+  it("hands over this browser's old choice once", () => {
+    expect(takeBrowserHomeTab()).toBeNull();
     saved.set(HOME_TAB_KEY, "discover");
-    expect(loadHomeTab()).toBe("recommended");
-  });
-
-  it("starts on Library when nothing (or nonsense) is saved", () => {
-    expect(loadHomeTab()).toBe("library");
-    saved.set(HOME_TAB_KEY, "elsewhere");
-    expect(loadHomeTab()).toBe("library");
+    expect(takeBrowserHomeTab()).toBe("recommended");
+    expect(saved.has(HOME_TAB_KEY)).toBe(false);
+    expect(takeBrowserHomeTab()).toBeNull();
   });
 });

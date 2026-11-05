@@ -1,4 +1,4 @@
-import { getItem, getJson, setItem, setJson } from "../storage";
+import { getItem, getJson, removeItem, setItem, setJson } from "../storage";
 
 const FEED_LAYOUT_KEY = "horde.channelFeed.layout";
 const HOME_TAB_KEY = "horde.home.tab";
@@ -6,16 +6,22 @@ const CHANNEL_URLS_KEY = "horde.channelUrls";
 
 export type HomeTab = "library" | "recommended";
 
-/** The home tab chosen last ("discover" is the old Recommended+ tab). */
-export function loadHomeTab(): HomeTab {
-  const stored = getItem(HOME_TAB_KEY);
-  return stored === "recommended" || stored === "discover"
+/** A saved home tab, whatever was stored ("discover" is the old Recommended+). */
+export function homeTabOf(value: unknown): HomeTab {
+  return value === "recommended" || value === "discover"
     ? "recommended"
     : "library";
 }
 
-export function saveHomeTab(tab: HomeTab): void {
-  setItem(HOME_TAB_KEY, tab);
+/**
+ * The home tab this browser saved before the choice moved to the account
+ * (`Settings.homeTab`), once: it is removed as it is read. Null when none.
+ */
+export function takeBrowserHomeTab(): HomeTab | null {
+  const stored = getItem(HOME_TAB_KEY);
+  if (stored === null) return null;
+  removeItem(HOME_TAB_KEY);
+  return homeTabOf(stored);
 }
 
 export function loadFeedLayout(): "grid" | "list" {

@@ -184,6 +184,8 @@ export interface Settings {
   playbackMode: ViewMode;
   lastCustomChannel: string;
   showContinueWatching: boolean;
+  /** The home tab chosen last; saved with the account, so every device opens on it. */
+  homeTab: "library" | "recommended";
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
   showDownloadNavBadge: boolean;

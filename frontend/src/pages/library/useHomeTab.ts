@@ -1,18 +1,26 @@
-import { useCallback, useState } from "react";
-import { loadHomeTab, saveHomeTab, type HomeTab } from "../libraryStorage";
+import { useCallback, useEffect } from "react";
+import { useSettings } from "../../hooks/useSettings";
+import { homeTabOf, takeBrowserHomeTab, type HomeTab } from "../libraryStorage";
 
 /**
- * Library or Recommended on the home page, remembered between visits. A search
- * always shows the library's results, but does not change the saved choice:
- * clear the search and you are back where you were.
+ * Library or Recommended on the home page, saved with the account so every
+ * visit, on any device, opens on the tab chosen last. A search always shows
+ * the library's results, but does not change the saved choice.
  */
 export function useHomeTab(search: string) {
-  const [saved, setSaved] = useState<HomeTab>(loadHomeTab);
+  const [settings, update] = useSettings();
+  const saved = homeTabOf(settings.homeTab);
 
-  const setHomeTab = useCallback((tab: HomeTab) => {
-    setSaved(tab);
-    saveHomeTab(tab);
-  }, []);
+  const setHomeTab = useCallback(
+    (tab: HomeTab) => update({ homeTab: tab }),
+    [update]
+  );
+
+  // A choice this browser kept before it moved to the account carries over.
+  useEffect(() => {
+    const old = takeBrowserHomeTab();
+    if (old === "recommended") setHomeTab(old);
+  }, [setHomeTab]);
 
   return { homeTab: search.trim() ? "library" : saved, setHomeTab };
 }
