@@ -58,7 +58,7 @@ Interactive API reference: `/docs`.
   history, AI chats and appearance; members get only the permissions the admin
   grants. Optional two-step sign-in.
 - **AI** (optional): summaries, chapters, chat about a video, tags, semantic
-  search and recommendations, and an assistant (Ask about Horde) that answers
+  search and recommendations, and an assistant (Ask) that answers
   how-to questions, finds and changes settings, answers about your own library
   and writes custom CSS, with any OpenAI-compatible provider (OpenRouter,
   OpenAI, Gemini, Groq, Ollama, LM Studio, …).

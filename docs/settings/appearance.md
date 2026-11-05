@@ -185,7 +185,7 @@ On a phone, the installed app (added to the Home Screen) shows a floating bar of
 | Home | **Default.** The home page; tapping it again goes back to the top |
 | Search | **Default.** Opens the search box at the top |
 | Download | **Default.** The Download page (needs the download permission) |
-| Chat | **Default.** Opens [Ask about Horde](../guides/ai-features.md) (when AI is set up for this account) |
+| Ask | **Default.** Opens [Ask](../guides/ask.md) (when AI is set up for this account) |
 | Playlists, History, Settings | Those pages |
 | Offline | The Offline page, when this device has offline downloads |
 

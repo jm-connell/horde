@@ -33,6 +33,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0025](0025-one-history.md) | History shows every watch, and each can be removed or kept out of recommendations | Accepted |
 | [0026](0026-one-recommended-tab.md) | One Recommended tab: the Recommended+ feed, the old "For you" ranker removed | Accepted |
 | [0027](0027-invite-links.md) | Invite links let new members choose their own password | Accepted |
+| [0028](0028-one-ask.md) | One Ask: a single name, with the source on show and pickable | Accepted |
 
 ## Writing a new record
 

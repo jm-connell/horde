@@ -24,8 +24,8 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 | **Summaries** | Generate a synopsis for a video | Chat LLM |
 | **Chapters** | Generate Watch markers from captions when the description has none | Chat LLM |
 | **Chat** | Ask questions about a video (metadata + optional subs) | Chat LLM |
-| **Ask about Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
-| **[Ask](ask.md)** | Answers questions about what indexed YouTube channels said, citing each point to the moment, from the same chat panel when you name a channel | Chat LLM (or the Assistant model); embeddings help |
+| **[Ask](ask.md), from Horde** | Answers how-to questions from the docs and source, links to and changes settings, answers about your own library, queues downloads, builds playlists and writes custom CSS | Chat LLM (or the Assistant model) |
+| **[Ask](ask.md), from channels** | Answers questions about what indexed YouTube channels said, citing each point to the moment, when you name a channel or pick it | Chat LLM (or the Assistant model); embeddings help |
 | **Enrich tags** | Suggest / apply topical tags | Chat LLM |
 | **Recommended tab** | Better ranking (by content) and category chips | Embed + categories ready |
 | **Duplicate confirmation** | Score heuristic duplicate groups on Import | Chat (+ optional embed similarity) |
@@ -42,9 +42,9 @@ When **AI video chapters** is on, choose **On download** or **Watch page**. On d
 
 Per-video chat lets you ask about content, chapters, or themes. Context is built from metadata and captions when available, and from the video's saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. Requires a working chat provider. The watch-page AI panel always opens on **Summary**; switching to Chat is not remembered across videos or reloads.
 
-## Ask about Horde
+## Ask
 
-The footer at the bottom of every page has an **Ask about Horde** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen, and following a link in an answer closes it). In the installed app on a phone, the **Chat** tab of the tab bar opens and closes it, and it sits just above the bar. On a wider screen, the side-panel button in its header docks it as a full-height column on the right (drag its left edge to make it wider or narrower): the page makes room for it (a video plays in theater layout while it is docked, so the picture stays large), and it stays there as you move around the app until you float it again. **Escape** or the close button hides it; **New chat** starts over, and **History** lists your earlier conversations (saved on the server for your account). Name an [Ask](ask.md) channel in a question to ask what it said in its videos.
+The footer at the bottom of every page has an **Ask** button. It opens a chat panel in the corner of the screen: ask how to set up AI, why a download failed, where files live or how a feature works under the hood. The panel is not in the way of the app: it stays open, with the same conversation, as you move between pages, and you can drag it by its header and resize it from its top-left corner (on a phone it fills the bottom of the screen, and following a link in an answer closes it). In the installed app on a phone, the **Ask** tab of the tab bar opens and closes it, and it sits just above the bar. On a wider screen, the side-panel button in its header docks it as a full-height column on the right (drag its left edge to make it wider or narrower): the page makes room for it (a video plays in theater layout while it is docked, so the picture stays large), and it stays there as you move around the app until you float it again. **Escape** or the close button hides it; **New chat** starts over, and **History** lists your earlier conversations (saved on the server for your account). **Answering from**, above the question box, says whether the next answer comes from Horde or from a channel; press it to pick another. This section is about answers from Horde; answers from channels are on the [Ask](ask.md) page.
 
 Without AI (no provider set up, or an account without the `use_ai` permission) the panel still works: it says so above the question box, and each question is answered with the closest pages of this documentation (linked, with the first lines of each) and up to three matching settings, found by the same search the AI uses. Nothing is sent anywhere. An administrator also gets a link to the AI provider settings.
 
@@ -54,7 +54,7 @@ Answers come from the documentation and the source code shipped with your versio
 
 - Needs the `use_ai` permission and a working chat provider; it does not depend on the **AI video chat** toggle. With OpenRouter, spend is recorded under `chat` in the cost ledger.
 - Members are told when something is an administrator's setting.
-- The conversation, and where you put the panel, are kept in the browser tab only (until the tab closes or **Clear**); the server stores none of it. Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
+- Where you put the panel is kept in the browser tab only; conversations are saved on the server for your account (see **History**). Each question sends the last few turns back, with roughly 6,000 tokens of excerpts, so a local model needs a context window of at least 8K tokens (Ollama: `OLLAMA_CONTEXT_LENGTH=8192` or more) for good answers.
 - Answers can be wrong. The model only sees the excerpts it was given; check the linked pages before changing anything important.
 
 When the panel opens it suggests five questions, a different mix each time; the first is always **What can you do?**, which lists everything below (answered by the app itself, without asking the model).

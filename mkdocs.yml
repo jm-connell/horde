@@ -75,7 +75,7 @@ nav:
       - Watch on your TV: guides/tv.md
       - Media servers: guides/media-servers.md
       - AI features: guides/ai-features.md
-      - Ask (channel knowledge): guides/ask.md
+      - Ask: guides/ask.md
   - Settings:
       - Overview: settings/index.md
       - Appearance: settings/appearance.md
@@ -140,6 +140,7 @@ nav:
       - 0025 One history: adr/0025-one-history.md
       - 0026 One Recommended tab: adr/0026-one-recommended-tab.md
       - 0027 Invite links: adr/0027-invite-links.md
+      - 0028 One Ask: adr/0028-one-ask.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
