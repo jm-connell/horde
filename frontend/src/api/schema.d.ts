@@ -260,31 +260,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/ai/recommendations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Ai Recommendations
-         * @description The home page's "For you" shelf, or one category's videos.
-         *
-         *     "For you" works without AI (ranked from the watch history alone); the
-         *     category shelves need it. With ``include_streams``, the first page also
-         *     carries followed channels' live broadcasts (``reason: live``), which the
-         *     client leaves out of its ``offset``.
-         */
-        get: operations["ai_recommendations_api_ai_recommendations_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/ai/resume": {
         parameters: {
             query?: never;
@@ -7930,46 +7905,6 @@ export interface components {
             active: string;
             custom?: components["schemas"]["Tuning-Input"] | null;
         };
-        /**
-         * RecommendationItemRead
-         * @description A library video (``video``) or an upload that is not downloaded (``stream``).
-         */
-        RecommendationItemRead: {
-            /** Reason */
-            reason?: ("throwback" | "live") | null;
-            stream?: components["schemas"]["ChannelFeedEntry"] | null;
-            video?: components["schemas"]["VideoRead"] | null;
-        };
-        /** RecommendationSectionRead */
-        RecommendationSectionRead: {
-            /**
-             * Items
-             * @default []
-             */
-            items: components["schemas"]["RecommendationItemRead"][];
-            /** Kind */
-            kind?: string | null;
-            /** Seed Video Id */
-            seed_video_id?: number | null;
-            /** Title */
-            title: string;
-            /** Videos */
-            videos: components["schemas"]["VideoRead"][];
-        };
-        /** RecommendationsRead */
-        RecommendationsRead: {
-            /** Categories */
-            categories: string[];
-            /**
-             * Has More
-             * @default false
-             */
-            has_more: boolean;
-            /** Hint */
-            hint?: string | null;
-            /** Sections */
-            sections: components["schemas"]["RecommendationSectionRead"][];
-        };
         /** ResetRequest */
         ResetRequest: {
             /**
@@ -9946,50 +9881,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiProcessResult"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    ai_recommendations_api_ai_recommendations_get: {
-        parameters: {
-            query?: {
-                category?: string | null;
-                limit?: number;
-                offset?: number;
-                /** @description Mix in indexed channels' uploads that are not downloaded. */
-                include_streams?: boolean;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RecommendationsRead"];
                 };
             };
             /** @description Validation error */

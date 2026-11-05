@@ -848,7 +848,7 @@ def test_up_next_is_read_with_yt_dlps_own_parsers():
     assert entries[0]["channel_url"] == "https://www.youtube.com/@rackguy"
 
 
-# --- Recommended (library + every catalog) ------------------------------------------
+# --- library + every catalog -------------------------------------------------------
 
 
 def test_recommended_includes_unfollowed_catalogs_but_not_streamed_or_blocked(
@@ -872,14 +872,8 @@ def test_recommended_includes_unfollowed_catalogs_but_not_streamed_or_blocked(
     client.post(
         "/api/discover/feedback", json={"kind": "channel", "key": "", "label": "Spam"}
     )
-    body = client.get(
-        "/api/ai/recommendations", params={"include_streams": True}
-    ).json()
-    titles = [
-        (i["stream"] or i["video"])["title"]
-        for s in body["sections"]
-        for i in s["items"]
-    ]
+    items = _items(client)
+    titles = [(i["stream"] or i["video"])["title"] for i in items]
     assert "Unfollowed upload" in titles
     assert "Streamed" not in titles and "Spam upload" not in titles
 
@@ -1030,7 +1024,7 @@ def test_hidden_live_streams_stay_out_of_recommended_plus(
     assert "quietlive01" not in keys and "found000001" in keys
 
 
-def test_live_broadcasts_join_recommended_with_streams_on(
+def test_a_blocked_channels_live_broadcast_stays_out(
     app, client, session, add_video, set_watch, admin_user
 ):
     seen = add_video(title="Seen", channel="Loved")
@@ -1041,18 +1035,9 @@ def test_live_broadcasts_join_recommended_with_streams_on(
         "/api/discover/feedback",
         json={"kind": "channel", "key": blocked, "label": "Muted"},
     )
-
-    def live_items(**params):
-        body = client.get("/api/ai/recommendations", params=params).json()
-        return [
-            i for s in body["sections"] for i in s["items"] if i["reason"] == "live"
-        ]
-
-    [item] = live_items(include_streams=True)
-    assert item["stream"]["id"] == "lovedlive01"
-    assert item["stream"]["live_status"] == "is_live"
-    assert live_items() == []
-    assert live_items(include_streams=True, offset=24) == []
+    first = client.get("/api/discover/feed").json()
+    live = [i["key"] for i in first["items"] if i["reason"]["kind"] == "live"]
+    assert live == ["lovedlive01"]
 
 
 def test_live_picks_are_capped_and_match_streamed_watches(

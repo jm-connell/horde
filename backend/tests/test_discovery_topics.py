@@ -7,7 +7,7 @@ from datetime import UTC, datetime, timedelta
 
 from sqlmodel import select
 
-from tests.test_discovery import _catalog, _discovered, _history, _items, _vec
+from tests.test_discovery import _discovered, _history, _items, _vec
 from tests.test_discovery import ai_on as _ai_on
 from tests.test_discovery import youtube as _youtube
 
@@ -108,25 +108,6 @@ def test_a_word_block_leaves_videos_out_and_says_how_many(client, session, admin
     assert "keepme00001" in keys
     assert not {"blockme0001", "blockme0002"} & keys
     assert body["blocked"] == [{"topic_id": block["id"], "count": 2}]
-
-
-def test_word_blocks_apply_to_recommended_too(client, session, admin_user):
-    _catalog(
-        session,
-        "Mixed",
-        [
-            ("mixedup0001", "Crypto explained", 3, None),
-            ("mixedup0002", "Bread", 3, None),
-        ],
-    )
-    _add(client, kind="block", text="crypto")
-    body = client.get("/api/ai/recommendations", params={"include_streams": True})
-    titles = [
-        (i["stream"] or i["video"])["title"]
-        for s in body.json()["sections"]
-        for i in s["items"]
-    ]
-    assert "Bread" in titles and "Crypto explained" not in titles
 
 
 def test_an_interest_gets_its_own_picks_until_it_expires(client, session, admin_user):

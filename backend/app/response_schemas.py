@@ -156,33 +156,6 @@ class AiJobAction(BaseModel):
     id: int
 
 
-class RecommendationItemRead(BaseModel):
-    """A library video (``video``) or an upload that is not downloaded (``stream``)."""
-
-    video: VideoRead | None = None
-    stream: ChannelFeedEntry | None = None
-    #: ``throwback``: picked from a channel or topic the user watched months ago.
-    #: ``live``: a followed channel's broadcast, live now (not counted in ``offset``).
-    reason: Literal["throwback", "live"] | None = None
-
-
-class RecommendationSectionRead(BaseModel):
-    title: str
-    kind: str | None = None
-    seed_video_id: int | None = None
-    #: The library videos of the section.
-    videos: list[VideoRead]
-    #: The section in order, undownloaded uploads included (``include_streams``).
-    items: list[RecommendationItemRead] = []
-
-
-class RecommendationsRead(BaseModel):
-    categories: list[str]
-    sections: list[RecommendationSectionRead]
-    hint: str | None = None
-    has_more: bool = False
-
-
 class AiCategoriesRead(BaseModel):
     categories: list[str]
 

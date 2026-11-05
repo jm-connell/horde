@@ -1,4 +1,4 @@
-"""Followed channels' live broadcasts, for the Recommended and Recommended+ feeds.
+"""Followed channels' live broadcasts, for the Recommended feed.
 
 Read from the background live checks (``directory``). A broadcast from a channel
 the user watched lately leads the first page; the others join it a few cards in.
