@@ -338,8 +338,9 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   Beside the title sits the source, so the header reads "Ask Automatic",
   "Ask Horde" or "Ask Northwind": accent `text-sm` semibold text with a
   chevron, `rounded-md` with an `ink-800` hover ("<channel> or Horde" on a
-  channel's page; it truncates first, the tabs keep their width when the
-  panel has tabs). It opens a `MenuFlyout` dropping across the panel under
+  channel's page; it truncates first). When the panel has tabs it sits
+  right after the Ask tab, then an `ink-700` hairline and the other tab
+  ("Ask Horde ▾ | Algorithm"); the tabs keep their width. It opens a `MenuFlyout` dropping across the panel under
   the header (inside the panel rather than floating: the panel's
   translucency would need a portal, and a phone keyboard moves the panel):
   `menuitemradio` rows for Automatic and Horde, each with a one-line

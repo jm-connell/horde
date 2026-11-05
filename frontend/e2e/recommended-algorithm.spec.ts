@@ -142,6 +142,18 @@ test("why this video shows what the score is made of", async ({ page }) => {
 test("with the chat open too, the panel shows tabs instead of two panels", async ({
   page,
 }) => {
+  // An AI is set up, so Ask shows its source (the suite has no provider).
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
   await openRecommended(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
   await page.getByRole("button", { name: "Ask", exact: true }).click();
@@ -156,6 +168,11 @@ test("with the chat open too, the panel shows tabs instead of two panels", async
   await expect(
     page.getByRole("textbox", { name: "Your question" })
   ).toBeVisible();
+  // Ask's source reads with its tab ("Ask Automatic"), before Algorithm.
+  const source = page.getByRole("button", { name: /^Answering from/ });
+  const x = async (l: typeof ask) => (await l.boundingBox())!.x;
+  expect(await x(ask)).toBeLessThan(await x(source));
+  expect(await x(source)).toBeLessThan(await x(algorithm));
 
   await algorithm.click();
   await expect(algorithm).toHaveAttribute("aria-selected", "true");

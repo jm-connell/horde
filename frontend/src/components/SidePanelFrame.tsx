@@ -1,4 +1,5 @@
 import {
+  Fragment,
   type ReactNode,
   useContext,
   useEffect,
@@ -432,32 +433,40 @@ export default function SidePanelFrame({
       >
         <div className="flex min-w-0 items-center gap-1.5">
           {tabbed ? (
-            <div
-              role="tablist"
-              aria-label="Side panel"
-              className="-my-1 flex shrink-0 gap-1"
-            >
-              {tabs.map((t) => {
+            // `contents`, so the tabs are this row's items and the showing
+            // body's addon can sit right after its own tab ("Ask Horde ▾ |
+            // Algorithm") by `order`, without a non-tab inside the tablist.
+            <div role="tablist" aria-label="Side panel" className="contents">
+              {tabs.map((t, i) => {
                 const selected = t.id === active.id;
                 return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    role="tab"
-                    id={`${tabIdBase}-${t.id}`}
-                    aria-selected={selected}
-                    aria-controls={`${tabIdBase}-${t.id}-panel`}
-                    tabIndex={selected ? 0 : -1}
-                    onClick={() => onTabChange(t.id)}
-                    onKeyDown={onTabKey}
-                    className={`truncate rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
-                      selected
-                        ? "bg-ink-800 text-gray-100"
-                        : "text-muted hover:text-accent"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
+                  <Fragment key={t.id}>
+                    {i > 0 && (
+                      <span
+                        aria-hidden="true"
+                        style={{ order: 3 * i - 1 }}
+                        className="h-4 w-px shrink-0 bg-ink-700"
+                      />
+                    )}
+                    <button
+                      type="button"
+                      role="tab"
+                      id={`${tabIdBase}-${t.id}`}
+                      aria-selected={selected}
+                      aria-controls={`${tabIdBase}-${t.id}-panel`}
+                      tabIndex={selected ? 0 : -1}
+                      onClick={() => onTabChange(t.id)}
+                      onKeyDown={onTabKey}
+                      style={{ order: 3 * i }}
+                      className={`-my-1 shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                        selected
+                          ? "bg-ink-800 text-gray-100"
+                          : "text-muted hover:text-accent"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  </Fragment>
                 );
               })}
             </div>
@@ -471,7 +480,15 @@ export default function SidePanelFrame({
             </h2>
           )}
           {/* ... and a control beside it, such as Ask's source. */}
-          <span ref={setAddonEl} className="flex min-w-0" />
+          <span
+            ref={setAddonEl}
+            style={
+              tabbed
+                ? { order: 3 * tabs.findIndex((t) => t.id === active.id) + 1 }
+                : undefined
+            }
+            className="flex min-w-0"
+          />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <div ref={setActionsEl} className="flex items-center gap-1" />
