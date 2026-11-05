@@ -26,6 +26,9 @@ from ..schemas import (
     AuthUserRead,
     BootstrapRequest,
     ForgotPasswordRequest,
+    InviteAcceptRequest,
+    InviteCheckRequest,
+    InviteInfo,
     LoginRequest,
     MeUpdate,
     PasswordChange,
@@ -48,6 +51,7 @@ from ..services.auth import (
     alerts,
     avatars,
     device_cookie,
+    invites,
     login_tickets,
     passwords,
     reset_codes,
@@ -406,6 +410,57 @@ def _refuse_when_auth_disabled(runtime: AuthRuntime) -> None:
         raise CodedHTTPException(
             400, "Sign-in is disabled on this server", "auth_disabled"
         )
+
+
+# Invite tokens have 192 bits, so guessing is hopeless; the throttle only keeps a
+# client from hammering these public routes. Keyed per address, so one noisy
+# client cannot slow down everyone else's invites.
+def _invite_key(request: Request) -> str:
+    return f"invite:{_runtime(request).client_address(request)}"
+
+
+@router.post("/invite/check", response_model=InviteInfo)
+def check_invite(
+    payload: InviteCheckRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+) -> InviteInfo:
+    """Whether an invite link still works, and who it is for (the join page)."""
+    _refuse_when_auth_disabled(_runtime(request))
+    with _begin(request, _invite_key(request)) as attempt:
+        invite = invites.find_valid(session, payload.token)
+        if invite is None:
+            attempt.failure()
+            raise invites.InvalidInvite(
+                "This invite link is not valid. It may have been used or expired."
+            )
+        attempt.success()
+    return InviteInfo(label=invite.label, expires_at=as_utc(invite.expires_at))
+
+
+@router.post("/invite/accept", response_model=AuthLoginResult)
+def accept_invite(
+    payload: InviteAcceptRequest,
+    request: Request,
+    response: Response,
+    session: Session = Depends(get_session),
+) -> AuthLoginResult:
+    """Create a member account with an invite link, and sign it in."""
+    runtime = _runtime(request)
+    _refuse_when_auth_disabled(runtime)
+    with _begin(request, _invite_key(request)) as attempt:
+        if invites.find_valid(session, payload.token) is None:
+            attempt.failure()
+            raise invites.InvalidInvite(
+                "This invite link is not valid. It may have been used or expired."
+            )
+        attempt.success()
+        with runtime.hashing.slot():
+            user = invites.redeem(
+                session, payload.token, payload.username, payload.password
+            )
+    _open_session(session, request, response, runtime, user, announce=False)
+    return AuthLoginResult(user=user_read(flag_enrollment(runtime, AuthUser.of(user))))
 
 
 @router.post("/forgot", status_code=204)

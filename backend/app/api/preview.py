@@ -30,6 +30,7 @@ from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
+    ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
     classify_ytdlp_error,
@@ -373,6 +374,8 @@ def preview_extraction_error(exc: Exception, cleaned: str) -> StarletteHTTPExcep
     if kind == ERROR_KIND_UNKNOWN:
         logger.error("stream preview meta failed for %r", cleaned, exc_info=exc)
         return extraction_error(500, detail)
+    if kind == ERROR_KIND_NETWORK:
+        return extraction_error(502, detail)
     return extraction_error(400, detail)
 
 

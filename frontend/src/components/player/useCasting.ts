@@ -7,6 +7,8 @@ import type { SubtitleSource } from "../videoPlayerTypes";
 interface Options {
   videoRef: RefObject<HTMLVideoElement | null>;
   videoId?: number;
+  /** The video has an H.264 copy: a Chromecast gets that (most cannot play AV1). */
+  hasCompat?: boolean;
   src: string;
   mimeType: string;
   title?: string;
@@ -20,12 +22,27 @@ interface Options {
 }
 
 /**
+ * What a Chromecast is sent: the H.264 copy when the video has one, because
+ * most Chromecasts cannot decode AV1, else the original.
+ */
+export function chromecastSource(
+  videoId: number,
+  hasCompat: boolean,
+  mimeType: string
+): { path: string; mimeType: string } {
+  return hasCompat
+    ? { path: streamUrl(videoId, "compat"), mimeType: "video/mp4" }
+    : { path: streamUrl(videoId), mimeType };
+}
+
+/**
  * Chromecast and AirPlay: availability, the Cast button action, and keeping
  * the player's clock and play state in step with a Chromecast receiver.
  */
 export function useCasting({
   videoRef,
   videoId,
+  hasCompat = false,
   src,
   mimeType,
   title,
@@ -109,9 +126,10 @@ export function useCasting({
       // The receiver fetches these itself and sends no cookie: sign them.
       const { token } = await api.getMediaToken(videoId);
       const signed = (path: string) => absoluteUrl(withMediaToken(path, token));
+      const source = chromecastSource(videoId, hasCompat, mimeType);
       await castChromecastMedia({
-        contentUrl: signed(streamUrl(videoId)),
-        mimeType,
+        contentUrl: signed(source.path),
+        mimeType: source.mimeType,
         title: title ?? "Video",
         posterUrl: poster ? signed(poster) : null,
         currentTime: v.currentTime,
@@ -127,6 +145,7 @@ export function useCasting({
   }, [
     videoRef,
     videoId,
+    hasCompat,
     mimeType,
     title,
     poster,

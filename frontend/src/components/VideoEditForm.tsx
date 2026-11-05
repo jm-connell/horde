@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { api, thumbnailUrl } from "../api";
-import type { ChannelStat, Video } from "../types";
+import type { ChannelStat, ImportSuggestion, Video } from "../types";
 import { formatDuration, formatResolution, formatSize } from "../utils";
 import ChannelPicker from "./ChannelPicker";
 import { ChevronIcon } from "./icons";
@@ -32,6 +32,24 @@ function toDraft(v: Video): DraftState {
   };
 }
 
+/** The non-empty fields of a suggestion, as draft values. */
+function suggestionDraft(s: ImportSuggestion): Partial<DraftState> {
+  const out: Partial<DraftState> = {};
+  if (s.title) out.title = s.title;
+  if (s.channel) out.channel = s.channel;
+  if (s.channel_url) out.channel_url = s.channel_url;
+  if (s.description) out.description = s.description;
+  if (s.source_url) out.source_url = s.source_url;
+  if (s.published_at) out.published_at = s.published_at.slice(0, 10);
+  if (s.tags?.length) out.tags = s.tags.join(", ");
+  // Only an explicit lookup fills the thumbnail: saving fails when it cannot be
+  // fetched, and a server without internet should still approve offline files.
+  if (s.thumbnail_url && s.sources?.includes("youtube")) {
+    out.thumbnail_url = s.thumbnail_url;
+  }
+  return out;
+}
+
 interface ThumbCandidate {
   index: number;
   at_seconds: number;
@@ -46,6 +64,8 @@ interface Props {
   // Require title + channel before saving (used by the import flow).
   requireChannel?: boolean;
   focusField?: "notes";
+  /** Values to fill into the form (import suggestions, a YouTube lookup). */
+  prefill?: ImportSuggestion | null;
 }
 
 export default function VideoEditForm({
@@ -55,6 +75,7 @@ export default function VideoEditForm({
   saveLabel = "Save",
   requireChannel = false,
   focusField,
+  prefill,
 }: Props) {
   const fieldId = useId();
   const notesRef = useRef<HTMLTextAreaElement>(null);
@@ -122,6 +143,18 @@ export default function VideoEditForm({
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset the draft only when switching videos; a refreshed `video` object must not clobber in-progress edits
   }, [video.id]);
+
+  // After the reset above: fill in what Horde suggests, over the draft. Once
+  // per distinct suggestion: the list reloads after every approval, and a
+  // reloaded (equal) suggestion must not undo what the user typed since.
+  const appliedPrefill = useRef<string | null>(null);
+  useEffect(() => {
+    if (!prefill) return;
+    const key = `${video.id}:${JSON.stringify(prefill)}`;
+    if (appliedPrefill.current === key) return;
+    appliedPrefill.current = key;
+    setDraft((d) => ({ ...d, ...suggestionDraft(prefill) }));
+  }, [prefill, video.id]);
 
   const set = (key: keyof DraftState, value: string) =>
     setDraft((d) => ({ ...d, [key]: value }));

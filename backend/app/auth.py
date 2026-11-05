@@ -63,6 +63,8 @@ PUBLIC_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/api/auth/bootstrap"),
         ("POST", "/api/auth/forgot"),
         ("POST", "/api/auth/reset"),
+        ("POST", "/api/auth/invite/check"),
+        ("POST", "/api/auth/invite/accept"),
     }
 )
 #: All that an account which must set up two-step sign-in may do until it has:

@@ -1,5 +1,8 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import ChannelFeed from "../components/ChannelFeed";
+import GettingStarted from "../components/GettingStarted";
+import MemberWelcome from "../components/MemberWelcome";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
@@ -24,7 +27,10 @@ import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
-import type { ChannelSettingsSection } from "./library/channelSettings/channelSettingsText";
+import {
+  settingsSectionFromUrl,
+  type ChannelSettingsSection,
+} from "./library/channelSettings/channelSettingsText";
 import HomeControls from "./library/HomeControls";
 import LibraryGrid, { type LibraryGridOptions } from "./library/LibraryGrid";
 import LibraryHeader from "./library/LibraryHeader";
@@ -185,10 +191,23 @@ function OnlineLibrary() {
   );
   // The channel settings sheet: closed (undefined), open at the top (null) or
   // at one section. A different channel closes it.
+  // ?settings=<section> (from Subscriptions) opens it once, then leaves the URL.
   const [settingsSheet, setSettingsSheet] = useState<
     ChannelSettingsSection | null | undefined
-  >(undefined);
-  useEffect(() => setSettingsSheet(undefined), [activeChannel]);
+  >(() => settingsSectionFromUrl(window.location.search));
+  const [urlParams, setUrlParams] = useSearchParams();
+  useEffect(() => {
+    if (!urlParams.has("settings")) return;
+    const next = new URLSearchParams(urlParams);
+    next.delete("settings");
+    setUrlParams(next, { replace: true });
+  }, [urlParams, setUrlParams]);
+  const sheetChannel = useRef(activeChannel);
+  useEffect(() => {
+    if (sheetChannel.current === activeChannel) return;
+    sheetChannel.current = activeChannel;
+    setSettingsSheet(undefined);
+  }, [activeChannel]);
   const feed = useChannelFeedControls(activeChannel);
   const channelLive = useChannelLive(
     onChannelPage && isYoutubeChannelUrl(activeChannelUrl)
@@ -384,6 +403,7 @@ function OnlineLibrary() {
           />
         )}
 
+        {isHome && !debouncedSearch && <MemberWelcome />}
         <div
           key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"
@@ -413,13 +433,11 @@ function OnlineLibrary() {
             />
           ) : loading ? (
             <LoadingIndicator />
+          ) : !debouncedSearch && videos.length === 0 && !activeTag ? (
+            <GettingStarted />
           ) : !debouncedSearch && videos.length === 0 ? (
             <div className="py-20 text-center text-muted">
-              <p className="text-lg">No videos yet.</p>
-              <p className="mt-1 text-sm">
-                Paste a link on the Download page or drop files into your media
-                folder.
-              </p>
+              <p className="text-lg">No videos with this tag.</p>
             </div>
           ) : debouncedSearch ? (
             <SearchResults

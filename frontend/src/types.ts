@@ -12,6 +12,9 @@ export type Storyboard = S["StoryboardRead"];
 export type SubtitleTrack = S["SubtitleTrack"];
 export type SearchMatchReason = S["SearchMatchReason"];
 export type Video = S["VideoRead"];
+export type ReviewItem = S["ReviewItemRead"];
+export type ImportSuggestion = S["ImportSuggestion"];
+export type ApproveSuggestedResult = S["ApproveSuggestedResult"];
 export type CompatState = S["CompatState"];
 export type CompatSummary = S["CompatSummaryRead"];
 export type VideoUpdate = S["VideoUpdate"];
@@ -43,6 +46,8 @@ export type DownloadQueueStatus = S["DownloadQueueStatus"];
 export type TagStat = S["TagStat"];
 export type FollowedChannel = S["FollowedChannelRead"];
 export type FollowList = S["FollowListResponse"];
+export type Subscription = S["SubscriptionRead"];
+export type SubscriptionList = S["SubscriptionList"];
 export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
@@ -83,6 +88,7 @@ export type HelpCatalog = S["HelpCatalog"];
 export type HelpCatalogSetting = S["HelpCatalogSetting"];
 export type HelpCatalogPage = S["HelpCatalogPage"];
 export type HelpAssistantInfo = S["HelpAssistantInfo"];
+export type HelpSearchResult = S["HelpSearchResult"];
 export type OpenRouterCosts = S["AiCostsRead"];
 export type OpenRouterModel = S["AiModelRow"];
 /** `models` / `embedding_models` / `presets` are always sent (defaults in the schema). */
@@ -158,6 +164,11 @@ export type PlaylistEntry = S["PlaylistEntry"];
 export type PlaylistServerCopies = S["PlaylistServerCopies"];
 export type PlaylistPreviewEntry = S["PlaylistPreviewEntry"];
 export type PlaylistPreviewData = S["PlaylistPreview"];
+export type Invite = Omit<S["InviteRead"], "permissions"> & {
+  permissions: Permission[];
+};
+export type InviteCreated = { invite: Invite; token: string };
+export type InviteInfo = S["InviteInfo"];
 export type AuthUser = Omit<S["AuthUserRead"], "permissions"> & {
   permissions: Permission[];
 };

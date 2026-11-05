@@ -1,6 +1,22 @@
 import { expectNoSeriousViolations } from "./axe";
 import { expect, test, videoCard } from "./fixtures";
 
+// These specs are about the AI chat: the e2e server has no provider, so say
+// there is one (a spec can still answer /api/ai/help/info differently).
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
+});
+
 const sse = (events: object[]) =>
   events.map((e) => `data: ${JSON.stringify(e)}\n\n`).join("");
 
@@ -608,4 +624,46 @@ test("under reduced motion the chat docks without gliding", async ({
   await expect(panel).toHaveAttribute("data-docked", "true");
   expect(await panel.evaluate((el) => el.getAnimations().length)).toBe(0);
   await panel.getByRole("button", { name: "Float the chat" }).click();
+});
+
+test.describe("without AI", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.route(/\/api\/ai\/help\/info$/, (route) =>
+      route.fulfill({
+        json: {
+          model: null,
+          tier: "medium",
+          provider_label: "",
+          local: false,
+          available: false,
+        },
+      })
+    );
+  });
+
+  test("Ask about Horde answers with documentation pages", async ({ page }) => {
+    const chats: string[] = [];
+    page.on("request", (req) => {
+      if (/\/api\/ask\/chat$/.test(req.url())) chats.push(req.url());
+    });
+    await page.goto("/");
+    await page.getByRole("button", { name: "Ask about Horde" }).click();
+    const panel = page.getByRole("dialog", { name: "Ask about Horde" });
+    await expect(
+      panel.getByText("answers are searches of Horde’s documentation")
+    ).toBeVisible();
+
+    await panel
+      .getByRole("textbox", { name: "Your question" })
+      .fill("How do I update Horde?");
+    await panel.getByRole("button", { name: "Send" }).click();
+
+    await expect(
+      panel.getByText(/this is a search of Horde's documentation/)
+    ).toBeVisible();
+    await expect(
+      panel.getByRole("link", { name: /Updating/ }).first()
+    ).toBeVisible();
+    expect(chats).toEqual([]);
+  });
 });

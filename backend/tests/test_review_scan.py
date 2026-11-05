@@ -182,3 +182,13 @@ def test_stopping_the_poller_ends_the_thumbnail_grab_of_a_new_file(
     finally:
         release.set()
         worker.stop(timeout=15)
+
+
+def test_scan_ingests_phone_mov_and_m4v_files(client, init_db, monkeypatch):
+    _stub_ingest(monkeypatch)
+    _write_media(init_db["downloads"] / "imports" / "IMG_0001.MOV")
+    _write_media(init_db["downloads"] / "imports" / "clip.m4v")
+
+    assert client.post("/api/review/scan").json()["added"] == 2
+    paths = {row["file_path"] for row in client.get("/api/review").json()["items"]}
+    assert paths == {"imports/IMG_0001.MOV", "imports/clip.m4v"}

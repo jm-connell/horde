@@ -53,6 +53,11 @@ def _set_job(**kwargs: Any) -> None:
 
 
 def _extract_metadata(url: str) -> dict[str, Any]:
+    return extract_source_info(url, priority=EXTRACT_PRIORITY_BACKGROUND)
+
+
+def extract_source_info(url: str, *, priority: int) -> dict[str, Any]:
+    """Full yt-dlp metadata (description, tags, dates) for ``url``, no download."""
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -63,7 +68,7 @@ def _extract_metadata(url: str) -> dict[str, Any]:
         url,
         opts,
         cache_key=f"meta-sync:{url}",
-        priority=EXTRACT_PRIORITY_BACKGROUND,
+        priority=priority,
     )
     return info or {}
 

@@ -57,7 +57,7 @@ server {
     # with a short burst; the rest is answered 429 before Horde sees it. Not the
     # rest of /api/auth/ (GET /api/auth/state is fetched all the time, so a
     # household behind one address would be turned away).
-    location ~ ^/api/auth/(login|login/totp|forgot|reset|reauth)$ {
+    location ~ ^/api/auth/(login|login/totp|forgot|reset|invite/accept|reauth)$ {
         limit_req zone=horde_auth burst=10 nodelay;
         limit_req_status 429;
         proxy_pass http://127.0.0.1:8686;
@@ -89,7 +89,7 @@ server {
 
 ## Rate-limit sign-in at the proxy {#rate-limit}
 
-Horde throttles failed sign-ins itself (per address, per name and per day, see [Passwords and sessions](authentication.md#passwords-and-sessions)), but that throttle lives inside the application, after the proxy has accepted the connection and Horde has spent a thread on the request. Limiting the sign-in routes at the proxy turns most of a flood away before it reaches Horde. Limit only the `POST`s that take a password or a code, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/forgot`, `/api/auth/reset` and `/api/auth/reauth`, and not all of `/api/auth/`: `GET /api/auth/state` is fetched constantly, and a household behind one address would hit the limit. nginx: the `limit_req_zone` and the `location ~ ^/api/auth/...` in the [config above](#nginx).
+Horde throttles failed sign-ins itself (per address, per name and per day, see [Passwords and sessions](authentication.md#passwords-and-sessions)), but that throttle lives inside the application, after the proxy has accepted the connection and Horde has spent a thread on the request. Limiting the sign-in routes at the proxy turns most of a flood away before it reaches Horde. Limit only the `POST`s that take a password or a code, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/forgot`, `/api/auth/reset`, `/api/auth/invite/accept` and `/api/auth/reauth`, and not all of `/api/auth/`: `GET /api/auth/state` is fetched constantly, and a household behind one address would hit the limit. nginx: the `limit_req_zone` and the `location ~ ^/api/auth/...` in the [config above](#nginx).
 
 Caddy has no rate limiter in the standard build. Either add the third-party [`caddy-ratelimit`](https://github.com/mholt/caddy-ratelimit) module, which has to be **built into Caddy** (`xcaddy build --with github.com/mholt/caddy-ratelimit`; the stock binary and the distribution packages do not have it and stop with "unrecognized directive"), and limit the same paths. `rate_limit` is not one of Caddy's standard directives, so it either goes in a `route` block, as below, or needs `order rate_limit before basic_auth` in the global options block at the top of the Caddyfile:
 
@@ -101,7 +101,7 @@ horde.example.com {
                         zone auth {
                                 match {
                                         method POST
-                                        path /api/auth/login /api/auth/login/totp /api/auth/forgot /api/auth/reset /api/auth/reauth
+                                        path /api/auth/login /api/auth/login/totp /api/auth/forgot /api/auth/reset /api/auth/invite/accept /api/auth/reauth
                                 }
                                 key         {remote_host}
                                 ipv6_prefix 64

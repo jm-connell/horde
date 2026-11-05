@@ -18,6 +18,7 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import CreateAdminPage from "../pages/CreateAdmin";
 import EnrollTwoFactorPage from "../pages/EnrollTwoFactor";
 import LoginPage from "../pages/Login";
+import JoinPage from "../pages/Join";
 import { adoptSettingsOwner, clearLocalSettings } from "../hooks/useSettings";
 import { deviceAccounts } from "../offline/accounts";
 import { connectivity } from "../offline/connectivity";
@@ -311,12 +312,14 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
   if (!state.authenticated) {
     if (location.pathname === "/login") return <LoginPage />;
+    if (location.pathname === "/join") return <JoinPage onJoined={refresh} />;
     const here = `${location.pathname}${location.search}${location.hash}`;
     return <Navigate to={`/login?next=${encodeURIComponent(here)}`} replace />;
   }
   if (state.user?.two_factor_enrollment_required) {
     return <EnrollTwoFactorPage />;
   }
+  if (location.pathname === "/join") return <Navigate to="/" replace />;
   if (location.pathname === "/login") {
     return (
       <Navigate

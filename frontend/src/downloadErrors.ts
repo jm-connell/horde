@@ -8,6 +8,8 @@ export type DownloadErrorKind =
   | "rate_limit"
   | "unavailable"
   | "postprocess"
+  | "disk_full"
+  | "network"
   | "cancelled"
   | "unknown";
 
@@ -19,6 +21,8 @@ const LABELS: Record<string, string> = {
   rate_limit: "Rate limited",
   unavailable: "Unavailable",
   postprocess: "Post-process failed",
+  disk_full: "Disk full",
+  network: "Can’t reach site",
   cancelled: "Cancelled",
   unknown: "Failed",
 };
@@ -34,6 +38,10 @@ const HINTS: Record<string, string> = {
   unavailable: "The source may have removed or geo-blocked this video.",
   postprocess:
     "The file may still be salvageable — retry or check disk permissions.",
+  disk_full:
+    "Free up space or raise the library limit (Settings → System), then retry.",
+  network:
+    "The server has no route to the site. Check its internet connection, DNS, and any proxy or VPN.",
 };
 
 export function downloadErrorLabel(kind: string | null | undefined): string {

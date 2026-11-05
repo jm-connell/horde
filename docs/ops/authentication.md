@@ -78,6 +78,12 @@ For administrators, *Account settings* also lists every account under **Users**.
 
 The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 
+### Invite links {#invite-links}
+
+Instead of choosing someone's password, an administrator can send them a link. Under **Users**, **Invite links → Make an invite link** asks who it is for (optional, shown on the page they open) and which permissions they get, then shows the link once: `https://<your Horde>/join?token=…`. Copy it and send it however you like. The person opens it, picks a username and password, and is signed in as a **member** with those permissions; an invite can never make an administrator. Their first visit to Home shows a short welcome (what is shared, what is theirs, where to start), which **Got it** closes on every device.
+
+A link works **once** and expires after **7 days**. Unused links are listed with a **Revoke** button; a used or expired link says "This invite doesn't work". Only the SHA-256 of the link's 192-bit token is stored, like session tokens. Creating a link counts as a sensitive action ([confirm your password](#reauth) if you signed in more than 10 minutes ago). With `HORDE_AUTH_DISABLED` the join routes are refused, since a proxy decides who gets in. See [ADR 0027](../adr/0027-invite-links.md).
+
 ## Passwords and sessions
 
 - Passwords are stored as salted **scrypt** hashes (`n=2^15, r=8, p=1`), never in clear. Any non-empty password is accepted: no minimum length or composition rules. The password forms show a strength meter as advice only.
@@ -171,6 +177,8 @@ Everything under `/api` (and `/docs`, `/redoc`, `/openapi.json`) requires a sess
 | `POST /api/auth/bootstrap` | Create the first admin; `409` once any account exists |
 | `POST /api/auth/forgot` | Write a one-time reset code to the server log; always `204` |
 | `POST /api/auth/reset` | New password with that code; signs in (or continues to the second step) |
+| `POST /api/auth/invite/check` | Whether an [invite link](#invite-links) still works and who it is for |
+| `POST /api/auth/invite/accept` | Create a member account with an invite link; signs in |
 
 `POST /api/auth/reauth` needs a session (it is how a signed-in browser confirms its password, see [above](#reauth)).
 | the SPA files, `/wiki/*` | No data |

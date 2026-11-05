@@ -8,13 +8,20 @@ from sqlmodel import Session, col, select
 
 from ..auth import current_user, require_permission
 from ..config import VIDEO_EXTENSIONS
-from ..context import get_paths, get_session
-from ..models import Video
+from ..context import AppContext, get_ctx, get_paths, get_session
+from ..errors import CodedHTTPException, extraction_error
+from ..models import Video, require_id
 from ..response_schemas import VideoPage
-from ..schemas import VideoRead
+from ..schemas import (
+    ApproveSuggestedResult,
+    ImportSuggestion,
+    ReviewItemRead,
+    VideoRead,
+)
 from ..services import duplicate_groups as duplicate_groups_svc
-from ..services import library, uploads
+from ..services import import_suggest, library, media_sidecars, metadata_sync, uploads
 from ..services.auth.accounts import AuthUser
+from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.metadata import probe_is_playable
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.paths import find_video_by_path, safe_filename, unique_rel_path
@@ -23,6 +30,14 @@ from ..services.scanner import (
     mark_active,
     scan_for_new_files,
     unmark_active,
+)
+from ..services.url_clean import youtube_video_id
+from ..services.ytdlp_common import (
+    ERROR_KIND_NETWORK,
+    ERROR_KIND_UNKNOWN,
+    EXTRACT_PRIORITY_INTERACTIVE,
+    classify_ytdlp_error,
+    http_detail_for_error,
 )
 from .video_page import DEFAULT_LIMIT, MAX_LIMIT, build_page, page_request
 from .video_serialize import to_read as _to_read
@@ -43,20 +58,29 @@ class DuplicateGroupRead(BaseModel):
     ai_error: str | None = None
 
 
+class ReviewPage(BaseModel):
+    """One page of the import queue. Pass ``next_cursor`` back as ``cursor``."""
+
+    items: list[ReviewItemRead]
+    next_cursor: str | None = None
+    total: int | None = None
+
+
 class ScanResult(BaseModel):
     added: int
     requeued: int
 
 
-@router.get("", response_model=VideoPage)
+@router.get("", response_model=ReviewPage)
 def review_queue(
     limit: int = Query(DEFAULT_LIMIT, ge=1, le=MAX_LIMIT),
     cursor: str | None = None,
     include_total: bool = False,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
-):
-    """One page of videos waiting for review, newest first."""
+) -> ReviewPage:
+    """One page of videos waiting for review, newest first, each with what its
+    files on disk suggest (``.info.json``, ``.nfo``, folder and ``[id]``)."""
     sort, order = "added_at", "desc"
     page, _ = page_request(cursor, limit=limit, sort=sort, order=order, seed=None)
     videos = library.query_videos(
@@ -69,7 +93,7 @@ def review_queue(
         if include_total
         else None
     )
-    return build_page(
+    built: VideoPage = build_page(
         videos,
         page,
         sort=sort,
@@ -82,6 +106,129 @@ def review_queue(
         ),
         total=total,
     )
+    by_id = {v.id: v for v in videos}
+    return ReviewPage(
+        items=[
+            ReviewItemRead(
+                **item.model_dump(), suggestion=import_suggest.suggest(by_id[item.id])
+            )
+            for item in built.items
+        ],
+        next_cursor=built.next_cursor,
+        total=built.total,
+    )
+
+
+@router.post(
+    "/approve-suggested",
+    response_model=ApproveSuggestedResult,
+    dependencies=[Depends(require_permission("edit_metadata"))],
+)
+def approve_suggested(
+    session: Session = Depends(get_session),
+) -> ApproveSuggestedResult:
+    """Approve every review item whose title and channel are known, from the
+    video itself or its suggestion, in one pass. Files and thumbnails stay as
+    they are."""
+    rows = session.exec(
+        select(Video)
+        .where(Video.needs_review == True)  # noqa: E712 - SQL column comparison, not a Python truth test
+        .order_by(col(Video.id))
+    ).all()
+    approved: list[int] = []
+    for video in rows:
+        suggestion = import_suggest.suggest(video) or ImportSuggestion()
+        if import_suggest.approve_with(session, video, suggestion):
+            approved.append(require_id(video))
+    session.commit()
+    for video_id in approved:
+        _after_approval(session, video_id)
+    remaining = library.query_videos(
+        session, needs_review=True, sort="added_at", order="desc", count_only=True
+    )
+    return ApproveSuggestedResult(approved=len(approved), remaining=remaining)
+
+
+def _after_approval(session: Session, video_id: int) -> None:
+    """What a single approval does after the commit: tags, sidecars, AI."""
+    try:
+        from ..services.ai.embeddings import sync_tag_provenance
+
+        sync_tag_provenance(session, video_id)
+        session.commit()
+    except Exception:
+        logger.warning(
+            "could not record tag provenance for video %s", video_id, exc_info=True
+        )
+    media_sidecars.refresh(video_id)
+    try:
+        from ..services.ai import enqueue_for_video
+
+        enqueue_for_video(video_id, include_tags=True, force=False)
+    except Exception:
+        logger.warning("could not queue AI enrichment for %s", video_id, exc_info=True)
+
+
+@router.get(
+    "/{video_id}/youtube",
+    response_model=ImportSuggestion,
+    dependencies=[Depends(require_permission("edit_metadata")), Depends(ytdlp_slot)],
+)
+def lookup_on_youtube(
+    video_id: int,
+    youtube_id: str | None = Query(
+        None, pattern=r"^[A-Za-z0-9_-]{11}$", description="Overrides the file's id."
+    ),
+    session: Session = Depends(get_session),
+    gate: ExtractionGate = Depends(extraction_gate),
+    ctx: AppContext = Depends(get_ctx),
+) -> ImportSuggestion:
+    """Title, channel, date, description and tags of the YouTube video this file
+    is a copy of: the ``[id]`` in its name, its sidecars, or ``youtube_id``."""
+    video = session.get(Video, video_id)
+    if video is None:
+        raise CodedHTTPException(404, "Video not found", "not_found")
+    if youtube_id is None:
+        found = import_suggest.suggest(video)
+        youtube_id = video.youtube_id or (
+            youtube_video_id(found.source_url) if found and found.source_url else None
+        )
+    if not youtube_id:
+        raise CodedHTTPException(
+            409,
+            "No YouTube id is known for this file. Paste its YouTube link as the "
+            "source URL first.",
+            "no_youtube_id",
+        )
+    url = import_suggest.youtube_watch_url(youtube_id)
+    if ctx.e2e:
+        info: dict[str, Any] = {
+            "title": "E2E looked-up title",
+            "channel": "Northwind",
+            "upload_date": "20240514",
+            "webpage_url": url,
+        }
+    else:
+        try:
+            info = gate.run(
+                metadata_sync.extract_source_info,
+                url,
+                priority=EXTRACT_PRIORITY_INTERACTIVE,
+            )
+        except HTTPException:
+            raise  # 429 / 504 from the gate
+        except Exception as exc:
+            kind, _ = classify_ytdlp_error(exc, url=url)
+            detail = http_detail_for_error(exc, prefix="Could not look it up", url=url)
+            if kind == ERROR_KIND_UNKNOWN:
+                logger.exception("YouTube lookup failed for %s", url)
+            raise extraction_error(
+                502 if kind == ERROR_KIND_NETWORK else 400, detail
+            ) from exc
+    suggestion = import_suggest.from_source_info(info)
+    if suggestion is None:
+        raise CodedHTTPException(404, "YouTube had nothing for this id", "not_found")
+    return suggestion
 
 
 @router.post(

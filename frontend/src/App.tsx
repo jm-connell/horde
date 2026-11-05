@@ -19,6 +19,7 @@ import {
   OfflinePage,
   Playlists,
   Settings,
+  Subscriptions,
   Setup,
   Watch,
 } from "./pages/lazy";
@@ -120,6 +121,7 @@ function AppRoutes() {
               }
             />
             <Route path="/playlists" element={<Playlists />} />
+            <Route path="/subscriptions" element={<Subscriptions />} />
             <Route path="/playlists/:id" element={<PlaylistOpenRedirect />} />
             <Route
               path="/import"

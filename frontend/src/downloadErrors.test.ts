@@ -14,6 +14,9 @@ describe("downloadErrors", () => {
     expect(downloadErrorHint("cookies")).toMatch(/retries|signed-in|access/i);
     expect(downloadErrorLabel(null)).toBe("Failed");
     expect(downloadErrorHint("unknown")).toBeNull();
+    expect(downloadErrorLabel("network")).toBe("Can’t reach site");
+    expect(downloadErrorHint("network")).toMatch(/internet/);
+    expect(downloadErrorLabel("disk_full")).toBe("Disk full");
   });
 
   it("splits extract failure target from the message", () => {

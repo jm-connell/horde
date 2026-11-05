@@ -2,6 +2,7 @@ import type {
   AiConnectionTest,
   HelpAssistantInfo,
   HelpCatalog,
+  HelpSearchResult,
   AiJobRow,
   AiProcessResult,
   AiStatus,
@@ -179,6 +180,12 @@ export const aiApi = {
   /** What Ask about Horde runs on and where questions are sent. */
   getHelpInfo(opts?: ReadOptions): Promise<HelpAssistantInfo> {
     return request<HelpAssistantInfo>("/api/ai/help/info", opts);
+  },
+
+  /** Ask about Horde without AI: matching documentation and settings. */
+  searchHelp(q: string, page: string): Promise<HelpSearchResult> {
+    const qs = new URLSearchParams({ q, page });
+    return request<HelpSearchResult>(`/api/ai/help/search?${qs}`);
   },
 
   // --- AI for a streamed (not downloaded) video; all need `use_ai` ---

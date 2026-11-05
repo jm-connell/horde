@@ -53,6 +53,7 @@ nav:
   - Getting started:
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md
+      - Other platforms (Unraid, Synology, Portainer): getting-started/other-platforms.md
       - First run: getting-started/first-run.md
       - Updating: getting-started/updating.md
       - Local development: getting-started/local-dev.md
@@ -66,10 +67,12 @@ nav:
       - Video player: guides/player.md
       - Downloads: guides/downloads.md
       - Import & review: guides/import-review.md
+      - Moving an existing archive: guides/migrating.md
       - Playlists: guides/playlists.md
       - History & continue watching: guides/history.md
       - YouTube history (Takeout): guides/youtube-history.md
       - Offline & installed app: guides/offline.md
+      - Watch on your TV: guides/tv.md
       - Media servers: guides/media-servers.md
       - AI features: guides/ai-features.md
       - Ask (channel knowledge): guides/ask.md
@@ -136,6 +139,7 @@ nav:
       - 0024 Tunable Recommended+: adr/0024-tunable-recommended-plus.md
       - 0025 One history: adr/0025-one-history.md
       - 0026 One Recommended tab: adr/0026-one-recommended-tab.md
+      - 0027 Invite links: adr/0027-invite-links.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

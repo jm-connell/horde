@@ -1229,6 +1229,47 @@ class UserCreate(BaseModel):
     share_downloads: bool = True
 
 
+class InviteCreate(BaseModel):
+    """A one-time link for a new member to create their own account."""
+
+    #: Who it is for ("Mum"); shown on the join page.
+    label: str | None = Field(default=None, max_length=60)
+    #: Omitted = the default grants (see /api/users/permissions).
+    permissions: list[str] | None = None
+    days: int = Field(default=7, ge=1, le=30)
+
+
+class InviteRead(BaseModel):
+    id: int
+    label: str | None = None
+    permissions: list[str]
+    created_at: datetime
+    expires_at: datetime
+
+
+class InviteCreated(BaseModel):
+    invite: InviteRead
+    #: Shown only now: the link is ``<this server>/join?token=<token>``.
+    token: str
+
+
+class InviteCheckRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+
+
+class InviteInfo(BaseModel):
+    """What the join page shows about a valid invite."""
+
+    label: str | None = None
+    expires_at: datetime
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str = Field(min_length=1, max_length=200)
+    username: str = Field(max_length=200)
+    password: str = Field(max_length=2000)
+
+
 class UserUpdate(BaseModel):
     is_admin: bool | None = None
     disabled: bool | None = None
@@ -1432,6 +1473,20 @@ class NotificationTestResult(BaseModel):
 class HelpChatTurn(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(..., min_length=1, max_length=8000)
+
+
+class HelpSource(BaseModel):
+    path: str
+    title: str
+    url: str
+
+
+class HelpSearchResult(BaseModel):
+    """Ask about Horde without AI: the best documentation matches, as Markdown
+    with ``[[setting:id]]`` links, and the pages they came from."""
+
+    answer: str
+    sources: list[HelpSource] = []
 
 
 class HelpChatRequest(BaseModel):
@@ -1813,3 +1868,66 @@ class LiveCommentsRead(BaseModel):
     items: list[CommentRead] = []
     #: The next, larger ``limit``; null when there are no more comments to read.
     next_limit: int | None = None
+
+
+class ImportSuggestion(BaseModel):
+    """Fields Horde can fill in for a review item. Only blanks are suggested."""
+
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    description: str | None = None
+    published_at: datetime | None = None
+    source_url: str | None = None
+    tags: list[str] = []
+    thumbnail_url: str | None = None
+    # Where the suggestion came from: info_json, nfo, path or youtube.
+    sources: list[str] = []
+
+    def is_empty(self) -> bool:
+        return not any(
+            (
+                self.title,
+                self.channel,
+                self.channel_url,
+                self.description,
+                self.published_at,
+                self.source_url,
+                self.tags,
+                self.thumbnail_url,
+            )
+        )
+
+
+class ReviewItemRead(VideoRead):
+    """A video waiting in the import queue, with what its files suggest."""
+
+    suggestion: ImportSuggestion | None = None
+
+
+class ApproveSuggestedResult(BaseModel):
+    approved: int = Field(description="Review items moved into the library.")
+    remaining: int = Field(description="Review items still waiting.")
+
+
+class SubscriptionRead(BaseModel):
+    """A channel the user keeps up with, and how."""
+
+    channel_url: str
+    channel_name: str | None = None
+    #: The signed-in user follows it (live list, new uploads in Recommended+).
+    following: bool = False
+    #: New uploads download by themselves (server-wide).
+    autodownload: bool = False
+    quality_preset: str | None = None
+    #: The enabled cleanup rule, if any (server-wide).
+    retention: ChannelRetentionSummary | None = None
+    #: Videos of the channel in the library.
+    video_count: int = 0
+    #: When Horde last finished reading the channel's uploads.
+    checked_at: datetime | None = None
+
+
+class SubscriptionList(BaseModel):
+    items: list[SubscriptionRead] = []
+    next_cursor: str | None = None

@@ -2,7 +2,7 @@
 
 ## How do I install Horde?
 
-Clone [the git repo](https://github.com/jm-connell/horde) onto the Docker host, copy `.env.example` to `.env`, set `PUID` / `PGID` / `DOWNLOADS_PATH` / `DATA_PATH`, then `docker compose up --build -d`. On TrueNAS, clone into Dockge’s stacks directory and **Scan Stacks Folder** — do not paste compose into **Add Stack** alone. Walkthroughs: [Install with Docker](../getting-started/install-docker.md), [TrueNAS / Dockge](../getting-started/truenas-dockge.md). Later: `bash update.sh` on the host ([Updating](../getting-started/updating.md)).
+Clone [the git repo](https://github.com/jm-connell/horde) onto the Docker host, copy `.env.example` to `.env`, set `PUID` / `PGID` / `DOWNLOADS_PATH` / `DATA_PATH`, then `docker compose up -d` (it downloads the published image). Unraid, Synology, Portainer or plain `docker run`: [Other platforms](../getting-started/other-platforms.md). On TrueNAS, clone into Dockge’s stacks directory and **Scan Stacks Folder** — do not paste compose into **Add Stack** alone. Walkthroughs: [Install with Docker](../getting-started/install-docker.md), [TrueNAS / Dockge](../getting-started/truenas-dockge.md). Later: `bash update.sh` on the host ([Updating](../getting-started/updating.md)).
 
 ## Is there authentication?
 
@@ -30,7 +30,7 @@ Back up the **data** volume (SQLite DB, thumbnails, app settings) and the **down
 
 ## How do I update?
 
-Pull the latest git revision with **`bash update.sh`** on the host (not Dockge Bash) and **rebuild** the image. Horde is typically built from source on the host, not pulled as a fixed registry tag. Settings, the SQLite library, and media stay on `DATA_PATH` / `DOWNLOADS_PATH` in `.env` — do not hardcode those only in `docker-compose.yml`. Settings → System can notice a newer GitHub commit. See [Updating](../getting-started/updating.md).
+Run **`bash update.sh`** on the host (not Dockge Bash), or use **Update now** in Settings → System. It moves to the newest release and pulls the published image (or rebuilds it, on an install that builds from source). Settings, the SQLite library, and media stay on `DATA_PATH` / `DOWNLOADS_PATH` in `.env` — do not hardcode those only in `docker-compose.yml`. Settings → System can notice a newer GitHub commit. See [Updating](../getting-started/updating.md).
 
 ## Where is the wiki in development?
 

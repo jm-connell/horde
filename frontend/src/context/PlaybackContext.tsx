@@ -1002,6 +1002,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         key="library"
         src={streamSrc}
         videoId={current.id}
+        hasCompat={Boolean(current.has_compat)}
         mimeType={
           libraryRendition.rendition === "compat"
             ? "video/mp4"

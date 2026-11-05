@@ -75,7 +75,14 @@ export async function ensureNavVisible(page: Page) {
 
 export async function openNav(
   page: Page,
-  label: "Home" | "Playlists" | "History" | "Download" | "Import" | "Settings"
+  label:
+    | "Home"
+    | "Playlists"
+    | "Subscriptions"
+    | "History"
+    | "Download"
+    | "Import"
+    | "Settings"
 ) {
   await ensureNavVisible(page);
   const name = label === "Home" ? "Home" : new RegExp(`^${label}\\b`);

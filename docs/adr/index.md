@@ -32,6 +32,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0024](0024-tunable-recommended-plus.md) | Recommended+ is tuned per user, with every value on show | Accepted |
 | [0025](0025-one-history.md) | History shows every watch, and each can be removed or kept out of recommendations | Accepted |
 | [0026](0026-one-recommended-tab.md) | One Recommended tab: the Recommended+ feed, the old "For you" ranker removed | Accepted |
+| [0027](0027-invite-links.md) | Invite links let new members choose their own password | Accepted |
 
 ## Writing a new record
 

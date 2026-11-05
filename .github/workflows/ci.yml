@@ -138,9 +138,16 @@ jobs:
       - name: Build frontend
         working-directory: frontend
         run: npm run build
+      # Both take under a minute; a slow apt mirror can stall them for hours,
+      # so fail fast and re-run instead.
       - name: Install Playwright
         working-directory: frontend
+        timeout-minutes: 5
         run: npx playwright install --with-deps chromium
+      # The import specs scan real files, and the scanner probes them with ffprobe.
+      - name: Install ffmpeg
+        timeout-minutes: 5
+        run: sudo apt-get install -y --no-install-recommends ffmpeg
       - name: Run Playwright
         working-directory: frontend
         env:

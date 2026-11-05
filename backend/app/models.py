@@ -646,6 +646,33 @@ class UserRecoveryCode(SQLModel, table=True):
     created_at: datetime = Field(default_factory=utcnow)
 
 
+class UserInvite(SQLModel, table=True):
+    """A one-time link that lets someone create their own member account.
+
+    Only the SHA-256 of the link's token is stored. Used once (``used_at``),
+    then kept as a record of who joined through whom.
+    """
+
+    __tablename__ = "user_invites"
+    __table_args__ = _AUTOINCREMENT
+
+    id: int | None = Field(default=None, primary_key=True)
+    token_hash: str = Field(unique=True, index=True)
+    #: Who it is for, as the administrator typed it ("Mum"); shown on the join page.
+    label: str | None = None
+    #: JSON list of the permissions the new account gets.
+    permissions: str = Field(default="[]")
+    created_by: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+    created_at: datetime = Field(default_factory=utcnow)
+    expires_at: datetime
+    used_at: datetime | None = None
+    used_by: int | None = Field(
+        default=None, foreign_key="users.id", ondelete="SET NULL"
+    )
+
+
 class UserSession(SQLModel, table=True):
     """A signed-in browser. Only the SHA-256 of the cookie token is stored."""
 

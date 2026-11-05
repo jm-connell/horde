@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { useHelpChat } from "../context/HelpChatContext";
+import type { HealthStats } from "../types";
 import { HELP_PANEL_ID } from "./helpChat";
 
-const REPO_URL = "https://github.com/jm-connell/horde";
+import { bugReportUrl, REPO_URL } from "./bugReport";
 
 const LINK =
   "rounded-sm text-muted underline-offset-2 hover:text-accent hover:underline";
@@ -9,6 +11,16 @@ const LINK =
 /** The quiet strip under every page: help, docs and where to report bugs. */
 export default function AppFooter() {
   const help = useHelpChat();
+  // Read once per visit, for the bug report link only.
+  const version = useQuery({
+    queryKey: ["health", "version"],
+    queryFn: async ({ signal }) => {
+      const res = await fetch("/api/health", { signal });
+      return ((await res.json()) as Partial<HealthStats>).horde_version ?? null;
+    },
+    staleTime: Infinity,
+    retry: false,
+  }).data;
   return (
     // No z-index: above the background (earlier, z-0) but below <main>'s
     // layer, which holds fixed bars such as the library's bulk actions.
@@ -31,7 +43,7 @@ export default function AppFooter() {
         Docs
       </a>
       <a
-        href={`${REPO_URL}/issues/new`}
+        href={bugReportUrl(version)}
         target="_blank"
         rel="noreferrer"
         className={LINK}

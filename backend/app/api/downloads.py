@@ -58,6 +58,7 @@ from ..services.url_clean import (
 from ..services.url_safety import UnsafeUrlError, validate_public_url
 from ..services.workers import shutdown_requested
 from ..services.ytdlp_common import (
+    ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
     MembersOnlyError,
     classify_ytdlp_error,
@@ -80,6 +81,9 @@ _CONTENT_TYPES = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mkv": "video/x-matroska",
+    # Served as MP4: Chrome will not play a "video/quicktime" response.
+    ".m4v": "video/mp4",
+    ".mov": "video/mp4",
     ".m4a": "audio/mp4",
     ".mp3": "audio/mpeg",
     ".opus": "audio/opus",
@@ -249,6 +253,8 @@ def preview_download(
         if kind == ERROR_KIND_UNKNOWN:
             logger.exception("download preview extract failed for %r", url)
             raise extraction_error(500, detail) from exc
+        if kind == ERROR_KIND_NETWORK:
+            raise extraction_error(502, detail) from exc
         raise extraction_error(400, detail) from exc
 
 

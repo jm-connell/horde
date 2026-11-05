@@ -218,7 +218,10 @@ export default function HelpChatPanel({
     queryFn: ({ signal }) => api.getHelpInfo({ signal }),
     // Read again on each opening: the provider (local or cloud) may change.
     staleTime: 0,
+    enabled: can("use_ai"),
   }).data;
+  // No provider (or no AI permission): answers are searches of the docs.
+  const noAi = info?.available === false || !can("use_ai");
   // Settings → Library; the server holds the data back from a cloud AI when
   // only "local" was allowed.
   const consent = settings.helpChatData;
@@ -289,6 +292,10 @@ export default function HelpChatPanel({
           }),
         },
       ]);
+      return;
+    }
+    if (noAi) {
+      await searchDocs(text);
       return;
     }
     setSending(true);
@@ -375,6 +382,33 @@ export default function HelpChatPanel({
       dropEmptyReply();
     } finally {
       if (abortRef.current === ac) abortRef.current = null;
+      setSending(false);
+      inputRef.current?.focus();
+    }
+  }
+
+  /** Without AI: the documentation pages and settings that match. */
+  async function searchDocs(text: string) {
+    const stamp = Date.now();
+    setSending(true);
+    setMessages((prev) => [
+      ...prev,
+      { id: `user-${stamp}`, role: "user", content: text },
+    ]);
+    try {
+      const found = await api.searchHelp(text, currentPage());
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `reply-${stamp}`,
+          role: "assistant",
+          content: found.answer,
+          sources: parseSources(found.sources),
+        },
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
       setSending(false);
       inputRef.current?.focus();
     }
@@ -728,6 +762,15 @@ export default function HelpChatPanel({
             <CloseIcon />
           </button>
         </div>
+      )}
+      {noAi && (
+        <p
+          className="border-t border-ink-700 px-3 pt-2 text-xs text-muted"
+          data-horde="help-no-ai"
+        >
+          AI is not set up, so answers are searches of Horde&rsquo;s
+          documentation.
+        </p>
       )}
       <form
         className="flex items-end gap-2 border-t border-ink-700 px-3 py-2.5"

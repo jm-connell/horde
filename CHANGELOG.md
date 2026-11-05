@@ -7,6 +7,52 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Subscriptions.** A page in the top bar lists the channels you follow
+  and every channel that downloads or cleans up by itself, with Follow and
+  Auto-download toggles and a link to each channel's settings. Add a
+  channel by link or `@handle`, optionally downloading its new uploads.
+- **Bring in an existing archive.** Files dropped into the media folder are
+  filled in from a yt-dlp `.info.json`, a Kodi/Jellyfin `.nfo`, or a
+  `Channel/Year/Title [id]` path (and Tube Archivist's names). **Approve N
+  ready** takes every file with a known title and channel at once, without
+  moving it; **Fetch details from YouTube** fills one from its id. A new
+  guide covers moving from yt-dlp, Tube Archivist, Pinchflat and others.
+  `.m4v` and `.mov` files import too.
+- **Invite links.** Administrators can send a one-time link instead of a
+  password: the person picks their own username and password and joins
+  as a member. Members get a short welcome on their first visit.
+- **Get started** on an empty library: download, subscribe, import, Takeout,
+  household, phone and AI, each a link away.
+- The setup wizard asks which devices people watch on and picks the
+  playback mode from that, and remembers its step across a reload.
+- **Ask about Horde without AI** answers with the matching documentation
+  pages and settings instead of an error.
+- Issue forms, a security policy, and a footer bug link with your version
+  filled in. New docs: other platforms (Portainer, Synology, Unraid,
+  `docker run`) and Watch on your TV.
+
+### Changed
+
+- New installs pull the published image (`HORDE_IMAGE` in `.env.example`)
+  instead of building on the host. Existing installs keep building until
+  they set it.
+- `DOWNLOADS_PATH` and `DATA_PATH` have no fallback in the compose file any
+  more: Compose stops with a message naming the missing one, instead of
+  creating root-owned folders. `update.sh` writes the running container's
+  paths into `.env` before it updates, so updated installs are unaffected.
+- A download that cannot reach the site says so ("Can't reach site") instead
+  of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
+  "please report this issue" footer no longer appears in errors.
+
+### Fixed
+
+- A failed download's error toast came back on every page load for ten
+  minutes after the failure.
+- Casting to a Chromecast sent the original file even when an H.264 copy
+  existed, so AV1 videos failed on most Chromecasts.
+
 ## [1.2.2] - 2026-11-03
 
 ### Added

@@ -2165,6 +2165,26 @@
         "title": "AppSettingsUpdate",
         "type": "object"
       },
+      "ApproveSuggestedResult": {
+        "properties": {
+          "approved": {
+            "description": "Review items moved into the library.",
+            "title": "Approved",
+            "type": "integer"
+          },
+          "remaining": {
+            "description": "Review items still waiting.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approved",
+          "remaining"
+        ],
+        "title": "ApproveSuggestedResult",
+        "type": "object"
+      },
       "AskChannelCreate": {
         "properties": {
           "include_streams": {
@@ -7099,6 +7119,51 @@
         "title": "HelpChatTurn",
         "type": "object"
       },
+      "HelpSearchResult": {
+        "description": "Ask about Horde without AI: the best documentation matches, as Markdown\nwith ``[[setting:id]]`` links, and the pages they came from.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/HelpSource"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "answer"
+        ],
+        "title": "HelpSearchResult",
+        "type": "object"
+      },
+      "HelpSource": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "title",
+          "url"
+        ],
+        "title": "HelpSource",
+        "type": "object"
+      },
       "HistoryKeysWrite": {
         "description": "History entries by key (a YouTube id, or ``video:<id>``).",
         "properties": {
@@ -7580,6 +7645,276 @@
           "sources"
         ],
         "title": "HistoryWatchRead",
+        "type": "object"
+      },
+      "ImportSuggestion": {
+        "description": "Fields Horde can fill in for a review item. Only blanks are suggested.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ImportSuggestion",
+        "type": "object"
+      },
+      "InviteAcceptRequest": {
+        "properties": {
+          "password": {
+            "maxLength": 2000,
+            "title": "Password",
+            "type": "string"
+          },
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 200,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "username",
+          "password"
+        ],
+        "title": "InviteAcceptRequest",
+        "type": "object"
+      },
+      "InviteCheckRequest": {
+        "properties": {
+          "token": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token"
+        ],
+        "title": "InviteCheckRequest",
+        "type": "object"
+      },
+      "InviteCreate": {
+        "description": "A one-time link for a new member to create their own account.",
+        "properties": {
+          "days": {
+            "default": 7,
+            "maximum": 30.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "permissions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Permissions"
+          }
+        },
+        "title": "InviteCreate",
+        "type": "object"
+      },
+      "InviteCreated": {
+        "properties": {
+          "invite": {
+            "$ref": "#/components/schemas/InviteRead"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "invite",
+          "token"
+        ],
+        "title": "InviteCreated",
+        "type": "object"
+      },
+      "InviteInfo": {
+        "description": "What the join page shows about a valid invite.",
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "expires_at"
+        ],
+        "title": "InviteInfo",
+        "type": "object"
+      },
+      "InviteRead": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "permissions",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "InviteRead",
         "type": "object"
       },
       "JobStatus": {
@@ -10270,6 +10605,576 @@
         "title": "RetentionPreviewItem",
         "type": "object"
       },
+      "ReviewItemRead": {
+        "description": "A video waiting in the import queue, with what its files suggest.",
+        "properties": {
+          "acodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acodec"
+          },
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "ai_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary"
+          },
+          "ai_summary_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Cost"
+          },
+          "ai_summary_length": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Length"
+          },
+          "ai_summary_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Model"
+          },
+          "ai_tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Ai Tags",
+            "type": "array"
+          },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_subscriber_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Subscriber Count"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "chapters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChapterRead"
+            },
+            "title": "Chapters",
+            "type": "array"
+          },
+          "chapters_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "description",
+                  "source",
+                  "ai"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters Source"
+          },
+          "codec_string": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec String"
+          },
+          "compat": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompatState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compat_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compat Size"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "description_is_custom": {
+            "default": false,
+            "title": "Description Is Custom",
+            "type": "boolean"
+          },
+          "duration_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Sec"
+          },
+          "embed_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Error"
+          },
+          "embed_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Status"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size"
+          },
+          "frame_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Rate"
+          },
+          "has_compat": {
+            "default": false,
+            "title": "Has Compat",
+            "type": "boolean"
+          },
+          "has_sprites": {
+            "default": false,
+            "title": "Has Sprites",
+            "type": "boolean"
+          },
+          "has_thumbnail": {
+            "title": "Has Thumbnail",
+            "type": "boolean"
+          },
+          "height_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Px"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_hdr": {
+            "default": false,
+            "title": "Is Hdr",
+            "type": "boolean"
+          },
+          "last_position_sec": {
+            "title": "Last Position Sec",
+            "type": "number"
+          },
+          "last_watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watched At"
+          },
+          "match_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Synced At"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "processing_chapters": {
+            "default": false,
+            "title": "Processing Chapters",
+            "type": "boolean"
+          },
+          "processing_sprites": {
+            "default": false,
+            "title": "Processing Sprites",
+            "type": "boolean"
+          },
+          "processing_summary": {
+            "default": false,
+            "title": "Processing Summary",
+            "type": "boolean"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Description"
+          },
+          "source_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Title"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VideoStatus"
+          },
+          "subtitles": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleTrack"
+            },
+            "title": "Subtitles",
+            "type": "array"
+          },
+          "subtitles_pending": {
+            "default": false,
+            "title": "Subtitles Pending",
+            "type": "boolean"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "tags_enriched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags Enriched At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_is_custom": {
+            "title": "Title Is Custom",
+            "type": "boolean"
+          },
+          "user_tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "User Tags",
+            "type": "array"
+          },
+          "vcodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vcodec"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count"
+          },
+          "width_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Px"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "channel",
+          "channel_url",
+          "tags",
+          "description",
+          "notes",
+          "source_url",
+          "has_thumbnail",
+          "subtitles",
+          "file_path",
+          "duration_sec",
+          "file_size",
+          "width_px",
+          "height_px",
+          "frame_rate",
+          "view_count",
+          "channel_subscriber_count",
+          "published_at",
+          "added_at",
+          "last_position_sec",
+          "last_watched_at",
+          "needs_review",
+          "platform",
+          "status",
+          "metadata_synced_at",
+          "source_title",
+          "title_is_custom"
+        ],
+        "title": "ReviewItemRead",
+        "type": "object"
+      },
+      "ReviewPage": {
+        "description": "One page of the import queue. Pass ``next_cursor`` back as ``cursor``.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReviewPage",
+        "type": "object"
+      },
       "RewatchedPage": {
         "properties": {
           "items": {
@@ -11225,6 +12130,104 @@
           "throwback"
         ],
         "title": "Strictness",
+        "type": "object"
+      },
+      "SubscriptionList": {
+        "properties": {
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/SubscriptionRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "title": "SubscriptionList",
+        "type": "object"
+      },
+      "SubscriptionRead": {
+        "description": "A channel the user keeps up with, and how.",
+        "properties": {
+          "autodownload": {
+            "default": false,
+            "title": "Autodownload",
+            "type": "boolean"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "checked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Checked At"
+          },
+          "following": {
+            "default": false,
+            "title": "Following",
+            "type": "boolean"
+          },
+          "quality_preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quality Preset"
+          },
+          "retention": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelRetentionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_count": {
+            "default": 0,
+            "title": "Video Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscriptionRead",
         "type": "object"
       },
       "SubtitleTrack": {
@@ -14300,6 +15303,78 @@
         ]
       }
     },
+    "/api/ai/help/search": {
+      "get": {
+        "description": "Ask about Horde when no AI is set up: the documentation pages and\nsettings that best match ``q``. Works for anyone signed in.",
+        "operationId": "get_help_search_api_ai_help_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": true,
+            "schema": {
+              "maxLength": 4000,
+              "minLength": 1,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 500,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Page"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HelpSearchResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Get Help Search",
+        "tags": [
+          "ai"
+        ]
+      }
+    },
     "/api/ai/jobs": {
       "get": {
         "operationId": "ai_list_jobs_api_ai_jobs_get",
@@ -15968,6 +17043,110 @@
           }
         },
         "summary": "Forgot Password",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/invite/accept": {
+      "post": {
+        "description": "Create a member account with an invite link, and sign it in.",
+        "operationId": "accept_invite_api_auth_invite_accept_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteAcceptRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthLoginResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Accept Invite",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/invite/check": {
+      "post": {
+        "description": "Whether an invite link still works, and who it is for (the join page).",
+        "operationId": "check_invite_api_auth_invite_check_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Check Invite",
         "tags": [
           "auth"
         ]
@@ -17655,6 +18834,48 @@
           }
         },
         "summary": "Search Channels",
+        "tags": [
+          "channels"
+        ]
+      }
+    },
+    "/api/channels/subscriptions": {
+      "get": {
+        "description": "Followed channels and every channel with automatic downloads or a cleanup\nrule, in one list (one page; ``next_cursor`` is always null).",
+        "operationId": "list_subscriptions_api_channels_subscriptions_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscriptionList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Subscriptions",
         "tags": [
           "channels"
         ]
@@ -23315,7 +24536,7 @@
     },
     "/api/review": {
       "get": {
-        "description": "One page of videos waiting for review, newest first.",
+        "description": "One page of videos waiting for review, newest first, each with what its\nfiles on disk suggest (``.info.json``, ``.nfo``, folder and ``[id]``).",
         "operationId": "review_queue_api_review_get",
         "parameters": [
           {
@@ -23362,7 +24583,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VideoPage"
+                  "$ref": "#/components/schemas/ReviewPage"
                 }
               }
             },
@@ -23390,6 +24611,48 @@
           }
         },
         "summary": "Review Queue",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/api/review/approve-suggested": {
+      "post": {
+        "description": "Approve every review item whose title and channel are known, from the\nvideo itself or its suggestion, in one pass. Files and thumbnails stay as\nthey are.",
+        "operationId": "approve_suggested_api_review_approve_suggested_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApproveSuggestedResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve Suggested",
         "tags": [
           "review"
         ]
@@ -23609,6 +24872,78 @@
           }
         },
         "summary": "Skip Review",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/api/review/{video_id}/youtube": {
+      "get": {
+        "description": "Title, channel, date, description and tags of the YouTube video this file\nis a copy of: the ``[id]`` in its name, its sidecars, or ``youtube_id``.",
+        "operationId": "lookup_on_youtube_api_review__video_id__youtube_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Overrides the file's id.",
+            "in": "query",
+            "name": "youtube_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{11}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides the file's id.",
+              "title": "Youtube Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Lookup On Youtube",
         "tags": [
           "review"
         ]
@@ -25110,6 +26445,147 @@
           }
         },
         "summary": "Create User",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/invites": {
+      "get": {
+        "description": "Invite links not used yet and not expired, newest first.",
+        "operationId": "list_invites_api_users_invites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InviteRead"
+                  },
+                  "title": "Response List Invites Api Users Invites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "List Invites",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "A one-time link (for members only) that lets someone pick their own\nusername and password. The token is in this answer and nowhere else.",
+        "operationId": "create_invite_api_users_invites_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Create Invite",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/users/invites/{invite_id}": {
+      "delete": {
+        "operationId": "revoke_invite_api_users_invites__invite_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "invite_id",
+            "required": true,
+            "schema": {
+              "title": "Invite Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Revoke Invite",
         "tags": [
           "users"
         ]

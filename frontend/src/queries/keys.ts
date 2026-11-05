@@ -79,6 +79,8 @@ export const queryKeys = {
   },
   follows: {
     list: ["follows", "list"] as const,
+    // Under "follows" so following or unfollowing refreshes it too.
+    subscriptions: ["follows", "subscriptions"] as const,
   },
   live: {
     now: ["live", "now"] as const,

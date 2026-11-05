@@ -25,6 +25,7 @@
 | `unavailable` | Removed, geo, no formats |
 | `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
 | `disk_full` | The disk ran out of space while writing. The queue holds for a while instead of failing every following job; free space, then retry. See [Disk limits](../guides/downloads.md#disk-limits) |
+| `network` | The server could not reach the site at all: no internet, DNS, a proxy or firewall, a VPN that blocks the container. The link preview answers `502`. |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
 
@@ -40,7 +41,7 @@ A cancel that crashes before the DB write can requeue once — rare and acceptab
 
 ## Files not appearing in the library
 
-1. Confirm the file is under `DOWNLOADS_DIR` with a supported extension (`.mp4`, `.mkv`, `.webm`).
+1. Confirm the file is under `DOWNLOADS_DIR` with a supported extension (`.mp4`, `.mkv`, `.webm`, `.m4v`, `.mov`).
 2. Intermediate names (`.part`, `.fNNN.`, `.norm.`, `.compat.`) are ignored until the final merge exists.
 3. Wait for the watchdog or the poll interval (`SCAN_INTERVAL_SEC`, default 60s).
 4. Imports may sit in **needs review** — open [Import](../guides/import-review.md).

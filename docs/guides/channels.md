@@ -28,6 +28,17 @@ Type in the sidebar search:
 
 Pick a remote result to open that channel’s page and start catalog work / downloads.
 
+## Subscriptions
+
+**Subscriptions** in the top bar lists, one row per channel:
+
+- the channels **you** follow (live list, new uploads in Recommended+; following is per account), and
+- every channel with **automatic downloads** or a **cleanup rule** (those are server-wide, so everyone sees them).
+
+Each row shows how many of its videos are in the library and when Horde last read its uploads, with buttons to **Follow** / **Following**, to turn **Auto-download** on or off (keeping the quality and older-videos choices already saved for it; needs the `download` permission) and **Settings**, which opens the channel page with its settings sheet. A cleanup rule shows as a chip (for example **Keeps latest 20**) that opens that section.
+
+**Add a YouTube channel** at the top takes a channel link or an `@handle`. It follows the channel, and with **Also download its new uploads automatically** it turns on automatic downloads too (new uploads only, at 1080p; change that in the channel's settings). The channel does not need any videos in the library yet.
+
 ## Channel pages
 
 Open a channel from the sidebar to see its **feed**:
@@ -118,7 +129,7 @@ Anyone may see a channel's rule; saving one needs the `delete_videos` permission
 
 ## Following and live streams
 
-Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** in the channel's header (or **Channel settings → Live & following**), or add its URL or `@handle` under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
+Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** in the channel's header (or **Channel settings → Live & following**), or add its URL or `@handle` on the [Subscriptions](#subscriptions) page or under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
 
 A YouTube channel's page has two tabs. **Videos** lists its uploads. **Live** lists its live streams, newest first: past broadcasts are ordinary videos you can watch or download, and the **Filter streams** box filters the loaded list by title. When the channel is live right now, its broadcast is the first card on either tab, with a red **LIVE** badge and **Live now** in place of the download button.
 

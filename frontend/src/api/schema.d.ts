@@ -141,6 +141,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ai/help/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Help Search
+         * @description Ask about Horde when no AI is set up: the documentation pages and
+         *     settings that best match ``q``. Works for anyone signed in.
+         */
+        get: operations["get_help_search_api_ai_help_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ai/jobs": {
         parameters: {
             query?: never;
@@ -684,6 +705,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/invite/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept Invite
+         * @description Create a member account with an invite link, and sign it in.
+         */
+        post: operations["accept_invite_api_auth_invite_accept_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/invite/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Invite
+         * @description Whether an invite link still works, and who it is for (the join page).
+         */
+        post: operations["check_invite_api_auth_invite_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/login": {
         parameters: {
             query?: never;
@@ -1186,6 +1247,27 @@ export interface paths {
         };
         /** Search Channels */
         get: operations["search_channels_api_channels_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/channels/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Subscriptions
+         * @description Followed channels and every channel with automatic downloads or a cleanup
+         *     rule, in one list (one page; ``next_cursor`` is always null).
+         */
+        get: operations["list_subscriptions_api_channels_subscriptions_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2868,11 +2950,34 @@ export interface paths {
         };
         /**
          * Review Queue
-         * @description One page of videos waiting for review, newest first.
+         * @description One page of videos waiting for review, newest first, each with what its
+         *     files on disk suggest (``.info.json``, ``.nfo``, folder and ``[id]``).
          */
         get: operations["review_queue_api_review_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/approve-suggested": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Suggested
+         * @description Approve every review item whose title and channel are known, from the
+         *     video itself or its suggestion, in one pass. Files and thumbnails stay as
+         *     they are.
+         */
+        post: operations["approve_suggested_api_review_approve_suggested_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2962,6 +3067,27 @@ export interface paths {
          *     library keeping its filename-derived title.
          */
         post: operations["skip_review_api_review__video_id__skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/{video_id}/youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup On Youtube
+         * @description Title, channel, date, description and tags of the YouTube video this file
+         *     is a copy of: the ``[id]`` in its name, its sidecars, or ``youtube_id``.
+         */
+        get: operations["lookup_on_youtube_api_review__video_id__youtube_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3484,6 +3610,48 @@ export interface paths {
         /** Create User */
         post: operations["create_user_api_users_post"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/invites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Invites
+         * @description Invite links not used yet and not expired, newest first.
+         */
+        get: operations["list_invites_api_users_invites_get"];
+        put?: never;
+        /**
+         * Create Invite
+         * @description A one-time link (for members only) that lets someone pick their own
+         *     username and password. The token is in this answer and nowhere else.
+         */
+        post: operations["create_invite_api_users_invites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/invites/{invite_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke Invite */
+        delete: operations["revoke_invite_api_users_invites__invite_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5030,6 +5198,19 @@ export interface components {
             } | null;
             /** Youtube Video Search */
             youtube_video_search?: boolean | null;
+        };
+        /** ApproveSuggestedResult */
+        ApproveSuggestedResult: {
+            /**
+             * Approved
+             * @description Review items moved into the library.
+             */
+            approved: number;
+            /**
+             * Remaining
+             * @description Review items still waiting.
+             */
+            remaining: number;
         };
         /** AskChannelCreate */
         AskChannelCreate: {
@@ -6776,6 +6957,29 @@ export interface components {
             role: "user" | "assistant";
         };
         /**
+         * HelpSearchResult
+         * @description Ask about Horde without AI: the best documentation matches, as Markdown
+         *     with ``[[setting:id]]`` links, and the pages they came from.
+         */
+        HelpSearchResult: {
+            /** Answer */
+            answer: string;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: components["schemas"]["HelpSource"][];
+        };
+        /** HelpSource */
+        HelpSource: {
+            /** Path */
+            path: string;
+            /** Title */
+            title: string;
+            /** Url */
+            url: string;
+        };
+        /**
          * HistoryKeysWrite
          * @description History entries by key (a YouTube id, or ``video:<id>``).
          */
@@ -6950,6 +7154,103 @@ export interface components {
              * @default 0
              */
             youtube_views: number;
+        };
+        /**
+         * ImportSuggestion
+         * @description Fields Horde can fill in for a review item. Only blanks are suggested.
+         */
+        ImportSuggestion: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /** InviteAcceptRequest */
+        InviteAcceptRequest: {
+            /** Password */
+            password: string;
+            /** Token */
+            token: string;
+            /** Username */
+            username: string;
+        };
+        /** InviteCheckRequest */
+        InviteCheckRequest: {
+            /** Token */
+            token: string;
+        };
+        /**
+         * InviteCreate
+         * @description A one-time link for a new member to create their own account.
+         */
+        InviteCreate: {
+            /**
+             * Days
+             * @default 7
+             */
+            days: number;
+            /** Label */
+            label?: string | null;
+            /** Permissions */
+            permissions?: string[] | null;
+        };
+        /** InviteCreated */
+        InviteCreated: {
+            invite: components["schemas"]["InviteRead"];
+            /** Token */
+            token: string;
+        };
+        /**
+         * InviteInfo
+         * @description What the join page shows about a valid invite.
+         */
+        InviteInfo: {
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Label */
+            label?: string | null;
+        };
+        /** InviteRead */
+        InviteRead: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Id */
+            id: number;
+            /** Label */
+            label?: string | null;
+            /** Permissions */
+            permissions: string[];
         };
         /**
          * JobStatus
@@ -7951,6 +8252,168 @@ export interface components {
             /** Title */
             title: string;
         };
+        /**
+         * ReviewItemRead
+         * @description A video waiting in the import queue, with what its files suggest.
+         */
+        ReviewItemRead: {
+            /** Acodec */
+            acodec?: string | null;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Ai Summary */
+            ai_summary?: string | null;
+            /** Ai Summary Cost */
+            ai_summary_cost?: number | null;
+            /** Ai Summary Length */
+            ai_summary_length?: string | null;
+            /** Ai Summary Model */
+            ai_summary_model?: string | null;
+            /**
+             * Ai Tags
+             * @default []
+             */
+            ai_tags: string[];
+            /** Bit Depth */
+            bit_depth?: number | null;
+            /** Channel */
+            channel: string | null;
+            /** Channel Subscriber Count */
+            channel_subscriber_count: number | null;
+            /** Channel Url */
+            channel_url: string | null;
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterRead"][];
+            /** Chapters Source */
+            chapters_source?: ("description" | "source" | "ai") | null;
+            /** Codec String */
+            codec_string?: string | null;
+            compat?: components["schemas"]["CompatState"] | null;
+            /** Compat Size */
+            compat_size?: number | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Description Is Custom
+             * @default false
+             */
+            description_is_custom: boolean;
+            /** Duration Sec */
+            duration_sec: number | null;
+            /** Embed Error */
+            embed_error?: string | null;
+            /** Embed Status */
+            embed_status?: string | null;
+            /** File Path */
+            file_path: string;
+            /** File Size */
+            file_size: number | null;
+            /** Frame Rate */
+            frame_rate: number | null;
+            /**
+             * Has Compat
+             * @default false
+             */
+            has_compat: boolean;
+            /**
+             * Has Sprites
+             * @default false
+             */
+            has_sprites: boolean;
+            /** Has Thumbnail */
+            has_thumbnail: boolean;
+            /** Height Px */
+            height_px: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Is Hdr
+             * @default false
+             */
+            is_hdr: boolean;
+            /** Last Position Sec */
+            last_position_sec: number;
+            /** Last Watched At */
+            last_watched_at: string | null;
+            match_reason?: components["schemas"]["SearchMatchReason"] | null;
+            /** Metadata Synced At */
+            metadata_synced_at: string | null;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Notes */
+            notes: string | null;
+            /** Platform */
+            platform: string | null;
+            /**
+             * Processing Chapters
+             * @default false
+             */
+            processing_chapters: boolean;
+            /**
+             * Processing Sprites
+             * @default false
+             */
+            processing_sprites: boolean;
+            /**
+             * Processing Summary
+             * @default false
+             */
+            processing_summary: boolean;
+            /** Published At */
+            published_at: string | null;
+            /** Source Description */
+            source_description?: string | null;
+            /** Source Title */
+            source_title: string | null;
+            /** Source Url */
+            source_url: string | null;
+            status: components["schemas"]["VideoStatus"];
+            /** Subtitles */
+            subtitles: components["schemas"]["SubtitleTrack"][];
+            /**
+             * Subtitles Pending
+             * @default false
+             */
+            subtitles_pending: boolean;
+            suggestion?: components["schemas"]["ImportSuggestion"] | null;
+            /** Tags */
+            tags: string[];
+            /** Tags Enriched At */
+            tags_enriched_at?: string | null;
+            /** Title */
+            title: string;
+            /** Title Is Custom */
+            title_is_custom: boolean;
+            /**
+             * User Tags
+             * @default []
+             */
+            user_tags: string[];
+            /** Vcodec */
+            vcodec?: string | null;
+            /** View Count */
+            view_count: number | null;
+            /** Width Px */
+            width_px: number | null;
+        };
+        /**
+         * ReviewPage
+         * @description One page of the import queue. Pass ``next_cursor`` back as ``cursor``.
+         */
+        ReviewPage: {
+            /** Items */
+            items: components["schemas"]["ReviewItemRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
+        };
         /** RewatchedPage */
         RewatchedPage: {
             /** Items */
@@ -8353,6 +8816,46 @@ export interface components {
              * @default 50
              */
             throwback: number;
+        };
+        /** SubscriptionList */
+        SubscriptionList: {
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["SubscriptionRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * SubscriptionRead
+         * @description A channel the user keeps up with, and how.
+         */
+        SubscriptionRead: {
+            /**
+             * Autodownload
+             * @default false
+             */
+            autodownload: boolean;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /** Checked At */
+            checked_at?: string | null;
+            /**
+             * Following
+             * @default false
+             */
+            following: boolean;
+            /** Quality Preset */
+            quality_preset?: string | null;
+            retention?: components["schemas"]["ChannelRetentionSummary"] | null;
+            /**
+             * Video Count
+             * @default 0
+             */
+            video_count: number;
         };
         /** SubtitleTrack */
         SubtitleTrack: {
@@ -9604,6 +10107,47 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HelpAssistantInfo"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_help_search_api_ai_help_search_get: {
+        parameters: {
+            query: {
+                q: string;
+                page?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HelpSearchResult"];
                 };
             };
             /** @description Validation error */
@@ -10915,6 +11459,90 @@ export interface operations {
             };
         };
     };
+    accept_invite_api_auth_invite_accept_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteAcceptRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthLoginResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_invite_api_auth_invite_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteInfo"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     login_api_auth_login_post: {
         parameters: {
             query?: never;
@@ -12153,6 +12781,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChannelSearchResponse"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_subscriptions_api_channels_subscriptions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscriptionList"];
                 };
             };
             /** @description Validation error */
@@ -16461,7 +17127,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VideoPage"];
+                    "application/json": components["schemas"]["ReviewPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_suggested_api_review_approve_suggested_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveSuggestedResult"];
                 };
             };
             /** @description Validation error */
@@ -16623,6 +17327,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    lookup_on_youtube_api_review__video_id__youtube_get: {
+        parameters: {
+            query?: {
+                /** @description Overrides the file's id. */
+                youtube_id?: string | null;
+            };
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSuggestion"];
                 };
             };
             /** @description Validation error */
@@ -17814,6 +18561,124 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["UserRead"];
                 };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_invites_api_users_invites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteRead"][];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_invite_api_users_invites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InviteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InviteCreated"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    revoke_invite_api_users_invites__invite_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                invite_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation error */
             422: {

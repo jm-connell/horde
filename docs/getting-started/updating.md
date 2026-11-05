@@ -2,7 +2,7 @@
 
 The easy way to update Horde is the **Update now** button in Settings → System → Updates. This page explains how to switch it on (once), what it does, and what to do if something goes wrong. The same update can also be run by hand from the shell, which is how you roll back.
 
-Behind the scenes Horde’s Docker image is **built from source** on your host (`build: .` in `docker-compose.yml`). Updating means pulling new git commits, rebuilding the `horde` image with the current commit SHA, and recreating containers.
+Behind the scenes an update moves the git checkout to the new release (for the compose file, scripts and docs), then gets the new `horde` image and recreates the containers. Installs made from the current `.env.example` pull the [published image](#use-the-published-image); older installs build the image from source on the host (`build: .`) unless they set `HORDE_IMAGE`.
 
 First-time install is a `git clone` plus Compose/Dockge deploy — [Install with Docker](install-docker.md) or [TrueNAS / Dockge](truenas-dockge.md). This page is only for an existing checkout.
 
@@ -207,14 +207,16 @@ Uncommented the GPU lines in `docker-compose.yml` (older instructions said to)? 
 
 ## Use the published image
 
-Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, the commit SHA and `latest`. Building from source remains the default. To skip the build instead, put this in `.env`:
+Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, the commit SHA and `latest`. New installs use it: `.env.example` sets `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`. An install from before that builds from source until you put this in `.env`:
 
 ```env
 HORDE_IMAGE=ghcr.io/jm-connell/horde:1.2.3   # or :latest to follow releases
 HORDE_PULL_POLICY=always
 ```
 
-`update.sh` then runs `docker compose pull horde` instead of building (the git checkout is still updated for compose and docs changes), and backs up the database and rolls back exactly as above. Pin an exact version to control when you move; `latest` follows the newest release. Without `update.sh`: `docker compose pull horde && docker compose up -d`.
+`update.sh` then runs `docker compose pull horde` instead of building (the git checkout is still updated for compose and docs changes), and backs up the database and rolls back exactly as above. Pin an exact version to control when you move; `latest` follows the newest release. Without `update.sh`: `docker compose pull horde && docker compose up -d`. To build from source instead (for example to follow `HORDE_UPDATE_CHANNEL=main`, which the published image does not), comment out `HORDE_IMAGE`.
+
+In a container manager that is not Dockge (Portainer, Synology Container Manager, Unraid's Compose Manager), updating with the published image is that tool's **pull and redeploy**; see [Other platforms](other-platforms.md#updating). Horde still backs up the database itself before any migration (`DATA_PATH/backups/`), but there is no automatic rollback outside `update.sh`.
 
 ## Manual steps
 
