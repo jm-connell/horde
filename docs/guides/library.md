@@ -122,11 +122,11 @@ Hover a Recommended+ card to see why it is there; its **⋯** menu offers **Why 
 
   Interests and blocks are yours, not part of an algorithm: they stay when you switch presets.
 - **Ranking**: match strictness (take chances, or close matches only), freshness (any age, or recent uploads), popularity (hidden gems, or popular) and shuffle.
-- **Variety and repeats**: how far apart the same channel shows, how many videos one new channel may have, and after how many visits a video you keep scrolling past drops to the end.
-- **Your taste**: how many weeks count as your recent taste, and how far back throwbacks reach.
-- **Filters**: hide Shorts (a minute or less) and past live streams, a shortest and longest length, and an upload age.
-- **Sources**: your library, indexed channels, videos found on YouTube (off also stops Horde searching YouTube for you) and the household lift.
-- **Advanced**: strictness per kind of pick, how much of a video you must have watched for it to shape your recommendations, how old a finished video must be to come back as a rewatch, and a preference for downloaded videos.
+- **Sources**: your library, indexed channels, videos found on YouTube (off also stops Horde searching YouTube for you), the household lift, and **Prefer downloaded videos**: downloaded videos move up and take more of the mix; at 100% every downloaded video qualifies and they lead the feed.
+- **Filters**: hide past live streams (recordings of streams that ended) and an upload age. Shorts never reach Horde, so there is no filter for them.
+- **Advanced** (folded away): strictness per kind of pick (overrides Match strictness for that kind), how far apart the same channel shows, how many videos one new channel may have, after how many visits a video you keep scrolling past moves to the end, how many weeks count as your recent taste, how far back throwbacks reach, how much of a video you must have watched for it to shape your recommendations, how old a finished video must be to come back as a rewatch, and a shortest and longest video length.
+
+Each slider has a small tick under it at the Balanced value, and lists mark it **(default)**; **(?)** beside a setting explains it.
 
 **Save as…** names your settings ("Weeknight", "Learning") so you can switch between them from the picker; tick **Share with other accounts** to offer one to everyone here (they see your name beside it). Someone using your shared algorithm gets your later changes; if they move a setting, it becomes their own copy, so nobody changes yours. After moving a setting on one of your own, **Save to “name”** writes the change back. When you delete an algorithm or stop sharing it (or delete your account), everyone else using it gets a private copy, saved as “name (from you)”, so their feed does not change; your own Custom settings are never overwritten. Your interests and blocked topics are never part of a saved algorithm.
 

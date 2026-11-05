@@ -66,6 +66,17 @@ test("the algorithm panel re-ranks the feed and stays in step with Account", asy
     '[data-horde="side-panel"]'
   );
 
+  // Each setting marks Balanced's value: a tick under a slider, "(default)"
+  // in a list.
+  await expect(
+    panel.locator('[data-horde="slider-default"]').first()
+  ).toBeAttached();
+  await expect(
+    panel.getByRole("button", { name: "Uploaded within: Any time (default)" })
+  ).toBeVisible();
+  // Shorts never reach Horde, so there is no filter for them.
+  await expect(panel.getByText("Hide Shorts")).toHaveCount(0);
+
   // A preset is one click.
   await panel.getByRole("button", { name: "Explorer" }).click();
   await expect(
@@ -178,6 +189,8 @@ test("Escape closes an open list in the panel before the panel", async ({
   await openRecommendedPlus(page);
   await page.getByRole("button", { name: "Algorithm" }).click();
   const panel = page.getByRole("dialog", { name: "Recommended+ algorithm" });
+  // The taste window and lengths are advanced settings.
+  await panel.getByRole("button", { name: "Advanced" }).click();
   const select = panel.getByRole("button", {
     name: "Recent taste is the last",
   });
