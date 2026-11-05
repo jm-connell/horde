@@ -167,7 +167,7 @@ test("a channel answer links every point to its moment", async ({ page }) => {
       exact: true,
     });
   // Nothing picked: Horde, or the channel a question names.
-  await expect(source("Horde or a named channel")).toBeVisible();
+  await expect(source("Automatic")).toBeVisible();
   await input.fill("What does Northwind say about the timing belt?");
   await input.press("Enter");
 
@@ -230,7 +230,7 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   // Automatic goes back to choosing per question.
   await source("Horde").click();
   await menu.getByRole("menuitemradio", { name: /^Automatic/ }).click();
-  await expect(source("Horde or a named channel")).toBeVisible();
+  await expect(source("Automatic")).toBeVisible();
 });
 
 test("saved conversations are listed in the chat panel", async ({ page }) => {

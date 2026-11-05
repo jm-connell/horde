@@ -523,7 +523,7 @@ export default function HelpChatPanel({
       ? "Horde"
       : pageAuto
         ? `${pageAuto} or Horde`
-        : "Horde or a named channel";
+        : "Automatic";
   const placeholder = scoped.length
     ? `Ask ${channelNames || "this channel"}…`
     : pageAuto

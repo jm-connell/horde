@@ -84,7 +84,7 @@ export default function AskSourcePicker({
   return (
     <div
       ref={rootRef}
-      className="border-t border-ink-700 px-3 pt-2 text-xs"
+      className="border-t border-ink-700 px-3 py-2 text-xs"
       data-horde="ask-source"
     >
       <MenuFlyout

@@ -336,8 +336,9 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
   Above the question box, "Answering from" in `text-muted` is followed by
   the source as a `rounded-full` `ink-800` chip with a chevron (the channel
-  names, Horde, or "Horde or a named channel"; "<channel> or Horde" with a
-  muted hint beside it on a channel's page). It opens a `MenuFlyout` inside
+  names, Horde, or Automatic; "<channel> or Horde" with a muted hint beside
+  it on a channel's page), padded 8px above and below so the chip clears the
+  question box's top border. It opens a `MenuFlyout` inside
   the panel, just above the row rather than floating (the panel's
   translucency would need a portal, and a phone keyboard moves the panel):
   `menuitemradio` rows for Automatic and Horde, each with a one-line
