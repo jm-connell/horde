@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import ChannelFeed from "../components/ChannelFeed";
+import GettingStarted from "../components/GettingStarted";
 import ContinueWatchingRow from "../components/ContinueWatchingRow";
 import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
@@ -451,13 +452,11 @@ function OnlineLibrary() {
             )
           ) : loading ? (
             <LoadingIndicator />
+          ) : !debouncedSearch && videos.length === 0 && !activeTag ? (
+            <GettingStarted />
           ) : !debouncedSearch && videos.length === 0 ? (
             <div className="py-20 text-center text-muted">
-              <p className="text-lg">No videos yet.</p>
-              <p className="mt-1 text-sm">
-                Paste a link on the Download page or drop files into your media
-                folder.
-              </p>
+              <p className="text-lg">No videos with this tag.</p>
             </div>
           ) : debouncedSearch ? (
             <SearchResults

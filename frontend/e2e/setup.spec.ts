@@ -64,10 +64,18 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   const picker = page.getByRole("radiogroup", {
     name: "Playback compatibility",
   });
-  await expect(picker.getByRole("radio", { name: /AV1 only/ })).toBeVisible();
+  const av1 = picker.getByRole("radio", { name: /AV1 only/ });
+  await expect(av1).toHaveAttribute("aria-checked", "true");
   const sidecar = picker.getByRole("radio", { name: /AV1 \+ H\.264 copy/ });
-  await sidecar.click();
+  // Saying what people watch on picks the mode: computers alone keep AV1,
+  // an iPhone in the house adds the H.264 copy.
+  await page.getByLabel("Computers and Android phones").check();
+  await expect(av1).toHaveAttribute("aria-checked", "true");
+  await page.getByLabel("iPhones, iPads or Macs").check();
   await expect(sidecar).toHaveAttribute("aria-checked", "true");
+  await expect(
+    page.getByRole("status").filter({ hasText: "cannot play AV1" })
+  ).toBeVisible();
 
   await stepSettled(page);
   await page.getByRole("button", { name: "Back" }).click();
@@ -81,6 +89,9 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
 
   await stepSettled(page);
   await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByRole("heading", { name: "Look" })).toBeVisible();
+  // A reload stays on the same step.
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Look" })).toBeVisible();
   const oled = page.getByRole("button", { name: "OLED (true black)" });
   await oled.click();
@@ -143,4 +154,20 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await expect(
     page.getByRole("link", { name: "Home", exact: true })
   ).toBeVisible();
+
+  // The empty library says what to do first.
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  const start = page.getByRole("region", { name: "Get started" });
+  await expect(start).toBeVisible();
+  for (const step of [
+    "Download a video",
+    "Subscribe to a channel",
+    "Bring in videos you already have",
+    "Add your household",
+    "Turn on AI (optional)",
+  ]) {
+    await expect(start.getByText(step)).toBeVisible();
+  }
+  await start.getByRole("link", { name: "Open Subscriptions" }).click();
+  await expect(page).toHaveURL(/\/subscriptions$/);
 });

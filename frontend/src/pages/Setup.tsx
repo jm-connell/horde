@@ -13,6 +13,8 @@ import {
 } from "../hooks/useSettings";
 import type { HealthStats, SystemStats } from "../types";
 import { formatSize } from "../utils";
+import { getItem, removeItem, setItem } from "../storage";
+import type { DownloadVideoCodec } from "../hooks/settings/types";
 import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
@@ -55,6 +57,26 @@ const STEP_TITLE: Record<Step, string> = {
 
 const STEP_MS = 300;
 
+// The step survives a reload (the wizard is long, and a reload restarted it).
+const STEP_KEY = "horde.setupStep";
+function savedStep(): Step {
+  const saved = getItem(STEP_KEY, "session");
+  return STEPS.find((s) => s === saved) ?? "welcome";
+}
+
+type Device = "computers" | "apple" | "tv";
+const DEVICES: { id: Device; label: string }[] = [
+  { id: "computers", label: "Computers and Android phones" },
+  { id: "apple", label: "iPhones, iPads or Macs" },
+  { id: "tv", label: "Smart TVs, Chromecast or game consoles" },
+];
+
+/** The mode that plays on every device chosen: older iPhones, iPads and Macs
+ * and most TVs cannot decode AV1, so those get an H.264 copy too. */
+function modeForDevices(devices: Set<Device>): DownloadVideoCodec {
+  return devices.has("apple") || devices.has("tv") ? "sidecar" : "av1";
+}
+
 const PRIMARY_BTN = button("primary");
 const GHOST_BTN = button("quiet");
 const HEIGHT_EASE =
@@ -64,7 +86,8 @@ export default function Setup() {
   const navigate = useNavigate();
   const saveAppSettings = useUpdateAppSettings();
   const [settings, update] = useSettings();
-  const [step, setStep] = useState<Step>("welcome");
+  const [step, setStep] = useState<Step>(savedStep);
+  const [devices, setDevices] = useState<Set<Device>>(new Set());
   const [health, setHealth] = useState<HealthStats | null>(null);
   const systemStats = dataOrNull(useSystemStats());
   const [finishing, setFinishing] = useState(false);
@@ -87,6 +110,10 @@ export default function Setup() {
       .then(setHealth)
       .catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    setItem(STEP_KEY, step, "session");
+  }, [step]);
 
   useEffect(() => {
     if (step === prevStepRef.current) return;
@@ -128,6 +155,7 @@ export default function Setup() {
     try {
       await flushSettingsSync();
       await saveAppSettings({ setup_completed: true });
+      removeItem(STEP_KEY, "session");
       markSetupCompleted();
       navigate((health?.library_video_count ?? 0) > 0 ? "/" : "/download", {
         replace: true,
@@ -239,6 +267,8 @@ export default function Setup() {
   const saveBundled = () => connectAi(BUNDLED_OLLAMA_URL, "");
 
   const panelProps: Omit<WizardPanelProps, "step"> = {
+    devices,
+    setDevices,
     settings,
     update,
     health,
@@ -310,6 +340,8 @@ export default function Setup() {
 
 type WizardPanelProps = {
   step: Step;
+  devices: Set<Device>;
+  setDevices: (next: Set<Device>) => void;
   settings: Settings;
   update: (patch: Partial<Settings>) => void;
   health: HealthStats | null;
@@ -333,6 +365,8 @@ type WizardPanelProps = {
 
 function WizardPanel({
   step,
+  devices,
+  setDevices,
   settings,
   update,
   health,
@@ -446,6 +480,40 @@ function WizardPanel({
               Decide which devices can play your library. You can change this
               later in Settings → Library, and switching never deletes videos.
             </p>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium text-gray-200">
+                What will people watch on?
+              </legend>
+              {DEVICES.map((d) => (
+                <label
+                  key={d.id}
+                  className="flex items-center gap-2 text-sm text-gray-300"
+                >
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 accent-accent"
+                    checked={devices.has(d.id)}
+                    onChange={(e) => {
+                      const next = new Set(devices);
+                      if (e.target.checked) next.add(d.id);
+                      else next.delete(d.id);
+                      setDevices(next);
+                      if (next.size > 0) {
+                        update({ downloadVideoCodec: modeForDevices(next) });
+                      }
+                    }}
+                  />
+                  {d.label}
+                </label>
+              ))}
+              {devices.size > 0 && (
+                <p className="text-xs text-muted" role="status">
+                  {modeForDevices(devices) === "sidecar"
+                    ? "Picked AV1 + H.264 copy below: some of these devices cannot play AV1, so each video also gets a copy they can."
+                    : "Picked AV1 only below: these devices play it, and it keeps files smallest."}
+                </p>
+              )}
+            </fieldset>
             <PlaybackCompatPicker
               mode={settings.downloadVideoCodec}
               onChange={(id) => update({ downloadVideoCodec: id })}
