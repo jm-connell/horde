@@ -1423,7 +1423,8 @@ export interface paths {
          *     The first page also tells the gatherer this user is active (it starts at once
          *     the first time). It also carries followed channels' live broadcasts, the
          *     ones from channels watched lately first. Each page counts as shown for its
-         *     videos.
+         *     videos, unless it is a ``prefetch`` (the home page loading it before the
+         *     user opens the tab; opening it asks again and counts then).
          */
         get: operations["discover_feed_api_discover_feed_get"];
         put?: never;
@@ -12715,6 +12716,8 @@ export interface operations {
                 cursor?: string | null;
                 /** @description Ordering seed; a new one reshuffles the less certain picks. */
                 seed?: number | null;
+                /** @description Loaded ahead of time, not shown yet: its videos do not count as shown. */
+                prefetch?: boolean;
             };
             header?: never;
             path?: never;

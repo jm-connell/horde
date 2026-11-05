@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type {
@@ -8,6 +9,43 @@ import type {
   RecTuningWrite,
 } from "../types";
 import { queryKeys } from "./keys";
+
+/** Cards per Recommended+ page. */
+export const DISCOVER_PAGE_SIZE = 24;
+/** A first page loaded ahead is shown at once for this long. */
+export const DISCOVER_PREVIEW_MS = 5 * 60_000;
+/** How long the home page waits before loading Recommended+ ahead. */
+const PREFETCH_DELAY_MS = 1500;
+
+/**
+ * Load Recommended+ (its first page and channel suggestions) shortly after the
+ * home page settles, so opening the tab shows it at once. The prefetched page
+ * does not count its videos as shown; opening the tab asks again.
+ */
+export function usePrefetchDiscover(enabled: boolean) {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (!enabled) return;
+    const timer = window.setTimeout(() => {
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.discover.firstPage,
+        queryFn: ({ signal }) =>
+          api.getDiscoverFeed(
+            { limit: DISCOVER_PAGE_SIZE, prefetch: true },
+            { signal }
+          ),
+        staleTime: DISCOVER_PREVIEW_MS,
+      });
+      void queryClient.prefetchQuery({
+        queryKey: queryKeys.discover.channels,
+        queryFn: ({ signal }) =>
+          api.getSuggestedChannels(undefined, { signal }),
+        staleTime: DISCOVER_PREVIEW_MS,
+      });
+    }, PREFETCH_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [enabled, queryClient]);
+}
 
 /** The signed-in user's Recommended+ algorithm: a preset or their own values. */
 export function useRecTuning() {
@@ -23,8 +61,11 @@ export function useSaveRecTuning() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (payload: RecTuningWrite) => api.saveRecTuning(payload),
-    onSuccess: (state) =>
-      queryClient.setQueryData(queryKeys.discover.tuning, state),
+    onSuccess: (state) => {
+      queryClient.setQueryData(queryKeys.discover.tuning, state);
+      // A page ranked with the old values is not shown ahead any more.
+      queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
+    },
   });
 }
 
@@ -39,8 +80,13 @@ export function useRecTopics() {
 
 function useInvalidateTopics() {
   const queryClient = useQueryClient();
-  return () =>
-    queryClient.invalidateQueries({ queryKey: queryKeys.discover.topics });
+  return () => {
+    // Topics change the ranking: a page loaded ahead is out of date.
+    queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.discover.topics,
+    });
+  };
 }
 
 export function useAddRecTopic() {

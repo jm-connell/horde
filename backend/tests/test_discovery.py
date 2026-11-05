@@ -1097,3 +1097,16 @@ def test_channel_suggestion_says_what_the_channel_is_like():
     assert pick.typical_views == 2000
     assert pick.typical_minutes == 15
     assert pick.reason == "Like Aurora over the fjord"
+
+
+def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
+    """The home page loads Recommended+ ahead of time; only opening it counts."""
+    from app.models import RecImpression
+
+    _discovered(session, admin_user, "prefetch001", "Found early", "Chan")
+    body = _feed(client, prefetch="true")
+    assert [i["key"] for i in body["items"]] == ["prefetch001"]
+    assert session.get(RecImpression, (admin_user.id, "prefetch001")) is None
+    _feed(client)
+    row = session.get(RecImpression, (admin_user.id, "prefetch001"))
+    assert row is not None and row.shown_count == 1

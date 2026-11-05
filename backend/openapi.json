@@ -18472,7 +18472,7 @@
     },
     "/api/discover/feed": {
       "get": {
-        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos.",
+        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos, unless it is a ``prefetch`` (the home page loading it before the\nuser opens the tab; opening it asks again and counts then).",
         "operationId": "discover_feed_api_discover_feed_get",
         "parameters": [
           {
@@ -18521,6 +18521,18 @@
               ],
               "description": "Ordering seed; a new one reshuffles the less certain picks.",
               "title": "Seed"
+            }
+          },
+          {
+            "description": "Loaded ahead of time, not shown yet: its videos do not count as shown.",
+            "in": "query",
+            "name": "prefetch",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Loaded ahead of time, not shown yet: its videos do not count as shown.",
+              "title": "Prefetch",
+              "type": "boolean"
             }
           }
         ],

@@ -6,13 +6,20 @@ import { useDownloads } from "../context/DownloadContext";
 import { useGridColumns } from "../hooks/useGridColumns";
 import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
-import { useRecTopics, useRecTuning } from "../queries/discover";
+import {
+  DISCOVER_PAGE_SIZE,
+  DISCOVER_PREVIEW_MS,
+  useRecTopics,
+  useRecTuning,
+} from "../queries/discover";
 import { queryKeys } from "../queries/keys";
 import type {
   ChannelFeedEntry,
+  DiscoverFeed,
   DiscoverItem,
   DiscoverStatus,
   SuggestedChannel,
+  SuggestedChannels as SuggestedChannelsPage,
 } from "../types";
 import { button } from "./buttons";
 import ChannelFeedCard from "./ChannelFeedCard";
@@ -23,7 +30,6 @@ import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
 
-const PAGE_SIZE = 24;
 /**
  * How many cards come before the channel suggestions: two full rows (four on
  * a narrow grid), or as many full rows as there are, so no row above them is
@@ -54,6 +60,18 @@ function channelOf(item: DiscoverItem): ChannelHit {
 
 function titleOf(item: DiscoverItem): string {
   return item.video?.title ?? item.stream?.title ?? "";
+}
+
+/** Today's first page, loaded ahead (or shown last time) and still recent. */
+function recentFirstPage(
+  queryClient: ReturnType<typeof useQueryClient>
+): DiscoverFeed | undefined {
+  const state = queryClient.getQueryState<DiscoverFeed>(
+    queryKeys.discover.firstPage
+  );
+  return state?.data && Date.now() - state.dataUpdatedAt < DISCOVER_PREVIEW_MS
+    ? state.data
+    : undefined;
 }
 
 function newSeed(): number {
@@ -97,11 +115,26 @@ export default function DiscoverHome({
   // Undefined: the server's seed of the day, so a plain reload keeps the order.
   const [seed, setSeed] = useState<number | undefined>(undefined);
   const [reloadKey, setReloadKey] = useState(0);
-  const [items, setItems] = useState<DiscoverItem[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [status, setStatus] = useState<DiscoverStatus | null>(null);
-  const [channels, setChannels] = useState<SuggestedChannel[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Loaded ahead by the home page: shown at once, then asked for again
+  // (quietly) so the visit counts and the order is current.
+  const [preview] = useState(() => recentFirstPage(queryClient));
+  const quietLoad = useRef(Boolean(preview));
+  const [items, setItems] = useState<DiscoverItem[]>(
+    () => preview?.items ?? []
+  );
+  const [cursor, setCursor] = useState<string | null>(
+    () => preview?.next_cursor ?? null
+  );
+  const [status, setStatus] = useState<DiscoverStatus | null>(
+    () => preview?.status ?? null
+  );
+  const [channels, setChannels] = useState<SuggestedChannel[]>(
+    () =>
+      queryClient.getQueryData<SuggestedChannelsPage>(
+        queryKeys.discover.channels
+      )?.items ?? []
+  );
+  const [loading, setLoading] = useState(!preview);
   /** Re-ranking with cards on screen: keep them, dimmed, instead of a spinner. */
   const [updating, setUpdating] = useState(false);
   const hasItems = useRef(false);
@@ -124,12 +157,13 @@ export default function DiscoverHome({
   useEffect(() => {
     let active = true;
     generation.current += 1;
-    if (hasItems.current) setUpdating(true);
+    if (quietLoad.current) quietLoad.current = false;
+    else if (hasItems.current) setUpdating(true);
     else setLoading(true);
     setError(null);
     setFreshReady(false);
     api
-      .getDiscoverFeed({ limit: PAGE_SIZE, seed })
+      .getDiscoverFeed({ limit: DISCOVER_PAGE_SIZE, seed })
       .then((page) => {
         if (!active) return;
         setItems(page.items);
@@ -141,6 +175,9 @@ export default function DiscoverHome({
           page.blocked ?? []
         );
         runAtLoad.current = page.status.last_run_at ?? null;
+        // Today's order: shown at once the next time the tab opens.
+        if (seed === undefined)
+          queryClient.setQueryData(queryKeys.discover.firstPage, page);
       })
       .catch(() => {
         if (active) setError("Could not load recommendations.");
@@ -154,7 +191,10 @@ export default function DiscoverHome({
     api
       .getSuggestedChannels(seed)
       .then((data) => {
-        if (active) setChannels(data.items);
+        if (!active) return;
+        setChannels(data.items);
+        if (seed === undefined)
+          queryClient.setQueryData(queryKeys.discover.channels, data);
       })
       .catch(() => undefined);
     return () => {
@@ -195,7 +235,10 @@ export default function DiscoverHome({
     const gen = generation.current;
     setLoadingMore(true);
     try {
-      const page = await api.getDiscoverFeed({ cursor, limit: PAGE_SIZE });
+      const page = await api.getDiscoverFeed({
+        cursor,
+        limit: DISCOVER_PAGE_SIZE,
+      });
       if (gen !== generation.current) return; // The list was reloaded meanwhile.
       setItems((prev) => {
         const seen = new Set(prev.map((i) => i.key));

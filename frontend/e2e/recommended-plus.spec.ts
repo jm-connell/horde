@@ -193,3 +193,28 @@ test("suggested channels show the channel's picture", async ({ page }) => {
   // A channel without one shows its first letter instead.
   await expect(shelf.getByText("T", { exact: true })).toBeVisible();
 });
+
+test("Recommended+ is loaded ahead and opens at once", async ({ page }) => {
+  await lookingOnYoutube(page);
+  await page.addInitScript(() =>
+    localStorage.setItem("horde.home.tab", "library")
+  );
+  const prefetched = page.waitForResponse(
+    (r) =>
+      r.url().includes("/api/discover/feed") &&
+      r.url().includes("prefetch=true") &&
+      r.ok()
+  );
+  await page.goto("/");
+  await prefetched;
+  // Opening the tab asks again (so the visit counts), but does not wait for it.
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.getByRole("button", { name: "Recommended+", exact: true }).click();
+  await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
+  release();
+});

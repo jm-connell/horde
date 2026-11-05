@@ -20,6 +20,7 @@ import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
 import { useContinueYoutube } from "../queries/history";
+import { usePrefetchDiscover } from "../queries/discover";
 import { useDiscoverStatus } from "../queries/status";
 import type { HomeTab } from "./libraryStorage";
 import { OfflinePage } from "./lazy";
@@ -89,6 +90,10 @@ function OnlineLibrary() {
   }, [search, activeChannel, setActiveChannel, clearSearch]);
 
   const isHome = !activeChannel && !activeTag;
+  // On the other home tabs, load Recommended+ ahead so it opens at once.
+  usePrefetchDiscover(
+    isHome && discoverEnabled === true && homeTab !== "discover" && !search
+  );
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;

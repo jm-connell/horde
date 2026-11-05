@@ -23,10 +23,17 @@ import { type ReadOptions, request } from "./client";
 /** Recommended+: the feed, channels to follow, feedback and stream history. */
 export const discoverApi = {
   getDiscoverFeed(
-    params: { cursor?: string | null; limit?: number; seed?: number },
+    params: {
+      cursor?: string | null;
+      limit?: number;
+      seed?: number;
+      /** Loaded ahead of time: its videos do not count as shown. */
+      prefetch?: boolean;
+    },
     opts?: ReadOptions
   ): Promise<DiscoverFeed> {
     const q = new URLSearchParams();
+    if (params.prefetch) q.set("prefetch", "true");
     if (params.cursor) q.set("cursor", params.cursor);
     if (params.limit) q.set("limit", String(params.limit));
     if (params.seed != null) q.set("seed", String(params.seed));

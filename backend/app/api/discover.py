@@ -170,6 +170,11 @@ def discover_feed(
         lt=SEED_RANGE,
         description="Ordering seed; a new one reshuffles the less certain picks.",
     ),
+    prefetch: bool = Query(
+        False,
+        description="Loaded ahead of time, not shown yet: its videos do not "
+        "count as shown.",
+    ),
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
@@ -179,7 +184,8 @@ def discover_feed(
     The first page also tells the gatherer this user is active (it starts at once
     the first time). It also carries followed channels' live broadcasts, the
     ones from channels watched lately first. Each page counts as shown for its
-    videos.
+    videos, unless it is a ``prefetch`` (the home page loading it before the
+    user opens the tab; opening it asks again and counts then).
     """
     try:
         page = parse_cursor(
@@ -249,7 +255,8 @@ def discover_feed(
             _live_item,
             lambda i: i.key,
         )
-    feedback.record_shown(session, user.id, (i.key for i in items))
+    if not prefetch:
+        feedback.record_shown(session, user.id, (i.key for i in items))
     return DiscoverFeedRead(
         items=items,
         next_cursor=offset_cursor(
