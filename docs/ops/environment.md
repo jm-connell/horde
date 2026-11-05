@@ -82,6 +82,8 @@ The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `f
 | `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the checkout. |
 | `HORDE_ALLOW_ROOT` | `0` | The entrypoint refuses `PUID=0` / `PGID=0` unless this is `1`. |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = on start, install the latest yt-dlp into `DATA_DIR/pylib` and prefer it over the baked version (details below). |
+| `HORDE_IMAGE` | `ghcr.io/jm-connell/horde:latest` in `.env.example`; unset = build locally | Compose-only. The image the `horde` service runs. Set: pulled from the registry (pin a version such as `:1.2.2`). Unset: built from this checkout. See [Use the published image](../getting-started/updating.md#use-the-published-image). |
+| `HORDE_PULL_POLICY` | `missing` | Compose-only. `always` pulls `HORDE_IMAGE` on every `docker compose up`. |
 | `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |
 | `HORDE_PIDS_LIMIT` | `1024` | Compose-only. Maximum processes/threads. |
 | `FFMPEG_FLAVOR` | `jellyfin` | Build-time. `jellyfin` or `debian`; the build fails if the flavor is unavailable. |

@@ -1,8 +1,8 @@
 # Install with Docker
 
-This page takes you from a machine with nothing on it to Horde running in your browser. It assumes no Docker experience: every command is spelled out, and each step says how to check that it worked. Plan on 15–30 minutes, most of it waiting for the first build.
+This page takes you from a machine with nothing on it to Horde running in your browser. It assumes no Docker experience: every command is spelled out, and each step says how to check that it worked. Plan on 15–30 minutes, most of it reading.
 
-Using **TrueNAS with Dockge**? Follow [TrueNAS / Dockge](truenas-dockge.md) instead; it covers the same steps with TrueNAS screens.
+Using **TrueNAS with Dockge**? Follow [TrueNAS / Dockge](truenas-dockge.md) instead; it covers the same steps with TrueNAS screens. On Unraid, Synology, Portainer or with plain `docker run`, see [Other platforms](other-platforms.md).
 
 !!! warning "Trusted network"
     The first visit creates the admin account ([accounts](../ops/authentication.md)). Keep Horde on your home network or a VPN such as Tailscale. To put it on the internet, follow the [internet exposure checklist](../ops/internet-exposure.md) first.
@@ -15,7 +15,7 @@ You only need these to follow along:
 |------|--------------------|
 | **Host** (or server) | The computer Horde runs on: a NAS, a mini PC, a spare desktop, a VM. Commands on this page are typed on the host. |
 | **Container** | A sealed box the app runs in. Horde's box cannot see your files unless you hand it a folder. |
-| **Image** | The template a container is made from. Horde's image is **built on your host** from this repository (there is no Docker Hub image). |
+| **Image** | The template a container is made from. Horde's image is published on GitHub (`ghcr.io/jm-connell/horde`), for x86 and ARM; Compose downloads it. |
 | **Docker Compose** | Reads `docker-compose.yml` and starts all of Horde's containers with one command. |
 | **`.env`** | A small text file next to `docker-compose.yml` with *your* settings: which folders to use, which user owns the files. |
 | **Volume / bind mount** | A folder on the host handed to the container. Horde gets two: one for videos, one for its database. Anything outside them is thrown away when the container is rebuilt. |
@@ -24,8 +24,8 @@ You only need these to follow along:
 
 - A 64-bit **Linux** host (x86 or ARM) with **Docker Engine** and the **Docker Compose plugin**. Windows and macOS (Docker Desktop) are not tested.
 - **Git**, to download Horde and to update it later.
-- A few GB free for the build, plus room for the videos you plan to keep.
-- Internet access during the build (it downloads base images and packages).
+- About 2 GB free for the image, plus room for the videos you plan to keep.
+- Internet access (to download the image, and for Horde to reach YouTube).
 - A terminal on the host: open one directly, or connect with `ssh you@<server-ip>`.
 
 ### Install Docker and Git
@@ -42,7 +42,7 @@ git --version
 If the first line says `docker: 'compose' is not a docker command`, you have the old standalone `docker-compose`; install the Compose plugin from the Docker guide above.
 
 !!! note "`permission denied` from Docker? Use `sudo`"
-    On most Linux hosts only `root` may talk to Docker. If a `docker` command fails with *permission denied … docker.sock*, put `sudo` in front of it (`sudo docker compose up --build -d`). Every command on this page works the same way with `sudo`. To drop the `sudo`, add yourself to the `docker` group with `sudo usermod -aG docker $USER`, then log out and back in (that group is equivalent to root access).
+    On most Linux hosts only `root` may talk to Docker. If a `docker` command fails with *permission denied … docker.sock*, put `sudo` in front of it (`sudo docker compose up -d`). Every command on this page works the same way with `sudo`. To drop the `sudo`, add yourself to the `docker` group with `sudo usermod -aG docker $USER`, then log out and back in (that group is equivalent to root access).
 
 ## 1. Download Horde
 
@@ -95,7 +95,7 @@ cp .env.example .env
 nano .env
 ```
 
-Change these four lines near the top (use your own numbers and paths; leave everything else alone):
+Fill in these four lines near the top (use your own numbers and paths; leave everything else alone). The two paths start out empty, and Horde will not start until they are set:
 
 ```env
 PUID=1000
@@ -106,8 +106,10 @@ DATA_PATH=/home/alex/horde-data
 
 In `nano`: move with the arrow keys, save with **Ctrl+O** then **Enter**, quit with **Ctrl+X**.
 
-!!! warning "Do not keep the example paths"
-    `.env.example` ships TrueNAS-style paths (`/mnt/tank/...`, `/opt/dockge/...`). On any other machine they do not exist, and Docker silently creates them **owned by root**, somewhere you did not choose. Horde then cannot save downloads. Always point both paths at folders you created.
+!!! warning "Point both paths at folders you created"
+    If a path does not exist, Docker creates it **owned by root**, and Horde then cannot save downloads there. Create the folders first (step 2), then use their full paths.
+
+The same file also sets `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`, the published image. Leave it: it saves a long build on your machine. (To build from the source instead, put a `#` in front of that line.)
 
 Make sure that user owns both folders (use the numbers from `id -u` and `id -g`):
 
@@ -117,13 +119,15 @@ sudo chown -R 1000:1000 ~/horde-media ~/horde-data
 
 Horde fixes the ownership of the data folder by itself on start; the media folder is left exactly as you set it, so this step matters for it.
 
-## 4. Build and start Horde
+## 4. Start Horde
 
 ```bash
-docker compose up --build -d
+docker compose up -d
 ```
 
-What this does: builds the Horde image from the source you cloned, downloads the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The **first build takes several minutes**, longer on a low-power NAS, and prints a lot of output. It is finished when you get your prompt back with lines like `Container horde  Started`.
+What this does: downloads the Horde image and the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The first start downloads about 1 GB, so give it a few minutes on a slow connection. It is finished when you get your prompt back with lines like `Container horde  Started`.
+
+If it stops at once with `required variable DOWNLOADS_PATH is missing a value`, the path is still empty in `.env`: go back to step 3.
 
 Check that it is running:
 
@@ -190,8 +194,9 @@ Start with the log: `docker compose logs --tail=50 horde`. The cause is usually 
 | `permission denied while trying to connect to the Docker daemon socket` (newer Docker: `… to the docker API at unix:///var/run/docker.sock`) | Put `sudo` in front of the command (see the note under [Install Docker and Git](#install-docker-and-git)). |
 | `docker: 'compose' is not a docker command` | Install the Docker Compose plugin (step [Install Docker and Git](#install-docker-and-git)). |
 | `unable to prepare context` / `Dockerfile not found` | You are not in the `horde` folder. `cd ~/horde` (or wherever you cloned it) and run the command again. |
+| `required variable DOWNLOADS_PATH is missing a value` (or `DATA_PATH`) | You are not in the `horde` folder, there is no `.env` there, or the path in it is empty. Fill in both paths (step 3). |
 | `horde` keeps restarting, log says `refusing to run as root` | `PUID` or `PGID` in `.env` is `0`. Set them to your own `id -u` / `id -g`. |
-| Downloads fail with *permission denied*, or the log mentions `/downloads` | The media folder is not owned by `PUID`:`PGID`. Rerun the `chown` from step 3 with the right numbers, then `docker compose up -d`. If you left the example paths in `.env`, fix them first. |
+| Downloads fail with *permission denied*, or the log mentions `/downloads` | The media folder is not owned by `PUID`:`PGID`. Rerun the `chown` from step 3 with the right numbers, then `docker compose up -d`. Check that both paths in `.env` are folders you created. |
 | Browser cannot connect | Check `docker compose ps`, use port **8686** (not 8080), and use the host's LAN address. A firewall on the host (for example `ufw`) may need `sudo ufw allow 8686/tcp`. |
 | Browser shows `host_not_allowed` | You opened Horde under a domain name (for example `horde.mydomain.com`). Add `HORDE_ALLOWED_HOSTS=horde.mydomain.com` to `.env`, then `docker compose up -d`. LAN and Tailscale IP addresses, `localhost`, single-word names (`mynas`) and names ending in `.local`, `.lan`, `.home.arpa`, `.internal` or `.ts.net` always work. |
 | The page looks old or broken after an update | Hard-refresh the browser: **Ctrl+Shift+R** (Mac: **Cmd+Shift+R**). |

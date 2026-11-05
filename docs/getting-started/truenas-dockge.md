@@ -4,7 +4,7 @@ Horde is designed to run on TrueNAS SCALE with [Dockge](https://dockge.kuma.pet/
 
 **The short version:** a shell on the NAS → `git clone` Horde into Dockge's stacks folder → `cp .env.example .env` and set `PUID`, `PGID`, `DOWNLOADS_PATH`, `DATA_PATH` → Dockge **Scan Stacks Folder** → **Deploy** → open `http://<truenas-ip>:8686`.
 
-Horde is **built from git** on the host (`build: .`). The Dockge stack folder must be a full `git clone`, not a compose snippet pasted into **Add Stack**. Without the repo, Docker has no `Dockerfile` and the image cannot build. A GitHub ZIP also skips `.git`, so later [`update.sh`](updating.md) cannot `git pull`.
+The Dockge stack folder must be a full `git clone`, not a compose snippet pasted into **Add Stack**: the stack needs the repository's compose file, `.env.example` and the [`update.sh`](updating.md) script, and a GitHub ZIP skips `.git`, so `update.sh` could not update it later. The Horde image itself is downloaded (`HORDE_IMAGE` in `.env`), not built on the NAS.
 
 !!! warning "Trusted network"
     Create the admin account on first visit ([accounts](../ops/authentication.md)). Keep the Dockge stack on your trusted network by default. To expose it, follow the [internet exposure checklist](../ops/internet-exposure.md) instead of just forwarding `8686`.
@@ -22,7 +22,7 @@ Horde is **built from git** on the host (`build: .`). The Dockge stack folder mu
 Dockge is a web UI over Docker Compose. Official install: [louislam/dockge](https://github.com/louislam/dockge). If you installed it from the TrueNAS **Apps** catalog instead, open its app settings to see which host folder holds the stacks and use that folder below. Two rules matter for Horde:
 
 1. **Stacks directory** (`DOCKGE_STACKS_DIR`, Dockge default `/opt/stacks`) is where you will `git clone` Horde.
-2. That directory must be mounted at the **same path** inside the Dockge container as on the host (`/mnt/tank/dockge/stacks:/mnt/tank/dockge/stacks`, not `/mnt/tank/dockge/stacks:/opt/stacks`). If the paths differ, `build: .` and Horde’s bind mounts resolve incorrectly.
+2. That directory must be mounted at the **same path** inside the Dockge container as on the host (`/mnt/tank/dockge/stacks:/mnt/tank/dockge/stacks`, not `/mnt/tank/dockge/stacks:/opt/stacks`). If the paths differ, Horde’s bind mounts resolve incorrectly.
 
 On TrueNAS, put stacks on a **pool dataset**, not the small boot device, for example:
 
@@ -99,7 +99,7 @@ bash update.sh
 
 ## 4. Edit `.env`
 
-`.env` holds your settings for this stack. Open it in the shell with `nano .env` (move with the arrow keys, save with **Ctrl+O** then **Enter**, quit with **Ctrl+X**), or, after step 5's scan, in the **.env** editor on the stack's page in Dockge. Change these lines to your values and leave the rest alone:
+`.env` holds your settings for this stack. Open it in the shell with `nano .env` (move with the arrow keys, save with **Ctrl+O** then **Enter**, quit with **Ctrl+X**), or, after step 5's scan, in the **.env** editor on the stack's page in Dockge. Fill in these lines with your values (the two paths start out empty, and Horde will not start until they are set) and leave the rest alone, including `HORDE_IMAGE`:
 
 ```env
 PUID=3000
@@ -114,21 +114,21 @@ SCAN_INTERVAL_SEC=60
 | `DOWNLOADS_PATH` | `/downloads` | Media dataset (Channel / Year / files) |
 | `DATA_PATH` | `/app/data` | Persistent DB + thumbnails (survive rebuilds) |
 
-Ensure `DATA_PATH` exists and is writable by `PUID`/`PGID`. It must survive container recreation. Keep these values in `.env` so `update.sh` / `git pull` cannot fall back to the compose defaults. Do not replace the volume lines in `docker-compose.yml` with hardcoded `/mnt/...` paths.
+Ensure `DATA_PATH` exists and is writable by `PUID`/`PGID`. It must survive container recreation. Keep these values in `.env`: the compose file has no fallback paths and stops with `required variable DOWNLOADS_PATH is missing a value` when one is missing. Do not replace the volume lines in `docker-compose.yml` with hardcoded `/mnt/...` paths.
 
 ## 5. Scan and deploy in Dockge
 
 1. Open Dockge in the browser.
 2. Top-right menu → **Scan Stacks Folder**. You should see a stack named `horde` (the folder name).
-3. Open it. The compose file should be this repo’s `docker-compose.yml` (`build: .`, `8686:8080`, volumes from `${DOWNLOADS_PATH}` / `${DATA_PATH}`).
+3. Open it. The compose file should be this repo’s `docker-compose.yml` (`8686:8080`, volumes from `${DOWNLOADS_PATH}` / `${DATA_PATH}`).
 4. Confirm the env panel matches the `.env` you edited. Do **not** rewrite bind-mount paths in the compose editor.
-5. Click **Deploy** / start. The **first** build pulls base images and compiles the frontend and wiki; watch the log until `horde` and `horde-bgutil-pot` are up.
+5. Click **Deploy** / start. The first start downloads the Horde image (about 1 GB); watch the log until `horde` and `horde-bgutil-pot` are up.
 
 From the host shell, the equivalent is:
 
 ```bash
 cd /mnt/tank/dockge/stacks/horde
-sudo docker compose up --build -d
+sudo docker compose up -d
 ```
 
 Wait until both containers show **running** (Dockge) or `docker compose ps` lists `horde` as `Up (healthy)`. If `horde` keeps restarting, its log says why; the usual causes are in [If something goes wrong](install-docker.md#if-something-goes-wrong).
@@ -184,7 +184,7 @@ cd /mnt/tank/dockge/stacks/horde   # your stack path
 bash update.sh
 ```
 
-`update.sh` pulls the latest code, records the running container’s volume mounts into `.env`, builds with `HORDE_GIT_SHA=$(git rev-parse HEAD)`, and recreates containers **only if** `DOWNLOADS_PATH` and `DATA_PATH` would stay the same. Full details: [Updating](updating.md).
+`update.sh` pulls the latest code, records the running container’s volume mounts into `.env`, pulls the new image (or builds it, without `HORDE_IMAGE`), and recreates containers **only if** `DOWNLOADS_PATH` and `DATA_PATH` would stay the same. Full details: [Updating](updating.md).
 
 Put host paths in `.env` and other changes (GPU, ports) in `docker-compose.override.yml`, never in `docker-compose.yml`. `update.sh` stops when `docker-compose.yml` has local edits (it saves your copy and tells you what to do, see [Local compose edits](updating.md#local-compose-edits)); hardcoded `/mnt/...` volume lines in Dockge's editor are what used to remount empty defaults and look like a settings wipe.
 

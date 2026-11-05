@@ -53,6 +53,7 @@ nav:
   - Getting started:
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md
+      - Other platforms (Unraid, Synology, Portainer): getting-started/other-platforms.md
       - First run: getting-started/first-run.md
       - Updating: getting-started/updating.md
       - Local development: getting-started/local-dev.md
