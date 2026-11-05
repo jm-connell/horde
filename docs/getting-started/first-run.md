@@ -66,6 +66,8 @@ If you mount the media dataset as an SMB share (or copy files into `DOWNLOADS_PA
 - `.mp4`
 - `.mkv`
 - `.webm`
+- `.m4v`
+- `.mov`
 
 New files are queued for review before they join the library. The fallback poller runs every **`SCAN_INTERVAL_SEC`** seconds (default **60**), which helps when inotify events are missed on network/ZFS mounts.
 
@@ -91,7 +93,7 @@ You do not need AI for a working archive. Enable it later via [AI setup](../ops/
 - [ ] A test URL downloads without errors
 - [ ] File exists under `Channel/Year/…`
 - [ ] Video appears in the library and plays
-- [ ] (Optional) A dropped `.mp4` / `.mkv` / `.webm` shows in Review within ~60s
+- [ ] (Optional) A dropped `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` shows in Review within ~60s
 
 ## If something fails
 
@@ -99,6 +101,6 @@ You do not need AI for a working archive. Enable it later via [AI setup](../ops/
     Hard-refresh the browser (`Ctrl+Shift+R`) so cached frontend assets reload.
 
 !!! tip "Empty library but files on disk"
-    Confirm `DOWNLOADS_PATH` / `DATA_PATH` mounts, then check Import & review for unscanned drops. Scanner only indexes `.mp4`, `.mkv`, and `.webm`.
+    Confirm `DOWNLOADS_PATH` / `DATA_PATH` mounts, then check Import & review for unscanned drops. Scanner only indexes `.mp4`, `.mkv`, `.webm`, `.m4v` and `.mov`.
 
 More: [Troubleshooting](../ops/troubleshooting.md).

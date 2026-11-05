@@ -50,7 +50,7 @@ Create a **second** directory on the pool for app data (SQLite, settings, thumbn
 
 This becomes `DATA_PATH` → `/app/data`. `.env.example` still mentions `/opt/dockge/horde/data`; prefer a dataset on `tank` so the database is not on the boot pool. Do not point `DATA_PATH` at an SMB or NFS mount: SQLite's WAL mode is unsafe on network filesystems.
 
-Optionally share the media dataset over SMB so you can drop `.mp4` / `.mkv` / `.webm` files from a desktop. The folder scanner (watchdog plus a poll every `SCAN_INTERVAL_SEC`, default **60** seconds) picks them up for [Import & review](../guides/import-review.md).
+Optionally share the media dataset over SMB so you can drop `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files from a desktop. The folder scanner (watchdog plus a poll every `SCAN_INTERVAL_SEC`, default **60** seconds) picks them up for [Import & review](../guides/import-review.md).
 
 Prefer the shell? Plain folders work too (datasets just make snapshots and quotas easier):
 

@@ -41,7 +41,7 @@ A cancel that crashes before the DB write can requeue once — rare and acceptab
 
 ## Files not appearing in the library
 
-1. Confirm the file is under `DOWNLOADS_DIR` with a supported extension (`.mp4`, `.mkv`, `.webm`).
+1. Confirm the file is under `DOWNLOADS_DIR` with a supported extension (`.mp4`, `.mkv`, `.webm`, `.m4v`, `.mov`).
 2. Intermediate names (`.part`, `.fNNN.`, `.norm.`, `.compat.`) are ignored until the final merge exists.
 3. Wait for the watchdog or the poll interval (`SCAN_INTERVAL_SEC`, default 60s).
 4. Imports may sit in **needs review** — open [Import](../guides/import-review.md).

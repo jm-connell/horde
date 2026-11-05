@@ -100,7 +100,7 @@ Start the backend before the frontend so the proxy has something to talk to.
 | `DOWNLOADS_DIR` | `./downloads` | Media tree (`Channel/Year/Title [id].ext`) |
 | `DATA_DIR` | `./data` | SQLite DB, thumbnails, sprites |
 
-Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**. Fallback poll interval: **`SCAN_INTERVAL_SEC`** (default **60**), same as Docker.
+Scanner import extensions: **`.mp4`**, **`.mkv`**, **`.webm`**, **`.m4v`**, **`.mov`**. Fallback poll interval: **`SCAN_INTERVAL_SEC`** (default **60**), same as Docker.
 
 ## Tests
 

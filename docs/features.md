@@ -65,7 +65,7 @@ Full guide: [Channels](guides/channels.md).
 
 ## Import and review
 
-Bring in files that did not come from the download queue: drag-and-drop on `/import`, or drop `.mp4` / `.mkv` / `.webm` into the media folder. A review queue asks for a **channel** (and usually a title) before the file joins the library.
+Bring in files that did not come from the download queue: drag-and-drop on `/import`, or drop `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` into the media folder. A review queue asks for a **channel** (and usually a title) before the file joins the library.
 
 ![Import and review queue for dropped or uploaded files](assets/screenshots/import.webp)
 

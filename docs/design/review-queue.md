@@ -26,7 +26,7 @@ You can **skip** review without a channel: the file stays playable and leaves th
 
 | Path | Behavior |
 |------|----------|
-| **Folder scanner** | Watchdog + poll interval discovers new `.mp4` / `.mkv` / `.webm` (and configured extensions) under downloads |
+| **Folder scanner** | Watchdog + poll interval discovers new `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` (and configured extensions) under downloads |
 | **Scan for new files** | Import page button; same walk as the scanner, plus re-queues skipped manual imports |
 | **Upload** | Streams into `imports/…` and creates a review row |
 | **Active downloads** | Intermediate yt-dlp fragments are ignored so partial files never become review items |

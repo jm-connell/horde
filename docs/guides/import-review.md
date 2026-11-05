@@ -18,6 +18,8 @@ On `/import`, drop or choose files. Accepted extensions:
 - `.mp4`
 - `.mkv`
 - `.webm`
+- `.m4v`
+- `.mov`
 
 Unsupported types are rejected with a toast.
 

@@ -81,6 +81,9 @@ _CONTENT_TYPES = {
     ".mp4": "video/mp4",
     ".webm": "video/webm",
     ".mkv": "video/x-matroska",
+    # Served as MP4: Chrome will not play a "video/quicktime" response.
+    ".m4v": "video/mp4",
+    ".mov": "video/mp4",
     ".m4a": "audio/mp4",
     ".mp3": "audio/mpeg",
     ".opus": "audio/opus",

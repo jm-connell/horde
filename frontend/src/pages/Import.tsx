@@ -26,8 +26,9 @@ import { formatSize } from "../utils";
 import { getJson, setJson } from "../storage";
 import { ChevronIcon } from "../components/icons";
 import { button } from "../components/buttons";
-const VIDEO_ACCEPT = ".mp4,.mkv,.webm,video/mp4,video/webm,video/x-matroska";
-const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm"]);
+const VIDEO_ACCEPT =
+  ".mp4,.mkv,.webm,.m4v,.mov,video/mp4,video/webm,video/x-matroska,video/quicktime";
+const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm", ".m4v", ".mov"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
 
 function verdictLabel(group: DuplicateGroup): string | null {
@@ -253,7 +254,7 @@ export default function Import() {
     async (files: File[]) => {
       const videos = files.filter(isVideoFile);
       if (videos.length === 0) {
-        showToast("No supported video files (.mp4, .mkv, .webm)");
+        showToast("No supported video files (.mp4, .mkv, .webm, .m4v, .mov)");
         return;
       }
       if (uploadingRef.current) {
@@ -364,7 +365,7 @@ export default function Import() {
         }`}
       >
         <p className="text-sm text-gray-300">
-          Drop .mp4, .mkv, or .webm files here
+          Drop .mp4, .mkv, .webm, .m4v or .mov files here
         </p>
         <p className="mt-1 text-xs text-muted">or</p>
         <button

@@ -169,7 +169,7 @@ Stopping or rebuilding never deletes your videos or settings: they live in the t
 
 **A GPU.** Not needed for downloading, browsing or playing. It only speeds up making H.264 copies for devices that cannot play AV1. See [GPU](../ops/environment.md#gpu); settings like this go in a `docker-compose.override.yml`, never in `docker-compose.yml` itself, so updates keep working.
 
-**Dropping in your own files.** Copy `.mp4`, `.mkv` or `.webm` files into the media folder (for example over an SMB share) and they show up under **Import** within a minute ([Import & review](../guides/import-review.md)).
+**Dropping in your own files.** Copy `.mp4`, `.mkv`, `.webm`, `.m4v` or `.mov` files into the media folder (for example over an SMB share) and they show up under **Import** within a minute ([Import & review](../guides/import-review.md)).
 
 **More settings.** Every option you can put in `.env` is listed under [Environment variables](../ops/environment.md). After editing `.env`, run `docker compose up -d`.
 

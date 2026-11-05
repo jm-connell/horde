@@ -35,7 +35,7 @@ downloads/
 | Year | Upload year (`upload_date`) |
 | Filename | Title + YouTube (or source) id in brackets + extension |
 
-Supported library extensions: `.mp4`, `.mkv`, `.webm`.
+Supported library extensions: `.mp4`, `.mkv`, `.webm`, `.m4v`, `.mov` (the last two are served as MP4; they play when they hold H.264 or HEVC with AAC, as phones and cameras write them).
 
 ### Imports
 

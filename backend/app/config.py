@@ -43,7 +43,9 @@ TRASH_DAYS_DEFAULT = 7
 TRASH_DAYS: int = _non_negative_int("HORDE_TRASH_DAYS", TRASH_DAYS_DEFAULT)
 
 # Video extensions the scanner treats as importable media.
-VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm"}
+# .m4v and .mov are MP4-family containers that browsers play when the streams are
+# H.264/HEVC + AAC, which is what phones and cameras write.
+VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm", ".m4v", ".mov"}
 
 # Host/port for uvicorn (entrypoint reads these too).
 HOST: str = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 - container server; bind-all is the documented default
