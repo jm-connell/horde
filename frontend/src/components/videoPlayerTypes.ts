@@ -57,6 +57,8 @@ export interface VideoPlayerProps {
    */
   progressiveFallbackSrc?: string;
   videoId?: number;
+  /** The library video has an H.264 copy (cast that to a Chromecast). */
+  hasCompat?: boolean;
   /** A stream's YouTube storyboard: seek previews without local sprites. */
   storyboard?: Storyboard | null;
   mimeType?: string;

@@ -47,6 +47,7 @@ export default function VideoPlayer({
   live = false,
   progressiveFallbackSrc: progressiveFallbackProp,
   videoId,
+  hasCompat,
   storyboard = null,
   mimeType = "video/mp4",
   poster = null,
@@ -120,6 +121,7 @@ export default function VideoPlayer({
   } = useCasting({
     videoRef,
     videoId,
+    hasCompat,
     src,
     mimeType,
     title,

@@ -99,6 +99,8 @@ Floating UI (download panel / queue) tracks the mini player on resize and avoids
 | **Chromecast** | Cast library/stream media when the Cast SDK is available |
 | **AirPlay** | Show the AirPlay picker on supported Safari / Apple environments |
 
+A Chromecast gets a video's H.264 copy when it has one ([Playback compatibility](downloads.md#compatibility-codecs)), because most Chromecasts cannot play AV1; without a copy it gets the original file. If casting AV1 videos fails, turn on **AV1 + H.264 copy** in Settings → Library.
+
 Remote playback syncs position where the cast session reports it, and while a Chromecast plays, the position it reports is saved to your account like local playback (every few seconds), so your other devices resume from where the TV got to. Ending a cast session restores that position locally. AirPlay plays through the page's own player, so its progress is saved as usual.
 
 ## SponsorBlock
