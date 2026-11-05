@@ -2165,6 +2165,26 @@
         "title": "AppSettingsUpdate",
         "type": "object"
       },
+      "ApproveSuggestedResult": {
+        "properties": {
+          "approved": {
+            "description": "Review items moved into the library.",
+            "title": "Approved",
+            "type": "integer"
+          },
+          "remaining": {
+            "description": "Review items still waiting.",
+            "title": "Remaining",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "approved",
+          "remaining"
+        ],
+        "title": "ApproveSuggestedResult",
+        "type": "object"
+      },
       "AskChannelCreate": {
         "properties": {
           "include_streams": {
@@ -7549,6 +7569,107 @@
         "title": "HistoryWatchRead",
         "type": "object"
       },
+      "ImportSuggestion": {
+        "description": "Fields Horde can fill in for a review item. Only blanks are suggested.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "sources": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Sources",
+            "type": "array"
+          },
+          "tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ImportSuggestion",
+        "type": "object"
+      },
       "JobStatus": {
         "enum": [
           "queued",
@@ -10368,6 +10489,576 @@
           "reason"
         ],
         "title": "RetentionPreviewItem",
+        "type": "object"
+      },
+      "ReviewItemRead": {
+        "description": "A video waiting in the import queue, with what its files suggest.",
+        "properties": {
+          "acodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acodec"
+          },
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "ai_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary"
+          },
+          "ai_summary_cost": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Cost"
+          },
+          "ai_summary_length": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Length"
+          },
+          "ai_summary_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ai Summary Model"
+          },
+          "ai_tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Ai Tags",
+            "type": "array"
+          },
+          "bit_depth": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bit Depth"
+          },
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_subscriber_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Subscriber Count"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "chapters": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ChapterRead"
+            },
+            "title": "Chapters",
+            "type": "array"
+          },
+          "chapters_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "description",
+                  "source",
+                  "ai"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chapters Source"
+          },
+          "codec_string": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec String"
+          },
+          "compat": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompatState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "compat_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Compat Size"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "description_is_custom": {
+            "default": false,
+            "title": "Description Is Custom",
+            "type": "boolean"
+          },
+          "duration_sec": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Sec"
+          },
+          "embed_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Error"
+          },
+          "embed_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embed Status"
+          },
+          "file_path": {
+            "title": "File Path",
+            "type": "string"
+          },
+          "file_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Size"
+          },
+          "frame_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame Rate"
+          },
+          "has_compat": {
+            "default": false,
+            "title": "Has Compat",
+            "type": "boolean"
+          },
+          "has_sprites": {
+            "default": false,
+            "title": "Has Sprites",
+            "type": "boolean"
+          },
+          "has_thumbnail": {
+            "title": "Has Thumbnail",
+            "type": "boolean"
+          },
+          "height_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Px"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "is_hdr": {
+            "default": false,
+            "title": "Is Hdr",
+            "type": "boolean"
+          },
+          "last_position_sec": {
+            "title": "Last Position Sec",
+            "type": "number"
+          },
+          "last_watched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Watched At"
+          },
+          "match_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata_synced_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Synced At"
+          },
+          "needs_review": {
+            "title": "Needs Review",
+            "type": "boolean"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "processing_chapters": {
+            "default": false,
+            "title": "Processing Chapters",
+            "type": "boolean"
+          },
+          "processing_sprites": {
+            "default": false,
+            "title": "Processing Sprites",
+            "type": "boolean"
+          },
+          "processing_summary": {
+            "default": false,
+            "title": "Processing Summary",
+            "type": "boolean"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Description"
+          },
+          "source_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Title"
+          },
+          "source_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Url"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VideoStatus"
+          },
+          "subtitles": {
+            "items": {
+              "$ref": "#/components/schemas/SubtitleTrack"
+            },
+            "title": "Subtitles",
+            "type": "array"
+          },
+          "subtitles_pending": {
+            "default": false,
+            "title": "Subtitles Pending",
+            "type": "boolean"
+          },
+          "suggestion": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportSuggestion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "tags_enriched_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags Enriched At"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "title_is_custom": {
+            "title": "Title Is Custom",
+            "type": "boolean"
+          },
+          "user_tags": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "User Tags",
+            "type": "array"
+          },
+          "vcodec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vcodec"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count"
+          },
+          "width_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width Px"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "channel",
+          "channel_url",
+          "tags",
+          "description",
+          "notes",
+          "source_url",
+          "has_thumbnail",
+          "subtitles",
+          "file_path",
+          "duration_sec",
+          "file_size",
+          "width_px",
+          "height_px",
+          "frame_rate",
+          "view_count",
+          "channel_subscriber_count",
+          "published_at",
+          "added_at",
+          "last_position_sec",
+          "last_watched_at",
+          "needs_review",
+          "platform",
+          "status",
+          "metadata_synced_at",
+          "source_title",
+          "title_is_custom"
+        ],
+        "title": "ReviewItemRead",
+        "type": "object"
+      },
+      "ReviewPage": {
+        "description": "One page of the import queue. Pass ``next_cursor`` back as ``cursor``.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItemRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ReviewPage",
         "type": "object"
       },
       "RewatchedPage": {
@@ -23400,7 +24091,7 @@
     },
     "/api/review": {
       "get": {
-        "description": "One page of videos waiting for review, newest first.",
+        "description": "One page of videos waiting for review, newest first, each with what its\nfiles on disk suggest (``.info.json``, ``.nfo``, folder and ``[id]``).",
         "operationId": "review_queue_api_review_get",
         "parameters": [
           {
@@ -23447,7 +24138,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VideoPage"
+                  "$ref": "#/components/schemas/ReviewPage"
                 }
               }
             },
@@ -23475,6 +24166,48 @@
           }
         },
         "summary": "Review Queue",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/api/review/approve-suggested": {
+      "post": {
+        "description": "Approve up to 100 review items whose title and channel are known, from the\nvideo itself or its suggestion. Files stay where they are. Call again while\n``approved`` is non-zero to work through a large queue.",
+        "operationId": "approve_suggested_api_review_approve_suggested_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApproveSuggestedResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve Suggested",
         "tags": [
           "review"
         ]
@@ -23694,6 +24427,78 @@
           }
         },
         "summary": "Skip Review",
+        "tags": [
+          "review"
+        ]
+      }
+    },
+    "/api/review/{video_id}/youtube": {
+      "get": {
+        "description": "Title, channel, date, description and tags of the YouTube video this file\nis a copy of: the ``[id]`` in its name, its sidecars, or ``youtube_id``.",
+        "operationId": "lookup_on_youtube_api_review__video_id__youtube_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Overrides the file's id.",
+            "in": "query",
+            "name": "youtube_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[A-Za-z0-9_-]{11}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Overrides the file's id.",
+              "title": "Youtube Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSuggestion"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Lookup On Youtube",
         "tags": [
           "review"
         ]

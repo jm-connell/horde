@@ -2887,11 +2887,34 @@ export interface paths {
         };
         /**
          * Review Queue
-         * @description One page of videos waiting for review, newest first.
+         * @description One page of videos waiting for review, newest first, each with what its
+         *     files on disk suggest (``.info.json``, ``.nfo``, folder and ``[id]``).
          */
         get: operations["review_queue_api_review_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/approve-suggested": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Suggested
+         * @description Approve up to 100 review items whose title and channel are known, from the
+         *     video itself or its suggestion. Files stay where they are. Call again while
+         *     ``approved`` is non-zero to work through a large queue.
+         */
+        post: operations["approve_suggested_api_review_approve_suggested_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2981,6 +3004,27 @@ export interface paths {
          *     library keeping its filename-derived title.
          */
         post: operations["skip_review_api_review__video_id__skip_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/{video_id}/youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup On Youtube
+         * @description Title, channel, date, description and tags of the YouTube video this file
+         *     is a copy of: the ``[id]`` in its name, its sidecars, or ``youtube_id``.
+         */
+        get: operations["lookup_on_youtube_api_review__video_id__youtube_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -5050,6 +5094,19 @@ export interface components {
             /** Youtube Video Search */
             youtube_video_search?: boolean | null;
         };
+        /** ApproveSuggestedResult */
+        ApproveSuggestedResult: {
+            /**
+             * Approved
+             * @description Review items moved into the library.
+             */
+            approved: number;
+            /**
+             * Remaining
+             * @description Review items still waiting.
+             */
+            remaining: number;
+        };
         /** AskChannelCreate */
         AskChannelCreate: {
             /**
@@ -6954,6 +7011,36 @@ export interface components {
             youtube_views: number;
         };
         /**
+         * ImportSuggestion
+         * @description Fields Horde can fill in for a review item. Only blanks are suggested.
+         */
+        ImportSuggestion: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Source Url */
+            source_url?: string | null;
+            /**
+             * Sources
+             * @default []
+             */
+            sources: string[];
+            /**
+             * Tags
+             * @default []
+             */
+            tags: string[];
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
          * JobStatus
          * @enum {string}
          */
@@ -7992,6 +8079,168 @@ export interface components {
             size_bytes: number;
             /** Title */
             title: string;
+        };
+        /**
+         * ReviewItemRead
+         * @description A video waiting in the import queue, with what its files suggest.
+         */
+        ReviewItemRead: {
+            /** Acodec */
+            acodec?: string | null;
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Ai Summary */
+            ai_summary?: string | null;
+            /** Ai Summary Cost */
+            ai_summary_cost?: number | null;
+            /** Ai Summary Length */
+            ai_summary_length?: string | null;
+            /** Ai Summary Model */
+            ai_summary_model?: string | null;
+            /**
+             * Ai Tags
+             * @default []
+             */
+            ai_tags: string[];
+            /** Bit Depth */
+            bit_depth?: number | null;
+            /** Channel */
+            channel: string | null;
+            /** Channel Subscriber Count */
+            channel_subscriber_count: number | null;
+            /** Channel Url */
+            channel_url: string | null;
+            /**
+             * Chapters
+             * @default []
+             */
+            chapters: components["schemas"]["ChapterRead"][];
+            /** Chapters Source */
+            chapters_source?: ("description" | "source" | "ai") | null;
+            /** Codec String */
+            codec_string?: string | null;
+            compat?: components["schemas"]["CompatState"] | null;
+            /** Compat Size */
+            compat_size?: number | null;
+            /** Description */
+            description: string | null;
+            /**
+             * Description Is Custom
+             * @default false
+             */
+            description_is_custom: boolean;
+            /** Duration Sec */
+            duration_sec: number | null;
+            /** Embed Error */
+            embed_error?: string | null;
+            /** Embed Status */
+            embed_status?: string | null;
+            /** File Path */
+            file_path: string;
+            /** File Size */
+            file_size: number | null;
+            /** Frame Rate */
+            frame_rate: number | null;
+            /**
+             * Has Compat
+             * @default false
+             */
+            has_compat: boolean;
+            /**
+             * Has Sprites
+             * @default false
+             */
+            has_sprites: boolean;
+            /** Has Thumbnail */
+            has_thumbnail: boolean;
+            /** Height Px */
+            height_px: number | null;
+            /** Id */
+            id: number;
+            /**
+             * Is Hdr
+             * @default false
+             */
+            is_hdr: boolean;
+            /** Last Position Sec */
+            last_position_sec: number;
+            /** Last Watched At */
+            last_watched_at: string | null;
+            match_reason?: components["schemas"]["SearchMatchReason"] | null;
+            /** Metadata Synced At */
+            metadata_synced_at: string | null;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Notes */
+            notes: string | null;
+            /** Platform */
+            platform: string | null;
+            /**
+             * Processing Chapters
+             * @default false
+             */
+            processing_chapters: boolean;
+            /**
+             * Processing Sprites
+             * @default false
+             */
+            processing_sprites: boolean;
+            /**
+             * Processing Summary
+             * @default false
+             */
+            processing_summary: boolean;
+            /** Published At */
+            published_at: string | null;
+            /** Source Description */
+            source_description?: string | null;
+            /** Source Title */
+            source_title: string | null;
+            /** Source Url */
+            source_url: string | null;
+            status: components["schemas"]["VideoStatus"];
+            /** Subtitles */
+            subtitles: components["schemas"]["SubtitleTrack"][];
+            /**
+             * Subtitles Pending
+             * @default false
+             */
+            subtitles_pending: boolean;
+            suggestion?: components["schemas"]["ImportSuggestion"] | null;
+            /** Tags */
+            tags: string[];
+            /** Tags Enriched At */
+            tags_enriched_at?: string | null;
+            /** Title */
+            title: string;
+            /** Title Is Custom */
+            title_is_custom: boolean;
+            /**
+             * User Tags
+             * @default []
+             */
+            user_tags: string[];
+            /** Vcodec */
+            vcodec?: string | null;
+            /** View Count */
+            view_count: number | null;
+            /** Width Px */
+            width_px: number | null;
+        };
+        /**
+         * ReviewPage
+         * @description One page of the import queue. Pass ``next_cursor`` back as ``cursor``.
+         */
+        ReviewPage: {
+            /** Items */
+            items: components["schemas"]["ReviewItemRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+            /** Total */
+            total?: number | null;
         };
         /** RewatchedPage */
         RewatchedPage: {
@@ -16495,7 +16744,45 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VideoPage"];
+                    "application/json": components["schemas"]["ReviewPage"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_suggested_api_review_approve_suggested_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveSuggestedResult"];
                 };
             };
             /** @description Validation error */
@@ -16657,6 +16944,49 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    lookup_on_youtube_api_review__video_id__youtube_get: {
+        parameters: {
+            query?: {
+                /** @description Overrides the file's id. */
+                youtube_id?: string | null;
+            };
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSuggestion"];
                 };
             };
             /** @description Validation error */

@@ -135,6 +135,8 @@ GATES: dict[tuple[str, str], str] = {
         for m, p in [
             ("PATCH", "/api/videos/bulk-notes"),
             ("PATCH", "/api/videos/{video_id}"),
+            ("POST", "/api/review/approve-suggested"),
+            ("GET", "/api/review/{video_id}/youtube"),
             ("POST", "/api/videos/{video_id}/refresh-metadata"),
             ("POST", "/api/videos/{video_id}/comments/refresh"),
             ("POST", "/api/videos/{video_id}/thumbnail"),

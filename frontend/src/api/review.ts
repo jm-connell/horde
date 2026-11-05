@@ -1,4 +1,11 @@
-import type { DuplicateGroup, ImportScanResult, Video } from "../types";
+import type {
+  ApproveSuggestedResult,
+  DuplicateGroup,
+  ImportScanResult,
+  ImportSuggestion,
+  ReviewItem,
+  Video,
+} from "../types";
 import {
   collectPages,
   CSRF_HEADER,
@@ -26,12 +33,25 @@ export const reviewApi = {
     return page.total ?? page.items.length;
   },
 
-  listReview(): Promise<Video[]> {
+  /** The whole import queue, each item with what its files on disk suggest. */
+  listReview(): Promise<ReviewItem[]> {
     return collectPages((cursor) => {
       const qs = new URLSearchParams({ limit: String(PAGE_SIZE) });
       if (cursor) qs.set("cursor", cursor);
-      return request<Page<Video>>(`/api/review?${qs}`);
+      return request<Page<ReviewItem>>(`/api/review?${qs}`);
     });
+  },
+
+  /** Approve one batch (up to 100) of items whose title and channel are known. */
+  approveSuggested(): Promise<ApproveSuggestedResult> {
+    return request<ApproveSuggestedResult>("/api/review/approve-suggested", {
+      method: "POST",
+    });
+  },
+
+  /** What YouTube says about the video a review item is a copy of. */
+  lookupOnYoutube(id: number): Promise<ImportSuggestion> {
+    return request<ImportSuggestion>(`/api/review/${id}/youtube`);
   },
 
   scanImport(): Promise<ImportScanResult> {

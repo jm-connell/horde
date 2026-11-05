@@ -7,7 +7,12 @@ import LoadingIndicator from "../components/LoadingIndicator";
 import VideoEditForm from "../components/VideoEditForm";
 import { useConfirm } from "../context/ConfirmContext";
 import { useToast } from "../context/ToastContext";
-import type { DuplicateGroup, Video } from "../types";
+import type {
+  DuplicateGroup,
+  ImportSuggestion,
+  ReviewItem,
+  Video,
+} from "../types";
 import { useQueryClient } from "@tanstack/react-query";
 import { queryKeys } from "../queries/keys";
 import {
@@ -30,6 +35,29 @@ const VIDEO_ACCEPT =
   ".mp4,.mkv,.webm,.m4v,.mov,video/mp4,video/webm,video/x-matroska,video/quicktime";
 const VIDEO_EXTS = new Set([".mp4", ".mkv", ".webm", ".m4v", ".mov"]);
 const DISMISSED_DUPES_KEY = "horde.dismissedDuplicateGroups";
+// Each form grabs frames from its video; a migrated archive can queue thousands.
+const FORMS_PER_PAGE = 20;
+
+const SOURCE_LABELS: Record<string, string> = {
+  info_json: "yt-dlp .info.json",
+  nfo: ".nfo file",
+  path: "folder and file name",
+  youtube: "YouTube",
+};
+
+/** True when approving would not need anything typed in. */
+function isReady(item: ReviewItem): boolean {
+  const s = item.suggestion;
+  return Boolean((item.channel || s?.channel) && (s?.title || item.title));
+}
+
+function hasYoutubeSource(item: ReviewItem): boolean {
+  return Boolean(
+    /\[[A-Za-z0-9_-]{11}\]/.test(item.file_path) ||
+    item.source_url?.includes("youtube.com/") ||
+    item.suggestion?.source_url?.includes("youtube.com/")
+  );
+}
 
 function verdictLabel(group: DuplicateGroup): string | null {
   if (group.match_type === "youtube_id") return "Same YouTube ID";
@@ -91,7 +119,12 @@ export default function Import() {
   const confirm = useConfirm();
   const retentionDays = useTrashRetentionDays();
   const afterDelete = useAfterDelete();
-  const [items, setItems] = useState<Video[]>([]);
+  const [items, setItems] = useState<ReviewItem[]>([]);
+  const [shownForms, setShownForms] = useState(FORMS_PER_PAGE);
+  const [lookups, setLookups] = useState<Record<number, ImportSuggestion>>({});
+  const [lookingUp, setLookingUp] = useState<number | null>(null);
+  const [approving, setApproving] = useState(false);
+  const readyCount = useMemo(() => items.filter(isReady).length, [items]);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(() =>
     loadDismissedDupes()
@@ -209,7 +242,7 @@ export default function Import() {
     (opts?: { silent?: boolean }) => {
       if (!opts?.silent) setLoading(true);
       Promise.all([
-        api.listReview().catch(() => [] as Video[]),
+        api.listReview().catch(() => [] as ReviewItem[]),
         api.listDuplicateGroups().catch(() => [] as DuplicateGroup[]),
       ])
         .then(([review, dupes]) => {
@@ -224,6 +257,50 @@ export default function Import() {
     },
     [queryClient]
   );
+
+  const approveAllReady = async () => {
+    const ok = await confirm({
+      title: `Approve ${videoCount(readyCount)}?`,
+      body: (
+        <p>
+          Every file whose title and channel Horde could read from its folder,
+          file name or sidecar files joins the library as suggested. Files stay
+          where they are on disk. Files without a channel stay here.
+        </p>
+      ),
+      confirmLabel: "Approve",
+    });
+    if (!ok) return;
+    setApproving(true);
+    let total = 0;
+    try {
+      // The server approves a batch per call; keep going until none are left.
+      for (;;) {
+        const res = await api.approveSuggested();
+        total += res.approved;
+        if (res.approved === 0 || res.remaining === 0) break;
+      }
+      showToast(`Approved ${videoCount(total)}`);
+    } catch (err) {
+      showError(`Could not approve: ${describeError(err)}`);
+    } finally {
+      setApproving(false);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.videos.all });
+      load({ silent: true });
+    }
+  };
+
+  const lookUp = async (item: ReviewItem) => {
+    setLookingUp(item.id);
+    try {
+      const found = await api.lookupOnYoutube(item.id);
+      setLookups((prev) => ({ ...prev, [item.id]: found }));
+    } catch (err) {
+      showError(`Could not look it up: ${describeError(err)}`);
+    } finally {
+      setLookingUp(null);
+    }
+  };
 
   const scanForNewFiles = async () => {
     if (scanningRef.current) return;
@@ -455,15 +532,59 @@ export default function Import() {
         <div className="space-y-8">
           {items.length > 0 && (
             <div className="space-y-5">
-              {items.map((v) => (
+              {items.length > 1 && readyCount > 0 && can("edit_metadata") && (
+                <div
+                  className="ui-panel flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-900 px-4 py-3 ring-1 ring-ink-700"
+                  role="status"
+                >
+                  <p className="text-sm text-gray-300">
+                    {readyCount} of {items.length} files already have a title
+                    and channel from their folder, name or sidecar files.
+                  </p>
+                  <button
+                    type="button"
+                    disabled={approving}
+                    aria-busy={approving || undefined}
+                    onClick={() => void approveAllReady()}
+                    className={button("primary")}
+                  >
+                    {approving ? "Approving…" : `Approve ${readyCount} ready`}
+                  </button>
+                </div>
+              )}
+              {items.slice(0, shownForms).map((v) => (
                 <div key={v.id} className="space-y-2">
+                  {(lookups[v.id] ?? v.suggestion) && (
+                    <p className="text-xs text-muted">
+                      Filled in from{" "}
+                      {(lookups[v.id] ?? v.suggestion)?.sources
+                        ?.map((src) => SOURCE_LABELS[src] ?? src)
+                        .join(", ")}
+                      . Check it, then approve.
+                    </p>
+                  )}
                   <VideoEditForm
                     video={v}
+                    prefill={lookups[v.id] ?? v.suggestion}
                     requireChannel
                     saveLabel="Save & approve"
                     onSaved={() => load()}
                   />
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
+                    {hasYoutubeSource(v) && can("edit_metadata") && (
+                      <button
+                        type="button"
+                        disabled={lookingUp === v.id}
+                        aria-busy={lookingUp === v.id || undefined}
+                        onClick={() => void lookUp(v)}
+                        className={button("secondary")}
+                        title="Fill in the title, channel, date, description and tags from YouTube"
+                      >
+                        {lookingUp === v.id
+                          ? "Looking up…"
+                          : "Fetch details from YouTube"}
+                      </button>
+                    )}
                     <button
                       onClick={async () => {
                         try {
@@ -489,6 +610,16 @@ export default function Import() {
                   </div>
                 </div>
               ))}
+              {items.length > shownForms && (
+                <button
+                  type="button"
+                  onClick={() => setShownForms((n) => n + FORMS_PER_PAGE)}
+                  className={`${button("secondary")} w-full`}
+                >
+                  Show {Math.min(FORMS_PER_PAGE, items.length - shownForms)}{" "}
+                  more ({items.length - shownForms} not shown)
+                </button>
+              )}
             </div>
           )}
 

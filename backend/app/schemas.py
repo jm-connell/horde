@@ -1803,3 +1803,43 @@ class LiveCommentsRead(BaseModel):
     items: list[CommentRead] = []
     #: The next, larger ``limit``; null when there are no more comments to read.
     next_limit: int | None = None
+
+
+class ImportSuggestion(BaseModel):
+    """Fields Horde can fill in for a review item. Only blanks are suggested."""
+
+    title: str | None = None
+    channel: str | None = None
+    channel_url: str | None = None
+    description: str | None = None
+    published_at: datetime | None = None
+    source_url: str | None = None
+    tags: list[str] = []
+    thumbnail_url: str | None = None
+    # Where the suggestion came from: info_json, nfo, path or youtube.
+    sources: list[str] = []
+
+    def is_empty(self) -> bool:
+        return not any(
+            (
+                self.title,
+                self.channel,
+                self.channel_url,
+                self.description,
+                self.published_at,
+                self.source_url,
+                self.tags,
+                self.thumbnail_url,
+            )
+        )
+
+
+class ReviewItemRead(VideoRead):
+    """A video waiting in the import queue, with what its files suggest."""
+
+    suggestion: ImportSuggestion | None = None
+
+
+class ApproveSuggestedResult(BaseModel):
+    approved: int = Field(description="Review items moved into the library.")
+    remaining: int = Field(description="Review items still waiting.")
