@@ -34,7 +34,7 @@ Interactive API reference: `/docs`.
 - **Library**: channel sidebar, hybrid search, tags, bulk selection, continue
   watching, and YouTube channel catalogs to browse, preview and download
   uploads you don't have yet.
-- **Recommended+**: a home feed for when you don't know what to watch: new
+- **Recommended**: a home feed for when you don't know what to watch: new
   uploads from your channels, more like what you've been watching, channels
   you've never seen (found on YouTube in the background, gently rate limited)
   and the odd throwback, with "not interested" and channel suggestions.

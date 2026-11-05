@@ -281,11 +281,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   always sits at the bottom right, never on a line of its own. "+ Queue"
   appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
   with a short stagger.
-- **Recommendation source marks.** In Recommended+, when **Sources** is on, a
+- **Recommendation source marks.** In Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
   has indexed), none (a channel new to them). Square on phones' edge-to-edge
-  cards. A legend of dots sits above the grid. Only the theme's accent, so the
+  cards. A legend of dots sits beside the home tabs. Only the theme's accent, so the
   marks follow every theme; why a card is there is its hover title, not a line
   under it.
 - **Search placeholder card.** Holds a late result's place in a grid (YouTube
@@ -333,7 +333,7 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
-  The Recommended+ **Algorithm** panel uses the same frame (it shows only
+  The Recommended **Algorithm** panel uses the same frame (it shows only
   while that feed is on screen). With both open there is still one frame: its
   header turns into tabs (`ink-800` fill on the selected one, `text-muted`
   otherwise; arrow keys move between them), each body stays mounted while

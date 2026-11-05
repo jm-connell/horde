@@ -1,4 +1,4 @@
-"""Every video Recommended+ may show, and the vectors that score it.
+"""Every video Recommended may show, and the vectors that score it.
 
 Three pools, one key space (the YouTube id; ``video:<id>`` for a library video
 without one), and a video in more than one pool is listed once, from the first

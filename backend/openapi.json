@@ -10100,7 +10100,7 @@
         "type": "object"
       },
       "RecTuningRead": {
-        "description": "The user's Recommended+ settings and the presets they can pick from.",
+        "description": "The user's Recommended settings and the presets they can pick from.",
         "properties": {
           "active": {
             "title": "Active",
@@ -10160,7 +10160,7 @@
         "type": "object"
       },
       "RecTuningWrite": {
-        "description": "Rank Recommended+ with a preset, a saved algorithm, or your own values.",
+        "description": "Rank Recommended with a preset, a saved algorithm, or your own values.",
         "properties": {
           "active": {
             "maxLength": 40,
@@ -12127,7 +12127,7 @@
       },
       "Tuning-Input": {
         "additionalProperties": false,
-        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "description": "One complete set of Recommended settings (what a preset or a save holds).",
         "properties": {
           "channel_gap": {
             "default": 5,
@@ -12290,7 +12290,7 @@
       },
       "Tuning-Output": {
         "additionalProperties": false,
-        "description": "One complete set of Recommended+ settings (what a preset or a save holds).",
+        "description": "One complete set of Recommended settings (what a preset or a save holds).",
         "properties": {
           "channel_gap": {
             "default": 5,
@@ -18215,7 +18215,7 @@
     },
     "/api/discover/channels": {
       "get": {
-        "description": "Channels new to the user that their Recommended+ feed leans on most.",
+        "description": "Channels new to the user that their Recommended feed leans on most.",
         "operationId": "discover_channels_api_discover_channels_get",
         "parameters": [
           {
@@ -18277,7 +18277,7 @@
     },
     "/api/discover/feed": {
       "get": {
-        "description": "One page of the Recommended+ feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos, unless it is a ``prefetch`` (the home page loading it before the\nuser opens the tab): that neither counts as shown nor as a visit for the\ngatherer; opening the tab asks again and counts then.",
+        "description": "One page of the Recommended feed.\n\nThe first page also tells the gatherer this user is active (it starts at once\nthe first time). It also carries followed channels' live broadcasts, the\nones from channels watched lately first. Each page counts as shown for its\nvideos, unless it is a ``prefetch`` (the home page loading it before the\nuser opens the tab): that neither counts as shown nor as a visit for the\ngatherer; opening the tab asks again and counts then.",
         "operationId": "discover_feed_api_discover_feed_get",
         "parameters": [
           {
@@ -18887,7 +18887,7 @@
     },
     "/api/discover/tuning": {
       "get": {
-        "description": "How this user ranks Recommended+: a preset, a saved algorithm or their\nown values.",
+        "description": "How this user ranks Recommended: a preset, a saved algorithm or their\nown values.",
         "operationId": "get_tuning_api_discover_tuning_get",
         "responses": {
           "200": {

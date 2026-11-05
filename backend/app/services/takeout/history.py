@@ -278,7 +278,7 @@ class ChannelTaste:
 
 @dataclass
 class Profile:
-    """What the imported history says, for "For you"."""
+    """What the imported history says, for Recommended."""
 
     watched: set[str] = field(default_factory=set)
     #: Channels by key (normalized URL, else ``name:<casefolded name>``).
@@ -310,7 +310,7 @@ class ProfileCache:
     """Each user's last ``profile``, reused while their history is unchanged.
 
     Held on the ``AppContext`` (``caches``), so tests start from an empty one.
-    For you asks for the profile on every page of its infinite scroll.
+    Recommended asks for the profile on every page of its infinite scroll.
     """
 
     def __init__(self) -> None:

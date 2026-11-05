@@ -439,7 +439,7 @@ class FontList(BaseModel):
     items: list[FontRead]
 
 
-# --- Recommended+ ------------------------------------------------------------
+# --- Recommended ------------------------------------------------------------
 
 
 class DiscoverReasonRead(BaseModel):
@@ -487,7 +487,7 @@ class DiscoverItemRead(BaseModel):
 
 
 class DiscoverStatusRead(BaseModel):
-    #: Recommended+ may ask YouTube for videos (its switch and video search are on).
+    #: Recommended may ask YouTube for videos (its switch and video search are on).
     enabled: bool
     #: The gatherer is working for this user right now, or will on its next pass.
     gathering: bool
@@ -620,7 +620,7 @@ class RecTuningPresetRead(BaseModel):
 
 
 class RecTuningRead(BaseModel):
-    """The user's Recommended+ settings and the presets they can pick from."""
+    """The user's Recommended settings and the presets they can pick from."""
 
     #: A preset id, "custom" or "algo:<id>".
     active: str

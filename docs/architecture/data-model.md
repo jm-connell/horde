@@ -35,9 +35,9 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_ai_chat_messages` | User/assistant turns of one person's chat about a video (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
-| `discovery_videos` | YouTube videos the Recommended+ gatherer found outside the library and catalogs (metadata + its own vector); deleted when no hit or stream watch points at them |
+| `discovery_videos` | YouTube videos the Recommended gatherer found outside the library and catalogs (metadata + its own vector); deleted when no hit or stream watch points at them |
 | `discovery_hits` | Why a found video is a candidate for one user: `source` (`search`/`related`), `seed` (query or seed YouTube id), `seed_title`, `era` (`recent`/`throwback`), `rank`; forgotten after 21 days |
-| `discovery_state` | Per user: when they last opened Recommended+, when the gatherer last ran and was asked to, and what it asked (`asked_json`, for cooldowns) |
+| `discovery_state` | Per user: when they last opened Recommended, when the gatherer last ran and was asked to, and what it asked (`asked_json`, for cooldowns) |
 | `trash_entries` | One tombstone per deleted video waiting in the [trash](../guides/library.md#trash): the `folder` token its files sit under, the original `video_id`, `youtube_id`, title, relative path, bytes, `trashed_at`, `trashed_by_user_id`, the moved files (`files_json`) and a snapshot of the rows a restore re-inserts (`snapshot_json`). Not tied to `videos` by a foreign key |
 | `ai_jobs` | Background job queue (`embed_video`, `enrich_tags`, `refresh_categories`, `embed_catalog_video`, `summarize`, `chapters`) |
 | `alembic_version` | Current Alembic revision (`version_num`) |

@@ -133,7 +133,7 @@ class AppContext:
     sidecars: SidecarJobs = field(default_factory=lambda: _new_sidecars())
     #: The previous progress save of recently watched videos (services/watch_stats).
     watch_refs: WatchRefs = field(default_factory=lambda: _new_watch_refs())
-    #: Recommended+: the gatherer's back-off, the vector matrix, ranked feeds.
+    #: Recommended: the gatherer's back-off, the vector matrix, ranked feeds.
     discovery: DiscoveryRuntime = field(default_factory=lambda: _new_discovery())
     #: Pacing of YouTube caption requests (library first, then Ask indexing).
     timedtext: TimedtextPacer = field(default_factory=lambda: _new_timedtext())

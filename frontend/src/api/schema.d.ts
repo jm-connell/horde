@@ -1373,7 +1373,7 @@ export interface paths {
         };
         /**
          * Discover Channels
-         * @description Channels new to the user that their Recommended+ feed leans on most.
+         * @description Channels new to the user that their Recommended feed leans on most.
          */
         get: operations["discover_channels_api_discover_channels_get"];
         put?: never;
@@ -1393,7 +1393,7 @@ export interface paths {
         };
         /**
          * Discover Feed
-         * @description One page of the Recommended+ feed.
+         * @description One page of the Recommended feed.
          *
          *     The first page also tells the gatherer this user is active (it starts at once
          *     the first time). It also carries followed channels' live broadcasts, the
@@ -1576,7 +1576,7 @@ export interface paths {
         };
         /**
          * Get Tuning
-         * @description How this user ranks Recommended+: a preset, a saved algorithm or their
+         * @description How this user ranks Recommended: a preset, a saved algorithm or their
          *     own values.
          */
         get: operations["get_tuning_api_discover_tuning_get"];
@@ -7883,7 +7883,7 @@ export interface components {
         };
         /**
          * RecTuningRead
-         * @description The user's Recommended+ settings and the presets they can pick from.
+         * @description The user's Recommended settings and the presets they can pick from.
          */
         RecTuningRead: {
             /** Active */
@@ -7898,7 +7898,7 @@ export interface components {
         };
         /**
          * RecTuningWrite
-         * @description Rank Recommended+ with a preset, a saved algorithm, or your own values.
+         * @description Rank Recommended with a preset, a saved algorithm, or your own values.
          */
         RecTuningWrite: {
             /** Active */
@@ -8646,7 +8646,7 @@ export interface components {
         };
         /**
          * Tuning
-         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         * @description One complete set of Recommended settings (what a preset or a save holds).
          */
         "Tuning-Input": {
             /**
@@ -8759,7 +8759,7 @@ export interface components {
         };
         /**
          * Tuning
-         * @description One complete set of Recommended+ settings (what a preset or a save holds).
+         * @description One complete set of Recommended settings (what a preset or a save holds).
          */
         "Tuning-Output": {
             /**

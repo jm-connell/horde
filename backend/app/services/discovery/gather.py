@@ -1,7 +1,7 @@
-"""The Recommended+ gatherer: asks YouTube for videos outside the library.
+"""The Recommended gatherer: asks YouTube for videos outside the library.
 
 One worker thread (``DiscoveryRuntime.worker``) serves the users who opened
-Recommended+ in the last ``ACTIVE_FOR``, each at most every ``RUN_INTERVAL`` (or
+Recommended in the last ``ACTIVE_FOR``, each at most every ``RUN_INTERVAL`` (or
 sooner when they ask for a refresh, but not within ``REFRESH_MIN_GAP``). A run
 makes at most ``SEARCHES_PER_RUN`` searches built from the user's interests and
 ``RELATED_PER_RUN`` up next lists of videos they liked, then embeds what it found.
@@ -92,7 +92,7 @@ _THROTTLE_KINDS = frozenset({ERROR_KIND_BOT, ERROR_KIND_RATE_LIMIT, ERROR_KIND_P
 
 
 def enabled() -> bool:
-    """Recommended+ may ask YouTube (its own switch and site-wide video search)."""
+    """Recommended may ask YouTube (its own switch and site-wide video search)."""
     data = app_settings.load()
     return bool(data.get("discovery_enabled", True)) and (
         app_settings.youtube_video_search_system(data)
@@ -126,7 +126,7 @@ def _asked(row: DiscoveryState) -> dict[str, str]:
 def note_viewed(
     session: Session, runtime: DiscoveryRuntime, user_id: int
 ) -> DiscoveryState:
-    """The user opened Recommended+: keep gathering for them (start now if never)."""
+    """The user opened Recommended: keep gathering for them (start now if never)."""
     row = _state(session, user_id)
     first = row.last_run_at is None and row.requested_at is None
     row.last_viewed_at = utcnow()
@@ -300,7 +300,7 @@ def _throttled(runtime: DiscoveryRuntime) -> None:
     )
     runtime.paused_until = time.monotonic() + runtime.backoff_sec
     logger.warning(
-        "YouTube pushed back; Recommended+ stops asking for %.0f minutes",
+        "YouTube pushed back; Recommended stops asking for %.0f minutes",
         runtime.backoff_sec / 60,
     )
 
@@ -543,7 +543,7 @@ def gather_for(
                     error = message
                     raise _Halt(message) from exc
                 logger.warning(
-                    "Recommended+ %s for %r failed",
+                    "Recommended %s for %r failed",
                     request.kind,
                     request.key,
                     exc_info=True,
@@ -562,7 +562,7 @@ def gather_for(
             )
         runtime.backoff_sec = 0.0
     except _Halt as halt:
-        logger.info("Recommended+ run for user %s stopped early: %s", user_id, halt)
+        logger.info("Recommended run for user %s stopped early: %s", user_id, halt)
     finally:
         session.rollback()
         # The run's record first: a failure below must not make the same
@@ -581,7 +581,7 @@ def gather_for(
         except Exception:
             session.rollback()
             logger.warning(
-                "Recommended+ clean-up for user %s failed", user_id, exc_info=True
+                "Recommended clean-up for user %s failed", user_id, exc_info=True
             )
         runtime.forget_feeds(user_id)
     return found
@@ -612,9 +612,7 @@ def run_due(runtime: DiscoveryRuntime, worker: BackgroundWorker | None = None) -
                     worker.sleep if worker is not None else (lambda _sec: False),
                 )
         except Exception:
-            logger.warning(
-                "Recommended+ run for user %s failed", user_id, exc_info=True
-            )
+            logger.warning("Recommended run for user %s failed", user_id, exc_info=True)
         finally:
             runtime.gathering_for = None
 
@@ -629,7 +627,7 @@ def _loop(worker: BackgroundWorker) -> None:
             with Session(get_engine()) as session:
                 prune(session)
         except Exception:
-            logger.warning("Recommended+ gathering failed", exc_info=True)
+            logger.warning("Recommended gathering failed", exc_info=True)
         if worker.wait_for_wake(IDLE_WAIT_SEC):
             return
 

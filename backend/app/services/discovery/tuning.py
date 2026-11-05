@@ -1,4 +1,4 @@
-"""How one user wants Recommended+ ranked: the values behind its sliders.
+"""How one user wants Recommended ranked: the values behind its sliders.
 
 Every value here maps onto something ``feed.build_feed`` already does, so the
 "Balanced" preset (``DEFAULTS``) ranks almost exactly as the feed did before it
@@ -73,7 +73,7 @@ class Strictness(BaseModel):
 
 
 class Tuning(BaseModel):
-    """One complete set of Recommended+ settings (what a preset or a save holds)."""
+    """One complete set of Recommended settings (what a preset or a save holds)."""
 
     # Read back, every field is present: say so in the response schema.
     model_config = ConfigDict(
@@ -323,7 +323,7 @@ def load(session: Session, user_id: int) -> Selection:
         # Saved by an older version with values this one rejects: start over
         # rather than fail every feed request.
         logger.warning(
-            "Unreadable Recommended+ settings for user %s; using Balanced",
+            "Unreadable Recommended settings for user %s; using Balanced",
             user_id,
             exc_info=True,
         )

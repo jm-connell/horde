@@ -163,7 +163,7 @@ def _seed_ask(engine: Engine) -> None:
         )
 
 
-#: Videos Recommended+ "found on YouTube" for the admin: (id, title, channel).
+#: Videos Recommended "found on YouTube" for the admin: (id, title, channel).
 #: Two channels with two videos each, so both are suggested as channels to follow.
 E2E_DISCOVERED = (
     ("discover001", "Night sky timelapse from a lighthouse", "Northern Skies"),

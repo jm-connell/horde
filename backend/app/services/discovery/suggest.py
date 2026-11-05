@@ -1,4 +1,4 @@
-"""Channels to follow: the new channels the Recommended+ feed liked most.
+"""Channels to follow: the new channels the Recommended feed liked most.
 
 A channel qualifies with at least ``MIN_SUPPORT`` of its videos in the feed's
 "new" bucket above the floor; it ranks by its best three videos (the best counts

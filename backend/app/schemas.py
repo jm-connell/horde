@@ -1629,7 +1629,7 @@ class RecAlgorithmUpdate(BaseModel):
 
 
 class RecTuningWrite(BaseModel):
-    """Rank Recommended+ with a preset, a saved algorithm, or your own values."""
+    """Rank Recommended with a preset, a saved algorithm, or your own values."""
 
     #: A preset id, "custom" (then ``custom`` holds the values) or "algo:<id>".
     active: str = Field(min_length=1, max_length=40)

@@ -1,4 +1,4 @@
-"""The Recommended+ feed: four kinds of picks, ranked separately, then mixed.
+"""The Recommended feed: four kinds of picks, ranked separately, then mixed.
 
 Every unwatched candidate (``candidates``) lands in exactly one bucket:
 

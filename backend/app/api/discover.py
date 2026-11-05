@@ -1,4 +1,4 @@
-"""Recommended+: the feed, channel suggestions, feedback, and stream history."""
+"""Recommended: the feed, channel suggestions, feedback, and stream history."""
 
 from __future__ import annotations
 
@@ -186,7 +186,7 @@ def discover_feed(
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """One page of the Recommended+ feed.
+    """One page of the Recommended feed.
 
     The first page also tells the gatherer this user is active (it starts at once
     the first time). It also carries followed channels' live broadcasts, the
@@ -345,7 +345,7 @@ def get_tuning(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """How this user ranks Recommended+: a preset, a saved algorithm or their
+    """How this user ranks Recommended: a preset, a saved algorithm or their
     own values."""
     return _tuning_read(session, user.id)
 
@@ -519,7 +519,7 @@ def discover_channels(
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Channels new to the user that their Recommended+ feed leans on most."""
+    """Channels new to the user that their Recommended feed leans on most."""
     # Loaded beside the feed's first page: share its ranking when it exists.
     feed = ranked_feed(
         session,

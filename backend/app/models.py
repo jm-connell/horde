@@ -730,7 +730,7 @@ class UserSettings(SQLModel, table=True):
 
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
     ui_json: str = Field(default="{}")
-    #: The user's Recommended+ settings (``services/discovery/tuning.py``); kept
+    #: The user's Recommended settings (``services/discovery/tuning.py``); kept
     #: out of ``ui_json`` so a UI save can never overwrite them unvalidated.
     rec_tuning_json: str | None = None
     updated_at: datetime = Field(default_factory=utcnow)
@@ -879,7 +879,7 @@ class UserStreamState(SQLModel, table=True):
 class DiscoveryVideo(SQLModel, table=True):
     """A YouTube video found outside the library and the channel catalogs.
 
-    The Recommended+ gatherer (``services/discovery/gather.py``) fills it from
+    The Recommended gatherer (``services/discovery/gather.py``) fills it from
     YouTube searches and "up next" lists; ``discovery_hits`` says for whom and why.
     Rows no hit points at any more are deleted.
     """
@@ -937,12 +937,12 @@ class DiscoveryHit(SQLModel, table=True):
 
 
 class DiscoveryState(SQLModel, table=True):
-    """Per user: when Recommended+ last looked outside, and what it asked."""
+    """Per user: when Recommended last looked outside, and what it asked."""
 
     __tablename__ = "discovery_state"
 
     user_id: int = Field(foreign_key="users.id", primary_key=True, ondelete="CASCADE")
-    #: The user last opened Recommended+ (only active users are gathered for).
+    #: The user last opened Recommended (only active users are gathered for).
     last_viewed_at: datetime | None = None
     last_run_at: datetime | None = None
     #: A refresh the user asked for, picked up by the next worker pass.
@@ -953,7 +953,7 @@ class DiscoveryState(SQLModel, table=True):
 
 
 class RecAlgorithm(SQLModel, table=True):
-    """A named set of Recommended+ settings a user saved (``discovery/algorithms.py``).
+    """A named set of Recommended settings a user saved (``discovery/algorithms.py``).
 
     ``tuning_json`` holds a ``tuning.Tuning``. A shared one shows in everyone's
     algorithm picker; only its owner changes or deletes it. Someone ranking with
@@ -976,7 +976,7 @@ class RecAlgorithm(SQLModel, table=True):
 
 
 class RecTopic(SQLModel, table=True):
-    """A topic a user added to Recommended+ by hand (``services/discovery/topics.py``).
+    """A topic a user added to Recommended by hand (``services/discovery/topics.py``).
 
     ``kind``: ``interest`` (shown more, and searched for on YouTube) or
     ``block`` (left out). A topic past ``expires_at`` stays listed, switched

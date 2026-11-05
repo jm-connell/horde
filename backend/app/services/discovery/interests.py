@@ -58,7 +58,7 @@ MIN_GROUP_WEIGHT = 0.3
 class TasteWindow:
     """Which watches are recent taste and how far back throwbacks reach.
 
-    A user's Recommended+ settings choose it (``tuning.Tuning.window``); the
+    A user's Recommended settings choose it (``tuning.Tuning.window``); the
     defaults are the constants above.
     """
 

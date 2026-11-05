@@ -1,4 +1,4 @@
-"""What Recommended+ keeps in memory: one ``DiscoveryRuntime`` on the ``AppContext``."""
+"""What Recommended keeps in memory: one ``DiscoveryRuntime`` on the ``AppContext``."""
 
 from __future__ import annotations
 

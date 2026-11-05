@@ -105,7 +105,7 @@ Full guide: [Playlists](guides/playlists.md).
 
 ## YouTube history
 
-Import your YouTube watch history, subscriptions and playlists from a Google Takeout export, each person for their own account. Videos you watched on YouTube get a **Watched** badge on channel pages and count as seen in **For you**, the channels you watch there steer recommendations (recent viewing far more than old, with the odd **Throwback**), and the Download page suggests what you rewatch most. Import a newer export any time; only new views are added.
+Import your YouTube watch history, subscriptions and playlists from a Google Takeout export, each person for their own account. Videos you watched on YouTube get a **Watched** badge on channel pages and count as seen in **Recommended**, the channels you watch there steer recommendations (recent viewing far more than old, with the odd **Throwback**), and the Download page suggests what you rewatch most. Import a newer export any time; only new views are added.
 
 Full guide: [YouTube history](guides/youtube-history.md).
 
@@ -120,7 +120,7 @@ Turn the archive into something you can actually ask questions of. Use any OpenA
 | Hybrid search (keyword + embeddings) | Embed indexes |
 | Related videos on Watch | Embeddings |
 | Recommended category shelves | Embeddings + categories |
-| Recommended+ (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |
+| Recommended (mixed feed with channels new to you) | Works without AI; embeddings make it much sharper; a chat model writes better searches |
 | Summaries, chapters, chat, tag enrich | Chat LLM |
 | Duplicate help on Import | Chat (optional embed similarity) |
 | [Ask](guides/ask.md): search what channels said, and ask them questions with references to the moment | Search works without AI; asking needs a chat model; embeddings help it find meaning |

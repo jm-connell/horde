@@ -1,4 +1,4 @@
-"""Recommended+ by category: the AI categories (as on Recommended) over the feed.
+"""Recommended by category: the AI categories (Settings -> AI) over the feed.
 
 A pick belongs to a category by the same rule as a library video on Recommended
 (``recommend.category_members``), measured on its own embedding: library
