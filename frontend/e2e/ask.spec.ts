@@ -160,7 +160,9 @@ test("a channel answer links every point to its moment", async ({ page }) => {
   const input = chatPanel.getByRole("textbox", { name: "Your question" });
   // With an Ask channel on, the hint says a channel can be named or picked.
   await expect(input).toHaveAttribute("placeholder", /name a channel/);
-  await expect(chatPanel.getByText(/name it or pick it below\./)).toBeVisible();
+  await expect(
+    chatPanel.getByText(/name it or pick it beside Ask at the top\./)
+  ).toBeVisible();
   const source = (name: string) =>
     chatPanel.getByRole("button", {
       name: `Answering from ${name}`,
@@ -330,15 +332,20 @@ test("on a video of an Ask channel, the chat answers from that channel", async (
   await expect(page).toHaveURL(/\/watch\//);
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  // Nothing picked: each question goes to the channel or Horde.
+  // Nothing picked: each question goes to the channel or Horde. The source
+  // sits beside the title ("Ask Northwind or Horde"), and Automatic says how.
+  const source = panel
+    .locator("header")
+    .getByRole("button", { name: "Answering from Northwind or Horde" });
+  await expect(source).toBeVisible();
+  await source.click();
   await expect(
-    panel.getByRole("button", { name: "Answering from Northwind or Horde" })
-  ).toBeVisible();
-  await expect(
-    panel.getByText(
-      "Questions about its videos go to Northwind; the rest to Horde."
-    )
-  ).toBeVisible();
+    page
+      .getByRole("menu", { name: "Answer from" })
+      .getByRole("menuitemradio", { name: /^Automatic/ })
+  ).toHaveText(/Northwind for its videos, Horde for the rest/);
+  await page.keyboard.press("Escape");
+  await expect(source).toBeFocused();
   const input = panel.getByRole("textbox", { name: "Your question" });
   await expect(input).toHaveAttribute("placeholder", "Ask Northwind or Horde…");
   await input.fill("when should the belt be changed?");

@@ -37,14 +37,18 @@ export interface PanelTab {
 }
 
 /**
- * Put a body's title and header buttons into the frame's header. Each body
- * renders one; only the showing body's lands there.
+ * Put a body's title, a control beside it and header buttons into the
+ * frame's header. Each body renders one; only the showing body's lands there.
+ * The addon also shows beside the tabs, and the header is its positioning
+ * parent (a menu it opens can span the header with `absolute inset-x-*`).
  */
 export function PanelHeader({
   title,
+  addon,
   actions,
 }: {
   title: ReactNode;
+  addon?: ReactNode;
   actions?: ReactNode;
 }) {
   const slots = useContext(SlotCtx);
@@ -53,6 +57,7 @@ export function PanelHeader({
   return (
     <>
       {slots.title && createPortal(title, slots.title)}
+      {slots.addon && addon && createPortal(addon, slots.addon)}
       {slots.actions && actions && createPortal(actions, slots.actions)}
     </>
   );
@@ -179,6 +184,7 @@ export default function SidePanelFrame({
   const tabIdBase = useId();
   const panelRef = useRef<HTMLElement>(null);
   const [titleEl, setTitleEl] = useState<HTMLElement | null>(null);
+  const [addonEl, setAddonEl] = useState<HTMLElement | null>(null);
   const [actionsEl, setActionsEl] = useState<HTMLElement | null>(null);
   const { miniPlayerRect } = usePlaybackLayout();
   const isMobile = useIsMobile();
@@ -278,7 +284,8 @@ export default function SidePanelFrame({
   }
 
   function onHeaderPointerDown(e: React.PointerEvent<HTMLElement>) {
-    if ((e.target as HTMLElement).closest("button, a, [role=tab]")) return;
+    if ((e.target as HTMLElement).closest("button, a, [role=tab], [role=menu]"))
+      return;
     const start = box;
     startDrag(e, (dx, dy) =>
       clampHelpFrame(
@@ -418,50 +425,54 @@ export default function SidePanelFrame({
         />
       )}
       <header
-        className={`flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5 ${
+        className={`relative flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5 ${
           isMobile || dockedHere ? "" : "cursor-move touch-none select-none"
         }`}
         onPointerDown={isMobile || dockedHere ? undefined : onHeaderPointerDown}
       >
-        {tabbed ? (
-          <div
-            role="tablist"
-            aria-label="Side panel"
-            className="-my-1 flex min-w-0 gap-1"
-          >
-            {tabs.map((t) => {
-              const selected = t.id === active.id;
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  id={`${tabIdBase}-${t.id}`}
-                  aria-selected={selected}
-                  aria-controls={`${tabIdBase}-${t.id}-panel`}
-                  tabIndex={selected ? 0 : -1}
-                  onClick={() => onTabChange(t.id)}
-                  onKeyDown={onTabKey}
-                  className={`truncate rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
-                    selected
-                      ? "bg-ink-800 text-gray-100"
-                      : "text-muted hover:text-accent"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <h2
-            id={titleId}
-            className="min-w-0 truncate text-sm font-semibold text-gray-100"
-          >
-            {/* The showing body puts its title here (PanelHeader). */}
-            <span ref={setTitleEl} />
-          </h2>
-        )}
+        <div className="flex min-w-0 items-center gap-1.5">
+          {tabbed ? (
+            <div
+              role="tablist"
+              aria-label="Side panel"
+              className="-my-1 flex shrink-0 gap-1"
+            >
+              {tabs.map((t) => {
+                const selected = t.id === active.id;
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="tab"
+                    id={`${tabIdBase}-${t.id}`}
+                    aria-selected={selected}
+                    aria-controls={`${tabIdBase}-${t.id}-panel`}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => onTabChange(t.id)}
+                    onKeyDown={onTabKey}
+                    className={`truncate rounded-md px-2.5 py-1.5 text-sm font-semibold transition-colors ${
+                      selected
+                        ? "bg-ink-800 text-gray-100"
+                        : "text-muted hover:text-accent"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <h2
+              id={titleId}
+              className="min-w-0 truncate text-sm font-semibold text-gray-100"
+            >
+              {/* The showing body puts its title here (PanelHeader). */}
+              <span ref={setTitleEl} />
+            </h2>
+          )}
+          {/* ... and a control beside it, such as Ask's source. */}
+          <span ref={setAddonEl} className="flex min-w-0" />
+        </div>
         <div className="flex shrink-0 items-center gap-1">
           <div ref={setActionsEl} className="flex items-center gap-1" />
           {!isMobile && (
@@ -496,6 +507,7 @@ export default function SidePanelFrame({
       <SlotCtx.Provider
         value={{
           title: tabbed ? null : titleEl,
+          addon: addonEl,
           actions: actionsEl,
           isMobile,
         }}

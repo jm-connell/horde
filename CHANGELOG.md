@@ -46,12 +46,12 @@ All notable changes to Horde are documented here. The format follows
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
 - **One Ask.** Ask about Horde and asking channels are one feature, **Ask**
-  (the footer button and the phone tab, which was Chat). **Answering from**
-  above the question box shows whether the next answer comes from Horde or a
-  channel; press it to pick Automatic, Horde or a channel. Picking Horde
-  keeps answers on Horde even when a question names a channel. Settings → Library → Ask channels is now
+  (the footer button and the phone tab, which was Chat). The source shows
+  beside the title, "Ask Automatic", "Ask Horde" or "Ask <channel>"; press
+  it to pick another. Picking Horde keeps answers on Horde even when a
+  question names a channel. Settings → Library → Ask channels is now
   **Channels Ask can answer from**, and the permission **Manage channel
-  indexing**.
+  indexing**. The button that docks the chat at the side is an expand arrow.
 
 ### Fixed
 

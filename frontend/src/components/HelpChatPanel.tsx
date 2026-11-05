@@ -172,7 +172,8 @@ function AssistantReply({
 /**
  * Ask: a chat in the corner that answers from Horde (this server's docs and
  * source, its settings, the user's library) or from channels Ask indexes; the
- * source shows above the question box, where the user can pick another. It
+ * source shows beside the title ("Ask Northwind"), where the user can pick
+ * another. It
  * floats over every page (drag it by its header, resize it from the top-left
  * corner) and tells the server which page the user is on. The conversation
  * lives in this tab (sessionStorage) and on the server.
@@ -596,6 +597,30 @@ export default function HelpChatPanel({
     <>
       <PanelHeader
         title="Ask"
+        addon={
+          showSource && (
+            <AskSourcePicker
+              label={sourceLabel}
+              autoDetail={
+                pageName
+                  ? `${pageName} for its videos, Horde for the rest`
+                  : "Horde, or the channel a question names"
+              }
+              channels={askable}
+              selected={
+                ask.scope.length === 1
+                  ? ask.scope[0].id
+                  : ask.scope.length
+                    ? null
+                    : ask.horde
+                      ? "horde"
+                      : "auto"
+              }
+              disabled={sending}
+              onPick={pickSource}
+            />
+          )
+        }
         actions={
           <>
             <button
@@ -682,8 +707,8 @@ export default function HelpChatPanel({
                 your question.
                 {showSource
                   ? ask.horde
-                    ? " To ask what a channel said in its videos, pick it below."
-                    : " To ask what a channel said in its videos, name it or pick it below."
+                    ? " To ask what a channel said in its videos, pick it beside Ask at the top."
+                    : " To ask what a channel said in its videos, name it or pick it beside Ask at the top."
                   : ""}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -779,33 +804,6 @@ export default function HelpChatPanel({
         )}
       </div>
 
-      {showSource && (
-        <AskSourcePicker
-          label={sourceLabel}
-          hint={
-            pageAuto
-              ? `Questions about its videos go to ${pageAuto}; the rest to Horde.`
-              : undefined
-          }
-          autoDetail={
-            pageName
-              ? `${pageName} for its videos, Horde for the rest`
-              : "Horde, or the channel a question names"
-          }
-          channels={askable}
-          selected={
-            ask.scope.length === 1
-              ? ask.scope[0].id
-              : ask.scope.length
-                ? null
-                : ask.horde
-                  ? "horde"
-                  : "auto"
-          }
-          disabled={sending}
-          onPick={pickSource}
-        />
-      )}
       {noAi && (
         <p
           className="border-t border-ink-700 px-3 pt-2 text-xs text-muted"

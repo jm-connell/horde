@@ -13,13 +13,13 @@ const ITEM =
   "flex w-full items-center justify-between gap-3 px-3 py-1.5 text-left text-xs hover:bg-ink-800";
 
 /**
- * "Answering from …" above Ask's question box: where the next answer comes
- * from, with a menu to pick another. The menu opens inside the panel, above
- * the row, so it moves with the panel and never leaves the screen.
+ * The source beside Ask's title ("Ask Northwind ▾"): where the next answer
+ * comes from, with a menu to pick another. It sits in the panel header
+ * (`PanelHeader`'s addon), and the menu drops across the panel under it, so
+ * it moves with the panel and never leaves the screen.
  */
 export default function AskSourcePicker({
   label,
-  hint,
   autoDetail,
   channels,
   selected,
@@ -28,8 +28,6 @@ export default function AskSourcePicker({
 }: {
   /** Where the next question goes, e.g. "Horde" or "Northwind or Horde". */
   label: string;
-  /** Shown beside it when Ask picks per question on a channel's page. */
-  hint?: string;
   /** What Automatic does here (it depends on the page). */
   autoDetail: string;
   /** The channels Ask can answer from. */
@@ -40,7 +38,7 @@ export default function AskSourcePicker({
   onPick: (source: AskSource) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
+  const rootRef = useRef<HTMLSpanElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -82,21 +80,34 @@ export default function AskSourcePicker({
   );
 
   return (
-    <div
-      ref={rootRef}
-      className="border-t border-ink-700 px-3 py-2 text-xs"
-      data-horde="ask-source"
-    >
+    <span ref={rootRef} className="flex min-w-0" data-horde="ask-source">
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={`Answering from ${label}`}
+        className="ui-interactive -my-0.5 inline-flex min-w-0 max-w-full items-center gap-1 rounded-md px-1.5 py-0.5 text-sm font-semibold text-accent hover:bg-ink-800 disabled:opacity-40"
+      >
+        <span className="truncate">{label}</span>
+        <span
+          className={`shrink-0 text-[10px] leading-none transition-transform ${open ? "rotate-180" : ""}`}
+        >
+          <ChevronIcon />
+        </span>
+      </button>
       <MenuFlyout
         open={open}
-        className="mb-2"
+        className="absolute inset-x-3 top-full z-20 mt-1 cursor-auto font-normal"
         menu={{
           label: "Answer from",
           onClose: () => setOpen(false),
           triggerRef,
         }}
       >
-        <MenuScroll className="max-h-56" revision={channels.length}>
+        <MenuScroll className="max-h-64" revision={channels.length}>
           {item(
             selected === "auto",
             "Automatic",
@@ -126,27 +137,6 @@ export default function AskSourcePicker({
           ))}
         </MenuScroll>
       </MenuFlyout>
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-        <span className="text-muted">Answering from</span>
-        <button
-          ref={triggerRef}
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          disabled={disabled}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          aria-label={`Answering from ${label}`}
-          className="ui-interactive inline-flex min-w-0 max-w-full items-center gap-1 rounded-full bg-ink-800 px-2 py-0.5 text-gray-300 hover:text-accent disabled:opacity-40"
-        >
-          <span className="truncate">{label}</span>
-          <span
-            className={`shrink-0 text-[10px] leading-none transition-transform ${open ? "rotate-180" : ""}`}
-          >
-            <ChevronIcon />
-          </span>
-        </button>
-        {hint && <span className="text-muted">{hint}</span>}
-      </div>
-    </div>
+    </span>
   );
 }

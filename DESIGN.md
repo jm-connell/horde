@@ -316,7 +316,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
   player when that is there), drags by its header, resizes from its top-left
   corner like the mini player, and becomes a bottom sheet on phones. On
-  desktop its header button docks it: a full-height column on the right
+  desktop its header's expand button (⤢, ⤡ to float it again) docks it: a
+  full-height column on the right
   (`ink-900`, `border-l ink-700`, no radius or shadow) from the bottom of the
   full-width nav to the bottom of the window, about 30% of the width
   (360–520 px) until its left edge is dragged (a focusable separator, accent
@@ -334,12 +335,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
-  Above the question box, "Answering from" in `text-muted` is followed by
-  the source as a `rounded-full` `ink-800` chip with a chevron (the channel
-  names, Horde, or Automatic; "<channel> or Horde" with a muted hint beside
-  it on a channel's page), padded 8px above and below so the chip clears the
-  question box's top border. It opens a `MenuFlyout` inside
-  the panel, just above the row rather than floating (the panel's
+  Beside the title sits the source, so the header reads "Ask Automatic",
+  "Ask Horde" or "Ask Northwind": accent `text-sm` semibold text with a
+  chevron, `rounded-md` with an `ink-800` hover ("<channel> or Horde" on a
+  channel's page; it truncates first, the tabs keep their width when the
+  panel has tabs). It opens a `MenuFlyout` dropping across the panel under
+  the header (inside the panel rather than floating: the panel's
   translucency would need a portal, and a phone keyboard moves the panel):
   `menuitemradio` rows for Automatic and Horde, each with a one-line
   description, then the channels under an uppercase "Channels" label, the

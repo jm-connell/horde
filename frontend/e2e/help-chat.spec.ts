@@ -127,13 +127,14 @@ test("Ask opens in the corner, follows the user and moves", async ({
   expect(bodies[0].thread_id).toBeNull();
   expect(bodies[1].thread_id).toBe(7);
 
-  // Drag it by the header, then resize it from the top-left corner.
+  // Drag it by the header (its title; the source beside it is a button),
+  // then resize it from the top-left corner.
   const before = (await panel.boundingBox())!;
   const header = panel.locator("header");
   const hb = (await header.boundingBox())!;
-  await page.mouse.move(hb.x + 60, hb.y + 15);
+  await page.mouse.move(hb.x + 20, hb.y + 15);
   await page.mouse.down();
-  await page.mouse.move(hb.x - 240, hb.y - 100, { steps: 5 });
+  await page.mouse.move(hb.x - 280, hb.y - 100, { steps: 5 });
   await page.mouse.up();
   const moved = (await panel.boundingBox())!;
   expect(moved.x).toBeCloseTo(before.x - 300, 0);

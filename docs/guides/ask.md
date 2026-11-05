@@ -5,7 +5,7 @@
 - **Horde**: how to use, set up or fix Horde, its settings, and your own downloads, library and playlists. What it can do there is in [AI features](ai-features.md#ask).
 - **Channels**: what YouTube channels said in their videos, with a numbered reference to the moment for every point. The rest of this page is about those.
 
-**Answering from …**, just above the question box, shows where the next answer comes from. Press it to pick:
+The source shows beside the panel's title: **Ask Automatic**, **Ask Horde** or **Ask \<channel\>** says where the next answer comes from. Press it to pick:
 
 - **Automatic** (the start): Horde, or a channel when the question names it. On a channel's page it reads **\<channel\> or Horde**: questions about its videos go to the channel.
 - **Horde**: only Horde, even when a question names a channel.
@@ -30,11 +30,11 @@ Only the administrator, and members given **Manage channel indexing** (Account �
 
 ## Asking a channel
 
-Dock Ask at the side with the button in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. A question that names no channel is answered from Horde.
+Dock Ask at the side with the expand button (⤢) in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. A question that names no channel is answered from Horde.
 
-To skip the guessing, pick the channel under **Answering from**. Picking **Horde** keeps every answer on Horde, even when a question names a channel (useful for *"how do I stop indexing The Car Care Nut?"*); **Automatic** goes back to choosing per question. **New chat** starts on the source you picked last, and the pick is kept while the browser tab is open.
+To skip the guessing, pick the channel beside **Ask**. Picking **Horde** keeps every answer on Horde, even when a question names a channel (useful for *"how do I stop indexing The Car Care Nut?"*); **Automatic** goes back to choosing per question. **New chat** starts on the source you picked last, and the pick is kept while the browser tab is open.
 
-On a channel's page, or watching one of its videos, Ask already knows the channel: with **Automatic** picked, **Answering from** shows **\<channel\> or Horde**, and a question that names no channel is answered from the channel (the video you are watching first) unless it is about Horde itself, such as its settings, downloads or playlists. **Ask \<channel\>** on a channel's page opens a new conversation about that channel. Once an answer comes from a channel, **Answering from** shows it and follow-up questions stay on it without naming it again.
+On a channel's page, or watching one of its videos, Ask already knows the channel: with **Automatic** picked, the title reads **Ask \<channel\> or Horde**, and a question that names no channel is answered from the channel (the video you are watching first) unless it is about Horde itself, such as its settings, downloads or playlists. **Ask \<channel\>** on a channel's page opens a new conversation about that channel. Once an answer comes from a channel, the title shows it and follow-up questions stay on it without naming it again.
 
 Answers come only from what the channels said. When the indexed videos do not cover the question, the answer says so. When several channels cover it, the answer says where they agree and where they disagree, and when a channel changed its mind over the years, it says that too.
 
