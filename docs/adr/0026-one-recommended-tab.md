@@ -10,7 +10,7 @@ The home page had three tabs: Library, Recommended ("For you" from the library a
 
 - **One tab.** The home page has Library and Recommended. Recommended is the Recommended+ feed (`GET /api/discover/feed`, `services/discovery/`). It is always offered: with looking on YouTube off it simply has no found videos.
 - **The old ranker goes.** `GET /api/ai/recommendations` and the "For you" ranking in `services/ai/recommend.py` are removed. That module keeps the AI category rule, which `GET /api/ai/categories`, Settings -> AI and the feed's category chips (`discovery/categories.py`) use.
-- **What the old tab offered maps onto the feed.** Its **Include not downloaded** chip is the algorithm's **Indexed channels** source; its category shelves are the feed's category chips; its admin **Refresh** is **Settings -> AI -> Jobs**.
+- **What the old tab offered maps onto the feed.** Its **Include not downloaded** chip is the algorithm's **Indexed channels** source (a saved "off" does not carry over: turn the source off in the algorithm); its category shelves are the feed's category chips; its admin **Refresh** is **Settings -> AI -> Jobs**.
 - **The tab choice is remembered per browser** (`horde.home.tab` in local storage). A saved `discover` (Recommended+) opens Recommended. A search shows library results without changing the saved choice.
 - Internal names stay: the API, tables and code still say `discover` / `discovery`; only what users read changed.
 
@@ -18,4 +18,6 @@ The home page had three tabs: Library, Recommended ("For you" from the library a
 
 - One ranking to tune and fix. Without AI it ranks from the watch history (channel and tag taste), as the old tab did.
 - Throwbacks are the feed's throwback share rather than the old "one in twenty" slot, and live broadcasts lead the first page as before.
+- Everyone who opens Recommended now counts as active for the YouTube gatherer (it used to be only those who opened Recommended+), so with looking on YouTube on it searches for more people, within the same overall hourly budget ([0019](0019-recommended-plus.md)).
+- The YouTube history import now only tells Recommended which videos were watched there; the channel taste and seed lists the old ranker read are gone (`takeout/history.py`).
 - Clients of `GET /api/ai/recommendations` (none outside the app) must move to `GET /api/discover/feed`.

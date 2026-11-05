@@ -7,7 +7,6 @@ import json
 import zipfile
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlmodel import Session, select
 
 from app.models import (
@@ -21,7 +20,6 @@ from app.models import (
     YoutubeWatchEvent,
 )
 from app.services import follows
-from app.services.takeout import history
 from app.services.takeout.parse import read_export
 
 ROOT = "Takeout/YouTube and YouTube Music"
@@ -417,38 +415,6 @@ def test_rewatched_lists_repeat_views_not_in_the_library(client, add_video):
     ).json()
     assert [(i["entry"]["title"], i["views"]) for i in rest["items"]] == [("Twice", 2)]
     assert rest["next_cursor"] is None
-
-
-def test_profile_weighs_recent_views_far_above_old_ones(session, admin_user):
-    history.store_views(
-        session,
-        admin_user.id,
-        read_export(
-            [
-                (
-                    "t.zip",
-                    io.BytesIO(
-                        _export(
-                            [
-                                _view("nnnnnnnnnn1", NOW, channel="New"),
-                                _view(
-                                    "nnnnnnnnnn2",
-                                    NOW - timedelta(days=90),
-                                    channel="Old",
-                                    channel_url="https://www.youtube.com/@old",
-                                ),
-                            ]
-                        )
-                    ),
-                )
-            ]
-        ).views,
-    )
-    found = history.profile(session, admin_user.id, NOW)
-    by_name = {c.name: c.recent for c in found.channels.values()}
-    # Views count per day (from its noon), so within a day of the exact weight.
-    assert by_name["New"] == pytest.approx(1.0, abs=0.025)
-    assert by_name["Old"] == pytest.approx(0.125, abs=0.005)  # three half-lives
 
 
 # --- History stats ----------------------------------------------------------------

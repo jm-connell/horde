@@ -12,7 +12,7 @@ import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 from sqlalchemy import bindparam, delete, func
 from sqlalchemy import select as sa_select
@@ -26,10 +26,6 @@ from .parse import WatchView
 _CHUNK = 2000
 #: ``IN (...)`` lists stay under SQLite's bound-parameter limit.
 _IN_CHUNK = 500
-#: A channel's pull halves every this many days since the view (recent taste wins).
-RECENT_HALF_LIFE_DAYS = 30.0
-#: Views at least this old make up the "throwback" side of the taste.
-THROWBACK_MIN_AGE_DAYS = 180
 #: Views needed before a video counts as rewatched (Download page suggestions).
 REWATCH_MIN_VIEWS = 2
 
@@ -264,45 +260,18 @@ def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentV
 
 
 @dataclass
-class ChannelTaste:
-    """One channel the user watches on YouTube."""
-
-    name: str | None
-    url: str | None
-    #: Views weighted by age (halving every ``RECENT_HALF_LIFE_DAYS``).
-    recent: float = 0.0
-    #: Views at least ``THROWBACK_MIN_AGE_DAYS`` old, unweighted.
-    old_views: int = 0
-    views: int = 0
-
-
-@dataclass
 class Profile:
     """What the imported history says, for Recommended."""
 
+    #: Every video the user watched on YouTube (they count as seen).
     watched: set[str] = field(default_factory=set)
-    #: Channels by key (normalized URL, else ``name:<casefolded name>``).
-    channels: dict[str, ChannelTaste] = field(default_factory=dict)
-    #: The ``PROFILE_VIDEOS`` videos watched last, newest first, with when.
-    recent_videos: list[tuple[str, datetime]] = field(default_factory=list)
-    #: The same for videos last watched at least ``THROWBACK_MIN_AGE_DAYS`` ago.
-    old_videos: list[tuple[str, datetime]] = field(default_factory=list)
 
     @property
     def empty(self) -> bool:
         return not self.watched
 
 
-def channel_key(url: str | None, name: str | None) -> str | None:
-    if url:
-        return url
-    if name and name.strip():
-        return f"name:{name.strip().casefold()}"
-    return None
-
-
-#: How long a computed profile is reused while the history stays unchanged
-#: (the decay moves by well under 1% in that time).
+#: How long a computed profile is reused while the history stays unchanged.
 PROFILE_TTL_SEC = 600.0
 
 
@@ -350,75 +319,11 @@ def cached_profile(session: Session, user_id: int) -> Profile:
     return found
 
 
-#: Newest (and oldest-but-not-forgotten) videos ``profile`` hands back as seeds.
-PROFILE_VIDEOS = 60
-
-
-def profile(session: Session, user_id: int, now: datetime | None = None) -> Profile:
-    """The user's imported history folded into channel taste and seed videos.
-
-    Aggregated in SQL (views per channel and day, the last view per video), so
-    a history of a few hundred thousand views costs a few grouped scans.
-    """
-    now = as_utc(now or utcnow())
+def profile(session: Session, user_id: int) -> Profile:
+    """The user's imported history as Recommended reads it."""
     mine = col(YoutubeWatchEvent.user_id) == user_id
-    out = Profile()
-    out.watched = set(
-        session.exec(select(YoutubeWatchEvent.yt_id).where(mine).distinct()).all()
+    return Profile(
+        watched=set(
+            session.exec(select(YoutubeWatchEvent.yt_id).where(mine).distinct()).all()
+        )
     )
-    if not out.watched:
-        return out
-
-    # Views of the last ``THROWBACK_MIN_AGE_DAYS`` per channel and day; older
-    # ones (their recent pull is at most 1/64 by then) per channel and month.
-    cutoff = now - timedelta(days=THROWBACK_MIN_AGE_DAYS)
-    stamp = col(YoutubeWatchEvent.watched_at)
-    tastes: dict[str, ChannelTaste] = {}
-    for bucket, window, old in (
-        (func.date(stamp), stamp >= cutoff, False),
-        (func.strftime("%Y-%m-15", stamp), stamp < cutoff, True),
-    ):
-        for channel_url, channel, when, count in session.execute(
-            sa_select(
-                col(YoutubeWatchEvent.channel_url),
-                col(YoutubeWatchEvent.channel),
-                bucket,
-                func.count(),
-            )
-            .where(mine, window)
-            .group_by(
-                col(YoutubeWatchEvent.channel_url),
-                col(YoutubeWatchEvent.channel),
-                bucket,
-            )
-        ).all():
-            key = channel_key(channel_url, channel)
-            if key is None:
-                continue
-            taste = tastes.setdefault(key, ChannelTaste(None, None))
-            taste.name = taste.name or channel
-            taste.url = taste.url or channel_url
-            noon = datetime.fromisoformat(str(when)).replace(hour=12, tzinfo=UTC)
-            days = max(0.0, (now - noon).total_seconds() / 86400)
-            taste.recent += int(count) * 0.5 ** (days / RECENT_HALF_LIFE_DAYS)
-            taste.views += int(count)
-            if old:
-                taste.old_views += int(count)
-    out.channels = tastes
-
-    last = func.max(col(YoutubeWatchEvent.watched_at))
-    newest = (
-        sa_select(col(YoutubeWatchEvent.yt_id), last)
-        .where(mine)
-        .group_by(col(YoutubeWatchEvent.yt_id))
-        .order_by(last.desc())
-        .limit(PROFILE_VIDEOS)
-    )
-    out.recent_videos = [
-        (str(yt_id), as_utc(when)) for yt_id, when in session.execute(newest).all()
-    ]
-    out.old_videos = [
-        (str(yt_id), as_utc(when))
-        for yt_id, when in session.execute(newest.having(last < cutoff)).all()
-    ]
-    return out

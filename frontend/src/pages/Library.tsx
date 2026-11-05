@@ -81,7 +81,7 @@ function OnlineLibrary() {
 
   const isHome = !activeChannel && !activeTag;
   // On the Library tab, load Recommended ahead so it opens at once.
-  usePrefetchDiscover(isHome && homeTab === "library");
+  usePrefetchDiscover(isHome && homeTab === "library" && !search.trim());
   const onChannelPage = Boolean(activeChannel);
   // Recommended works without AI (ranked from the watch history).
   const showHomeTabs = isHome;
@@ -311,7 +311,12 @@ function OnlineLibrary() {
             isHome={isHome}
             showHomeTabs={showHomeTabs}
             homeTab={homeTab}
-            onHomeTab={setHomeTab}
+            onHomeTab={(tab) => {
+              // During a search the library's results show; picking a tab
+              // means leaving the search for that tab.
+              if (search.trim()) clearSearch();
+              setHomeTab(tab);
+            }}
             settings={settings}
           >
             <HomeControls

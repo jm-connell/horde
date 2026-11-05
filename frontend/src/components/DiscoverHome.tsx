@@ -462,7 +462,11 @@ export default function DiscoverHome({
         type="button"
         onClick={refresh}
         className={button("secondary", "sm")}
-        title="Reshuffle, and look for new videos on YouTube"
+        title={
+          status?.enabled === false
+            ? "Reshuffle the less certain picks"
+            : "Reshuffle, and look for new videos on YouTube"
+        }
       >
         Refresh
       </button>

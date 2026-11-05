@@ -111,6 +111,13 @@ test("the home tab is remembered between visits, and a search does not change it
   await page.reload();
   await expect(recommended).toHaveAttribute("data-liquid-active", "true");
 
+  // Picking a tab during a search leaves the search for that tab.
+  await box.fill("Harbor");
+  await expect(page.getByRole("region", { name: /^Results/ })).toBeVisible();
+  await recommended.click();
+  await expect(box).toHaveValue("");
+  await expect(page.getByText(FOUND)).toBeVisible();
+
   // Library is remembered the same way.
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await page.reload();
