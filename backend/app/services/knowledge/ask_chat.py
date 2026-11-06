@@ -122,6 +122,8 @@ class Route:
 
     channels: list[KbChannel] = field(default_factory=list)
     video: VideoRef | None = None
+    #: The video the user picked: the conversation's source, whatever answered.
+    picked: VideoRef | None = None
 
 
 def resolve_video(
@@ -175,51 +177,51 @@ def pick_route(
     channel_ids: list[int] | None,
     page_channel_id: int | None = None,
     video: VideoRef | None = None,
+    video_picked: bool = False,
     horde_only: bool = False,
 ) -> Route:
     """Where this turn is answered from.
 
     In order: Horde when the user picked it; every channel ("all my
     channels"); the channels the question names; the channels the chat is
-    about. Then, with a video: Horde for a question about Horde or the user's
-    own things, the page's channel for one about the whole channel, else the
-    video. Without one: the page's channel unless the question is about Horde.
-    Else Horde.
+    about. Then, with a video (picked, or the watch page's): Horde when the
+    question names Horde or asks about the user's own things (unless it is
+    about the video), the page's channel for one about the whole channel,
+    Horde for one about Horde's features that is not about the video (once
+    the video is picked, only a how-to: "how do I change the theme?"), else
+    the video. Without one: the page's channel unless the question is about
+    Horde. Else Horde.
     """
+    picked = video if video_picked else None
     if horde_only:
         return Route()
     channels = searchable_channels(session)
     if routing.asks_all_channels(message):
-        return Route(channels)
+        return Route(channels, picked=picked)
     named = routing.named_channels(message, channels)
     if named:
-        return Route(named)
+        return Route(named, picked=picked)
     wanted = set(channel_ids or [])
     chosen = [c for c in channels if c.id in wanted]
     if chosen:
-        return Route(chosen)
+        return Route(chosen, picked=picked)
     page = [c for c in channels if c.id == page_channel_id]
     if video is not None:
-        if routing.about_horde(message) or help_data.topics(message):
-            return Route()
+        on_video = routing.about_video(message)
+        if routing.names_horde(message) or (help_data.topics(message) and not on_video):
+            return Route(picked=picked)
         if page and routing.about_channel(message):
-            return Route(page)
-        return Route(video=video)
+            return Route(page, picked=picked)
+        if (
+            routing.about_horde(message)
+            and not on_video
+            and (not video_picked or routing.asks_how_to(message))
+        ):
+            return Route(picked=picked)
+        return Route(video=video, picked=picked)
     if page and not routing.about_horde(message):
         return Route(page)
     return Route()
-
-
-def pick_scope(
-    session: Session,
-    message: str,
-    channel_ids: list[int] | None,
-    page_channel_id: int | None = None,
-) -> list[KbChannel]:
-    """The channels a turn without a video answers from; empty for Horde."""
-    return pick_route(
-        session, message, channel_ids=channel_ids, page_channel_id=page_channel_id
-    ).channels
 
 
 def most_relevant(
@@ -591,21 +593,27 @@ def _turn_events(
             c for c in (session.get(KbChannel, ch.id) for ch in route.channels) if c
         ]
         video = route.video
+        about = route.picked or video
         if thread_id is None:
-            thread_id = require_id(threads.start(session, user.id, message))
+            # A conversation about a video is titled with it, so History tells
+            # them apart ("What is this video about?" would not).
+            title = (about.title if about else "") or message
+            thread_id = require_id(threads.start(session, user.id, title))
         thread = threads.owned_or_404(session, thread_id, user.id)
         yield _sse({"type": "thread", "id": thread_id, "title": thread.title})
         scope = {"channels": [{"id": c.id, "name": c.channel_name} for c in channels]}
         video_dict = video.as_dict() if video and not channels else None
-        threads.set_scope(
-            session,
-            thread,
+        saved: dict[str, Any] = (
             scope
             if channels
             else {"video": video_dict}
             if video_dict
-            else {"help": True},
+            else {"help": True}
         )
+        if route.picked is not None:
+            # The picked video stays the source of the conversation.
+            saved["video"] = route.picked.as_dict()
+        threads.set_scope(session, thread, saved)
         yield _sse({"type": "scope", **scope, "video": video_dict})
         if video is not None and not channels:
             target = _VideoChat(thread_id, threads.history(session, thread_id), video)

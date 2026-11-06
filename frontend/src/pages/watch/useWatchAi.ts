@@ -224,7 +224,10 @@ export function useWatchAi(
       (mediaDescription || "").trim() ||
       hasSubtitles
     );
-  const showAiSection = canAiSummarize || canAiChat;
+  const aiSummary = video ? video.ai_summary : streamAi?.summary;
+  // A saved summary shows even when it cannot be generated again.
+  const showAiSection =
+    canAiSummarize || canAiChat || !!(aiSummary ?? "").trim();
 
   // --- The AI panel's view of the video ---
   // What Ask is told about this video ("Chat" opens Ask on it).
@@ -274,7 +277,6 @@ export function useWatchAi(
     },
     [streamUrl, queryClient]
   );
-  const aiSummary = video ? video.ai_summary : streamAi?.summary;
   const processingSummary = !!video?.processing_summary;
   const expiresAt = streamAi?.expires_at ?? null;
   const target = useMemo<AiTarget | null>(() => {
@@ -283,7 +285,6 @@ export function useWatchAi(
         key: `video:${videoId}`,
         summary: aiSummary ?? null,
         processingSummary,
-        hasSubtitles,
         summarize: summarizeLibrary,
         askVideo,
       };
@@ -294,7 +295,6 @@ export function useWatchAi(
         key: `stream:${streamUrl}`,
         summary: aiSummary ?? null,
         processingSummary: false,
-        hasSubtitles,
         note: until
           ? `Saved until ${until} \u2014 downloading the video keeps it.`
           : null,
@@ -309,7 +309,6 @@ export function useWatchAi(
     streamUrl,
     aiSummary,
     processingSummary,
-    hasSubtitles,
     expiresAt,
     summarizeLibrary,
     summarizeStream,

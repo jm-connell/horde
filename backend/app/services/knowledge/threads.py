@@ -16,11 +16,14 @@ from ...models import (
     require_id,
     utcnow,
 )
-from ..url_clean import youtube_video_id
 
 # Earlier turns sent back to the model with a question (question and answer text).
 HISTORY_TURNS = 12
 _TITLE_CHARS = 120
+#: In ``ask_threads.scope``: a conversation copied from a per-video chat
+#: (revision ``0029_video_chats_to_ask``, which a downgrade removes by it).
+IMPORTED = "imported"
+_IMPORTED_VIDEO_CHAT = "video_chat"
 
 
 def owned_or_404(session: Session, thread_id: int, user_id: int) -> AskThread:
@@ -37,8 +40,9 @@ def _title(text: str) -> str:
     return title
 
 
-def start(session: Session, user_id: int, first_question: str) -> AskThread:
-    thread = AskThread(user_id=user_id, title=_title(first_question))
+def start(session: Session, user_id: int, title: str) -> AskThread:
+    """A new conversation, titled with its first question (or its video)."""
+    thread = AskThread(user_id=user_id, title=_title(title))
     session.add(thread)
     session.commit()
     session.refresh(thread)
@@ -46,6 +50,10 @@ def start(session: Session, user_id: int, first_question: str) -> AskThread:
 
 
 def set_scope(session: Session, thread: AskThread, scope: dict[str, Any]) -> None:
+    """Save where the conversation is answered from; keeps the import mark."""
+    previous = parse_sources(thread.scope)
+    if isinstance(previous, dict) and IMPORTED in previous:
+        scope = {**scope, IMPORTED: previous[IMPORTED]}
     thread.scope = json.dumps(scope)
     thread.updated_at = utcnow()
     session.add(thread)
@@ -148,18 +156,17 @@ def adopt_video_chats(session: Session, user_id: int) -> None:
         by_video.setdefault(row.video_id, []).append(row)
     for video_id, chat in by_video.items():
         video = session.get(Video, video_id)
-        source = (video.source_url if video else None) or ""
         title = (video.title if video else "") or ""
         ref = {
             "library_id": video_id,
-            "youtube_id": youtube_video_id(source) if source else None,
+            "youtube_id": video.youtube_id if video else None,
             "url": None,
             "title": title,
         }
         thread = AskThread(
             user_id=user_id,
             title=_title(title) or "Video",
-            scope=json.dumps({"video": ref}),
+            scope=json.dumps({"video": ref, IMPORTED: _IMPORTED_VIDEO_CHAT}),
             created_at=chat[0].created_at,
             updated_at=chat[-1].created_at,
         )

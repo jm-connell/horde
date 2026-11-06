@@ -2454,6 +2454,16 @@
             ],
             "title": "Page Channel Id"
           },
+          "page_video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskVideoRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "page_video_id": {
             "anyOf": [
               {

@@ -52,11 +52,12 @@ The model never writes times itself. It only cites passages; Horde then finds th
 
 With nothing picked, a question on a watch page goes to that video too (the title reads **Ask this video or Horde**). Either way Ask still sends a question elsewhere when that fits better, without you switching:
 
-- about Horde or your own library, downloads, history or playlists (*"what should I watch next?"*): Horde;
+- naming Horde, or about your own library, downloads, history or playlists (*"what should I watch next?"*): Horde;
+- about Horde's features, such as its theme, downloads or storage (*"how do I change the theme?"*): Horde, unless the question is about someone or something in the video (*"what backup tool does he use?"* stays on the video). Once you have picked the video, only a how-to (*"how do I…"*, *"can I…"*) leaves it this way;
 - naming a channel, or *"all my channels"*: those channels;
 - about the video's whole channel, when Ask indexes it (*"what does this channel say about…"*, *"in his other videos"*): that channel.
 
-Each answer's byline says where it came from, and a picked video stays picked. While a video plays in the mini player on another page, it is listed in the source menu as **Playing now**: questions only go to it once you pick it, so a general question does not land on a video by accident.
+Each answer's byline says where it came from, and a picked video stays picked, in History too. A conversation about a video is titled with it, and **Chat** on the video you are already asking about carries that conversation on. Answers about a video come from text anyone can write (its description, captions, comments), so like answers from channels they offer no setting changes, downloads or CSS, only text and links. While a video plays in the mini player on another page, it is listed in the source menu as **Playing now**: questions only go to it once you pick it, so a general question does not land on a video by accident.
 
 This needs **AI video chat** on (Settings → AI → Features); with it off, video questions are answered from Horde. Answers use the **Assistant model**, like the rest of Ask. Chats you had with a video before this moved into Ask are in **History**, one conversation per video, and can be continued.
 

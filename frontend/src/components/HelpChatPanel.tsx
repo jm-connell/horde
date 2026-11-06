@@ -14,6 +14,7 @@ import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import { findAskChannel } from "../pages/ask/askLinks";
 import type { HelpCatalog } from "../types";
 import { useSettings } from "../hooks/useSettings";
+import { appSettingsQuery } from "../queries/app";
 import { queryKeys } from "../queries/keys";
 import { getJson, removeItem, setJson } from "../storage";
 import AiMarkdown, { type InlineRenderers } from "./AiMarkdown";
@@ -78,6 +79,15 @@ function requestedSource(req: SourceRequest): AskSourceState {
   return req.video
     ? { scope: [], horde: false, video: req.video }
     : { scope: req.channel ? [req.channel] : [], horde: false, video: null };
+}
+
+/** "Chat" on the video the conversation is already about carries it on. */
+function resumes(req: SourceRequest | null, state: AskChatState): boolean {
+  return (
+    !!req?.video &&
+    !!state.video &&
+    askVideoKey(req.video) === askVideoKey(state.video)
+  );
 }
 
 /** A library video or a stream as Ask refers to it. */
@@ -244,19 +254,22 @@ export default function HelpChatPanel({
   // it. (The panel mounts on open, so the request is already there; peeking,
   // not taking, keeps React's doubled initialisers harmless.)
   const [opening] = useState(() => pendingSourceRequest());
-  const [messages, setMessages] = useState<HelpMessage[]>(() =>
-    opening ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
-  );
   // The saved conversation this tab shows, where it is answered from, and
   // the source last picked (kept with it, so a reopened panel has it too).
+  const [saved] = useState(() =>
+    getJson(
+      ASK_CHAT_STORAGE_KEY,
+      isAskState,
+      { threadId: null, scope: [] },
+      "session"
+    )
+  );
+  const [fresh] = useState(() => !!opening && !resumes(opening, saved));
+  const [messages, setMessages] = useState<HelpMessage[]>(() =>
+    fresh ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
+  );
   const [ask, setAsk] = useState<AskChatState>(() => {
-    if (!opening)
-      return getJson(
-        ASK_CHAT_STORAGE_KEY,
-        isAskState,
-        { threadId: null, scope: [] },
-        "session"
-      );
+    if (!fresh || !opening) return saved;
     const source = requestedSource(opening);
     return { threadId: null, ...source, picked: source };
   });
@@ -312,6 +325,10 @@ export default function HelpChatPanel({
     if (!req) return;
     consumeSourceRequest(req.seq);
     if (req.seq === opening?.seq) return; // started on it already
+    if (resumes(req, ask)) {
+      inputRef.current?.focus();
+      return;
+    }
     abortRef.current?.abort();
     setMessages([]);
     setError(null);
@@ -319,7 +336,7 @@ export default function HelpChatPanel({
     const source = requestedSource(req);
     setAsk({ threadId: null, ...source, picked: source });
     inputRef.current?.focus();
-  }, [sourceRequest, pendingSourceRequest, consumeSourceRequest, opening]);
+  }, [sourceRequest, pendingSourceRequest, consumeSourceRequest, opening, ask]);
 
   useEffect(() => {
     const el = listRef.current;
@@ -386,8 +403,9 @@ export default function HelpChatPanel({
         pageChannelId: pageAsk?.id ?? null,
         pageVideoId: pageAsk ? (pageChannel?.videoId ?? null) : null,
         hordeOnly: !!ask.horde,
-        // The picked video, else (nothing picked) the watch page's.
-        video: ask.video ?? (auto ? (pageVideoHere ?? null) : null),
+        video: pickedVideo,
+        // Nothing picked: the watch page's video.
+        pageVideo: auto ? pageVideoHere : null,
         page: currentPage(),
         dataConsent: consent,
       };
@@ -521,9 +539,10 @@ export default function HelpChatPanel({
           ...savedSources(m.sources),
         }))
       );
-      const saved = thread.scope as { channels?: unknown; video?: unknown };
-      const scope = parseScopeChannels(saved.channels);
-      const video = parseAskVideo(saved.video);
+      const kept = thread.scope as { channels?: unknown; video?: unknown };
+      // A picked video is the source even when channels answered last.
+      const video = parseAskVideo(kept.video);
+      const scope = video ? [] : parseScopeChannels(kept.channels);
       setAsk((a) => ({
         ...a,
         threadId: thread.id,
@@ -579,17 +598,24 @@ export default function HelpChatPanel({
   const askable: AskScopeChannel[] = (askChannels ?? [])
     .filter((c) => c.passages > 0)
     .map((c) => ({ id: c.id, name: c.channel_name || c.channel_url }));
-  // Video answers need AI too.
-  const pickedVideo = noAi ? null : (ask.video ?? null);
+  // Answers about a video need AI and the AI video chat switch.
+  const appSettings = useQuery(appSettingsQuery()).data;
+  const videoChat = !noAi && appSettings?.ai.ai_chat !== false;
+  const pickedVideo = videoChat ? (ask.video ?? null) : null;
   const auto = !ask.horde && !scoped.length && !pickedVideo;
   // The watch page's video, while that page is showing.
   const pageVideoHere =
-    !noAi && pageVideo && pageVideo.pathname === location.pathname
+    videoChat && pageVideo && pageVideo.pathname === location.pathname
       ? pageVideo.video
       : null;
   // The videos the menu offers: this page's, the one playing, the picked one.
   const videoChoices: { video: AskVideo; detail: string }[] = [];
-  const playing = noAi ? null : playingVideo(current, stream);
+  // A stream Ask can read is a YouTube one.
+  const playingNow = videoChat ? playingVideo(current, stream) : null;
+  const playing =
+    playingNow && (playingNow.library_id != null || playingNow.youtube_id)
+      ? playingNow
+      : null;
   for (const [video, detail] of [
     [pageVideoHere, "This page's video"],
     [playing, "Playing now"],

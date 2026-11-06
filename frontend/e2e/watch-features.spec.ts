@@ -134,6 +134,12 @@ test("the Summary section generates a summary and Chat opens Ask on the video", 
     "Aurora Drift"
   );
   expect(bodies[0].video).toEqual({ library_id: id, url: null });
+
+  // Chat again on the same video carries the conversation on.
+  await input.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(panel.getByText("It is about auroras.")).toBeVisible();
 });
 
 test("a saved summary still shows when it cannot be generated again", async ({
@@ -174,7 +180,10 @@ test("with nothing picked, Ask on the watch page answers from its video", async 
       },
     })
   );
-  const bodies: { video: { library_id: number | null } | null }[] = [];
+  const bodies: {
+    video: { library_id: number | null } | null;
+    page_video: { library_id: number | null } | null;
+  }[] = [];
   await page.route(/\/api\/ask\/chat$/, (route) => {
     bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
     return route.fulfill({
@@ -210,7 +219,9 @@ test("with nothing picked, Ask on the watch page answers from its video", async 
   await input.fill("What happens at the end?");
   await input.press("Enter");
   await expect(panel.getByText("Ok.")).toBeVisible();
-  expect(bodies[0].video).toEqual({ library_id: id, url: null });
+  // Not picked: sent as the page's video.
+  expect(bodies[0].video).toBeNull();
+  expect(bodies[0].page_video).toEqual({ library_id: id, url: null });
 });
 
 /** Put the resize handle just below the fixed nav, then drag it by `dy`. */

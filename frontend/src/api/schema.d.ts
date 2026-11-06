@@ -5297,6 +5297,7 @@ export interface components {
             page?: string | null;
             /** Page Channel Id */
             page_channel_id?: number | null;
+            page_video?: components["schemas"]["AskVideoRef"] | null;
             /** Page Video Id */
             page_video_id?: string | null;
             /** Thread Id */

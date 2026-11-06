@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
 from starlette.concurrency import run_in_threadpool
@@ -25,6 +27,7 @@ from ..schemas import (
     AskThreadMessage,
     AskThreadRead,
     AskThreadSummary,
+    AskVideoRef,
 )
 from ..services.auth.accounts import AuthUser
 from ..services.follows import normalize_channel_url
@@ -36,6 +39,7 @@ from . import member_view
 from . import stream_ai as stream_ai_api
 
 router = APIRouter(prefix="/api/ask", tags=["ask"])
+logger = logging.getLogger(__name__)
 
 _SORT = "relevance"
 
@@ -283,22 +287,29 @@ def search(
 _USE_AI = [Depends(require_permission("use_ai"))]
 
 
-def _route_turn(payload: AskChatRequest, user_id: int) -> ask_chat.Route:
-    """Check the conversation is the user's and pick where the turn is answered from."""
+def _route_turn(
+    payload: AskChatRequest, user_id: int, page_video: bool = True
+) -> ask_chat.Route:
+    """Check the conversation is the user's and pick where the turn is answered
+    from (without the watch page's video when ``page_video`` is False)."""
     with Session(get_engine()) as session:
         if payload.thread_id is not None:
             threads.owned_or_404(session, payload.thread_id, user_id)
-        video = (
-            ask_chat.resolve_video(session, payload.video.library_id, payload.video.url)
-            if payload.video is not None
-            else None
-        )
+
+        def resolve(ref: AskVideoRef | None) -> ask_chat.VideoRef | None:
+            if ref is None:
+                return None
+            return ask_chat.resolve_video(session, ref.library_id, ref.url)
+
+        picked = resolve(payload.video)
+        video = picked or (resolve(payload.page_video) if page_video else None)
         return ask_chat.pick_route(
             session,
             payload.message,
             channel_ids=payload.channel_ids,
             page_channel_id=payload.page_channel_id,
             video=video,
+            video_picked=picked is not None,
             horde_only=payload.horde_only,
         )
 
@@ -315,8 +326,18 @@ async def chat(
     video = route.video
     if video is not None and video.library_id is None and video.url:
         # A stream: save its details and captions first (once; then they are kept).
-        _, stream_id = await stream_ai_api.prepared_state(request, video.url)
-        route.video = await run_in_threadpool(ask_chat.with_stream, video, stream_id)
+        try:
+            _, stream_id = await stream_ai_api.prepared_state(request, video.url)
+        except HTTPException:
+            if route.picked is not None:
+                raise  # the user asked about this video: say why it cannot be
+            # Only the page's video: answer from elsewhere instead.
+            logger.warning("Ask: could not read %s", video.url, exc_info=True)
+            route = await run_in_threadpool(_route_turn, payload, user.id, False)
+        else:
+            route.video = await run_in_threadpool(
+                ask_chat.with_stream, video, stream_id
+            )
     return StreamingResponse(
         ask_chat.stream_ask_events(
             user,

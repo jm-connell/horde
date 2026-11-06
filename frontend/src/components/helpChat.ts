@@ -50,8 +50,12 @@ export function parseAskVideo(value: unknown): AskVideo | null {
   };
 }
 
-/** Tells two references to the same video apart from others. */
+/**
+ * Tells two references to the same video apart from others; a stream and its
+ * downloaded copy share the YouTube id.
+ */
 export function askVideoKey(video: AskVideo): string {
+  if (video.youtube_id) return `youtube:${video.youtube_id}`;
   return video.library_id != null
     ? `video:${video.library_id}`
     : `stream:${video.url}`;

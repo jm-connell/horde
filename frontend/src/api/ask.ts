@@ -16,6 +16,11 @@ import {
   request,
 } from "./client";
 
+/** A video as the server takes it: a library id, or a stream's URL. */
+function videoRef(video: AskVideo | null | undefined) {
+  return video ? { library_id: video.library_id, url: video.url } : null;
+}
+
 export const askApi = {
   askChannels(opts?: ReadOptions): Promise<AskChannelList> {
     return request<AskChannelList>("/api/ask/channels", opts);
@@ -101,8 +106,10 @@ export const askApi = {
       pageVideoId?: string | null;
       /** The user picked Horde as the source: no channel answers. */
       hordeOnly?: boolean;
-      /** The video the chat is about: the picked one, or the watch page's. */
+      /** The video the user picked. */
       video?: AskVideo | null;
+      /** The watch page's video, when nothing is picked. */
+      pageVideo?: AskVideo | null;
       page: string;
       dataConsent: HelpDataConsent;
     },
@@ -117,9 +124,8 @@ export const askApi = {
         page_channel_id: params.pageChannelId ?? null,
         page_video_id: params.pageVideoId ?? null,
         horde_only: params.hordeOnly ?? false,
-        video: params.video
-          ? { library_id: params.video.library_id, url: params.video.url }
-          : null,
+        video: videoRef(params.video),
+        page_video: videoRef(params.pageVideo),
         page: params.page,
         data_consent: params.dataConsent,
       },

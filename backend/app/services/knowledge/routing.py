@@ -1,10 +1,12 @@
-"""Which Ask channels a question is about.
+"""Which Ask channels, or whether the video, a question is about.
 
 A turn is answered from channels when the question names them ("what does the car
 care nut say…", "@TheCarCareNut", "CarCareNut"), from channels the chat is already
 about, or from the channel of the page the user is on unless the question is
 about Horde itself. "All my channels" and similar search every ready channel.
-Plain text matching, no model call, so it is predictable and free.
+With a video, the words that send a question to Horde count only when the
+question is not about the video ("he", "they", "this video"). Plain text
+matching, no model call, so it is predictable and free.
 """
 
 from __future__ import annotations
@@ -31,6 +33,21 @@ _HORDE = re.compile(
 )
 
 
+# Horde by name: never about a video.
+_NAMES_HORDE = re.compile(r"\b(horde|this app|the app)\b", re.IGNORECASE)
+# Someone or something in the video: the question is about what it shows.
+_ABOUT_VIDEO = re.compile(
+    r"\b(he|she|they|him|them|his|her|hers|their|theirs"
+    r"|the (video|host|creator|speaker|presenter|narrator|author|youtuber)"
+    r"|this (video|one|clip)|in (it|the video|this video))\b",
+    re.IGNORECASE,
+)
+# The user setting something up or doing something: a how-to.
+_HOW_TO = re.compile(
+    r"\b(how (do|can|should|would) i|(can|could|should) i|where (do|can) i"
+    r"|i (want|need|would like) to|help me|my)\b",
+    re.IGNORECASE,
+)
 # Words that make a question about a channel's other videos, not the one on screen.
 _WHOLE_CHANNEL = re.compile(
     r"\b(this|the|his|her|their|whole|entire) channel\b"
@@ -89,6 +106,21 @@ def named_channels(message: str, channels: list[KbChannel]) -> list[KbChannel]:
 def about_horde(message: str) -> bool:
     """True for a question about the app itself (its settings, downloads, ...)."""
     return bool(_HORDE.search(message or ""))
+
+
+def names_horde(message: str) -> bool:
+    """True when the question says Horde (or "this app") outright."""
+    return bool(_NAMES_HORDE.search(message or ""))
+
+
+def about_video(message: str) -> bool:
+    """True for a question about someone or something in the video."""
+    return bool(_ABOUT_VIDEO.search(message or ""))
+
+
+def asks_how_to(message: str) -> bool:
+    """True for "how do I…", "can I…", "my …": the user doing something."""
+    return bool(_HOW_TO.search(message or ""))
 
 
 def about_channel(message: str) -> bool:

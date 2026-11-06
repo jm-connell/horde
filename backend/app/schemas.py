@@ -1792,10 +1792,13 @@ class AskChatRequest(BaseModel):
     #: The user picked Horde as the source: answer from Horde even when the
     #: question names a channel (``channel_ids`` and the page's are ignored).
     horde_only: bool = False
-    #: The video the chat is about: the one the user picked, or the watch
-    #: page's. Answered from unless the question is about Horde or the user's
-    #: own things, names a channel or is about the page channel as a whole.
+    #: The video the user picked: answered from unless the question names
+    #: Horde, asks how to do something in it or about the user's own things,
+    #: names a channel or is about the page channel as a whole.
     video: AskVideoRef | None = None
+    #: The watch page's video, when nothing is picked: as ``video``, and also
+    #: left for a question about Horde's features that is not about the video.
+    page_video: AskVideoRef | None = None
     #: Where the user is in the app (Horde answers only).
     page: str | None = Field(default=None, max_length=300)
     data_consent: Literal["off", "local", "cloud"] = "off"
