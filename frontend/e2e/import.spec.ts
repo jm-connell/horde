@@ -10,6 +10,8 @@ const downloads = path.resolve(
 );
 const archiveDir = path.join(downloads, "Harbor Archive");
 const archived = path.join(archiveDir, "2023", "Night Pier [abcdefghijk].mp4");
+// Tube Archivist's layout: <channel id>/<video id>.mp4, nothing else to go on.
+const tubeArchivistDir = path.join(downloads, "UCBa659QWEk1AI4Tg--mrJ2A");
 
 function dropArchivedFile() {
   fs.mkdirSync(path.dirname(archived), { recursive: true });
@@ -21,6 +23,7 @@ function dropArchivedFile() {
 
 test.afterEach(() => {
   fs.rmSync(archiveDir, { recursive: true, force: true });
+  fs.rmSync(tubeArchivistDir, { recursive: true, force: true });
 });
 
 test("import queue approves a dropped file into the library", async ({
@@ -113,6 +116,44 @@ test("Fetch details from YouTube fills the form from the file's id", async ({
     page.locator("input[value='E2E looked-up title']")
   ).toBeVisible();
   await expect(page.getByText("Filled in from YouTube.")).toBeVisible();
+});
+
+test("files known only by their YouTube id are fetched and approved in bulk", async ({
+  page,
+}) => {
+  fs.mkdirSync(tubeArchivistDir, { recursive: true });
+  for (const id of ["2tdiKTSdE9Y", "bcdefghijkl"]) {
+    fs.copyFileSync(
+      path.join(downloads, "Northwind/2024/Paper Kites.mp4"),
+      path.join(tubeArchivistDir, `${id}.mp4`)
+    );
+  }
+  await page.goto("/import");
+  await page.getByRole("button", { name: "Scan for new files" }).click();
+  await expect(
+    page.getByText("Added 2 files to the import queue")
+  ).toBeVisible();
+  await expect(
+    page
+      .getByRole("status")
+      .filter({ hasText: "2 files have a YouTube id but no channel" })
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Fetch 2 from YouTube" }).click();
+  await page
+    .getByRole("dialog")
+    .getByRole("button", { name: "Fetch and approve" })
+    .click();
+  await expect(page.getByText("Approved 2 videos")).toBeVisible();
+  // The seeded drop has no YouTube id and waits; the files stay on disk.
+  await expect(page.locator('[data-horde="import-item"]')).toHaveCount(1);
+  await expect(page.locator("input[value='Unreviewed drop']")).toBeVisible();
+  expect(fs.existsSync(path.join(tubeArchivistDir, "2tdiKTSdE9Y.mp4"))).toBe(
+    true
+  );
+
+  await openNav(page, "Home");
+  await expect(videoCard(page, "E2E looked-up title").first()).toBeVisible();
 });
 
 test("approving one file keeps what was typed into another", async ({

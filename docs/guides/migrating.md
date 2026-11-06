@@ -20,7 +20,8 @@ Open **Import** and press **Scan for new files**, or wait for the background sca
 ## 3. Approve
 
 - **Approve N ready** takes every file that already has a title and channel into the library at once.
-- The rest need a channel. Open them one by one, or use **Fetch details from YouTube** on files whose YouTube id Horde knows.
+- **Fetch N from YouTube** looks up every file whose YouTube id Horde knows but whose channel it does not, one at a time, and approves each with what YouTube says. Files stay where they are.
+- The rest need a channel typed in, one by one.
 
 Videos with a YouTube source link then pick up view counts, captions, chapters and missing thumbnails from the periodic metadata sync in the background.
 
@@ -29,10 +30,10 @@ Videos with a YouTube source link then pick up view counts, captions, chapters a
 | Coming from | What to expect |
 |-------------|----------------|
 | **yt-dlp** with `--write-info-json` | Everything is filled in from the `.info.json`. Use **Approve N ready**. |
-| **yt-dlp**, default names (`Title [id].ext`) | Title from the name, YouTube link from `[id]`. The channel comes from the folder holding the file when files sit in per-channel folders. **Fetch details from YouTube** fills in the rest per file. |
+| **yt-dlp**, default names (`Title [id].ext`) | Title from the name, YouTube link from `[id]`. The channel comes from the folder holding the file when files sit in per-channel folders. In a flat folder, use **Fetch N from YouTube**. |
 | **Horde's own layout** (`Channel/Year/Title [id].ext`, for example from another Horde) | Title, channel and YouTube link from the path. Use **Approve N ready**. |
 | **Pinchflat**, **ytdl-sub** or anything that writes `.nfo` files | Title, channel, date, description and tags from the `.nfo`. Turn NFO output on in that tool before you move the files, if it is off. |
-| **Tube Archivist** | Its files are named `<channel id>/<video id>.mp4`, and titles and channels live in its database, not beside the files. Horde recognizes the video id, so **Fetch details from YouTube** works on each file, but there is no bulk lookup yet. For a large library, consider exporting metadata from Tube Archivist first, or re-downloading the channels in Horde with [automatic downloads](channels.md#autodownload). |
+| **Tube Archivist** | Its files are named `<channel id>/<video id>.mp4`, and titles and channels live in its database, not beside the files. Horde recognizes the video id: use **Fetch N from YouTube**. It takes a few seconds per file, so a large library takes a while; you can stop it and run it again later. Videos since removed from YouTube cannot be looked up and need a title and channel typed in. |
 | **Phone or camera files** | No sidecars: type a title and a channel (for example "Family"). |
 
 ## Watching on a TV afterwards
