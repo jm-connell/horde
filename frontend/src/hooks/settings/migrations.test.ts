@@ -1,4 +1,18 @@
 import { describe, expect, it } from "vitest";
+import {
+  BACKGROUND_EFFECT_OPTIONS,
+  NEW_BACKGROUND_EFFECT_OPTIONS,
+} from "../../effects";
+import {
+  LOADING_STYLE_OPTIONS,
+  NEW_LOADING_STYLE_OPTIONS,
+} from "../../loadingStyles";
+import {
+  HOVER_MOTION_OPTIONS,
+  NAV_INDICATOR_OPTIONS,
+  NEW_HOVER_MOTION_OPTIONS,
+  NEW_NAV_INDICATOR_OPTIONS,
+} from "../../pages/settings/constants";
 import { DEFAULTS } from "./defaults";
 import { migratePanelTranslucency, normalizeSettings } from "./migrations";
 import { serverUiToSettingsPatch, settingsToServerUi } from "./serverUi";
@@ -36,6 +50,33 @@ describe("normalizeSettings", () => {
     });
     for (const key of ["liquidNav", "translucentPanels", "uiScale", "aiTab"]) {
       expect(next).not.toHaveProperty(key);
+    }
+  });
+
+  // A choice the pickers offer but validation forgot resets on the next load.
+  it("keeps every option Settings offers, the new ones included", () => {
+    for (const o of [
+      ...BACKGROUND_EFFECT_OPTIONS,
+      ...NEW_BACKGROUND_EFFECT_OPTIONS,
+    ]) {
+      expect(
+        normalizeSettings({ backgroundEffect: o.value }).backgroundEffect
+      ).toBe(o.value);
+    }
+    for (const o of [...LOADING_STYLE_OPTIONS, ...NEW_LOADING_STYLE_OPTIONS]) {
+      expect(normalizeSettings({ loadingStyle: o.value }).loadingStyle).toBe(
+        o.value
+      );
+    }
+    for (const o of [...NAV_INDICATOR_OPTIONS, ...NEW_NAV_INDICATOR_OPTIONS]) {
+      expect(normalizeSettings({ navIndicator: o.value }).navIndicator).toBe(
+        o.value
+      );
+    }
+    for (const o of [...HOVER_MOTION_OPTIONS, ...NEW_HOVER_MOTION_OPTIONS]) {
+      expect(normalizeSettings({ hoverMotion: o.value }).hoverMotion).toBe(
+        o.value
+      );
     }
   });
 

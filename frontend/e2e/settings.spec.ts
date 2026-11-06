@@ -54,6 +54,83 @@ test("appearance changes theme and loading animation", async ({ page }) => {
   await expect(page.getByLabel("Background animation").first()).toBeVisible();
 });
 
+test("the New section tries reworked and new looks, and they stick", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=appearance");
+  const backgrounds = page.getByRole("group", { name: "New backgrounds" });
+  const galaxy = backgrounds.getByRole("button", { name: /^Spiral galaxy/ });
+  await galaxy.click();
+  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
+  // The Background picker shows it too (under its "New" heading).
+  await expect(
+    page.getByRole("button", { name: "Background animation: Spiral galaxy" })
+  ).toBeVisible();
+  await expect(page.locator('canvas[data-horde="background"]')).toBeVisible();
+
+  // A rework can be set against the effect it replaces, and back again.
+  await page.getByRole("button", { name: "Compare with Galaxy" }).click();
+  await expect(
+    page.getByRole("button", { name: "Background animation: Galaxy" })
+  ).toBeVisible();
+  // The same button flips, so keyboard focus stays on it.
+  const back = page.getByRole("button", { name: "Back to Spiral galaxy" });
+  await expect(back).toBeFocused();
+  await back.press("Enter");
+  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
+
+  const helix = page
+    .getByRole("group", { name: "New loaders" })
+    .getByRole("button", { name: "Helix" });
+  await helix.click();
+  await expect(helix).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText("Helix — A double strand twisting in place")
+  ).toBeVisible();
+
+  await page
+    .getByRole("group", { name: "New navigation indicators" })
+    .getByRole("button", { name: "Focus" })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-nav-indicator",
+    "focus"
+  );
+
+  const saved = waitForSettingsPatch(page, "hover_motion", "zoom");
+  await page
+    .getByRole("group", { name: "New hover motions" })
+    .getByRole("button", { name: "Zoom" })
+    .click();
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-hover-motion",
+    "zoom"
+  );
+  await saved;
+
+  await page.reload();
+  await expect(galaxy).toHaveAttribute("aria-pressed", "true");
+  await expect(helix).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-nav-indicator",
+    "focus"
+  );
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-hover-motion",
+    "zoom"
+  );
+});
+
+test("settings search finds the New section by an option's name", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=playback");
+  await page.getByLabel("Search settings").fill("northern lights");
+  await expect(
+    page.getByRole("group", { name: "New backgrounds" })
+  ).toBeVisible();
+});
+
 test("the panel blur slider changes the blur on panels", async ({ page }) => {
   await page.goto("/settings?tab=appearance");
   const slider = page.getByRole("slider", { name: "Panel blur" });

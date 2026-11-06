@@ -49,6 +49,17 @@ describe("settings search routing", () => {
     expect(firstMatchingTab("factory reset")).toBe("system");
     expect(firstMatchingTab("erase")).toBe("system");
   });
+  it("finds the New section by an option's name, without taking other tabs' words", () => {
+    expect(firstMatchingTab("northern lights")).toBe("appearance");
+    expect(firstMatchingTab("firefly")).toBe("appearance");
+    expect(firstMatchingTab("clapper")).toBe("appearance");
+    // Words from the new options' names and descriptions that belong elsewhere.
+    expect(firstMatchingTab("system")).toBe("system");
+    expect(firstMatchingTab("play")).not.toBe("appearance");
+    expect(firstMatchingTab("sync")).not.toBe("appearance");
+    expect(firstMatchingTab("core")).toBe("ai");
+    expect(firstMatchingTab("button")).toBe("ai");
+  });
   it("skips settings the user does not see", () => {
     const member = (access: string) => access !== "admin";
     const memberTabs = TABS.filter((t) => !ADMIN_ONLY_TABS.has(t.id));
