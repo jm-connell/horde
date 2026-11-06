@@ -155,6 +155,7 @@ function AssistantReply({
   renderers,
   catalog,
   references,
+  untrusted,
   onNavigate,
 }: {
   content: string;
@@ -163,13 +164,16 @@ function AssistantReply({
   catalog: HelpCatalog | undefined;
   /** Ask channel answers: markers become links to these. */
   references?: AskReference[];
+  /** Built from text anyone could have written (captions, comments). */
+  untrusted: boolean;
   onNavigate: () => void;
 }) {
   const { text, actions } = splitActions(content);
   const byN = new Map((references ?? []).map((r) => [r.n, r]));
-  // A channel answer is built from captions anyone could have written, so its
-  // help tokens stay text and it offers no actions or CSS.
-  const render: InlineRenderers = references
+  // A channel or video answer is built from captions, descriptions and
+  // comments anyone could have written, so its help tokens stay text and it
+  // offers no actions or CSS.
+  const render: InlineRenderers = untrusted
     ? {
         link: renderers.link,
         token: (raw) => raw,
@@ -195,7 +199,7 @@ function AssistantReply({
       {!streaming && references && (
         <AskReferenceList references={references} onNavigate={onNavigate} />
       )}
-      {!streaming && !references && (
+      {!streaming && !untrusted && (
         <>
           <HelpActionCards
             actions={actions}
@@ -902,6 +906,7 @@ export default function HelpChatPanel({
                       renderers={renderers}
                       catalog={catalog}
                       references={m.references}
+                      untrusted={!!(m.references || m.video)}
                       onNavigate={onNavigate}
                     />
                   )}
