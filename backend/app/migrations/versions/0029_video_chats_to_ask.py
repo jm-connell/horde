@@ -7,8 +7,10 @@ conversation per user and video, titled with the video and scoped to it, so it
 can be continued. Rows without an owner (from before accounts) go to the first
 administrator when there is one; otherwise the bootstrap moves them later
 (``knowledge.threads.adopt_video_chats``). The old rows are left in place, and
-the copies are marked in their scope so a downgrade removes exactly them. No
-table changes shape, so the tag and full-text triggers are untouched.
+the copies are marked in their scope (Ask keeps the mark as the
+conversation goes on) so a downgrade removes exactly them, with any turns
+added since. No table changes shape, so the tag and full-text triggers are
+untouched.
 
 Revision ID: 0029_video_chats_to_ask
 Revises: 0028_user_invites
@@ -17,7 +19,6 @@ Revises: 0028_user_invites
 import json
 from collections.abc import Sequence
 from typing import Any
-from urllib.parse import parse_qs, urlparse
 
 import sqlalchemy as sa
 from alembic import op
@@ -35,7 +36,7 @@ _TITLE_CHARS = 120
 _LIBRARY = sa.text(
     "SELECT COALESCE(m.user_id, :admin) AS uid, m.video_id AS key, m.role, "
     "m.content, m.cost, m.model, m.created_at, v.title, v.source_url, "
-    "NULL AS youtube_id "
+    "v.youtube_id "
     "FROM video_ai_chat_messages m JOIN videos v ON v.id = m.video_id "
     "WHERE COALESCE(m.user_id, :admin) IS NOT NULL "
     "ORDER BY uid, m.video_id, m.created_at, m.id"
@@ -46,29 +47,6 @@ _STREAMS = sa.text(
     "FROM stream_ai_chat_messages m JOIN stream_ai_state s ON s.id = m.stream_id "
     "ORDER BY uid, m.stream_id, m.created_at, m.id"
 )
-
-
-def _youtube_id(url: str | None) -> str | None:
-    """The id in a YouTube watch / youtu.be URL (frozen copy, no app imports)."""
-    if not url:
-        return None
-    try:
-        p = urlparse(url.strip())
-    except ValueError:
-        return None
-    host = p.netloc.lower()
-    if host in ("youtu.be", "www.youtu.be"):
-        vid = p.path.strip("/").split("/")[0]
-    elif host.endswith("youtube.com"):
-        if p.path == "/watch":
-            vid = (parse_qs(p.query).get("v") or [""])[0]
-        elif p.path.startswith(("/shorts/", "/live/", "/embed/")):
-            vid = p.path.split("/")[2] if len(p.path.split("/")) > 2 else ""
-        else:
-            vid = ""
-    else:
-        return None
-    return vid if len(vid) == 11 else None
 
 
 def _title(raw: str | None) -> str:
@@ -85,12 +63,12 @@ def _copy(bind: sa.Connection, rows: Sequence[Any], *, stream: bool) -> None:
     for row in rows:
         if (row.uid, row.key) != current:
             current = (row.uid, row.key)
-            youtube_id = row.youtube_id if stream else _youtube_id(row.source_url)
             ref = {
                 "library_id": None if stream else row.key,
-                "youtube_id": youtube_id,
+                "youtube_id": row.youtube_id,
                 "url": (
-                    row.source_url or f"https://www.youtube.com/watch?v={youtube_id}"
+                    row.source_url
+                    or f"https://www.youtube.com/watch?v={row.youtube_id}"
                 )
                 if stream
                 else None,

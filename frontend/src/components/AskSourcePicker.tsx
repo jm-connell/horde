@@ -114,7 +114,10 @@ export default function AskSourcePicker({
           triggerRef,
         }}
       >
-        <MenuScroll className="max-h-64" revision={channels.length}>
+        <MenuScroll
+          className="max-h-64"
+          revision={`${videos.length}-${channels.length}`}
+        >
           {item(
             selected === "auto",
             "Automatic",

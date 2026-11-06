@@ -32,7 +32,7 @@ Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../op
 
 ## Summaries
 
-When **AI video summaries** is on, a summary is queued after download once captions are on disk. Length is a setting (`short` / `medium` / `long`). Watch still has **Regenerate**, and older videos without a summary can **Generate** from the AI panel. Summaries use title, description, and caption text.
+When **AI video summaries** is on, a summary is queued after download once captions are on disk. Length is a setting (`short` / `medium` / `long`). Watch still has **Regenerate**, and older videos without a summary can **Generate** from the Summary section. Summaries use title, description, and caption text.
 
 ## Chapters
 

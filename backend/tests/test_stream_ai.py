@@ -257,13 +257,8 @@ def test_downloading_moves_the_results_onto_the_video(session, add_video, admin_
     meta = session.get(VideoAiMeta, video.id)
     assert meta is not None and meta.summary == "Stream summary."
     assert json.loads(meta.chapters or "[]") == [{"start_sec": 0, "title": "Start"}]
-    rows = session.exec(
-        select(VideoAiChatMessage).where(VideoAiChatMessage.video_id == video.id)
-    ).all()
-    assert [(r.role, r.content, r.user_id) for r in rows] == [
-        ("user", "Q?", admin_user.id),
-        ("assistant", "A.", admin_user.id),
-    ]
+    # Chat about it lives in Ask now; the old per-stream rows are not copied.
+    assert session.exec(select(VideoAiChatMessage)).all() == []
     assert _state(session) is None
     assert session.exec(select(StreamAiChatMessage)).all() == []
 

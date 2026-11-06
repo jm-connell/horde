@@ -1,9 +1,12 @@
-"""AI summary, chapters and chat for a streamed (not downloaded) video.
+"""AI summary and chapters for a streamed (not downloaded) video, and what Ask
+is given about it.
 
-Results live in ``stream_ai_state`` / ``stream_ai_chat_messages``, keyed by the
-YouTube id. When the video is downloaded they move onto the library video
-(``adopt_for_video``); rows nobody opened for ``STREAM_AI_RETENTION_DAYS`` are
-deleted (``purge_expired``). A small worker does both periodically.
+Results live in ``stream_ai_state``, keyed by the YouTube id. When the video is
+downloaded they move onto the library video (``adopt_for_video``); rows nobody
+opened for ``STREAM_AI_RETENTION_DAYS`` are deleted (``purge_expired``). A small
+worker does both periodically. Questions about a stream are Ask's (saved in
+its threads); ``stream_ai_chat_messages`` only holds chats from before, which
+revision 0029 copied into Ask.
 """
 
 from __future__ import annotations
@@ -18,10 +21,8 @@ from sqlmodel import Session, col, delete, select
 from .. import config
 from ..context import get_engine
 from ..models import (
-    StreamAiChatMessage,
     StreamAiState,
     Video,
-    VideoAiChatMessage,
     VideoAiMeta,
     as_utc,
     require_id,
@@ -289,8 +290,7 @@ def adopt_for_video(session: Session, video: Video) -> bool:
     """Move a stream's AI results onto the downloaded ``video``.
 
     The video's own results win: a summary or AI chapters it already has are
-    kept, and the stream's copy is dropped. Chat turns are appended to each
-    user's conversation about the video. Returns whether a stream row existed.
+    kept, and the stream's copy is dropped. Returns whether a stream row existed.
     """
     youtube_id = video.youtube_id
     if not youtube_id:
@@ -312,23 +312,7 @@ def adopt_for_video(session: Session, video: Video) -> bool:
         meta.chapters_skip_reason = None
     meta.updated_at = utcnow()
     session.add(meta)
-    for row in session.exec(
-        select(StreamAiChatMessage).where(
-            col(StreamAiChatMessage.stream_id) == require_id(state)
-        )
-    ).all():
-        session.add(
-            VideoAiChatMessage(
-                video_id=video_id,
-                user_id=row.user_id,
-                role=row.role,
-                content=row.content,
-                cost=row.cost,
-                model=row.model,
-                created_at=row.created_at,
-            )
-        )
-    session.delete(state)  # chat rows go with it (ON DELETE CASCADE)
+    session.delete(state)  # old chat rows go with it (ON DELETE CASCADE)
     session.commit()
     logger.info("moved stream AI results for %s onto video %s", youtube_id, video_id)
     return True

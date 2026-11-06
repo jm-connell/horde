@@ -1314,6 +1314,7 @@ def test_video_chats_revision_copies_each_chat_into_ask(tmp_dirs):
             "[]",
             "x/one.mp4",
             source_url="https://www.youtube.com/watch?v=ccccccccccc",
+            youtube_id="ccccccccccc",
         )
         for uid, role, content, when in (
             (2, "user", "how often?", "2024-01-01 00:00:01"),
