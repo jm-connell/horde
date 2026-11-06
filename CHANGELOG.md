@@ -17,7 +17,8 @@ All notable changes to Horde are documented here. The format follows
   filled in from a yt-dlp `.info.json`, a Kodi/Jellyfin `.nfo`, or a
   `Channel/Year/Title [id]` path (and Tube Archivist's names). **Approve N
   ready** takes every file with a known title and channel at once, without
-  moving it; **Fetch details from YouTube** fills one from its id. A new
+  moving it; **Fetch details from YouTube** fills one from its id, and **Fetch N from
+  YouTube** looks up and approves every file known only by its id. A new
   guide covers moving from yt-dlp, Tube Archivist, Pinchflat and others.
   `.m4v` and `.mov` files import too.
 - **Invite links.** Administrators can send a one-time link instead of a

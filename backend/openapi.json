@@ -24616,6 +24616,59 @@
         ]
       }
     },
+    "/api/review/{video_id}/approve-from-youtube": {
+      "post": {
+        "description": "Look this file up on YouTube by the id it is known by and approve it with\nwhat YouTube says, filling only blanks (a title that is still the file name\ncounts as blank). The file stays where it is. The Import page calls this\nonce per file for a bulk lookup.",
+        "operationId": "approve_from_youtube_api_review__video_id__approve_from_youtube_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApproveSuggestedResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve From Youtube",
+        "tags": [
+          "review"
+        ]
+      }
+    },
     "/api/review/{video_id}/skip": {
       "post": {
         "description": "Dismiss a review item without requiring a channel. The file stays in the\nlibrary keeping its filename-derived title.",

@@ -54,6 +54,14 @@ export const reviewApi = {
     return request<ImportSuggestion>(`/api/review/${id}/youtube`);
   },
 
+  /** Look a review item up on YouTube and approve it with what YouTube says. */
+  approveFromYoutube(id: number): Promise<ApproveSuggestedResult> {
+    return request<ApproveSuggestedResult>(
+      `/api/review/${id}/approve-from-youtube`,
+      { method: "POST" }
+    );
+  },
+
   scanImport(): Promise<ImportScanResult> {
     return request<ImportScanResult>("/api/review/scan", { method: "POST" });
   },
