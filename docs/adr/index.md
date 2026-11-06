@@ -35,6 +35,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0027](0027-invite-links.md) | Invite links let new members choose their own password | Accepted |
 | [0028](0028-one-ask.md) | One Ask: a single name, with the source on show and pickable | Accepted |
 | [0029](0029-video-questions-in-ask.md) | Questions about a video go to Ask | Accepted |
+| [0030](0030-ask-routes-on-its-own.md) | Ask routes each question itself; no source menu | Accepted |
 
 ## Writing a new record
 

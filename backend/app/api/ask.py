@@ -310,7 +310,7 @@ def _route_turn(
             page_channel_id=payload.page_channel_id,
             video=video,
             video_picked=picked is not None,
-            horde_only=payload.horde_only,
+            answer_from=payload.answer_from,
         )
 
 

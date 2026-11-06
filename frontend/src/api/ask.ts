@@ -92,7 +92,8 @@ export const askApi = {
   /**
    * One Ask turn (SSE): from channels when the question names one or
    * `channelIds` says which, from `video` unless the question is about Horde
-   * or a channel, from Horde otherwise (always with `hordeOnly`). The server
+   * or a channel, from Horde otherwise (`answerFrom` forces Horde or the
+   * video for this turn: "Ask … instead"). The server
    * saves the turn in `threadId` (a new conversation when null; see the
    * `thread` event).
    */
@@ -104,8 +105,8 @@ export const askApi = {
       /** The page's Ask channel and watched video (see `useAskPageChannel`). */
       pageChannelId?: number | null;
       pageVideoId?: string | null;
-      /** The user picked Horde as the source: no channel answers. */
-      hordeOnly?: boolean;
+      /** "Ask … instead": answer this turn from Horde, or from `video`. */
+      answerFrom?: "horde" | "video" | null;
       /** The video the user picked. */
       video?: AskVideo | null;
       /** The watch page's video, when nothing is picked. */
@@ -123,7 +124,7 @@ export const askApi = {
         channel_ids: params.channelIds,
         page_channel_id: params.pageChannelId ?? null,
         page_video_id: params.pageVideoId ?? null,
-        horde_only: params.hordeOnly ?? false,
+        answer_from: params.answerFrom ?? null,
         video: videoRef(params.video),
         page_video: videoRef(params.pageVideo),
         page: params.page,

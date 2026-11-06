@@ -118,12 +118,9 @@ test("the Summary section generates a summary and Chat opens Ask on the video", 
   // Chat opens Ask on this video.
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  await expect(
-    panel.getByRole("button", {
-      name: "Answering from Aurora Drift",
-      exact: true,
-    })
-  ).toBeVisible();
+  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
+    "Aurora Drift"
+  );
   const input = panel.getByRole("textbox", { name: "Your question" });
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute("placeholder", "Ask about Aurora Drift…");
@@ -183,6 +180,7 @@ test("with nothing picked, Ask on the watch page answers from its video", async 
   const bodies: {
     video: { library_id: number | null } | null;
     page_video: { library_id: number | null } | null;
+    answer_from: string | null;
   }[] = [];
   await page.route(/\/api\/ask\/chat$/, (route) => {
     bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
@@ -202,26 +200,28 @@ test("with nothing picked, Ask on the watch page answers from its video", async 
   await page.goto(`/watch/${id}`);
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  const source = panel.getByRole("button", {
-    name: "Answering from this video or Horde",
-    exact: true,
-  });
-  await expect(source).toBeVisible();
-  // The menu offers the video itself too.
-  await source.click();
-  await expect(
-    page
-      .getByRole("menu", { name: "Answer from" })
-      .getByRole("menuitemradio", { name: /^Aurora Drift/ })
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
+  // Nothing picked: no chip, and the question box says where questions go.
+  const focus = panel.locator('[data-horde="ask-focus"]');
+  await expect(focus).toHaveCount(0);
   const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toHaveAttribute(
+    "placeholder",
+    "Ask this video or Horde…"
+  );
   await input.fill("What happens at the end?");
   await input.press("Enter");
   await expect(panel.getByText("Ok.")).toBeVisible();
   // Not picked: sent as the page's video.
   expect(bodies[0].video).toBeNull();
   expect(bodies[0].page_video).toEqual({ library_id: id, url: null });
+
+  // The reply came from Horde: "Ask Aurora Drift instead" asks the video,
+  // and the chat is about it from then on.
+  await panel.getByRole("button", { name: "Ask Aurora Drift instead" }).click();
+  await expect.poll(() => bodies.length).toBe(2);
+  expect(bodies[1].answer_from).toBe("video");
+  expect(bodies[1].video).toEqual({ library_id: id, url: null });
+  await expect(focus).toHaveText("Aurora Drift");
 });
 
 /** Put the resize handle just below the fixed nav, then drag it by `dy`. */

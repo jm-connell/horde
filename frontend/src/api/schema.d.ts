@@ -5278,6 +5278,8 @@ export interface components {
          * @description One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.
          */
         AskChatRequest: {
+            /** Answer From */
+            answer_from?: ("horde" | "video") | null;
             /** Channel Ids */
             channel_ids?: number[];
             /**
@@ -5286,11 +5288,6 @@ export interface components {
              * @enum {string}
              */
             data_consent: "off" | "local" | "cloud";
-            /**
-             * Horde Only
-             * @default false
-             */
-            horde_only: boolean;
             /** Message */
             message: string;
             /** Page */

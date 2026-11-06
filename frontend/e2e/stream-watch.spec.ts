@@ -177,12 +177,9 @@ test("a streamed video gets an AI summary with a retention note, and Chat opens 
 
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
-  await expect(
-    panel.getByRole("button", {
-      name: "Answering from Ridge at dusk",
-      exact: true,
-    })
-  ).toBeVisible();
+  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
+    "Ridge at dusk"
+  );
   const input = panel.getByRole("textbox", { name: "Your question" });
   await input.fill("What is it about?");
   await input.press("Enter");

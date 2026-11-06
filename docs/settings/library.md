@@ -147,7 +147,7 @@ Everyone has it, for their own account. The line sums up your imported YouTube h
 
 ## Channels Ask can answer from
 
-Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one or it is picked beside Ask's title.
+Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one, or from a channel's page.
 
 ## Trash
 

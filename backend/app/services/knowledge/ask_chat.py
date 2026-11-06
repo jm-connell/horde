@@ -4,8 +4,8 @@ Each turn picks its source (``pick_route``): channels the question names, else
 the channels the client says the chat is about (opened on a channel page, or
 the previous answer's channels), else the video the chat is about (picked, or
 the watch page's) unless the question is about Horde, the user's own things or
-the whole channel, else Horde (``help_chat``). When the user picked Horde as
-the source (``horde_only``), it is Horde whatever the question names. Every
+the whole channel, else Horde (``help_chat``). "Ask … instead" under a reply
+(``answer_from``) forces Horde or the video for that turn. Every
 kind is saved in the user's thread (``threads``), so Ask has one history.
 
 A channel turn retrieves numbered excerpts (``retrieval``), streams the answer
@@ -178,13 +178,13 @@ def pick_route(
     page_channel_id: int | None = None,
     video: VideoRef | None = None,
     video_picked: bool = False,
-    horde_only: bool = False,
+    answer_from: str | None = None,
 ) -> Route:
     """Where this turn is answered from.
 
-    In order: Horde when the user picked it; every channel ("all my
-    channels"); the channels the question names; the channels the chat is
-    about. Then, with a video (picked, or the watch page's): Horde when the
+    In order: the source "Ask … instead" asked for (``answer_from``); every
+    channel ("all my channels"); the channels the question names; the
+    channels the chat is about. Then, with a video (picked, or the watch page's): Horde when the
     question names Horde or asks about the user's own things (unless it is
     about the video), the page's channel for one about the whole channel,
     Horde for one about Horde's features that is not about the video (once
@@ -193,8 +193,10 @@ def pick_route(
     Horde. Else Horde.
     """
     picked = video if video_picked else None
-    if horde_only:
-        return Route()
+    if answer_from == "horde":
+        return Route(picked=picked)
+    if answer_from == "video" and video is not None:
+        return Route(video=video, picked=picked)
     channels = searchable_channels(session)
     if routing.asks_all_channels(message):
         return Route(channels, picked=picked)

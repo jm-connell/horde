@@ -1789,9 +1789,9 @@ class AskChatRequest(BaseModel):
     page_channel_id: int | None = None
     #: The YouTube id of the video being watched: its passages come first.
     page_video_id: str | None = Field(default=None, max_length=32)
-    #: The user picked Horde as the source: answer from Horde even when the
-    #: question names a channel (``channel_ids`` and the page's are ignored).
-    horde_only: bool = False
+    #: "Ask … instead" under a reply: answer this turn from Horde, or from the
+    #: video (``video``), whatever the question names or the page is about.
+    answer_from: Literal["horde", "video"] | None = None
     #: The video the user picked: answered from unless the question names
     #: Horde, asks how to do something in it or about the user's own things,
     #: names a channel or is about the page channel as a whole.

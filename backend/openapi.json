@@ -2402,6 +2402,21 @@
       "AskChatRequest": {
         "description": "One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.",
         "properties": {
+          "answer_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "horde",
+                  "video"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer From"
+          },
           "channel_ids": {
             "items": {
               "type": "integer"
@@ -2419,11 +2434,6 @@
             ],
             "title": "Data Consent",
             "type": "string"
-          },
-          "horde_only": {
-            "default": false,
-            "title": "Horde Only",
-            "type": "boolean"
           },
           "message": {
             "maxLength": 4000,

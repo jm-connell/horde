@@ -338,20 +338,16 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
-  Beside the title sits the source, so the header reads "Ask Automatic",
-  "Ask Horde", "Ask Northwind" or "Ask <video title>": accent `text-sm`
-  semibold text with a chevron, `rounded-md` with an `ink-800` hover
-  ("this video or Horde" on a watch page, "<channel> or Horde" on a
-  channel's page; it truncates first). When the panel has tabs it sits
-  right after the Ask tab, then an `ink-700` hairline and the other tab
-  ("Ask Horde ▾ | Algorithm"); the tabs keep their width. It opens a `MenuFlyout` dropping across the panel under
-  the header (inside the panel rather than floating: the panel's
-  translucency would need a portal, and a phone keyboard moves the panel):
-  `menuitemradio` rows for Automatic and Horde, each with a one-line
-  description, then the page's or playing video under an uppercase "Video"
-  label ("This page's video", "Playing now"), then the channels under
-  "Channels", the picked one in accent with a check. Each reply's small
-  uppercase byline names its source the same way. About a video, the empty
+  When Ask is focused on a video or channel, a chip sits beside the title
+  ("Ask · Cedar Notes ×"): `ink-800` fill, `rounded-md`, accent `text-sm`
+  semibold text that truncates first, and a small muted × that goes back
+  to asking about anything. When the panel has tabs it sits right after
+  the Ask tab, then an `ink-700` hairline and the other tab ("Ask ·
+  Northwind × | Algorithm"); the tabs keep their width. There is no source
+  menu: each reply's small uppercase byline names where it came from, and
+  under the latest reply muted `text-xs` links ("Ask Horde instead", "Ask
+  <video> instead") re-ask the same question from elsewhere, underlined in
+  accent on hover.
   conversation offers three starter questions as the same outlined chips
   as Horde's suggestions.
   The Recommended **Algorithm** panel uses the same frame (it shows only

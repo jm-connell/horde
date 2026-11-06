@@ -366,9 +366,7 @@ def test_unnamed_questions_go_to_ask_about_horde_and_are_saved(
     assert thread["messages"][1]["sources"]["kind"] == "help"
 
 
-def test_horde_picked_as_the_source_ignores_a_named_channel(
-    client, session, llm, help_index
-):
+def test_ask_horde_instead_ignores_a_named_channel(client, session, llm, help_index):
     nut = _channel(session)
     _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
     llm["replies"] = ["Settings → Library → Channels Ask can answer from."]
@@ -379,7 +377,7 @@ def test_horde_picked_as_the_source_ignores_a_named_channel(
                 "message": "How do I stop indexing the Car Care Nut?",
                 "channel_ids": [nut.id],
                 "page_channel_id": nut.id,
-                "horde_only": True,
+                "answer_from": "horde",
             },
         ).text
     )
@@ -815,8 +813,9 @@ def test_a_video_answers_unless_the_question_is_about_horde_or_a_channel(session
     assert route("what does this channel say about oil?").channels == [nut]
     # Not indexed: the video is all there is.
     assert to_video("has he talked about this in other videos?", page=None)
-    # Horde picked wins over everything.
-    assert route("when should I change it?", horde_only=True) == ask_chat.Route()
+    # "Ask … instead" forces the source for one turn.
+    assert route("when should I change it?", answer_from="horde") == ask_chat.Route()
+    assert to_video("how do I change the theme?", answer_from="video")
 
 
 def test_a_picked_video_leaves_only_for_a_plain_horde_question(session):

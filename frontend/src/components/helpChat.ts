@@ -82,12 +82,10 @@ export const HELP_CHAT_STORAGE_KEY = "horde.helpChat";
 /** The saved conversation this tab shows and where Ask answers it from. */
 export const ASK_CHAT_STORAGE_KEY = "horde.askChat";
 
-/** Where Ask answers from: channels, a video, Horde only, or (none) per question. */
+/** What the chat is focused on: channels, a video, or (neither) whatever each question is about. */
 export interface AskSourceState {
   /** The channels the chat is about. */
   scope: AskScopeChannel[];
-  /** Horde only: no channel answers, even one the question names. */
-  horde?: boolean;
   /** The picked video: questions go to it unless they are about Horde or a channel. */
   video?: AskVideo | null;
 }
@@ -103,7 +101,6 @@ function isSourceState(value: unknown): value is AskSourceState {
   const v = value as Record<string, unknown>;
   return (
     Array.isArray(v.scope) &&
-    (v.horde === undefined || typeof v.horde === "boolean") &&
     (v.video == null || parseAskVideo(v.video) !== null)
   );
 }

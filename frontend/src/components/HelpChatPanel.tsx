@@ -25,7 +25,6 @@ import {
   HelpActionCards,
   HelpTokenLink,
 } from "./HelpChatActions";
-import AskSourcePicker, { type AskSource } from "./AskSourcePicker";
 import {
   ASK_CHAT_STORAGE_KEY,
   type AskChatState,
@@ -52,6 +51,7 @@ import {
   WHAT_CAN_YOU_DO,
 } from "./helpPrompts";
 import { cssBlocks, splitActions } from "./helpTokens";
+import { CloseIcon } from "./icons";
 import { PanelHeader } from "./SidePanelFrame";
 import { usePanelFrame } from "./sidePanelContext";
 import TypingDots from "./TypingDots";
@@ -72,13 +72,19 @@ function isAppPath(href: string): boolean {
 }
 
 /** Nothing picked: each question goes to Horde or a channel, by what it asks. */
-const AUTO: AskSourceState = { scope: [], horde: false, video: null };
+const AUTO: AskSourceState = { scope: [], video: null };
+
+/** "Ask … instead" under a reply: the same question, answered from here. */
+type Instead =
+  | { kind: "horde" }
+  | { kind: "video"; video: AskVideo }
+  | { kind: "channel"; channel: AskScopeChannel };
 
 /** The source a request starts a conversation on. */
 function requestedSource(req: SourceRequest): AskSourceState {
   return req.video
-    ? { scope: [], horde: false, video: req.video }
-    : { scope: req.channel ? [req.channel] : [], horde: false, video: null };
+    ? { scope: [], video: req.video }
+    : { scope: req.channel ? [req.channel] : [], video: null };
 }
 
 /** "Chat" on the video the conversation is already about carries it on. */
@@ -351,7 +357,7 @@ export default function HelpChatPanel({
     });
   }
 
-  async function send(question: string) {
+  async function send(question: string, instead?: Instead) {
     const text = question.trim();
     if (!text || sending) return;
     setDraft("");
@@ -397,15 +403,32 @@ export default function HelpChatPanel({
     const ac = new AbortController();
     abortRef.current = ac;
     try {
+      // "Ask … instead" picks the video or channel it names (the state
+      // catches up after this render), or answers this one turn from Horde.
+      const video =
+        instead?.kind === "video"
+          ? instead.video
+          : instead?.kind === "channel"
+            ? null
+            : pickedVideo;
+      const channels =
+        instead?.kind === "channel"
+          ? [instead.channel]
+          : instead?.kind === "video"
+            ? []
+            : ask.scope;
       const params = {
         threadId: ask.threadId,
-        channelIds: ask.scope.map((c) => c.id),
+        channelIds: channels.map((c) => c.id),
         pageChannelId: pageAsk?.id ?? null,
         pageVideoId: pageAsk ? (pageChannel?.videoId ?? null) : null,
-        hordeOnly: !!ask.horde,
-        video: pickedVideo,
+        answerFrom:
+          instead?.kind === "horde" || instead?.kind === "video"
+            ? instead.kind
+            : null,
+        video,
         // Nothing picked: the watch page's video.
-        pageVideo: auto ? pageVideoHere : null,
+        pageVideo: auto && !instead ? pageVideoHere : null,
         page: currentPage(),
         dataConsent: consent,
       };
@@ -420,9 +443,7 @@ export default function HelpChatPanel({
             const video = parseAskVideo(event.video);
             // A picked video stays the source: an answer from Horde or the
             // channel does not replace it (the reply's byline says which).
-            setAsk((a) =>
-              a.video ? a : { ...a, scope, horde: !scope.length && a.horde }
-            );
+            setAsk((a) => (a.video ? a : { ...a, scope }));
             // A channel answer: the model's own numbers stay hidden until the
             // renumbered answer and its references arrive.
             if (scope.length)
@@ -547,7 +568,6 @@ export default function HelpChatPanel({
         ...a,
         threadId: thread.id,
         scope,
-        horde: !scope.length && !video && a.horde,
         video,
       }));
       setShowHistory(false);
@@ -602,50 +622,29 @@ export default function HelpChatPanel({
   const appSettings = useQuery(appSettingsQuery()).data;
   const videoChat = !noAi && appSettings?.ai.ai_chat !== false;
   const pickedVideo = videoChat ? (ask.video ?? null) : null;
-  const auto = !ask.horde && !scoped.length && !pickedVideo;
+  const auto = !scoped.length && !pickedVideo;
   // The watch page's video, while that page is showing.
   const pageVideoHere =
     videoChat && pageVideo && pageVideo.pathname === location.pathname
       ? pageVideo.video
       : null;
-  // The videos the menu offers: this page's, the one playing, the picked one.
-  const videoChoices: { video: AskVideo; detail: string }[] = [];
-  // A stream Ask can read is a YouTube one.
+  // The video playing (a stream Ask can read is a YouTube one).
   const playingNow = videoChat ? playingVideo(current, stream) : null;
   const playing =
     playingNow && (playingNow.library_id != null || playingNow.youtube_id)
       ? playingNow
       : null;
-  for (const [video, detail] of [
-    [pageVideoHere, "This page's video"],
-    [playing, "Playing now"],
-    [pickedVideo, "Picked"],
-  ] as const) {
-    if (
-      video &&
-      !videoChoices.some((c) => askVideoKey(c.video) === askVideoKey(video))
-    )
-      videoChoices.push({ video, detail });
-  }
-  const showSource =
-    !noAi &&
-    (askable.length > 0 || ask.scope.length > 0 || videoChoices.length > 0);
   // Nothing picked on the watch page: questions go to its video. On a
   // channel's page: its videos' questions go to the channel.
   const pageVideoAuto = auto && !!pageVideoHere;
   const pageAuto = !noAi && auto && !pageVideoHere ? pageName : null;
   const videoTitle = pickedVideo?.title || "this video";
-  const sourceLabel = scoped.length
-    ? channelNames || "a channel"
-    : pickedVideo
-      ? pickedVideo.title || "this video"
-      : ask.horde
-        ? "Horde"
-        : pageVideoAuto
-          ? "this video or Horde"
-          : pageAuto
-            ? `${pageAuto} or Horde`
-            : "Automatic";
+  // What the chat is focused on, shown beside the title with a way out.
+  const focus = pickedVideo
+    ? videoTitle
+    : scoped.length
+      ? channelNames || "a channel"
+      : null;
   const placeholder = scoped.length
     ? `Ask ${channelNames || "this channel"}…`
     : pickedVideo
@@ -654,21 +653,61 @@ export default function HelpChatPanel({
         ? "Ask this video or Horde…"
         : pageAuto
           ? `Ask ${pageAuto} or Horde…`
-          : showSource && auto
+          : !noAi && askable.length
             ? "Ask how to use Horde, or name a channel…"
             : "Ask how to use Horde…";
 
-  function pickSource(source: AskSource) {
-    const next: AskSourceState =
-      source === "auto"
-        ? AUTO
-        : source === "horde"
-          ? { scope: [], horde: true, video: null }
-          : "video" in source
-            ? { scope: [], horde: false, video: source.video }
-            : { scope: [source.channel], horde: false, video: null };
-    setAsk((a) => ({ ...a, ...next, picked: next }));
+  /** × on the focus chip: back to asking about anything. */
+  function clearFocus() {
+    setAsk((a) => ({ ...a, ...AUTO, picked: AUTO }));
     inputRef.current?.focus();
+  }
+
+  // Under the latest reply: the same question from the other likely sources.
+  const lastReply = messages[messages.length - 1];
+  const lastQuestion = messages[messages.length - 2];
+  const insteads: { label: string; instead: Instead }[] = [];
+  if (
+    !noAi &&
+    !sending &&
+    lastReply?.role === "assistant" &&
+    lastReply.content.trim() &&
+    lastQuestion?.role === "user" &&
+    !isWhatCanYouDo(lastQuestion.content)
+  ) {
+    const from = lastReply.video
+      ? "video"
+      : lastReply.references
+        ? "channel"
+        : "horde";
+    const video = pickedVideo ?? pageVideoHere ?? playing;
+    const channel = pageAsk
+      ? { id: pageAsk.id, name: pageAsk.channel_name || pageAsk.channel_url }
+      : null;
+    if (from !== "video" && video)
+      insteads.push({
+        label: `Ask ${video.title || "this video"} instead`,
+        instead: { kind: "video", video },
+      });
+    if (from !== "channel" && channel)
+      insteads.push({
+        label: `Ask ${channel.name} instead`,
+        instead: { kind: "channel", channel },
+      });
+    if (from !== "horde")
+      insteads.push({ label: "Ask Horde instead", instead: { kind: "horde" } });
+  }
+
+  function askInstead(instead: Instead) {
+    if (!lastQuestion) return;
+    if (instead.kind !== "horde") {
+      const next: AskSourceState =
+        instead.kind === "video"
+          ? { scope: [], video: instead.video }
+          : { scope: [instead.channel], video: null };
+      setAsk((a) => ({ ...a, ...next, picked: next }));
+    }
+    void send(lastQuestion.content, instead);
   }
 
   // On a phone the panel covers the page: get out of the way of a link.
@@ -725,32 +764,23 @@ export default function HelpChatPanel({
       <PanelHeader
         title="Ask"
         addon={
-          showSource && (
-            <AskSourcePicker
-              label={sourceLabel}
-              autoDetail={
-                pageVideoHere
-                  ? "This video; Horde or a channel when a question is about them"
-                  : pageName
-                    ? `${pageName} for its videos, Horde for the rest`
-                    : "Horde, or the channel a question names"
-              }
-              videos={videoChoices}
-              channels={askable}
-              selected={
-                pickedVideo
-                  ? askVideoKey(pickedVideo)
-                  : ask.scope.length === 1
-                    ? ask.scope[0].id
-                    : ask.scope.length
-                      ? null
-                      : ask.horde
-                        ? "horde"
-                        : "auto"
-              }
-              disabled={sending}
-              onPick={pickSource}
-            />
+          focus && (
+            <span
+              className="-my-0.5 flex min-w-0 items-center gap-1 rounded-md bg-ink-800 py-0.5 pl-2 pr-1 text-sm font-semibold text-accent"
+              data-horde="ask-focus"
+            >
+              <span className="truncate">{focus}</span>
+              <button
+                type="button"
+                onClick={clearFocus}
+                disabled={sending}
+                aria-label={`Stop asking about ${focus}`}
+                title="Ask about anything"
+                className="shrink-0 rounded-sm p-0.5 text-muted hover:text-accent disabled:opacity-40"
+              >
+                <CloseIcon className="h-3 w-3" />
+              </button>
+            </span>
           )
         }
         actions={
@@ -871,10 +901,8 @@ export default function HelpChatPanel({
                 setting or change it, look at your downloads and library, make
                 playlists and restyle the app. The page you are on is sent with
                 your question.
-                {showSource
-                  ? ask.horde
-                    ? " To ask what a channel said in its videos, pick it beside Ask at the top."
-                    : " To ask what a channel said in its videos, name it or pick it beside Ask at the top."
+                {!noAi && askable.length
+                  ? " To ask what a channel said in its videos, name it."
                   : ""}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -964,6 +992,23 @@ export default function HelpChatPanel({
               </div>
             );
           })}
+        {!showHistory && insteads.length > 0 && (
+          <div
+            className="-mt-1 flex flex-wrap gap-x-3 gap-y-1 pl-1 text-xs"
+            data-horde="ask-instead"
+          >
+            {insteads.map(({ label, instead }) => (
+              <button
+                key={label}
+                type="button"
+                onClick={() => askInstead(instead)}
+                className="text-muted underline-offset-2 hover:text-accent hover:underline"
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         {error && (
           <p role="alert" className="text-xs text-warning">
             {error}
