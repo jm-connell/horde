@@ -65,7 +65,19 @@ export type BackgroundEffect =
   | "modern-grid"
   | "flowing-gradient"
   | "lightspeed"
-  | "galaxy";
+  | "galaxy"
+  // New (preview) effects, listed under "New" in Settings.
+  | "northern-lights"
+  | "silk"
+  | "mesh-gradient"
+  | "spiral-galaxy"
+  | "plexus"
+  | "firefly-sync"
+  | "snowfall"
+  | "contours"
+  | "projector"
+  | "film"
+  | "halftone";
 
 export type FlowingGradientPreset = "theme" | "rgb" | "cool" | "warm" | "mono";
 

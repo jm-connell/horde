@@ -70,6 +70,17 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "flowing-gradient",
   "lightspeed",
   "galaxy",
+  "northern-lights",
+  "silk",
+  "mesh-gradient",
+  "spiral-galaxy",
+  "plexus",
+  "firefly-sync",
+  "snowfall",
+  "contours",
+  "projector",
+  "film",
+  "halftone",
 ]);
 
 const VALID_FLOWING_PRESETS = new Set<string>([
