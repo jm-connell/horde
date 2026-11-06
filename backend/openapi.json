@@ -2400,8 +2400,23 @@
         "type": "object"
       },
       "AskChatRequest": {
-        "description": "One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.",
+        "description": "One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.",
         "properties": {
+          "answer_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "horde",
+                  "video"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer From"
+          },
           "channel_ids": {
             "items": {
               "type": "integer"
@@ -2419,11 +2434,6 @@
             ],
             "title": "Data Consent",
             "type": "string"
-          },
-          "horde_only": {
-            "default": false,
-            "title": "Horde Only",
-            "type": "boolean"
           },
           "message": {
             "maxLength": 4000,
@@ -2454,6 +2464,16 @@
             ],
             "title": "Page Channel Id"
           },
+          "page_video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskVideoRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "page_video_id": {
             "anyOf": [
               {
@@ -2476,6 +2496,16 @@
               }
             ],
             "title": "Thread Id"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskVideoRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2741,6 +2771,36 @@
           "updated_at"
         ],
         "title": "AskThreadSummary",
+        "type": "object"
+      },
+      "AskVideoRef": {
+        "description": "A video Ask can answer from: a library video, or a stream by its URL.",
+        "properties": {
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "AskVideoRef",
         "type": "object"
       },
       "AuthLoginResult": {
@@ -11674,28 +11734,6 @@
         "title": "StreamAiAction",
         "type": "object"
       },
-      "StreamAiChatRequest": {
-        "properties": {
-          "message": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          },
-          "url": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url",
-          "message"
-        ],
-        "title": "StreamAiChatRequest",
-        "type": "object"
-      },
       "StreamAiRead": {
         "description": "AI results saved for a streamed (not downloaded) video.",
         "properties": {
@@ -14040,103 +14078,6 @@
         "title": "UserUpdate",
         "type": "object"
       },
-      "VideoAiChatHistory": {
-        "properties": {
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/VideoAiChatMessageRead"
-            },
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "messages"
-        ],
-        "title": "VideoAiChatHistory",
-        "type": "object"
-      },
-      "VideoAiChatMessageRead": {
-        "properties": {
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "cost": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "role": {
-            "enum": [
-              "user",
-              "assistant"
-            ],
-            "title": "Role",
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "VideoAiChatMessageRead",
-        "type": "object"
-      },
-      "VideoAiChatRequest": {
-        "properties": {
-          "message": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "title": "VideoAiChatRequest",
-        "type": "object"
-      },
       "VideoCommentsRead": {
         "description": "A library video's saved comments, in YouTube's \"top\" order.\n\n``status``: ``saved``; ``pending`` (not fetched yet); ``disabled`` (turned off on\nYouTube); ``unavailable`` (private, removed or members-only); ``failed``;\n``off`` (comments are turned off: nothing is listed); ``not_youtube``. Comments saved earlier\nare still listed when a later fetch finds them disabled or unavailable.",
         "properties": {
@@ -16244,7 +16185,7 @@
     },
     "/api/ask/chat": {
       "post": {
-        "description": "One Ask turn (SSE): from channels when the question names one, else from Horde.",
+        "description": "One Ask turn (SSE): from the channels a question names, the video the\nchat is about, the page's channel, else Horde (``ask_chat.pick_route``).",
         "operationId": "chat_api_ask_chat_post",
         "requestBody": {
           "content": {
@@ -23810,160 +23751,6 @@
         ]
       }
     },
-    "/api/preview/ai/chat": {
-      "delete": {
-        "operationId": "delete_stream_chat_api_preview_ai_chat_delete",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "url",
-            "required": true,
-            "schema": {
-              "maxLength": 4000,
-              "title": "Url",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Delete Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      },
-      "get": {
-        "operationId": "get_stream_chat_api_preview_ai_chat_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "url",
-            "required": true,
-            "schema": {
-              "maxLength": 4000,
-              "title": "Url",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoAiChatHistory"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Get Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      },
-      "post": {
-        "operationId": "post_stream_chat_api_preview_ai_chat_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StreamAiChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Server-sent events, one JSON object per event"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Post Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      }
-    },
     "/api/preview/ai/summarize": {
       "post": {
         "operationId": "summarize_stream_api_preview_ai_summarize_post",
@@ -27615,169 +27402,6 @@
           }
         },
         "summary": "Generate Video Chapters",
-        "tags": [
-          "videos"
-        ]
-      }
-    },
-    "/api/videos/{video_id}/ai/chat": {
-      "delete": {
-        "operationId": "delete_video_ai_chat_api_videos__video_id__ai_chat_delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Delete Video Ai Chat",
-        "tags": [
-          "videos"
-        ]
-      },
-      "get": {
-        "operationId": "get_video_ai_chat_api_videos__video_id__ai_chat_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoAiChatHistory"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Get Video Ai Chat",
-        "tags": [
-          "videos"
-        ]
-      },
-      "post": {
-        "operationId": "post_video_ai_chat_api_videos__video_id__ai_chat_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VideoAiChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Server-sent events, one JSON object per event"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Post Video Ai Chat",
         "tags": [
           "videos"
         ]

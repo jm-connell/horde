@@ -111,8 +111,12 @@ def test_bootstrap_moves_legacy_history_settings_and_chat_to_the_admin(
     )
     assert row["last_position_sec"] == 33.0
     assert fresh_client.get("/api/settings").json()["ui"]["theme"] == "oled"
-    chat = fresh_client.get(f"/api/videos/{watched.id}/ai/chat").json()["messages"]
-    assert [m["content"] for m in chat] == ["old question"]
+    # The chat from before accounts is the admin's, as an Ask conversation.
+    [thread] = fresh_client.get("/api/ask/threads").json()["items"]
+    assert thread["title"] == "Seen"
+    chat = fresh_client.get(f"/api/ask/threads/{thread['id']}").json()
+    assert [m["content"] for m in chat["messages"]] == ["old question"]
+    assert chat["scope"]["video"]["library_id"] == watched.id
     with Session(init_db["engine"]) as s:
         assert len(s.exec(select(UserVideoState)).all()) == 1
         assert s.exec(select(UserSettings)).one().user_id == 1
@@ -311,41 +315,6 @@ def test_members_cannot_manage_users(member_client):
         ).status_code
         == 403
     )
-
-
-# --- AI chat is per user -----------------------------------------------------
-
-
-def test_chat_history_is_private_to_each_user(
-    client, member_client, add_video, init_db, admin_user, member_user
-):
-    video = add_video()
-    with Session(init_db["engine"]) as s:
-        s.add(
-            VideoAiChatMessage(
-                video_id=video.id,
-                user_id=admin_user.id,
-                role="user",
-                content="admin asks",
-            )
-        )
-        s.add(
-            VideoAiChatMessage(
-                video_id=video.id,
-                user_id=member_user.id,
-                role="user",
-                content="member asks",
-            )
-        )
-        s.commit()
-    path = f"/api/videos/{video.id}/ai/chat"
-    assert [m["content"] for m in client.get(path).json()["messages"]] == ["admin asks"]
-    assert [m["content"] for m in member_client.get(path).json()["messages"]] == [
-        "member asks"
-    ]
-    assert member_client.delete(path).status_code == 200
-    assert member_client.get(path).json()["messages"] == []
-    assert len(client.get(path).json()["messages"]) == 1
 
 
 # --- signed media URLs -------------------------------------------------------

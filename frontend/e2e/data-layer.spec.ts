@@ -194,7 +194,9 @@ test("an AI setting saved in Settings shows on the Watch page without another re
   });
   await openNav(page, "Home");
   await videoCard(page, "Aurora Drift").first().click();
-  await expect(page.getByPlaceholder("Ask this video…")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Chat", exact: true })
+  ).toBeVisible();
   expect(reads).toBe(0);
   // An AI status poll may still be inside the route when the test ends.
   await page.unrouteAll({ behavior: "ignoreErrors" });

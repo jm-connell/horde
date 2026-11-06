@@ -36,6 +36,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Chat about a video is in Ask.** The watch page's AI section is now
+  **Summary** (with Regenerate) and a **Chat ↗** button that opens Ask on
+  the video ("Ask <video>"). On a watch page Ask answers from the video by
+  default, and still sends questions about Horde, your library or a channel
+  where they belong. Your earlier chats about videos are in Ask's History.
 - New installs pull the published image (`HORDE_IMAGE` in `.env.example`)
   instead of building on the host. Existing installs keep building until
   they set it.
@@ -47,12 +52,13 @@ All notable changes to Horde are documented here. The format follows
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
 - **One Ask.** Ask about Horde and asking channels are one feature, **Ask**
-  (the footer button and the phone tab, which was Chat). The source shows
-  beside the title, "Ask Automatic", "Ask Horde" or "Ask <channel>"; press
-  it to pick another. Picking Horde keeps answers on Horde even when a
-  question names a channel. Settings → Library → Ask channels is now
-  **Channels Ask can answer from**, and the permission **Manage channel
-  indexing**. The button that docks the chat at the side is an expand arrow.
+  (the footer button and the phone tab, which was Chat). Each question goes
+  where it fits, each answer says where it came from, and links under an
+  answer ("Ask Horde instead", "Ask <channel> instead") ask it again from
+  elsewhere; a chip beside the title shows when Ask is focused on a channel
+  or video. Settings → Library → Ask channels is now **Channels Ask can
+  answer from**, and the permission **Manage channel indexing**. The button
+  that docks the chat at the side is an expand arrow.
 
 ### Fixed
 

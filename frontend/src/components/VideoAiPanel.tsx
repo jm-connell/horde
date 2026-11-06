@@ -5,6 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useHelpChat } from "../context/HelpChatContext";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   clampPanelHeight,
@@ -18,10 +19,7 @@ import OverlayScrollThumb from "./OverlayScrollThumb";
 import ResizeHandle from "./ResizeHandle";
 import TypingDots from "./TypingDots";
 import type { AiTarget } from "./aiTarget";
-import VideoAiChat from "./VideoAiChat";
-import { ChevronIcon } from "./icons";
-
-type AiTab = "summary" | "chat";
+import { ChevronIcon, ExternalIcon } from "./icons";
 
 /** Smallest height the summary can be dragged to, in rem. */
 const MIN_SUMMARY_REM = 4;
@@ -30,19 +28,21 @@ interface Props {
   target: AiTarget;
   canSummarize: boolean;
   canChat: boolean;
-  showCosts?: boolean;
   showToast: (msg: string) => void;
 }
 
+/**
+ * The watch page's Summary section: the AI summary (generate, regenerate,
+ * resize), and "Chat", which opens Ask on this video.
+ */
 export default function VideoAiPanel({
   target,
   canSummarize,
   canChat,
-  showCosts = false,
   showToast,
 }: Props) {
   const [settings, updateSettings] = useSettings();
-  const [tab, setTab] = useState<AiTab>("summary");
+  const help = useHelpChat();
   const [summarizing, setSummarizing] = useState(false);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const summarizeAbortRef = useRef<AbortController | null>(null);
@@ -52,15 +52,13 @@ export default function VideoAiPanel({
     usePanelSize("aiSummary");
 
   const expanded = settings.aiExpanded;
-  const showToggle = canSummarize && canChat;
-  const activeTab: AiTab = showToggle ? tab : canSummarize ? "summary" : "chat";
+  const showChat = canChat && help.available;
 
   useEffect(() => {
     setSummaryError(null);
     summarizeAbortRef.current?.abort();
     summarizeAbortRef.current = null;
     setSummarizing(false);
-    setTab("summary");
   }, [target.key]);
 
   useEffect(() => {
@@ -71,19 +69,21 @@ export default function VideoAiPanel({
 
   const summaryText = target.summary ?? "";
   const hasAiSummary = !!summaryText.trim();
+  // A saved summary shows even when it cannot be generated again (summaries
+  // switched off, captions gone); generating needs `canSummarize`.
+  const showSummary = canSummarize || hasAiSummary;
   const waitingOnSummary =
     summarizing || (target.processingSummary && !hasAiSummary);
   const { summarize } = target;
 
   // The summary may be dragged shorter (to scroll it) but never taller than
-  // its own text, which would leave an empty box. Chat keeps a free height:
-  // a long draft needs the room. Measured from the rendered content because
-  // the text wraps differently at different widths.
+  // its own text, which would leave an empty box. Measured from the rendered
+  // content because the text wraps differently at different widths.
   const summaryContentRef = useRef<HTMLDivElement>(null);
   const [summaryContentPx, setSummaryContentPx] = useState(0);
   // Measured before paint, so a saved height taller than the text never shows.
   useLayoutEffect(() => {
-    if (!expanded || activeTab !== "summary" || !canSummarize) return;
+    if (!expanded || !showSummary) return;
     const el = summaryContentRef.current;
     if (!el) return;
     const measure = () => setSummaryContentPx(el.offsetHeight);
@@ -93,8 +93,7 @@ export default function VideoAiPanel({
     return () => ro.disconnect();
   }, [
     expanded,
-    activeTab,
-    canSummarize,
+    showSummary,
     isMobile,
     summaryText,
     summaryError,
@@ -122,7 +121,6 @@ export default function VideoAiPanel({
       }
       setSummarizing(true);
       updateSettings({ aiExpanded: true });
-      setTab("summary");
       setSummaryError(null);
       const ac = new AbortController();
       summarizeAbortRef.current = ac;
@@ -146,25 +144,29 @@ export default function VideoAiPanel({
     [canSummarize, hasAiSummary, summarize, showToast, updateSettings]
   );
 
-  if (!canSummarize && !canChat) return null;
+  if (!showSummary && !showChat) return null;
 
   return (
     <div>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-2">
-        <button
-          type="button"
-          onClick={() => updateSettings({ aiExpanded: !expanded })}
-          className="ui-panel-toggle ui-interactive flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
-        >
-          <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
-            <span>AI</span>
-            <ChevronIcon
-              className={`transition-transform duration-200 ease-fluid ${expanded ? "rotate-180" : ""}`}
-            />
-          </span>
-        </button>
+        {showSummary ? (
+          <button
+            type="button"
+            onClick={() => updateSettings({ aiExpanded: !expanded })}
+            className="ui-panel-toggle ui-interactive flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:text-accent"
+          >
+            <span className="ui-panel-toggle-press inline-flex items-center gap-2 transition-transform">
+              <span>Summary</span>
+              <ChevronIcon
+                className={`transition-transform duration-200 ease-fluid ${expanded ? "rotate-180" : ""}`}
+              />
+            </span>
+          </button>
+        ) : (
+          <span className="flex-1" />
+        )}
         <div className="flex shrink-0 items-center gap-2">
-          {activeTab === "summary" &&
+          {canSummarize &&
             expanded &&
             (summarizing ? (
               <button
@@ -191,41 +193,23 @@ export default function VideoAiPanel({
                 </button>
               )
             ))}
-          {expanded && showToggle && (
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => setTab("summary")}
-                className={
-                  activeTab === "summary"
-                    ? "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent"
-                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted hover:text-gray-400"
-                }
-              >
-                Summary
-              </button>
-              <span className="text-[10px] text-gray-700" aria-hidden>
-                /
-              </span>
-              <button
-                type="button"
-                onClick={() => setTab("chat")}
-                className={
-                  activeTab === "chat"
-                    ? "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-accent"
-                    : "px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted hover:text-gray-400"
-                }
-              >
-                Chat
-              </button>
-            </div>
+          {showChat && (
+            <button
+              type="button"
+              onClick={() => help.askVideo(target.askVideo)}
+              title="Ask about this video"
+              className="ui-panel ui-interactive inline-flex items-center gap-1 rounded-lg border border-ink-700 bg-ink-950 px-2.5 py-1 text-xs text-gray-300 hover:border-accent hover:text-accent"
+            >
+              Chat
+              <ExternalIcon className="h-3 w-3" />
+            </button>
           )}
         </div>
       </div>
 
-      <Collapse open={expanded}>
+      <Collapse open={expanded && (showSummary || !!target.note)}>
         <div>
-          {activeTab === "summary" && canSummarize && (
+          {showSummary && (
             <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
               <div
                 ref={summaryScrollRef}
@@ -302,17 +286,6 @@ export default function VideoAiPanel({
             </div>
           )}
 
-          {canChat && (
-            <VideoAiChat
-              chatKey={target.key}
-              chat={target.chat}
-              summary={target.summary}
-              hasSubtitles={target.hasSubtitles}
-              active={activeTab === "chat"}
-              showCosts={showCosts}
-              showToast={showToast}
-            />
-          )}
           {target.note && (
             <p className="mt-2 text-xs text-muted">{target.note}</p>
           )}

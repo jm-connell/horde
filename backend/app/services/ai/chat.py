@@ -1,4 +1,4 @@
-"""Per-video AI chat: persistence, context, and streaming replies."""
+"""AI chat turns: the runner Ask's video and channel turns use, and their checks."""
 
 from __future__ import annotations
 
@@ -8,12 +8,10 @@ from collections.abc import Callable, Generator
 from typing import Any, Protocol
 
 from sqlalchemy.exc import IntegrityError
-from sqlmodel import Session, col, select
+from sqlmodel import Session
 
-from ...context import get_engine
-from ...models import Video, VideoAiChatMessage, utcnow
+from ...models import Video
 from .. import app_settings
-from . import embeddings as ai_embeddings
 from . import text as ai_text
 from .provider import (
     format_provider_error,
@@ -25,7 +23,6 @@ from .workload import ensure_quality_chat_model
 
 logger = logging.getLogger(__name__)
 
-_MAX_HISTORY = 24
 _CHAT_TIMEOUT = 180.0
 _NUM_PREDICT = 1024
 
@@ -34,76 +31,6 @@ class ChatError(Exception):
     def __init__(self, message: str, *, status_code: int = 400):
         super().__init__(message)
         self.status_code = status_code
-
-
-def list_messages(
-    session: Session, video_id: int, user_id: int
-) -> list[dict[str, Any]]:
-    rows = session.exec(
-        select(VideoAiChatMessage)
-        .where(
-            VideoAiChatMessage.video_id == video_id,
-            VideoAiChatMessage.user_id == user_id,
-        )
-        .order_by(
-            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
-        )
-    ).all()
-    return [
-        {
-            "id": r.id,
-            "role": r.role,
-            "content": r.content,
-            "cost": r.cost if r.role == "assistant" else None,
-            "model": r.model if r.role == "assistant" else None,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
-
-
-def clear_messages(session: Session, video_id: int, user_id: int) -> None:
-    """Delete this user's conversation about the video (nobody else's)."""
-    rows = session.exec(
-        select(VideoAiChatMessage).where(
-            VideoAiChatMessage.video_id == video_id,
-            VideoAiChatMessage.user_id == user_id,
-        )
-    ).all()
-    for row in rows:
-        session.delete(row)
-    session.commit()
-
-
-def _history_for_prompt(
-    session: Session, video_id: int, user_id: int
-) -> list[dict[str, str]]:
-    rows = session.exec(
-        select(VideoAiChatMessage)
-        .where(
-            VideoAiChatMessage.video_id == video_id,
-            VideoAiChatMessage.user_id == user_id,
-        )
-        .order_by(
-            col(VideoAiChatMessage.created_at).asc(), col(VideoAiChatMessage.id).asc()
-        )
-    ).all()
-    return history_from_rows(list(rows))
-
-
-def history_from_rows(rows: list[Any]) -> list[dict[str, str]]:
-    """Prompt history from oldest-first message rows (``role`` / ``content``)."""
-    # Drop the just-persisted latest user message — it is passed as ``prompt``.
-    if rows and rows[-1].role == "user":
-        rows = rows[:-1]
-    trimmed = rows[-_MAX_HISTORY:]
-    out: list[dict[str, str]] = []
-    for row in trimmed:
-        role = str(row.role or "")
-        content = str(row.content or "").strip()
-        if role in {"user", "assistant"} and content:
-            out.append({"role": role, "content": content})
-    return out
 
 
 def validate_chat_message(message: str) -> None:
@@ -124,8 +51,8 @@ def validate_chat_message(message: str) -> None:
         raise ChatError("Message is too long", status_code=400)
 
 
-def _validate_chat_request(session: Session, video_id: int, message: str) -> Video:
-    validate_chat_message(message)
+def library_video_for_chat(session: Session, video_id: int) -> Video:
+    """The library video a chat turn is about; ``ChatError`` when it cannot be asked."""
     video = session.get(Video, video_id)
     if video is None:
         raise ChatError("Video not found", status_code=404)
@@ -147,19 +74,8 @@ def _validate_chat_request(session: Session, video_id: int, message: str) -> Vid
 Authorized = Callable[..., bool]
 
 
-def stream_chat_events(
-    video_id: int,
-    message: str,
-    user_id: int,
-    authorized: Authorized | None = None,
-) -> Generator[str]:
-    """SSE generator that owns its DB session for the full stream lifetime."""
-    with Session(get_engine()) as session:
-        yield from stream_chat(session, video_id, message, user_id, authorized)
-
-
 class ChatTarget(Protocol):
-    """What a chat turn is about: a library video or a stream."""
+    """What a chat turn is about, and where it is saved (an Ask thread)."""
 
     #: For log lines.
     label: str
@@ -188,66 +104,6 @@ class ChatTarget(Protocol):
 
     def exists(self, session: Session) -> bool:
         """Whether the video (or stream) the chat is about still exists."""
-
-
-class _LibraryChat:
-    def __init__(self, video_id: int, user_id: int) -> None:
-        self.video_id = video_id
-        self.user_id = user_id
-        self.label = f"video_id={video_id}"
-        self.usage_video_id: int | None = video_id
-
-    def validate(self, session: Session, message: str) -> None:
-        _validate_chat_request(session, self.video_id, message)
-
-    def add_message(
-        self,
-        session: Session,
-        *,
-        role: str,
-        content: str,
-        cost: float | None = None,
-        model: str | None = None,
-    ) -> VideoAiChatMessage:
-        row = VideoAiChatMessage(
-            video_id=self.video_id,
-            user_id=self.user_id,
-            role=role,
-            content=content,
-            cost=cost,
-            model=model,
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        return row
-
-    def history(self, session: Session) -> list[dict[str, str]]:
-        return _history_for_prompt(session, self.video_id, self.user_id)
-
-    def context(self, session: Session, question: str) -> str | None:
-        # Re-load video after commit (expire_on_commit) before building context.
-        video = session.get(Video, self.video_id)
-        if video is None:
-            return None
-        return ai_embeddings.build_chat_context(session, video, question)
-
-    def exists(self, session: Session) -> bool:
-        return session.get(Video, self.video_id) is not None
-
-
-def stream_chat(
-    session: Session,
-    video_id: int,
-    message: str,
-    user_id: int,
-    authorized: Authorized | None = None,
-) -> Generator[str]:
-    """Yield SSE event strings for a chat turn about a library video."""
-    yield from run_chat_turn(
-        session, _LibraryChat(video_id, user_id), message, user_id, authorized
-    )
 
 
 def run_chat_turn(

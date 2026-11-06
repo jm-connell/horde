@@ -366,9 +366,7 @@ def test_unnamed_questions_go_to_ask_about_horde_and_are_saved(
     assert thread["messages"][1]["sources"]["kind"] == "help"
 
 
-def test_horde_picked_as_the_source_ignores_a_named_channel(
-    client, session, llm, help_index
-):
+def test_ask_horde_instead_ignores_a_named_channel(client, session, llm, help_index):
     nut = _channel(session)
     _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
     llm["replies"] = ["Settings → Library → Channels Ask can answer from."]
@@ -379,11 +377,11 @@ def test_horde_picked_as_the_source_ignores_a_named_channel(
                 "message": "How do I stop indexing the Car Care Nut?",
                 "channel_ids": [nut.id],
                 "page_channel_id": nut.id,
-                "horde_only": True,
+                "answer_from": "horde",
             },
         ).text
     )
-    assert events[1] == {"type": "scope", "channels": []}
+    assert events[1] == {"type": "scope", "channels": [], "video": None}
     assert "sources" in [e["type"] for e in events]
     assert events[-1]["type"] == "done"
 
@@ -481,12 +479,9 @@ def test_all_channels_picks_the_most_relevant(session):
     other = _channel(session, "Other Channel", "https://youtube.com/@other")
     _indexed_video(session, belt, "aaaaaaaaaaa", BELT_VTT)
     _indexed_video(session, other, "bbbbbbbbbbb", _vtt({}, 30))
-    assert ask_chat.pick_scope(
-        session, "what do all my channels say about belts?", None
-    ) == [
-        belt,
-        other,
-    ]
+    assert ask_chat.pick_route(
+        session, "what do all my channels say about belts?", channel_ids=None
+    ).channels == [belt, other]
     assert ask_chat.most_relevant(session, [other, belt], "timing belt", 1) == [belt]
 
 
@@ -701,18 +696,18 @@ def test_the_page_channel_answers_unless_the_question_is_about_horde(session):
     fix = _channel(session, "ChrisFix", "https://youtube.com/@chrisfix")
     _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
     _indexed_video(session, fix, "bbbbbbbbbbb", BELT_VTT)
-    assert ask_chat.pick_scope(session, "when should I change it?", None, nut.id) == [
-        nut
-    ]
-    assert (
-        ask_chat.pick_scope(session, "how do I change the theme?", None, nut.id) == []
-    )
+
+    def scope(message: str, chosen=None, page=nut.id) -> list[KbChannel]:
+        return ask_chat.pick_route(
+            session, message, channel_ids=chosen, page_channel_id=page
+        ).channels
+
+    assert scope("when should I change it?") == [nut]
+    assert scope("how do I change the theme?") == []
     # Naming a channel, or one already chosen, wins over the page's.
-    assert ask_chat.pick_scope(session, "what does chrisfix say?", None, nut.id) == [
-        fix
-    ]
-    assert ask_chat.pick_scope(session, "and then?", [fix.id], nut.id) == [fix]
-    assert ask_chat.pick_scope(session, "when should I change it?", None, None) == []
+    assert scope("what does chrisfix say?") == [fix]
+    assert scope("and then?", [fix.id]) == [fix]
+    assert scope("when should I change it?", page=None) == []
 
 
 def test_the_page_channel_reaches_the_chat(client, session, llm):
@@ -769,3 +764,223 @@ def test_the_watched_video_comes_first(session, init_db, monkeypatch):
     assert "watched0000" not in found()
     # ...unless it is the one being watched.
     assert "watched0000" in found(focus_yt_id="watched0000")
+
+
+# --- a video as the source -----------------------------------------------------
+
+
+@pytest.fixture
+def video_chat(llm, monkeypatch):
+    """The per-video chat checks: AI on, video chat on."""
+    from app.services import stream_ai
+
+    monkeypatch.setattr(chat, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(stream_ai, "llm_features_allowed", lambda: (True, None))
+    return llm
+
+
+def test_a_video_answers_unless_the_question_is_about_horde_or_a_channel(session):
+    nut = _channel(session)
+    fix = _channel(session, "ChrisFix", "https://youtube.com/@chrisfix")
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    _indexed_video(session, fix, "bbbbbbbbbbb", BELT_VTT)
+    video = ask_chat.VideoRef(library_id=1, youtube_id="aaaaaaaaaaa", title="Belt")
+
+    def route(message: str, page: int | None = nut.id, **kw) -> ask_chat.Route:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=page, video=video, **kw
+        )
+
+    def to_video(message: str, **kw) -> bool:
+        return route(message, **kw).video == video
+
+    assert to_video("when should I change it?")
+    # About Horde, or the user's own things: Horde.
+    assert route("how do I change the theme?") == ask_chat.Route()
+    assert route("what should I watch next?") == ask_chat.Route()
+    assert route("does Horde keep my subtitles?") == ask_chat.Route()
+    # Horde's words in a question about the video keep it on the video.
+    for question in (
+        "How does he set up the docker server?",
+        "What backup tool does he recommend?",
+        "What does he recommend I watch next?",
+        "Where can I download the files he mentions?",
+    ):
+        assert to_video(question), question
+    # A channel by name, or the whole of the page's channel: the channel.
+    assert route("what does chrisfix say about belts?").channels == [fix]
+    assert route("has he talked about this in other videos?").channels == [nut]
+    assert route("what does this channel say about oil?").channels == [nut]
+    # Not indexed: the video is all there is.
+    assert to_video("has he talked about this in other videos?", page=None)
+    # "Ask … instead" forces the source for one turn.
+    assert route("when should I change it?", answer_from="horde") == ask_chat.Route()
+    assert to_video("how do I change the theme?", answer_from="video")
+
+
+def test_a_picked_video_leaves_only_for_a_plain_horde_question(session):
+    video = ask_chat.VideoRef(library_id=1, title="NAS build")
+
+    def route(message: str) -> ask_chat.Route:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, video=video, video_picked=True
+        )
+
+    picked = ask_chat.Route(video=video, picked=video)
+    # Horde words alone are about the video once it is picked...
+    assert route("How much storage does the NAS have?") == picked
+    assert route("Which password manager is it?") == picked
+    # ...but a how-to, Horde by name or the user's things still go to Horde,
+    # and the conversation stays about the video.
+    assert route("how do I change the theme?") == ask_chat.Route(picked=video)
+    assert route("is Horde able to do this?") == ask_chat.Route(picked=video)
+    assert route("what did I download yesterday?") == ask_chat.Route(picked=video)
+
+
+def test_a_question_on_a_library_video_answers_from_it(
+    client, session, video_chat, add_video
+):
+    video = add_video(
+        title="Timing belt basics",
+        description="How often to change a timing belt.",
+        source_url="https://www.youtube.com/watch?v=ccccccccccc",
+    )
+    video_chat["replies"] = ["Every ninety thousand miles."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "how often should it be changed?",
+                "video": {"library_id": video.id},
+            },
+        ).text
+    )
+    ref = {
+        "library_id": video.id,
+        "youtube_id": "ccccccccccc",
+        "url": None,
+        "title": "Timing belt basics",
+    }
+    assert events[1] == {"type": "scope", "channels": [], "video": ref}
+    assert events[-1]["type"] == "done"
+    call = video_chat["calls"][0]
+    assert "Timing belt basics" in call["system"]
+    assert call["model"] == "test-model-14b"
+
+    thread = client.get(f"/api/ask/threads/{events[0]['id']}").json()
+    assert thread["scope"] == {"video": ref}
+    assert [m["role"] for m in thread["messages"]] == ["user", "assistant"]
+    assert thread["messages"][1]["sources"] == {"kind": "video", "video": ref}
+    # Titled with the video, not the question.
+    assert thread["title"] == "Timing belt basics"
+
+
+def test_a_picked_video_stays_the_conversations_source(
+    client, session, video_chat, help_index, add_video
+):
+    """A Horde answer in a chat about a video keeps the video in its scope."""
+    video = add_video(title="Timing belt basics", description="Belts.")
+    video_chat["replies"] = ["Settings → Appearance → Theme."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "how do I change the theme?",
+                "video": {"library_id": video.id},
+            },
+        ).text
+    )
+    assert events[1]["video"] is None  # answered from Horde
+    thread = client.get(f"/api/ask/threads/{events[0]['id']}").json()
+    assert thread["scope"]["help"] is True
+    assert thread["scope"]["video"]["library_id"] == video.id
+
+
+def test_a_turn_keeps_the_import_mark(session, admin_user):
+    """The mark the 0029 revision sets survives a continued conversation."""
+    thread = AskThread(
+        user_id=admin_user.id,
+        title="Old",
+        scope=json.dumps({"video": {}, "imported": "video_chat"}),
+    )
+    session.add(thread)
+    session.commit()
+    from app.services.knowledge import threads
+
+    threads.set_scope(session, thread, {"help": True})
+    assert json.loads(thread.scope) == {"help": True, "imported": "video_chat"}
+
+
+def test_a_question_on_a_stream_answers_from_it(client, video_chat, monkeypatch):
+    from app.api import stream_ai as stream_ai_api
+    from app.services import stream_preview
+
+    url = "https://www.youtube.com/watch?v=ddddddddddd"
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda u: {
+            "id": "ddddddddddd",
+            "title": "Ridge at dawn",
+            "channel": "Northwind",
+            "description": "A ride up the ridge.",
+            "duration": 600.0,
+            "source_url": url,
+            "subtitles": [],
+        },
+    )
+
+    async def no_vtt(request, cleaned, lang):
+        return b""
+
+    monkeypatch.setattr(stream_ai_api, "fetch_preview_vtt", no_vtt)
+    video_chat["replies"] = ["It climbs the ridge."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={"message": "where does it go?", "video": {"url": url}},
+        ).text
+    )
+    assert events[1]["video"] == {
+        "library_id": None,
+        "youtube_id": "ddddddddddd",
+        "url": url,
+        "title": "Ridge at dawn",
+    }
+    assert "Ridge at dawn" in video_chat["calls"][0]["system"]
+    assert events[-1]["type"] == "done"
+
+
+def test_with_video_chat_off_a_video_question_goes_to_horde(
+    client, session, video_chat, help_index, add_video
+):
+    video = add_video(title="Timing belt basics", description="Belts.")
+    assert (
+        client.patch("/api/settings", json={"ai": {"ai_chat": False}}).status_code
+        == 200
+    )
+    video_chat["replies"] = ["Use the player menu."]
+    events = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "how often should it be changed?",
+                "video": {"library_id": video.id},
+            },
+        ).text
+    )
+    assert events[1] == {"type": "scope", "channels": [], "video": None}
+    assert "sources" in [e["type"] for e in events]
+
+
+def test_a_downloaded_stream_is_asked_about_as_its_library_copy(
+    session, video_chat, add_video
+):
+    """A conversation about a stream keeps going on the video once it is downloaded."""
+    video = add_video(title="Ridge at dawn", yt_id="ddddddddddd")
+    ref = ask_chat.resolve_video(
+        session, None, "https://www.youtube.com/watch?v=ddddddddddd"
+    )
+    assert ref == ask_chat.VideoRef(
+        library_id=video.id, youtube_id="ddddddddddd", title="Ridge at dawn"
+    )

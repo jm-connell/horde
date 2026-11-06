@@ -112,7 +112,7 @@ SQLite at `DATA_DIR/horde.db` ([ADR 0001](../adr/0001-sqlite-wal-alembic.md)). S
 | Accounts | `users`, `user_sessions` | The person |
 | History | `user_video_state` (position and last watched, per user per video) | **Per user** |
 | Preferences | `user_settings` (UI JSON) | **Per user** |
-| AI chat | `video_ai_chat_messages` (has `user_id`) | **Per user** |
+| AI chat (Ask) | `ask_threads` / `ask_messages` (has `user_id`) | **Per user** |
 
 Rules that follow from this:
 

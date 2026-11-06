@@ -42,7 +42,7 @@ async function enableAi(page: Page) {
   expect(saved.ok()).toBe(true);
 }
 
-test("AI summary is generated from the watch page and chat answers a question", async ({
+test("the Summary section generates a summary and Chat opens Ask on the video", async ({
   page,
 }) => {
   const id = await videoId(page, "Aurora Drift");
@@ -56,20 +56,42 @@ test("AI summary is generated from the watch page and chat answers a question", 
     route.fulfill({
       json: {
         ...detail,
+        // The patched detail's captions, as the server would return them.
         subtitles: [{ lang: "en", auto: false }],
         ai_summary: summary,
       },
     })
   );
-  await page.route(new RegExp(`/api/videos/${id}/ai/chat$`), (route) => {
-    if (route.request().method() !== "POST") return route.fallback();
+  // Ask answers with AI (the e2e server has no provider).
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
+  const bodies: { video: { library_id: number | null } | null }[] = [];
+  const video = {
+    library_id: id,
+    youtube_id: null,
+    url: null,
+    title: "Aurora Drift",
+  };
+  await page.route(/\/api\/ask\/chat$/, (route) => {
+    bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
     const events = [
+      { type: "thread", id: 4, title: "What is it about?" },
+      { type: "scope", channels: [], video },
       { type: "token", text: "It is " },
       { type: "token", text: "about auroras." },
       {
         type: "done",
         message: {
-          id: "m1",
+          id: 2,
           role: "assistant",
           content: "It is about auroras.",
         },
@@ -86,13 +108,120 @@ test("AI summary is generated from the watch page and chat answers a question", 
   await expect(
     page.getByRole("heading", { name: "Aurora Drift", level: 1 })
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Summary", exact: true })
+  ).toBeVisible();
   await page.getByRole("button", { name: "Generate summary" }).click();
   await expect(page.getByText(summary)).toBeVisible();
+  await expect(page.getByRole("button", { name: "Regenerate" })).toBeVisible();
 
+  // Chat opens Ask on this video.
   await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await page.getByPlaceholder("Ask this video…").fill("What is it about?");
-  await page.getByPlaceholder("Ask this video…").press("Enter");
-  await expect(page.getByText("It is about auroras.")).toBeVisible();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
+  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
+    "Aurora Drift"
+  );
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAttribute("placeholder", "Ask about Aurora Drift…");
+  await input.fill("What is it about?");
+  await input.press("Enter");
+  await expect(panel.getByText("It is about auroras.")).toBeVisible();
+  await expect(panel.locator('[data-horde="ask-byline"]').last()).toHaveText(
+    "Aurora Drift"
+  );
+  expect(bodies[0].video).toEqual({ library_id: id, url: null });
+
+  // Chat again on the same video carries the conversation on.
+  await input.press("Escape");
+  await expect(panel).toHaveCount(0);
+  await page.getByRole("button", { name: "Chat", exact: true }).click();
+  await expect(panel.getByText("It is about auroras.")).toBeVisible();
+});
+
+test("a saved summary still shows when it cannot be generated again", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  await enableAi(page);
+  // No captions: nothing to summarize from, but the summary from before stays.
+  await patchVideoDetail(page, id, {
+    subtitles: [],
+    ai_summary: "The ridge glows green all night.",
+  });
+  await page.goto(`/watch/${id}`);
+  const toggle = page.getByRole("button", { name: "Summary", exact: true });
+  await expect(toggle).toBeVisible();
+  const text = page.getByText("The ridge glows green all night.");
+  if (!(await text.isVisible())) await toggle.click();
+  await expect(text).toBeVisible();
+  await expect(page.getByRole("button", { name: "Regenerate" })).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Chat", exact: true })
+  ).toBeVisible();
+});
+
+test("with nothing picked, Ask on the watch page answers from its video", async ({
+  page,
+}) => {
+  const id = await videoId(page, "Aurora Drift");
+  await enableAi(page);
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
+  const bodies: {
+    video: { library_id: number | null } | null;
+    page_video: { library_id: number | null } | null;
+    answer_from: string | null;
+  }[] = [];
+  await page.route(/\/api\/ask\/chat$/, (route) => {
+    bodies.push(route.request().postDataJSON() as (typeof bodies)[number]);
+    return route.fulfill({
+      status: 200,
+      contentType: "text/event-stream",
+      body: [
+        { type: "thread", id: 5, title: "x" },
+        { type: "scope", channels: [], video: null },
+        { type: "done", message: { id: 2, role: "assistant", content: "Ok." } },
+      ]
+        .map((e) => `data: ${JSON.stringify(e)}\n\n`)
+        .join(""),
+    });
+  });
+
+  await page.goto(`/watch/${id}`);
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
+  // Nothing picked: no chip, and the question box says where questions go.
+  const focus = panel.locator('[data-horde="ask-focus"]');
+  await expect(focus).toHaveCount(0);
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await expect(input).toHaveAttribute(
+    "placeholder",
+    "Ask this video or Horde…"
+  );
+  await input.fill("What happens at the end?");
+  await input.press("Enter");
+  await expect(panel.getByText("Ok.")).toBeVisible();
+  // Not picked: sent as the page's video.
+  expect(bodies[0].video).toBeNull();
+  expect(bodies[0].page_video).toEqual({ library_id: id, url: null });
+
+  // The reply came from Horde: "Ask Aurora Drift instead" asks the video,
+  // and the chat is about it from then on.
+  await panel.getByRole("button", { name: "Ask Aurora Drift instead" }).click();
+  await expect.poll(() => bodies.length).toBe(2);
+  expect(bodies[1].answer_from).toBe("video");
+  expect(bodies[1].video).toEqual({ library_id: id, url: null });
+  await expect(focus).toHaveText("Aurora Drift");
 });
 
 /** Put the resize handle just below the fixed nav, then drag it by `dy`. */

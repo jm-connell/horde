@@ -105,21 +105,44 @@ async function mockStream(page: Page, related: unknown[] = []) {
     state.has_captions = true;
     return route.fulfill({ json: state });
   });
-  await page.route(/\/api\/preview\/ai\/chat/, (route) => {
-    if (route.request().method() === "GET") {
-      return route.fulfill({ json: { messages: [] } });
-    }
-    expectMutation(route.request(), {
-      url: STREAM_URL,
-      message: "What is it about?",
-    });
+  // Questions go to Ask, with the stream as the video; Ask answers with AI.
+  await page.route(/\/api\/ai\/help\/info$/, (route) =>
+    route.fulfill({
+      json: {
+        model: null,
+        tier: "medium",
+        provider_label: "a test provider",
+        local: true,
+        available: true,
+      },
+    })
+  );
+  await page.route(/\/api\/ask\/chat$/, (route) => {
+    expect(route.request().headers()["x-horde-request"]).toBe("1");
+    const body = route.request().postDataJSON() as {
+      message: string;
+      video: { library_id: number | null; url: string | null } | null;
+    };
+    expect(body.message).toBe("What is it about?");
+    expect(body.video).toEqual({ library_id: null, url: STREAM_URL });
     const events = [
+      { type: "thread", id: 6, title: "What is it about?" },
+      {
+        type: "scope",
+        channels: [],
+        video: {
+          library_id: null,
+          youtube_id: null,
+          url: STREAM_URL,
+          title: "Ridge at dusk",
+        },
+      },
       { type: "token", text: "Mostly " },
       { type: "token", text: "about a hike." },
       {
         type: "done",
         message: {
-          id: "m1",
+          id: 2,
           role: "assistant",
           content: "Mostly about a hike.",
         },
@@ -137,7 +160,7 @@ async function mockStream(page: Page, related: unknown[] = []) {
   return state;
 }
 
-test("a streamed video gets an AI summary with a retention note, and chat", async ({
+test("a streamed video gets an AI summary with a retention note, and Chat opens Ask", async ({
   page,
 }) => {
   await enableAi(page);
@@ -153,9 +176,14 @@ test("a streamed video gets an AI summary with a retention note, and chat", asyn
   await expect(page.getByText(/downloading the video keeps it/)).toBeVisible();
 
   await page.getByRole("button", { name: "Chat", exact: true }).click();
-  await page.getByPlaceholder("Ask this video…").fill("What is it about?");
-  await page.getByPlaceholder("Ask this video…").press("Enter");
-  await expect(page.getByText("Mostly about a hike.")).toBeVisible();
+  const panel = page.getByRole("dialog", { name: "Ask", exact: true });
+  await expect(panel.locator('[data-horde="ask-focus"]')).toHaveText(
+    "Ridge at dusk"
+  );
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await input.fill("What is it about?");
+  await input.press("Enter");
+  await expect(panel.getByText("Mostly about a hike.")).toBeVisible();
 });
 
 test("AI chapters generated for a stream replace the empty chapter list", async ({
@@ -445,7 +473,9 @@ test("without captions a stream offers neither a summary nor chapters", async ({
     page.getByRole("heading", { name: "Ridge at dusk", level: 1 })
   ).toBeVisible();
   // Chat is still offered (it falls back to title and description).
-  await expect(page.getByPlaceholder("Ask this video…")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Chat", exact: true })
+  ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Generate summary" })
   ).toHaveCount(0);

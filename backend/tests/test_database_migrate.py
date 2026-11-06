@@ -13,7 +13,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0028_user_invites"
+HEAD = "0029_video_chats_to_ask"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1283,3 +1283,122 @@ def test_playlist_entries_keep_only_links_that_can_be_streamed(tmp_dirs):
         assert conn.execute(
             text("SELECT video_id, url FROM playlist_items ORDER BY position")
         ).fetchall() == [(1, "https://example.com/a"), (2, None)]
+
+
+def test_video_chats_revision_copies_each_chat_into_ask(tmp_dirs):
+    """0028 -> 0029: each user's chat about a video becomes an Ask conversation."""
+    import json
+
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0028_user_invites")
+    at = "2024-01-01 00:00:00"
+    with engine.begin() as conn:
+        for uid, name, admin in ((1, "boss", 1), (2, "guest", 0)):
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, username, username_norm, password_hash, "
+                    "is_admin, created_at, updated_at, disabled, permissions) "
+                    "VALUES (:i, :n, :n, 'x', :a, :t, :t, 0, '[]')"
+                ),
+                {"i": uid, "n": name, "a": admin, "t": at},
+            )
+        _insert_video(
+            conn,
+            1,
+            "Belt basics",
+            "[]",
+            "x/one.mp4",
+            source_url="https://www.youtube.com/watch?v=ccccccccccc",
+            youtube_id="ccccccccccc",
+        )
+        for uid, role, content, when in (
+            (2, "user", "how often?", "2024-01-01 00:00:01"),
+            (2, "assistant", "Every 90k.", "2024-01-01 00:00:02"),
+            (None, "user", "old question", "2024-01-01 00:00:03"),
+        ):
+            conn.execute(
+                text(
+                    "INSERT INTO video_ai_chat_messages (video_id, user_id, role, "
+                    "content, created_at) VALUES (1, :u, :r, :c, :w)"
+                ),
+                {"u": uid, "r": role, "c": content, "w": when},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO stream_ai_state (id, youtube_id, source_url, title, "
+                "created_at, last_used_at) VALUES (1, 'ddddddddddd', "
+                "'https://www.youtube.com/watch?v=ddddddddddd', 'Ridge', :t, :t)"
+            ),
+            {"t": at},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO stream_ai_chat_messages (stream_id, user_id, role, "
+                "content, created_at) VALUES (1, 1, 'user', 'where?', :t)"
+            ),
+            {"t": "2024-01-02 00:00:00"},
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        threads = conn.execute(
+            text(
+                "SELECT id, user_id, title, scope FROM ask_threads ORDER BY user_id, id"
+            )
+        ).fetchall()
+        messages = conn.execute(
+            text(
+                "SELECT thread_id, role, content, sources FROM ask_messages ORDER BY id"
+            )
+        ).fetchall()
+    library = {
+        "library_id": 1,
+        "youtube_id": "ccccccccccc",
+        "url": None,
+        "title": "Belt basics",
+    }
+    stream = {
+        "library_id": None,
+        "youtube_id": "ddddddddddd",
+        "url": "https://www.youtube.com/watch?v=ddddddddddd",
+        "title": "Ridge",
+    }
+    # The ownerless chat is the first admin's; one conversation per user and video.
+    assert [(t.user_id, t.title, json.loads(t.scope)["video"]) for t in threads] == [
+        (1, "Belt basics", library),
+        (1, "Ridge", stream),
+        (2, "Belt basics", library),
+    ]
+    by_thread = {t.id: t.user_id for t in threads}
+    assert [
+        (by_thread[m.thread_id], m.role, m.content, m.sources and json.loads(m.sources))
+        for m in messages
+    ] == [
+        (1, "user", "old question", None),
+        (2, "user", "how often?", None),
+        (2, "assistant", "Every 90k.", {"kind": "video", "video": library}),
+        (1, "user", "where?", None),
+    ]
+
+    # A downgrade removes the copies only.
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO ask_threads (user_id, title, scope, created_at, "
+                "updated_at) VALUES (1, 'Mine', '{\"help\": true}', :t, :t)"
+            ),
+            {"t": at},
+        )
+    command.downgrade(alembic_config(engine), "0028_user_invites")
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT title FROM ask_threads")).fetchall() == [
+            ("Mine",)
+        ]
+        assert conn.execute(text("SELECT COUNT(*) FROM ask_messages")).scalar() == 0

@@ -371,11 +371,6 @@ class StreamAiAction(BaseModel):
     force: bool = False
 
 
-class StreamAiChatRequest(BaseModel):
-    url: str = Field(..., min_length=1, max_length=4000)
-    message: str = Field(..., min_length=1, max_length=4000)
-
-
 class DownloadJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -1772,8 +1767,15 @@ class AskSearchPage(BaseModel):
     next_cursor: str | None = None
 
 
+class AskVideoRef(BaseModel):
+    """A video Ask can answer from: a library video, or a stream by its URL."""
+
+    library_id: int | None = None
+    url: str | None = Field(default=None, max_length=4000)
+
+
 class AskChatRequest(BaseModel):
-    """One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels."""
+    """One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video."""
 
     message: str = Field(..., min_length=1, max_length=4000)
     #: Continue this saved conversation; a new one is started when empty.
@@ -1787,9 +1789,16 @@ class AskChatRequest(BaseModel):
     page_channel_id: int | None = None
     #: The YouTube id of the video being watched: its passages come first.
     page_video_id: str | None = Field(default=None, max_length=32)
-    #: The user picked Horde as the source: answer from Horde even when the
-    #: question names a channel (``channel_ids`` and the page's are ignored).
-    horde_only: bool = False
+    #: "Ask … instead" under a reply: answer this turn from Horde, or from the
+    #: video (``video``), whatever the question names or the page is about.
+    answer_from: Literal["horde", "video"] | None = None
+    #: The video the user picked: answered from unless the question names
+    #: Horde, asks how to do something in it or about the user's own things,
+    #: names a channel or is about the page channel as a whole.
+    video: AskVideoRef | None = None
+    #: The watch page's video, when nothing is picked: as ``video``, and also
+    #: left for a question about Horde's features that is not about the video.
+    page_video: AskVideoRef | None = None
     #: Where the user is in the app (Horde answers only).
     page: str | None = Field(default=None, max_length=300)
     data_consent: Literal["off", "local", "cloud"] = "off"

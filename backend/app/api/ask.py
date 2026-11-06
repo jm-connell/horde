@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request
+import logging
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlmodel import Session, col, select
+from starlette.concurrency import run_in_threadpool
 
 from ..auth import StreamAuthGuard, current_user, require_permission
-from ..context import get_session
+from ..context import get_engine, get_session
 from ..errors import CodedHTTPException
 from ..models import KbChannel, KbVideo, Video, require_id
 from ..openapi_responses import EVENT_STREAM, RAW
@@ -24,6 +27,7 @@ from ..schemas import (
     AskThreadMessage,
     AskThreadRead,
     AskThreadSummary,
+    AskVideoRef,
 )
 from ..services.auth.accounts import AuthUser
 from ..services.follows import normalize_channel_url
@@ -32,8 +36,10 @@ from ..services.knowledge import channels as kb_channels
 from ..services.knowledge import search as kb_search
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from . import member_view
+from . import stream_ai as stream_ai_api
 
 router = APIRouter(prefix="/api/ask", tags=["ask"])
+logger = logging.getLogger(__name__)
 
 _SORT = "relevance"
 
@@ -281,28 +287,67 @@ def search(
 _USE_AI = [Depends(require_permission("use_ai"))]
 
 
+def _route_turn(
+    payload: AskChatRequest, user_id: int, page_video: bool = True
+) -> ask_chat.Route:
+    """Check the conversation is the user's and pick where the turn is answered
+    from (without the watch page's video when ``page_video`` is False)."""
+    with Session(get_engine()) as session:
+        if payload.thread_id is not None:
+            threads.owned_or_404(session, payload.thread_id, user_id)
+
+        def resolve(ref: AskVideoRef | None) -> ask_chat.VideoRef | None:
+            if ref is None:
+                return None
+            return ask_chat.resolve_video(session, ref.library_id, ref.url)
+
+        picked = resolve(payload.video)
+        video = picked or (resolve(payload.page_video) if page_video else None)
+        return ask_chat.pick_route(
+            session,
+            payload.message,
+            channel_ids=payload.channel_ids,
+            page_channel_id=payload.page_channel_id,
+            video=video,
+            video_picked=picked is not None,
+            answer_from=payload.answer_from,
+        )
+
+
 @router.post("/chat", response_class=RAW, responses=EVENT_STREAM, dependencies=_USE_AI)
-def chat(
+async def chat(
     request: Request,
     payload: AskChatRequest,
-    session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """One Ask turn (SSE): from channels when the question names one, else from Horde."""
-    if payload.thread_id is not None:
-        threads.owned_or_404(session, payload.thread_id, user.id)
+    """One Ask turn (SSE): from the channels a question names, the video the
+    chat is about, the page's channel, else Horde (``ask_chat.pick_route``)."""
+    route = await run_in_threadpool(_route_turn, payload, user.id)
+    video = route.video
+    if video is not None and video.library_id is None and video.url:
+        # A stream: save its details and captions first (once; then they are kept).
+        try:
+            _, stream_id = await stream_ai_api.prepared_state(request, video.url)
+        except HTTPException:
+            if route.picked is not None:
+                raise  # the user asked about this video: say why it cannot be
+            # Only the page's video: answer from elsewhere instead.
+            logger.warning("Ask: could not read %s", video.url, exc_info=True)
+            route = await run_in_threadpool(_route_turn, payload, user.id, False)
+        else:
+            route.video = await run_in_threadpool(
+                ask_chat.with_stream, video, stream_id
+            )
     return StreamingResponse(
         ask_chat.stream_ask_events(
             user,
             payload.message,
             thread_id=payload.thread_id,
-            channel_ids=payload.channel_ids,
+            route=route,
             page=payload.page,
             data_consent=payload.data_consent,
             authorized=StreamAuthGuard.of(request).still_valid,
-            page_channel_id=payload.page_channel_id,
             page_video_id=payload.page_video_id,
-            horde_only=payload.horde_only,
         ),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},

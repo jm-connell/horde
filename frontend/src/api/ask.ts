@@ -1,4 +1,5 @@
 import type { HelpDataConsent } from "../hooks/settings/types";
+import type { AskVideo } from "../components/helpChat";
 import type {
   AskChannel,
   AskChannelList,
@@ -14,6 +15,11 @@ import {
   type ReadOptions,
   request,
 } from "./client";
+
+/** A video as the server takes it: a library id, or a stream's URL. */
+function videoRef(video: AskVideo | null | undefined) {
+  return video ? { library_id: video.library_id, url: video.url } : null;
+}
 
 export const askApi = {
   askChannels(opts?: ReadOptions): Promise<AskChannelList> {
@@ -85,9 +91,11 @@ export const askApi = {
 
   /**
    * One Ask turn (SSE): from channels when the question names one or
-   * `channelIds` says which, from Horde otherwise (always with `hordeOnly`).
-   * The server saves the
-   * turn in `threadId` (a new conversation when null; see the `thread` event).
+   * `channelIds` says which, from `video` unless the question is about Horde
+   * or a channel, from Horde otherwise (`answerFrom` forces Horde or the
+   * video for this turn: "Ask … instead"). The server
+   * saves the turn in `threadId` (a new conversation when null; see the
+   * `thread` event).
    */
   streamAsk(
     message: string,
@@ -97,8 +105,12 @@ export const askApi = {
       /** The page's Ask channel and watched video (see `useAskPageChannel`). */
       pageChannelId?: number | null;
       pageVideoId?: string | null;
-      /** The user picked Horde as the source: no channel answers. */
-      hordeOnly?: boolean;
+      /** "Ask … instead": answer this turn from Horde, or from `video`. */
+      answerFrom?: "horde" | "video" | null;
+      /** The video the user picked. */
+      video?: AskVideo | null;
+      /** The watch page's video, when nothing is picked. */
+      pageVideo?: AskVideo | null;
       page: string;
       dataConsent: HelpDataConsent;
     },
@@ -112,7 +124,9 @@ export const askApi = {
         channel_ids: params.channelIds,
         page_channel_id: params.pageChannelId ?? null,
         page_video_id: params.pageVideoId ?? null,
-        horde_only: params.hordeOnly ?? false,
+        answer_from: params.answerFrom ?? null,
+        video: videoRef(params.video),
+        page_video: videoRef(params.pageVideo),
         page: params.page,
         data_consent: params.dataConsent,
       },

@@ -141,6 +141,8 @@ nav:
       - 0026 One Recommended tab: adr/0026-one-recommended-tab.md
       - 0027 Invite links: adr/0027-invite-links.md
       - 0028 One Ask: adr/0028-one-ask.md
+      - 0029 Video questions in Ask: adr/0029-video-questions-in-ask.md
+      - 0030 Ask routes on its own: adr/0030-ask-routes-on-its-own.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

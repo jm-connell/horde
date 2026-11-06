@@ -27,11 +27,47 @@ export interface AskScopeChannel {
   name: string | null;
 }
 
+/** A video Ask can answer from (the server's `video` in `scope` and `sources`). */
+export interface AskVideo {
+  library_id: number | null;
+  youtube_id: string | null;
+  /** A stream's watch URL (null for a library video). */
+  url: string | null;
+  title: string;
+}
+
+export function parseAskVideo(value: unknown): AskVideo | null {
+  if (!value || typeof value !== "object") return null;
+  const v = value as Record<string, unknown>;
+  const libraryId = typeof v.library_id === "number" ? v.library_id : null;
+  const url = typeof v.url === "string" && v.url ? v.url : null;
+  if (libraryId == null && !url) return null;
+  return {
+    library_id: libraryId,
+    youtube_id: typeof v.youtube_id === "string" ? v.youtube_id : null,
+    url,
+    title: typeof v.title === "string" ? v.title : "",
+  };
+}
+
+/**
+ * Tells two references to the same video apart from others; a stream and its
+ * downloaded copy share the YouTube id.
+ */
+export function askVideoKey(video: AskVideo): string {
+  if (video.youtube_id) return `youtube:${video.youtube_id}`;
+  return video.library_id != null
+    ? `video:${video.library_id}`
+    : `stream:${video.url}`;
+}
+
 export interface HelpMessage {
   id: string;
   role: "user" | "assistant";
   content: string;
   sources?: HelpSource[];
+  /** Video answers: the video it answered from. */
+  video?: AskVideo;
   /** Ask channel answers: the numbered references, in order. */
   references?: AskReference[];
   /** Ask channel answers: the channels it answered from. */
@@ -46,12 +82,12 @@ export const HELP_CHAT_STORAGE_KEY = "horde.helpChat";
 /** The saved conversation this tab shows and where Ask answers it from. */
 export const ASK_CHAT_STORAGE_KEY = "horde.askChat";
 
-/** Where Ask answers from: channels, Horde only, or (neither) per question. */
+/** What the chat is focused on: channels, a video, or (neither) whatever each question is about. */
 export interface AskSourceState {
   /** The channels the chat is about. */
   scope: AskScopeChannel[];
-  /** Horde only: no channel answers, even one the question names. */
-  horde?: boolean;
+  /** The picked video: questions go to it unless they are about Horde or a channel. */
+  video?: AskVideo | null;
 }
 
 export interface AskChatState extends AskSourceState {
@@ -65,7 +101,7 @@ function isSourceState(value: unknown): value is AskSourceState {
   const v = value as Record<string, unknown>;
   return (
     Array.isArray(v.scope) &&
-    (v.horde === undefined || typeof v.horde === "boolean")
+    (v.video == null || parseAskVideo(v.video) !== null)
   );
 }
 
@@ -134,9 +170,13 @@ export function parseScopeChannels(value: unknown): AskScopeChannel[] {
 /** A saved message's `sources` as the panel keeps them. */
 export function savedSources(
   sources: unknown
-): Pick<HelpMessage, "sources" | "references" | "channels"> {
+): Pick<HelpMessage, "sources" | "references" | "channels" | "video"> {
   if (!sources || typeof sources !== "object") return {};
   const s = sources as Record<string, unknown>;
+  if (s.kind === "video") {
+    const video = parseAskVideo(s.video);
+    return video ? { video } : {};
+  }
   if (s.kind === "channels") {
     return {
       references: parseReferences(s.references),

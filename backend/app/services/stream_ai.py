@@ -1,9 +1,12 @@
-"""AI summary, chapters and chat for a streamed (not downloaded) video.
+"""AI summary and chapters for a streamed (not downloaded) video, and what Ask
+is given about it.
 
-Results live in ``stream_ai_state`` / ``stream_ai_chat_messages``, keyed by the
-YouTube id. When the video is downloaded they move onto the library video
-(``adopt_for_video``); rows nobody opened for ``STREAM_AI_RETENTION_DAYS`` are
-deleted (``purge_expired``). A small worker does both periodically.
+Results live in ``stream_ai_state``, keyed by the YouTube id. When the video is
+downloaded they move onto the library video (``adopt_for_video``); rows nobody
+opened for ``STREAM_AI_RETENTION_DAYS`` are deleted (``purge_expired``). A small
+worker does both periodically. Questions about a stream are Ask's (saved in
+its threads); ``stream_ai_chat_messages`` only holds chats from before, which
+revision 0029 copied into Ask.
 """
 
 from __future__ import annotations
@@ -18,10 +21,8 @@ from sqlmodel import Session, col, delete, select
 from .. import config
 from ..context import get_engine
 from ..models import (
-    StreamAiChatMessage,
     StreamAiState,
     Video,
-    VideoAiChatMessage,
     VideoAiMeta,
     as_utc,
     require_id,
@@ -29,7 +30,6 @@ from ..models import (
 )
 from . import app_settings, library
 from . import chapters as chapters_svc
-from .ai import chat as ai_chat
 from .ai import text as ai_text
 from .ai.provider import llm_features_allowed
 from .ai.tasks import (
@@ -269,144 +269,28 @@ def generate_stream_chapters(
 # --- chat --------------------------------------------------------------------
 
 
-def _message_rows(
-    session: Session, stream_id: int, user_id: int
-) -> list[StreamAiChatMessage]:
-    return list(
-        session.exec(
-            select(StreamAiChatMessage)
-            .where(
-                col(StreamAiChatMessage.stream_id) == stream_id,
-                col(StreamAiChatMessage.user_id) == user_id,
-            )
-            .order_by(
-                col(StreamAiChatMessage.created_at).asc(),
-                col(StreamAiChatMessage.id).asc(),
-            )
-        ).all()
+def chat_refusal(state: StreamAiState) -> str | None:
+    """Why Ask cannot answer about this stream (nothing to read), or None."""
+    has_meta = bool((state.title or "").strip() or (state.description or ""))
+    if not has_meta and not caption_text(state).strip():
+        return "Chat needs video metadata or captions"
+    return None
+
+
+def chat_context(state: StreamAiState) -> str:
+    """What Ask is given about a stream: its details and captions."""
+    return ai_text.format_chat_context(
+        metadata=ai_text.metadata_document(as_video(state)),
+        caption_chunks=ai_text.chat_captions(caption_text(state)),
+        summary=state.summary,
     )
-
-
-def list_messages(
-    session: Session, state: StreamAiState, user_id: int
-) -> list[dict[str, Any]]:
-    return [
-        {
-            "id": r.id,
-            "role": r.role,
-            "content": r.content,
-            "cost": r.cost if r.role == "assistant" else None,
-            "model": r.model if r.role == "assistant" else None,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in _message_rows(session, require_id(state), user_id)
-    ]
-
-
-def clear_messages(session: Session, state: StreamAiState, user_id: int) -> None:
-    """Delete this user's conversation about the stream (nobody else's)."""
-    session.execute(
-        delete(StreamAiChatMessage).where(
-            col(StreamAiChatMessage.stream_id) == require_id(state),
-            col(StreamAiChatMessage.user_id) == user_id,
-        )
-    )
-    session.commit()
-
-
-class _StreamChat:
-    """``ai_chat.ChatTarget`` for a stream: context is metadata plus captions."""
-
-    usage_video_id: int | None = None
-
-    def __init__(self, stream_id: int, youtube_id: str, user_id: int) -> None:
-        self.stream_id = stream_id
-        self.user_id = user_id
-        self.label = f"youtube_id={youtube_id}"
-
-    def _state(self, session: Session) -> StreamAiState | None:
-        return session.get(StreamAiState, self.stream_id)
-
-    def validate(self, session: Session, message: str) -> None:
-        ai_chat.validate_chat_message(message)
-        state = self._state(session)
-        if state is None:
-            raise ai_chat.ChatError("Video not found", status_code=404)
-        has_meta = bool((state.title or "").strip() or (state.description or ""))
-        if not has_meta and not caption_text(state).strip():
-            raise ai_chat.ChatError(
-                "Chat needs video metadata or captions", status_code=400
-            )
-
-    def add_message(
-        self,
-        session: Session,
-        *,
-        role: str,
-        content: str,
-        cost: float | None = None,
-        model: str | None = None,
-    ) -> StreamAiChatMessage:
-        row = StreamAiChatMessage(
-            stream_id=self.stream_id,
-            user_id=self.user_id,
-            role=role,
-            content=content,
-            cost=cost,
-            model=model,
-            created_at=utcnow(),
-        )
-        session.add(row)
-        session.commit()
-        session.refresh(row)
-        return row
-
-    def exists(self, session: Session) -> bool:
-        return self._state(session) is not None
-
-    def history(self, session: Session) -> list[dict[str, str]]:
-        return ai_chat.history_from_rows(
-            _message_rows(session, self.stream_id, self.user_id)
-        )
-
-    def context(self, session: Session, question: str) -> str | None:
-        state = self._state(session)
-        if state is None:
-            return None
-        return ai_text.format_chat_context(
-            metadata=ai_text.metadata_document(as_video(state)),
-            caption_chunks=ai_text.chat_captions(caption_text(state)),
-            summary=state.summary,
-        )
-
-
-def stream_chat_events(
-    stream_id: int,
-    youtube_id: str,
-    message: str,
-    user_id: int,
-    authorized: ai_chat.Authorized | None = None,
-):
-    """SSE generator that owns its DB session for the full stream lifetime."""
-    with Session(get_engine()) as session:
-        yield from ai_chat.run_chat_turn(
-            session,
-            _StreamChat(stream_id, youtube_id, user_id),
-            message,
-            user_id,
-            authorized,
-        )
-
-
-# --- carry-over and expiry ---------------------------------------------------
 
 
 def adopt_for_video(session: Session, video: Video) -> bool:
     """Move a stream's AI results onto the downloaded ``video``.
 
     The video's own results win: a summary or AI chapters it already has are
-    kept, and the stream's copy is dropped. Chat turns are appended to each
-    user's conversation about the video. Returns whether a stream row existed.
+    kept, and the stream's copy is dropped. Returns whether a stream row existed.
     """
     youtube_id = video.youtube_id
     if not youtube_id:
@@ -428,23 +312,7 @@ def adopt_for_video(session: Session, video: Video) -> bool:
         meta.chapters_skip_reason = None
     meta.updated_at = utcnow()
     session.add(meta)
-    for row in session.exec(
-        select(StreamAiChatMessage).where(
-            col(StreamAiChatMessage.stream_id) == require_id(state)
-        )
-    ).all():
-        session.add(
-            VideoAiChatMessage(
-                video_id=video_id,
-                user_id=row.user_id,
-                role=row.role,
-                content=row.content,
-                cost=row.cost,
-                model=row.model,
-                created_at=row.created_at,
-            )
-        )
-    session.delete(state)  # chat rows go with it (ON DELETE CASCADE)
+    session.delete(state)  # old chat rows go with it (ON DELETE CASCADE)
     session.commit()
     logger.info("moved stream AI results for %s onto video %s", youtube_id, video_id)
     return True
