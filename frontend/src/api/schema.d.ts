@@ -3052,6 +3052,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/review/{video_id}/approve-from-youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve From Youtube
+         * @description Look this file up on YouTube by the id it is known by and approve it with
+         *     what YouTube says, filling only blanks (a title that is still the file name
+         *     counts as blank). The file stays where it is. The Import page calls this
+         *     once per file for a bulk lookup.
+         */
+        post: operations["approve_from_youtube_api_review__video_id__approve_from_youtube_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/review/{video_id}/skip": {
         parameters: {
             query?: never;
@@ -17292,6 +17315,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_from_youtube_api_review__video_id__approve_from_youtube_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveSuggestedResult"];
                 };
             };
             /** @description Validation error */
