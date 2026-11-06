@@ -81,8 +81,11 @@ export type BackgroundEffect =
 
 export type FlowingGradientPreset = "theme" | "rgb" | "cool" | "warm" | "mono";
 
-export type HoverMotion = "off" | "subtle" | "lift" | "glow";
-export type NavIndicator = "none" | "liquid" | "underline" | "fade";
+/** `tilt` and `zoom` are new (preview) options. */
+export type HoverMotion = "off" | "subtle" | "lift" | "glow" | "tilt" | "zoom";
+/** `stretch`, `dot` and `focus` are new (preview) options. */
+export type NavIndicator =
+  "none" | "liquid" | "underline" | "fade" | "stretch" | "dot" | "focus";
 /** App text size (rem root). Replaces the old multi-step UI scale. */
 export type FontSize = "small" | "medium" | "large" | "xl";
 

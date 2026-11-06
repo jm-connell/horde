@@ -1289,6 +1289,101 @@ html[data-hover-motion="glow"]
   }
 }
 
+/* New (preview) hover motions. Tilt leans a video card toward the pointer
+   (components/HoverTilt.tsx sets the transform) with a sheen over its
+   picture; Zoom eases the thumbnail closer and leaves the card still.
+   Controls keep Subtle's brightness in both. */
+html[data-hover-motion="tilt"] .ui-interactive,
+html[data-hover-motion="zoom"] .ui-interactive,
+html[data-hover-motion="tilt"] button:not(:disabled),
+html[data-hover-motion="zoom"] button:not(:disabled),
+html[data-hover-motion="tilt"] select,
+html[data-hover-motion="zoom"] select,
+html[data-hover-motion="tilt"] input:not([type="range"]):not([type="color"]),
+html[data-hover-motion="zoom"] input:not([type="range"]):not([type="color"]) {
+  transition:
+    transform 200ms var(--ease-fluid),
+    box-shadow 200ms var(--ease-fluid),
+    filter 200ms var(--ease-fluid),
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease,
+    opacity 200ms ease;
+}
+
+/* Settling back is slower than following the pointer. */
+html[data-hover-motion="tilt"] .ui-card {
+  transition:
+    transform 450ms var(--ease-fluid),
+    filter 300ms var(--ease-fluid),
+    background-color 200ms ease,
+    color 200ms ease,
+    border-color 200ms ease;
+}
+html[data-hover-motion="tilt"] .ui-card[data-tilting] {
+  transition-duration: 120ms, 300ms, 200ms, 200ms, 200ms;
+  filter: drop-shadow(0 14px 18px rgb(0 0 0 / 0.4));
+}
+html[data-hover-motion="tilt"] .ui-card-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at var(--horde-sheen-x, 50%) var(--horde-sheen-y, 0%),
+    rgb(255 255 255 / 0.16),
+    transparent 55%
+  );
+  opacity: 0;
+  transition: opacity 300ms ease;
+}
+html[data-hover-motion="tilt"] .ui-card[data-tilting] .ui-card-media::after {
+  opacity: 1;
+}
+
+html[data-hover-motion="zoom"] .ui-card-media > :is(img, .ui-card-art) {
+  transition:
+    opacity 320ms ease-out,
+    transform 300ms var(--ease-fluid),
+    filter 300ms var(--ease-fluid);
+}
+html[data-hover-motion="zoom"] .ui-card-media > video {
+  transition:
+    opacity 200ms ease,
+    transform 300ms var(--ease-fluid);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  html[data-hover-motion="zoom"]
+    .ui-card:hover
+    .ui-card-media
+    > :is(img, video, .ui-card-art) {
+    transform: scale(1.06);
+  }
+  html[data-hover-motion="zoom"]
+    .ui-card:hover
+    .ui-card-media
+    > :is(img, .ui-card-art) {
+    filter: brightness(1.06);
+  }
+
+  html[data-hover-motion="tilt"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="zoom"]
+    button:not(:disabled):not(.ui-nav-icon):not(.ui-player-chrome):hover,
+  html[data-hover-motion="tilt"] .ui-interactive:hover,
+  html[data-hover-motion="zoom"] .ui-interactive:hover,
+  html[data-hover-motion="tilt"] select:hover,
+  html[data-hover-motion="zoom"] select:hover,
+  html[data-hover-motion="tilt"]
+    input:not([type="range"]):not([type="color"]):hover,
+  html[data-hover-motion="zoom"]
+    input:not([type="range"]):not([type="color"]):hover {
+    filter: brightness(1.06);
+  }
+}
+
 /* Button press feedback (always on unless reduced motion).
    Panel headers use .ui-panel-toggle so only the label/arrow scale, not the
    full-width hover background. */
