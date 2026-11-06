@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { useSettings } from "../hooks/useSettings";
 import { isLoadingStyle, type LoadingStyle } from "../loadingStyles";
 
@@ -27,6 +28,15 @@ export function LoadingMark({
       {style === "leapfrog" && <LeapfrogMark />}
       {style === "plus" && <PlusMark />}
       {style === "ringwalk" && <RingwalkMark />}
+      {style === "arc" && <ArcMark />}
+      {style === "orbit" && <OrbitMark />}
+      {style === "helix" && <HelixMark />}
+      {style === "infinity" && <InfinityMark />}
+      {style === "cradle" && <CradleMark />}
+      {style === "spokes" && <SpokesMark />}
+      {style === "sweep" && <SweepMark compact={compact} />}
+      {style === "clapper" && <ClapperMark />}
+      {style === "play" && <PlayMark />}
     </div>
   );
 }
@@ -261,6 +271,172 @@ function RingwalkMark() {
     <span className="horde-load-ringwalk">
       <span className="horde-load-ringwalk-ring" />
       <span className="horde-load-ringwalk-pent" />
+    </span>
+  );
+}
+
+// New (preview) marks below. Each moves only by transform and opacity, so it
+// keeps its pace while the page is busy, and settles into a slow breathe
+// when the system asks for reduced motion (index.css, `.horde-load-new`).
+
+function ArcMark() {
+  return (
+    <span className="horde-load-new horde-load-arc">
+      <span className="horde-load-arc-layer">
+        <span className="horde-load-arc-half horde-load-arc-half--l">
+          <span className="horde-load-arc-ring" />
+        </span>
+        <span className="horde-load-arc-half horde-load-arc-half--r">
+          <span className="horde-load-arc-ring" />
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function OrbitMark() {
+  return (
+    <span className="horde-load-new horde-load-orbit">
+      <span className="horde-load-orbit-tilt">
+        <span className="horde-load-orbit-path" />
+        <span className="horde-load-orbit-planet" />
+        <span className="horde-load-orbit-moon" />
+        <span className="horde-load-orbit-moon horde-load-orbit-moon--b" />
+      </span>
+    </span>
+  );
+}
+
+const HELIX_COLUMNS = 7;
+
+function HelixMark() {
+  return (
+    <span className="horde-load-new horde-load-helix">
+      {Array.from({ length: HELIX_COLUMNS }, (_, i) => (
+        <span
+          key={i}
+          className="horde-load-helix-col"
+          // Each column is a step further round the twist.
+          style={{ "--helix-delay": `${-i * 0.11}s` } as CSSProperties}
+        >
+          <span className="horde-load-helix-dot" />
+          <span className="horde-load-helix-dot horde-load-helix-dot--b" />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** A Gerono lemniscate (x = sin t, y = sin t cos t), the track the comet runs. */
+const INFINITY_TRACK = Array.from({ length: 49 }, (_, i) => {
+  const t = (i / 48) * Math.PI * 2;
+  return `${(16 + Math.sin(t) * 12).toFixed(2)},${(10 + Math.sin(t) * Math.cos(t) * 12).toFixed(2)}`;
+}).join(" ");
+
+const INFINITY_TRAIL = [1, 0.62, 0.42, 0.28, 0.18, 0.1];
+/** Seconds per loop (`horde-load-inf-x`); the Y bob runs exactly twice in it. */
+const INFINITY_CYCLE = 1.6;
+
+function InfinityMark() {
+  return (
+    <span className="horde-load-new horde-load-infinity">
+      <svg
+        viewBox="0 0 32 20"
+        className="horde-load-infinity-track"
+        aria-hidden
+      >
+        <polyline points={INFINITY_TRACK} />
+      </svg>
+      {INFINITY_TRAIL.map((opacity, i) => (
+        <span
+          key={i}
+          className="horde-load-infinity-x"
+          // A moment behind the head: a full cycle back, less the lag.
+          style={{ animationDelay: `${i * 0.055 - INFINITY_CYCLE}s` }}
+        >
+          <span
+            className="horde-load-infinity-y"
+            style={{ animationDelay: `${i * 0.055 - INFINITY_CYCLE}s` }}
+          >
+            <span
+              className="horde-load-infinity-dot"
+              style={{ opacity, scale: `${1 - i * 0.1}` }}
+            />
+          </span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function CradleMark() {
+  return (
+    <span className="horde-load-new horde-load-cradle">
+      <span className="horde-load-cradle-bar" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <span
+          key={i}
+          className={`horde-load-cradle-pendulum horde-load-cradle-pendulum--${i}`}
+        >
+          <span className="horde-load-cradle-ball" />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const SPOKES = 8;
+
+function SpokesMark() {
+  return (
+    <span className="horde-load-new horde-load-spokes">
+      {Array.from({ length: SPOKES }, (_, i) => (
+        <span
+          key={i}
+          className="horde-load-spoke"
+          // The brightest spoke leads; the rest trail off behind it.
+          style={{
+            rotate: `${i * (360 / SPOKES)}deg`,
+            opacity: 0.16 + (0.84 * (i + 1)) / SPOKES,
+          }}
+        />
+      ))}
+    </span>
+  );
+}
+
+function SweepMark({ compact }: { compact: boolean }) {
+  return (
+    <span
+      className={`horde-load-new horde-load-sweep ${compact ? "horde-load-sweep--compact" : ""}`}
+    >
+      <span className="horde-load-sweep-bar horde-load-sweep-bar--a" />
+      <span className="horde-load-sweep-bar horde-load-sweep-bar--b" />
+    </span>
+  );
+}
+
+function ClapperMark() {
+  return (
+    <span className="horde-load-new horde-load-clapper">
+      <span className="horde-load-clapper-stick" />
+      <span className="horde-load-clapper-board">
+        <span className="horde-load-clapper-line" />
+        <span className="horde-load-clapper-line horde-load-clapper-line--short" />
+      </span>
+    </span>
+  );
+}
+
+function PlayMark() {
+  return (
+    <span className="horde-load-new horde-load-play">
+      <span className="horde-load-play-ring">
+        <span className="horde-load-play-glint" />
+      </span>
+      <svg viewBox="0 0 24 24" className="horde-load-play-icon" aria-hidden>
+        <path d="M9.5 7.5v9l7-4.5z" />
+      </svg>
     </span>
   );
 }

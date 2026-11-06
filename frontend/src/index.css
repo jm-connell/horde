@@ -1888,6 +1888,601 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   }
 }
 
+/* New (preview) loading marks. Transform and opacity only, so each keeps
+   its pace while the page is busy; reduced motion swaps the movement for a
+   slow breathe (bottom of this block). */
+
+/* Arc: two half rings clipped side by side grow and shrink the visible arc
+   while the whole turns, so its length changes with no stroke animation. */
+.horde-load-arc {
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  animation: horde-load-spin 1.57s linear infinite;
+}
+.horde-load-arc-layer {
+  position: absolute;
+  inset: 0;
+  animation: horde-load-arc-step 5.33s cubic-bezier(0.4, 0, 0.2, 1) infinite
+    both;
+}
+.horde-load-arc-half {
+  position: absolute;
+  top: 0;
+  width: 50%;
+  height: 100%;
+  overflow: hidden;
+}
+.horde-load-arc-half--l {
+  left: 0;
+}
+.horde-load-arc-half--r {
+  right: 0;
+}
+.horde-load-arc-ring {
+  position: absolute;
+  top: 0;
+  width: 200%;
+  height: 100%;
+  box-sizing: border-box;
+  border: 0.1875rem solid rgb(var(--accent));
+  border-bottom-color: transparent;
+  border-radius: 9999px;
+  animation: 1.33s cubic-bezier(0.4, 0, 0.2, 1) infinite both;
+}
+.horde-load-arc-half--l .horde-load-arc-ring {
+  left: 0;
+  border-right-color: transparent;
+  animation-name: horde-load-arc-l;
+}
+.horde-load-arc-half--r .horde-load-arc-ring {
+  right: 0;
+  border-left-color: transparent;
+  animation-name: horde-load-arc-r;
+}
+@keyframes horde-load-arc-l {
+  0%,
+  100% {
+    transform: rotate(130deg);
+  }
+  50% {
+    transform: rotate(-5deg);
+  }
+}
+@keyframes horde-load-arc-r {
+  0%,
+  100% {
+    transform: rotate(-130deg);
+  }
+  50% {
+    transform: rotate(5deg);
+  }
+}
+@keyframes horde-load-arc-step {
+  12.5% {
+    transform: rotate(135deg);
+  }
+  25% {
+    transform: rotate(270deg);
+  }
+  37.5% {
+    transform: rotate(405deg);
+  }
+  50% {
+    transform: rotate(540deg);
+  }
+  62.5% {
+    transform: rotate(675deg);
+  }
+  75% {
+    transform: rotate(810deg);
+  }
+  87.5% {
+    transform: rotate(945deg);
+  }
+  100% {
+    transform: rotate(1080deg);
+  }
+}
+
+/* Orbit: a real 3D tilt, so the moons pass behind the planet. */
+.horde-load-orbit {
+  display: block;
+  width: 2rem;
+  height: 2rem;
+  perspective: 7rem;
+  rotate: -20deg;
+}
+.horde-load-orbit-tilt {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transform: rotateX(68deg);
+}
+.horde-load-orbit-path {
+  position: absolute;
+  inset: 0.1rem;
+  border: 1px solid rgb(var(--accent) / 0.3);
+  border-radius: 9999px;
+}
+.horde-load-orbit-planet,
+.horde-load-orbit-moon {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+}
+.horde-load-orbit-planet {
+  width: 0.62rem;
+  height: 0.62rem;
+  margin: -0.31rem 0 0 -0.31rem;
+  /* Stood back up to face the viewer. */
+  transform: rotateX(-68deg);
+}
+.horde-load-orbit-moon {
+  width: 0.34rem;
+  height: 0.34rem;
+  margin: -0.17rem 0 0 -0.17rem;
+  animation: horde-load-orbit 1.8s linear infinite;
+}
+.horde-load-orbit-moon--b {
+  width: 0.24rem;
+  height: 0.24rem;
+  margin: -0.12rem 0 0 -0.12rem;
+  animation-delay: -0.9s;
+}
+@keyframes horde-load-orbit {
+  from {
+    transform: rotateZ(0deg) translateX(0.9rem) rotateZ(0deg) rotateX(-68deg);
+  }
+  to {
+    transform: rotateZ(360deg) translateX(0.9rem) rotateZ(-360deg)
+      rotateX(-68deg);
+  }
+}
+
+/* Helix: each dot bobs while its size and opacity, a quarter turn behind,
+   say whether it is in front or behind; the second strand runs half a turn
+   round. */
+.horde-load-helix {
+  display: flex;
+  height: 2rem;
+  align-items: center;
+  gap: 0.14rem;
+}
+.horde-load-helix-col {
+  position: relative;
+  width: 0.28rem;
+  height: 1.5rem;
+}
+.horde-load-helix-dot {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 0.28rem;
+  height: 0.28rem;
+  margin-top: -0.14rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  animation:
+    horde-load-helix-y 0.7s ease-in-out infinite alternate,
+    horde-load-helix-z 0.7s ease-in-out infinite alternate;
+  animation-delay: var(--helix-delay), calc(var(--helix-delay) - 0.35s);
+}
+.horde-load-helix-dot--b {
+  animation-delay:
+    calc(var(--helix-delay) - 0.7s), calc(var(--helix-delay) - 1.05s);
+}
+@keyframes horde-load-helix-y {
+  from {
+    translate: 0 -0.6rem;
+  }
+  to {
+    translate: 0 0.6rem;
+  }
+}
+@keyframes horde-load-helix-z {
+  from {
+    scale: 1;
+    opacity: 1;
+  }
+  to {
+    scale: 0.42;
+    opacity: 0.3;
+  }
+}
+
+/* Infinity: sine on X and twice as fast on Y draw a figure eight; the trail
+   is the same path a moment behind. */
+.horde-load-infinity {
+  position: relative;
+  display: block;
+  width: 2rem;
+  height: 1.25rem;
+}
+.horde-load-infinity-track {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke: rgb(var(--accent) / 0.18);
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.horde-load-infinity-x {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  animation: horde-load-inf-x 1.6s linear infinite;
+}
+.horde-load-infinity-y {
+  display: block;
+  animation: horde-load-inf-y 0.8s linear infinite;
+}
+.horde-load-infinity-dot {
+  display: block;
+  width: 0.3rem;
+  height: 0.3rem;
+  margin: -0.15rem 0 0 -0.15rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+}
+/* Quarter sines (easeOutSine, easeInSine) between the extremes. */
+@keyframes horde-load-inf-x {
+  0%,
+  50% {
+    transform: translateX(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  25% {
+    transform: translateX(0.75rem);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  75% {
+    transform: translateX(-0.75rem);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+@keyframes horde-load-inf-y {
+  0%,
+  50% {
+    transform: translateY(0);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  25% {
+    transform: translateY(0.375rem);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  75% {
+    transform: translateY(-0.375rem);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  100% {
+    transform: translateY(0);
+  }
+}
+
+/* Cradle: the end balls swing like pendulums, slowing as they rise and
+   gathering speed as they fall back into the row. */
+.horde-load-cradle {
+  position: relative;
+  display: block;
+  width: 1.9rem;
+  height: 1.6rem;
+}
+.horde-load-cradle-bar {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 1px;
+  background: rgb(var(--accent) / 0.35);
+}
+.horde-load-cradle-pendulum {
+  position: absolute;
+  top: 0;
+  width: 0.36rem;
+  height: 1.55rem;
+  transform-origin: 50% 0;
+}
+.horde-load-cradle-pendulum::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: calc(100% - 0.36rem);
+  margin-left: -0.5px;
+  background: rgb(var(--accent) / 0.4);
+}
+.horde-load-cradle-ball {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0.36rem;
+  height: 0.36rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+}
+.horde-load-cradle-pendulum--0 {
+  left: 0.05rem;
+  animation: horde-load-cradle-l 1.2s infinite;
+}
+.horde-load-cradle-pendulum--1 {
+  left: 0.41rem;
+}
+.horde-load-cradle-pendulum--2 {
+  left: 0.77rem;
+}
+.horde-load-cradle-pendulum--3 {
+  left: 1.13rem;
+}
+.horde-load-cradle-pendulum--4 {
+  left: 1.49rem;
+  animation: horde-load-cradle-r 1.2s infinite;
+}
+@keyframes horde-load-cradle-l {
+  0% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  25% {
+    transform: rotate(34deg);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.67, 0);
+  }
+  50%,
+  100% {
+    transform: rotate(0deg);
+  }
+}
+@keyframes horde-load-cradle-r {
+  0%,
+  50% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  75% {
+    transform: rotate(-34deg);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.67, 0);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* Spokes: a stepped turn, like the system activity spinner. */
+.horde-load-spokes {
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+  animation: horde-load-spin 0.9s steps(8) infinite;
+}
+.horde-load-spoke {
+  position: absolute;
+  left: 50%;
+  top: 0.05rem;
+  width: 0.17rem;
+  height: 0.5rem;
+  margin-left: -0.085rem;
+  border-radius: 9999px;
+  background: rgb(var(--accent));
+  /* The middle of the mark: half its height less the spoke's top. */
+  transform-origin: 50% 0.825rem;
+}
+
+/* Sweep: two fixed-width segments sliding along the track (Bar animates
+   width and left). */
+.horde-load-sweep {
+  position: relative;
+  display: block;
+  width: 8rem;
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 9999px;
+  background: rgb(var(--accent) / 0.16);
+}
+.horde-load-sweep--compact {
+  width: 3.5rem;
+  height: 0.1875rem;
+}
+.horde-load-sweep-bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: rgb(var(--accent));
+}
+.horde-load-sweep-bar--a {
+  width: 42%;
+  animation: horde-load-sweep-a 1.7s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.horde-load-sweep-bar--b {
+  width: 20%;
+  animation: horde-load-sweep-b 1.7s infinite;
+}
+@keyframes horde-load-sweep-a {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(240%);
+  }
+}
+@keyframes horde-load-sweep-b {
+  0%,
+  45% {
+    transform: translateX(-100%);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  100% {
+    transform: translateX(505%);
+  }
+}
+
+/* Clapper: the stick snaps shut (accelerating), bounces once, holds, then
+   lifts again; the board gives a little at the clap. */
+.horde-load-clapper {
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.6rem;
+}
+.horde-load-clapper-board {
+  position: absolute;
+  inset: auto 0 0;
+  height: 1.05rem;
+  box-sizing: border-box;
+  border: 2px solid rgb(var(--accent));
+  border-radius: 0.2rem;
+  background: rgb(var(--accent) / 0.16);
+  transform-origin: 50% 100%;
+  animation: horde-load-clapper-board 1.3s infinite;
+}
+.horde-load-clapper-line {
+  position: absolute;
+  top: 0.22rem;
+  left: 0.18rem;
+  right: 0.18rem;
+  height: 2px;
+  border-radius: 9999px;
+  background: rgb(var(--accent) / 0.55);
+}
+.horde-load-clapper-line--short {
+  top: 0.5rem;
+  right: 0.6rem;
+}
+.horde-load-clapper-stick {
+  position: absolute;
+  top: 0.12rem;
+  left: 0;
+  right: 0;
+  height: 0.42rem;
+  border-radius: 0.12rem;
+  background: repeating-linear-gradient(
+    -60deg,
+    rgb(var(--accent)) 0 0.17rem,
+    rgb(var(--accent) / 0.22) 0.17rem 0.34rem
+  );
+  transform-origin: 0.1rem 100%;
+  animation: horde-load-clapper-stick 1.3s infinite;
+}
+@keyframes horde-load-clapper-stick {
+  0% {
+    transform: rotate(-26deg);
+    animation-timing-function: cubic-bezier(0.55, 0, 1, 0.45);
+  }
+  20% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
+  }
+  28% {
+    transform: rotate(-5deg);
+    animation-timing-function: cubic-bezier(0.32, 0, 0.67, 0);
+  }
+  36%,
+  62% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1);
+  }
+  100% {
+    transform: rotate(-26deg);
+  }
+}
+@keyframes horde-load-clapper-board {
+  0%,
+  19%,
+  32%,
+  100% {
+    transform: none;
+  }
+  23% {
+    transform: scaleY(0.94);
+  }
+}
+
+/* Play: a glint runs round a rounded square (a turning conic gradient seen
+   through a ring-shaped mask) while the play mark gently beats. */
+.horde-load-play {
+  position: relative;
+  display: block;
+  width: 1.75rem;
+  height: 1.75rem;
+}
+.horde-load-play-ring {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: 2px;
+  border-radius: 0.55rem;
+  background: rgb(var(--accent) / 0.2);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+.horde-load-play-glint {
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0 62%,
+    rgb(var(--accent)) 90%,
+    transparent 100%
+  );
+  animation: horde-load-spin 1.4s linear infinite;
+}
+.horde-load-play-icon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: rgb(var(--accent));
+  stroke: rgb(var(--accent));
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+  animation: horde-load-play-beat 1.4s ease-in-out infinite;
+}
+@keyframes horde-load-play-beat {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes horde-load-breathe {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .horde-load-new,
+  .horde-load-new * {
+    animation: none !important;
+  }
+  .horde-load-new {
+    animation: horde-load-breathe 1.6s ease-in-out infinite !important;
+  }
+}
+
 @keyframes horde-processing-ellipsis {
   0%,
   100% {

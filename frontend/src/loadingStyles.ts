@@ -13,6 +13,16 @@ export const LOADING_STYLES = [
   "leapfrog",
   "plus",
   "ringwalk",
+  // New (preview) styles, listed under "New" in Settings.
+  "arc",
+  "orbit",
+  "helix",
+  "infinity",
+  "cradle",
+  "spokes",
+  "sweep",
+  "clapper",
+  "play",
 ] as const;
 
 export type LoadingStyle = (typeof LOADING_STYLES)[number];
@@ -91,6 +101,66 @@ export const LOADING_STYLE_OPTIONS: {
     value: "ringwalk",
     label: "Ring walk",
     description: "A pentagon stepping on a spinning ring",
+  },
+];
+
+/**
+ * New (preview) styles, shown in their own "New" group. Each moves only by
+ * transform and opacity, so it keeps its pace while the page is busy.
+ */
+export const NEW_LOADING_STYLE_OPTIONS: {
+  value: LoadingStyle;
+  label: string;
+  description: string;
+  /** The existing style this one reworks. */
+  reworks?: string;
+}[] = [
+  {
+    value: "arc",
+    label: "Arc",
+    description: "An arc that grows and shrinks as it turns",
+    reworks: "Spinner",
+  },
+  {
+    value: "orbit",
+    label: "Orbit",
+    description: "Two moons circling a planet, seen at a tilt",
+  },
+  {
+    value: "helix",
+    label: "Helix",
+    description: "A double strand twisting in place",
+  },
+  {
+    value: "infinity",
+    label: "Infinity",
+    description: "A comet looping a figure eight",
+  },
+  {
+    value: "cradle",
+    label: "Cradle",
+    description: "Newton's cradle, swinging end to end",
+  },
+  {
+    value: "spokes",
+    label: "Spokes",
+    description: "Fading spokes ticking round, like a system spinner",
+  },
+  {
+    value: "sweep",
+    label: "Sweep",
+    description: "Two segments racing along a track",
+    reworks: "Bar",
+  },
+  {
+    value: "clapper",
+    label: "Clapper",
+    description: "A clapperboard snapping shut",
+  },
+  {
+    value: "play",
+    label: "Play",
+    description: "A glint circling a play button",
   },
 ];
 
