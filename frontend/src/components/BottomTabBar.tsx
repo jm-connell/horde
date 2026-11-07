@@ -147,7 +147,7 @@ export default function BottomTabBar() {
           key={item}
           type="button"
           onClick={() => {
-            if (item === "chat") help.setOpen(!help.open);
+            if (item === "chat") help.toggleOpen();
             else {
               if (chatOpen) help.setOpen(false);
               window.dispatchEvent(new Event("horde:open-search"));

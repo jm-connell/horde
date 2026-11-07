@@ -33,6 +33,9 @@ All notable changes to Horde are documented here. The format follows
 - Issue forms, a security policy, and a footer bug link with your version
   filled in. New docs: other platforms (Portainer, Synology, Unraid,
   `docker run`) and Watch on your TV.
+- **Minimize Ask.** A button in its header folds the chat to a small bar at
+  the bottom of the window, keeping the conversation and a half-typed
+  question; the bar or the footer's **Ask** brings it back as it was.
 
 ### Changed
 
@@ -62,6 +65,9 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- Settings → Library → **Import from Google Takeout** dimmed the page but
+  opened its dialog below the fold.
+- The SponsorBlock chip slides in and fades out instead of popping.
 - A failed download's error toast came back on every page load for ten
   minutes after the failure.
 - Casting to a Chromecast sent the original file even when an H.264 copy

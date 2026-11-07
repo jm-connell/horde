@@ -33,7 +33,7 @@ export default function AppFooter() {
           type="button"
           aria-expanded={help.open}
           aria-controls={help.open ? HELP_PANEL_ID : undefined}
-          onClick={() => help.setOpen(!help.open)}
+          onClick={() => help.toggleOpen()}
           className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 font-medium text-gray-200 hover:border-accent hover:text-accent"
         >
           Ask
