@@ -15,17 +15,19 @@ from ..errors import CodedHTTPException
 from ..schemas import (
     FollowedChannelRead,
     FollowListResponse,
+    FollowPreviewRead,
     FollowRequest,
     FollowUpdate,
     SubscribeAskIndexRequest,
     SubscribeAskIndexResult,
     UnfollowResult,
 )
-from ..services import follows
+from ..services import channel_avatar, follows
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog.runtime import is_youtube_channel_url
 from ..services.knowledge import channels as kb_channels
 from ..services.knowledge import search as kb_search
+from ..services.limits import ytdlp_slot
 from ..services.live.page import fetch_live_page, parse_channel_name, parse_live_page
 from ..services.url_safety import UnsafeUrlError, UrlFetchError, validate_public_url
 
@@ -70,6 +72,42 @@ def list_follows(
 
 
 _MANAGE = [Depends(require_permission("manage_subscriptions"))]
+
+
+@router.get(
+    "/preview", response_model=FollowPreviewRead, dependencies=[Depends(ytdlp_slot)]
+)
+def preview_channel(
+    request: Request,
+    channel: str = Query(..., min_length=1, max_length=500),
+    session: Session = Depends(get_session),
+):
+    """Look a channel up by link or ``@handle`` before subscribing: its name and
+    picture, read from its YouTube page (404 ``channel_not_found`` when there is
+    no such page)."""
+    url = _channel_url_from_input(channel)
+    if not is_youtube_channel_url(url):
+        raise CodedHTTPException(
+            400, "Only YouTube channels can be subscribed to", "not_followable"
+        )
+    name = follows.channel_name_hint(session, url)
+    if get_ctx(request).e2e:
+        # The browser suite has no YouTube: the handle stands in for the name.
+        return FollowPreviewRead(channel_url=url, channel_name=name)
+    try:
+        page = channel_avatar.read_channel_page(url)
+    except channel_avatar.AvatarUnreadable as exc:
+        logger.debug("could not read the channel page of %s", url, exc_info=True)
+        raise CodedHTTPException(
+            404, "No YouTube channel found there", "channel_not_found"
+        ) from exc
+    avatar = channel_avatar.parse_avatar(page)
+    channel_avatar.cache().put(url, avatar)
+    return FollowPreviewRead(
+        channel_url=url,
+        channel_name=name or parse_channel_name(page),
+        avatar_url=avatar,
+    )
 
 
 @router.put("", response_model=FollowedChannelRead, dependencies=_MANAGE)

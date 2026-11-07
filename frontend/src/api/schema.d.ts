@@ -2033,6 +2033,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/follows/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Channel
+         * @description Look a channel up by link or ``@handle`` before subscribing: its name and
+         *     picture, read from its YouTube page (404 ``channel_not_found`` when there is
+         *     no such page).
+         */
+        get: operations["preview_channel_api_follows_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fonts": {
         parameters: {
             query?: never;
@@ -6711,6 +6733,18 @@ export interface components {
             items: components["schemas"]["FollowedChannelRead"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * FollowPreviewRead
+         * @description A channel looked up by link or ``@handle`` before subscribing to it.
+         */
+        FollowPreviewRead: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
         };
         /** FollowRequest */
         FollowRequest: {
@@ -14820,6 +14854,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubscribeAskIndexResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_channel_api_follows_preview_get: {
+        parameters: {
+            query: {
+                channel: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowPreviewRead"];
                 };
             };
             /** @description Validation error */

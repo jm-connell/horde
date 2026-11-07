@@ -6333,6 +6333,42 @@
         "title": "FollowListResponse",
         "type": "object"
       },
+      "FollowPreviewRead": {
+        "description": "A channel looked up by link or ``@handle`` before subscribing to it.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "FollowPreviewRead",
+        "type": "object"
+      },
       "FollowRequest": {
         "properties": {
           "channel_name": {
@@ -21499,6 +21535,61 @@
           }
         },
         "summary": "Index Subscribed Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
+    "/api/follows/preview": {
+      "get": {
+        "description": "Look a channel up by link or ``@handle`` before subscribing: its name and\npicture, read from its YouTube page (404 ``channel_not_found`` when there is\nno such page).",
+        "operationId": "preview_channel_api_follows_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Channel",
         "tags": [
           "follows"
         ]

@@ -1319,6 +1319,15 @@ class UnfollowResult(BaseModel):
     following: bool = False
 
 
+class FollowPreviewRead(BaseModel):
+    """A channel looked up by link or ``@handle`` before subscribing to it."""
+
+    channel_url: str
+    channel_name: str | None = None
+    #: Its profile picture on YouTube's image host (None when unknown).
+    avatar_url: str | None = None
+
+
 class SubscribeAskIndexRequest(BaseModel):
     """Turn Ask indexing on for a channel the caller subscribes to."""
 
