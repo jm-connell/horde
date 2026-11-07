@@ -236,3 +236,52 @@ test("a link that is not a channel says so and cannot be subscribed", async ({
     page.locator("form").getByRole("button", { name: "Subscribe", exact: true })
   ).toBeDisabled();
 });
+
+test("typing a channel you already have narrows the list to it", async ({
+  page,
+}) => {
+  for (const [handle, name] of [
+    ["@e2epotterywheel", "Pottery Wheel"],
+    ["@e2etrailnotes", "Trail Notes"],
+  ]) {
+    const saved = await page.request.put("/api/follows", {
+      headers: { "X-Horde-Request": "1" },
+      data: {
+        channel_url: `https://www.youtube.com/${handle}`,
+        channel_name: name,
+      },
+    });
+    expect(saved.ok()).toBeTruthy();
+  }
+  await page.route(/\/api\/channels\/search\?/, (route) =>
+    route.fulfill({ json: { results: [] } })
+  );
+  await page.goto("/subscriptions");
+  const list = page.getByRole("list", { name: "Subscriptions" });
+  const box = page.getByLabel("Find a YouTube channel: name, link or @handle");
+  await expect(card(page, "Trail Notes")).toBeVisible();
+
+  await box.fill("pottery");
+  await expect(card(page, "Pottery Wheel")).toBeVisible();
+  await expect(card(page, "Trail Notes")).toHaveCount(0);
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+  await expect(
+    page.getByRole("status").filter({
+      hasText: "Showing 1 channel you already have matching “pottery”",
+    })
+  ).toBeVisible();
+
+  // A pasted link to the same channel finds it too.
+  await box.fill("https://www.youtube.com/@e2etrailnotes/videos");
+  await expect(card(page, "Trail Notes")).toBeVisible();
+  await expect(list.getByRole("listitem")).toHaveCount(1);
+
+  // A channel you do not have leaves the whole list in view.
+  await box.fill("something new entirely");
+  await expect(card(page, "Pottery Wheel")).toBeVisible();
+  await expect(card(page, "Trail Notes")).toBeVisible();
+
+  await box.fill("");
+  await expect(card(page, "Pottery Wheel")).toBeVisible();
+  await expect(card(page, "Trail Notes")).toBeVisible();
+});

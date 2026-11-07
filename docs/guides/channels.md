@@ -36,6 +36,8 @@ Subscribing is the one way to keep up with a channel. A subscription is yours al
 
 The box at the top finds the channel: type its name to search YouTube's channels (the results list each one with its subscriber count; pick one), or paste its link or `@handle` to look it up. The channel needs no videos in the library. While it looks, a spinner shows and **Subscribe** waits; once a channel is found the box opens to show it, with two switches. **Download new uploads (1080p)** (with the `download` permission) turns on automatic downloads for new uploads only; change the quality or add older videos in the channel's settings. **Index for Ask and search** (on by default, shown when you may use it) turns [Ask](ask.md) on for the channel, which fetches the captions of every upload so the search bar and Ask can find what was said. A channel with more than 500 uploads is not indexed by itself: a notice says how big it is, and **Index anyway** (with **Manage channel indexing**) starts it. Subscribing from a channel's header, a suggested channel or a download card does the same.
 
+While you type, the grid narrows to the channels you already have that match (by name, `@handle` or, for a pasted link, the same channel), with a line saying how many; a name you do not have yet leaves the whole grid in view.
+
 Changing your subscriptions needs the **Manage subscriptions** permission (on by default for members).
 
 ### New channels from downloads
@@ -136,7 +138,7 @@ Watched videos count from the update that introduced retention: the date a video
 
 Anyone may see a channel's rule; saving one needs the `delete_videos` permission. The API is `GET` / `PUT /api/channels/retention` and `POST /api/channels/retention/preview`.
 
-## Following and live streams
+## Subscriptions and live streams
 
 Subscribe to a channel to see when it is live (the API and older versions call this following). A download you queued can subscribe you, as the administrator chose (see [New channels from downloads](#new-channels-from-downloads)), and an administrator starts out subscribed to every channel in the library (unless New channels from downloads is **Never**). To subscribe by hand, even to a channel with no videos on the server, use **Subscribe** in the channel's header (or **Channel settings → Subscription**), or add its URL or `@handle` on the [Subscriptions](#subscriptions) page. Unsubscribing sticks: a later download from that channel does not subscribe you again.
 

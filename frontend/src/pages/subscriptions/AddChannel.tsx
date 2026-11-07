@@ -99,8 +99,11 @@ function Avatar({
  */
 export default function AddChannel({
   subscribed,
+  onTextChange,
 }: {
   subscribed: Set<string>;
+  /** The box's text as typed, so the page can show matching subscriptions. */
+  onTextChange: (text: string) => void;
 }) {
   const { can } = useAuth();
   const { showError, showToast } = useToast();
@@ -115,6 +118,7 @@ export default function AddChannel({
   const [busy, setBusy] = useState(false);
 
   const text = value.trim();
+  useEffect(() => onTextChange(text), [text, onTextChange]);
   const debounced = useDebounced(text);
   const isLink = LINK_RE.test(debounced);
   const ready = debounced.length >= 2 && !picked;

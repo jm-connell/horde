@@ -20,6 +20,7 @@ import { formatCompactCount, formatRelative } from "../utils";
 import { findAskChannel } from "./ask/askLinks";
 import { saveChannelUrl } from "./libraryStorage";
 import AddChannel from "./subscriptions/AddChannel";
+import { subscriptionMatches } from "./subscriptions/match";
 import { normalizeChannelUrl } from "../utils/followUrl";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
 import {
@@ -275,8 +276,18 @@ export default function Subscriptions() {
   const { items, isLoading, isError, error } = useSubscriptions();
   const askChannels = useAskChannels(true).data?.items ?? [];
   const [open, setOpen] = useState<Subscription | null>(null);
-  const mine = items.filter((s) => s.following);
-  const server = items.filter((s) => !s.following);
+  const [typed, setTyped] = useState("");
+  const allMine = items.filter((s) => s.following);
+  const allServer = items.filter((s) => !s.following);
+  // Typing a channel you already have narrows the list to it; a channel you
+  // do not have leaves the whole list in view.
+  const matched =
+    typed.length >= 2 ? items.filter((s) => subscriptionMatches(s, typed)) : [];
+  const filtering = matched.length > 0;
+  const mine = filtering ? allMine.filter((s) => matched.includes(s)) : allMine;
+  const server = filtering
+    ? allServer.filter((s) => matched.includes(s))
+    : allServer;
   const askFor = (sub: Subscription) =>
     findAskChannel(askChannels, sub.channel_url, sub.channel_name);
 
@@ -284,8 +295,8 @@ export default function Subscriptions() {
     <div className="mx-auto max-w-6xl">
       <div className="mb-4 flex flex-wrap items-baseline gap-x-3">
         <h1 className="text-2xl font-bold text-gray-100">Subscriptions</h1>
-        {mine.length > 0 && (
-          <span className="text-sm text-muted">{mine.length}</span>
+        {allMine.length > 0 && (
+          <span className="text-sm text-muted">{allMine.length}</span>
         )}
       </div>
       <p className="mb-5 max-w-2xl text-sm text-gray-400">
@@ -296,10 +307,20 @@ export default function Subscriptions() {
       {can("manage_subscriptions") && (
         <AddChannel
           subscribed={
-            new Set(mine.map((s) => normalizeChannelUrl(s.channel_url) ?? ""))
+            new Set(
+              allMine.map((s) => normalizeChannelUrl(s.channel_url) ?? "")
+            )
           }
+          onTextChange={setTyped}
         />
       )}
+      <p role="status" className="mb-2 text-sm text-muted empty:hidden">
+        {filtering
+          ? `Showing ${matched.length} ${
+              matched.length === 1 ? "channel" : "channels"
+            } you already have matching “${typed}”`
+          : ""}
+      </p>
       {isLoading ? (
         <LoadingIndicator />
       ) : isError ? (
