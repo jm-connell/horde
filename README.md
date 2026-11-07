@@ -8,7 +8,7 @@ Horde was created due to features I find lacking in Plex. I have used Plex for y
 
 I have spent a huge amount of time on this project since its creation in June 2026, and I’m very happy with where it is at the moment. I want to make it accessible to as many people as possible, and I hope to receive feedback on bugs, missing features, and whatever else this project needs to be successful. I use it regularly and hope others find it as useful as I do. Horde is open source and completely free, so if you enjoy using Horde and want to support its development going forward, please check out my GitHub sponsors page!
 
---
+---
 
 Horde is a single Docker container: a FastAPI backend that serves the React UI,
 the API and an offline copy of the documentation. Docker Compose also starts a
@@ -40,12 +40,13 @@ Interactive API reference: `/docs`.
   and the odd throwback, with "not interested" and channel suggestions.
 - **Comments**: the top YouTube comments of every video, with the most
   popular discussions' replies, are saved with it, show under the video,
-  count in search and give the AI chat viewers' reactions. More load from
-  YouTube on request.
+  count in search and tell Ask what viewers thought. More load from YouTube
+  on request.
 - **Player**: standard, theater and windowed modes, mini player,
-  picture-in-picture, Chromecast, SponsorBlock, chapters and subtitles. Videos
-  play as stored, without live transcoding; devices that cannot play AV1 can get
-  an H.264 copy made ahead of time (Playback compatibility, Settings → Library).
+  picture-in-picture, Chromecast, AirPlay, SponsorBlock, chapters and
+  subtitles. Videos play as stored, without live transcoding; devices that
+  cannot play AV1 can get an H.264 copy made ahead of time (Playback
+  compatibility, Settings → Library).
 - **YouTube streaming**: preview a video before deciding to download it. Works
   for most videos, but quality varies and it can break when YouTube changes.
 - **Live streams**: follow channels, see which are live in the sidebar, and
@@ -54,18 +55,23 @@ Interactive API reference: `/docs`.
   playlists that pick up new videos as they are added.
 - **YouTube history**: import your watch history, subscriptions and playlists
   from Google Takeout to mark what you have seen and shape recommendations.
+- **Installed app and offline**: install Horde to a phone's home screen and
+  save videos to the device to watch without a connection (needs HTTPS).
 - **Accounts**: one administrator plus members, each with their own watch
   history, AI chats and appearance; members get only the permissions the admin
   grants. Optional two-step sign-in.
-- **AI** (optional): summaries, chapters, chat about a video, tags, semantic
-  search and recommendations, and an assistant (Ask) that answers
-  how-to questions, finds and changes settings, answers about your own library
-  and writes custom CSS, with any OpenAI-compatible provider (OpenRouter,
-  OpenAI, Gemini, Groq, Ollama, LM Studio, …).
-- **Ask**: index what YouTube channels say in their videos (captions only, no
-  download), find it from the search bar, and ask questions such as "What does The Car Care Nut
-  say about the 2004 4Runner?" in the chat; answers cite each point with a link
-  to the moment it was said, and compare channels that disagree.
+- **AI** (optional): summaries, chapters, tags, semantic search, related
+  videos and sharper recommendations, with any OpenAI-compatible provider
+  (OpenRouter, OpenAI, Gemini, Groq, Ollama, LM Studio, …).
+- **Ask**: one chat at the bottom of every page that answers about Horde
+  itself (how-to, finding and changing settings, your own library, custom
+  CSS), about the video you are watching, or about what YouTube channels said
+  in their videos. Channels are indexed from their captions, with no
+  download; the search bar finds every moment that mentions your words, and
+  a question such as "What does The Car Care Nut say about the 2004 4Runner?"
+  gets an answer that cites each point with a link to the moment it was said
+  and compares channels that disagree. Searching works without AI; asking
+  needs a chat model.
 
 Horde is meant for a home network or VPN. Everyone signs in, but before
 exposing it to the internet, follow the
@@ -96,7 +102,8 @@ and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truena
 
 ### 1. Clone
 
-There is no Docker Hub image; Compose builds it from this repo. Use
+Compose downloads the published image (`ghcr.io/jm-connell/horde`, x86 and
+ARM); the checkout holds the compose file, `.env.example` and `update.sh`. Use
 `git clone`, not a ZIP, so `update.sh` can update it later.
 
 ```bash
@@ -140,16 +147,17 @@ Set these in `.env`:
 
 The example values are TrueNAS paths. On other machines Docker creates missing
 paths owned by root, and Horde cannot save downloads there. Keep paths in
-`.env`, not in `docker-compose.yml`.
+`.env`, not in `docker-compose.yml`. Leave `HORDE_IMAGE` as it is: it points
+at the published image. (Comment it out to build from source instead.)
 
 ### 4. Start
 
 ```bash
-docker compose up --build -d
+docker compose up -d
 ```
 
 Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not edit
-the volume lines in the compose editor. The first build takes several minutes.
+the volume lines in the compose editor. The first start downloads about 1 GB.
 
 ### 5. Open
 
@@ -193,9 +201,9 @@ Either way, `update.sh`:
 
 - backs up the database,
 - moves to the newest release (set `HORDE_UPDATE_CHANNEL=main` in `.env` to
-  follow every commit instead),
-- rebuilds the image (or pulls it, with the published image), recreates the containers and waits until Horde reports
-  healthy,
+  follow every commit instead; that needs a build from source),
+- pulls the new image (or rebuilds it, when building from source), recreates
+  the containers and waits until Horde reports healthy,
 - rolls back automatically if the new version does not start.
 
 `bash update.sh --rollback` undoes the last update. Videos and settings are not
@@ -205,8 +213,8 @@ recreated the stack.
 
 Do not run `git reset --hard` or edit `docker-compose.yml` to get past a failed
 update; see [Updating](https://jm-connell.github.io/horde/getting-started/updating/)
-for what to do instead. To skip building on the host, use the prebuilt
-multi-arch images at `ghcr.io/jm-connell/horde`
+for what to do instead. Installs from before the published image build on the
+host until `HORDE_IMAGE` is set
 ([Use the published image](https://jm-connell.github.io/horde/getting-started/updating/#use-the-published-image)).
 
 yt-dlp is pinned in the image and updates with Horde. To install the newest
@@ -221,6 +229,7 @@ Settings that live in `.env` (most others are in the app's Settings page):
 | `PUID` / `PGID` | User and group Horde writes files as (default `1000`) |
 | `DOWNLOADS_PATH` | Host folder for videos, mounted at `/downloads` |
 | `DATA_PATH` | Host folder for the database and thumbnails, mounted at `/app/data` (local disk only) |
+| `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; comment out to build from source) |
 | `SCAN_INTERVAL_SEC` | How often the media folder is rescanned for new files (default `60` seconds) |
 | `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
 | `YTDLP_COOKIE_FILE` | Optional cookies file for age-restricted or blocked videos |
@@ -284,6 +293,33 @@ the full set on every pull request and push to `main`. See
 and [Automated testing](https://jm-connell.github.io/horde/getting-started/testing/).
 Contributor guidelines: [`CONTRIBUTING.md`](CONTRIBUTING.md) and
 [`CLAUDE.md`](CLAUDE.md).
+
+## Built with
+
+Horde stands on a lot of other people's work:
+
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) for every download, stream
+  preview, channel catalog and comment fetch
+- [FFmpeg](https://ffmpeg.org/), using
+  [Jellyfin's build](https://github.com/jellyfin/jellyfin-ffmpeg) for hardware
+  encoding
+- [bgutil-ytdlp-pot-provider](https://github.com/Brainicism/bgutil-ytdlp-pot-provider),
+  which keeps YouTube working without a Google login
+- [SponsorBlock](https://sponsor.ajay.app/) and
+  [Return YouTube Dislike](https://returnyoutubedislike.com/), community
+  services Horde reads from
+- [Shaka Player](https://github.com/shaka-project/shaka-player) for streaming
+  and live playback
+- [FastAPI](https://fastapi.tiangolo.com/), [SQLModel](https://sqlmodel.tiangolo.com/),
+  [Alembic](https://alembic.sqlalchemy.org/) and [SQLite](https://sqlite.org/)
+  (FTS5 powers search) on the backend
+- [React](https://react.dev/), [Vite](https://vite.dev/),
+  [Tailwind CSS](https://tailwindcss.com/) and
+  [TanStack Query](https://tanstack.com/query) on the frontend
+- [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/) for the
+  documentation
+- [Ollama](https://ollama.com/) and [OpenRouter](https://openrouter.ai/) as the
+  usual AI providers
 
 ## License
 
