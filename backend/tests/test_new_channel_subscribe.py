@@ -9,6 +9,7 @@ from sqlmodel import Session, select
 from app.models import ChannelFollow, DownloadJob, JobStatus, KbChannel, User
 from app.services import app_settings, follows
 from app.services.auth import accounts
+from app.services.knowledge import channels as kb_channels
 from app.services.knowledge import listing
 
 CHANNEL = "https://www.youtube.com/@dlchan"
@@ -235,11 +236,55 @@ def test_large_channel_waits_for_a_confirm(client, channel_size, init_db):
     assert len(_kb(init_db["engine"])) == 1
 
 
-def test_unknown_size_counts_as_large(client, channel_size, init_db):
+@pytest.mark.parametrize(("more", "indexed"), [(True, False), (False, True)])
+def test_unknown_size_is_counted_by_looking_past_the_limit(
+    more, indexed, client, channel_size, monkeypatch, init_db
+):
+    """YouTube often reports no count for a channel: whether there is an upload
+    past the limit decides instead."""
     channel_size["count"] = None
+    asked: list[int] = []
+
+    def fake(url: str, n: int) -> bool:
+        asked.append(n)
+        return more
+
+    monkeypatch.setattr(listing, "has_more_uploads_than", fake)
     _subscribe(client)
     body = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL}).json()
-    assert body["large"] is True and body["indexed"] is False
+    assert asked == [follows.ASK_INDEX_AUTO_MAX]
+    assert body["indexed"] is indexed and body["large"] is (not indexed)
+    assert len(_kb(init_db["engine"])) == (1 if indexed else 0)
+
+
+def test_turned_on_meanwhile_counts_as_already(client, monkeypatch, init_db):
+    """Two subscribers at once: the second finds it on, not an error."""
+    monkeypatch.setattr("app.api.follows.fetch_live_page", lambda *a, **k: "")
+
+    def racing_preview(url: str) -> listing.Preview:
+        with Session(init_db["engine"]) as s:
+            s.add(KbChannel(channel_url=NORMAL, channel_name="Dl Chan"))
+            s.commit()
+        return listing.Preview(
+            channel_name="Dl Chan", channel_url=url, video_count=10, has_streams=False
+        )
+
+    monkeypatch.setattr(listing, "preview", racing_preview)
+    # Both look-ups before the insert miss it, as in a real race; add() then
+    # finds it.
+    real_find = kb_channels._find
+    calls = {"n": 0}
+
+    def late_find(session, url):
+        calls["n"] += 1
+        return None if calls["n"] <= 2 else real_find(session, url)
+
+    monkeypatch.setattr(kb_channels, "_find", late_find)
+    _subscribe(client)
+    resp = client.post("/api/follows/ask-index", json={"channel_url": CHANNEL})
+    assert resp.status_code == 200
+    assert resp.json()["already"] is True and resp.json()["indexed"] is True
+    assert len(_kb(init_db["engine"])) == 1
 
 
 def test_only_subscribers_index(client, channel_size, init_db):
@@ -278,3 +323,12 @@ def test_member_left_out_may_not_index(
     resp = member_client.post("/api/follows/ask-index", json={"channel_url": CHANNEL})
     assert resp.status_code == 403
     assert channel_size["seen"] == []
+
+
+def test_never_also_skips_the_administrators_library_seed(
+    session, admin_user, add_video
+):
+    add_video(channel="One", channel_url="https://www.youtube.com/@one")
+    _setting("never")
+    assert follows.seed_administrators() == 0
+    assert follows.list_follows(session, admin_user.id) == []

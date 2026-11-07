@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from sqlalchemy import delete, text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from ...context import current
@@ -125,13 +126,43 @@ def index_on_subscribe(
             canonical, on.channel_name, found.video_count, indexed=True, already=True
         )
     count = found.video_count
-    if (count is None or count > auto_max) and not confirm_large:
-        return SubscribeIndex(
-            canonical, found.channel_name, count, indexed=False, large=True
-        )
-    channel = add(session, url, include_streams=False, user_id=user_id, found=found)
+    if not confirm_large:
+        if count is None:
+            try:
+                large = listing.has_more_uploads_than(canonical, auto_max)
+            except Exception as exc:
+                raise _youtube_error(exc, canonical) from exc
+        else:
+            large = count > auto_max
+        if large:
+            return SubscribeIndex(
+                canonical, found.channel_name, count, indexed=False, large=True
+            )
+    try:
+        channel = add(session, url, include_streams=False, user_id=user_id, found=found)
+    except CodedHTTPException as exc:
+        if exc.code != "exists":
+            raise
+        return _already(session, canonical, found)
+    except IntegrityError:
+        # Someone else turned it on between the look-up and the insert.
+        session.rollback()
+        return _already(session, canonical, found)
     return SubscribeIndex(
         channel.channel_url, channel.channel_name, count, indexed=True
+    )
+
+
+def _already(
+    session: Session, canonical: str, found: listing.Preview
+) -> SubscribeIndex:
+    on = _find(session, canonical)
+    return SubscribeIndex(
+        canonical,
+        on.channel_name if on else found.channel_name,
+        found.video_count,
+        indexed=True,
+        already=True,
     )
 
 
