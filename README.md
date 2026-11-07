@@ -29,7 +29,7 @@ download into Horde from the web UI with yt-dlp.
 I've spent a huge amount of time on Horde since I started it in June 2026, and
 I'm very happy with where it is. I want it to be useful to as many people as
 possible, so please send feedback: bugs, missing features, or anything else it
-needs. I use it every day and hope you find it as useful as I do.
+needs. Horde is still under active development and my first priority is making it polished and accessible, so feedback is appreciated.
 
 Horde is free and source-available. If you enjoy it and want to support its
 development, please consider [sponsoring me on GitHub](https://github.com/sponsors/jm-connell).
