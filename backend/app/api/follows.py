@@ -148,6 +148,7 @@ def unfollow_channel(
 @router.post("/ask-index", response_model=SubscribeAskIndexResult, dependencies=_MANAGE)
 def index_subscribed_channel(
     payload: SubscribeAskIndexRequest,
+    request: Request,
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
@@ -170,6 +171,9 @@ def index_subscribed_channel(
         raise CodedHTTPException(
             503, "This server's SQLite has no full-text search (FTS5)", "unavailable"
         )
+    if get_ctx(request).e2e:
+        # The browser suite has no YouTube: nothing is looked up or turned on.
+        return SubscribeAskIndexResult(channel_url=url)
     if payload.confirm_large and "manage_ask" not in user.permissions:
         raise CodedHTTPException(
             403,

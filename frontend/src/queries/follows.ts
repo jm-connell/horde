@@ -207,12 +207,14 @@ export function useSubscribe() {
   ) => {
     try {
       const done = await api.indexSubscribedChannel(channelUrl, confirmLarge);
+      // YouTube's name for it, when the subscription had none yet.
+      const shown = done.channel_name ?? name;
       void queryClient.invalidateQueries({ queryKey: queryKeys.ask.channels });
       void queryClient.invalidateQueries({ queryKey: ["follows"] });
       if (done.large) {
         const count = done.video_count;
         showToast(
-          `${name} has ${
+          `${shown} has ${
             count == null ? "a lot of" : count.toLocaleString()
           } videos, so it was not indexed for Ask and search: fetching every caption takes hours.`,
           {
@@ -221,15 +223,13 @@ export function useSubscribe() {
             action: can("manage_ask")
               ? {
                   label: "Index anyway",
-                  onClick: () => void indexFor(channelUrl, name, true),
+                  onClick: () => void indexFor(channelUrl, shown, true),
                 }
               : undefined,
           }
         );
       } else if (done.indexed && !done.already) {
-        showToast(`Indexing ${name} for Ask and search`, {
-          key: `ask-index-${channelUrl}`,
-        });
+        showToast(`Indexing ${shown} for Ask and search`);
       }
     } catch (err) {
       // No full-text search on this server: there is nothing to turn on.
