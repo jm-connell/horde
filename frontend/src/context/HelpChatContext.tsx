@@ -151,7 +151,7 @@ function isPanelState(v: unknown): v is PanelState {
 }
 
 /**
- * Ask, available on every page: the footer opens it and it stays
+ * Ask, available on every page: the top bar opens it and it stays
  * open (same conversation, same spot) while the user moves around the app.
  */
 export function HelpChatProvider({ children }: { children: ReactNode }) {

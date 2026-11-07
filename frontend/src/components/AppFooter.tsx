@@ -1,16 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { useHelpChat } from "../context/HelpChatContext";
 import type { HealthStats } from "../types";
-import { HELP_PANEL_ID } from "./helpChat";
-
 import { bugReportUrl, REPO_URL } from "./bugReport";
 
 const LINK =
   "rounded-sm text-muted underline-offset-2 hover:text-accent hover:underline";
 
-/** The quiet strip under every page: help, docs and where to report bugs. */
+/** The quiet strip under every page: docs and where to report bugs. */
 export default function AppFooter() {
-  const help = useHelpChat();
   // Read once per visit, for the bug report link only.
   const version = useQuery({
     queryKey: ["health", "version"],
@@ -28,17 +24,6 @@ export default function AppFooter() {
       data-horde="footer"
       className="relative mx-auto mt-auto flex w-full max-w-[1920px] flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-ink-800 px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-5 text-xs md:px-6"
     >
-      {help.available && (
-        <button
-          type="button"
-          aria-expanded={help.open}
-          aria-controls={help.open ? HELP_PANEL_ID : undefined}
-          onClick={() => help.toggleOpen()}
-          className="ui-panel ui-interactive rounded-lg border border-ink-700 bg-ink-900 px-3 py-1.5 font-medium text-gray-200 hover:border-accent hover:text-accent"
-        >
-          Ask
-        </button>
-      )}
       <a href="/wiki/" target="_blank" rel="noreferrer" className={LINK}>
         Docs
       </a>

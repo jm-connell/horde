@@ -709,7 +709,7 @@ test("the chat minimizes to a bar and comes back as it was", async ({
   await expect(panel).toHaveAttribute("data-docked", "true");
   await expect(box).toHaveValue("half a question");
 
-  // Opening Ask from the footer while minimized unfolds it too.
+  // Opening Ask from the top bar while minimized unfolds it too.
   await panel.getByRole("button", { name: "Minimize the chat" }).click();
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(panel).not.toHaveAttribute("data-minimized", "true");

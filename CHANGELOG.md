@@ -48,7 +48,7 @@ All notable changes to Horde are documented here. The format follows
   `docker run`) and Watch on your TV.
 - **Minimize Ask.** A button in its header folds the chat to a small bar at
   the bottom of the window, keeping the conversation and a half-typed
-  question; the bar or the footer's **Ask** brings it back as it was.
+  question; the bar or the top bar's **Ask** brings it back as it was.
 
 ### Changed
 
@@ -67,6 +67,9 @@ All notable changes to Horde are documented here. The format follows
 - A download that cannot reach the site says so ("Can't reach site") instead
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
+- **Ask** moved from the footer to the top bar, left of the search box (a
+  chat icon beside the search icon on a phone).
+- Subscription cards open their settings from a **⋯** button.
 - Settings → Library has one **Ask** section (Use my data, and Channels Ask
   can answer from) and a **Subscriptions** section; the old Followed
   channels list there is gone (use the Subscriptions page).
