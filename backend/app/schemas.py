@@ -371,6 +371,13 @@ class StreamAiAction(BaseModel):
     force: bool = False
 
 
+class SubscribePrompt(BaseModel):
+    """A finished download from a channel its requester does not subscribe to."""
+
+    channel_url: str
+    channel_name: str | None = None
+
+
 class DownloadJobRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -405,6 +412,9 @@ class DownloadJobRead(BaseModel):
     #: A clip: the part of the video kept, in seconds from its start.
     clip_start_sec: float | None = None
     clip_end_sec: float | None = None
+    #: Offer the caller to subscribe to the video's channel (new to them, and the
+    #: administrator chose to ask about new channels).
+    subscribe_prompt: SubscribePrompt | None = None
 
     @field_validator("destination", mode="before")
     @classmethod
@@ -1307,6 +1317,27 @@ class FollowUpdate(BaseModel):
 class UnfollowResult(BaseModel):
     channel_url: str
     following: bool = False
+
+
+class SubscribeAskIndexRequest(BaseModel):
+    """Turn Ask indexing on for a channel the caller subscribes to."""
+
+    channel_url: str = Field(min_length=1, max_length=500)
+    #: Index it even though it has more uploads than subscribing indexes by itself.
+    confirm_large: bool = False
+
+
+class SubscribeAskIndexResult(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+    #: Uploads on the channel, as YouTube reports them (None: unknown).
+    video_count: int | None = None
+    #: Ask indexes it now (it was just turned on, or was on already).
+    indexed: bool = False
+    #: It was on already.
+    already: bool = False
+    #: Too many uploads to index without ``confirm_large``; nothing was changed.
+    large: bool = False
 
 
 class LiveChannelRead(BaseModel):

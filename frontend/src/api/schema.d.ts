@@ -2007,6 +2007,32 @@ export interface paths {
         patch: operations["update_follow_api_follows_patch"];
         trace?: never;
     };
+    "/api/follows/ask-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Index Subscribed Channel
+         * @description Turn Ask indexing on for a channel the caller subscribes to.
+         *
+         *     Up to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel
+         *     answers ``large`` and starts only with ``confirm_large``, which needs
+         *     ``manage_ask``. Members without ``manage_ask`` may do this while the
+         *     administrator includes their new channels (``follows.may_index_on_subscribe``).
+         *     Reads the channel's upload count from YouTube.
+         */
+        post: operations["index_subscribed_channel_api_follows_ask_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fonts": {
         parameters: {
             query?: never;
@@ -3376,6 +3402,8 @@ export interface paths {
         /**
          * Apply Takeout
          * @description Follow the chosen subscriptions and import the chosen playlists.
+         *
+         *     Without ``manage_subscriptions`` chosen subscriptions are refused (403).
          */
         post: operations["apply_takeout_api_takeout_apply_post"];
         delete?: never;
@@ -5123,6 +5151,17 @@ export interface components {
              * @default 24
              */
             metadata_sync_interval_hours: number;
+            /**
+             * New Channel Subscribe
+             * @default always
+             * @enum {string}
+             */
+            new_channel_subscribe: "always" | "ask" | "never";
+            /**
+             * New Channel Subscribe Members
+             * @default true
+             */
+            new_channel_subscribe_members: boolean;
             /** Progress Expiry Days */
             progress_expiry_days: number;
             /**
@@ -5172,6 +5211,10 @@ export interface components {
             media_server_sidecars?: boolean | null;
             /** Metadata Sync Interval Hours */
             metadata_sync_interval_hours?: number | null;
+            /** New Channel Subscribe */
+            new_channel_subscribe?: ("always" | "ask" | "never") | null;
+            /** New Channel Subscribe Members */
+            new_channel_subscribe_members?: boolean | null;
             /** Progress Expiry Days */
             progress_expiry_days?: number | null;
             /** Require Two Factor */
@@ -6478,6 +6521,7 @@ export interface components {
             /** Replace Video Id */
             replace_video_id?: number | null;
             status: components["schemas"]["JobStatus"];
+            subscribe_prompt?: components["schemas"]["SubscribePrompt"] | null;
             /**
              * Superseded
              * @default false
@@ -8809,6 +8853,53 @@ export interface components {
              * @default 50
              */
             throwback: number;
+        };
+        /**
+         * SubscribeAskIndexRequest
+         * @description Turn Ask indexing on for a channel the caller subscribes to.
+         */
+        SubscribeAskIndexRequest: {
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Confirm Large
+             * @default false
+             */
+            confirm_large: boolean;
+        };
+        /** SubscribeAskIndexResult */
+        SubscribeAskIndexResult: {
+            /**
+             * Already
+             * @default false
+             */
+            already: boolean;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Indexed
+             * @default false
+             */
+            indexed: boolean;
+            /**
+             * Large
+             * @default false
+             */
+            large: boolean;
+            /** Video Count */
+            video_count?: number | null;
+        };
+        /**
+         * SubscribePrompt
+         * @description A finished download from a channel its requester does not subscribe to.
+         */
+        SubscribePrompt: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
         };
         /** SubscriptionList */
         SubscriptionList: {
@@ -14685,6 +14776,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FollowedChannelRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    index_subscribed_channel_api_follows_ask_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeAskIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscribeAskIndexResult"];
                 };
             };
             /** @description Validation error */

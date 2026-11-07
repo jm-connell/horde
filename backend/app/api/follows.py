@@ -9,7 +9,7 @@ import time
 from fastapi import APIRouter, Depends, Query, Request
 from sqlmodel import Session
 
-from ..auth import current_user
+from ..auth import current_user, require_permission
 from ..context import get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..schemas import (
@@ -17,11 +17,15 @@ from ..schemas import (
     FollowListResponse,
     FollowRequest,
     FollowUpdate,
+    SubscribeAskIndexRequest,
+    SubscribeAskIndexResult,
     UnfollowResult,
 )
 from ..services import follows
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog.runtime import is_youtube_channel_url
+from ..services.knowledge import channels as kb_channels
+from ..services.knowledge import search as kb_search
 from ..services.live.page import fetch_live_page, parse_channel_name, parse_live_page
 from ..services.url_safety import UnsafeUrlError, UrlFetchError, validate_public_url
 
@@ -65,7 +69,10 @@ def list_follows(
     )
 
 
-@router.put("", response_model=FollowedChannelRead)
+_MANAGE = [Depends(require_permission("manage_subscriptions"))]
+
+
+@router.put("", response_model=FollowedChannelRead, dependencies=_MANAGE)
 def follow_channel(
     payload: FollowRequest,
     request: Request,
@@ -127,7 +134,7 @@ def update_follow(
     return _read(item)
 
 
-@router.delete("", response_model=UnfollowResult)
+@router.delete("", response_model=UnfollowResult, dependencies=_MANAGE)
 def unfollow_channel(
     channel_url: str = Query(..., min_length=1, max_length=500),
     session: Session = Depends(get_session),
@@ -136,6 +143,54 @@ def unfollow_channel(
     url = follows.normalize_channel_url(channel_url)
     follows.unfollow(session, user.id, url)
     return UnfollowResult(channel_url=url, following=False)
+
+
+@router.post("/ask-index", response_model=SubscribeAskIndexResult, dependencies=_MANAGE)
+def index_subscribed_channel(
+    payload: SubscribeAskIndexRequest,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Turn Ask indexing on for a channel the caller subscribes to.
+
+    Up to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel
+    answers ``large`` and starts only with ``confirm_large``, which needs
+    ``manage_ask``. Members without ``manage_ask`` may do this while the
+    administrator includes their new channels (``follows.may_index_on_subscribe``).
+    Reads the channel's upload count from YouTube.
+    """
+    if not follows.may_index_on_subscribe(user.is_admin, user.permissions):
+        raise CodedHTTPException(
+            403, "Turning Ask on for channels is not allowed here", "forbidden"
+        )
+    url = follows.normalize_channel_url(payload.channel_url)
+    if url not in follows.followed_urls(session, user.id):
+        raise CodedHTTPException(409, "Subscribe to the channel first", "not_followed")
+    if not kb_search.fts_available(session):
+        raise CodedHTTPException(
+            503, "This server's SQLite has no full-text search (FTS5)", "unavailable"
+        )
+    if payload.confirm_large and "manage_ask" not in user.permissions:
+        raise CodedHTTPException(
+            403,
+            "Indexing a channel this large needs the Manage channel indexing permission",
+            "channel_too_large",
+        )
+    done = kb_channels.index_on_subscribe(
+        session,
+        url,
+        user_id=user.id,
+        auto_max=follows.ASK_INDEX_AUTO_MAX,
+        confirm_large=payload.confirm_large,
+    )
+    return SubscribeAskIndexResult(
+        channel_url=done.channel_url,
+        channel_name=done.channel_name,
+        video_count=done.video_count,
+        indexed=done.indexed,
+        already=done.already,
+        large=done.large,
+    )
 
 
 def _wake_poller(request: Request) -> None:
