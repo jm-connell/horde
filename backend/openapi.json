@@ -12409,6 +12409,17 @@
               }
             ]
           },
+          "subscriber_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscriber Count"
+          },
           "video_count": {
             "default": 0,
             "title": "Video Count",

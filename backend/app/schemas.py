@@ -1967,6 +1967,9 @@ class SubscriptionRead(BaseModel):
     retention: ChannelRetentionSummary | None = None
     #: Videos of the channel in the library.
     video_count: int = 0
+    #: Its YouTube subscriber count, as last read for a library video (None:
+    #: no video of it in the library carries one).
+    subscriber_count: int | None = None
     #: When Horde last finished reading the channel's uploads.
     checked_at: datetime | None = None
 

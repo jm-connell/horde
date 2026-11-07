@@ -129,3 +129,29 @@ test("unticking Ask indexing subscribes without indexing", async ({ page }) => {
   await expect(card(page, "e2enoindex")).toBeVisible();
   expect(asked).toBe(0);
 });
+
+test("a card shows the channel's subscriber count beside its name", async ({
+  page,
+}) => {
+  await page.route(/\/api\/channels\/subscriptions$/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as {
+      items: { channel_url: string; subscriber_count: number | null }[];
+    };
+    body.items = body.items.map((item) =>
+      item.channel_url.endsWith("@e2esubcount")
+        ? { ...item, subscriber_count: 19_500_000 }
+        : item
+    );
+    return route.fulfill({ response, json: body });
+  });
+  await page.goto("/subscriptions");
+  await page.getByLabel("YouTube channel link or @handle").fill("@e2esubcount");
+  await page.getByLabel(/Index for Ask and search/).uncheck();
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  const row = card(page, "e2esubcount");
+  await expect(row.getByText("19.5M subs")).toHaveAttribute(
+    "title",
+    "19,500,000 subscribers on YouTube"
+  );
+});

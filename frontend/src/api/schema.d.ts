@@ -8935,6 +8935,8 @@ export interface components {
             /** Quality Preset */
             quality_preset?: string | null;
             retention?: components["schemas"]["ChannelRetentionSummary"] | null;
+            /** Subscriber Count */
+            subscriber_count?: number | null;
             /**
              * Video Count
              * @default 0

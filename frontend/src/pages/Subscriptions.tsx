@@ -16,7 +16,7 @@ import {
 } from "../queries/follows";
 import { queryKeys } from "../queries/keys";
 import type { AskChannel, Subscription } from "../types";
-import { formatRelative } from "../utils";
+import { formatCompactCount, formatRelative } from "../utils";
 import { findAskChannel } from "./ask/askLinks";
 import { saveChannelUrl } from "./libraryStorage";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
@@ -141,13 +141,23 @@ function SubscriptionCard({
       <Avatar sub={sub} size="md" />
       <div className="min-w-0 flex-1">
         <div className="min-w-0">
-          <Link
-            to={channelHref(sub)}
-            onClick={() => saveChannelUrl(name, sub.channel_url)}
-            className="block truncate text-sm font-medium text-gray-100 hover:text-accent"
-          >
-            {name}
-          </Link>
+          <div className="flex min-w-0 items-baseline gap-1.5">
+            <Link
+              to={channelHref(sub)}
+              onClick={() => saveChannelUrl(name, sub.channel_url)}
+              className="min-w-0 truncate text-sm font-medium text-gray-100 hover:text-accent"
+            >
+              {name}
+            </Link>
+            {sub.subscriber_count != null && (
+              <span
+                className="shrink-0 text-xs text-muted"
+                title={`${sub.subscriber_count.toLocaleString()} subscribers on YouTube`}
+              >
+                {formatCompactCount(sub.subscriber_count)} subs
+              </span>
+            )}
+          </div>
           <div className="flex min-w-0 items-center gap-1.5">
             <p
               className="min-w-0 shrink-[2] truncate text-xs text-muted"
