@@ -5,6 +5,7 @@ import { api } from "../api";
 import { describeError } from "../apiErrors";
 import LoadingIndicator from "../components/LoadingIndicator";
 import { button } from "../components/buttons";
+import { MoreIcon } from "../components/icons";
 import { useAuth } from "../context/AuthContext";
 import { useToast } from "../context/ToastContext";
 import { useAskChannels } from "../queries/ask";
@@ -35,11 +36,11 @@ function channelName(sub: Subscription): string {
 }
 
 const chip =
-  "inline-flex items-center gap-1 rounded-full bg-ink-800 px-2 py-0.5 text-[11px] text-gray-300 ring-1 ring-ink-700";
+  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full bg-ink-800 px-1.5 py-px text-[11px] leading-4 text-gray-300 ring-1 ring-ink-700";
 
 function Avatar({ sub, size }: { sub: Subscription; size: "md" | "sm" }) {
   const avatar = useChannelAvatar(sub.channel_url);
-  const box = size === "md" ? "h-11 w-11 text-base" : "h-8 w-8 text-sm";
+  const box = size === "md" ? "h-10 w-10 text-base" : "h-8 w-8 text-sm";
   return avatar ? (
     <img
       src={avatar}
@@ -70,16 +71,26 @@ function StatusChips({
   sub: Subscription;
   ask: AskChannel | null;
 }) {
-  const auto = autodownloadChipLabel(
+  const autoTitle = autodownloadChipLabel(
     sub.autodownload
       ? { enabled: true, quality_preset: sub.quality_preset ?? "1080p" }
       : null
   );
+  const auto = sub.autodownload
+    ? `Auto ${sub.quality_preset ?? "1080p"}`
+    : null;
   const keep = retentionChipLabel(sub.retention);
   if (!auto && !keep && !ask) return null;
   return (
-    <ul className="flex flex-wrap gap-1.5" aria-label="Turned on">
-      {auto && <li className={chip}>{auto}</li>}
+    <ul
+      className="flex min-w-0 shrink gap-1 overflow-hidden"
+      aria-label="Turned on"
+    >
+      {auto && (
+        <li className={chip} title={autoTitle ?? undefined}>
+          {auto}
+        </li>
+      )}
       {ask && (
         <li className={chip} title="Ask and the search bar use its captions">
           {ASK_STATE[ask.status] ?? "Ask · indexing"}
@@ -102,15 +113,16 @@ function SettingsButton({
       type="button"
       onClick={() => onOpen(sub)}
       aria-label={`Settings for ${channelName(sub)}`}
-      className={`${button("quiet", "sm")} shrink-0`}
+      title="Channel settings"
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted hover:bg-ink-800 hover:text-accent"
     >
-      Settings
+      <MoreIcon className="h-4 w-4" />
     </button>
   );
 }
 
 function videoCount(sub: Subscription): string {
-  if (sub.video_count === 0) return "Nothing downloaded";
+  if (sub.video_count === 0) return "No videos";
   return sub.video_count === 1 ? "1 video" : `${sub.video_count} videos`;
 }
 
@@ -125,9 +137,9 @@ function SubscriptionCard({
 }) {
   const name = channelName(sub);
   return (
-    <li className="ui-panel flex items-center gap-3 rounded-xl bg-ink-900 p-3 ring-1 ring-ink-700">
+    <li className="ui-panel flex items-center gap-2.5 rounded-xl bg-ink-900 py-2 pl-2.5 pr-1.5 ring-1 ring-ink-700">
       <Avatar sub={sub} size="md" />
-      <div className="min-w-0 flex-1 space-y-1">
+      <div className="min-w-0 flex-1">
         <div className="min-w-0">
           <Link
             to={channelHref(sub)}
@@ -136,14 +148,20 @@ function SubscriptionCard({
           >
             {name}
           </Link>
-          <p className="truncate text-xs text-muted">
-            {videoCount(sub)}
-            {sub.checked_at
-              ? ` · checked ${formatRelative(sub.checked_at)}`
-              : ""}
-          </p>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <p
+              className="min-w-0 shrink-[2] truncate text-xs text-muted"
+              title={
+                sub.checked_at
+                  ? `Checked ${formatRelative(sub.checked_at)}`
+                  : undefined
+              }
+            >
+              {videoCount(sub)}
+            </p>
+            <StatusChips sub={sub} ask={ask} />
+          </div>
         </div>
-        <StatusChips sub={sub} ask={ask} />
       </div>
       <SettingsButton sub={sub} onOpen={onOpen} />
     </li>
@@ -392,7 +410,7 @@ export default function Subscriptions() {
             </div>
           ) : (
             <ul
-              className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3"
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
               aria-label="Subscriptions"
             >
               {mine.map((sub) => (

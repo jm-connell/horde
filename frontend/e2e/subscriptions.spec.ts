@@ -26,7 +26,7 @@ test("adding a channel by handle subscribes and can turn on auto-download", asyn
   ).toBeVisible();
 
   const row = card(page, "e2enewchannel");
-  await expect(row.getByText("Auto-download on · 1080p")).toBeVisible();
+  await expect(row.getByText("Auto 1080p", { exact: true })).toBeVisible();
 });
 
 test("Settings opens the channel's settings over the page", async ({
@@ -77,7 +77,7 @@ test("a channel that downloads for everyone is listed apart", async ({
   await page.goto("/subscriptions");
   const others = page.getByRole("list", { name: "Downloading for everyone" });
   const row = others.getByRole("listitem").filter({ hasText: "e2eeveryone" });
-  await expect(row.getByText("Auto-download on · 720p")).toBeVisible();
+  await expect(row.getByText("Auto 720p", { exact: true })).toBeVisible();
   await row.getByRole("button", { name: "Subscribe" }).click();
   await expect(card(page, "e2eeveryone")).toBeVisible();
   await expect(others).toHaveCount(0);
