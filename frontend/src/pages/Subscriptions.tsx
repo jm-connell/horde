@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
@@ -19,6 +19,8 @@ import type { AskChannel, Subscription } from "../types";
 import { formatCompactCount, formatRelative } from "../utils";
 import { findAskChannel } from "./ask/askLinks";
 import { saveChannelUrl } from "./libraryStorage";
+import AddChannel from "./subscriptions/AddChannel";
+import { normalizeChannelUrl } from "../utils/followUrl";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
 import {
   autodownloadChipLabel,
@@ -268,116 +270,6 @@ function SubscriptionSettings({
   );
 }
 
-function AddChannel() {
-  const { can } = useAuth();
-  const { showError, showToast } = useToast();
-  const queryClient = useQueryClient();
-  const { subscribe, mayIndex } = useSubscribe();
-  const inputId = useId();
-  const autoId = useId();
-  const askId = useId();
-  const [value, setValue] = useState("");
-  const [autodownload, setAutodownload] = useState(false);
-  const [indexAsk, setIndexAsk] = useState(true);
-  const [busy, setBusy] = useState(false);
-
-  const add = async () => {
-    const text = value.trim();
-    if (!text) return;
-    setBusy(true);
-    try {
-      const followed = await subscribe(text, null, { indexAsk });
-      const name = followed.channel_name ?? followed.channel_url;
-      if (autodownload) {
-        await api.updateChannelAutodownload({
-          url: followed.channel_url,
-          channel: followed.channel_name ?? undefined,
-          enabled: true,
-          previous_mode: "none",
-          quality_preset: "1080p",
-          include_completed_streams: false,
-        });
-      }
-      showToast(
-        autodownload
-          ? `Subscribed to ${name}; new uploads will download by themselves`
-          : `Subscribed to ${name}`
-      );
-      setValue("");
-    } catch (err) {
-      showError(`Could not subscribe: ${describeError(err)}`);
-    } finally {
-      setBusy(false);
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.follows.subscriptions,
-      });
-    }
-  };
-
-  return (
-    <form
-      className="ui-panel mb-6 rounded-xl bg-ink-900 p-4 ring-1 ring-ink-700"
-      onSubmit={(e) => {
-        e.preventDefault();
-        void add();
-      }}
-    >
-      <label htmlFor={inputId} className="sr-only">
-        YouTube channel link or @handle
-      </label>
-      <div className="flex flex-wrap gap-2">
-        <input
-          id={inputId}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          placeholder="Add a channel: link or @handle"
-          className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
-        />
-        <button
-          type="submit"
-          disabled={busy || !value.trim()}
-          className={`${button("primary")} shrink-0`}
-        >
-          {busy ? "Subscribing…" : "Subscribe"}
-        </button>
-      </div>
-      {(can("download") || mayIndex) && (
-        <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-gray-300">
-          {can("download") && (
-            <div className="flex items-center gap-2">
-              <input
-                id={autoId}
-                type="checkbox"
-                checked={autodownload}
-                onChange={(e) => setAutodownload(e.target.checked)}
-                className="h-4 w-4 accent-accent"
-              />
-              <label htmlFor={autoId}>Download new uploads (1080p)</label>
-            </div>
-          )}
-          {mayIndex && (
-            <div className="flex items-center gap-2">
-              <input
-                id={askId}
-                type="checkbox"
-                checked={indexAsk}
-                onChange={(e) => setIndexAsk(e.target.checked)}
-                className="h-4 w-4 accent-accent"
-              />
-              <label htmlFor={askId}>
-                Index for Ask and search{" "}
-                <span className="text-muted">
-                  (asks first above 500 videos)
-                </span>
-              </label>
-            </div>
-          )}
-        </div>
-      )}
-    </form>
-  );
-}
-
 export default function Subscriptions() {
   const { can } = useAuth();
   const { items, isLoading, isError, error } = useSubscriptions();
@@ -401,7 +293,13 @@ export default function Subscriptions() {
         in Recommended+. Settings on each one add automatic downloads, cleanup
         and Ask indexing, which apply for everyone on this server.
       </p>
-      {can("manage_subscriptions") && <AddChannel />}
+      {can("manage_subscriptions") && (
+        <AddChannel
+          subscribed={
+            new Set(mine.map((s) => normalizeChannelUrl(s.channel_url) ?? ""))
+          }
+        />
+      )}
       {isLoading ? (
         <LoadingIndicator />
       ) : isError ? (
@@ -414,8 +312,8 @@ export default function Subscriptions() {
             <div className="py-10 text-center text-muted">
               <p className="text-lg">No subscriptions yet.</p>
               <p className="mt-1 text-sm">
-                Paste a channel link above, or open a channel from the library
-                and press Subscribe.
+                Search for a channel above, or open one from the library and
+                press Subscribe.
               </p>
             </div>
           ) : (

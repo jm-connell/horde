@@ -49,6 +49,7 @@ export type FollowList = S["FollowListResponse"];
 export type Subscription = S["SubscriptionRead"];
 export type SubscriptionList = S["SubscriptionList"];
 export type SubscribeAskIndexResult = S["SubscribeAskIndexResult"];
+export type FollowPreview = S["FollowPreviewRead"];
 export type SubscribePrompt = S["SubscribePrompt"];
 export type NewChannelMode = S["AppSettingsRead"]["new_channel_subscribe"];
 export type UnfollowResult = S["UnfollowResult"];

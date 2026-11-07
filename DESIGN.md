@@ -310,7 +310,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   quiet ⋯ icon button (named
   "Settings for <channel>") that opens the channel settings sheet over the
   page. Cards are tight (8px vertical padding, 40px avatar), up to 4 columns. Channels you do not subscribe to
-  sit below as plain hover rows.
+  sit below as plain hover rows. The add box is one input and a primary
+  **Subscribe** that stays disabled until a channel is found; a small spinner
+  sits inside the input's right edge while it looks, search results list
+  under it as hover rows (32px avatar, name, muted subscriber count), and the
+  found channel opens below a hairline (`Collapse`) as a card-like row with
+  `Toggle` switches for its options.
 - **New channel tag.** On a finished download card: an inline `rounded-lg`
   strip with a 10% accent fill and a 30% accent ring, "New channel" in
   accent, the channel name, a small accent **Subscribe** and a quiet **No

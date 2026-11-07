@@ -50,6 +50,8 @@ export const queryKeys = {
       ["channels", "list", sort ?? "", order ?? ""] as const,
     catalogStatus: ["channels", "catalog-status"] as const,
     avatar: (url: string) => ["channels", "avatar", url] as const,
+    youtubeSearch: (q: string) => ["channels", "youtube-search", q] as const,
+    preview: (q: string) => ["channels", "preview", q] as const,
     retention: (channel: string) => ["channels", "retention", channel] as const,
     retentionPreview: (channel: string, limits: unknown) =>
       ["channels", "retention-preview", channel, limits] as const,

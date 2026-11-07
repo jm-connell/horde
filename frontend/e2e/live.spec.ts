@@ -8,7 +8,9 @@ import { CSRF_HEADERS, expect, test } from "./fixtures";
  */
 async function subscribeTo(page: Page, handle: string) {
   await page.goto("/subscriptions");
-  await page.getByLabel("YouTube channel link or @handle").fill(handle);
+  await page
+    .getByLabel("Find a YouTube channel: name, link or @handle")
+    .fill(handle);
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
   const card = page
     .getByRole("list", { name: "Subscriptions" })

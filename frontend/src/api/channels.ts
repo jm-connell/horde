@@ -12,6 +12,7 @@ import type {
   ChannelAvatar,
   UnfollowResult,
   RetentionLimits,
+  FollowPreview,
   SubscribeAskIndexResult,
   SubscriptionList,
 } from "../types";
@@ -53,13 +54,22 @@ export const channelsApi = {
 
   searchChannels(
     q: string,
-    limit = 8
+    limit = 8,
+    opts?: ReadOptions
   ): Promise<ApiResponse<"/api/channels/search", "get">> {
     const qs = new URLSearchParams({
       q,
       limit: String(limit),
     });
-    return request(`/api/channels/search?${qs.toString()}`);
+    return request(`/api/channels/search?${qs.toString()}`, opts);
+  },
+
+  /** A channel by link or @handle, before subscribing: name and picture. */
+  previewChannel(channel: string, opts?: ReadOptions): Promise<FollowPreview> {
+    return request<FollowPreview>(
+      `/api/follows/preview?${new URLSearchParams({ channel })}`,
+      opts
+    );
   },
 
   getChannelFeed(params: ChannelFeedQuery = {}): Promise<ChannelFeedPage> {

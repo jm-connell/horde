@@ -14,8 +14,9 @@ All notable changes to Horde are documented here. The format follows
   subscriptions as a grid with chips for what is on (auto-download, Ask,
   cleanup); **Settings** on a card opens the channel's settings over the
   page. Channels that download or clean up for everyone without your
-  subscription are listed under it. Add a channel by link or `@handle`,
-  optionally downloading its new uploads.
+  subscription are listed under it. Add a channel by searching for it by
+  name or pasting its link or `@handle`; the box shows the channel it found
+  before you subscribe, with switches for automatic downloads and Ask.
 - **Ask indexing on subscribe.** Subscribing, by hand or through a download,
   turns Ask on for a channel with up to 500 uploads; a bigger one gets a
   notice with **Index anyway** (when subscribing by hand).

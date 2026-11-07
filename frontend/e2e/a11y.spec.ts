@@ -118,7 +118,7 @@ for (const { name, path, ready } of [
   {
     name: "subscriptions",
     path: "/subscriptions",
-    ready: "Download new uploads (1080p)",
+    ready: undefined,
   },
   { name: "history", path: "/history", ready: "Today" },
   { name: "import", path: "/import", ready: undefined },

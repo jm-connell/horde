@@ -17,7 +17,7 @@ test("adding a channel by handle subscribes and can turn on auto-download", asyn
   ).toBeVisible();
 
   await page
-    .getByLabel("YouTube channel link or @handle")
+    .getByLabel("Find a YouTube channel: name, link or @handle")
     .fill("@e2enewchannel");
   await page.getByLabel("Download new uploads (1080p)").check();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
@@ -34,7 +34,7 @@ test("Settings opens the channel's settings over the page", async ({
 }) => {
   await page.goto("/subscriptions");
   await page
-    .getByLabel("YouTube channel link or @handle")
+    .getByLabel("Find a YouTube channel: name, link or @handle")
     .fill("@e2esheetchannel");
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
   const row = card(page, "e2esheetchannel");
@@ -103,7 +103,7 @@ test("a big channel is not indexed for Ask without a confirm", async ({
   });
   await page.goto("/subscriptions");
   await page
-    .getByLabel("YouTube channel link or @handle")
+    .getByLabel("Find a YouTube channel: name, link or @handle")
     .fill("@e2ebigchannel");
   await expect(page.getByLabel(/Index for Ask and search/)).toBeChecked();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
@@ -123,7 +123,9 @@ test("unticking Ask indexing subscribes without indexing", async ({ page }) => {
     return route.abort();
   });
   await page.goto("/subscriptions");
-  await page.getByLabel("YouTube channel link or @handle").fill("@e2enoindex");
+  await page
+    .getByLabel("Find a YouTube channel: name, link or @handle")
+    .fill("@e2enoindex");
   await page.getByLabel(/Index for Ask and search/).uncheck();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
   await expect(card(page, "e2enoindex")).toBeVisible();
@@ -146,7 +148,9 @@ test("a card shows the channel's subscriber count beside its name", async ({
     return route.fulfill({ response, json: body });
   });
   await page.goto("/subscriptions");
-  await page.getByLabel("YouTube channel link or @handle").fill("@e2esubcount");
+  await page
+    .getByLabel("Find a YouTube channel: name, link or @handle")
+    .fill("@e2esubcount");
   await page.getByLabel(/Index for Ask and search/).uncheck();
   await page.getByRole("button", { name: "Subscribe", exact: true }).click();
   const row = card(page, "e2esubcount");
@@ -154,4 +158,81 @@ test("a card shows the channel's subscriber count beside its name", async ({
     "title",
     "19,500,000 subscribers on YouTube"
   );
+});
+
+test("typing a name searches YouTube and shows the pick before subscribing", async ({
+  page,
+}) => {
+  const searched: string[] = [];
+  await page.route(/\/api\/channels\/search\?/, (route) => {
+    searched.push(new URL(route.request().url()).searchParams.get("q") ?? "");
+    return route.fulfill({
+      json: {
+        results: [
+          {
+            name: "Glaze Lab",
+            url: "https://www.youtube.com/@e2eglazelab",
+            thumbnail_url: null,
+            subscriber_count: 312_000,
+          },
+          {
+            name: "Glaze Lab Shorts",
+            url: "https://www.youtube.com/@e2eglazeshorts",
+            thumbnail_url: null,
+            subscriber_count: 900,
+          },
+        ],
+      },
+    });
+  });
+  await page.goto("/subscriptions");
+  const subscribe = page
+    .locator("form")
+    .getByRole("button", { name: "Subscribe", exact: true });
+  await page
+    .getByLabel("Find a YouTube channel: name, link or @handle")
+    .fill("glaze lab");
+  // Nothing is picked yet, so there is nothing to subscribe to.
+  await expect(subscribe).toBeDisabled();
+  const found = page.getByRole("list", { name: "Channels found" });
+  await expect(found.getByRole("button")).toHaveCount(2);
+  await expect(found.getByText("312K subs")).toBeVisible();
+  expect(searched).toEqual(["glaze lab"]);
+
+  await found.getByRole("button", { name: /^Glaze Lab 312K subs$/ }).click();
+  await expect(found).toHaveCount(0);
+  const pick = page.getByRole("group", { name: "Found: Glaze Lab" });
+  await expect(pick.getByText("312K subscribers")).toBeVisible();
+  await expect(
+    page.getByRole("switch", { name: /Index for Ask and search/ })
+  ).toBeChecked();
+  await expect(subscribe).toBeEnabled();
+  await subscribe.click();
+  await expect(card(page, "Glaze Lab")).toBeVisible();
+  // The box is ready for the next one.
+  await expect(
+    page.getByLabel("Find a YouTube channel: name, link or @handle")
+  ).toHaveValue("");
+});
+
+test("a link that is not a channel says so and cannot be subscribed", async ({
+  page,
+}) => {
+  await page.route(/\/api\/follows\/preview\?/, (route) =>
+    route.fulfill({
+      status: 404,
+      json: {
+        detail: "No YouTube channel found there",
+        code: "channel_not_found",
+      },
+    })
+  );
+  await page.goto("/subscriptions");
+  await page
+    .getByLabel("Find a YouTube channel: name, link or @handle")
+    .fill("@e2edoesnotexist");
+  await expect(page.getByText("No YouTube channel found there.")).toBeVisible();
+  await expect(
+    page.locator("form").getByRole("button", { name: "Subscribe", exact: true })
+  ).toBeDisabled();
 });
