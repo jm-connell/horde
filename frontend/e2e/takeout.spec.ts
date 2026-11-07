@@ -113,7 +113,7 @@ test("imports a Takeout export and lets the user pick what to keep", async ({
 
   await dialog.getByRole("button", { name: /Import selected \(3\)/ }).click();
   await expect(
-    dialog.getByText(/followed 2 channels, created 1 playlist/)
+    dialog.getByText(/subscribed to 2 channels, created 1 playlist/)
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Close" }).first().click();
 

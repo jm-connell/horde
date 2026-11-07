@@ -41,7 +41,7 @@ export default function SubscriptionsSection() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-300">
-        <Link to="/subscriptions" className="text-accent hover:underline">
+        <Link to="/subscriptions" className="text-accent underline">
           Your subscriptions
         </Link>{" "}
         list each channel you subscribe to, with its automatic downloads,

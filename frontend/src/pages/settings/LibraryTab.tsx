@@ -380,10 +380,7 @@ export default function LibraryTab() {
           {isAdmin && (
             <p className="text-xs text-muted">
               Models, video chat and summaries are in{" "}
-              <Link
-                to="/settings?tab=ai"
-                className="text-accent hover:underline"
-              >
+              <Link to="/settings?tab=ai" className="text-accent underline">
                 Settings → AI
               </Link>
               .
