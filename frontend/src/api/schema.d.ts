@@ -2044,7 +2044,7 @@ export interface paths {
          * Preview Channel
          * @description Look a channel up by link or ``@handle`` before subscribing: its name and
          *     picture, read from its YouTube page (404 ``channel_not_found`` when there is
-         *     no such page).
+         *     no such page, 502 ``youtube_unavailable`` when YouTube does not answer).
          */
         get: operations["preview_channel_api_follows_preview_get"];
         put?: never;

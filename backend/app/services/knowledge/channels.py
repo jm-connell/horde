@@ -113,7 +113,8 @@ def index_on_subscribe(
 ) -> SubscribeIndex:
     """Turn Ask on for a channel someone subscribed to: by itself up to
     ``auto_max`` uploads, beyond that only with ``confirm_large`` (the caller
-    checks who may confirm). Uploads it cannot count are treated as large."""
+    checks who may confirm). Raises 502 ``youtube_error`` when the uploads
+    cannot be counted."""
     url = parse_channel_input(channel_url)
     on = _find(session, url)
     if on is not None:

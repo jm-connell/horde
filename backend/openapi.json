@@ -21542,7 +21542,7 @@
     },
     "/api/follows/preview": {
       "get": {
-        "description": "Look a channel up by link or ``@handle`` before subscribing: its name and\npicture, read from its YouTube page (404 ``channel_not_found`` when there is\nno such page).",
+        "description": "Look a channel up by link or ``@handle`` before subscribing: its name and\npicture, read from its YouTube page (404 ``channel_not_found`` when there is\nno such page, 502 ``youtube_unavailable`` when YouTube does not answer).",
         "operationId": "preview_channel_api_follows_preview_get",
         "parameters": [
           {

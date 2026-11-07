@@ -38,12 +38,23 @@ _HANDLE_RE = re.compile(r"^@[\w.\-]{2,100}$")
 
 
 def _channel_url_from_input(raw: str) -> str:
+    """A YouTube channel URL from a link or ``@handle``; 400 ``not_followable``
+    for anything else (another site, or a YouTube link that is not a channel).
+    The host and path are checked before any DNS lookup."""
     text = raw.strip()
     if _HANDLE_RE.match(text):
         text = f"https://www.youtube.com/{text}"
     elif not text.startswith(("http://", "https://")):
         text = f"https://{text}"
     url = follows.normalize_channel_url(text)
+    try:
+        if not is_youtube_channel_url(url):
+            raise CodedHTTPException(400, "not a YouTube link", "not_followable")
+        kb_channels.parse_channel_input(url)
+    except CodedHTTPException as exc:
+        raise CodedHTTPException(
+            400, "Only YouTube channels can be subscribed to", "not_followable"
+        ) from exc
     try:
         validate_public_url(url)
     except UnsafeUrlError as exc:
@@ -84,22 +95,28 @@ def preview_channel(
 ):
     """Look a channel up by link or ``@handle`` before subscribing: its name and
     picture, read from its YouTube page (404 ``channel_not_found`` when there is
-    no such page)."""
+    no such page, 502 ``youtube_unavailable`` when YouTube does not answer)."""
     url = _channel_url_from_input(channel)
-    if not is_youtube_channel_url(url):
-        raise CodedHTTPException(
-            400, "Only YouTube channels can be subscribed to", "not_followable"
-        )
     name = follows.channel_name_hint(session, url)
-    if get_ctx(request).e2e:
+    ctx = get_ctx(request)
+    if ctx.e2e:
         # The browser suite has no YouTube: the handle stands in for the name.
         return FollowPreviewRead(channel_url=url, channel_name=name)
+    if time.time() < ctx.live.directory.paused_until:
+        raise CodedHTTPException(
+            502, "YouTube is not answering right now", "youtube_unavailable"
+        )
     try:
         page = channel_avatar.read_channel_page(url)
     except channel_avatar.AvatarUnreadable as exc:
         logger.debug("could not read the channel page of %s", url, exc_info=True)
+        cause = exc.__cause__
+        if isinstance(cause, UrlFetchError) and cause.status == 404:
+            raise CodedHTTPException(
+                404, "No YouTube channel found there", "channel_not_found"
+            ) from exc
         raise CodedHTTPException(
-            404, "No YouTube channel found there", "channel_not_found"
+            502, "YouTube is not answering right now", "youtube_unavailable"
         ) from exc
     avatar = channel_avatar.parse_avatar(page)
     channel_avatar.cache().put(url, avatar)
@@ -119,10 +136,6 @@ def follow_channel(
 ):
     """Follow a channel by URL or ``@handle`` (it needs no videos in the library)."""
     url = _channel_url_from_input(payload.channel_url)
-    if not is_youtube_channel_url(url):
-        raise CodedHTTPException(
-            400, "Only YouTube channels can be followed", "not_followable"
-        )
     name = (payload.channel_name or "").strip() or follows.channel_name_hint(
         session, url
     )
