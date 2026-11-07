@@ -12,6 +12,7 @@ import type {
   ChannelAvatar,
   UnfollowResult,
   RetentionLimits,
+  SubscribeAskIndexResult,
   SubscriptionList,
 } from "../types";
 import type { ApiResponse } from "./typed";
@@ -279,6 +280,24 @@ export const channelsApi = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channel_url: channelUrl, hide_live: hideLive }),
+    });
+  },
+
+  /**
+   * Turn Ask on for a channel the user subscribes to (reads YouTube). A big
+   * channel answers `large` until called again with `confirmLarge`.
+   */
+  indexSubscribedChannel(
+    channelUrl: string,
+    confirmLarge = false
+  ): Promise<SubscribeAskIndexResult> {
+    return request<SubscribeAskIndexResult>("/api/follows/ask-index", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel_url: channelUrl,
+        confirm_large: confirmLarge,
+      }),
     });
   },
 

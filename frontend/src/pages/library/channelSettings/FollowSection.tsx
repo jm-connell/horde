@@ -1,10 +1,14 @@
 import { Link } from "react-router-dom";
+import { useAuth } from "../../../context/AuthContext";
 import { useSettings } from "../../../hooks/useSettings";
 import { useChannelFollow } from "../../../queries/follows";
 import { Toggle } from "../../settings/ui";
 import SettingsSection from "./SettingsSection";
 
-/** Whether this account follows the channel, which drives the sidebar's Live list. */
+/**
+ * Whether this account subscribes to the channel (which drives the sidebar's
+ * Live list and Recommended+), and whether its live streams show.
+ */
 export default function FollowSection({
   channel,
   channelUrl,
@@ -13,22 +17,27 @@ export default function FollowSection({
   channelUrl: string | null;
 }) {
   const [settings] = useSettings();
+  const { can } = useAuth();
+  const allowed = can("manage_subscriptions");
   const follow = useChannelFollow(channelUrl, channel);
   return (
     <SettingsSection
       id="following"
-      title="Live & following"
-      description="Followed channels show in the sidebar’s Live list while they stream. Following is just for your account."
+      title="Subscription"
+      description="Subscribed channels show in the sidebar’s Live list while they stream, and their new uploads in Recommended+. Your subscriptions are just for your account."
+      readOnlyNote={
+        allowed ? null : "Changing subscriptions needs a permission."
+      }
     >
       {follow.followable ? (
         <div className="space-y-2">
           <label className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium text-gray-200">
-              Follow this channel
+              Subscribe to this channel
             </span>
             <Toggle
               checked={follow.followed}
-              disabled={follow.pending}
+              disabled={follow.pending || !allowed}
               onChange={follow.toggle}
             />
           </label>
@@ -65,7 +74,7 @@ export default function FollowSection({
         </div>
       ) : (
         <p className="text-sm text-gray-400">
-          Only YouTube channels can be followed.
+          Only YouTube channels can be subscribed to.
         </p>
       )}
     </SettingsSection>
