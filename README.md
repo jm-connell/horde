@@ -1,5 +1,12 @@
 # Horde
 
+[![Latest release](https://img.shields.io/github/v/release/jm-connell/horde?label=release)](https://github.com/jm-connell/horde/releases/latest)
+[![CI](https://github.com/jm-connell/horde/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/jm-connell/horde/actions/workflows/ci.yml)
+[![Docker image](https://img.shields.io/badge/image-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/jm-connell/horde/pkgs/container/horde)
+[![Docs](https://img.shields.io/badge/docs-jm--connell.github.io%2Fhorde-0aa4c8)](https://jm-connell.github.io/horde/)
+[![License: PolyForm Noncommercial](https://img.shields.io/badge/license-PolyForm%20Noncommercial-lightgrey)](LICENSE)
+[![Sponsor](https://img.shields.io/badge/sponsor-%E2%9D%A4-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/jm-connell)
+
 Horde is a self-hosted media archive, downloader and player. It builds on
 yt-dlp, SponsorBlock, FFmpeg and other great projects ([Built with](#built-with))
 to give you a full-featured, private video platform on your own hardware.
