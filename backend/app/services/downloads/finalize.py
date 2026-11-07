@@ -22,7 +22,7 @@ from ...models import (
     VideoStatus,
     require_id,
 )
-from .. import activity, compat_rendition, follows, library, media_sidecars, scanner
+from .. import activity, compat_rendition, library, media_sidecars, scanner
 from ..fsutil import MoveJournal, is_within, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
 from ..metadata import (
@@ -449,8 +449,6 @@ def _complete_library(
     )
     attach_download_to_playlist(spec.job_id, video_id)
     progress_store[spec.job_id] = snapshot
-    # After the job shows as done: subscribing can read YouTube (Ask indexing).
-    follows.follow_from_download(spec.job_id, video_id)
     return video_id
 
 

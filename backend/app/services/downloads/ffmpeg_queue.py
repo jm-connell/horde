@@ -5,7 +5,7 @@ import threading
 import time
 
 from ...logging_config import job_context
-from .. import scanner
+from .. import follows, scanner
 from . import lifecycle
 from .errors import DownloadCancelled
 from .finalize import complete_download
@@ -123,8 +123,9 @@ class FfmpegQueue:
             self._run_task(task)
 
     def _run_task(self, task: PostprocessTask) -> None:
+        video_id: int | None = None
         try:
-            complete_download(task)
+            video_id = complete_download(task)
         except DownloadCancelled:
             lifecycle.mark_job_cancelled(self._downloads, task.job_id, task.destination)
         except Exception as exc:
@@ -138,11 +139,16 @@ class FfmpegQueue:
             discard_staging_unless_requeued(task.job_id)
             with self._lock:
                 self._running.discard(task.job_id)
-                self._threads.discard(threading.current_thread())
             self._downloads.release_ffmpeg(task.job_id)
             # A finished video changes the library size the next job is checked against.
             self._downloads.space.invalidate()
             self._dispatch()
+        try:
+            # Off the slot: subscribing can read YouTube (Ask indexing) for a while.
+            follows.follow_from_download(task.job_id, video_id)
+        finally:
+            with self._lock:
+                self._threads.discard(threading.current_thread())
 
 
 ffmpeg_queue = FfmpegQueue(download_queue)
