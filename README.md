@@ -1,12 +1,38 @@
 # Horde
 
-Horde is a self-hosted media archive, downloader, and player. It integrates yt-dlp, SponsorBlock, ffmpeg, and other great libraries and projects to provide you with a fully featured and private video platform running on your own hardware. Horde was created to be archive only, but has since expanded to fully support streaming video from YouTube without downloading, including livestreams. The app is fully customizable with a large number of settings available.
+Horde is a self-hosted media archive, downloader and player. It builds on
+yt-dlp, SponsorBlock, FFmpeg and other great projects ([Built with](#built-with))
+to give you a full-featured, private video platform on your own hardware.
+Horde started as an archive, and now also supports streaming from YouTube
+without downloading, live streams included. Nearly everything is adjustable in
+Settings.
 
-One of the core (but optional) features of Horde is the AI integration, either local AI on your hardware, or via a cloud provider like OpenRouter. This AI connection allows for video summaries and chat, intelligent search of your entire library and subscribed channels, a transparent and tunable recommendation algorithm, and more.
+It's built for a household, not just one person: one administrator plus member
+accounts, each with their own watch history, recommendations, AI chats and
+appearance. The admin decides what each member may do, such as download,
+delete or use AI.
 
-Horde was created due to features I find lacking in Plex. I have used Plex for years now and still use it almost daily. While it’s great for Movies and TV, Plex falls short in the category of “Other” videos. The organization isn’t great and it can be difficult to navigate an archive of YouTube-style videos. Horde provides an interface closer to YouTube (though much better in my biased opinion) so your archive of videos can be conveniently accessed, whether it’s imported from your existing library or downloaded to Horde in the web UI via yt-dlp.
+One of Horde's core (but optional) features is AI, either a local model on
+your own hardware or a cloud provider such as OpenRouter. It powers video
+summaries and chat, smart search across your whole library and the channels you
+follow, a transparent and tunable recommendation feed, and more.
 
-I have spent a huge amount of time on this project since its creation in June 2026, and I’m very happy with where it is at the moment. I want to make it accessible to as many people as possible, and I hope to receive feedback on bugs, missing features, and whatever else this project needs to be successful. I use it regularly and hope others find it as useful as I do. Horde is open source and completely free, so if you enjoy using Horde and want to support its development going forward, please check out my GitHub sponsors page!
+## Why Horde
+
+I've used Plex for years and still use it almost every day. It's great for
+movies and TV, but it falls short on "Other" videos: the organization isn't
+great, and an archive of YouTube-style videos is hard to navigate. Horde gives
+you an interface closer to YouTube (better, in my biased opinion), so your
+archive is easy to get around, whether you import an existing library or
+download into Horde from the web UI with yt-dlp.
+
+I've spent a huge amount of time on Horde since I started it in June 2026, and
+I'm very happy with where it is. I want it to be useful to as many people as
+possible, so please send feedback: bugs, missing features, or anything else it
+needs. I use it every day and hope you find it as useful as I do.
+
+Horde is free and source-available. If you enjoy it and want to support its
+development, please consider [sponsoring me on GitHub](https://github.com/sponsors/jm-connell).
 
 ---
 
