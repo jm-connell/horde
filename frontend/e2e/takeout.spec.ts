@@ -113,7 +113,7 @@ test("imports a Takeout export and lets the user pick what to keep", async ({
 
   await dialog.getByRole("button", { name: /Import selected \(3\)/ }).click();
   await expect(
-    dialog.getByText(/followed 2 channels, created 1 playlist/)
+    dialog.getByText(/subscribed to 2 channels, created 1 playlist/)
   ).toBeVisible();
   await dialog.getByRole("button", { name: "Close" }).first().click();
 
@@ -169,4 +169,25 @@ test("suggests downloads watched often and adds YouTube views to stats on reques
   await openNav(page, "History");
   await page.getByRole("button", { name: /More stats/ }).click();
   await expect(page.getByText(/4 YouTube views/)).toBeVisible();
+});
+
+test("the import dialog opens centred in the window", async ({ page }) => {
+  // Regression: the dialog rendered inside the settings body, so a transformed
+  // ancestor pinned it to the page and it opened out of sight.
+  const dialog = await openImport(page);
+  await expect(dialog).toBeVisible();
+  const box = await dialog.boundingBox();
+  const viewport = page.viewportSize();
+  expect(box).not.toBeNull();
+  expect(viewport).not.toBeNull();
+  if (!box || !viewport) return;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+  // The dimmed backdrop covers the whole window, not just the settings body.
+  const backdrop = page
+    .locator('[role="presentation"]')
+    .filter({ has: dialog });
+  const shade = await backdrop.boundingBox();
+  expect(shade?.y).toBe(0);
+  expect(shade?.height).toBe(viewport.height);
 });

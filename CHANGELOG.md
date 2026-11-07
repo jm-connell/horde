@@ -9,10 +9,24 @@ All notable changes to Horde are documented here. The format follows
 
 ### Added
 
-- **Subscriptions.** A page in the top bar lists the channels you follow
-  and every channel that downloads or cleans up by itself, with Follow and
-  Auto-download toggles and a link to each channel's settings. Add a
-  channel by link or `@handle`, optionally downloading its new uploads.
+- **Subscriptions.** One name for keeping up with a channel: **Subscribe**
+  (it was Follow). The Subscriptions page in the top bar shows your
+  subscriptions as a grid with chips for what is on (auto-download, Ask,
+  cleanup); **Settings** on a card opens the channel's settings over the
+  page. Channels that download or clean up for everyone without your
+  subscription are listed under it. Add a channel by searching for it by
+  name or pasting its link or `@handle`; the box shows the channel it found
+  before you subscribe, with switches for automatic downloads and Ask.
+- **Ask indexing on subscribe.** Subscribing, by hand or through a download,
+  turns Ask on for a channel with up to 500 uploads; a bigger one gets a
+  notice with **Index anyway** (when subscribing by hand).
+- **New channels from downloads** (Settings → Library → Subscriptions): a
+  download from a channel you do not subscribe to can subscribe you (as
+  before), show **New channel · Subscribe / No thanks** on its card, or do
+  nothing, and **Include new channels from members** decides whether
+  members' downloads count.
+- A member permission, **Manage subscriptions** (on by default), for
+  subscribing and unsubscribing.
 - **Bring in an existing archive.** Files dropped into the media folder are
   filled in from a yt-dlp `.info.json`, a Kodi/Jellyfin `.nfo`, or a
   `Channel/Year/Title [id]` path (and Tube Archivist's names). **Approve N
@@ -33,6 +47,9 @@ All notable changes to Horde are documented here. The format follows
 - Issue forms, a security policy, and a footer bug link with your version
   filled in. New docs: other platforms (Portainer, Synology, Unraid,
   `docker run`) and Watch on your TV.
+- **Minimize Ask.** A button in its header folds the chat to a small bar at
+  the bottom of the window, keeping the conversation and a half-typed
+  question; the bar or the top bar's **Ask** brings it back as it was.
 
 ### Changed
 
@@ -51,6 +68,12 @@ All notable changes to Horde are documented here. The format follows
 - A download that cannot reach the site says so ("Can't reach site") instead
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
+- **Ask** moved from the footer to the top bar, left of the search box (a
+  chat icon beside the search icon on a phone).
+- Subscription cards open their settings from a **⋯** button.
+- Settings → Library has one **Ask** section (Use my data, and Channels Ask
+  can answer from) and a **Subscriptions** section; the old Followed
+  channels list there is gone (use the Subscriptions page).
 - **One Ask.** Ask about Horde and asking channels are one feature, **Ask**
   (the footer button and the phone tab, which was Chat). Each question goes
   where it fits, each answer says where it came from, and links under an
@@ -62,6 +85,9 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- Settings → Library → **Import from Google Takeout** dimmed the page but
+  opened its dialog below the fold.
+- The SponsorBlock chip slides in and fades out instead of popping.
 - A failed download's error toast came back on every page load for ten
   minutes after the failure.
 - Casting to a Chromecast sent the original file even when an H.264 copy

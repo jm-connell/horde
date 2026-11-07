@@ -43,6 +43,7 @@ import {
 import AddToPlaylist from "./AddToPlaylist";
 import ChannelPicker from "./ChannelPicker";
 import ConfirmDialog from "./ConfirmDialog";
+import SubscribePromptTag from "./SubscribePromptTag";
 import ThemedSelect from "./ThemedSelect";
 import {
   applyActionRowCollapse,
@@ -848,6 +849,12 @@ function DownloadJobCard({ job, live, channels, active = false }: Props) {
                 </span>
               )}
             </div>
+            {job.subscribe_prompt && completed && !videoGone && (
+              <SubscribePromptTag
+                prompt={job.subscribe_prompt}
+                onAnswered={refreshJobs}
+              />
+            )}
           </div>
         </div>
       </div>

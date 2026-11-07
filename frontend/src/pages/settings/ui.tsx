@@ -14,6 +14,7 @@ export function Toggle({
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-label={label}
       aria-checked={checked}

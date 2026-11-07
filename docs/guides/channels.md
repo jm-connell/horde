@@ -30,14 +30,23 @@ Pick a remote result to open that channel’s page and start catalog work / down
 
 ## Subscriptions
 
-**Subscriptions** in the top bar lists, one row per channel:
+Subscribing is the one way to keep up with a channel. A subscription is yours alone: the channel shows in the sidebar's **Live** list while it streams, and its new uploads land in Recommended+. Everything else about a channel is an option on it, set in its **Settings**: automatic downloads, cleanup and Ask indexing (those apply for everyone on the server).
 
-- the channels **you** follow (live list, new uploads in Recommended+; following is per account), and
-- every channel with **automatic downloads** or a **cleanup rule** (those are server-wide, so everyone sees them).
+**Subscriptions** in the top bar shows your subscriptions as a grid of cards: the channel's picture and name with its YouTube subscriber count (when a downloaded video of it carries one), how many of its videos are downloaded and when Horde last read its uploads, and chips for what is turned on (**Auto 1080p**, **Ask**, a cleanup rule such as **Keeps latest 20**). The **⋯** button on a card opens the channel's settings sheet over the page. Under the grid, **Downloading for everyone** lists channels with automatic downloads or a cleanup rule that you do not subscribe to, each with **Subscribe** and **⋯**.
 
-Each row shows how many of its videos are in the library and when Horde last read its uploads, with buttons to **Follow** / **Following**, to turn **Auto-download** on or off (keeping the quality and older-videos choices already saved for it; needs the `download` permission) and **Settings**, which opens the channel page with its settings sheet. A cleanup rule shows as a chip (for example **Keeps latest 20**) that opens that section.
+The box at the top finds the channel: type its name to search YouTube's channels (the results list each one with its subscriber count; pick one), or paste its link or `@handle` to look it up. The channel needs no videos in the library. While it looks, a spinner shows and **Subscribe** waits; once a channel is found the box opens to show it, with two switches. **Download new uploads (1080p)** (with the `download` permission) turns on automatic downloads for new uploads only; change the quality or add older videos in the channel's settings. **Index for Ask and search** (on by default, shown when you may use it) turns [Ask](ask.md) on for the channel, which fetches the captions of every upload so the search bar and Ask can find what was said. A channel with more than 500 uploads is not indexed by itself: a notice says how big it is, and **Index anyway** (with **Manage channel indexing**) starts it. Subscribing from a channel's header, a suggested channel or a download card does the same.
 
-**Add a YouTube channel** at the top takes a channel link or an `@handle`. It follows the channel, and with **Also download its new uploads automatically** it turns on automatic downloads too (new uploads only, at 1080p; change that in the channel's settings). The channel does not need any videos in the library yet.
+Changing your subscriptions needs the **Manage subscriptions** permission (on by default for members).
+
+### New channels from downloads
+
+What a finished download does when you do not subscribe to its channel is the administrator's choice (**Settings → Library → Subscriptions → New channels from downloads**):
+
+- **Subscribe** (the default): you are subscribed to it, and Ask indexing is turned on for it as if you had subscribed by hand (by itself up to 500 uploads, when your account may turn Ask on; a bigger channel is left for someone to turn on in its settings).
+- **Ask on the download**: the download's card in **Recent downloads** shows a **New channel** tag with **Subscribe** and **No thanks**. No thanks is remembered, so that channel is not offered again.
+- **Never**: nothing happens.
+
+A channel you unsubscribed from is never subscribed again by a download. When the server has member accounts, **Include new channels from members** says whether their downloads count too; while it is on, a member's subscriptions may also turn Ask on for channels up to 500 uploads, even without **Manage channel indexing**.
 
 ## Channel pages
 
@@ -50,9 +59,9 @@ Open a channel from the sidebar to see its **feed**:
 
 The header shows who the channel is (its YouTube profile picture, its `@handle`, how many of its videos are downloaded and its subscriber count), the search index state (**Not indexed**, **Fully indexed (1000)**; click it to open **Manage**) and three actions:
 
-- **Follow** / **Following** (YouTube channels): see [Following and live streams](#following-and-live-streams).
+- **Subscribe** / **Subscribed** (YouTube channels): see [Subscriptions](#subscriptions).
 - **Download…** (YouTube channels, needs the `download` permission): opens the [Download](downloads.md) page with the channel's link filled in, so you can pick which of its videos to download.
-- The gear, **Channel settings**: everything that sticks to this channel, in one panel (a side sheet on wide screens, a full-height sheet on phones). Its sections are **Automatic downloads**, **Clean up old videos**, **Live & following**, **Search** (whether searching this channel also asks YouTube) and **Manage** (rename the channel, build its search index).
+- The gear, **Channel settings**: everything that sticks to this channel, in one panel (a side sheet on wide screens, a full-height sheet on phones). Its sections are **Automatic downloads**, **Clean up old videos**, **Subscription**, **Search** (whether searching this channel also asks YouTube) and **Manage** (rename the channel, build its search index).
 
 Small chips under the name sum up what is active, for example **Auto-download on · 1080p** or **Keeps latest 20**. Click a chip to open the settings at that section. Sections you lack the permission for are shown read-only: automatic downloads need `download`, cleanup needs `delete_videos`, renaming and the YouTube search choice need `edit_metadata`.
 
@@ -129,15 +138,15 @@ Anyone may see a channel's rule; saving one needs the `delete_videos` permission
 
 ## Following and live streams
 
-Follow a channel to see when it is live. You follow a channel automatically when a download you queued from it finishes, and an administrator starts out following every channel in the library. To follow a channel by hand, even one with no videos on the server, use **Follow** in the channel's header (or **Channel settings → Live & following**), or add its URL or `@handle` on the [Subscriptions](#subscriptions) page or under **Settings → Library → Followed channels**. Unfollowing sticks: a later download from that channel does not follow it again.
+Subscribe to a channel to see when it is live (the API and older versions call this following). A download you queued can subscribe you, as the administrator chose (see [New channels from downloads](#new-channels-from-downloads)), and an administrator starts out subscribed to every channel in the library (unless New channels from downloads is **Never**). To subscribe by hand, even to a channel with no videos on the server, use **Subscribe** in the channel's header (or **Channel settings → Subscription**), or add its URL or `@handle` on the [Subscriptions](#subscriptions) page. Unsubscribing sticks: a later download from that channel does not subscribe you again.
 
 A YouTube channel's page has two tabs. **Videos** lists its uploads. **Live** lists its live streams, newest first: past broadcasts are ordinary videos you can watch or download, and the **Filter streams** box filters the loaded list by title. When the channel is live right now, its broadcast is the first card on either tab, with a red **LIVE** badge and **Live now** in place of the download button.
 
 Downloading a past livestream longer than two hours asks first, because a recording that long can take a while and use a lot of storage (the watch page shows the estimated size at the chosen quality). **Download anyway** queues it as usual.
 
-When followed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. Live broadcasts of followed channels also lead **Recommended**: first when you watched the channel in the last two weeks, a few cards in otherwise (up to three of each).
+When subscribed channels are live, a small **Live** list appears at the top of the sidebar, with each channel, the stream title, the game and the viewer count. It is not there when nobody is live. Click a stream to watch it. The seek bar covers the stream so far, up to the last 4 hours by default, so you can scrub back. The **LIVE** readout shows how far behind you are; click it to jump back to live. Turn the list off with **Settings → Library → Show live streams**. Live broadcasts of subscribed channels also lead **Recommended**: first when you watched the channel in the last two weeks, a few cards in otherwise (up to three of each).
 
-To stop seeing one channel's live streams without unfollowing it, open the **⋯** menu on its live card and choose **Hide live streams from …** (with Undo), or turn off **Show its live streams** under **Channel settings → Live & following**. Its broadcasts leave the Live list and Recommended; the channel's own page still shows when it is live.
+To stop seeing one channel's live streams without unsubscribing, open the **⋯** menu on its live card and choose **Hide live streams from …** (with Undo), or turn off **Show its live streams** under **Channel settings → Subscription**. Its broadcasts leave the Live list and Recommended; the channel's own page still shows when it is live.
 
 Leave a live stream (lock the screen, switch apps) and come back a minute or more later, and it reconnects and plays on from where you left it in the live timeline, as if you had paused it there; if that part is older than the seek bar reaches, it starts at the oldest part. Pressing play after a long pause with the page hidden does the same. How it works: [Live streams](../design/live-streams.md).
 

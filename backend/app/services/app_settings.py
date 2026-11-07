@@ -226,6 +226,11 @@ DEFAULTS: dict[str, Any] = {
     "metadata_sync_interval_hours": 24,
     "channel_catalog_enabled": True,
     "channel_catalog_max_videos": 1000,
+    # A finished download from a channel its requester does not subscribe to:
+    # always subscribe them, ask on the download card, or never
+    # (services/follows.new_channel_mode); and whether members' downloads count.
+    "new_channel_subscribe": "always",
+    "new_channel_subscribe_members": True,
     "direct_youtube_search": True,
     "youtube_video_search": True,
     # Recommended (services/discovery): look for videos on YouTube, and let what

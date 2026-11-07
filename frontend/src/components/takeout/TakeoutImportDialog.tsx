@@ -1,11 +1,15 @@
 import { useId, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
 import { backdropClick } from "../../utils";
 import { DIALOG_BACKDROP_ENTER, DIALOG_PANEL_ENTER } from "../dialogMotion";
 import { CloseIcon } from "../icons";
 import TakeoutImport from "./TakeoutImport";
 
-/** `TakeoutImport` in a dialog (Settings → Library). */
+/**
+ * `TakeoutImport` in a dialog (Settings → Library). Portaled to the body: the
+ * settings body is transformed, which would pin a fixed overlay to it.
+ */
 export default function TakeoutImportDialog({
   onClose,
 }: {
@@ -14,7 +18,7 @@ export default function TakeoutImportDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
   useFocusTrap(dialogRef, { onEscape: onClose });
   const titleId = useId();
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-60 flex items-center justify-center bg-black/60 p-4 ${DIALOG_BACKDROP_ENTER}`}
       role="presentation"
@@ -43,6 +47,7 @@ export default function TakeoutImportDialog({
         </div>
         <TakeoutImport onFinished={onClose} />
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

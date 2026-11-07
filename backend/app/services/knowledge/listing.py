@@ -116,6 +116,14 @@ class Preview:
     has_streams: bool
 
 
+def has_more_uploads_than(channel_url: str, n: int) -> bool:
+    """Whether the channel has more than ``n`` uploads, for when YouTube reports
+    no count (it often does not for a channel's Videos tab): is there one at
+    position ``n + 1``?"""
+    page = _page(channel_url, n, 1, "videos", EXTRACT_PRIORITY_INTERACTIVE)
+    return bool(page.get("entries"))
+
+
 def preview(channel_url: str) -> Preview:
     """Name, canonical URL, upload count and whether there are past live streams."""
     # Someone is waiting on the dialog: ahead of background extracts.

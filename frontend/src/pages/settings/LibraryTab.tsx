@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 import { useHelpChat } from "../../context/HelpChatContext";
 import { useSettingsPage } from "./context";
@@ -22,11 +23,11 @@ import {
 import HelpTip from "../../components/HelpTip";
 import AskChannelsSection from "./AskChannelsSection";
 import CommentsSetting from "./CommentsSetting";
-import FollowedChannelsSection from "./FollowedChannelsSection";
 import HelpDataSection from "./HelpDataSection";
 import MediaServerFiles from "./MediaServerFiles";
 import PlaybackCompatPicker from "./PlaybackCompatPicker";
 import TrashSection from "./TrashSection";
+import SubscriptionsSection from "./SubscriptionsSection";
 import YoutubeHistorySection from "./YoutubeHistorySection";
 
 const EXPIRY_TERMS = ["progress expiry", "inactivity", "days"];
@@ -53,7 +54,16 @@ const ASK_CHANNEL_TERMS = [
   "live streams",
 ];
 
+const SUBSCRIPTION_TERMS = [
+  "subscriptions",
+  "subscribe",
+  "new channels",
+  "followed channels",
+  "members",
+];
+
 const HELP_DATA_TERMS = [
+  "ask",
   "ask: use my data",
   "ask about horde",
   "assistant",
@@ -160,8 +170,8 @@ export default function LibraryTab() {
           <SettingRow
             anchor="show-live-streams"
             title="Show live streams"
-            description="List followed channels that are live in the library sidebar."
-            hidden={!!q && !match("live streams", "live", "follow")}
+            description="List subscribed channels that are live in the library sidebar."
+            hidden={!!q && !match("live streams", "live", "subscri")}
             control={
               <Toggle
                 checked={settings.showLiveStreams}
@@ -171,9 +181,6 @@ export default function LibraryTab() {
               />
             }
           />
-          <div hidden={!!q && !match("followed channels", "follow", "live")}>
-            <FollowedChannelsSection />
-          </div>
           <SettingRow
             anchor="progress-continue-watching"
             title="Progress bar on continue watching"
@@ -327,12 +334,59 @@ export default function LibraryTab() {
       </Section>
 
       <Section
-        anchor="help-data"
-        title="Ask: use my data"
-        description="Let Ask answer about your own downloads, library, watch history and playlists. Only questions about your own things send any, and only what the question needs."
-        hidden={!helpChat.available || !match(...HELP_DATA_TERMS)}
+        anchor="subscriptions"
+        title="Subscriptions"
+        hidden={!match(...SUBSCRIPTION_TERMS)}
       >
-        <HelpDataSection />
+        <SubscriptionsSection />
+      </Section>
+
+      <Section
+        anchor="ask"
+        title="Ask"
+        description="Ask answers from Horde's docs, your own data and the channels indexed for it."
+        hidden={
+          !(helpChat.available && match(...HELP_DATA_TERMS)) &&
+          !(can("manage_ask") && match(...ASK_CHANNEL_TERMS))
+        }
+      >
+        <div className="space-y-6">
+          {helpChat.available && match(...HELP_DATA_TERMS) && (
+            <div data-setting="help-data">
+              <h3 className="text-sm font-medium text-gray-200">Use my data</h3>
+              <p className="mb-3 text-xs text-muted">
+                Let Ask answer about your own downloads, library, watch history
+                and playlists. Only questions about your own things send any,
+                and only what the question needs.
+              </p>
+              <HelpDataSection />
+            </div>
+          )}
+          {can("manage_ask") && match(...ASK_CHANNEL_TERMS) && (
+            <div data-setting="ask-channels">
+              <h3 className="text-sm font-medium text-gray-200">
+                Channels Ask can answer from
+              </h3>
+              <p className="mb-3 text-xs text-muted">
+                Horde indexes what these channels say in their videos. Everyone
+                can search it from the search bar, and Ask answers from a
+                channel when a question names it or it is picked as the source.
+                Subscribing to a channel, by hand or through a download, turns
+                this on for it when it has up to 500 videos.
+              </p>
+              <AskChannelsSection />
+            </div>
+          )}
+          {isAdmin && (
+            <p className="text-xs text-muted">
+              Models, video chat and summaries are in{" "}
+              <Link to="/settings?tab=ai" className="text-accent underline">
+                Settings → AI
+              </Link>
+              .
+            </p>
+          )}
+        </div>
       </Section>
 
       <Section
@@ -667,15 +721,6 @@ export default function LibraryTab() {
             onRemove={() => void removeMediaSidecars()}
           />
         </div>
-      </Section>
-
-      <Section
-        anchor="ask-channels"
-        title="Channels Ask can answer from"
-        description="Horde indexes what these channels say in their videos. Everyone can search it from the search bar, and Ask answers from a channel when a question names it or it is picked as the source."
-        hidden={!can("manage_ask") || !match(...ASK_CHANNEL_TERMS)}
-      >
-        <AskChannelsSection />
       </Section>
 
       <TrashSection />

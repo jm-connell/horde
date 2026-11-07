@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, File, Query, UploadFile
 from sqlmodel import Session, col, select
 
-from ..auth import current_user
+from ..auth import current_user, ensure_permission
 from ..context import get_session
 from ..errors import CodedHTTPException
 from ..models import ChannelCatalogVideo
@@ -144,7 +144,12 @@ def apply_takeout(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ) -> TakeoutApplyResult:
-    """Follow the chosen subscriptions and import the chosen playlists."""
+    """Follow the chosen subscriptions and import the chosen playlists.
+
+    Without ``manage_subscriptions`` chosen subscriptions are refused (403).
+    """
+    if payload.subscriptions:
+        ensure_permission(user, "manage_subscriptions")
     followed = apply.follow_channels(
         session,
         user.id,

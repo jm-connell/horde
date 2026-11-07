@@ -21,6 +21,7 @@ from ..errors import CodedHTTPException, extraction_error
 from ..models import (
     DownloadDestination,
     DownloadJob,
+    DownloadRequester,
     JobStatus,
     Playlist,
     Video,
@@ -38,10 +39,12 @@ from ..schemas import (
     DownloadPreview,
     DownloadQualityUpdate,
     DownloadQueueStatus,
+    SubscribePrompt,
 )
 from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
+from ..services.channel_catalog.runtime import is_youtube_channel_url
 from ..services.downloads import clips, device_access
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
@@ -106,6 +109,43 @@ def _visible_job(session: Session, user: AuthUser, job_id: int) -> DownloadJob:
     return job
 
 
+def _subscribe_prompts(
+    session: Session,
+    user: AuthUser,
+    jobs: list[DownloadJob],
+    video_by_id: dict[int, Video],
+) -> dict[int, SubscribePrompt]:
+    """Finished downloads the caller queued from channels new to them, when the
+    administrator chose to ask about new channels: job id -> its channel."""
+    if follows.new_channel_mode(user.is_admin, user.permissions) != "ask":
+        return {}
+    done = {
+        require_id(j): j
+        for j in jobs
+        if j.status == JobStatus.completed and j.video_id in video_by_id
+    }
+    if not done:
+        return {}
+    mine = set(
+        session.exec(
+            select(DownloadRequester.job_id).where(
+                DownloadRequester.user_id == user.id,
+                col(DownloadRequester.job_id).in_(list(done)),
+            )
+        ).all()
+    )
+    known = follows.known_urls(session, user.id)
+    out: dict[int, SubscribePrompt] = {}
+    for job_id, job in done.items():
+        if job_id not in mine or job.video_id is None:
+            continue
+        video = video_by_id[job.video_id]
+        url = follows.normalize_channel_url(video.channel_url or "")
+        if url and url not in known and is_youtube_channel_url(url):
+            out[job_id] = SubscribePrompt(channel_url=url, channel_name=video.channel)
+    return out
+
+
 def _enrich_jobs(
     session: Session, user: AuthUser, jobs: list[DownloadJob]
 ) -> list[DownloadJobRead]:
@@ -134,6 +174,7 @@ def _enrich_jobs(
     }
     existing: set[int] = set()
     height_by_video: dict[int, int | None] = {}
+    video_by_id: dict[int, Video] = {}
     if video_ids:
         videos = session.exec(
             select(Video).where(col(Video.id).in_(list(video_ids)))
@@ -143,6 +184,8 @@ def _enrich_jobs(
                 continue
             existing.add(video.id)
             height_by_video[video.id] = video.height_px
+            video_by_id[video.id] = video
+    prompts = _subscribe_prompts(session, user, jobs, video_by_id)
 
     # Newest completed job wins per video_id and per URL.
     latest_by_video: dict[int, int] = {}
@@ -185,6 +228,7 @@ def _enrich_jobs(
                     else None,
                     "video_missing": video_missing,
                     "superseded": superseded,
+                    "subscribe_prompt": prompts.get(require_id(j)),
                     "held_reason": download_queue.held_reason(j.id)
                     if j.id is not None and j.status == JobStatus.queued
                     else None,

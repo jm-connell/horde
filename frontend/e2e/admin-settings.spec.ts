@@ -73,8 +73,11 @@ test("members see only their own preferences and what their permissions allow", 
     "Channel list order (sidebar)",
     // Everyone imports their own YouTube history.
     "YouTube history",
+    // A way to their own subscriptions (the new-channel choice is admin-only).
+    "Subscriptions",
     // Each account with the AI permission chooses what the assistant may read.
-    "Ask: use my data",
+    "Ask",
+    "Use my data",
     "Downloads",
   ]);
   await expect(member.getByLabel("Progress expiry in days")).toHaveCount(0);
@@ -115,7 +118,9 @@ test("members see only their own preferences and what their permissions allow", 
     "Default video sort",
     "Channel list order (sidebar)",
     "YouTube history",
-    "Ask: use my data",
+    "Subscriptions",
+    "Ask",
+    "Use my data",
   ]);
   await viewerCtx.close();
 });
@@ -441,4 +446,39 @@ test("the administrator adds, tests, edits and removes a notification target", a
   expect(denied.status()).toBe(403);
   expect((await denied.json()).code).toBe("admin_required");
   await ctx.close();
+});
+
+test("the administrator chooses what downloads from new channels do", async ({
+  page,
+}) => {
+  await page.goto("/settings?tab=library&find=new-channel-subscribe");
+  const choice = page.locator('[data-setting="new-channel-subscribe"]');
+  await expect(
+    choice.getByRole("button", { name: "Subscribe", exact: true })
+  ).toHaveAttribute("aria-pressed", "true");
+  // There are members here, so whether they count is offered too.
+  const members = page.getByRole("switch", {
+    name: /Include new channels from members/,
+  });
+  await expect(members).toBeChecked();
+
+  const saved = page.waitForResponse(
+    (r) =>
+      r.url().endsWith("/api/settings") &&
+      r.request().method() === "PATCH" &&
+      r.ok()
+  );
+  await choice.getByRole("button", { name: "Ask on the download" }).click();
+  expect((await saved).request().postDataJSON()).toEqual({
+    new_channel_subscribe: "ask",
+  });
+  await expect(
+    choice.getByRole("button", { name: "Ask on the download" })
+  ).toHaveAttribute("aria-pressed", "true");
+
+  // Never leaves nothing for members to be included in.
+  await choice.getByRole("button", { name: "Never" }).click();
+  await expect(members).toHaveCount(0);
+  await choice.getByRole("button", { name: "Subscribe", exact: true }).click();
+  await expect(members).toBeVisible();
 });

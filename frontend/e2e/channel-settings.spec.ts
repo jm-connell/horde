@@ -45,7 +45,7 @@ test("channel settings open from the header and close with Escape", async ({
   for (const heading of [
     "Automatic downloads",
     "Clean up old videos",
-    "Live & following",
+    "Subscription",
     "Search",
     "Manage",
   ]) {
@@ -191,7 +191,7 @@ test("renaming into another channel says its cleanup rule was turned off", async
   );
 });
 
-test("the header shows the channel's picture and its index beside Follow", async ({
+test("the header shows the channel's picture and its index beside Subscribe", async ({
   page,
 }) => {
   await giveKilnAYoutubeUrl(page);
@@ -217,9 +217,9 @@ test("the header shows the channel's picture and its index beside Follow", async
     .toBe(1);
   await expect(page.getByText(/\d+ videos? downloaded/)).toBeVisible();
 
-  // The index state sits on the action row, left of Follow, not on a line of its own.
+  // The index state sits on the action row, left of Subscribe, not on a line of its own.
   const index = page.getByRole("button", { name: "Not indexed" });
-  const follow = page.getByRole("button", { name: "Follow", exact: true });
+  const follow = page.getByRole("button", { name: "Subscribe", exact: true });
   await expect(index).toBeVisible();
   await expect(page.getByRole("list", { name: "Channel status" })).toHaveCount(
     0

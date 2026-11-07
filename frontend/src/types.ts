@@ -48,6 +48,10 @@ export type FollowedChannel = S["FollowedChannelRead"];
 export type FollowList = S["FollowListResponse"];
 export type Subscription = S["SubscriptionRead"];
 export type SubscriptionList = S["SubscriptionList"];
+export type SubscribeAskIndexResult = S["SubscribeAskIndexResult"];
+export type FollowPreview = S["FollowPreviewRead"];
+export type SubscribePrompt = S["SubscribePrompt"];
+export type NewChannelMode = S["AppSettingsRead"]["new_channel_subscribe"];
 export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
@@ -250,4 +254,5 @@ export type Permission =
   | "edit_metadata"
   | "manage_playlists"
   | "use_ai"
+  | "manage_subscriptions"
   | "manage_ask";

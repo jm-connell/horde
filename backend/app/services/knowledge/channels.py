@@ -7,6 +7,7 @@ import re
 from dataclasses import dataclass
 
 from sqlalchemy import delete, text
+from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, func, select
 
 from ...context import current
@@ -65,9 +66,15 @@ def _find(session: Session, channel_url: str) -> KbChannel | None:
 
 
 def add(
-    session: Session, raw: str, *, include_streams: bool, user_id: int
+    session: Session,
+    raw: str,
+    *,
+    include_streams: bool,
+    user_id: int,
+    found: listing.Preview | None = None,
 ) -> KbChannel:
-    found = preview(raw)
+    """Turn Ask on for a channel (``found``: its preview, when already read)."""
+    found = found or preview(raw)
     canonical = normalize_channel_url(found.channel_url) or parse_channel_input(raw)
     if _find(session, canonical) is not None:
         raise CodedHTTPException(409, "Ask is already on for this channel", "exists")
@@ -82,6 +89,81 @@ def add(
     session.refresh(channel)
     current().knowledge.wake.set()
     return channel
+
+
+@dataclass(frozen=True)
+class SubscribeIndex:
+    """What turning Ask on for a subscribed channel did."""
+
+    channel_url: str
+    channel_name: str | None
+    video_count: int | None
+    indexed: bool
+    already: bool = False
+    large: bool = False
+
+
+def index_on_subscribe(
+    session: Session,
+    channel_url: str,
+    *,
+    user_id: int,
+    auto_max: int,
+    confirm_large: bool,
+) -> SubscribeIndex:
+    """Turn Ask on for a channel someone subscribed to: by itself up to
+    ``auto_max`` uploads, beyond that only with ``confirm_large`` (the caller
+    checks who may confirm). Uploads it cannot count are treated as large."""
+    url = parse_channel_input(channel_url)
+    on = _find(session, url)
+    if on is not None:
+        return SubscribeIndex(url, on.channel_name, None, indexed=True, already=True)
+    found = preview(url)
+    canonical = normalize_channel_url(found.channel_url) or url
+    on = _find(session, canonical)
+    if on is not None:
+        return SubscribeIndex(
+            canonical, on.channel_name, found.video_count, indexed=True, already=True
+        )
+    count = found.video_count
+    if not confirm_large:
+        if count is None:
+            try:
+                large = listing.has_more_uploads_than(canonical, auto_max)
+            except Exception as exc:
+                raise _youtube_error(exc, canonical) from exc
+        else:
+            large = count > auto_max
+        if large:
+            return SubscribeIndex(
+                canonical, found.channel_name, count, indexed=False, large=True
+            )
+    try:
+        channel = add(session, url, include_streams=False, user_id=user_id, found=found)
+    except CodedHTTPException as exc:
+        if exc.code != "exists":
+            raise
+        return _already(session, canonical, found)
+    except IntegrityError:
+        # Someone else turned it on between the look-up and the insert.
+        session.rollback()
+        return _already(session, canonical, found)
+    return SubscribeIndex(
+        channel.channel_url, channel.channel_name, count, indexed=True
+    )
+
+
+def _already(
+    session: Session, canonical: str, found: listing.Preview
+) -> SubscribeIndex:
+    on = _find(session, canonical)
+    return SubscribeIndex(
+        canonical,
+        on.channel_name if on else found.channel_name,
+        found.video_count,
+        indexed=True,
+        already=True,
+    )
 
 
 def get_or_404(session: Session, channel_id: int) -> KbChannel:

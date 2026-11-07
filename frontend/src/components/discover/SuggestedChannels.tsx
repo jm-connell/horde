@@ -7,15 +7,16 @@ import { isYoutubeChannelUrl } from "../channelFeedYoutubeSearch";
 import FadeImage from "../FadeImage";
 import { CloseIcon } from "../icons";
 
-/** "Channels you might like": follow one, open it, or say no. */
+/** "Channels you might like": subscribe to one, open it, or say no. */
 export default function SuggestedChannels({
   channels,
-  onFollow,
+  onSubscribe,
   onDismiss,
   onOpen,
 }: {
   channels: SuggestedChannel[];
-  onFollow: (channel: SuggestedChannel) => Promise<void>;
+  /** Absent when this account may not change its subscriptions. */
+  onSubscribe?: (channel: SuggestedChannel) => Promise<void>;
   onDismiss: (channel: SuggestedChannel) => void;
   onOpen: (channel: SuggestedChannel) => void;
 }) {
@@ -116,17 +117,19 @@ export default function SuggestedChannels({
                   {ch.reason}
                 </p>
               )}
-              <button
-                type="button"
-                disabled={busy === ch.url}
-                onClick={() => {
-                  setBusy(ch.url);
-                  void onFollow(ch).finally(() => setBusy(null));
-                }}
-                className={`${button("secondary", "sm")} mt-auto`}
-              >
-                {busy === ch.url ? "Following…" : "Follow"}
-              </button>
+              {onSubscribe && (
+                <button
+                  type="button"
+                  disabled={busy === ch.url}
+                  onClick={() => {
+                    setBusy(ch.url);
+                    void onSubscribe(ch).finally(() => setBusy(null));
+                  }}
+                  className={`${button("secondary", "sm")} mt-auto`}
+                >
+                  {busy === ch.url ? "Subscribing…" : "Subscribe"}
+                </button>
+              )}
             </div>
           );
         })}

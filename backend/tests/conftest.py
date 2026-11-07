@@ -123,6 +123,19 @@ def _ai_probes_offline(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_ask_channel_lookups(monkeypatch):
+    """Ask's channel look-ups read YouTube; a finished download that subscribes
+    someone triggers one. Fail them fast; a test that needs one stubs it."""
+    from app.services.knowledge import listing
+
+    def offline(*_args, **_kwargs):
+        raise RuntimeError("no YouTube in tests")
+
+    monkeypatch.setattr(listing, "preview", offline)
+    monkeypatch.setattr(listing, "has_more_uploads_than", offline)
+
+
+@pytest.fixture(autouse=True)
 def _empty_compat_tables():
     """Start each test with no compat jobs or remembered failures.
 
