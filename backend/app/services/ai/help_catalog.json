@@ -149,7 +149,7 @@
     {"id": "youtube-history", "label": "YouTube history (Google Takeout)", "tab": "library", "chat": "link",
      "about": "Import your YouTube watch history, subscriptions and playlists", "keywords": "takeout import google subscriptions"},
     {"id": "new-channel-subscribe", "label": "New channels from downloads", "tab": "library", "access": "admin", "chat": "change", "scope": "server",
-     "key": "new_channel_subscribe", "type": "enum", "about": "When a download finishes from a channel its owner does not subscribe to: subscribe them, ask on the download's card, or neither", "keywords": "auto subscribe follow",
+     "key": "new_channel_subscribe", "type": "enum", "about": "When a download finishes from a channel its owner does not subscribe to: subscribe them (which also turns Ask indexing on for channels up to 500 videos), ask on the download's card, or neither", "keywords": "auto subscribe follow",
      "options": [{"value": "always", "label": "Subscribe"}, {"value": "ask", "label": "Ask on the download"}, {"value": "never", "label": "Never"}]},
     {"id": "new-channel-members", "label": "Include new channels from members", "tab": "library", "access": "admin", "chat": "change", "scope": "server",
      "key": "new_channel_subscribe_members", "type": "bool", "about": "Members' downloads count for New channels from downloads, and their subscriptions may turn Ask on for channels up to 500 videos"},

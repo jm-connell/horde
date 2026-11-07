@@ -332,3 +332,52 @@ def test_never_also_skips_the_administrators_library_seed(
     _setting("never")
     assert follows.seed_administrators() == 0
     assert follows.list_follows(session, admin_user.id) == []
+
+
+# --- a download that subscribes also turns Ask on ------------------------------
+
+
+def test_auto_subscribe_indexes_a_small_channel(
+    session, admin_user, add_video, channel_size, init_db
+):
+    _finished_download(session, admin_user.id, add_video)
+    [kb] = _kb(init_db["engine"])
+    assert kb.channel_url == NORMAL and kb.added_by == admin_user.id
+
+
+def test_auto_subscribe_leaves_a_big_channel_alone(
+    session, admin_user, add_video, channel_size, init_db
+):
+    channel_size["count"] = follows.ASK_INDEX_AUTO_MAX + 1
+    _finished_download(session, admin_user.id, add_video)
+    assert _followed(init_db["engine"], admin_user.id)[0].followed
+    assert _kb(init_db["engine"]) == []
+
+
+@pytest.mark.parametrize("mode", ["ask", "never"])
+def test_no_auto_subscribe_no_index(
+    mode, session, admin_user, add_video, channel_size, init_db
+):
+    _setting(mode)
+    _finished_download(session, admin_user.id, add_video)
+    assert _kb(init_db["engine"]) == []
+    assert channel_size["seen"] == []
+
+
+def test_included_member_auto_subscribe_indexes_too(
+    session, member_user, add_video, channel_size, init_db
+):
+    _finished_download(session, member_user.id, add_video)
+    assert len(_kb(init_db["engine"])) == 1
+
+
+def test_a_failed_lookup_keeps_the_subscription(
+    session, admin_user, add_video, monkeypatch, init_db
+):
+    def broken(url: str) -> listing.Preview:
+        raise RuntimeError("YouTube is down")
+
+    monkeypatch.setattr(listing, "preview", broken)
+    _finished_download(session, admin_user.id, add_video)
+    assert _followed(init_db["engine"], admin_user.id)[0].followed
+    assert _kb(init_db["engine"]) == []

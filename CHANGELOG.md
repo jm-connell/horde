@@ -16,8 +16,9 @@ All notable changes to Horde are documented here. The format follows
   page. Channels that download or clean up for everyone without your
   subscription are listed under it. Add a channel by link or `@handle`,
   optionally downloading its new uploads.
-- **Ask indexing on subscribe.** Subscribing turns Ask on for a channel with
-  up to 500 uploads; a bigger one gets a notice with **Index anyway**.
+- **Ask indexing on subscribe.** Subscribing, by hand or through a download,
+  turns Ask on for a channel with up to 500 uploads; a bigger one gets a
+  notice with **Index anyway** (when subscribing by hand).
 - **New channels from downloads** (Settings → Library → Subscriptions): a
   download from a channel you do not subscribe to can subscribe you (as
   before), show **New channel · Subscribe / No thanks** on its card, or do

@@ -371,8 +371,8 @@ export default function LibraryTab() {
                 Horde indexes what these channels say in their videos. Everyone
                 can search it from the search bar, and Ask answers from a
                 channel when a question names it or it is picked as the source.
-                Subscribing to a channel turns this on for it when it has up to
-                500 videos.
+                Subscribing to a channel, by hand or through a download, turns
+                this on for it when it has up to 500 videos.
               </p>
               <AskChannelsSection />
             </div>

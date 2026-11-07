@@ -21,7 +21,7 @@ from urllib.parse import urlsplit
 from sqlmodel import Session, col, select
 
 from ..context import get_engine
-from ..models import ChannelFollow, DownloadRequester, User, Video, utcnow
+from ..models import ChannelFollow, DownloadRequester, User, Video, require_id, utcnow
 from . import app_settings, library
 from .auth.accounts import effective_permissions
 from .channel_catalog.runtime import is_youtube_channel_url
@@ -352,12 +352,46 @@ def follow_from_download(job_id: int, video_id: int | None) -> None:
                 SOURCE_DOWNLOAD,
             ):
                 session.commit()
+                if may_index_on_subscribe(user.is_admin, effective_permissions(user)):
+                    _index_new_subscription(session, user, video.channel_url)
     except Exception:
         logger.warning(
             "could not follow the channel of job %s (video %s)",
             job_id,
             video_id,
             exc_info=True,
+        )
+
+
+def _index_new_subscription(session: Session, user: User, channel_url: str) -> None:
+    """Turn Ask on for a channel a download just subscribed someone to, as a
+    subscribe by hand would: by itself up to ``ASK_INDEX_AUTO_MAX`` uploads (a
+    bigger one waits for someone to choose it). Reads YouTube, so it is
+    skipped in the browser suite; never raises."""
+    from ..context import current
+    from .knowledge import channels as kb_channels
+    from .knowledge import search as kb_search
+
+    if current().e2e or not kb_search.fts_available(session):
+        return
+    try:
+        done = kb_channels.index_on_subscribe(
+            session,
+            channel_url,
+            user_id=require_id(user),
+            auto_max=ASK_INDEX_AUTO_MAX,
+            confirm_large=False,
+        )
+    except Exception:
+        logger.warning(
+            "could not turn Ask on for %s after subscribing", channel_url, exc_info=True
+        )
+        return
+    if done.large:
+        logger.info(
+            "Ask not turned on for %s: more than %s uploads",
+            channel_url,
+            ASK_INDEX_AUTO_MAX,
         )
 
 

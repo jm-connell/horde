@@ -448,8 +448,9 @@ def _complete_library(
         error_kind=None,
     )
     attach_download_to_playlist(spec.job_id, video_id)
-    follows.follow_from_download(spec.job_id, video_id)
     progress_store[spec.job_id] = snapshot
+    # After the job shows as done: subscribing can read YouTube (Ask indexing).
+    follows.follow_from_download(spec.job_id, video_id)
     return video_id
 
 

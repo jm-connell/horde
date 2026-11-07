@@ -42,7 +42,7 @@ Changing your subscriptions needs the **Manage subscriptions** permission (on by
 
 What a finished download does when you do not subscribe to its channel is the administrator's choice (**Settings → Library → Subscriptions → New channels from downloads**):
 
-- **Subscribe** (the default): you are subscribed to it.
+- **Subscribe** (the default): you are subscribed to it, and Ask indexing is turned on for it as if you had subscribed by hand (by itself up to 500 uploads, when your account may turn Ask on; a bigger channel is left for someone to turn on in its settings).
 - **Ask on the download**: the download's card in **Recent downloads** shows a **New channel** tag with **Subscribe** and **No thanks**. No thanks is remembered, so that channel is not offered again.
 - **Never**: nothing happens.
 
