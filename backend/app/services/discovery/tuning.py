@@ -211,7 +211,7 @@ PRESETS: list[Preset] = [
     _preset(
         "catch_up",
         "Catch up",
-        "Mostly new uploads from the channels you follow and watch.",
+        "Mostly new uploads from the channels you subscribe to and watch.",
         shares={
             "subscriptions": 60,
             "similar": 25,

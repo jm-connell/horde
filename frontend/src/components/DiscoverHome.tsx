@@ -563,7 +563,7 @@ export default function DiscoverHome({
           <p className="mt-1 text-sm">
             {gathering
               ? "This takes a minute or two the first time."
-              : "Watch a few videos, follow some channels, or index a channel's catalog."}
+              : "Watch a few videos, subscribe to some channels, or index a channel's catalog."}
           </p>
         </div>
       ) : (

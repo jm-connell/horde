@@ -1,6 +1,6 @@
 # Horde
 
-**Horde is a self-hosted library for the videos you want to keep.** Download from YouTube or any other [yt-dlp](https://github.com/yt-dlp/yt-dlp) site, follow channels so new uploads arrive by themselves, bring in files you already have, and watch it all in a clean player on your desktop, phone or TV. Your videos stay plain files on your own disk (`Channel/Year/Title [id].mp4`), readable without Horde.
+**Horde is a self-hosted library for the videos you want to keep.** Download from YouTube or any other [yt-dlp](https://github.com/yt-dlp/yt-dlp) site, subscribe to channels so new uploads arrive by themselves, bring in files you already have, and watch it all in a clean player on your desktop, phone or TV. Your videos stay plain files on your own disk (`Channel/Year/Title [id].mp4`), readable without Horde.
 
 ![Library home in Horde, cyan-on-dark with constellation background and a channel sidebar](assets/screenshots/library.webp)
 
@@ -26,7 +26,7 @@ Open `http://<server-ip>:8686`, create the administrator account, and the setup 
 | Area | What you get |
 |------|--------------|
 | **Downloads** | Paste any yt-dlp link, pick a quality, follow a live queue. Whole playlists, and a bookmarklet or share-sheet entry to send links from your phone |
-| **Subscriptions** | Follow channels, download their new uploads automatically, keep only the latest N ([Channels](guides/channels.md#subscriptions)) |
+| **Subscriptions** | Subscribe to channels, download their new uploads automatically, keep only the latest N ([Channels](guides/channels.md#subscriptions)) |
 | **Your existing archive** | Point Horde at folders from yt-dlp, Tube Archivist, Pinchflat or another Horde; it reads their sidecar files ([Moving an existing archive](guides/migrating.md)) |
 | **Library** | Channel sidebar, search across titles, descriptions and captions, tags, continue watching, recommendations |
 | **Player** | Theater and mini player, picture-in-picture, chapters, subtitles, SponsorBlock, Chromecast and AirPlay ([Watch on your TV](guides/tv.md)) |
@@ -39,7 +39,7 @@ Every video watched in Horde plays without YouTube's ads, and [SponsorBlock](htt
 
 ## Is it for you?
 
-Horde is a good fit when you want to **keep** videos: channels you follow, talks and tutorials you return to, things that may disappear. A few neighbours, in short:
+Horde is a good fit when you want to **keep** videos: channels you subscribe to, talks and tutorials you return to, things that may disappear. A few neighbours, in short:
 
 | If you want… | Consider |
 |--------------|----------|
