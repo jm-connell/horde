@@ -116,6 +116,9 @@ export const queryKeys = {
     live: (youtubeId: string, limit: number) =>
       ["comments", "live", youtubeId, limit] as const,
   },
+  users: {
+    list: ["users", "list"] as const,
+  },
   ask: {
     channels: ["ask", "channels"] as const,
     threads: ["ask", "threads"] as const,

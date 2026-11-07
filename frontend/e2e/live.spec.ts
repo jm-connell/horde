@@ -1,21 +1,30 @@
+import type { Page } from "@playwright/test";
 import { CSRF_HEADERS, expect, test } from "./fixtures";
 
 /**
- * Followed channels and the sidebar's live list. The e2e server seeds one live
- * broadcast for `@hordelive` (there is no live poller offline); it shows up
- * once the user follows that channel.
+ * Subscribed channels and the sidebar's live list. The e2e server seeds one
+ * live broadcast for `@hordelive` (there is no live poller offline); it shows
+ * up once the user subscribes to that channel.
  */
-test("following a live channel lists it quietly in the sidebar", async ({
+async function subscribeTo(page: Page, handle: string) {
+  await page.goto("/subscriptions");
+  await page.getByLabel("YouTube channel link or @handle").fill(handle);
+  await page.getByRole("button", { name: "Subscribe", exact: true }).click();
+  const card = page
+    .getByRole("list", { name: "Subscriptions" })
+    .getByRole("listitem")
+    .filter({ hasText: /hordelive/i });
+  await expect(card).toBeVisible();
+  return card;
+}
+
+test("subscribing to a live channel lists it quietly in the sidebar", async ({
   page,
 }) => {
   await page.goto("/");
   await expect(page.locator('[data-horde="live-now"]')).toHaveCount(0);
 
-  await page.goto("/settings?tab=library");
-  await page.getByRole("button", { name: /Followed channels/ }).click();
-  await page.getByLabel("Channel URL or @handle").fill("@HordeLive");
-  await page.getByRole("button", { name: "Follow", exact: true }).click();
-  await expect(page.getByText("https://youtube.com/@hordelive")).toBeVisible();
+  await subscribeTo(page, "@HordeLive");
 
   await page.goto("/");
   const live = page.getByRole("region", { name: "Live now" });
@@ -44,13 +53,15 @@ test("following a live channel lists it quietly in the sidebar", async ({
   await expect(page.getByRole("region", { name: "Live now" })).toHaveCount(0);
 });
 
-test("unfollowing removes the live entry", async ({ page }) => {
-  await page.goto("/settings?tab=library");
-  await page.getByRole("button", { name: /Followed channels/ }).click();
-  await page.getByLabel("Channel URL or @handle").fill("@hordelive");
-  await page.getByRole("button", { name: "Follow", exact: true }).click();
-  await page.getByRole("button", { name: "Unfollow" }).click();
-  await expect(page.getByText("https://youtube.com/@hordelive")).toHaveCount(0);
+test("unsubscribing removes the live entry", async ({ page }) => {
+  const card = await subscribeTo(page, "@hordelive");
+  await card.getByRole("button", { name: /^Settings for / }).click();
+  const sheet = page.getByRole("dialog", { name: "Channel settings" });
+  await sheet
+    .getByRole("switch", { name: "Subscribe to this channel" })
+    .click();
+  await sheet.getByRole("button", { name: "Close channel settings" }).click();
+  await expect(card).toHaveCount(0);
   await page.goto("/");
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
   await expect(page.getByRole("region", { name: "Live now" })).toHaveCount(0);

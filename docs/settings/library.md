@@ -19,7 +19,7 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 |---------|-----|---------|---------|
 | Show live streams | `showLiveStreams` | `true` | UI blob |
 
-**Followed channels** (below the toggle) lists the channels you follow, with **Unfollow**, and takes a channel URL or `@handle` to follow a channel that has no videos on the server. Follows are per user. See [Channels → Following and live streams](../guides/channels.md#following-and-live-streams).
+It lists subscribed channels that are live. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
 
 ### Progress expiry
 
@@ -145,9 +145,28 @@ Writes `.nfo` files and thumbnails next to your videos so Jellyfin, Kodi or Plex
 
 Everyone has it, for their own account. The line sums up your imported YouTube history (views, videos, the period it covers and when you last imported). **Import from Google Takeout** (**Import a newer export** once you have one) opens the import dialog; **Forget** deletes the imported views after a confirm. **Include YouTube in History stats** (`historyIncludeYoutube`, off) counts those views in the [History stats](../guides/history.md#youtube-views-in-the-stats). Details: [YouTube history](../guides/youtube-history.md).
 
-## Channels Ask can answer from
+## Subscriptions
 
-Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one, or from a channel's page.
+A link to your [Subscriptions](../guides/channels.md#subscriptions). Administrators also choose:
+
+| Setting | Key | Default | Storage |
+|---------|-----|---------|---------|
+| New channels from downloads (**Subscribe** / **Ask on the download** / **Never**) | `new_channel_subscribe` (`always` / `ask` / `never`) | `always` | `app_settings.json` |
+| Include new channels from members | `new_channel_subscribe_members` | `true` | `app_settings.json` |
+
+The first says what a finished download does when its requester does not subscribe to the channel: subscribe them, show a **New channel** tag on the download's card, or nothing. The second appears once the server has member accounts and the first is not **Never**: with it on, members' downloads count too, and their subscriptions may turn Ask on for channels up to 500 uploads without **Manage channel indexing**. Members read both (their download cards depend on them) but cannot change them. Details: [New channels from downloads](../guides/channels.md#new-channels-from-downloads).
+
+## Ask
+
+Everything about [Ask](../guides/ask.md) that is not the AI provider, in one section (models, video chat and summaries are under **Settings → AI**).
+
+### Use my data
+
+Whether Ask may read your own downloads, library, watch history and playlists (`helpChatData`): **Off**, **AI on my network only** or **Any AI, including cloud**. Only questions about your own things send any of it, and only what the question needs.
+
+### Channels Ask can answer from
+
+Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. Subscribing to a channel adds it here by itself when it has up to 500 uploads (see [Subscriptions](../guides/channels.md#subscriptions)). The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one, or from a channel's page.
 
 ## Trash
 

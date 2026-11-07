@@ -89,6 +89,15 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
+    keywords: "subscriptions subscribe followed channels",
+  },
+  {
+    tab: "library",
+    access: "admin",
+    keywords: "new channels from downloads subscribe members",
+  },
+  {
+    tab: "library",
     access: "delete_videos",
     keywords:
       "trash bin recycle deleted videos restore undo empty trash delete forever",

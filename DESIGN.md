@@ -303,6 +303,16 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   masked overlay span in `DownloadJobCard`). This is intentional and owner-approved: it marks a
   download in progress at a glance. Keep it even though impeccable's
   side-tab rule flags it.
+- **Subscription cards.** The Subscriptions page is a grid (1/2/3 columns)
+  of one-row `ui-panel` cards: a 44px round avatar, the name (truncated) over
+  a muted `text-xs` line, small `rounded-full` `ink-800` chips for what is on
+  (auto-download, Ask, cleanup), and a quiet **Settings** button that opens
+  the channel settings sheet over the page. Channels you do not subscribe to
+  sit below as plain hover rows.
+- **New channel tag.** On a finished download card: an inline `rounded-lg`
+  strip with a 10% accent fill and a 30% accent ring, "New channel" in
+  accent, the channel name, a small accent **Subscribe** and a quiet **No
+  thanks**.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
   Actions sit at the right of the header as small outlined buttons, like
@@ -338,6 +348,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
+  Its header's minimize button (a chevron) folds it, docked or floating, to
+  just its header bar (52px) at the bottom-right, above the mini player when
+  that is there (full width above the tab bar on phones); the body stays
+  mounted, a docked panel gives the page its width back, and the bar, the
+  chevron or the footer's Ask restores it as it was.
   When Ask is focused on a video or channel, a chip sits beside the title
   ("Ask · Cedar Notes ×"): `ink-800` fill, `rounded-md`, accent `text-sm`
   semibold text that truncates first, and a small muted × that goes back
