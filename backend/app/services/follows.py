@@ -268,7 +268,10 @@ def seed_from_library(session: Session, user_id: int) -> int:
 
 
 def seed_administrators() -> int:
-    """At startup: seed every administrator who has no follow rows yet."""
+    """At startup: seed every administrator who has no follow rows yet (not
+    when the administrator chose that downloads never subscribe anyone)."""
+    if new_channel_setting()[0] == "never":
+        return 0
     with Session(get_engine()) as session:
         admin_ids = session.exec(
             select(User.id).where(

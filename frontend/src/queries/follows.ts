@@ -215,7 +215,7 @@ export function useSubscribe() {
         const count = done.video_count;
         showToast(
           `${shown} has ${
-            count == null ? "a lot of" : count.toLocaleString()
+            count == null ? "more than 500" : count.toLocaleString()
           } videos, so it was not indexed for Ask and search: fetching every caption takes hours.`,
           {
             key: `ask-index-${channelUrl}`,
@@ -232,8 +232,13 @@ export function useSubscribe() {
         showToast(`Indexing ${shown} for Ask and search`);
       }
     } catch (err) {
-      // No full-text search on this server: there is nothing to turn on.
-      if (err instanceof ApiError && err.code === "unavailable") return;
+      // No full-text search here, or a link Ask cannot read as a channel:
+      // the subscription stands and there is nothing to turn on.
+      if (
+        err instanceof ApiError &&
+        (err.code === "unavailable" || err.code === "invalid_channel")
+      )
+        return;
       showError(`Could not turn Ask on for ${name}: ${describeError(err)}`);
     }
   };
