@@ -48,7 +48,7 @@ Create a **second** directory on the pool for app data (SQLite, settings, thumbn
 /mnt/tank/apps/horde/data
 ```
 
-This becomes `DATA_PATH` → `/app/data`. `.env.example` still mentions `/opt/dockge/horde/data`; prefer a dataset on `tank` so the database is not on the boot pool. Do not point `DATA_PATH` at an SMB or NFS mount: SQLite's WAL mode is unsafe on network filesystems.
+This becomes `DATA_PATH` → `/app/data`. Use a dataset on a pool such as `tank`, not the boot pool. Do not point `DATA_PATH` at an SMB or NFS mount: SQLite's WAL mode is unsafe on network filesystems.
 
 Optionally share the media dataset over SMB so you can drop `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files from a desktop. The folder scanner (watchdog plus a poll every `SCAN_INTERVAL_SEC`, default **60** seconds) picks them up for [Import & review](../guides/import-review.md).
 
@@ -83,10 +83,13 @@ Do **not** click **Add Stack** in Dockge and paste YAML. Clone the repo so the f
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
 git clone https://github.com/jm-connell/horde.git horde
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 cp .env.example .env
 ```
 
-If `git clone` says *Permission denied*, the stacks folder belongs to root: run `sudo git clone https://github.com/jm-connell/horde.git horde`, then give the folder to your own user so later updates work without `sudo` (`sudo chown -R $(id -u):$(id -g) horde`), and continue with `cd horde`. Check that it worked with `ls`: you should see `docker-compose.yml`, `Dockerfile` and `.env.example`.
+The `git checkout` line switches to the newest release, so the compose file and scripts match the published image (a fresh clone is on `main`, which is often ahead of it, and [updates](updating.md) would then refuse to move back).
+
+If `git clone` says *Permission denied*, the stacks folder belongs to root: run `sudo git clone https://github.com/jm-connell/horde.git horde`, then give the folder to your own user so later updates work without `sudo` (`sudo chown -R $(id -u):$(id -g) horde`), and continue with `cd horde` and the `git checkout` line. Check that it worked with `ls`: you should see `docker-compose.yml`, `Dockerfile` and `.env.example`.
 
 If a leftover empty `horde` stack folder already exists from Add Stack, delete that stack in Dockge (or rename the folder) before cloning, or clone as a different name.
 
@@ -122,7 +125,7 @@ Ensure `DATA_PATH` exists and is writable by `PUID`/`PGID`. It must survive cont
 2. Top-right menu → **Scan Stacks Folder**. You should see a stack named `horde` (the folder name).
 3. Open it. The compose file should be this repo’s `docker-compose.yml` (`8686:8080`, volumes from `${DOWNLOADS_PATH}` / `${DATA_PATH}`).
 4. Confirm the env panel matches the `.env` you edited. Do **not** rewrite bind-mount paths in the compose editor.
-5. Click **Deploy** / start. The first start downloads the Horde image (about 1 GB); watch the log until `horde` and `horde-bgutil-pot` are up.
+5. Click **Deploy** / start. The first start downloads the Horde image (about 300 MB); watch the log until `horde` and `horde-bgutil-pot` are up.
 
 From the host shell, the equivalent is:
 

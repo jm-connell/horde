@@ -45,7 +45,7 @@ Unraid's own templates manage one container at a time, and Horde wants two. The 
 
 1. Install **Docker Compose Manager** from the **Apps** tab.
 2. Create shares for media and for Horde's data (put the data share on the cache pool or another local disk, `Use cache: Only`, so the database is never on the array's network path).
-3. In a terminal: `git clone https://github.com/jm-connell/horde.git /mnt/user/appdata/horde-stack`.
+3. In a terminal: `git clone https://github.com/jm-connell/horde.git /mnt/user/appdata/horde-stack`, then `cd /mnt/user/appdata/horde-stack` and `git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"` (moves the checkout to the newest release, so it matches the image).
 4. **Docker → Compose → Add new stack**, point it at that folder (Advanced → stack directory), then edit the stack's `.env`: `PUID=99`, `PGID=100` (Unraid's `nobody:users`, the usual owner of shares), `DOWNLOADS_PATH=/mnt/user/<media share>`, `DATA_PATH=/mnt/user/appdata/horde` and keep `HORDE_IMAGE`.
 5. **Compose Up**, then open `http://<server>:8686`.
 

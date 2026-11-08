@@ -21,7 +21,7 @@ Administrators can update Horde with one click, without opening a shell.
 | Step | What it means | How long |
 |------|---------------|----------|
 | Waiting | Your request is queued; the server picks it up within about a minute. You can **cancel** while it waits. | Up to ~1 minute |
-| Updating | The new version is being downloaded and built, then Horde restarts. The page may show “reconnecting” for a moment. | Several minutes (a rebuild takes a while on a NAS) |
+| Updating | The new version is being downloaded (or built, when you build from source), then Horde restarts. The page may show “reconnecting” for a moment. | Several minutes (a rebuild takes a while on a NAS) |
 | Result | One of the outcomes below, with the end of the log under **details**. | |
 
 | Result | Meaning |

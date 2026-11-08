@@ -92,6 +92,9 @@ All notable changes to Horde are documented here. The format follows
   minutes after the failure.
 - Casting to a Chromecast sent the original file even when an H.264 copy
   existed, so AV1 videos failed on most Chromecasts.
+- The install guides now check out the newest release after `git clone`. A
+  fresh clone is on `main`, usually ahead of the newest release, so the first
+  `update.sh` or **Update now** stopped with "would go BACKWARDS".
 
 ## [1.2.2] - 2026-11-03
 

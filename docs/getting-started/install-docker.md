@@ -52,7 +52,10 @@ Pick where Horde's program files will live (your home folder is fine) and clone 
 cd ~
 git clone https://github.com/jm-connell/horde.git
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
+
+The last line switches the checkout to the newest release, so the compose file and scripts match the published image. (A fresh clone is on `main`, which is often ahead of the newest release; later updates would then refuse to move "backwards" to it.) Copy it as it is; [updates](updating.md) take it from there.
 
 You are now inside the `horde` folder. Every later command on this page is run from here; if you open a new terminal, `cd ~/horde` first.
 
@@ -125,7 +128,7 @@ Horde fixes the ownership of the data folder by itself on start; the media folde
 docker compose up -d
 ```
 
-What this does: downloads the Horde image and the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The first start downloads about 1 GB, so give it a few minutes on a slow connection. It is finished when you get your prompt back with lines like `Container horde  Started`.
+What this does: downloads the Horde image and the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The first start downloads about 300 MB, so give it a few minutes on a slow connection. It is finished when you get your prompt back with lines like `Container horde  Started`.
 
 If it stops at once with `required variable DOWNLOADS_PATH is missing a value`, the path is still empty in `.env`: go back to step 3.
 

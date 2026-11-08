@@ -10,7 +10,7 @@ You have Horde running (Docker or local dev). This page walks through the first 
 | Deploy | URL |
 |--------|-----|
 | Docker Compose / TrueNAS | `http://<server-ip>:8686` |
-| Local backend only | `http://127.0.0.1:8080` |
+| Local backend only | `http://127.0.0.1:8080` (after `npm run build:sync` in `frontend/`; otherwise `/` is a 404 and only the API answers) |
 | Local Vite + API proxy | `http://localhost:5173` (usual) |
 
 !!! note "Docker host port"

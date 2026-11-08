@@ -54,7 +54,7 @@ Interactive API reference: `/docs`.
   playlists.
 - **Files on disk**: saved as `Channel/Year/Title [id].ext`, so browsing the
   share over SMB matches the UI.
-- **Import**: upload in the browser, or copy `.mp4` / `.mkv` / `.webm` files
+- **Import**: upload in the browser, or copy `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files
   into the media folder. New files wait in a review queue before joining the
   library.
 - **Library**: channel sidebar, hybrid search, tags, bulk selection, continue
@@ -130,21 +130,25 @@ and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truena
 
 Compose downloads the published image (`ghcr.io/jm-connell/horde`, x86 and
 ARM); the checkout holds the compose file, `.env.example` and `update.sh`. Use
-`git clone`, not a ZIP, so `update.sh` can update it later.
+`git clone`, not a ZIP, so `update.sh` can update it later. The third line
+moves the checkout to the newest release, so it matches the image (`main` can
+be ahead of it):
 
 ```bash
 git clone https://github.com/jm-connell/horde.git
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
 
 TrueNAS / Dockge: clone into the Dockge stacks folder so the folder name is the
-stack name. Do not use **Add Stack** with only `docker-compose.yml`; the build
-needs the whole repo.
+stack name. Do not use **Add Stack** with only `docker-compose.yml`; the stack
+needs the whole checkout (`.env.example`, `update.sh`).
 
 ```bash
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
 git clone https://github.com/jm-connell/horde.git horde
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
 
 ### 2. Create folders
@@ -171,8 +175,9 @@ Set these in `.env`:
 | `DOWNLOADS_PATH` | Full path of the media folder. May be a network share. |
 | `DATA_PATH` | Full path of the data folder (database, thumbnails). Must be a local disk, not SMB/NFS: SQLite can corrupt on network filesystems. |
 
-The example values are TrueNAS paths. On other machines Docker creates missing
-paths owned by root, and Horde cannot save downloads there. Keep paths in
+Both paths start out empty and Horde will not start until they are set. Point
+them at the folders from step 2: Docker creates a missing path owned by root,
+and Horde cannot save downloads there. Keep paths in
 `.env`, not in `docker-compose.yml`. Leave `HORDE_IMAGE` as it is: it points
 at the published image. (Comment it out to build from source instead.)
 
@@ -183,7 +188,7 @@ docker compose up -d
 ```
 
 Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not edit
-the volume lines in the compose editor. The first start downloads about 1 GB.
+the volume lines in the compose editor. The first start downloads about 300 MB.
 
 ### 5. Open
 
@@ -195,7 +200,7 @@ returns `"status":"ok"`. Common errors:
 
 ### Optional
 
-- **Imports:** `.mp4` / `.mkv` / `.webm` files copied into the media folder
+- **Imports:** `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files copied into the media folder
   (for example over SMB) appear in **Import** within `SCAN_INTERVAL_SEC`
   (default 60s).
 - **AI:** choose a provider in the setup wizard or Settings → AI (any
