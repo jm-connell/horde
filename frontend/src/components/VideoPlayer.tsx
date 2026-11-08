@@ -689,15 +689,13 @@ export default function VideoPlayer({
           />
         )}
 
-        {skip.notice && (
-          <SkipNoticeChip
-            notice={skip.notice}
-            isMini={isMini}
-            controlsVisible={controlsVisible}
-            onSkip={skip.skipPromptedSegment}
-            onUndo={skip.undoSkip}
-          />
-        )}
+        <SkipNoticeChip
+          notice={skip.notice}
+          isMini={isMini}
+          controlsVisible={controlsVisible}
+          onSkip={skip.skipPromptedSegment}
+          onUndo={skip.undoSkip}
+        />
 
         {upNext && !isMini && (
           <UpNextOverlay

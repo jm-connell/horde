@@ -56,7 +56,14 @@ class UnsafeUrlError(ValueError):
 
 
 class UrlFetchError(RuntimeError):
-    """The URL was allowed but the fetch failed (size cap, HTTP error, network)."""
+    """The URL was allowed but the fetch failed (size cap, HTTP error, network).
+
+    ``status`` is the HTTP status when the server answered with an error.
+    """
+
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def allow_private_urls() -> bool:
@@ -220,7 +227,10 @@ def fetch_bytes(
                             redirect_to = urljoin(checked.url, location)
                             break
                         if resp.status_code >= 400:
-                            raise UrlFetchError(f"Server answered {resp.status_code}")
+                            raise UrlFetchError(
+                                f"Server answered {resp.status_code}",
+                                status=resp.status_code,
+                            )
                         return _read_capped(resp, checked.url, max_bytes)
                 except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
                     last_error = exc  # try the next validated address

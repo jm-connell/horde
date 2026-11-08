@@ -26,7 +26,7 @@ import {
   resizeFromTopLeft,
 } from "./helpChatLayout";
 import { HELP_PANEL_ID } from "./helpChat";
-import { CloseIcon, CollapseIcon, ExpandIcon } from "./icons";
+import { ChevronIcon, CloseIcon, CollapseIcon, ExpandIcon } from "./icons";
 import { ActiveCtx, SlotCtx } from "./sidePanelContext";
 
 /** One body the frame shows: Ask, or the Recommended settings. */
@@ -161,6 +161,34 @@ interface Props {
   /** The docked width the user dragged it to (null: the default). */
   dockWidth: number | null;
   onDockWidthChange: (width: number) => void;
+  /** Folded to its header bar at the bottom of the window (bodies stay mounted). */
+  minimized: boolean;
+  onMinimizedChange: (minimized: boolean) => void;
+}
+
+/** Height of the minimized bar (the header row). */
+const BAR_H = 52;
+const BAR_W = 320;
+const BAR_MARGIN = 16;
+
+/** The minimized bar's spot: bottom-right, above the mini player when it is there. */
+function barPlacement(
+  vw: number,
+  vh: number,
+  mini: { top: number; left: number; right: number; bottom: number } | null
+): React.CSSProperties {
+  const width = Math.min(BAR_W, vw - 2 * BAR_MARGIN);
+  const left = vw - width - BAR_MARGIN;
+  let top = vh - BAR_H - BAR_MARGIN;
+  if (
+    mini &&
+    mini.left < left + width &&
+    mini.right > left &&
+    mini.bottom > top &&
+    mini.top < top + BAR_H
+  )
+    top = Math.max(BAR_MARGIN, mini.top - BAR_H - BAR_MARGIN / 2);
+  return { left, top, width, height: BAR_H };
 }
 
 /**
@@ -180,6 +208,8 @@ export default function SidePanelFrame({
   onDockedChange,
   dockWidth: wantedDockWidth,
   onDockWidthChange,
+  minimized,
+  onMinimizedChange,
 }: Props) {
   const titleId = useId();
   const tabIdBase = useId();
@@ -197,7 +227,9 @@ export default function SidePanelFrame({
   const noun = tabbed ? "panel" : isChat ? "chat" : "panel";
   // Docked: a column on the right below the full-width nav; the page makes room
   // through --horde-chat-dock (index.css). Phones keep the bottom sheet.
-  const dockedHere = docked && !isMobile;
+  // Minimized, a docked panel gives the page its width back until restored.
+  const dockedHere = docked && !isMobile && !minimized;
+  const floating = !isMobile && !dockedHere && !minimized;
   const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
   useDockMorph(panelRef, dockedHere);
@@ -359,22 +391,26 @@ export default function SidePanelFrame({
   // With the keyboard up, sit just above it inside what is visible: pinned
   // to the bottom, iOS pans the page and the panel's top goes off screen.
   const keyboardHeight = `min(36rem, 75dvh, ${viewport?.height ?? 0}px - 1rem)`;
-  const placement: React.CSSProperties | undefined = dockedHere
-    ? { top: navBottom, right: 0, bottom: 0, width: dockWidth }
-    : isMobile
-      ? viewport?.keyboard
-        ? {
-            top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
-            bottom: "auto",
-            height: keyboardHeight,
-          }
-        : undefined
-      : {
-          left: box.left,
-          top: box.top,
-          width: box.width,
-          height: box.height,
-        };
+  const placement: React.CSSProperties | undefined = minimized
+    ? isMobile
+      ? { height: BAR_H }
+      : barPlacement(vw, vh, miniPlayerRect)
+    : dockedHere
+      ? { top: navBottom, right: 0, bottom: 0, width: dockWidth }
+      : isMobile
+        ? viewport?.keyboard
+          ? {
+              top: `calc(${viewport.top + viewport.height}px - ${keyboardHeight} - 0.5rem)`,
+              bottom: "auto",
+              height: keyboardHeight,
+            }
+          : undefined
+        : {
+            left: box.left,
+            top: box.top,
+            width: box.width,
+            height: box.height,
+          };
 
   return createPortal(
     <section
@@ -389,13 +425,16 @@ export default function SidePanelFrame({
       ref={panelRef}
       style={placement}
       data-docked={dockedHere ? "true" : undefined}
+      data-minimized={minimized ? "true" : undefined}
       className={`ui-panel ui-panel-legible fixed z-45 flex flex-col overflow-hidden bg-ink-900 ${
         dockedHere
           ? "border-l border-ink-700"
           : "rounded-xl shadow-2xl ring-1 ring-ink-600"
       } ${
         isMobile
-          ? "inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom),var(--horde-bottom-bar,0px))] h-[min(36rem,75dvh)]"
+          ? `inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom),var(--horde-bottom-bar,0px))] ${
+              minimized ? "" : "h-[min(36rem,75dvh)]"
+            }`
           : ""
       }`}
     >
@@ -417,7 +456,7 @@ export default function SidePanelFrame({
         />
       )}
       {/* eslint-enable jsx-a11y/no-noninteractive-element-interactions, jsx-a11y/no-noninteractive-tabindex */}
-      {!isMobile && !dockedHere && (
+      {floating && (
         <div
           className="absolute left-0 top-0 z-10 h-4 w-4 cursor-nwse-resize touch-none"
           title="Drag to resize"
@@ -425,11 +464,20 @@ export default function SidePanelFrame({
           onPointerDown={onResizePointerDown}
         />
       )}
+      {/* eslint-disable-next-line jsx-a11y/no-static-element-interactions, jsx-a11y/click-events-have-key-events -- a click on the minimized bar is a shortcut; the Restore button is the keyboard path */}
       <header
-        className={`relative flex items-center justify-between gap-2 border-b border-ink-700 px-4 py-2.5 ${
-          isMobile || dockedHere ? "" : "cursor-move touch-none select-none"
-        }`}
-        onPointerDown={isMobile || dockedHere ? undefined : onHeaderPointerDown}
+        className={`relative flex items-center justify-between gap-2 px-4 py-2.5 ${
+          minimized ? "h-full cursor-pointer" : "border-b border-ink-700"
+        } ${floating ? "cursor-move touch-none select-none" : ""}`}
+        onPointerDown={floating ? onHeaderPointerDown : undefined}
+        onClick={
+          minimized
+            ? (e) => {
+                if (!(e.target as HTMLElement).closest("button, a, [role=tab]"))
+                  onMinimizedChange(false);
+              }
+            : undefined
+        }
       >
         <div className="flex min-w-0 items-center gap-1.5">
           {tabbed ? (
@@ -491,8 +539,28 @@ export default function SidePanelFrame({
           />
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <div ref={setActionsEl} className="flex items-center gap-1" />
-          {!isMobile && (
+          <div
+            ref={setActionsEl}
+            className={minimized ? "hidden" : "flex items-center gap-1"}
+          />
+          <button
+            type="button"
+            onClick={() => onMinimizedChange(!minimized)}
+            aria-expanded={!minimized}
+            aria-label={
+              minimized ? `Restore the ${noun}` : `Minimize the ${noun}`
+            }
+            title={minimized ? "Restore" : "Minimize"}
+            data-horde="side-panel-minimize"
+            className="flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-accent"
+          >
+            <ChevronIcon
+              className={`h-4 w-4 transition-transform duration-200 ease-fluid ${
+                minimized ? "rotate-180" : ""
+              }`}
+            />
+          </button>
+          {!isMobile && !minimized && (
             <button
               type="button"
               onClick={() => onDockedChange(!docked)}
@@ -537,11 +605,11 @@ export default function SidePanelFrame({
               id={`${tabIdBase}-${t.id}-panel`}
               role={tabbed ? "tabpanel" : undefined}
               aria-labelledby={tabbed ? `${tabIdBase}-${t.id}` : undefined}
-              hidden={!showing}
+              hidden={!showing || minimized}
               // The hidden attribute alone loses to a display class.
               // Switching tabs fades the body in (from display: none).
               className={
-                showing
+                showing && !minimized
                   ? "flex min-h-0 flex-1 flex-col transition-opacity duration-150 ease-fluid starting:opacity-0"
                   : "hidden"
               }

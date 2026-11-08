@@ -1940,6 +1940,21 @@
             "title": "Metadata Sync Interval Hours",
             "type": "integer"
           },
+          "new_channel_subscribe": {
+            "default": "always",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "title": "New Channel Subscribe",
+            "type": "string"
+          },
+          "new_channel_subscribe_members": {
+            "default": true,
+            "title": "New Channel Subscribe Members",
+            "type": "boolean"
+          },
           "progress_expiry_days": {
             "title": "Progress Expiry Days",
             "type": "integer"
@@ -2097,6 +2112,33 @@
               }
             ],
             "title": "Metadata Sync Interval Hours"
+          },
+          "new_channel_subscribe": {
+            "anyOf": [
+              {
+                "enum": [
+                  "always",
+                  "ask",
+                  "never"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Channel Subscribe"
+          },
+          "new_channel_subscribe_members": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Channel Subscribe Members"
           },
           "progress_expiry_days": {
             "anyOf": [
@@ -5613,6 +5655,16 @@
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
+          "subscribe_prompt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubscribePrompt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "superseded": {
             "default": false,
             "title": "Superseded",
@@ -6279,6 +6331,42 @@
           }
         },
         "title": "FollowListResponse",
+        "type": "object"
+      },
+      "FollowPreviewRead": {
+        "description": "A channel looked up by link or ``@handle`` before subscribing to it.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "FollowPreviewRead",
         "type": "object"
       },
       "FollowRequest": {
@@ -12175,6 +12263,102 @@
         "title": "Strictness",
         "type": "object"
       },
+      "SubscribeAskIndexRequest": {
+        "description": "Turn Ask indexing on for a channel the caller subscribes to.",
+        "properties": {
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "confirm_large": {
+            "default": false,
+            "title": "Confirm Large",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribeAskIndexRequest",
+        "type": "object"
+      },
+      "SubscribeAskIndexResult": {
+        "properties": {
+          "already": {
+            "default": false,
+            "title": "Already",
+            "type": "boolean"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "indexed": {
+            "default": false,
+            "title": "Indexed",
+            "type": "boolean"
+          },
+          "large": {
+            "default": false,
+            "title": "Large",
+            "type": "boolean"
+          },
+          "video_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Count"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribeAskIndexResult",
+        "type": "object"
+      },
+      "SubscribePrompt": {
+        "description": "A finished download from a channel its requester does not subscribe to.",
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribePrompt",
+        "type": "object"
+      },
       "SubscriptionList": {
         "properties": {
           "items": {
@@ -12260,6 +12444,17 @@
                 "type": "null"
               }
             ]
+          },
+          "subscriber_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscriber Count"
           },
           "video_count": {
             "default": 0,
@@ -21293,6 +21488,113 @@
         ]
       }
     },
+    "/api/follows/ask-index": {
+      "post": {
+        "description": "Turn Ask indexing on for a channel the caller subscribes to.\n\nUp to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel\nanswers ``large`` and starts only with ``confirm_large``, which needs\n``manage_ask``. Members without ``manage_ask`` may do this while the\nadministrator includes their new channels (``follows.may_index_on_subscribe``).\nReads the channel's upload count from YouTube.",
+        "operationId": "index_subscribed_channel_api_follows_ask_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeAskIndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscribeAskIndexResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Index Subscribed Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
+    "/api/follows/preview": {
+      "get": {
+        "description": "Look a channel up by link or ``@handle`` before subscribing: its name and\npicture, read from its YouTube page (404 ``channel_not_found`` when there is\nno such page, 502 ``youtube_unavailable`` when YouTube does not answer).",
+        "operationId": "preview_channel_api_follows_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
     "/api/fonts": {
       "get": {
         "operationId": "list_fonts_api_fonts_get",
@@ -25515,7 +25817,7 @@
     },
     "/api/takeout/apply": {
       "post": {
-        "description": "Follow the chosen subscriptions and import the chosen playlists.",
+        "description": "Follow the chosen subscriptions and import the chosen playlists.\n\nWithout ``manage_subscriptions`` chosen subscriptions are refused (403).",
         "operationId": "apply_takeout_api_takeout_apply_post",
         "requestBody": {
           "content": {

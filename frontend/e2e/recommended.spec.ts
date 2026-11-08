@@ -207,7 +207,9 @@ test("blocking a channel removes all of its videos", async ({ page }) => {
   await expect(page.getByText("Rock pools at low tide")).toBeVisible();
 });
 
-test("suggested channels can be followed or dismissed", async ({ page }) => {
+test("suggested channels can be subscribed to or dismissed", async ({
+  page,
+}) => {
   await openRecommended(page);
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.getByText("Northern Skies")).toBeVisible();
@@ -234,8 +236,8 @@ test("suggested channels can be followed or dismissed", async ({ page }) => {
     .click();
   await expect(shelf.getByText("Tidepool Notes")).toHaveCount(0);
 
-  await shelf.getByRole("button", { name: "Follow" }).click();
-  await expect(page.getByText("Following Northern Skies")).toBeVisible();
+  await shelf.getByRole("button", { name: "Subscribe" }).click();
+  await expect(page.getByText("Subscribed to Northern Skies")).toBeVisible();
   const follows = await page.request.get("/api/follows");
   const urls = (
     (await follows.json()) as { items: { channel_url: string }[] }

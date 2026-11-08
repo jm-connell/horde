@@ -209,7 +209,7 @@ screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 
 Theater mode widens the player to the viewport; the mini player docks bottom
 right and the play queue docks beside it. A quiet footer (centred
-`text-muted` links, one secondary-style "Ask" button) closes every
+`text-muted` links) closes every
 page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
@@ -303,6 +303,23 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   masked overlay span in `DownloadJobCard`). This is intentional and owner-approved: it marks a
   download in progress at a glance. Keep it even though impeccable's
   side-tab rule flags it.
+- **Subscription cards.** The Subscriptions page is a grid (1–4 columns)
+  of one-row `ui-panel` cards: a 44px round avatar, the name (truncated) over
+  a muted `text-xs` line, small `rounded-full` `ink-800` chips for what is on
+  (auto-download, Ask, cleanup) on the same line as the video count, and a
+  quiet ⋯ icon button (named
+  "Settings for <channel>") that opens the channel settings sheet over the
+  page. Cards are tight (8px vertical padding, 40px avatar), up to 4 columns. Channels you do not subscribe to
+  sit below as plain hover rows. The add box is one input and a primary
+  **Subscribe** that stays disabled until a channel is found; a small spinner
+  sits inside the input's right edge while it looks, search results list
+  under it as hover rows (32px avatar, name, muted subscriber count), and the
+  found channel opens below a hairline (`Collapse`) as a card-like row with
+  `Toggle` switches for its options.
+- **New channel tag.** On a finished download card: an inline `rounded-lg`
+  strip with a 10% accent fill and a 30% accent ring, "New channel" in
+  accent, the channel name, a small accent **Subscribe** and a quiet **No
+  thanks**.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
   Actions sit at the right of the header as small outlined buttons, like
@@ -314,6 +331,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   `ThemedSelect` for custom option lists.
 - **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
   150ms; dialogs centre. Both trap focus and close on Escape.
+- **Ask in the top bar.** Left of the search box: a square outlined
+  `ink-900` icon button the search box's height (34px) with a chat bubble,
+  named and titled "Ask" (accent border and icon while the panel is open). The
+  search box is 128px, 192px from `xl`, so the links still fit beside both. Under the hamburger layout it is a
+  chat icon beside the search icon, hidden while searching and in the
+  installed app (its tab bar has Ask).
 - **Floating panels.** The Ask chat is a non-modal floating
   panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
@@ -338,6 +361,11 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
+  Its header's minimize button (a chevron) folds it, docked or floating, to
+  just its header bar (52px) at the bottom-right, above the mini player when
+  that is there (full width above the tab bar on phones); the body stays
+  mounted, a docked panel gives the page its width back, and the bar, the
+  chevron or the top bar's Ask restores it as it was.
   When Ask is focused on a video or channel, a chip sits beside the title
   ("Ask · Cedar Notes ×"): `ink-800` fill, `rounded-md`, accent `text-sm`
   semibold text that truncates first, and a small muted × that goes back

@@ -33,7 +33,7 @@ export default function YoutubeHistorySection() {
   const forget = async () => {
     const ok = await confirm({
       title: "Forget your YouTube history?",
-      body: "Horde stops marking those videos as watched and stops using them for recommendations. Channels you followed and playlists you imported stay.",
+      body: "Horde stops marking those videos as watched and stops using them for recommendations. Channels you subscribed to and playlists you imported stay.",
       confirmLabel: "Forget history",
       danger: true,
     });

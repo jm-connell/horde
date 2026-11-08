@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { useSubscribe } from "../queries/follows";
 import { useDownloads } from "../context/DownloadContext";
 import { useGridColumns } from "../hooks/useGridColumns";
 import { normalizeChannelUrl } from "../utils/followUrl";
@@ -95,6 +96,7 @@ export default function DiscoverHome({
 }) {
   const { showToast, showError } = useToast();
   const { can } = useAuth();
+  const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
   const queryClient = useQueryClient();
   const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
@@ -380,10 +382,10 @@ export default function DiscoverHome({
     )
   );
 
-  const followChannel = async (ch: SuggestedChannel) => {
+  const subscribeChannel = async (ch: SuggestedChannel) => {
     dropPreview();
     try {
-      await api.followChannel(ch.url, ch.name);
+      await subscribe(ch.url, ch.name);
       if (can("download") && !ch.indexed) {
         // Indexing lists the channel's uploads, so they join Recommended.
         await api
@@ -391,9 +393,9 @@ export default function DiscoverHome({
           .catch(() => undefined);
       }
       setChannels((prev) => prev.filter((c) => c.url !== ch.url));
-      showToast(`Following ${ch.name}`);
+      showToast(`Subscribed to ${ch.name}`);
     } catch {
-      showError(`Could not follow ${ch.name}`);
+      showError(`Could not subscribe to ${ch.name}`);
     }
   };
 
@@ -561,7 +563,7 @@ export default function DiscoverHome({
           <p className="mt-1 text-sm">
             {gathering
               ? "This takes a minute or two the first time."
-              : "Watch a few videos, follow some channels, or index a channel's catalog."}
+              : "Watch a few videos, subscribe to some channels, or index a channel's catalog."}
           </p>
         </div>
       ) : (
@@ -574,7 +576,9 @@ export default function DiscoverHome({
             {items.slice(0, splitAt).map(card)}
             <SuggestedChannels
               channels={category === null ? channels : []}
-              onFollow={followChannel}
+              onSubscribe={
+                can("manage_subscriptions") ? subscribeChannel : undefined
+              }
               onDismiss={dismissChannel}
               onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
             />

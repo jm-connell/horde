@@ -1,5 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
+import { ApiError } from "../api/client";
+import { describeError } from "../apiErrors";
+import { useAuth } from "../context/AuthContext";
+import { useToast } from "../context/ToastContext";
+import { appSettingsQuery } from "./app";
 import { isYoutubeChannelUrl, normalizeChannelUrl } from "../utils/followUrl";
 import type {
   ChannelFeedEntry,
@@ -82,7 +87,8 @@ export function useChannelFollow(
 ) {
   const followable = isYoutubeChannelUrl(channelUrl);
   const { follows } = useFollows(followable);
-  const follow = useFollowMutation();
+  const { showError } = useToast();
+  const { subscribe, pending: subscribing } = useSubscribe();
   const unfollow = useUnfollowMutation();
   const hideLive = useHideLiveMutation();
   const normalized = channelUrl ? normalizeChannelUrl(channelUrl) : null;
@@ -93,7 +99,10 @@ export function useChannelFollow(
   const toggle = () => {
     if (!channelUrl) return;
     if (followed && normalized) unfollow.mutate(normalized);
-    else follow.mutate({ url: channelUrl, name: channelName });
+    else
+      subscribe(channelUrl, channelName).catch((err: unknown) =>
+        showError(`Could not subscribe: ${describeError(err)}`)
+      );
   };
   return {
     followable,
@@ -102,7 +111,7 @@ export function useChannelFollow(
     liveHidden: !!row?.hide_live,
     setLiveHidden: (hide: boolean) =>
       normalized && hideLive.mutate({ url: normalized, hide }),
-    pending: follow.isPending || unfollow.isPending || hideLive.isPending,
+    pending: subscribing || unfollow.isPending || hideLive.isPending,
     toggle,
   };
 }
@@ -161,4 +170,89 @@ export function useChannelLive(url: string | null) {
       }
     : null;
   return { ...query, live, entry };
+}
+
+/**
+ * Whether subscribing may turn Ask on for the channel, as the server decides
+ * (`follows.may_index_on_subscribe`): with Manage channel indexing, or while
+ * the administrator includes this account's new channels.
+ */
+export function useMayIndexOnSubscribe(): boolean {
+  const { can, isAdmin } = useAuth();
+  const settings = useQuery(appSettingsQuery()).data;
+  if (can("manage_ask")) return true;
+  if (!settings || !can("manage_subscriptions")) return false;
+  return (
+    settings.new_channel_subscribe !== "never" &&
+    (isAdmin || settings.new_channel_subscribe_members)
+  );
+}
+
+/**
+ * Subscribe to a channel and, where allowed, turn Ask on for it: by itself up
+ * to the server's limit, while a bigger channel only gets a warning (with
+ * "Index anyway" for those who manage Ask).
+ */
+export function useSubscribe() {
+  const { can } = useAuth();
+  const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
+  const follow = useFollowMutation();
+  const mayIndex = useMayIndexOnSubscribe();
+
+  const indexFor = async (
+    channelUrl: string,
+    name: string,
+    confirmLarge = false
+  ) => {
+    try {
+      const done = await api.indexSubscribedChannel(channelUrl, confirmLarge);
+      // YouTube's name for it, when the subscription had none yet.
+      const shown = done.channel_name ?? name;
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ask.channels });
+      void queryClient.invalidateQueries({ queryKey: ["follows"] });
+      if (done.large) {
+        const count = done.video_count;
+        showToast(
+          `${shown} has ${
+            count == null ? "more than 500" : count.toLocaleString()
+          } videos, so it was not indexed for Ask and search: fetching every caption takes hours.`,
+          {
+            key: `ask-index-${channelUrl}`,
+            persistent: true,
+            action: can("manage_ask")
+              ? {
+                  label: "Index anyway",
+                  onClick: () => void indexFor(channelUrl, shown, true),
+                }
+              : undefined,
+          }
+        );
+      } else if (done.indexed && !done.already) {
+        showToast(`Indexing ${shown} for Ask and search`);
+      }
+    } catch (err) {
+      // No full-text search here, or a link Ask cannot read as a channel:
+      // the subscription stands and there is nothing to turn on.
+      if (
+        err instanceof ApiError &&
+        (err.code === "unavailable" || err.code === "invalid_channel")
+      )
+        return;
+      showError(`Could not turn Ask on for ${name}: ${describeError(err)}`);
+    }
+  };
+
+  const subscribe = async (
+    url: string,
+    name?: string | null,
+    { indexAsk = true }: { indexAsk?: boolean } = {}
+  ): Promise<FollowedChannel> => {
+    const followed = await follow.mutateAsync({ url, name });
+    const shown = followed.channel_name ?? name ?? followed.channel_url;
+    if (indexAsk && mayIndex) void indexFor(followed.channel_url, shown);
+    return followed;
+  };
+
+  return { subscribe, pending: follow.isPending, mayIndex };
 }

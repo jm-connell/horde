@@ -19,7 +19,7 @@ Everything you import belongs to **your account only**. Another person on the sa
 Open **Settings → Library → YouTube history → Import from Google Takeout** (or the optional **YouTube history** step of the [setup wizard](../getting-started/first-run.md)). Choose the .zip (or the loose `watch-history.json` and CSV files of an unzipped export) and press **Import**.
 
 1. **Watch history** is stored straight away. Horde says how many views were new and how many it already had.
-2. **Subscriptions** are listed with a checkbox each, plus **Select all** and **Deselect all**. Ticked channels become channels you [follow](channels.md). Channels you already follow show as **Following**. A channel you unfollowed in Horde before starts unticked, so an old subscription does not undo that.
+2. **Subscriptions** are listed with a checkbox each, plus **Select all** and **Deselect all**. Ticked channels become [subscriptions](channels.md#subscriptions) in Horde. Channels you already subscribe to show as **Subscribed**. A channel you unsubscribed from in Horde before starts unticked, so an old subscription does not undo that.
 3. **Playlists** are listed the same way. Each ticked one becomes a **private** playlist of yours. Videos you have downloaded are linked to the library copy; the rest [play from YouTube](playlists.md) until you download them. Takeout lists only video ids, so a video Horde knows nothing about yet shows without a title.
 4. **Import selected** follows the channels and copies the playlists.
 
@@ -52,7 +52,7 @@ Takeout records **when** you watched, not **for how long**, so YouTube views nev
 
 ## Forget it again
 
-**Settings → Library → YouTube history → Forget** deletes your imported views. Channels you followed and playlists you imported stay; unfollow or delete them as usual. Deleting your account deletes the imported history with it.
+**Settings → Library → YouTube history → Forget** deletes your imported views. Channels you subscribed to and playlists you imported stay; unsubscribe or delete them as usual. Deleting your account deletes the imported history with it.
 
 ## API
 

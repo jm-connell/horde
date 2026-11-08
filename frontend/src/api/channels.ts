@@ -12,6 +12,8 @@ import type {
   ChannelAvatar,
   UnfollowResult,
   RetentionLimits,
+  FollowPreview,
+  SubscribeAskIndexResult,
   SubscriptionList,
 } from "../types";
 import type { ApiResponse } from "./typed";
@@ -52,13 +54,22 @@ export const channelsApi = {
 
   searchChannels(
     q: string,
-    limit = 8
+    limit = 8,
+    opts?: ReadOptions
   ): Promise<ApiResponse<"/api/channels/search", "get">> {
     const qs = new URLSearchParams({
       q,
       limit: String(limit),
     });
-    return request(`/api/channels/search?${qs.toString()}`);
+    return request(`/api/channels/search?${qs.toString()}`, opts);
+  },
+
+  /** A channel by link or @handle, before subscribing: name and picture. */
+  previewChannel(channel: string, opts?: ReadOptions): Promise<FollowPreview> {
+    return request<FollowPreview>(
+      `/api/follows/preview?${new URLSearchParams({ channel })}`,
+      opts
+    );
   },
 
   getChannelFeed(params: ChannelFeedQuery = {}): Promise<ChannelFeedPage> {
@@ -279,6 +290,24 @@ export const channelsApi = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ channel_url: channelUrl, hide_live: hideLive }),
+    });
+  },
+
+  /**
+   * Turn Ask on for a channel the user subscribes to (reads YouTube). A big
+   * channel answers `large` until called again with `confirmLarge`.
+   */
+  indexSubscribedChannel(
+    channelUrl: string,
+    confirmLarge = false
+  ): Promise<SubscribeAskIndexResult> {
+    return request<SubscribeAskIndexResult>("/api/follows/ask-index", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        channel_url: channelUrl,
+        confirm_large: confirmLarge,
+      }),
     });
   },
 

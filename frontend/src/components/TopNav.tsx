@@ -9,6 +9,7 @@ import {
 } from "../context/PlaybackContext";
 import { useSearch } from "../context/SearchContext";
 import { useHomeReset } from "../context/HomeResetContext";
+import { useInstalledApp } from "../hooks/useInstalledApp";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useVisualViewport } from "../hooks/useVisualViewport";
 import { useSettings } from "../hooks/useSettings";
@@ -24,6 +25,7 @@ import {
   useOfflineDownloads,
 } from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
+import NavAskButton from "./NavAskButton";
 import { isLinkActive, useNavLinks } from "./navLinks";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 import { actionForKey, resolveHotkeys } from "../hotkeys";
@@ -33,7 +35,7 @@ import {
   ownsArrowKeys,
 } from "../utils/keyboardTarget";
 
-/** Search box and account button before the desktop layout has been measured. */
+/** Ask, search box and account button before the desktop layout has been measured. */
 const DESKTOP_RIGHT_ESTIMATE_PX = 380;
 
 const ICON_BTN =
@@ -62,6 +64,7 @@ export default function TopNav() {
   const { mode } = usePlaybackSession();
   const { videoFrameInset } = usePlaybackLayout();
   const isMobile = useIsMobile();
+  const installed = useInstalledApp();
   // Typing in the search box: iOS pans the page for the keyboard and would
   // take the fixed nav (and the box) off screen with it.
   const viewport = useVisualViewport(useHamburger && searchOpen);
@@ -477,9 +480,10 @@ export default function TopNav() {
               <div className="mr-3 flex empty:hidden">
                 <ConnectionTag popupAlign="end" />
               </div>
+              <NavAskButton compact={false} />
               <div
                 data-horde="nav-search"
-                className="relative mr-2 w-44 self-center xl:w-60"
+                className="relative mr-2 w-32 self-center xl:w-48"
               >
                 <input
                   ref={desktopSearchRef}
@@ -552,6 +556,10 @@ export default function TopNav() {
                     <DownloadIcon className="h-5 w-5" />
                   )}
                 </NavLink>
+              )}
+              {/* The installed app's tab bar has its own Ask tab. */}
+              {!searchOpen && !(installed && isMobile) && (
+                <NavAskButton compact className={ICON_BTN} />
               )}
               <button
                 type="button"

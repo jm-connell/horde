@@ -1,7 +1,9 @@
-"""Followed channels: one list per user, read by the live list.
+"""Followed channels: one list per user, read by the live list. The UI calls
+following a channel *subscribing* (the Subscriptions page).
 
-A user follows a channel by hand, or automatically when a library download they
-queued finishes. An administrator's list is also seeded from the library at startup
+A user follows a channel by hand, or when a library download they queued
+finishes, as the administrator's ``new_channel_subscribe`` setting says
+(``new_channel_mode``): always, by asking on the download's card, or never. An administrator's list is also seeded from the library at startup
 (``seed_administrators``), because every download before follows existed was
 theirs. Unfollowing keeps a
 row with ``followed = False`` so the next download does not follow it again.
@@ -13,13 +15,15 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Literal
 from urllib.parse import urlsplit
 
 from sqlmodel import Session, col, select
 
 from ..context import get_engine
-from ..models import ChannelFollow, DownloadRequester, User, Video, utcnow
-from . import library
+from ..models import ChannelFollow, DownloadRequester, User, Video, require_id, utcnow
+from . import app_settings, library
+from .auth.accounts import effective_permissions
 from .channel_catalog.runtime import is_youtube_channel_url
 
 logger = logging.getLogger(__name__)
@@ -27,6 +31,13 @@ logger = logging.getLogger(__name__)
 SOURCE_MANUAL = "manual"
 SOURCE_DOWNLOAD = "download"
 SOURCE_LIBRARY = "library"
+
+NewChannelMode = Literal["always", "ask", "never"]
+NEW_CHANNEL_MODES: tuple[NewChannelMode, ...] = ("always", "ask", "never")
+
+#: Subscribing turns Ask indexing on by itself up to this many uploads; a larger
+#: channel needs a confirm (and the manage_ask permission).
+ASK_INDEX_AUTO_MAX = 500
 
 
 _TAB_SUFFIXES = frozenset(
@@ -257,7 +268,10 @@ def seed_from_library(session: Session, user_id: int) -> int:
 
 
 def seed_administrators() -> int:
-    """At startup: seed every administrator who has no follow rows yet."""
+    """At startup: seed every administrator who has no follow rows yet (not
+    when the administrator chose that downloads never subscribe anyone)."""
+    if new_channel_setting()[0] == "never":
+        return 0
     with Session(get_engine()) as session:
         admin_ids = session.exec(
             select(User.id).where(
@@ -273,8 +287,47 @@ def record_requester(session: Session, job_id: int, user_id: int) -> None:
     session.add(DownloadRequester(job_id=job_id, user_id=user_id))
 
 
+def new_channel_setting() -> tuple[NewChannelMode, bool]:
+    """The administrator's choice for downloads from a channel the requester does
+    not subscribe to, and whether members' downloads count."""
+    data = app_settings.load()
+    mode = data.get("new_channel_subscribe")
+    return (
+        mode if mode in NEW_CHANNEL_MODES else "always",
+        bool(data.get("new_channel_subscribe_members", True)),
+    )
+
+
+def new_channel_mode(is_admin: bool, permissions: frozenset[str]) -> NewChannelMode:
+    """What a finished download from a new channel does for this account."""
+    mode, members = new_channel_setting()
+    if "manage_subscriptions" not in permissions or (not is_admin and not members):
+        return "never"
+    return mode
+
+
+def may_index_on_subscribe(is_admin: bool, permissions: frozenset[str]) -> bool:
+    """Whether subscribing may turn Ask indexing on for a channel: anyone who
+    manages Ask, and members too while the administrator includes their new
+    channels."""
+    if "manage_ask" in permissions:
+        return True
+    return new_channel_mode(is_admin, permissions) != "never"
+
+
+def known_urls(session: Session, user_id: int) -> set[str]:
+    """Channels the user follows or has unfollowed (both are not new to them)."""
+    return set(
+        session.exec(
+            select(ChannelFollow.channel_url).where(ChannelFollow.user_id == user_id)
+        ).all()
+    )
+
+
 def follow_from_download(job_id: int, video_id: int | None) -> None:
-    """A finished library download follows its channel for whoever queued it.
+    """A finished library download follows its channel for whoever queued it,
+    when ``new_channel_mode`` says ``always`` for them (``ask`` leaves it to the
+    download's card).
 
     Best effort and never raises: the job is already committed as completed.
     """
@@ -286,6 +339,11 @@ def follow_from_download(job_id: int, video_id: int | None) -> None:
             video = session.get(Video, video_id)
             if requester is None or video is None or not video.channel_url:
                 return
+            user = session.get(User, requester.user_id)
+            if user is None or (
+                new_channel_mode(user.is_admin, effective_permissions(user)) != "always"
+            ):
+                return
             if _auto_follow(
                 session,
                 requester.user_id,
@@ -294,12 +352,46 @@ def follow_from_download(job_id: int, video_id: int | None) -> None:
                 SOURCE_DOWNLOAD,
             ):
                 session.commit()
+                if may_index_on_subscribe(user.is_admin, effective_permissions(user)):
+                    _index_new_subscription(session, user, video.channel_url)
     except Exception:
         logger.warning(
             "could not follow the channel of job %s (video %s)",
             job_id,
             video_id,
             exc_info=True,
+        )
+
+
+def _index_new_subscription(session: Session, user: User, channel_url: str) -> None:
+    """Turn Ask on for a channel a download just subscribed someone to, as a
+    subscribe by hand would: by itself up to ``ASK_INDEX_AUTO_MAX`` uploads (a
+    bigger one waits for someone to choose it). Reads YouTube, so it is
+    skipped in the browser suite; never raises."""
+    from ..context import current
+    from .knowledge import channels as kb_channels
+    from .knowledge import search as kb_search
+
+    if current().e2e or not kb_search.fts_available(session):
+        return
+    try:
+        done = kb_channels.index_on_subscribe(
+            session,
+            channel_url,
+            user_id=require_id(user),
+            auto_max=ASK_INDEX_AUTO_MAX,
+            confirm_large=False,
+        )
+    except Exception:
+        logger.warning(
+            "could not turn Ask on for %s after subscribing", channel_url, exc_info=True
+        )
+        return
+    if done.large:
+        logger.info(
+            "Ask not turned on for %s: more than %s uploads",
+            channel_url,
+            ASK_INDEX_AUTO_MAX,
         )
 
 

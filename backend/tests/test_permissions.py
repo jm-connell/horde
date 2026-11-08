@@ -171,6 +171,15 @@ GATES: dict[tuple[str, str], str] = {
         ]
     },
     **{
+        (m, p): "manage_subscriptions"
+        for m, p in [
+            ("PUT", "/api/follows"),
+            ("DELETE", "/api/follows"),
+            # Also checks in the handler who may turn Ask on (follows.py).
+            ("POST", "/api/follows/ask-index"),
+        ]
+    },
+    **{
         (m, p): "manage_ask"
         for m, p in [
             ("GET", "/api/ask/channels/preview"),
@@ -207,6 +216,9 @@ CONDITIONAL = {
     ("PATCH", "/api/playlists/{playlist_id}/reorder"),
     ("POST", "/api/playlists/{playlist_id}/thumbnail"),
     ("POST", "/api/playlists/{playlist_id}/sync"),
+    # Your own Takeout: subscriptions chosen need manage_subscriptions; the
+    # private playlists it makes need nothing.
+    ("POST", "/api/takeout/apply"),
 }
 
 #: Mutations any signed-in user may make, on purpose. The compat and sprite
@@ -246,12 +258,9 @@ OPEN_MUTATIONS = {
     ("DELETE", "/api/auth/sessions/{session_id}"),
     ("POST", "/api/auth/avatar"),  # your own profile picture
     ("DELETE", "/api/auth/avatar"),
-    ("PUT", "/api/follows"),  # your own followed channels
-    ("PATCH", "/api/follows"),
-    ("DELETE", "/api/follows"),
-    # Your own YouTube history; apply follows channels and makes private playlists.
+    ("PATCH", "/api/follows"),  # how your own subscriptions show
+    # Your own YouTube history.
     ("POST", "/api/takeout/import"),
-    ("POST", "/api/takeout/apply"),
     ("DELETE", "/api/takeout/history"),
 }
 PUBLIC = {
@@ -326,6 +335,7 @@ def test_every_permission_is_used_and_documented():
         "offline_download",
         "edit_metadata",
         "manage_playlists",
+        "manage_subscriptions",
         "use_ai",
     } == permissions.DEFAULT_PERMISSIONS
 

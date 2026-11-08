@@ -666,3 +666,51 @@ test.describe("without AI", () => {
     expect(chats).toEqual([]);
   });
 });
+
+test("the chat minimizes to a bar and comes back as it was", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+  const main = page.locator('[data-horde="main"]');
+  const fullWidth = (await main.boundingBox())!.width;
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  const box = panel.getByRole("textbox", { name: "Your question" });
+  await box.fill("half a question");
+  // Docked first: minimizing gives the page its width back.
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await expect(panel).toHaveAttribute("data-docked", "true");
+
+  await panel.getByRole("button", { name: "Minimize the chat" }).click();
+  await expect(panel).toHaveAttribute("data-minimized", "true");
+  await expect(panel).not.toHaveAttribute("data-docked", "true");
+  await expect(box).toBeHidden();
+  await expect
+    .poll(async () => (await main.boundingBox())!.width)
+    .toBeCloseTo(fullWidth, 0);
+  // A short bar at the bottom-right of the window (after gliding there).
+  await panel.evaluate((el) =>
+    Promise.all(el.getAnimations().map((a) => a.finished))
+  );
+  const bar = (await panel.boundingBox())!;
+  expect(bar.height).toBeLessThan(80);
+  expect(bar.y + bar.height).toBeGreaterThan(850);
+  expect(bar.x + bar.width).toBeGreaterThan(1400);
+
+  // It stays minimized on the next page, then restores docked with the draft.
+  await page.getByRole("link", { name: "History" }).first().click();
+  await expect(page).toHaveURL(/\/history$/);
+  await expect(panel).toHaveAttribute("data-minimized", "true");
+  await panel.getByRole("button", { name: "Restore the chat" }).click();
+  await expect(panel).not.toHaveAttribute("data-minimized", "true");
+  await expect(panel).toHaveAttribute("data-docked", "true");
+  await expect(box).toHaveValue("half a question");
+
+  // Opening Ask from the top bar while minimized unfolds it too.
+  await panel.getByRole("button", { name: "Minimize the chat" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(panel).not.toHaveAttribute("data-minimized", "true");
+});

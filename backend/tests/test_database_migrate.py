@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 from pathlib import Path
 
@@ -13,7 +14,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0029_video_chats_to_ask"
+HEAD = "0030_grant_manage_subscriptions"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1402,3 +1403,59 @@ def test_video_chats_revision_copies_each_chat_into_ask(tmp_dirs):
             ("Mine",)
         ]
         assert conn.execute(text("SELECT COUNT(*) FROM ask_messages")).scalar() == 0
+
+
+def test_manage_subscriptions_revision_keeps_members_subscribing(tmp_dirs):
+    """0029 -> 0030: members and unused invites from before the permission
+    existed get it, so subscribing keeps working after the upgrade."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0029_video_chats_to_ask")
+    old_defaults = json.dumps(
+        ["download", "offline_download", "edit_metadata", "manage_playlists", "use_ai"]
+    )
+    with engine.begin() as conn:
+        for uid, name, admin, perms in [
+            (1, "boss", 1, "[]"),
+            (2, "member", 0, old_defaults),
+            (3, "viewer", 0, "[]"),
+            (4, "already", 0, '["manage_subscriptions"]'),
+        ]:
+            conn.execute(
+                text(
+                    "INSERT INTO users (id, username, username_norm, password_hash, "
+                    "is_admin, created_at, updated_at, disabled, permissions, "
+                    "share_downloads) VALUES (:id, :n, :n, 'x', :a, "
+                    "'2024-01-01 00:00:00', '2024-01-01 00:00:00', 0, :p, 1)"
+                ),
+                {"id": uid, "n": name, "a": admin, "p": perms},
+            )
+        conn.execute(
+            text(
+                "INSERT INTO user_invites (id, token_hash, permissions, created_at, "
+                "expires_at) VALUES (1, 'h', :p, '2024-01-01 00:00:00', "
+                "'2030-01-01 00:00:00')"
+            ),
+            {"p": old_defaults},
+        )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        users = dict(
+            conn.execute(text("SELECT username, permissions FROM users")).fetchall()
+        )
+        invite = conn.execute(text("SELECT permissions FROM user_invites")).scalar()
+    assert users["boss"] == "[]"  # administrators hold everything already
+    assert json.loads(users["member"]) == [
+        *json.loads(old_defaults),
+        "manage_subscriptions",
+    ]
+    assert json.loads(users["viewer"]) == ["manage_subscriptions"]
+    assert json.loads(users["already"]) == ["manage_subscriptions"]
+    assert "manage_subscriptions" in json.loads(invite)

@@ -39,7 +39,7 @@ export default function GettingStarted() {
     {
       key: "subscribe",
       title: "Subscribe to a channel",
-      body: "Follow a channel by its link or @handle, and let its new uploads download by themselves.",
+      body: "Add one by its link or @handle, and let its new uploads download by themselves.",
       to: "/subscriptions",
       action: "Open Subscriptions",
       done: subscriptions.length > 0,

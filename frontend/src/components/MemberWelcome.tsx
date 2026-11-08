@@ -26,7 +26,7 @@ export default function MemberWelcome() {
         </li>
         <li>
           <Link to="/subscriptions" className="text-accent hover:underline">
-            Follow channels
+            Subscribe to channels
           </Link>{" "}
           to see when they go live and get their new uploads in Recommended+.
         </li>

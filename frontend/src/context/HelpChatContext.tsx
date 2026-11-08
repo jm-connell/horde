@@ -26,6 +26,8 @@ interface HelpChatValue {
   available: boolean;
   open: boolean;
   setOpen: (open: boolean) => void;
+  /** The footer / tab bar button: open, unfold a minimized chat, or close. */
+  toggleOpen: () => void;
   /** Set by a page to say which part of it is showing (see `useHelpPageDetail`). */
   setDetail: (detail: PageDetail) => void;
   /** Drop `detail` unless another page has replaced it already. */
@@ -71,6 +73,8 @@ interface HostValue {
   setDocked: (docked: boolean) => void;
   dockWidth: number | null;
   setDockWidth: (width: number) => void;
+  minimized: boolean;
+  setMinimized: (minimized: boolean) => void;
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
@@ -119,6 +123,8 @@ interface PanelState {
   docked?: boolean;
   /** The docked panel's width, once the user has dragged it. */
   dockWidth?: number | null;
+  /** Folded to its header bar at the bottom of the window, still open. */
+  minimized?: boolean;
 }
 
 function isFrame(v: unknown): v is HelpFrame {
@@ -138,13 +144,14 @@ function isPanelState(v: unknown): v is PanelState {
     (s.tab === undefined || s.tab === "ask" || s.tab === "algorithm") &&
     (s.frame === null || isFrame(s.frame)) &&
     (s.docked === undefined || typeof s.docked === "boolean") &&
+    (s.minimized === undefined || typeof s.minimized === "boolean") &&
     (s.dockWidth == null ||
       (typeof s.dockWidth === "number" && Number.isFinite(s.dockWidth)))
   );
 }
 
 /**
- * Ask, available on every page: the footer opens it and it stays
+ * Ask, available on every page: the top bar opens it and it stays
  * open (same conversation, same spot) while the user moves around the app.
  */
 export function HelpChatProvider({ children }: { children: ReactNode }) {
@@ -165,16 +172,32 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [openedHere, setOpenedHere] = useState(false);
   const setOpen = useCallback((open: boolean) => {
     if (open) setOpenedHere(true);
+    // Opening (again) unfolds a minimized panel; closing forgets it.
     setState((s) => ({
       ...s,
       open,
+      minimized: open ? false : s.algorithm ? s.minimized : false,
       tab: open ? "ask" : s.algorithm ? "algorithm" : s.tab,
     }));
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpenedHere(true);
+    setState((s) => {
+      if (s.open && !s.minimized)
+        return {
+          ...s,
+          open: false,
+          minimized: s.algorithm ? s.minimized : false,
+          tab: s.algorithm ? "algorithm" : s.tab,
+        };
+      return { ...s, open: true, minimized: false, tab: "ask" };
+    });
   }, []);
   const setAlgorithmOpen = useCallback((algorithm: boolean) => {
     setState((s) => ({
       ...s,
       algorithm,
+      minimized: algorithm ? false : s.open ? s.minimized : false,
       tab: algorithm ? "algorithm" : s.open ? "ask" : s.tab,
     }));
   }, []);
@@ -232,11 +255,16 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     (dockWidth: number) => setState((s) => ({ ...s, dockWidth })),
     []
   );
+  const setMinimized = useCallback(
+    (minimized: boolean) => setState((s) => ({ ...s, minimized })),
+    []
+  );
   const value = useMemo(
     () => ({
       available,
       open: available && state.open,
       setOpen,
+      toggleOpen,
       setDetail,
       clearDetail,
       askChannel,
@@ -251,6 +279,7 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       available,
       state.open,
       setOpen,
+      toggleOpen,
       setDetail,
       clearDetail,
       askChannel,
@@ -271,6 +300,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDocked,
       dockWidth: state.dockWidth ?? null,
       setDockWidth,
+      minimized: !!state.minimized,
+      setMinimized,
       pageDetail: () => detail.current,
       openedHere,
       sourceRequest,
@@ -290,6 +321,8 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDocked,
       state.dockWidth,
       setDockWidth,
+      state.minimized,
+      setMinimized,
       openedHere,
       sourceRequest,
       pageChannel,
@@ -365,6 +398,8 @@ export function HelpChatHost() {
       onDockedChange={host.setDocked}
       dockWidth={host.dockWidth}
       onDockWidthChange={host.setDockWidth}
+      minimized={host.minimized}
+      onMinimizedChange={host.setMinimized}
     />
   );
 }
