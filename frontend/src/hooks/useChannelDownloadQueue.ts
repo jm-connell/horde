@@ -4,10 +4,8 @@ import { isActiveJob, useDownloads } from "../context/DownloadContext";
 import { PRESET_ORDER, resolveQualityPreset } from "../presets";
 import type { ChannelFeedEntry, DownloadJob, DownloadPreview } from "../types";
 
-import { getItem, setItem } from "../storage";
 import { useSettings } from "./useSettings";
 const CONFIRM_SECONDS = 5;
-const DEFAULT_PRESET_KEY = "horde.channelFeed.defaultPreset";
 
 export interface PendingChannelDownload {
   tempId: number;
@@ -62,17 +60,13 @@ export function channelFeedItemDownloading(
   return jobs.some((j) => j.url === entry.url && isActiveJob(j));
 }
 
-function loadStoredPreset(): string | null {
-  return getItem(DEFAULT_PRESET_KEY)?.trim() || null;
-}
-
 export function useChannelDownloadQueue(channelName: string) {
   const { submitDownload, jobs } = useDownloads();
   const [settings] = useSettings();
-  // A quality picked in this browser's channel feed wins; otherwise the
-  // account's default quality.
-  const [storedPreset, setStoredPreset] = useState(loadStoredPreset);
-  const defaultPreset = storedPreset ?? settings.defaultDownloadPreset;
+  // A resolution picked on this channel page applies while you stay on it;
+  // otherwise, and on every new visit, the account's default quality.
+  const [pickedPreset, setPickedPreset] = useState<string | null>(null);
+  const defaultPreset = pickedPreset ?? settings.defaultDownloadPreset;
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [pending, setPending] = useState<PendingChannelDownload[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -87,11 +81,6 @@ export function useChannelDownloadQueue(channelName: string) {
   pendingRef.current = pending;
   const submittingIdsRef = useRef(new Set<number>());
   const pendingUrlsRef = useRef(new Set<string>());
-
-  const setDefaultPreset = useCallback((preset: string) => {
-    setStoredPreset(preset);
-    setItem(DEFAULT_PRESET_KEY, preset);
-  }, []);
 
   useEffect(() => {
     api
@@ -356,7 +345,7 @@ export function useChannelDownloadQueue(channelName: string) {
 
   return {
     defaultPreset,
-    setDefaultPreset,
+    setDefaultPreset: setPickedPreset,
     allPresets,
     pending,
     editingId,

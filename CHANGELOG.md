@@ -10,11 +10,26 @@ All notable changes to Horde are documented here. The format follows
 ### Added
 
 - **Default quality.** Pick the quality every download you start uses
-  unless you choose another: the Download page, the watch page, playlist
-  subscriptions, channel pages and Ask. Set it in the setup wizard's
-  Downloads step or Settings → Library → Downloads (Best available by
-  default); it is saved with your account. Channel auto-download keeps its
-  own per-channel quality.
+  unless you choose another: the Download page, the watch page, the
+  one-click download buttons, playlist subscriptions, channel pages and
+  Ask. Set it in the setup wizard's Downloads step or Settings → Library →
+  Downloads (Best available by default); it is saved with your account.
+  Channel auto-download keeps its own per-channel quality.
+
+### Changed
+
+- The one-click download buttons (Recommended, Continue watching, search
+  results, History, rewatched suggestions) use your default quality. They
+  always downloaded 1080p before; set Default quality to 1080p to keep that.
+- A resolution picked on a channel page applies until you leave the page,
+  instead of being remembered in the browser; the default quality covers
+  the rest.
+
+### Fixed
+
+- A download capped at a resolution (such as 1080p) from a link with no
+  video, like a podcast or a SoundCloud track, downloads the audio instead
+  of failing.
 
 ## [1.3.0] - 2026-11-08
 

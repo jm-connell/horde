@@ -387,7 +387,7 @@ function OnlineLibrary() {
             onDismissAll={dismissAll}
             onDismissYoutube={dismissYoutube}
             onDownloadYoutube={(e) =>
-              void submitDownload(e.url, "1080p", {
+              void submitDownload(e.url, settings.defaultDownloadPreset, {
                 title: e.title ?? undefined,
                 channel: e.channel ?? "Unknown channel",
               })

@@ -33,6 +33,7 @@ import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
+import { useSettings } from "../hooks/useSettings";
 
 /**
  * How many cards come before the channel suggestions: two full rows (four on
@@ -98,6 +99,7 @@ export default function DiscoverHome({
   const { can } = useAuth();
   const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
+  const [settings] = useSettings();
   const queryClient = useQueryClient();
   const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
   useAlgorithmPanelHere();
@@ -410,7 +412,7 @@ export default function DiscoverHome({
   const downloadStream = (entry: ChannelFeedEntry) => {
     if (!entry.url || downloading.has(entry.url)) return;
     setDownloading((prev) => new Set(prev).add(entry.url));
-    void submitDownload(entry.url, "1080p", {
+    void submitDownload(entry.url, settings.defaultDownloadPreset, {
       title: entry.title ?? undefined,
       channel: entry.channel ?? "Unknown channel",
     })

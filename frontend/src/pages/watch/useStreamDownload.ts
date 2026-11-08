@@ -47,6 +47,10 @@ export function useStreamDownload({
   const navigate = useNavigate();
   const [settings] = useSettings();
   const defaultPreset = settings.defaultDownloadPreset;
+  // Read by the reset below, which runs per stream: a default changed in
+  // another tab must not throw away a quality picked here.
+  const defaultPresetRef = useRef(defaultPreset);
+  defaultPresetRef.current = defaultPreset;
   const queryClient = useQueryClient();
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
@@ -69,12 +73,12 @@ export function useStreamDownload({
 
   useEffect(() => {
     if (libraryValid || !streamUrlParam) return;
-    setSelectedPreset(defaultPreset);
+    setSelectedPreset(defaultPresetRef.current);
     setAvailablePresets([]);
     setPresetSizes({});
     setPresetMenuOpen(false);
     userPickedPresetRef.current = false;
-  }, [streamUrlParam, libraryValid, defaultPreset]);
+  }, [streamUrlParam, libraryValid]);
 
   // Resolve download presets for stream
   const streamSource = source?.kind === "stream" ? source : null;
@@ -92,7 +96,8 @@ export function useStreamDownload({
       const ordered = orderPresets(presetsList);
       if (ordered.length === 0) return;
       setAvailablePresets(ordered);
-      if (!userPickedPresetRef.current) {
+      // A queued job keeps its own quality: leave the selection matching it.
+      if (!userPickedPresetRef.current && activeJobIdRef.current == null) {
         setSelectedPreset(defaultPresetFor(defaultPreset, ordered));
       }
     };

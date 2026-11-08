@@ -8,8 +8,14 @@ import { expect, test } from "./fixtures";
 async function withDefaultQuality(page: Page, preset: string) {
   await page.route(/\/api\/settings$/, async (route) => {
     if (route.request().method() !== "GET") return route.continue();
-    const response = await route.fetch();
-    const json = await response.json();
+    let response;
+    let json;
+    try {
+      response = await route.fetch();
+      json = await response.json();
+    } catch {
+      return; // the page moved on while this read was in flight
+    }
     json.ui = { ...(json.ui ?? {}), default_download_preset: preset };
     return route.fulfill({ response, json });
   });
@@ -116,4 +122,40 @@ test("a playlist subscription starts at the default quality", async ({
   await expect(
     page.getByRole("button", { name: "Max resolution" })
   ).toContainText("720p");
+});
+
+test("one-click download buttons use the default quality", async ({ page }) => {
+  await withDefaultQuality(page, "720p");
+  // The suite keeps YouTube search off; report it on so the feed shows the
+  // seed's videos found on YouTube (nothing here reaches YouTube).
+  await page.route(/\/api\/discover\/status$/, async (route) => {
+    let response;
+    let status;
+    try {
+      response = await route.fetch();
+      status = await response.json();
+    } catch {
+      return; // the page moved on while a status read was in flight
+    }
+    return route.fulfill({ response, json: { ...status, enabled: true } });
+  });
+  const posted: string[] = [];
+  await page.route(/\/api\/downloads$/, async (route) => {
+    if (route.request().method() !== "POST") return route.fallback();
+    // Answer with an existing job instead of queueing one, and record the
+    // request only once answered, so the test never ends mid-fetch.
+    const jobs = (await (
+      await route.fetch({ method: "GET" })
+    ).json()) as object[];
+    await route.fulfill({ json: jobs[0] });
+    posted.push(
+      (route.request().postDataJSON() as { quality_preset: string })
+        .quality_preset
+    );
+  });
+  await page.goto("/");
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  const found = page.locator(`[data-rec-key="discover001"]`);
+  await found.getByRole("button", { name: "Download" }).click();
+  await expect.poll(() => posted).toEqual(["720p"]);
 });
