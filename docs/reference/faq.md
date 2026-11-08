@@ -60,4 +60,4 @@ This is **not** an OSI-approved “open source” license (MIT/Apache/GPL all al
 
 ## Who wrote this?
 
-It was [vibecoded](../design/vibecoded.md) in Cursor with AI assistants. For questions, open the repo in Ask mode rather than expecting a full-time support desk.
+One person, with AI coding assistants writing most of the code. Every change has to pass the same automated test suite before it can ship, and installs follow tagged releases that roll back by themselves if they fail to start: [how Horde is built](../design/vibecoded.md). Questions and bugs: **Ask** at the bottom of every page answers from this documentation, and **Report a bug or idea** in Horde's footer opens a [GitHub issue](https://github.com/jm-connell/horde/issues).

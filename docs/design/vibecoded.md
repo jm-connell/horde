@@ -1,41 +1,33 @@
-# Vibecoded
+# How Horde is built
 
-Horde was **vibecoded**: built quickly in an AI-enabled IDE toward a personal TrueNAS / Dockge workflow, not designed as a multi-year corporate product with a full-time maintainer staff.
+Horde is written with **AI coding assistants**, and so is most of this documentation. One person directs the project and decides what goes in; the assistants write most of the code.
 
-## Provenance
+That is worth saying up front, because it is fair to ask how a project built this way stays reliable. The answer is that nothing reaches a release on the model's word alone.
 
-From the project README (paraphrased and preserved in spirit):
+## What every change has to pass
 
-- The author had long used Plex but disliked how it handles non-Movies/TV “Other” video — see [Why Horde](why-horde.md)
-- TubeArchivist looked decent; the goal was something shaped exactly to one vision
-- Implementation credit goes to AI coding models used in Cursor — notably **Opus**, **Composer**, and **Grok** — not to a claim of hand-written exclusivity
-- The stack targets a homelab archive: download, organize, watch, optionally add small local AI
+The same gates run locally (`scripts/check.sh`) and in CI on every pull request, and a red gate blocks the merge ([Automated testing](../getting-started/testing.md)):
 
-Treat that origin story as part of the product ethics: expect sharp edges, welcome forks, and prefer reading the running app over any leftover planning notes.
+- **Thousands of automated tests**: the API through FastAPI's `TestClient` (permissions, migrations, downloads, the update script and its rollback), the interface with Vitest, and the real app in a browser with Playwright, including accessibility checks.
+- **Static checks**: `ruff`, `mypy` at zero errors, `eslint` with no warnings, `tsc`, and a strict docs build, so a broken link fails too.
+- **Schema checks**: database changes are [Alembic revisions](sqlite-and-migrations.md), and a test fails when the models and the migrations drift apart. The committed API schema and the frontend's generated types must match the code.
+- **Project rules as tests**: no silently swallowed errors, every `noqa` explained, and every route that changes something classified as admin-only or permission-gated.
 
-## Extend with an AI IDE
+Larger or riskier changes (migrations, sign-in and security, deleting data, concurrency) also get an independent review that assumes the change is broken until shown otherwise.
 
-If you want to change Horde:
+## What that means for you
 
-1. Clone the repo and run [local development](../getting-started/local-dev.md) or Docker
-2. Open it in **Cursor** (or another AI IDE you like)
-3. Point the agent at the wiki (`/wiki/` or `docs/`) and the code under `backend/` / `frontend/`
-4. Keep changes small, test downloads/playback on your LAN, and watch SQLite + volume mounts
+- **Releases, not commits.** Installs follow tagged releases cut from a green `main`. Updates back up the database first and [roll back by themselves](../getting-started/updating.md) when the new version does not start.
+- **Decisions are written down.** The [decision records](../adr/index.md) explain the big choices (SQLite, threads, the auth model, the error envelope, how releases work), so the design does not live only in someone's head.
+- **Bugs still happen.** Please [report them](https://github.com/jm-connell/horde/issues): **Report a bug or idea** in Horde's footer fills in your version.
 
-The codebase is intentionally approachable for that loop: one container, additive SQLite migrations, React + FastAPI.
+## Changing Horde yourself
 
-## Ask mode for questions
+The codebase is set up to be easy to work on, with or without an AI assistant:
 
-The recommended way to ask “how does X work?” or “why did Y break?” is:
-
-1. Open this repository in Cursor
-2. Use **Ask** mode (read-only Q&A against the tree)
-3. Cite the files the model finds rather than guessing from memory
-
-That matches how the original author works and keeps answers grounded in *this* checkout.
-
-!!! tip "Docs in the app"
-    On a running instance: **Settings → System → Documentation** → `/wiki/`. Interactive API: `/docs`.
+1. Run it locally ([Local development](../getting-started/local-dev.md)).
+2. Read [`CLAUDE.md`](https://github.com/jm-connell/horde/blob/main/CLAUDE.md) and [`CONTRIBUTING.md`](https://github.com/jm-connell/horde/blob/main/CONTRIBUTING.md): the project rules, written for humans and coding agents alike. The [architecture map](architecture.md) shows where things live.
+3. Keep changes small and run `scripts/check.sh` before you open a pull request.
 
 ## Related
 
