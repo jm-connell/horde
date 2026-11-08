@@ -11,6 +11,7 @@ import SendLinksHelp from "../components/SendLinksHelp";
 import RewatchedSuggestions from "../components/takeout/RewatchedSuggestions";
 import ThemedSelect from "../components/ThemedSelect";
 import { useAuth } from "../context/AuthContext";
+import { useSettings } from "../hooks/useSettings";
 import { useToast } from "../context/ToastContext";
 import { sharedUrlFromParams } from "../shareTarget";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
@@ -87,7 +88,10 @@ export default function Download() {
   // On an http:// LAN origin the Clipboard API is missing and a Paste button
   // could not read anything (only Ctrl+V works), so it is not shown there.
   const canReadClipboard = clipboardReadAvailable();
-  const [preset, setPreset] = useState("best");
+  const [settings] = useSettings();
+  // The quality the user picked for this link; null means their default
+  // (Settings → Library), read live so it also applies once settings load.
+  const [pickedPreset, setPickedPreset] = useState<string | null>(null);
   const [destination, setDestination] =
     useState<DownloadDestination>("library");
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
@@ -185,7 +189,7 @@ export default function Download() {
     if (!trimmed) {
       setPreview(null);
       setPreviewError(null);
-      setPreset("best");
+      setPickedPreset(null);
       setPlaylistMode("import");
       return;
     }
@@ -198,11 +202,6 @@ export default function Download() {
           setPreviewError(null);
           setTitle(p.title ?? "");
           // Leave channel empty so the picker stays on "Auto-detected".
-          if (!p.is_playlist && p.available_presets.length > 0) {
-            setPreset((current) =>
-              current !== "best" ? current : p.available_presets[0]
-            );
-          }
         })
         .catch((err: unknown) => {
           setPreview(null);
@@ -274,6 +273,13 @@ export default function Download() {
     preview != null &&
     !preview.is_playlist &&
     preview.available_presets.length > 0;
+
+  // "Best available" shows as the top tier this video offers once it is known.
+  const basePreset = pickedPreset ?? settings.defaultDownloadPreset;
+  const preset =
+    metadataLoaded && basePreset === "best"
+      ? preview.available_presets[0]!
+      : basePreset;
 
   const qualityOptions = useMemo(() => {
     if (!metadataLoaded) return allPresets;
@@ -745,7 +751,7 @@ export default function Download() {
                 metadataLoaded ? presetSizes : undefined
               ),
             }))}
-            onChange={setPreset}
+            onChange={setPickedPreset}
             className="w-full"
             buttonClassName="w-full px-3 py-2.5"
           />

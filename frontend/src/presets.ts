@@ -26,6 +26,12 @@ export const PRESET_LABELS: Record<string, string> = {
   "audio-64": "Audio · 64 kbps",
 };
 
+/** Choices for the default download quality (Settings → Library, setup). */
+export const DEFAULT_PRESET_OPTIONS = PRESET_ORDER.map((value) => ({
+  value,
+  label: PRESET_LABELS[value] ?? value,
+}));
+
 export function isAudioPreset(preset: string): boolean {
   return preset === "audio" || preset.startsWith("audio-");
 }

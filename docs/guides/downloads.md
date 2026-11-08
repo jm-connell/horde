@@ -6,6 +6,8 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 
 ## Quality presets
 
+The Download page preselects your **Default quality** (Settings → Library → Downloads, or the setup wizard); change it per link in the **Quality** menu.
+
 | Preset | Meaning |
 |--------|---------|
 | **best** | Highest resolution **AV1** (then other codecs) + AAC when YouTube offers it |

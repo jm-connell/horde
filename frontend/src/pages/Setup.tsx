@@ -18,6 +18,8 @@ import type { DownloadVideoCodec } from "../hooks/settings/types";
 import PlaybackCompatPicker from "./settings/PlaybackCompatPicker";
 import ThemePalettePicker from "./settings/ThemePalettePicker";
 import { Toggle } from "./settings/ui";
+import ThemedSelect from "../components/ThemedSelect";
+import { DEFAULT_PRESET_OPTIONS } from "../presets";
 import TakeoutImport from "../components/takeout/TakeoutImport";
 import { INPUT, INPUT_KEY, PANEL_BTN } from "./settings/constants";
 import {
@@ -451,6 +453,24 @@ function WizardPanel({
               New downloads use these defaults. You can change them later in
               Settings → Library.
             </p>
+            <div className="flex items-center justify-between gap-4">
+              <span>
+                <span className="block text-sm font-medium text-gray-200">
+                  Default quality
+                </span>
+                <span className="block text-xs text-muted">
+                  Preselected on the Download page. Best available keeps the
+                  highest resolution each video offers.
+                </span>
+              </span>
+              <ThemedSelect
+                aria-label="Default quality"
+                value={settings.defaultDownloadPreset}
+                options={DEFAULT_PRESET_OPTIONS}
+                onChange={(value) => update({ defaultDownloadPreset: value })}
+                className="w-full min-w-40 max-w-56"
+              />
+            </div>
             <label className="flex items-center justify-between gap-4">
               <span>
                 <span className="block text-sm font-medium text-gray-200">

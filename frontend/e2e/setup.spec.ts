@@ -48,6 +48,11 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
   await page.getByRole("button", { name: "Continue" }).click();
   await expect(page.getByRole("heading", { name: "Downloads" })).toBeVisible();
   await expect(page.getByText("Normalize volume on download")).toBeVisible();
+  const quality = page.getByRole("button", { name: "Default quality" });
+  await expect(quality).toContainText("Best available");
+  await quality.click();
+  await page.getByRole("option", { name: "1080p" }).click();
+  await expect(quality).toContainText("1080p");
 
   await stepSettled(page);
   await page.getByRole("button", { name: "Back" }).click();
@@ -146,11 +151,22 @@ test("setup wizard walks each step and lands on Download", async ({ page }) => {
       { message: "the chosen playback mode reaches the server" }
     )
     .toContain('"sidecar"');
+  await expect
+    .poll(
+      async () =>
+        JSON.stringify(await (await page.request.get("/api/settings")).json()),
+      { message: "the chosen download quality reaches the server" }
+    )
+    .toContain('"default_download_preset":"1080p"');
   await page.getByRole("button", { name: "Go to Downloads" }).click();
   await expect(page).toHaveURL(/\/download$/);
   await expect(
     page.getByRole("heading", { name: "Download", level: 1 })
   ).toBeVisible();
+  // The quality chosen in the wizard is preselected for new links.
+  await expect(page.getByRole("button", { name: "Quality" })).toContainText(
+    "1080p"
+  );
   await expect(
     page.getByRole("link", { name: "Home", exact: true })
   ).toBeVisible();

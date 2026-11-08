@@ -6,6 +6,7 @@ import {
   parseCustomFontInput,
 } from "../../fonts";
 import { normalizeHotkeyOverrides } from "../../hotkeys";
+import { PRESET_ORDER } from "../../presets";
 import { normalizeTabBarItems } from "../../tabBar";
 import { isLoadingStyle } from "../../loadingStyles";
 import {
@@ -493,6 +494,11 @@ export function normalizeSettings(
     ),
     previewMuted: normalizeBool(parsed.previewMuted, DEFAULTS.previewMuted),
     downloadVideoCodec: normalizeDownloadVideoCodec(parsed.downloadVideoCodec),
+    defaultDownloadPreset: (PRESET_ORDER as readonly unknown[]).includes(
+      parsed.defaultDownloadPreset
+    )
+      ? (parsed.defaultDownloadPreset as string)
+      : DEFAULTS.defaultDownloadPreset,
     compatCopyResolution:
       parsed.compatCopyResolution === "source" ? "source" : "1080p",
     helpChatData:
