@@ -21,7 +21,8 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "gen:api": "node scripts/gen-api.mjs",
-    "gen:api:check": "node scripts/gen-api.mjs --check"
+    "gen:api:check": "node scripts/gen-api.mjs --check",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "dependencies": {
     "@fontsource/oxanium": "5.3.0",

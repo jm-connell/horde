@@ -137,6 +137,21 @@ npm run build:sync
 
 That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`. `backend/static` is gitignored: it is a local build artifact, never committed (the Docker image builds its own copy).
 
+## Retake the screenshots
+
+The README and docs screenshots come from a real library. Point the capture
+script at any running Horde (your own server works best) from `frontend/`:
+
+```bash
+npm run screenshots -- http://192.168.1.20:8686
+```
+
+A browser window opens: sign in there, then for each shot the script opens the
+page and says what to set up, and Enter saves it to
+`docs/assets/screenshots/<name>.webp` (`s` skips it). Name shots after the URL
+to retake only those, e.g. `... player ask`. The first run needs Playwright's
+browser: `npx playwright install chromium`.
+
 ## Optional: Docker-shaped local stack
 
 You can still use Compose on a laptop:
