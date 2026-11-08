@@ -41,6 +41,34 @@ if cmd == "info":
     out()
 if cmd == "ps":
     out()
+def builds_here():
+    if state.get("build_mode"):
+        return True
+    files = os.environ.get("COMPOSE_FILE", "")
+    env = Path(".env")
+    if not files and env.exists():
+        for line in env.read_text().splitlines():
+            if line.startswith("COMPOSE_FILE="):
+                files = line.split("=", 1)[1]
+    return "docker-compose.build.yml" in files
+
+def horde_ref():
+    return "horde:latest" if builds_here() else state.get("image_ref", "horde:latest")
+
+if cmd == "pull":  # docker pull REPO:sha-<short>, the published image of a commit
+    ref = args[-1]
+    state.setdefault("pulled", []).append(ref)
+    if state.get("pull_fails"):
+        save(); sys.exit(1)
+    import subprocess
+    short = ref.rsplit(":sha-", 1)[1]
+    full = subprocess.run(["git", "rev-parse", short + "^{commit}"],
+                          capture_output=True, text=True).stdout.strip()
+    ident = "sha256:pulled-" + short
+    state["images"].append(ident)
+    state["tags"][ref] = ident
+    state.setdefault("labels", {})[ident] = state.get("published_revision", full)
+    save(); out()
 if cmd == "rmi":
     state.setdefault("removed", []).append(args[-1])
     state["image_list"] = [i for i in state.get("image_list", []) if i[1] != args[-1].split(":")[-1]]
@@ -112,6 +140,12 @@ if cmd == "compose":
     verb = next((a for a in sub if a in ("ps", "config", "build", "up", "pull", "stop", "logs")), "")
     if verb == "ps":
         out("cid-1\n" if state["running"] else "")
+    if verb == "config" and "--images" in args:
+        lines = ["pot:1"] if args[-1] == "bgutil-pot" else ["pot:1", horde_ref()]
+        out("".join(line + "\n" for line in lines))
+    if verb == "config" and "--format" not in args:  # config horde (YAML)
+        build = "    build:\n      context: .\n" if builds_here() else ""
+        out(f"services:\n  bgutil-pot:\n    image: pot:1\n  horde:\n    image: {horde_ref()}\n{build}")
     if verb == "config":
         out(json.dumps({"services": {"horde": {"volumes": [
             {"type": "bind", "source": f"{d}/dl", "target": "/downloads"},
@@ -128,7 +162,7 @@ if cmd == "compose":
         state["running"] = False
         save(); out()
     if verb == "up":
-        image = state["tags"]["horde:latest"]
+        image = state["tags"][horde_ref()]
         state["running"] = True
         state["running_image"] = image
         state["healthy"] = image != "sha256:new" or state["new_is_healthy"]
@@ -232,6 +266,8 @@ class Harness:
             "revision_before": "0001",
             "revision_new": "0001",
             "new_is_healthy": True,
+            # Most tests cover building from the checkout; published_image() switches.
+            "build_mode": True,
         }
         state["labels"] = {"sha256:old": self.v1}
         (self.dir / "state.json").write_text(json.dumps(state))
@@ -254,6 +290,11 @@ class Harness:
     def tag_upstream(self, tag: str, ref: str = "HEAD") -> None:
         _git(self.other, "tag", tag, ref)
         _git(self.other, "push", "origin", tag)
+
+    def published_image(self) -> None:
+        """The default install: the published image, pulled, nothing built here."""
+        ref = "ghcr.io/example/horde:latest"
+        self.set(build_mode=False, image_ref=ref, tags={ref: "sha256:old"})
 
     def set(self, **changes: object) -> None:
         state = self.read_state()
@@ -726,13 +767,15 @@ def test_main_channel_ignores_release_tags(harness):
     assert v2 != v3
 
 
-def test_release_channel_refuses_to_move_a_checkout_backwards(harness):
+def test_release_channel_refuses_to_move_the_running_version_backwards(harness):
     v2 = harness.publish()
     harness.tag_upstream("v1.0.0", harness.v1)
     harness.publish()
     _git(harness.work, "pull", "--ff-only", "origin", "main")
     assert _git(harness.work, "rev-parse", "HEAD") != harness.v1
     before = _git(harness.work, "rev-parse", "HEAD")
+    # What runs was built from this newer checkout: the release would downgrade it.
+    harness.set(labels={"sha256:old": before})
 
     result = harness.run()
 
@@ -746,6 +789,141 @@ def test_release_channel_refuses_to_move_a_checkout_backwards(harness):
     allowed = harness.run(HORDE_ALLOW_DOWNGRADE="1")
     assert allowed.returncode == 0, allowed.stdout + allowed.stderr
     assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+
+
+# --- the published image (the default install) -------------------------------
+
+
+def test_published_image_pulls_the_image_of_the_release_it_checks_out(harness):
+    harness.published_image()
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    harness.publish()  # unreleased commit on main
+
+    result = harness.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == v2
+    calls = harness.calls()
+    assert not any(c.startswith("compose build") for c in calls)
+    assert _index(calls, f"pull ghcr.io/example/horde:sha-{v2[:7]}") < _index(
+        calls, "compose up"
+    )
+    state = harness.read_state()
+    pulled = f"sha256:pulled-{v2[:7]}"
+    # Started under the name compose uses, kept as horde:<sha> for rollback.
+    assert state["tags"]["ghcr.io/example/horde:latest"] == pulled
+    assert state["tags"][f"horde:{v2[:7]}"] == pulled
+    assert state["running_image"] == pulled
+    assert f"PREV_GIT_SHA={harness.v1}" in _state_text(harness)
+
+
+def test_fresh_clone_ahead_of_the_release_moves_to_the_release_it_runs(harness):
+    """A new install clones main, ahead of the release whose image it runs."""
+    harness.published_image()
+    harness.tag_upstream("v1.0.0", harness.v1)
+    harness.publish()
+    _git(harness.work, "pull", "--ff-only", "origin", "main")
+    assert _git(harness.work, "rev-parse", "HEAD") != harness.v1
+
+    result = harness.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "BACKWARDS" not in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "horde-release"
+
+
+def test_unpublished_release_image_stops_and_restores_the_checkout(harness):
+    harness.published_image()
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    harness.set(pull_fails=True)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "try again later" in result.stderr
+    assert _git(harness.work, "rev-parse", "--abbrev-ref", "HEAD") == "main"
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert not any(c.startswith("compose up") for c in harness.calls())
+    assert not (harness.work / ".local" / "update-state.env").exists()
+
+
+def test_image_built_from_another_commit_is_not_started(harness):
+    harness.published_image()
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    harness.set(published_revision=harness.v1)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "was not built from" in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert not any(c.startswith("compose up") for c in harness.calls())
+
+
+def test_pinned_image_is_not_moved_to_another_release(harness):
+    harness.published_image()
+    ref = "ghcr.io/example/horde:1.0.0"
+    harness.set(image_ref=ref, tags={ref: "sha256:old"})
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "pins ghcr.io/example/horde:1.0.0" in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert not harness.read_state().get("pulled")
+
+
+def test_published_image_up_to_date_does_nothing(harness):
+    harness.published_image()
+    harness.tag_upstream("v1.0.0", harness.v1)
+    assert harness.run().returncode == 0  # moves to horde-release, same image
+
+    harness.set(pulled=[])
+    result = harness.run()
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Already up to date" in result.stdout
+    assert not harness.read_state()["pulled"]
+
+
+def test_main_channel_switches_a_published_install_to_building(harness):
+    harness.published_image()
+    (harness.other / "docker-compose.build.yml").write_text("services: {}\n")
+    _git(harness.other, "add", "docker-compose.build.yml")
+    _git(harness.other, "commit", "-m", "build overlay")
+    _git(harness.other, "push", "origin", "main")
+    tip = _git(harness.other, "rev-parse", "HEAD")
+
+    result = harness.run(HORDE_UPDATE_CHANNEL="main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == tip
+    env = (harness.work / ".env").read_text()
+    assert "COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml" in env
+    calls = harness.calls()
+    assert any(c.startswith("compose build") for c in calls)
+    assert not harness.read_state().get("pulled")
+
+
+def test_rollback_after_a_pull_restarts_the_previous_image(harness):
+    harness.published_image()
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    assert harness.run().returncode == 0
+
+    result = harness.run("--rollback")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    state = harness.read_state()
+    assert state["tags"]["ghcr.io/example/horde:latest"] == "sha256:old"
+    assert state["running_image"] == "sha256:old"
 
 
 # --- scripts/update_watch.sh: the "Update now" button's host side ------------

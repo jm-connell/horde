@@ -15,6 +15,7 @@ import yaml
 REPO = Path(__file__).resolve().parents[2]
 ENV_EXAMPLE = REPO / ".env.example"
 COMPOSE = REPO / "docker-compose.yml"
+COMPOSE_BUILD = REPO / "docker-compose.build.yml"
 UPDATE_SCRIPTS = [REPO / "update.sh", *sorted((REPO / "scripts").glob("*.sh"))]
 
 #: Documented keys that are deliberately NOT container environment, with why.
@@ -31,6 +32,7 @@ NOT_RUNTIME: dict[str, str] = {
     "HORDE_GIT_SHA": "image build argument (baked into the image)",
     "HORDE_UPDATE_CHANNEL": "read by update.sh on the host",
     "HORDE_ALLOW_DOWNGRADE": "read by update.sh on the host",
+    "COMPOSE_FILE": "read by docker compose and update.sh on the host",
 }
 
 #: Commented (`# NAME=`) or active (`NAME=`) assignments at the start of a line.
@@ -80,7 +82,9 @@ def test_documented_keys_pass_the_operator_value_through() -> None:
 def test_not_runtime_allowlist_is_accurate() -> None:
     documented = documented_keys()
     env = compose_environment()
-    compose_text = COMPOSE.read_text(encoding="utf-8")
+    compose_text = COMPOSE.read_text(encoding="utf-8") + COMPOSE_BUILD.read_text(
+        encoding="utf-8"
+    )
     scripts_text = "\n".join(p.read_text(encoding="utf-8") for p in UPDATE_SCRIPTS)
     for name, why in NOT_RUNTIME.items():
         assert name in documented, f"{name} is allowlisted but no longer documented"

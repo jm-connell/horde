@@ -19,7 +19,7 @@ body:
     attributes:
       label: How is Horde installed?
       options:
-        - Docker Compose, published image (HORDE_IMAGE)
+        - Docker Compose, published image (default)
         - Docker Compose, built from source
         - TrueNAS with Dockge
         - Unraid

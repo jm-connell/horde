@@ -178,8 +178,8 @@ Set these in `.env`:
 Both paths start out empty and Horde will not start until they are set. Point
 them at the folders from step 2: Docker creates a missing path owned by root,
 and Horde cannot save downloads there. Keep paths in
-`.env`, not in `docker-compose.yml`. Leave `HORDE_IMAGE` as it is: it points
-at the published image. (Comment it out to build from source instead.)
+`.env`, not in `docker-compose.yml`. Horde runs the published image; nothing is
+built on your machine.
 
 ### 4. Start
 
@@ -244,9 +244,9 @@ recreated the stack.
 
 Do not run `git reset --hard` or edit `docker-compose.yml` to get past a failed
 update; see [Updating](https://jm-connell.github.io/horde/getting-started/updating/)
-for what to do instead. Installs from before the published image build on the
-host until `HORDE_IMAGE` is set
-([Use the published image](https://jm-connell.github.io/horde/getting-started/updating/#use-the-published-image)).
+for what to do instead. Updates only ever install releases, using the
+published image; to build on the host instead, see
+[Build from source](https://jm-connell.github.io/horde/getting-started/updating/#build-from-source).
 
 yt-dlp is pinned in the image and updates with Horde. To install the newest
 yt-dlp on every container start instead, set `YTDLP_AUTO_UPDATE=1` in `.env`.
@@ -260,7 +260,8 @@ Settings that live in `.env` (most others are in the app's Settings page):
 | `PUID` / `PGID` | User and group Horde writes files as (default `1000`) |
 | `DOWNLOADS_PATH` | Host folder for videos, mounted at `/downloads` |
 | `DATA_PATH` | Host folder for the database and thumbnails, mounted at `/app/data` (local disk only) |
-| `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; comment out to build from source) |
+| `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; set only for a fork's image) |
+| `COMPOSE_FILE` | `docker-compose.yml:docker-compose.build.yml` builds the image from the checkout instead of pulling it |
 | `SCAN_INTERVAL_SEC` | How often the media folder is rescanned for new files (default `60` seconds) |
 | `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a subscribed channel (default `300`, `0` = off) |
 | `YTDLP_COOKIE_FILE` | Optional cookies file for age-restricted or blocked videos |

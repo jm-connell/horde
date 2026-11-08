@@ -55,7 +55,7 @@ cd horde
 git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
 
-The last line switches the checkout to the newest release, so the compose file and scripts match the published image. (A fresh clone is on `main`, which is often ahead of the newest release; later updates would then refuse to move "backwards" to it.) Copy it as it is; [updates](updating.md) take it from there.
+The last line switches the checkout to the newest release, so the compose file and scripts match the image you will run (a fresh clone is on `main`, which is often ahead of the newest release). Copy it as it is; [updates](updating.md) keep you on releases from there.
 
 You are now inside the `horde` folder. Every later command on this page is run from here; if you open a new terminal, `cd ~/horde` first.
 
@@ -111,8 +111,6 @@ In `nano`: move with the arrow keys, save with **Ctrl+O** then **Enter**, quit w
 
 !!! warning "Point both paths at folders you created"
     If a path does not exist, Docker creates it **owned by root**, and Horde then cannot save downloads there. Create the folders first (step 2), then use their full paths.
-
-The same file also sets `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`, the published image. Leave it: it saves a long build on your machine. (To build from the source instead, put a `#` in front of that line.)
 
 Make sure that user owns both folders (use the numbers from `id -u` and `id -g`):
 

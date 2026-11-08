@@ -79,14 +79,15 @@ The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `f
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `HORDE_UPDATE_CHANNEL` | `release` | Host-side, read by `update.sh`: `release` (newest stable `vX.Y.Z` tag), `prerelease` or `main`. See [Update channels](../getting-started/updating.md#update-channels). |
-| `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the checkout. |
+| `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the version that runs. |
 | `HORDE_ALLOW_ROOT` | `0` | The entrypoint refuses `PUID=0` / `PGID=0` unless this is `1`. |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = on start, install the latest yt-dlp into `DATA_DIR/pylib` and prefer it over the baked version (details below). |
-| `HORDE_IMAGE` | `ghcr.io/jm-connell/horde:latest` in `.env.example`; unset = build locally | Compose-only. The image the `horde` service runs. Set: pulled from the registry (pin a version such as `:1.2.2`). Unset: built from this checkout. See [Use the published image](../getting-started/updating.md#use-the-published-image). |
-| `HORDE_PULL_POLICY` | `missing` | Compose-only. `always` pulls `HORDE_IMAGE` on every `docker compose up`. |
+| `HORDE_IMAGE` | `ghcr.io/jm-connell/horde:latest` | Compose-only. The published image the `horde` service runs; set it only for another image, such as a fork's. A pinned version (`:1.2.2`) holds `docker compose` there, and `update.sh` refuses to update until it ends in `:latest` again. See [Use the published image](../getting-started/updating.md#use-the-published-image). |
+| `COMPOSE_FILE` | *(unset)* | Read by Compose and `update.sh`. `docker-compose.yml:docker-compose.build.yml` builds the image from this checkout instead of pulling it (needed for `HORDE_UPDATE_CHANNEL=main`). See [Build from source](../getting-started/updating.md#build-from-source). |
+| `HORDE_PULL_POLICY` | `missing` | Compose-only. `always` pulls the image on every `docker compose up`. |
 | `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |
 | `HORDE_PIDS_LIMIT` | `1024` | Compose-only. Maximum processes/threads. |
-| `FFMPEG_FLAVOR` | `jellyfin` | Build-time. `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
+| `FFMPEG_FLAVOR` | `jellyfin` | Build-time (only when [building from source](../getting-started/updating.md#build-from-source)). `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
 | `JELLYFIN_GPG_FPR` | `4918AABC486CA052358D778D49023CD01DE21A7B` | Build-time. Expected fingerprint (40 hex characters) of the Jellyfin repository signing key; the build fails on a mismatch. Empty = use the built-in pinned fingerprint. Only override it if Jellyfin rotates their key (verify the new one out of band first). |
 | `YTDLP_UPDATE_TIMEOUT_SEC` | `45` | Time limit for the `YTDLP_AUTO_UPDATE` download at start. |
 

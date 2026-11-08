@@ -144,8 +144,7 @@ You can still use Compose on a laptop:
 ```bash
 cp .env.example .env
 # point DOWNLOADS_PATH / DATA_PATH at local dirs; set PUID/PGID
-# and comment out HORDE_IMAGE, so the image is built from this checkout
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
 ```
 
 UI: `http://127.0.0.1:8686` (host **8686** → container **8080**). `bgutil-pot` starts automatically; Ollama needs `docker compose --profile ai up -d`.

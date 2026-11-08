@@ -22,10 +22,8 @@ Use a stack from the Git repository, so Portainer gets the same compose file as 
 
 1. **Stacks → Add stack**, name it `horde`, build method **Repository**.
 2. Repository URL `https://github.com/jm-connell/horde`, compose path `docker-compose.yml`.
-3. Under **Environment variables**, add `PUID`, `PGID`, `DOWNLOADS_PATH`, `DATA_PATH` (full host paths) and `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`. Or upload a filled-in copy of `.env.example` with **Load variables from .env file**.
+3. Under **Environment variables**, add `PUID`, `PGID`, `DOWNLOADS_PATH` and `DATA_PATH` (full host paths). Or upload a filled-in copy of `.env.example` with **Load variables from .env file**.
 4. **Deploy the stack**, then open `http://<host>:8686`.
-
-Without `HORDE_IMAGE`, Portainer tries to build the image from the repository, which is slow and needs the whole checkout.
 
 ## Synology (Container Manager)
 
@@ -33,7 +31,7 @@ DSM 7.2 and later run Compose files as **projects**:
 
 1. In **File Station**, create a folder for the project (for example `docker/horde`), a media folder and a data folder on a local volume (not a mounted share).
 2. Download `docker-compose.yml` and `.env.example` from the [repository](https://github.com/jm-connell/horde) into the project folder, and rename `.env.example` to `.env`.
-3. Edit `.env`: `PUID` / `PGID` of the DSM user that owns the media folder (Control Panel → User, or `id` over SSH), and the full paths, which on Synology start with `/volume1/...`. Keep `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`.
+3. Edit `.env`: `PUID` / `PGID` of the DSM user that owns the media folder (Control Panel → User, or `id` over SSH), and the full paths, which on Synology start with `/volume1/...`.
 4. **Container Manager → Project → Create**, choose the project folder, use the existing `docker-compose.yml`, and finish the wizard.
 5. Open `http://<nas>:8686`.
 
@@ -46,7 +44,7 @@ Unraid's own templates manage one container at a time, and Horde wants two. The 
 1. Install **Docker Compose Manager** from the **Apps** tab.
 2. Create shares for media and for Horde's data (put the data share on the cache pool or another local disk, `Use cache: Only`, so the database is never on the array's network path).
 3. In a terminal: `git clone https://github.com/jm-connell/horde.git /mnt/user/appdata/horde-stack`, then `cd /mnt/user/appdata/horde-stack` and `git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"` (moves the checkout to the newest release, so it matches the image).
-4. **Docker → Compose → Add new stack**, point it at that folder (Advanced → stack directory), then edit the stack's `.env`: `PUID=99`, `PGID=100` (Unraid's `nobody:users`, the usual owner of shares), `DOWNLOADS_PATH=/mnt/user/<media share>`, `DATA_PATH=/mnt/user/appdata/horde` and keep `HORDE_IMAGE`.
+4. **Docker → Compose → Add new stack**, point it at that folder (Advanced → stack directory), then edit the stack's `.env`: `PUID=99`, `PGID=100` (Unraid's `nobody:users`, the usual owner of shares), `DOWNLOADS_PATH=/mnt/user/<media share>`, `DATA_PATH=/mnt/user/appdata/horde`.
 5. **Compose Up**, then open `http://<server>:8686`.
 
 Because the stack folder is a git clone, `bash update.sh` from the Unraid terminal works too.

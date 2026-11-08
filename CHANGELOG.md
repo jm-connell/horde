@@ -53,6 +53,14 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Releases only, published image by default.** `docker-compose.yml` runs
+  the published release image and no longer has a build section, so a
+  failed download stops with an error instead of quietly starting a long
+  build on the host. `update.sh` (and **Update now**) pulls the image of
+  exactly the release it checks out and checks the commit baked into it; a
+  release whose image is still being published stops the update and leaves
+  everything as it was. Building from the checkout is opt-in:
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` in `.env`.
 - **Chat about a video is in Ask.** The watch page's AI section is now
   **Summary** (with Regenerate) and a **Chat ↗** button that opens Ask on
   the video ("Ask <video>"). On a watch page Ask answers from the video by
@@ -92,9 +100,23 @@ All notable changes to Horde are documented here. The format follows
   minutes after the failure.
 - Casting to a Chromecast sent the original file even when an H.264 copy
   existed, so AV1 videos failed on most Chromecasts.
-- The install guides now check out the newest release after `git clone`. A
-  fresh clone is on `main`, usually ahead of the newest release, so the first
-  `update.sh` or **Update now** stopped with "would go BACKWARDS".
+- The first **Update now** (or `update.sh`) of a new install stopped with
+  "would go BACKWARDS": a fresh clone is on `main`, usually ahead of the
+  release its image runs. The guard now compares the release with the version
+  that runs, and the install guides check out the newest release after
+  `git clone`.
+- A broken link from Comments to "Chat about a video" in the AI features
+  guide.
+
+### Upgrade notes
+
+- Nothing to do for most installs. An install that builds from source (no
+  `HORDE_IMAGE` in `.env`) switches to the published image at its first
+  update to this release; to keep building, add
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` to `.env`
+  first. On `HORDE_UPDATE_CHANNEL=main`, `update.sh` adds that line itself.
+- A `HORDE_IMAGE` pinned to a version (`:1.2.2`) now stops `update.sh`;
+  remove the line, or end it in `:latest`, to update.
 
 ## [1.2.2] - 2026-11-03
 
