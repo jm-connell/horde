@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Update Horde: back up the database, fast-forward the git checkout, rebuild the
-# image (tagged horde:latest and horde:<shortsha>), restart, and wait for health.
-# If the new version does not become healthy it is rolled back automatically.
+# Update Horde: back up the database, move the git checkout to the newest
+# release, pull that release's published image (or, with docker-compose.build.yml
+# in COMPOSE_FILE, build it here), restart, and wait for health. The image is
+# also tagged horde:<shortsha> for rollback. If the new version does not become
+# healthy it is rolled back automatically.
 # Run on the TrueNAS / Docker host (not inside the container Bash button).
 #
 # Usage (from your Dockge stack folder):
@@ -115,12 +117,39 @@ docker_bin() {
 }
 
 compose() {
-  # Pass HORDE_GIT_SHA on the same line as sudo so it is not stripped from the environment.
+  # Variables go on the same line as sudo so they are not stripped from the
+  # environment; COMPOSE_FILE and HORDE_IMAGE set in the shell are passed on too.
+  # HORDE_PULL_POLICY=missing: the image this script pulled and tagged is the one
+  # to start, even when .env asks compose to pull on every start.
+  local vars=(HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" HORDE_PULL_POLICY=missing)
+  [[ -n "${COMPOSE_FILE:-}" ]] && vars+=(COMPOSE_FILE="$COMPOSE_FILE")
+  [[ -n "${HORDE_IMAGE:-}" ]] && vars+=(HORDE_IMAGE="$HORDE_IMAGE")
   if [[ "$USE_SUDO" -eq 0 ]]; then
-    HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" docker compose "$@"
+    env "${vars[@]}" docker compose "$@"
   else
-    sudo HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" docker compose "$@"
+    sudo "${vars[@]}" docker compose "$@"
   fi
+}
+
+# The image the horde service runs, as the checkout's compose files (and .env)
+# name it. Read from horde's own block: `config horde` also prints the services
+# it depends on, in no fixed order.
+compose_horde_image() {
+  compose config horde 2>/dev/null | awk '
+    /^  horde:$/ { in_horde = 1; next }
+    in_horde && /^  [^ ]/ { in_horde = 0 }
+    in_horde && /^    image: / { sub(/^    image: /, ""); print; exit }' || true
+}
+
+# True when the compose files build the horde image here: docker-compose.build.yml
+# in COMPOSE_FILE, a build: in an override file, or a checkout from before the
+# published image was the default.
+compose_builds_horde() {
+  compose config horde 2>/dev/null | awk '
+    /^  horde:$/ { in_horde = 1; next }
+    in_horde && /^  [^ ]/ { in_horde = 0 }
+    in_horde && /^    build:/ { found = 1 }
+    END { exit found ? 0 : 1 }'
 }
 
 want_ai_profile() {
@@ -256,13 +285,6 @@ planned_bind_mounts() {
     horde_extract_horde_bind_mounts <<<"$yaml" || true
   fi
 }
-
-# Image the horde service runs: horde:latest when built here, or HORDE_IMAGE
-# (a published image, see docs/getting-started/updating.md).
-IMAGE_REF="${HORDE_IMAGE:-$(horde_env_get "$ENV_FILE" HORDE_IMAGE)}"
-IMAGE_REF="${IMAGE_REF:-horde:latest}"
-PUBLISHED_IMAGE=0
-[[ -n "${HORDE_IMAGE:-$(horde_env_get "$ENV_FILE" HORDE_IMAGE)}" ]] && PUBLISHED_IMAGE=1
 
 image_id() {
   docker_bin image inspect --format '{{.Id}}' "$1" 2>/dev/null || true
@@ -441,8 +463,11 @@ backup_database() {
 # Put the previous image back as the horde image and recreate the container.
 # Never builds or pulls: it must work offline and must not re-fetch the bad version.
 recreate_previous() {
-  local prev_image="$1" prev_sha="$2"
-  docker_bin tag "$prev_image" "$IMAGE_REF" || return 1
+  local prev_image="$1" prev_sha="$2" ref
+  # The checkout is back at the previous version: give the previous image the
+  # name its compose files start (horde:latest when it was built here).
+  ref="$(compose_horde_image)"
+  docker_bin tag "$prev_image" "${ref:-$IMAGE_REF}" || return 1
   SHA="$prev_sha"
   compose "${UP_ARGS[@]}" --no-build --pull never --force-recreate
 }
@@ -690,6 +715,9 @@ if want_ai_profile; then
   UP_ARGS=(--profile ai up -d)
 fi
 
+IMAGE_REF="$(compose_horde_image)"
+IMAGE_REF="${IMAGE_REF:-horde:latest}"
+
 if [[ "$MODE" == "rollback" ]]; then
   if [[ -z "$LIVE_DATA" ]]; then
     LIVE_DATA="$(horde_env_get "$ENV_FILE" DATA_PATH)"
@@ -712,13 +740,34 @@ if [[ "$MODE" == "rollback" ]]; then
 fi
 
 PREV_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-PREV_IMAGE_ID="$(image_id "$IMAGE_REF")"
+PREV_HEAD="$(git rev-parse HEAD)"
+# What is deployed: the running container's image, else the one compose names.
+PREV_IMAGE_ID=""
+if cid="$(running_container)"; then
+  PREV_IMAGE_ID="$(docker_bin inspect --format '{{.Image}}' "$cid" 2>/dev/null || true)"
+fi
+PREV_IMAGE_ID="${PREV_IMAGE_ID:-$(image_id "$IMAGE_REF")}"
 # The commit of what is deployed is the one baked into the image, not the
-# checkout's HEAD: an earlier aborted run may already have pulled newer code.
+# checkout's HEAD: an earlier aborted run may already have pulled newer code,
+# and with the published image the checkout's code never runs at all. The
+# release guard in horde_git_pull compares against it (HORDE_DEPLOYED_SHA).
 PREV_SHA="$(image_revision "$PREV_IMAGE_ID")"
-if ! [[ "$PREV_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+if [[ "$PREV_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+  export HORDE_DEPLOYED_SHA="$PREV_SHA"
+else
   PREV_SHA="$(git rev-parse HEAD)"
 fi
+
+# Put the checkout back where this run found it, for a stop after the pull.
+restore_checkout() {
+  if [[ "$PREV_BRANCH" == "HEAD" ]]; then
+    git checkout -q --detach "$PREV_HEAD"
+  elif [[ "$(git rev-parse --abbrev-ref HEAD)" == "$PREV_BRANCH" ]]; then
+    git reset -q --keep "$PREV_HEAD"
+  else
+    git checkout -q "$PREV_BRANCH"
+  fi
+}
 
 horde_git_pull "$BACKUP_DIR"
 
@@ -730,6 +779,66 @@ fi
 SHA="$(git rev-parse HEAD)"
 SHORT="${SHA:0:7}"
 
+# Pull the published image of this release, or build it here
+# (docker-compose.build.yml). Decided on the new checkout's compose files: an
+# install from before the published image was the default builds until its
+# checkout reaches a release with the new compose file, then pulls.
+if ! compose config -q 2>"$SNAP_DIR/config.err"; then
+  restore_checkout
+  {
+    echo
+    echo "Stopping: docker compose cannot read the compose files and .env:"
+    sed 's/^/  /' "$SNAP_DIR/config.err"
+    echo "Nothing was changed."
+  } >&2
+  exit 1
+fi
+BUILD_MODE=0
+compose_builds_horde && BUILD_MODE=1
+if [[ "$BUILD_MODE" -eq 0 && "${HORDE_UPDATE_CHANNEL:-release}" == "main" ]]; then
+  # Images are published for releases only, so following main means building.
+  if [[ -f "$ROOT/docker-compose.build.yml" && -z "${COMPOSE_FILE:-}" \
+    && -z "$(horde_env_get "$ENV_FILE" COMPOSE_FILE)" ]]; then
+    # COMPOSE_FILE replaces Compose's automatic docker-compose.override.yml, so
+    # an existing override file goes in the list.
+    compose_files="docker-compose.yml:docker-compose.build.yml"
+    [[ -f "$ROOT/docker-compose.override.yml" ]] && compose_files+=":docker-compose.override.yml"
+    horde_env_upsert "$ENV_FILE" COMPOSE_FILE "$compose_files"
+    echo "HORDE_UPDATE_CHANNEL=main follows commits that have no published image, so this"
+    echo "install now builds Horde here: added COMPOSE_FILE=${compose_files} to .env."
+    compose_builds_horde && BUILD_MODE=1
+  fi
+  if [[ "$BUILD_MODE" -eq 0 ]]; then
+    restore_checkout
+    {
+      echo
+      echo "Stopping: HORDE_UPDATE_CHANNEL=main needs Horde built from this checkout (images"
+      echo "are published for releases only), but COMPOSE_FILE does not include"
+      echo "docker-compose.build.yml. Add it, or use the release channel. Nothing was changed."
+    } >&2
+    exit 1
+  fi
+fi
+IMAGE_REF="$(compose_horde_image)"
+IMAGE_REF="${IMAGE_REF:-horde:latest}"
+if [[ "$BUILD_MODE" -eq 0 ]]; then
+  # update.sh installs the newest release; a pinned version would not move.
+  image_name="${IMAGE_REF%%@*}"
+  image_tag="latest"
+  [[ "${image_name##*/}" == *:* ]] && image_tag="${image_name##*:}"
+  if [[ "$image_name" != "$IMAGE_REF" || "$image_tag" != "latest" ]]; then
+    restore_checkout
+    {
+      echo
+      echo "Stopping: HORDE_IMAGE pins ${IMAGE_REF}, but update.sh installs the newest release."
+      echo "To update, remove HORDE_IMAGE from .env (or end it in :latest) and run this again."
+      echo "Nothing was changed."
+    } >&2
+    exit 1
+  fi
+  IMAGE_REPO="${image_name%:latest}"
+fi
+
 # Nothing new and the image exists: do not touch anything, above all not the
 # rollback point recorded by the last real update.
 RUNNING_IMAGE=""
@@ -737,6 +846,7 @@ if cid="$(running_container)"; then
   RUNNING_IMAGE="$(docker_bin inspect --format '{{.Image}}' "$cid" 2>/dev/null || true)"
 fi
 if [[ "$SHA" == "$PREV_SHA" && -n "$PREV_IMAGE_ID" && "$RUNNING_IMAGE" == "$PREV_IMAGE_ID" \
+  && "$(image_id "$IMAGE_REF")" == "$PREV_IMAGE_ID" \
   && "$(image_revision "$PREV_IMAGE_ID")" == "$SHA" && "${HORDE_FORCE_REBUILD:-}" != "1" ]]; then
   echo
   echo "Already up to date at ${SHORT}; the running container uses the current image. Nothing to do."
@@ -782,9 +892,31 @@ if [[ -n "$PREV_IMAGE_ID" ]]; then
   docker_bin tag "$PREV_IMAGE_ID" "horde:${PREV_SHA:0:7}" || true
 fi
 
-if [[ "$PUBLISHED_IMAGE" -eq 1 ]]; then
-  echo "Pulling published image ${IMAGE_REF} ..."
-  compose pull horde
+if [[ "$BUILD_MODE" -eq 0 ]]; then
+  # The image published for exactly this commit (the release workflow tags every
+  # release image sha-<shortsha>), so checkout and image always match, then
+  # named as compose starts it. A just-pushed release tag has no image for up to
+  # an hour, while the release workflow builds it.
+  PULL_REF="${IMAGE_REPO}:sha-${SHORT}"
+  echo "Pulling the published image of ${SHORT} (${PULL_REF}) ..."
+  if ! docker_bin pull "$PULL_REF"; then
+    restore_checkout
+    {
+      echo
+      echo "Stopping: could not download ${PULL_REF}. If this release came out within the"
+      echo "last hour, its image is probably still being built: try again later. Otherwise"
+      echo "check that this host can reach the registry. Nothing was changed."
+    } >&2
+    exit 1
+  fi
+  if [[ "$(image_revision "$PULL_REF")" != "$SHA" ]]; then
+    restore_checkout
+    echo "Stopping: ${PULL_REF} was not built from ${SHORT}. Nothing was changed." >&2
+    exit 1
+  fi
+  docker_bin tag "$PULL_REF" "$IMAGE_REF"
+  docker_bin tag "$PULL_REF" "horde:${SHORT}"
+  docker_bin rmi "$PULL_REF" >/dev/null 2>&1 || true # untag only; the image keeps its other names
 else
   echo "Building horde image at ${SHORT} (version ${VERSION})..."
   compose build horde

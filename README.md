@@ -15,7 +15,7 @@ delete or use AI.
 One of Horde's core (but optional) features is AI, either a local model on
 your own hardware or a cloud provider such as OpenRouter. It powers video
 summaries and chat, smart search across your whole library and the channels you
-follow, a transparent and tunable recommendation feed, and more.
+subscribe to, a transparent and tunable recommendation feed, and more.
 
 ## Why Horde
 
@@ -54,7 +54,7 @@ Interactive API reference: `/docs`.
   playlists.
 - **Files on disk**: saved as `Channel/Year/Title [id].ext`, so browsing the
   share over SMB matches the UI.
-- **Import**: upload in the browser, or copy `.mp4` / `.mkv` / `.webm` files
+- **Import**: upload in the browser, or copy `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files
   into the media folder. New files wait in a review queue before joining the
   library.
 - **Library**: channel sidebar, hybrid search, tags, bulk selection, continue
@@ -75,7 +75,7 @@ Interactive API reference: `/docs`.
   compatibility, Settings → Library).
 - **YouTube streaming**: preview a video before deciding to download it. Works
   for most videos, but quality varies and it can break when YouTube changes.
-- **Live streams**: follow channels, see which are live in the sidebar, and
+- **Live streams**: subscribe to channels, see which are live in the sidebar, and
   watch with rewind (4 hours by default).
 - **Playlists**: your own lists, imported YouTube playlists, or subscribed
   playlists that pick up new videos as they are added.
@@ -120,8 +120,10 @@ and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truena
 
 ### Requirements
 
-- 64-bit Linux host with Docker, the Docker Compose plugin (`docker compose
-  version` reports v2 or newer) and Git.
+- 64-bit Linux host (x86 or ARM, including a Raspberry Pi 4/5) with Docker, the
+  Docker Compose plugin (`docker compose version` reports v2 or newer) and Git.
+  Windows (WSL 2), macOS, Unraid, Synology, Portainer and Proxmox:
+  [Other platforms](https://jm-connell.github.io/horde/getting-started/other-platforms/).
 - Run all commands in a shell on the host (SSH or the TrueNAS shell), not in
   Dockge's per-container **Bash** button.
 - If Docker reports `permission denied`, prefix `docker` commands with `sudo`.
@@ -130,21 +132,25 @@ and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truena
 
 Compose downloads the published image (`ghcr.io/jm-connell/horde`, x86 and
 ARM); the checkout holds the compose file, `.env.example` and `update.sh`. Use
-`git clone`, not a ZIP, so `update.sh` can update it later.
+`git clone`, not a ZIP, so `update.sh` can update it later. The third line
+moves the checkout to the newest release, so it matches the image (`main` can
+be ahead of it):
 
 ```bash
 git clone https://github.com/jm-connell/horde.git
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
 
 TrueNAS / Dockge: clone into the Dockge stacks folder so the folder name is the
-stack name. Do not use **Add Stack** with only `docker-compose.yml`; the build
-needs the whole repo.
+stack name. Do not use **Add Stack** with only `docker-compose.yml`; the stack
+needs the whole checkout (`.env.example`, `update.sh`).
 
 ```bash
 cd /mnt/tank/dockge/stacks          # your DOCKGE_STACKS_DIR
 git clone https://github.com/jm-connell/horde.git horde
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
 
 ### 2. Create folders
@@ -171,10 +177,11 @@ Set these in `.env`:
 | `DOWNLOADS_PATH` | Full path of the media folder. May be a network share. |
 | `DATA_PATH` | Full path of the data folder (database, thumbnails). Must be a local disk, not SMB/NFS: SQLite can corrupt on network filesystems. |
 
-The example values are TrueNAS paths. On other machines Docker creates missing
-paths owned by root, and Horde cannot save downloads there. Keep paths in
-`.env`, not in `docker-compose.yml`. Leave `HORDE_IMAGE` as it is: it points
-at the published image. (Comment it out to build from source instead.)
+Both paths start out empty and Horde will not start until they are set. Point
+them at the folders from step 2: Docker creates a missing path owned by root,
+and Horde cannot save downloads there. Keep paths in
+`.env`, not in `docker-compose.yml`. Horde runs the published image; nothing is
+built on your machine.
 
 ### 4. Start
 
@@ -183,7 +190,7 @@ docker compose up -d
 ```
 
 Dockge: menu → **Scan Stacks Folder**, open `horde`, **Deploy**. Do not edit
-the volume lines in the compose editor. The first start downloads about 1 GB.
+the volume lines in the compose editor. The first start downloads about 300 MB.
 
 ### 5. Open
 
@@ -195,7 +202,7 @@ returns `"status":"ok"`. Common errors:
 
 ### Optional
 
-- **Imports:** `.mp4` / `.mkv` / `.webm` files copied into the media folder
+- **Imports:** `.mp4` / `.mkv` / `.webm` / `.m4v` / `.mov` files copied into the media folder
   (for example over SMB) appear in **Import** within `SCAN_INTERVAL_SEC`
   (default 60s).
 - **AI:** choose a provider in the setup wizard or Settings → AI (any
@@ -239,9 +246,9 @@ recreated the stack.
 
 Do not run `git reset --hard` or edit `docker-compose.yml` to get past a failed
 update; see [Updating](https://jm-connell.github.io/horde/getting-started/updating/)
-for what to do instead. Installs from before the published image build on the
-host until `HORDE_IMAGE` is set
-([Use the published image](https://jm-connell.github.io/horde/getting-started/updating/#use-the-published-image)).
+for what to do instead. Updates only ever install releases, using the
+published image; to build on the host instead, see
+[Build from source](https://jm-connell.github.io/horde/getting-started/updating/#build-from-source).
 
 yt-dlp is pinned in the image and updates with Horde. To install the newest
 yt-dlp on every container start instead, set `YTDLP_AUTO_UPDATE=1` in `.env`.
@@ -255,9 +262,10 @@ Settings that live in `.env` (most others are in the app's Settings page):
 | `PUID` / `PGID` | User and group Horde writes files as (default `1000`) |
 | `DOWNLOADS_PATH` | Host folder for videos, mounted at `/downloads` |
 | `DATA_PATH` | Host folder for the database and thumbnails, mounted at `/app/data` (local disk only) |
-| `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; comment out to build from source) |
+| `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; set only for a fork's image) |
+| `COMPOSE_FILE` | `docker-compose.yml:docker-compose.build.yml` builds the image from the checkout instead of pulling it |
 | `SCAN_INTERVAL_SEC` | How often the media folder is rescanned for new files (default `60` seconds) |
-| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
+| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a subscribed channel (default `300`, `0` = off) |
 | `YTDLP_COOKIE_FILE` | Optional cookies file for age-restricted or blocked videos |
 | `OPENROUTER_API_KEY` | Optional; overrides the key saved in Settings → AI while the provider is OpenRouter |
 | `HORDE_UPDATE_CHANNEL` | Used by `update.sh`: `release` (default), `prerelease` or `main` |

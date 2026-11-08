@@ -20,8 +20,8 @@ Horde is configured primarily through environment variables. Most values have se
 | `HORDE_YTDLP_REQUEST_THREADS` | `8` | How many requests may be inside yt-dlp work (link checks, previews, feeds, searches) at once. Extra requests wait up to 15 s without using a worker thread, then get HTTP 429, so slow YouTube calls can never freeze the rest of the API. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_SEC` | `180` | How long one yt-dlp call waits its turn on the global extract queue before giving up with an error. |
 | `HORDE_EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC` | `540` (3x the above) | The same wait for background work (catalog indexing, metadata fills), which always queues behind interactive requests. |
-| `HORDE_LIVE_POLL_SEC` | `300` | How often each followed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
-| `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long follow list never bursts requests at YouTube. |
+| `HORDE_LIVE_POLL_SEC` | `300` | How often each subscribed channel is checked for a live broadcast (seconds). `0` turns the checks off. See [Live streams](../design/live-streams.md). |
+| `HORDE_LIVE_POLL_SPACING_SEC` | `2` | Pause between two live checks, so a long subscription list never bursts requests at YouTube. |
 | `HORDE_LIVE_DVR_HOURS` | `4` | How far back the player can scrub in a live stream, when YouTube still serves those segments. |
 | `HORDE_BACKUP_ENABLED` | `1` | `0` turns the [nightly database backup](backup-restore.md#nightly) off. |
 | `HORDE_BACKUP_HOUR` | `4` | Local hour (0-23) after which the nightly backup is taken. |
@@ -79,14 +79,15 @@ The image also contains `/app/BUILD_INFO` (version, commit, ffmpeg flavor and `f
 | Variable | Default | Purpose |
 |----------|---------|---------|
 | `HORDE_UPDATE_CHANNEL` | `release` | Host-side, read by `update.sh`: `release` (newest stable `vX.Y.Z` tag), `prerelease` or `main`. See [Update channels](../getting-started/updating.md#update-channels). |
-| `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the checkout. |
+| `HORDE_ALLOW_DOWNGRADE` | *(unset)* | Host-side: `1` lets `update.sh` switch to a release older than the version that runs. |
 | `HORDE_ALLOW_ROOT` | `0` | The entrypoint refuses `PUID=0` / `PGID=0` unless this is `1`. |
 | `YTDLP_AUTO_UPDATE` | `0` | `1` = on start, install the latest yt-dlp into `DATA_DIR/pylib` and prefer it over the baked version (details below). |
-| `HORDE_IMAGE` | `ghcr.io/jm-connell/horde:latest` in `.env.example`; unset = build locally | Compose-only. The image the `horde` service runs. Set: pulled from the registry (pin a version such as `:1.2.2`). Unset: built from this checkout. See [Use the published image](../getting-started/updating.md#use-the-published-image). |
-| `HORDE_PULL_POLICY` | `missing` | Compose-only. `always` pulls `HORDE_IMAGE` on every `docker compose up`. |
+| `HORDE_IMAGE` | `ghcr.io/jm-connell/horde:latest` | Compose-only. The published image the `horde` service runs; set it only for another image, such as a fork's. A pinned version (`:1.2.2`) holds `docker compose` there, and `update.sh` refuses to update until it ends in `:latest` again. See [Use the published image](../getting-started/updating.md#use-the-published-image). |
+| `COMPOSE_FILE` | *(unset)* | Read by Compose and `update.sh`. `docker-compose.yml:docker-compose.build.yml` builds the image from this checkout instead of pulling it (needed for `HORDE_UPDATE_CHANNEL=main`). See [Build from source](../getting-started/updating.md#build-from-source). |
+| `HORDE_PULL_POLICY` | `missing` | Compose-only. `always` pulls the image on every `docker compose up`. |
 | `HORDE_MEM_LIMIT` | *(unlimited)* | Compose-only. Memory limit for the `horde` container, for example `4g`. |
 | `HORDE_PIDS_LIMIT` | `1024` | Compose-only. Maximum processes/threads. |
-| `FFMPEG_FLAVOR` | `jellyfin` | Build-time. `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
+| `FFMPEG_FLAVOR` | `jellyfin` | Build-time (only when [building from source](../getting-started/updating.md#build-from-source)). `jellyfin` or `debian`; the build fails if the flavor is unavailable. |
 | `JELLYFIN_GPG_FPR` | `4918AABC486CA052358D778D49023CD01DE21A7B` | Build-time. Expected fingerprint (40 hex characters) of the Jellyfin repository signing key; the build fails on a mismatch. Empty = use the built-in pinned fingerprint. Only override it if Jellyfin rotates their key (verify the new one out of band first). |
 | `YTDLP_UPDATE_TIMEOUT_SEC` | `45` | Time limit for the `YTDLP_AUTO_UPDATE` download at start. |
 

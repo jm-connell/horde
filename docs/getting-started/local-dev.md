@@ -8,11 +8,12 @@ Run the FastAPI backend and Vite frontend on your machine for UI and API work. C
 ## Prerequisites
 
 - Python 3.14 with `venv` (the backend uses 3.14-only syntax; the Docker image and CI run 3.14)
-- Node.js and npm
+- Node.js 24 or newer, with npm (`.nvmrc` names the version CI uses)
 - Git (you need a clone of this repo)
 - `curl` (Linux/macOS helper scripts wait on `/api/health`)
+- FFmpeg (`ffmpeg` and `ffprobe` on `PATH`, or `FFMPEG_BIN` / `FFPROBE_BIN`) for downloads, thumbnails and imports; the UI and API start without it
 
-On Fedora, something like `sudo dnf install python3 nodejs npm curl` covers the basics.
+On Fedora, something like `sudo dnf install python3 nodejs npm curl ffmpeg` covers the basics.
 
 ## One-command start (recommended)
 
@@ -143,7 +144,7 @@ You can still use Compose on a laptop:
 ```bash
 cp .env.example .env
 # point DOWNLOADS_PATH / DATA_PATH at local dirs; set PUID/PGID
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
 ```
 
 UI: `http://127.0.0.1:8686` (host **8686** → container **8080**). `bgutil-pot` starts automatically; Ollama needs `docker compose --profile ai up -d`.

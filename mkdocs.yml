@@ -53,7 +53,7 @@ nav:
   - Getting started:
       - Install with Docker: getting-started/install-docker.md
       - TrueNAS / Dockge: getting-started/truenas-dockge.md
-      - Other platforms (Unraid, Synology, Portainer): getting-started/other-platforms.md
+      - Other platforms (Windows, macOS, Pi, Unraid, Synology, Portainer, Proxmox): getting-started/other-platforms.md
       - First run: getting-started/first-run.md
       - Updating: getting-started/updating.md
       - Local development: getting-started/local-dev.md
@@ -143,6 +143,7 @@ nav:
       - 0028 One Ask: adr/0028-one-ask.md
       - 0029 Video questions in Ask: adr/0029-video-questions-in-ask.md
       - 0030 Ask routes on its own: adr/0030-ask-routes-on-its-own.md
+      - 0031 Published image by default: adr/0031-published-image-by-default.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md

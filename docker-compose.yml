@@ -51,22 +51,13 @@ services:
     restart: unless-stopped
 
   horde:
-    build:
-      context: .
-      args:
-        HORDE_GIT_SHA: ${HORDE_GIT_SHA:-unknown}
-        # `jellyfin` (default; hardware-encoder-capable) or `debian`. The build
-        # fails if the chosen flavor cannot be installed.
-        FFMPEG_FLAVOR: ${FFMPEG_FLAVOR:-jellyfin}
-        # Optional: fail the build unless the Jellyfin repository key has this
-        # fingerprint (40 hex characters, no spaces).
-        JELLYFIN_GPG_FPR: ${JELLYFIN_GPG_FPR:-}
-        HORDE_VERSION: ${HORDE_VERSION:-dev}
-    # .env.example sets HORDE_IMAGE to the published image, so new installs pull
-    # it. Without HORDE_IMAGE the image is built here from this checkout
-    # (update.sh also tags horde:<shortsha> for rollback). See
-    # docs/getting-started/updating.md.
-    image: ${HORDE_IMAGE:-horde:latest}
+    # The published release image. To run another (a fork's), set HORDE_IMAGE
+    # in .env. To build from this checkout instead, add
+    # COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml to .env (see
+    # docs/getting-started/updating.md). There is no build section here on
+    # purpose: a failed pull stops with an error instead of starting a long
+    # build on the host.
+    image: ${HORDE_IMAGE:-ghcr.io/jm-connell/horde:latest}
     pull_policy: ${HORDE_PULL_POLICY:-missing}
     container_name: horde
     init: true

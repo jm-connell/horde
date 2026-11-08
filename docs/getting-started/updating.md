@@ -2,7 +2,7 @@
 
 The easy way to update Horde is the **Update now** button in Settings → System → Updates. This page explains how to switch it on (once), what it does, and what to do if something goes wrong. The same update can also be run by hand from the shell, which is how you roll back.
 
-Behind the scenes an update moves the git checkout to the new release (for the compose file, scripts and docs), then gets the new `horde` image and recreates the containers. Installs made from the current `.env.example` pull the [published image](#use-the-published-image); older installs build the image from source on the host (`build: .`) unless they set `HORDE_IMAGE`.
+Behind the scenes an update moves the git checkout to the newest release (for the compose file, scripts and docs), downloads that release's [published image](#use-the-published-image) and recreates the containers. Nothing is built on your machine unless you [build from source](#build-from-source).
 
 First-time install is a `git clone` plus Compose/Dockge deploy — [Install with Docker](install-docker.md) or [TrueNAS / Dockge](truenas-dockge.md). This page is only for an existing checkout.
 
@@ -21,7 +21,7 @@ Administrators can update Horde with one click, without opening a shell.
 | Step | What it means | How long |
 |------|---------------|----------|
 | Waiting | Your request is queued; the server picks it up within about a minute. You can **cancel** while it waits. | Up to ~1 minute |
-| Updating | The new version is being downloaded and built, then Horde restarts. The page may show “reconnecting” for a moment. | Several minutes (a rebuild takes a while on a NAS) |
+| Updating | The new version is being downloaded (or built, when you build from source), then Horde restarts. The page may show “reconnecting” for a moment. | Several minutes (a rebuild takes a while on a NAS) |
 | Result | One of the outcomes below, with the end of the log under **details**. | |
 
 | Result | Meaning |
@@ -74,7 +74,7 @@ On **other Linux hosts**, add this line to root’s crontab (`sudo crontab -e`) 
     Rebuilding and recreating containers needs Docker access, which only the host has. When the checkout belongs to another user, the job lets git work for that run and afterwards hands the git folder, `.local`, `.env`, the tracked files and their folders back to the checkout’s owner, so running `bash update.sh` by hand later still works.
 
 !!! note "Settings for the button’s updates"
-    The job runs `update.sh` without any of the variables you might type in front of it in the shell. Settings it should use go in the stack’s `.env` (`update.sh` reads `HORDE_UPDATE_CHANNEL`, `HORDE_ALLOW_DOWNGRADE`, `HORDE_IMAGE` and `YTDLP_AUTO_UPDATE` from there), or in front of the cron command, for example `HORDE_COMPOSE_PROFILES=ai bash /mnt/tank/dockge/stacks/horde/scripts/update_watch.sh`. The `ai` profile is also picked up automatically while the `horde-ollama` container runs.
+    The job runs `update.sh` without any of the variables you might type in front of it in the shell. Settings it should use go in the stack’s `.env` (`update.sh` reads `HORDE_UPDATE_CHANNEL`, `HORDE_ALLOW_DOWNGRADE`, `HORDE_IMAGE`, `COMPOSE_FILE` and `YTDLP_AUTO_UPDATE` from there), or in front of the cron command, for example `HORDE_COMPOSE_PROFILES=ai bash /mnt/tank/dockge/stacks/horde/scripts/update_watch.sh`. The `ai` profile is also picked up automatically while the `horde-ollama` container runs.
 
 Each run of the job stamps `DATA_PATH/update/watcher.env`. Horde shows the button only while the job has checked in during the last 5 minutes. With nothing to do the job prints nothing, so cron stays quiet, and a lock keeps two updates from running at once.
 
@@ -113,9 +113,9 @@ The script:
 
 1. Snapshots live `/downloads` and `/app/data` bind mounts (and `PUID`/`PGID`) into `.env` if a Horde container already exists
 2. `git fetch --tags`, then moves the checkout to the **newest release** (see [Update channels](#update-channels)); on the `main` channel it fast-forwards with `git merge --ff-only`. It never stashes, merges or rewrites history, and `.env` (gitignored) is never touched. If you edited a compose file it **stops**, saves your copy under `.local/update-backups/<timestamp>/` and tells you what to do (see [Local compose edits](#local-compose-edits))
-3. If the checkout is already at the commit the running container was built from, it prints "Already up to date" and exits without touching anything, **including the rollback point of the previous update**
+3. If the checkout is already at the commit the running container was built from, it prints "Already up to date" and exits without touching anything, **including the rollback point of the previous update**. A pinned `HORDE_IMAGE` (a version instead of `:latest`) stops the update here, with the checkout put back, since `update.sh` would move it to another release
 4. Refuses to recreate if the new compose would mount different host paths (override with `HORDE_FORCE_VOLUME_CHANGE=1`)
-5. Builds the image with the commit and version baked in and tags it `horde:latest` **and** `horde:<shortsha>`; the previous image is kept as `horde:<previous shortsha>`. Only the newest `HORDE_KEEP_IMAGES` (default 3) `horde:<shortsha>` tags are kept, always including the current and the previous one
+5. Downloads the image published for exactly that commit (`ghcr.io/jm-connell/horde:sha-<shortsha>`) and checks the commit baked into it, so the checkout and the image always match; when [building from source](#build-from-source) it builds the image with the commit and version baked in instead. The image gets the name compose starts (`ghcr.io/jm-connell/horde:latest`, or `horde:latest` for a build) **and** `horde:<shortsha>`; the previous image is kept as `horde:<previous shortsha>`. Only the newest `HORDE_KEEP_IMAGES` (default 3) `horde:<shortsha>` tags are kept, always including the current and the previous one. If the image cannot be downloaded (a release's image takes up to an hour to publish after its tag appears), the update stops, puts the checkout back and changes nothing
 6. **Backs up the SQLite database** just before recreating (so a failed build leaves no backup behind). It uses SQLite's online backup, consistent while Horde runs, run inside the running container (or a throwaway container of the current image when it is stopped), and verifies it with `PRAGMA integrity_check`. It writes `.local/update-backups/<timestamp>/horde.db`. "No database" is decided by the tool itself, not by looking at the host directory, so a dataset the invoking user cannot read is still backed up; any other failure aborts the update unless `HORDE_SKIP_DB_BACKUP=1`
 7. `docker compose up -d` — recreates containers from the new image (adds `--profile ai` when needed; see below)
 8. Polls `GET /api/health` until `status` is `ok` (default up to 90s, 150s when `YTDLP_AUTO_UPDATE=1`) and prints a short summary (`horde_version`, `yt_dlp_version`, POT, wiki, library count)
@@ -138,7 +138,7 @@ After it finishes, hard-refresh the browser (`Ctrl+Shift+R`) if the UI still loo
 | `HORDE_FORCE_VOLUME_CHANGE` | Set to `1` only if you **intend** to move `DOWNLOADS_PATH` / `DATA_PATH`. Otherwise `update.sh` aborts when a recreate would remount empty defaults |
 | `HORDE_KEEP_BACKUPS` | How many `.local/update-backups/<timestamp>/` folders to keep (default `5`) |
 | `HORDE_KEEP_IMAGES` | How many `horde:<shortsha>` image tags to keep (default `3`; the current and previous are always kept) |
-| `HORDE_FORCE_REBUILD` | `1` rebuilds even when the checkout is already at the running commit |
+| `HORDE_FORCE_REBUILD` | `1` pulls (or rebuilds) and recreates even when the checkout is already at the running commit |
 | `HORDE_AUTO_ROLLBACK` | `0` disables the automatic rollback on a failed health check |
 | `HORDE_SKIP_DB_BACKUP` | `1` continues even if the database cannot be backed up (otherwise the update aborts before touching the running stack) |
 | `HORDE_DISCARD_COMPOSE_EDITS` | `1` backs up and then discards local edits to the compose file (see below) |
@@ -155,14 +155,14 @@ HORDE_COMPOSE_PROFILES=ai bash update.sh
 
 | `HORDE_UPDATE_CHANNEL` | What `update.sh` installs |
 |------------------------|---------------------------|
-| `release` (default) | The highest stable `vX.Y.Z` tag, checked out on a local branch named `horde-release`. The image is built with that version baked in (`HORDE_VERSION`), so the in-app update notice compares release to release |
+| `release` (default) | The highest stable `vX.Y.Z` tag, checked out on a local branch named `horde-release`, running that release's published image |
 | `prerelease` | Like `release`, but pre-release tags such as `v1.3.0-rc.1` count too (a final `v1.3.0` still wins over its own rc) |
-| `main` | The previous behaviour: fast-forward the current branch to `origin`, i.e. every commit on `main` |
+| `main` | Every commit on `main`: fast-forwards the current branch to `origin`. Only releases have published images, so this [builds from source](#build-from-source); `update.sh` adds the `COMPOSE_FILE` line to `.env` itself the first time |
 
 Set it in `.env` (`HORDE_UPDATE_CHANNEL=main`) or in the shell for one run. Notes:
 
 - **No release exists yet?** `update.sh` says so and follows `main` until the first release tag appears.
-- **Never backwards by accident.** If your checkout is ahead of the latest release (you were following `main`), switching to the release would be a downgrade, and a database migrated by newer code may refuse to start on older code. `update.sh` stops and changes nothing. Keep following `main` with `HORDE_UPDATE_CHANNEL=main`, or accept it with `HORDE_ALLOW_DOWNGRADE=1`.
+- **Never backwards by accident.** If the version you run is newer than the latest release (you were following `main`), switching to the release would be a downgrade, and a database migrated by newer code may refuse to start on older code. `update.sh` stops and changes nothing. Keep following `main` with `HORDE_UPDATE_CHANNEL=main`, or accept it with `HORDE_ALLOW_DOWNGRADE=1`. What counts is the commit baked into the running image, not the checkout: a fresh clone of `main` that runs the published release image moves to that release without a fuss.
 - **Rollback** remembers the branch and commit you came from. Rolling back from `horde-release` after your first switch from `main` returns you to `main` at the old commit; between two releases it moves `horde-release` back to the previous tag.
 - Your own tracked-file edits are still protected as described below; compose edits stop the update.
 
@@ -179,7 +179,7 @@ Every update writes `.local/update-backups/<timestamp>/` (gitignored) containing
 1. keeps the failed container's log in the backup folder (`failed-container.log`),
 2. stops the failed container and reads the database's Alembic revision (`alembic_version`). If it differs from the one recorded before the update, or the database had no `alembic_version` table before (the first Alembic adoption), a **migration ran** and the backup is restored. If the revision cannot be read at all, the state is *unknown*: the database is **not** restored automatically and the script prints how to do it by hand,
 3. restores by copying the backup next to the live file, running `PRAGMA integrity_check` on the copy, and only then renaming it into place; the newer database is kept as `horde.db.pre-rollback-<timestamp>` (with its `-wal`/`-shm`). If any restore step fails the script stops loudly with Horde stopped and the `pre-rollback` file untouched, and does nothing else,
-4. retags the previous image as `horde:latest` and moves the checkout back with `git reset --keep` to the previous commit, **only if** the checkout is still exactly where the update left it. If you committed or switched branches since, it stops with instructions instead of discarding your work,
+4. gives the previous image back the name compose starts and moves the checkout back with `git reset --keep` to the previous commit, **only if** the checkout is still exactly where the update left it. If you committed or switched branches since, it stops with instructions instead of discarding your work,
 5. recreates the containers without building or pulling, and exits non-zero with a clear message.
 
 Restoring discards everything written since the backup (minutes at most for an automatic rollback).
@@ -207,37 +207,49 @@ Uncommented the GPU lines in `docker-compose.yml` (older instructions said to)? 
 
 ## Use the published image
 
-Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, the commit SHA and `latest`. New installs use it: `.env.example` sets `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`. An install from before that builds from source until you put this in `.env`:
+Tagged releases are published as multi-arch (`amd64`, `arm64`) images to `ghcr.io/jm-connell/horde` with the tags `X.Y.Z`, `X.Y`, `sha-<shortsha>` and (for stable releases) `latest`. This is what Horde runs by default: `docker-compose.yml` names `ghcr.io/jm-connell/horde:latest`, and has no build section, so a failed download stops with an error instead of quietly starting a long build on your machine. You do not need to set anything.
 
-```env
-HORDE_IMAGE=ghcr.io/jm-connell/horde:1.2.3   # or :latest to follow releases
-HORDE_PULL_POLICY=always
-```
+`update.sh` moves the checkout to the newest release and downloads the image of exactly that release, so the two always match. Without `update.sh`: `docker compose pull horde && docker compose up -d`.
 
-`update.sh` then runs `docker compose pull horde` instead of building (the git checkout is still updated for compose and docs changes), and backs up the database and rolls back exactly as above. Pin an exact version to control when you move; `latest` follows the newest release. Without `update.sh`: `docker compose pull horde && docker compose up -d`. To build from source instead (for example to follow `HORDE_UPDATE_CHANNEL=main`, which the published image does not), comment out `HORDE_IMAGE`.
+To run another image, such as a fork's, set `HORDE_IMAGE` in `.env` (keep `:latest`). Pinning a version (`HORDE_IMAGE=ghcr.io/jm-connell/horde:1.2.3`) keeps `docker compose` on it, but `update.sh` then refuses to update until you set it back to `:latest` or remove the line.
+
+Installs from before the published image was the default (no `HORDE_IMAGE` in `.env`) keep building until their checkout reaches a release whose compose file has no build section; from that update on they download the published image like everyone else.
 
 In a container manager that is not Dockge (Portainer, Synology Container Manager, Unraid's Compose Manager), updating with the published image is that tool's **pull and redeploy**; see [Other platforms](other-platforms.md#updating). Horde still backs up the database itself before any migration (`DATA_PATH/backups/`), but there is no automatic rollback outside `update.sh`.
 
+### Build from source { #build-from-source }
+
+To build the image on your machine instead (several minutes per update on a NAS; needed to follow `HORDE_UPDATE_CHANNEL=main`), add this line to `.env`:
+
+```env
+COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+```
+
+With a `docker-compose.override.yml`, add it to the end of that line (`...:docker-compose.build.yml:docker-compose.override.yml`): Compose reads the override file by itself only when `COMPOSE_FILE` is not set. (`update.sh` does this when it adds the line for the `main` channel.)
+
+`docker-compose.build.yml` adds the build section and names the image `horde:latest`, whatever `HORDE_IMAGE` says. `update.sh` then builds every update with the commit and version baked in, and backs up and rolls back exactly as above. Remove the line to go back to the published image.
+
 ## Manual steps
 
-Equivalent to the script (without the health wait):
+Equivalent to the script (without the backup, health wait and rollback):
 
 ```bash
 cd /path/to/horde
-git pull
-sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde
-sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose up -d
+git fetch --tags
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' origin/main)"
+sudo docker compose pull horde
+sudo docker compose up -d
 curl -sf http://127.0.0.1:8686/api/health
 ```
 
-Passing `HORDE_GIT_SHA` on the same line as `sudo` matters so the variable is not stripped from the environment.
+When building from source, build between the checkout and `up`: `sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose build horde` (passing `HORDE_GIT_SHA` on the same line as `sudo` matters so the variable is not stripped from the environment).
 
 Prefer `update.sh` over a raw `git pull`. Never `git reset --hard` to unstick a pull — that drops local compose edits and can remount empty default data/media directories.
 
 If you use the optional Ollama profile:
 
 ```bash
-sudo HORDE_GIT_SHA=$(git rev-parse HEAD) docker compose --profile ai up -d
+sudo docker compose --profile ai up -d
 ```
 
 ## What stays running

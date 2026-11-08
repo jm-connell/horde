@@ -2,7 +2,7 @@
 
 This page takes you from a machine with nothing on it to Horde running in your browser. It assumes no Docker experience: every command is spelled out, and each step says how to check that it worked. Plan on 15–30 minutes, most of it reading.
 
-Using **TrueNAS with Dockge**? Follow [TrueNAS / Dockge](truenas-dockge.md) instead; it covers the same steps with TrueNAS screens. On Unraid, Synology, Portainer or with plain `docker run`, see [Other platforms](other-platforms.md).
+Using **TrueNAS with Dockge**? Follow [TrueNAS / Dockge](truenas-dockge.md) instead; it covers the same steps with TrueNAS screens. On Unraid, Synology, Portainer, Windows, macOS, a Raspberry Pi or Proxmox, start with [Other platforms](other-platforms.md).
 
 !!! warning "Trusted network"
     The first visit creates the admin account ([accounts](../ops/authentication.md)). Keep Horde on your home network or a VPN such as Tailscale. To put it on the internet, follow the [internet exposure checklist](../ops/internet-exposure.md) first.
@@ -22,7 +22,7 @@ You only need these to follow along:
 
 ## What you need
 
-- A 64-bit **Linux** host (x86 or ARM) with **Docker Engine** and the **Docker Compose plugin**. Windows and macOS (Docker Desktop) are not tested.
+- A 64-bit **Linux** host (x86 or ARM, such as a Raspberry Pi 4 or 5 on the 64-bit OS) with **Docker Engine** and the **Docker Compose plugin**. Windows and macOS work through Docker Desktop: see [Windows](other-platforms.md#windows) and [macOS](other-platforms.md#macos) first.
 - **Git**, to download Horde and to update it later.
 - About 2 GB free for the image, plus room for the videos you plan to keep.
 - Internet access (to download the image, and for Horde to reach YouTube).
@@ -52,7 +52,10 @@ Pick where Horde's program files will live (your home folder is fine) and clone 
 cd ~
 git clone https://github.com/jm-connell/horde.git
 cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"
 ```
+
+The last line switches the checkout to the newest release, so the compose file and scripts match the image you will run (a fresh clone is on `main`, which is often ahead of the newest release). Copy it as it is; [updates](updating.md) keep you on releases from there.
 
 You are now inside the `horde` folder. Every later command on this page is run from here; if you open a new terminal, `cd ~/horde` first.
 
@@ -109,8 +112,6 @@ In `nano`: move with the arrow keys, save with **Ctrl+O** then **Enter**, quit w
 !!! warning "Point both paths at folders you created"
     If a path does not exist, Docker creates it **owned by root**, and Horde then cannot save downloads there. Create the folders first (step 2), then use their full paths.
 
-The same file also sets `HORDE_IMAGE=ghcr.io/jm-connell/horde:latest`, the published image. Leave it: it saves a long build on your machine. (To build from the source instead, put a `#` in front of that line.)
-
 Make sure that user owns both folders (use the numbers from `id -u` and `id -g`):
 
 ```bash
@@ -125,7 +126,7 @@ Horde fixes the ownership of the data folder by itself on start; the media folde
 docker compose up -d
 ```
 
-What this does: downloads the Horde image and the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The first start downloads about 1 GB, so give it a few minutes on a slow connection. It is finished when you get your prompt back with lines like `Container horde  Started`.
+What this does: downloads the Horde image and the small `bgutil-pot` helper (it lets YouTube downloads work without a Google login), and starts both in the background (`-d`). The first start downloads about 300 MB, so give it a few minutes on a slow connection. It is finished when you get your prompt back with lines like `Container horde  Started`.
 
 If it stops at once with `required variable DOWNLOADS_PATH is missing a value`, the path is still empty in `.env`: go back to step 3.
 
@@ -196,7 +197,7 @@ Start with the log: `docker compose logs --tail=50 horde`. The cause is usually 
 | `unable to prepare context` / `Dockerfile not found` | You are not in the `horde` folder. `cd ~/horde` (or wherever you cloned it) and run the command again. |
 | `required variable DOWNLOADS_PATH is missing a value` (or `DATA_PATH`) | You are not in the `horde` folder, there is no `.env` there, or the path in it is empty. Fill in both paths (step 3). |
 | `horde` keeps restarting, log says `refusing to run as root` | `PUID` or `PGID` in `.env` is `0`. Set them to your own `id -u` / `id -g`. |
-| Downloads fail with *permission denied*, or the log mentions `/downloads` | The media folder is not owned by `PUID`:`PGID`. Rerun the `chown` from step 3 with the right numbers, then `docker compose up -d`. Check that both paths in `.env` are folders you created. |
+| Downloads fail with *permission denied*, or the log says `/downloads ... is not writable` | The media folder is not owned by `PUID`:`PGID`. Rerun the `chown` from step 3 with the right numbers, then `docker compose up -d`. Check that both paths in `.env` are folders you created. |
 | Browser cannot connect | Check `docker compose ps`, use port **8686** (not 8080), and use the host's LAN address. A firewall on the host (for example `ufw`) may need `sudo ufw allow 8686/tcp`. |
 | Browser shows `host_not_allowed` | You opened Horde under a domain name (for example `horde.mydomain.com`). Add `HORDE_ALLOWED_HOSTS=horde.mydomain.com` to `.env`, then `docker compose up -d`. LAN and Tailscale IP addresses, `localhost`, single-word names (`mynas`) and names ending in `.local`, `.lan`, `.home.arpa`, `.internal` or `.ts.net` always work. |
 | The page looks old or broken after an update | Hard-refresh the browser: **Ctrl+Shift+R** (Mac: **Cmd+Shift+R**). |

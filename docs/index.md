@@ -4,7 +4,7 @@
 
 ![Library home in Horde, cyan-on-dark with constellation background and a channel sidebar](assets/screenshots/library.webp)
 
-[Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button } [Unraid, Synology, Portainer](getting-started/other-platforms.md){ .md-button }
+[Install with Docker](getting-started/install-docker.md){ .md-button .md-button--primary } [TrueNAS / Dockge](getting-started/truenas-dockge.md){ .md-button } [Windows, macOS, Pi, Unraid, Synology and more](getting-started/other-platforms.md){ .md-button }
 
 ## Quick start
 
