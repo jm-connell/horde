@@ -59,7 +59,7 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 **Symptoms:** Dockge has no `horde` stack; `docker compose` cannot find a `Dockerfile`; build context is empty; `update.sh` says `not a git repository`.
 
-Horde is built from a **git clone** of this repo. Compose `build: .` needs `Dockerfile` plus `backend/` and `frontend/` in the same folder as `docker-compose.yml`.
+Horde is installed from a **git clone** of this repo: the stack needs its `docker-compose.yml`, `.env.example` and `update.sh` together, and building from source (`docker-compose.build.yml`) also needs the `Dockerfile`, `backend/` and `frontend/` next to them.
 
 **Fix:**
 

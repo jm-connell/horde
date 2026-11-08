@@ -117,22 +117,28 @@ docker_bin() {
 }
 
 compose() {
-  # Pass HORDE_GIT_SHA on the same line as sudo so it is not stripped from the environment.
+  # Variables go on the same line as sudo so they are not stripped from the
+  # environment; COMPOSE_FILE and HORDE_IMAGE set in the shell are passed on too.
   # HORDE_PULL_POLICY=missing: the image this script pulled and tagged is the one
   # to start, even when .env asks compose to pull on every start.
+  local vars=(HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" HORDE_PULL_POLICY=missing)
+  [[ -n "${COMPOSE_FILE:-}" ]] && vars+=(COMPOSE_FILE="$COMPOSE_FILE")
+  [[ -n "${HORDE_IMAGE:-}" ]] && vars+=(HORDE_IMAGE="$HORDE_IMAGE")
   if [[ "$USE_SUDO" -eq 0 ]]; then
-    HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" HORDE_PULL_POLICY=missing docker compose "$@"
+    env "${vars[@]}" docker compose "$@"
   else
-    sudo HORDE_GIT_SHA="${SHA:-unknown}" HORDE_VERSION="${VERSION:-dev}" HORDE_PULL_POLICY=missing docker compose "$@"
+    sudo "${vars[@]}" docker compose "$@"
   fi
 }
 
 # The image the horde service runs, as the checkout's compose files (and .env)
-# name it. `config --images horde` also lists bgutil-pot, its dependency.
+# name it. Read from horde's own block: `config horde` also prints the services
+# it depends on, in no fixed order.
 compose_horde_image() {
-  local pot
-  pot="$(compose config --images bgutil-pot 2>/dev/null || true)"
-  compose config --images horde 2>/dev/null | grep -vxF -e "${pot:-<none>}" | head -n 1 || true
+  compose config horde 2>/dev/null | awk '
+    /^  horde:$/ { in_horde = 1; next }
+    in_horde && /^  [^ ]/ { in_horde = 0 }
+    in_horde && /^    image: / { sub(/^    image: /, ""); print; exit }' || true
 }
 
 # True when the compose files build the horde image here: docker-compose.build.yml
@@ -777,15 +783,29 @@ SHORT="${SHA:0:7}"
 # (docker-compose.build.yml). Decided on the new checkout's compose files: an
 # install from before the published image was the default builds until its
 # checkout reaches a release with the new compose file, then pulls.
+if ! compose config -q 2>"$SNAP_DIR/config.err"; then
+  restore_checkout
+  {
+    echo
+    echo "Stopping: docker compose cannot read the compose files and .env:"
+    sed 's/^/  /' "$SNAP_DIR/config.err"
+    echo "Nothing was changed."
+  } >&2
+  exit 1
+fi
 BUILD_MODE=0
 compose_builds_horde && BUILD_MODE=1
 if [[ "$BUILD_MODE" -eq 0 && "${HORDE_UPDATE_CHANNEL:-release}" == "main" ]]; then
   # Images are published for releases only, so following main means building.
   if [[ -f "$ROOT/docker-compose.build.yml" && -z "${COMPOSE_FILE:-}" \
     && -z "$(horde_env_get "$ENV_FILE" COMPOSE_FILE)" ]]; then
-    horde_env_upsert "$ENV_FILE" COMPOSE_FILE "docker-compose.yml:docker-compose.build.yml"
+    # COMPOSE_FILE replaces Compose's automatic docker-compose.override.yml, so
+    # an existing override file goes in the list.
+    compose_files="docker-compose.yml:docker-compose.build.yml"
+    [[ -f "$ROOT/docker-compose.override.yml" ]] && compose_files+=":docker-compose.override.yml"
+    horde_env_upsert "$ENV_FILE" COMPOSE_FILE "$compose_files"
     echo "HORDE_UPDATE_CHANNEL=main follows commits that have no published image, so this"
-    echo "install now builds Horde here: added COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml to .env."
+    echo "install now builds Horde here: added COMPOSE_FILE=${compose_files} to .env."
     compose_builds_horde && BUILD_MODE=1
   fi
   if [[ "$BUILD_MODE" -eq 0 ]]; then

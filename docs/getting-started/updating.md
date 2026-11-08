@@ -225,6 +225,8 @@ To build the image on your machine instead (several minutes per update on a NAS;
 COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
 ```
 
+With a `docker-compose.override.yml`, add it to the end of that line (`...:docker-compose.build.yml:docker-compose.override.yml`): Compose reads the override file by itself only when `COMPOSE_FILE` is not set. (`update.sh` does this when it adds the line for the `main` channel.)
+
 `docker-compose.build.yml` adds the build section and names the image `horde:latest`, whatever `HORDE_IMAGE` says. `update.sh` then builds every update with the commit and version baked in, and backs up and rolls back exactly as above. Remove the line to go back to the published image.
 
 ## Manual steps

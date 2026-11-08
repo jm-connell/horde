@@ -117,6 +117,9 @@ All notable changes to Horde are documented here. The format follows
   first. On `HORDE_UPDATE_CHANNEL=main`, `update.sh` adds that line itself.
 - A `HORDE_IMAGE` pinned to a version (`:1.2.2`) now stops `update.sh`;
   remove the line, or end it in `:latest`, to update.
+- An install already stopped by "would go BACKWARDS" (cloned from `main`,
+  running the published image) updates normally again once this release is
+  out, since it contains that checkout.
 
 ## [1.2.2] - 2026-11-03
 

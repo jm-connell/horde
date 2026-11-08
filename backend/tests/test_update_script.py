@@ -140,12 +140,18 @@ if cmd == "compose":
     verb = next((a for a in sub if a in ("ps", "config", "build", "up", "pull", "stop", "logs")), "")
     if verb == "ps":
         out("cid-1\n" if state["running"] else "")
-    if verb == "config" and "--images" in args:
-        lines = ["pot:1"] if args[-1] == "bgutil-pot" else ["pot:1", horde_ref()]
-        out("".join(line + "\n" for line in lines))
+    if verb == "config" and state.get("config_fails"):
+        sys.stderr.write("required variable DATA_PATH is missing a value\n")
+        sys.exit(1)
+    if verb == "config" and "-q" in args:
+        out()
     if verb == "config" and "--format" not in args:  # config horde (YAML)
+        # Dependencies come first (real compose prints them in no fixed order).
         build = "    build:\n      context: .\n" if builds_here() else ""
-        out(f"services:\n  bgutil-pot:\n    image: pot:1\n  horde:\n    image: {horde_ref()}\n{build}")
+        out(
+            "services:\n  bgutil-pot:\n    image: pot:1\n  vpn:\n    image: vpn:v3\n"
+            f"  horde:\n    depends_on: [vpn]\n    image: {horde_ref()}\n{build}"
+        )
     if verb == "config":
         out(json.dumps({"services": {"horde": {"volumes": [
             {"type": "bind", "source": f"{d}/dl", "target": "/downloads"},
@@ -909,6 +915,54 @@ def test_main_channel_switches_a_published_install_to_building(harness):
     calls = harness.calls()
     assert any(c.startswith("compose build") for c in calls)
     assert not harness.read_state().get("pulled")
+
+
+def test_unreadable_compose_config_stops_and_restores_the_checkout(harness):
+    harness.published_image()
+    v2 = harness.publish()
+    harness.tag_upstream("v1.2.0", v2)
+    harness.set(config_fails=True)
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "required variable DATA_PATH" in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == harness.v1
+    assert not harness.read_state().get("pulled")
+
+
+def test_without_a_known_running_version_the_checkout_guards_downgrades(harness):
+    """No revision label on the running image: the checkout's HEAD stands in."""
+    harness.published_image()
+    harness.tag_upstream("v1.0.0", harness.v1)
+    harness.publish()
+    _git(harness.work, "pull", "--ff-only", "origin", "main")
+    before = _git(harness.work, "rev-parse", "HEAD")
+    harness.set(labels={})
+
+    result = harness.run()
+
+    assert result.returncode == 1
+    assert "BACKWARDS" in result.stderr
+    assert _git(harness.work, "rev-parse", "HEAD") == before
+
+
+def test_main_channel_keeps_the_override_file_in_compose_file(harness):
+    harness.published_image()
+    (harness.work / "docker-compose.override.yml").write_text("services: {}\n")
+    (harness.other / "docker-compose.build.yml").write_text("services: {}\n")
+    _git(harness.other, "add", "docker-compose.build.yml")
+    _git(harness.other, "commit", "-m", "build overlay")
+    _git(harness.other, "push", "origin", "main")
+
+    result = harness.run(HORDE_UPDATE_CHANNEL="main")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    env = (harness.work / ".env").read_text()
+    assert (
+        "COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml:"
+        "docker-compose.override.yml" in env
+    )
 
 
 def test_rollback_after_a_pull_restarts_the_previous_image(harness):
