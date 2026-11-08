@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-08
+
 ### Added
 
 - **Subscriptions.** One name for keeping up with a channel: **Subscribe**
@@ -120,14 +122,28 @@ All notable changes to Horde are documented here. The format follows
 
 - Nothing to do for most installs. An install that builds from source (no
   `HORDE_IMAGE` in `.env`) switches to the published image at its first
-  update to this release; to keep building, add
+  update to this release. To keep building, add
   `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` to `.env`
-  first. On `HORDE_UPDATE_CHANNEL=main`, `update.sh` adds that line itself.
-- A `HORDE_IMAGE` pinned to a version (`:1.2.2`) now stops `update.sh`;
-  remove the line, or end it in `:latest`, to update.
+  once you are on 1.3.0, not before: the file it names does not exist in
+  1.2.x, so a rollback to 1.2.x would leave Compose unable to start Horde.
+  If you have a `docker-compose.override.yml`, append
+  `:docker-compose.override.yml` to that line, since `COMPOSE_FILE`
+  replaces Compose's automatic use of it. On `HORDE_UPDATE_CHANNEL=main`,
+  the first update after 1.3.0 adds the line itself.
+- A `HORDE_IMAGE` pinned to a version (`:1.2.2`) stays on that version, and
+  from 1.3.0 on `update.sh` stops instead of reporting an update; remove the
+  line, or end it in `:latest`, to update.
+- Following `HORDE_UPDATE_CHANNEL=main` from 1.2.x: wait until this release
+  is out before updating. The old `update.sh` starts the newest release
+  image rather than building `main`; once on 1.3.0, the next update switches
+  to building.
 - An install already stopped by "would go BACKWARDS" (cloned from `main`,
   running the published image) updates normally again once this release is
   out, since it contains that checkout.
+- The update to this release still runs the previous `update.sh`, which
+  starts whatever `:latest` is. Update once the release page is up (that is
+  when the in-app notice appears); if you updated earlier and Horde still
+  reports 1.2.x, run `bash update.sh` again.
 
 ## [1.2.2] - 2026-11-03
 
@@ -1076,7 +1092,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.2...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.3.0...main
+[1.3.0]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
