@@ -120,8 +120,10 @@ and [TrueNAS / Dockge](https://jm-connell.github.io/horde/getting-started/truena
 
 ### Requirements
 
-- 64-bit Linux host with Docker, the Docker Compose plugin (`docker compose
-  version` reports v2 or newer) and Git.
+- 64-bit Linux host (x86 or ARM, including a Raspberry Pi 4/5) with Docker, the
+  Docker Compose plugin (`docker compose version` reports v2 or newer) and Git.
+  Windows (WSL 2), macOS, Unraid, Synology, Portainer and Proxmox:
+  [Other platforms](https://jm-connell.github.io/horde/getting-started/other-platforms/).
 - Run all commands in a shell on the host (SSH or the TrueNAS shell), not in
   Dockge's per-container **Bash** button.
 - If Docker reports `permission denied`, prefix `docker` commands with `sudo`.

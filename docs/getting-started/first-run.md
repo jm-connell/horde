@@ -16,13 +16,13 @@ You have Horde running (Docker or local dev). This page walks through the first 
 !!! note "Docker host port"
     Production Compose publishes **8686 → 8080**. Do not expect the UI on host port `8080` unless you changed the mapping.
 
-Right after you create the admin account, a short **setup wizard** runs (on a new install, and again after **Settings → System → Reset Horde**). Every step can be changed later in [Settings](../settings/index.md), so do not worry about getting it perfect:
+Right after you create the admin account (step 1 of 8 in the wizard's counter), a short **setup wizard** runs the remaining steps (on a new install, and again after **Settings → System → Reset Horde**). Every step can be changed later in [Settings](../settings/index.md), so do not worry about getting it perfect:
 
 1. **Welcome**: how many videos the library has and how much disk space is free. **Use defaults** here skips the rest of the wizard.
 2. **Downloads**: whether to even out the volume of new downloads (loudness normalization).
 3. **Playback compatibility**: which devices can play your library. Tick what people will watch on (computers and Android phones; iPhones, iPads or Macs; smart TVs, Chromecast or consoles) and Horde picks the mode: **AV1 only** when computers are all, **AV1 + H.264 copy** as soon as an Apple device or a TV is in the house, because older ones cannot play AV1. You can still pick any mode yourself. Without ticking anything the default stays **AV1 only**, which needs no GPU and plays in current Chrome, Firefox and Edge. The step also shows your GPU/encoder and whether *this* device can play AV1 ([details](../guides/downloads.md#compatibility-codecs)).
 4. **Look**: a color palette.
-5. **AI (optional)**: **Skip for now**, **Connect a provider** (paste an API key from a cloud provider such as OpenRouter, OpenAI, Gemini or Groq, or the address of an AI server you run), or **Run Ollama for me** (the bundled Ollama container, started with one command on the server). See [AI setup](../ops/ai-setup.md).
+5. **AI (optional)**: **Skip for now** (then **Skip**), **Connect a provider** (paste an API key from a cloud provider such as OpenRouter, OpenAI, Gemini or Groq, or the address of an AI server you run), or **Run Ollama for me** (the bundled Ollama container, started with one command on the server). See [AI setup](../ops/ai-setup.md).
 6. **YouTube history (optional)**: import your YouTube watch history, subscriptions and playlists from a Google Takeout export, for your account ([how](../guides/youtube-history.md)). Others can import their own later in Settings → Library.
 7. **You’re set**: opens **Downloads** when the library is empty, or the library when it already has videos.
 

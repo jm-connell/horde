@@ -53,6 +53,14 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Install guides for more platforms.** Other platforms now covers Windows
+  (WSL 2), macOS, Raspberry Pi and Proxmox next to Unraid, Synology and
+  Portainer, with a table of which guide to follow. Unraid's database path
+  moves to the pool (`/mnt/cache/...`), and the `docker run` recipe gets
+  Compose's 40-second stop timeout.
+- **A media folder Horde cannot write to is reported at start.** The
+  container log says so and prints the `chown` that fixes it, instead of
+  downloads failing later.
 - **Releases only, published image by default.** `docker-compose.yml` runs
   the published release image and no longer has a build section, so a
   failed download stops with an error instead of quietly starting a long
