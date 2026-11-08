@@ -7,6 +7,8 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-11-08
+
 ### Added
 
 - **Subscriptions.** One name for keeping up with a channel: **Subscribe**
@@ -128,6 +130,10 @@ All notable changes to Horde are documented here. The format follows
 - An install already stopped by "would go BACKWARDS" (cloned from `main`,
   running the published image) updates normally again once this release is
   out, since it contains that checkout.
+- The update to this release still runs the previous `update.sh`, which
+  starts whatever `:latest` is. Update once the release page is up (that is
+  when the in-app notice appears); if you updated earlier and Horde still
+  reports 1.2.x, run `bash update.sh` again.
 
 ## [1.2.2] - 2026-11-03
 
@@ -1076,7 +1082,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.2...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.3.0...main
+[1.3.0]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.0
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0
