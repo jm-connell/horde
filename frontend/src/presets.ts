@@ -32,6 +32,27 @@ export const DEFAULT_PRESET_OPTIONS = PRESET_ORDER.map((value) => ({
   label: PRESET_LABELS[value] ?? value,
 }));
 
+/**
+ * The preset to preselect for a link, given the user's default and the presets
+ * the link offers (best first). A video cap becomes the best tier at or under
+ * it (else the lowest tier offered); an audio-only link always gets audio,
+ * since a height cap matches none of its formats.
+ */
+export function defaultPresetFor(base: string, available: string[]): string {
+  if (available.length === 0 || available.includes(base)) return base;
+  const videoTiers = available.filter((p) => p !== "best" && !isAudioPreset(p));
+  if (!isAudioPreset(base) && videoTiers.length > 0) {
+    if (base === "best") return videoTiers[0]!;
+    const cap = PRESET_ORDER.indexOf(base as (typeof PRESET_ORDER)[number]);
+    const under = videoTiers.find(
+      (p) => PRESET_ORDER.indexOf(p as (typeof PRESET_ORDER)[number]) >= cap
+    );
+    return under ?? videoTiers[videoTiers.length - 1]!;
+  }
+  if (available.includes("audio")) return "audio";
+  return available.find(isAudioPreset) ?? available[0]!;
+}
+
 export function isAudioPreset(preset: string): boolean {
   return preset === "audio" || preset.startsWith("audio-");
 }

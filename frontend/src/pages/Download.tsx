@@ -17,6 +17,7 @@ import { sharedUrlFromParams } from "../shareTarget";
 import { downloadErrorHint, downloadErrorLabel } from "../downloadErrors";
 import {
   formatApproxSize,
+  defaultPresetFor,
   mergePinnedPreset,
   PRESET_ORDER,
   presetOptionLabel,
@@ -274,12 +275,18 @@ export default function Download() {
     !preview.is_playlist &&
     preview.available_presets.length > 0;
 
-  // "Best available" shows as the top tier this video offers once it is known.
-  const basePreset = pickedPreset ?? settings.defaultDownloadPreset;
-  const preset =
-    metadataLoaded && basePreset === "best"
-      ? preview.available_presets[0]!
-      : basePreset;
+  // Once the video's formats are known, an explicit "Best available" shows as
+  // its top tier, and the default maps onto a tier the video offers.
+  const preset = !metadataLoaded
+    ? (pickedPreset ?? settings.defaultDownloadPreset)
+    : pickedPreset === null
+      ? defaultPresetFor(
+          settings.defaultDownloadPreset,
+          preview.available_presets
+        )
+      : pickedPreset === "best"
+        ? preview.available_presets[0]!
+        : pickedPreset;
 
   const qualityOptions = useMemo(() => {
     if (!metadataLoaded) return allPresets;
