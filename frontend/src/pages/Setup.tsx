@@ -459,7 +459,7 @@ function WizardPanel({
                   Default quality
                 </span>
                 <span className="block text-xs text-muted">
-                  Preselected on the Download page. Best available keeps the
+                  Used when you start a download. Best available keeps the
                   highest resolution each video offers.
                 </span>
               </span>

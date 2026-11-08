@@ -145,7 +145,7 @@
     {"id": "download-badge", "label": "Show active download count in navigation", "tab": "library", "access": "download", "chat": "change", "scope": "personal",
      "key": "showDownloadNavBadge", "type": "bool", "about": "A count of running downloads on the Download link"},
     {"id": "default-download-quality", "label": "Default download quality", "tab": "library", "access": "download", "chat": "change", "scope": "personal",
-     "key": "defaultDownloadPreset", "type": "enum", "about": "Quality preselected on the Download page for each new link", "keywords": "resolution 4k 1080p 720p audio preset",
+     "key": "defaultDownloadPreset", "type": "enum", "about": "Quality preselected whenever you start a download (Download page, watch page, playlists, channel pages, Ask)", "keywords": "resolution 4k 1080p 720p audio preset",
      "options": [{"value": "best", "label": "Best available"}, {"value": "2160p", "label": "4K"}, {"value": "1440p", "label": "1440p"}, {"value": "1080p", "label": "1080p"}, {"value": "720p", "label": "720p"}, {"value": "480p", "label": "480p"}, {"value": "audio", "label": "Audio (best)"}, {"value": "audio-160", "label": "Audio · 160 kbps"}, {"value": "audio-128", "label": "Audio · 128 kbps"}, {"value": "audio-64", "label": "Audio · 64 kbps"}]},
     {"id": "normalize-volume", "label": "Normalize volume on download", "tab": "library", "access": "download", "chat": "change", "scope": "personal",
      "key": "normalizeVolumeOnDownload", "type": "bool", "about": "Even out loudness of new downloads", "keywords": "loudness audio level"},

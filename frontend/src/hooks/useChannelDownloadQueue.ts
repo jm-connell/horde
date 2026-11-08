@@ -5,6 +5,7 @@ import { PRESET_ORDER, resolveQualityPreset } from "../presets";
 import type { ChannelFeedEntry, DownloadJob, DownloadPreview } from "../types";
 
 import { getItem, setItem } from "../storage";
+import { useSettings } from "./useSettings";
 const CONFIRM_SECONDS = 5;
 const DEFAULT_PRESET_KEY = "horde.channelFeed.defaultPreset";
 
@@ -61,13 +62,17 @@ export function channelFeedItemDownloading(
   return jobs.some((j) => j.url === entry.url && isActiveJob(j));
 }
 
-function loadDefaultPreset(): string {
-  return getItem(DEFAULT_PRESET_KEY)?.trim() || "best";
+function loadStoredPreset(): string | null {
+  return getItem(DEFAULT_PRESET_KEY)?.trim() || null;
 }
 
 export function useChannelDownloadQueue(channelName: string) {
   const { submitDownload, jobs } = useDownloads();
-  const [defaultPreset, setDefaultPresetState] = useState(loadDefaultPreset);
+  const [settings] = useSettings();
+  // A quality picked in this browser's channel feed wins; otherwise the
+  // account's default quality.
+  const [storedPreset, setStoredPreset] = useState(loadStoredPreset);
+  const defaultPreset = storedPreset ?? settings.defaultDownloadPreset;
   const [allPresets, setAllPresets] = useState<string[]>([...PRESET_ORDER]);
   const [pending, setPending] = useState<PendingChannelDownload[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -84,7 +89,7 @@ export function useChannelDownloadQueue(channelName: string) {
   const pendingUrlsRef = useRef(new Set<string>());
 
   const setDefaultPreset = useCallback((preset: string) => {
-    setDefaultPresetState(preset);
+    setStoredPreset(preset);
     setItem(DEFAULT_PRESET_KEY, preset);
   }, []);
 

@@ -420,7 +420,7 @@ export default function LibraryTab() {
           <SettingRow
             anchor="default-download-quality"
             title="Default quality"
-            description="Preselected on the Download page for each new link. You can still pick another before downloading."
+            description="Used when you start a download: the Download page, a video you are watching, playlist subscriptions, channel pages and Ask. You can still pick another each time."
             hidden={!!q && !match("default quality", "resolution", "downloads")}
             control={
               <ThemedSelect

@@ -135,7 +135,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `channelSort` | `"recent_download"` | string | `recent_download` \| `video_count` \| `alphabetical` \| `subscriber_count` | UI blob |
 | `channelOrder` | `"desc"` | string | `asc` \| `desc` | UI blob |
 | `showDownloadNavBadge` | `true` | bool | | UI blob |
-| `defaultDownloadPreset` | `"best"` | string | `best` \| `2160p` \| `1440p` \| `1080p` \| `720p` \| `480p` \| `audio` \| `audio-160` \| `audio-128` \| `audio-64`: preselected on the Download page | UI blob (`default_download_preset`) |
+| `defaultDownloadPreset` | `"best"` | string | `best` \| `2160p` \| `1440p` \| `1080p` \| `720p` \| `480p` \| `audio` \| `audio-160` \| `audio-128` \| `audio-64`: preselected whenever you start a download | UI blob (`default_download_preset`) |
 | `normalizeVolumeOnDownload` | `true` | bool | | UI blob |
 | `downloadVideoCodec` | `"av1"` | string | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (legacy `h264`/`h265` → `h264_convert`) | UI blob (`download_video_codec`) |
 | `compatCopyResolution` | `"1080p"` | string | `1080p` \| `source`: H.264 copy short-side cap (1080, or up to 4K) | UI blob (`compat_copy_resolution`) |

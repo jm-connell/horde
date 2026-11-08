@@ -6,7 +6,7 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 
 ## Quality presets
 
-The Download page preselects your **Default quality** (Settings → Library → Downloads, or the setup wizard); change it per link in the **Quality** menu.
+Every place you start a download (this page, the watch page, playlist subscriptions, channel pages and Ask) preselects your **Default quality** (Settings → Library → Downloads, or the setup wizard); change it per download in the **Quality** menu. Channel [auto-download](channels.md#autodownload) uses its own per-channel quality.
 
 | Preset | Meaning |
 |--------|---------|

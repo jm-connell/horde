@@ -8,7 +8,12 @@ import { isActiveJob, useDownloads } from "../../context/DownloadContext";
 import { usePlaybackActions } from "../../context/PlaybackContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
-import { PRESET_ORDER, resolveQualityPreset } from "../../presets";
+import { useSettings } from "../../hooks/useSettings";
+import {
+  PRESET_ORDER,
+  defaultPresetFor,
+  resolveQualityPreset,
+} from "../../presets";
 import { downloadProgressPercent } from "../../utils";
 import { isLongStream, longStreamConfirm } from "../../utils/longStream";
 import { setWatchResume } from "../../utils/watchHandoff";
@@ -16,10 +21,6 @@ import type { WatchSource } from "./useWatchVideo";
 
 const STAY_DOWNLOAD_TOAST =
   "Downloading - Video will switch to full quality when ready";
-
-function bestAvailablePreset(presets: string[]): string {
-  return resolveQualityPreset("best", presets);
-}
 
 function orderPresets(presets: string[]): string[] {
   const set = new Set(presets);
@@ -44,6 +45,8 @@ export function useStreamDownload({
   channelParam: string;
 }) {
   const navigate = useNavigate();
+  const [settings] = useSettings();
+  const defaultPreset = settings.defaultDownloadPreset;
   const queryClient = useQueryClient();
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
@@ -54,7 +57,7 @@ export function useStreamDownload({
   // Stream download controls
   const [queuing, setQueuing] = useState(false);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState("best");
+  const [selectedPreset, setSelectedPreset] = useState(defaultPreset);
   const [availablePresets, setAvailablePresets] = useState<string[]>([]);
   const [presetSizes, setPresetSizes] = useState<Record<string, number>>({});
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
@@ -66,12 +69,12 @@ export function useStreamDownload({
 
   useEffect(() => {
     if (libraryValid || !streamUrlParam) return;
-    setSelectedPreset("best");
+    setSelectedPreset(defaultPreset);
     setAvailablePresets([]);
     setPresetSizes({});
     setPresetMenuOpen(false);
     userPickedPresetRef.current = false;
-  }, [streamUrlParam, libraryValid]);
+  }, [streamUrlParam, libraryValid, defaultPreset]);
 
   // Resolve download presets for stream
   const streamSource = source?.kind === "stream" ? source : null;
@@ -90,7 +93,7 @@ export function useStreamDownload({
       if (ordered.length === 0) return;
       setAvailablePresets(ordered);
       if (!userPickedPresetRef.current) {
-        setSelectedPreset(bestAvailablePreset(ordered));
+        setSelectedPreset(defaultPresetFor(defaultPreset, ordered));
       }
     };
     if (streamMetaPresets?.length) applyPresets(streamMetaPresets);
@@ -100,7 +103,7 @@ export function useStreamDownload({
     if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
       setPresetSizes(p.preset_sizes);
     }
-  }, [streamMetaPresets, streamPreviewData]);
+  }, [streamMetaPresets, streamPreviewData, defaultPreset]);
 
   useEffect(() => {
     if (!presetMenuOpen) return;
@@ -270,8 +273,8 @@ export function useStreamDownload({
       activeJobId != null ? jobs.find((j) => j.id === activeJobId) : undefined;
     const fromJob = job?.available_presets ?? [];
     if (fromJob.length > 0) return orderPresets(fromJob);
-    return ["best"];
-  }, [availablePresets, activeJobId, jobs]);
+    return [defaultPreset];
+  }, [availablePresets, activeJobId, jobs, defaultPreset]);
 
   return {
     queuing,
