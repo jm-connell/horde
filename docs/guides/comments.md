@@ -28,7 +28,7 @@ When comments are turned off on YouTube, or YouTube no longer shows them (the vi
 ## In search and chat
 
 - **Search**: a library video whose saved comments contain every word of your search shows up in **In your library**, after the videos that match by title, description, tags or notes. Its **?** badge quotes the comment ("In a YouTube comment: …"). Channel and tag filters apply as usual.
-- **Video chat**: the [AI chat](ai-features.md#chat) about a library video gets the top comments (about 3,000 characters, with the creator's replies) next to the description and captions, labelled as viewers' comments. Ask it what people thought, whether anyone pointed out a mistake, or what the creator answered. It is told never to pass off a viewer's claim as what the video says.
+- **Video chat**: the [AI chat](ai-features.md#chat-about-a-video) about a library video gets the top comments (about 3,000 characters, with the creator's replies) next to the description and captions, labelled as viewers' comments. Ask it what people thought, whether anyone pointed out a mistake, or what the creator answered. It is told never to pass off a viewer's claim as what the video says.
 
 ## Turning it off
 
