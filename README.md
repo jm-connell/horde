@@ -15,7 +15,7 @@ delete or use AI.
 One of Horde's core (but optional) features is AI, either a local model on
 your own hardware or a cloud provider such as OpenRouter. It powers video
 summaries and chat, smart search across your whole library and the channels you
-follow, a transparent and tunable recommendation feed, and more.
+subscribe to, a transparent and tunable recommendation feed, and more.
 
 ## Why Horde
 
@@ -75,7 +75,7 @@ Interactive API reference: `/docs`.
   compatibility, Settings → Library).
 - **YouTube streaming**: preview a video before deciding to download it. Works
   for most videos, but quality varies and it can break when YouTube changes.
-- **Live streams**: follow channels, see which are live in the sidebar, and
+- **Live streams**: subscribe to channels, see which are live in the sidebar, and
   watch with rewind (4 hours by default).
 - **Playlists**: your own lists, imported YouTube playlists, or subscribed
   playlists that pick up new videos as they are added.
@@ -262,7 +262,7 @@ Settings that live in `.env` (most others are in the app's Settings page):
 | `DATA_PATH` | Host folder for the database and thumbnails, mounted at `/app/data` (local disk only) |
 | `HORDE_IMAGE` | Image to run (default: the published `ghcr.io/jm-connell/horde:latest`; comment out to build from source) |
 | `SCAN_INTERVAL_SEC` | How often the media folder is rescanned for new files (default `60` seconds) |
-| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a followed channel (default `300`, `0` = off) |
+| `HORDE_LIVE_POLL_SEC` | Seconds between live checks of a subscribed channel (default `300`, `0` = off) |
 | `YTDLP_COOKIE_FILE` | Optional cookies file for age-restricted or blocked videos |
 | `OPENROUTER_API_KEY` | Optional; overrides the key saved in Settings → AI while the provider is OpenRouter |
 | `HORDE_UPDATE_CHANNEL` | Used by `update.sh`: `release` (default), `prerelease` or `main` |
