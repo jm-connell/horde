@@ -10,7 +10,7 @@ Clone [the git repo](https://github.com/jm-connell/horde) onto the Docker host, 
 
 ## What ports does it use?
 
-The container listens on **8080** by default (API + SPA + wiki). Map that port in Compose / Dockge. Ollama, OpenRouter, and optional POT/bgutil are separate services with their own URLs. See [Ports & networking](../ops/ports-networking.md).
+Open Horde at **8686** on the host (`http://<server-ip>:8686`). Inside its container it listens on 8080 (API, web UI and wiki), and the stock compose file publishes that as 8686; to use another host port, see [Change the port](../ops/ports-networking.md#change-the-port). Ollama, OpenRouter, and optional POT/bgutil are separate services with their own URLs. See [Ports & networking](../ops/ports-networking.md).
 
 ## Is AI required?
 
@@ -30,7 +30,7 @@ Back up the **data** volume (SQLite DB, thumbnails, app settings) and the **down
 
 ## How do I update?
 
-Run **`bash update.sh`** on the host (not Dockge Bash), or use **Update now** in Settings → System. It moves to the newest release and pulls the published image (or rebuilds it, on an install that builds from source). Settings, the SQLite library, and media stay on `DATA_PATH` / `DOWNLOADS_PATH` in `.env` — do not hardcode those only in `docker-compose.yml`. Settings → System can notice a newer GitHub commit. See [Updating](../getting-started/updating.md).
+Run **`bash update.sh`** on the host (not Dockge Bash), or use **Update now** in Settings → System. It moves to the newest release and pulls the published image (or rebuilds it, on an install that builds from source). Settings, the SQLite library, and media stay on `DATA_PATH` / `DOWNLOADS_PATH` in `.env` — do not hardcode those only in `docker-compose.yml`. Settings → System shows when a newer release is out. See [Updating](../getting-started/updating.md).
 
 ## Where is the wiki in development?
 
