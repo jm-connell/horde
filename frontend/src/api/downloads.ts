@@ -15,10 +15,16 @@ export const downloadsApi = {
     return request<string[]>("/api/downloads/presets", opts);
   },
 
-  previewDownload(url: string, opts?: ReadOptions): Promise<DownloadPreview> {
+  /** ``background``: a lookup nobody is waiting on (a feed card's badge), which
+   *  the server runs after the videos people are opening. */
+  previewDownload(
+    url: string,
+    opts?: ReadOptions & { background?: boolean }
+  ): Promise<DownloadPreview> {
+    const bg = opts?.background ? "&background=true" : "";
     return request<DownloadPreview>(
-      `/api/downloads/preview?url=${encodeURIComponent(url)}`,
-      opts
+      `/api/downloads/preview?url=${encodeURIComponent(url)}${bg}`,
+      { signal: opts?.signal }
     );
   },
 
