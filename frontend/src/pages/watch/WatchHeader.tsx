@@ -69,15 +69,15 @@ export default function WatchHeader({
           </Link>
         )}
       </div>
-      {/* Phones keep the details on one line (the channel name truncates)
-          with the download control at its right end; wider screens let
-          the items wrap with the control inline after them. */}
-      <div className="mt-2 flex items-center gap-x-3 gap-y-1.5 text-sm text-gray-400 max-sm:gap-x-2 sm:flex-wrap">
-        <div className="flex min-w-0 flex-1 items-center gap-x-2 overflow-hidden whitespace-nowrap text-xs sm:contents sm:whitespace-normal sm:text-sm">
+      {/* The items wrap as they need to, the controls inline after them
+          (at the right end on phones). The channel name is never cut short:
+          a long one takes its own line and the rest follows on the next. */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-400 max-sm:gap-x-2">
+        <div className="contents text-xs sm:text-sm">
           {channelName && (
             <Link
               to={channelHref}
-              className="font-medium text-accent hover:underline max-sm:min-w-0 max-sm:truncate"
+              className="min-w-0 break-words font-medium text-accent hover:underline"
             >
               {channelName}
             </Link>
@@ -122,7 +122,7 @@ export default function WatchHeader({
             )}
         </div>
         {!isLibrary && (
-          <div className="flex shrink-0 items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2 max-sm:ml-auto">
             {originalHref && (
               <a
                 href={originalHref}
