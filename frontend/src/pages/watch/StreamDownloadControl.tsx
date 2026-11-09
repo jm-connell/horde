@@ -47,12 +47,14 @@ export default function StreamDownloadControl({
     <>
       {!downloadActive && can("download") && (
         <div className="relative" ref={downloadMenuRef}>
-          <div className="inline-flex overflow-hidden rounded-lg bg-accent text-xs font-medium text-on-accent hover:bg-accent-soft disabled:opacity-60">
+          {/* An outline like "+ Playlist" beside it: a filled accent button
+              pulled the eye away from the video. */}
+          <div className="inline-flex overflow-hidden rounded-lg border border-ink-600 text-xs font-medium text-gray-300 hover:border-accent">
             <button
               type="button"
               onClick={() => void handleStreamDownload()}
               disabled={queuing}
-              className="px-3 py-1 disabled:opacity-60"
+              className="px-3 py-1 hover:text-accent disabled:opacity-60"
             >
               {queuing ? "Queuing…" : downloadButtonLabel(selectedPreset)}
             </button>
@@ -64,7 +66,7 @@ export default function StreamDownloadControl({
               aria-label="Choose download quality"
               aria-expanded={presetMenuOpen}
               aria-haspopup="menu"
-              className="border-l border-ink-950/25 px-2 py-1 disabled:opacity-60"
+              className="border-l border-ink-600 px-2 py-1 hover:text-accent disabled:opacity-60"
             >
               <span
                 className={`inline-block text-[10px] leading-none transition-transform ${
