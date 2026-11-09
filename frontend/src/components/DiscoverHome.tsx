@@ -591,13 +591,15 @@ export default function DiscoverHome({
           />
         ) : null}
         {/* A live card has its own red ring; a second outline would sit inside it. */}
-        {SOURCE[item.source].outline && item.reason.kind !== "live" && (
-          <span
-            aria-hidden="true"
-            data-horde="source-outline"
-            className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
-          />
-        )}
+        {settings.showRecSourceColors &&
+          SOURCE[item.source].outline &&
+          item.reason.kind !== "live" && (
+            <span
+              aria-hidden="true"
+              data-horde="source-outline"
+              className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
+            />
+          )}
         <RecMenu
           channel={channel.name || null}
           onWhy={() => setWhyItem(item)}

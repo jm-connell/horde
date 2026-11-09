@@ -48,7 +48,9 @@ export default function LibraryHeader({
           onSelect={onHomeTab}
         />
       )}
-      {showHomeTabs && homeTab === "recommended" && <SourceLegend />}
+      {showHomeTabs &&
+        homeTab === "recommended" &&
+        settings.showRecSourceColors && <SourceLegend />}
 
       <div
         data-header-filters

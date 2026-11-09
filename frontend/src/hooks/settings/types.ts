@@ -205,6 +205,8 @@ export interface Settings {
   showProgressOnContinueWatching: boolean;
   showProgressOnAllVideos: boolean;
   showCardDates: boolean;
+  /** Outline Recommended cards by where they come from (downloaded, your channels, new). */
+  showRecSourceColors: boolean;
   progressExpiryDays: number;
   sponsorBlockEnabled: boolean;
   sponsorBlockShowNotice: boolean;

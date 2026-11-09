@@ -54,21 +54,30 @@ test("Recommended mixes the library with videos found on YouTube", async ({
   await expect(page.getByText(FOUND)).toBeVisible();
 });
 
-test("source marks tell downloaded, your channels and new apart", async ({
+test("source colors are off by default, and a setting turns them on", async ({
   page,
 }) => {
   await openRecommended(page);
   const legend = page.getByRole("list", { name: "What the outlines mean" });
-  await expect(legend).toBeVisible();
+  // Off by default: every card looks the same, and there is no color key.
+  await expect(legend).toHaveCount(0);
+  await expect(page.locator('[data-horde="source-outline"]')).toHaveCount(0);
+  // Screen readers still hear where a card comes from.
   const found = page.locator(`[data-rec-key="discover001"]`);
   await expect(found.getByText("New to you.")).toBeAttached();
+
+  await page.goto("/settings?tab=library");
+  await page
+    .locator('[data-setting="rec-source-colors"]')
+    .getByRole("switch")
+    .click();
+  await openRecommended(page);
+  await expect(legend).toBeVisible();
   // Downloaded cards carry the solid outline.
   await expect(
     page.locator('[data-horde="source-outline"].border-accent').first()
   ).toBeAttached();
-
-  // Always on: no toggle, and the legend sits beside the home tabs.
-  await expect(page.getByRole("button", { name: "Sources" })).toHaveCount(0);
+  // The legend sits beside the home tabs, on Recommended only.
   await page.getByRole("button", { name: "Library", exact: true }).click();
   await expect(legend).toHaveCount(0);
 });

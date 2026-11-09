@@ -232,6 +232,22 @@ export default function LibraryTab() {
               />
             }
           />
+          <SettingRow
+            anchor="rec-source-colors"
+            title="Color Recommended cards by source"
+            description="Outline Recommended cards by where they come from: downloaded, your channels, or new to you. Off: every card looks the same."
+            hidden={!!q && !match("color", "recommended", "source", "outline")}
+            control={
+              <Toggle
+                checked={settings.showRecSourceColors}
+                onChange={() =>
+                  update({
+                    showRecSourceColors: !settings.showRecSourceColors,
+                  })
+                }
+              />
+            }
+          />
         </div>
 
         {/* Server-wide: it resets everyone's saved positions. */}

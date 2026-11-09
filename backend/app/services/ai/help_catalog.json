@@ -127,6 +127,8 @@
      "key": "showProgressOnAllVideos", "type": "bool", "about": "How far you got, on every video card"},
     {"id": "card-dates", "label": "Show dates on video cards", "tab": "library", "chat": "change", "scope": "personal",
      "key": "showCardDates", "type": "bool", "about": "Upload dates under video cards"},
+    {"id": "rec-source-colors", "label": "Color Recommended cards by source", "tab": "library", "chat": "change", "scope": "personal",
+     "key": "showRecSourceColors", "type": "bool", "about": "Outline Recommended cards by source (downloaded, your channels, new) and show the color key", "keywords": "color key legend outline"},
     {"id": "show-live-streams", "label": "Show live streams", "tab": "library", "chat": "change", "scope": "personal",
      "key": "showLiveStreams", "type": "bool", "about": "List subscribed channels that are live in the library sidebar", "keywords": "live broadcast"},
     {"id": "default-sort", "label": "Default video sort", "tab": "library", "chat": "change", "scope": "personal",
