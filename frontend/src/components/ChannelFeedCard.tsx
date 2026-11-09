@@ -14,6 +14,7 @@ import {
   formatResolution,
   formatViewCount,
   joinDotList,
+  youtubeThumbnailRetries,
   youtubeThumbnailUrl,
 } from "../utils";
 import { enqueueYtPreview } from "../utils/ytPreviewQueue";
@@ -170,6 +171,7 @@ function UpcomingLabel() {
 
 function FeedThumbnail({
   thumbSrc,
+  retrySrcs,
   duration,
   className,
   live = false,
@@ -186,6 +188,8 @@ function FeedThumbnail({
   /** The viewer watched it on YouTube (their imported Takeout history). */
   watchedOnYoutube?: boolean;
   thumbSrc: string | null;
+  /** Other copies of the thumbnail to try when `thumbSrc` fails. */
+  retrySrcs?: string[];
   duration: string;
   className: string;
   /** A broadcast that is live right now: a LIVE badge instead of the length. */
@@ -215,6 +219,7 @@ function FeedThumbnail({
               width={320}
               height={180}
               src={thumbSrc}
+              retrySrcs={retrySrcs}
               alt=""
               loading="lazy"
               className="h-full w-full object-cover"
@@ -299,6 +304,7 @@ export default function ChannelFeedCard({
   const { can } = useAuth();
   const isLive = entry.live_status === "is_live";
   const thumbSrc = youtubeThumbnailUrl(entry.id, entry.thumbnail_url);
+  const thumbRetries = youtubeThumbnailRetries(entry.id, entry.thumbnail_url);
   const duration = formatDuration(entry.duration);
   const cardRef = useRef<HTMLDivElement | null>(null);
   const { current } = usePlaybackSession();
@@ -425,6 +431,7 @@ export default function ChannelFeedCard({
       >
         <FeedThumbnail
           thumbSrc={thumbSrc}
+          retrySrcs={thumbRetries}
           duration={duration}
           live={isLive}
           showDuration={false}
@@ -501,6 +508,7 @@ export default function ChannelFeedCard({
       >
         <FeedThumbnail
           thumbSrc={thumbSrc}
+          retrySrcs={thumbRetries}
           duration={duration}
           live={isLive}
           className="aspect-video w-full"

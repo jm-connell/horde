@@ -368,6 +368,24 @@ export function youtubeThumbnailUrl(
   return null;
 }
 
+/**
+ * YouTube's stable thumbnail URLs for a video, to retry when the stored one
+ * fails (search results hand out signed URLs that expire, or sizes a video
+ * does not have).
+ */
+export function youtubeThumbnailRetries(
+  videoId: string | null | undefined,
+  thumbnailUrl?: string | null
+): string[] {
+  const id =
+    youtubeVideoIdFromUrl(videoId) ?? youtubeVideoIdFromUrl(thumbnailUrl);
+  if (!id) return [];
+  return [
+    `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+    `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+  ];
+}
+
 /** Medium CDN thumb (~320×180) for small list tiles — avoids downscaling maxres. */
 export function youtubeListThumbnailUrl(
   videoId: string | null | undefined,

@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChannelPage } from "../../queries/follows";
 import type { SuggestedChannel } from "../../types";
-import { formatViewCount, joinDotList, youtubeThumbnailUrl } from "../../utils";
+import {
+  formatViewCount,
+  joinDotList,
+  youtubeThumbnailRetries,
+  youtubeThumbnailUrl,
+} from "../../utils";
 import { button } from "../buttons";
 import ChannelAvatar from "../ChannelAvatar";
 import { isYoutubeChannelUrl } from "../channelFeedYoutubeSearch";
@@ -50,6 +55,7 @@ function ChannelCard({
           <FadeImage
             key={v.id ?? v.url}
             src={youtubeThumbnailUrl(v.id, v.thumbnail_url) ?? undefined}
+            retrySrcs={youtubeThumbnailRetries(v.id, v.thumbnail_url)}
             alt=""
             className="aspect-video w-full rounded-sm bg-ink-800 object-cover"
             fallback={
