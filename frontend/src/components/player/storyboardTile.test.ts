@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { storyboardTileStyle } from "./storyboardTile";
+import { storyboardTileStyle, scrubPreviewScale } from "./storyboardTile";
 
 const board = {
   tile_width: 160,
@@ -29,5 +29,22 @@ describe("storyboardTileStyle", () => {
     // Frame 59: third sheet, frame 9 (row 1, column 4).
     expect(style?.backgroundImage).toBe('url("https://i.ytimg.com/c.jpg")');
     expect(style?.backgroundPosition).toBe("-640px -90px");
+  });
+});
+
+describe("scrubPreviewScale", () => {
+  it("leaves tiles alone on a desktop player", () => {
+    expect(scrubPreviewScale(320, 1100)).toBe(1);
+    expect(scrubPreviewScale(160, 600)).toBe(1);
+  });
+
+  it("shrinks a big tile to 40% of a phone's bar, not below 140 px", () => {
+    expect(320 * scrubPreviewScale(320, 370)).toBeCloseTo(148);
+    expect(320 * scrubPreviewScale(320, 250)).toBeCloseTo(140);
+  });
+
+  it("does nothing before it can measure", () => {
+    expect(scrubPreviewScale(0, 370)).toBe(1);
+    expect(scrubPreviewScale(320, 0)).toBe(1);
   });
 });

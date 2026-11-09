@@ -31,3 +31,18 @@ export function storyboardTileStyle(
     backgroundPosition: `-${col * board.tile_width}px -${row * board.tile_height}px`,
   };
 }
+
+/** Scrub previews are at most this share of the seek bar's width… */
+const PREVIEW_MAX_SHARE = 0.4;
+/** …but never shrunk below this (px). */
+const PREVIEW_MIN_W = 140;
+
+/**
+ * How much to shrink a preview tile (drawn at its own size, often 320 px)
+ * for a seek bar `barW` px wide: 1 on a desktop player, less on a phone.
+ */
+export function scrubPreviewScale(tileW: number, barW: number): number {
+  if (tileW <= 0 || barW <= 0) return 1;
+  const maxW = Math.max(PREVIEW_MIN_W, barW * PREVIEW_MAX_SHARE);
+  return Math.min(1, maxW / tileW);
+}

@@ -12,6 +12,7 @@ import type { Storyboard } from "../../types";
 import type { ClipBarRange } from "./clipMarkers";
 import { storyboardTileStyle } from "./storyboardTile";
 import { isChapterActive } from "./useChapters";
+import { scrubPreviewScale } from "./storyboardTile";
 import { useSeekSprites } from "./useSeekSprites";
 
 interface Props {
@@ -173,6 +174,7 @@ function ClipRangeMarks({
 }
 
 /** Seek bar: pointer scrubbing, hover thumbnails and chapter markers. */
+
 export default function ScrubBar({
   scrubberRef,
   videoId,
@@ -302,10 +304,22 @@ export default function ScrubBar({
           } else if (storyboard) {
             tileStyle = storyboardTileStyle(storyboard, time) ?? undefined;
           }
+          // Tiles are drawn at their own size, a good part of a phone's
+          // width: on a narrow player, shrink them to a share of the bar.
+          const tileW = Number(tileStyle?.width) || 0;
+          const tileH = Number(tileStyle?.height) || 0;
+          const scale = scrubPreviewScale(
+            tileW,
+            scrubberRef.current?.offsetWidth ?? 0
+          );
           return {
             time,
             pct: Math.min(92, Math.max(8, pct)),
             tileStyle,
+            box:
+              scale < 1
+                ? { width: tileW * scale, height: tileH * scale, scale }
+                : null,
           };
         })()
       : null;
@@ -326,12 +340,31 @@ export default function ScrubBar({
           style={{ left: `${scrubPreview.pct}%` }}
         >
           <div className="flex flex-col items-center gap-1">
-            {scrubPreview.tileStyle && (
-              <div
-                className="overflow-hidden rounded-lg border border-white/20 bg-black shadow-lg"
-                style={scrubPreview.tileStyle}
-              />
-            )}
+            {scrubPreview.tileStyle &&
+              (scrubPreview.box ? (
+                <div
+                  data-horde="scrub-preview"
+                  className="overflow-hidden rounded-lg border border-white/20 bg-black shadow-lg"
+                  style={{
+                    width: scrubPreview.box.width,
+                    height: scrubPreview.box.height,
+                  }}
+                >
+                  <div
+                    style={{
+                      ...scrubPreview.tileStyle,
+                      transform: `scale(${scrubPreview.box.scale})`,
+                      transformOrigin: "top left",
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  data-horde="scrub-preview"
+                  className="overflow-hidden rounded-lg border border-white/20 bg-black shadow-lg"
+                  style={scrubPreview.tileStyle}
+                />
+              ))}
             <span
               className={`rounded bg-black/90 px-1.5 py-0.5 text-xs ${
                 hoveredChapter
