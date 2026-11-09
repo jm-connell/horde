@@ -1919,9 +1919,16 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
 
 /* The chat docked at the side (HelpChatPanel): the page and footer make room
    for it below the full-width nav. Outside the layers, so it beats w-full and
-   mx-auto on those elements. */
+   mx-auto on those elements. On a screen wider than the page's max width
+   plus the chat, the page is centred in the room left of the chat (not
+   pushed against it), so theater mode's full-bleed player, centred on the
+   page, fills exactly that room. */
 html[data-chat-docked] [data-horde="main"],
 html[data-chat-docked] [data-horde="footer"] {
   width: calc(100% - var(--horde-chat-dock));
   margin-right: var(--horde-chat-dock);
+}
+html[data-chat-docked] [data-horde="main"],
+html[data-chat-docked] [data-horde="footer"] {
+  margin-left: max(0px, calc((100% - var(--horde-chat-dock) - 1920px) / 2));
 }

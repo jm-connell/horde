@@ -609,6 +609,34 @@ test("watching with the chat docked shows the player as theater", async ({
   await expect(theater).not.toHaveClass(active);
 });
 
+test("on a wide screen, theater with the chat docked fills the room beside it", async ({
+  page,
+}) => {
+  // Wider than the page's max width plus the chat: the page used to sit
+  // against the chat, so the full-bleed player started right of the screen's
+  // edge and ran under the chat.
+  await page.setViewportSize({ width: 2560, height: 1200 });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = page.locator('[data-horde="help-chat"]');
+  await panel
+    .getByRole("button", { name: "Dock the chat at the side" })
+    .click();
+  await expect(panel).toHaveAttribute("data-docked", "true");
+  await expect
+    .poll(async () => {
+      const video = (await page.locator("video").first().boundingBox())!;
+      const chat = (await panel.boundingBox())!;
+      return [
+        Math.round(video.x),
+        Math.round(chat.x - (video.x + video.width)),
+      ];
+    })
+    .toEqual([0, 0]);
+});
+
 test("under reduced motion the chat docks without gliding", async ({
   page,
 }) => {
