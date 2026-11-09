@@ -1,4 +1,5 @@
 import type {
+  AllowedChannel,
   AuthState,
   AuthUser,
   Invite,
@@ -244,6 +245,17 @@ export const authApi = {
 
   updateUser(id: number, input: UserUpdateInput): Promise<UserAccount> {
     return request<UserAccount>(`/api/users/${id}`, jsonInit("PATCH", input));
+  },
+
+  /** Parental controls: the channels a member may watch (null lifts it). */
+  setAllowedChannels(
+    id: number,
+    channels: AllowedChannel[] | null
+  ): Promise<UserAccount> {
+    return request<UserAccount>(
+      `/api/users/${id}/allowed-channels`,
+      jsonInit("PUT", { channels })
+    );
   },
 
   async listUserSessions(userId: number): Promise<DeviceSession[]> {

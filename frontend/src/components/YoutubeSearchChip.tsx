@@ -1,3 +1,4 @@
+import { useAuth } from "../context/AuthContext";
 import { useSearch } from "../context/SearchContext";
 import { YOUTUBE_VIDEO_SEARCH_HEADER_TIP } from "../pages/settings/constants";
 
@@ -19,9 +20,12 @@ export default function YoutubeSearchChip({
     youtubeVideoSearchSaving,
     toggleYoutubeVideoSearch,
   } = useSearch();
+  // Parental controls: no YouTube search to switch on.
+  const restricted = useAuth().user?.allowed_channels != null;
   const isOn = checked ?? youtubeVideoSearch;
   const isDisabled = disabled ?? youtubeVideoSearchSaving;
   const label = title ?? YOUTUBE_VIDEO_SEARCH_HEADER_TIP;
+  if (restricted) return null;
 
   return (
     <span className="absolute right-1.5 inset-y-0 z-10 flex items-center">
