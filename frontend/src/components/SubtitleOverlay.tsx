@@ -70,6 +70,8 @@ export default function SubtitleOverlay({
   const [view, setView] = useState<ViewLine[]>([]);
   const [dragging, setDragging] = useState(false);
   const [liftPx, setLiftPx] = useState(0);
+  /** Pulled left this far so the box stays inside a narrower player. */
+  const [shiftPx, setShiftPx] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const clipRef = useRef<HTMLDivElement>(null);
   const stackRef = useRef<HTMLDivElement>(null);
@@ -319,6 +321,15 @@ export default function SubtitleOverlay({
 
   const measureLiftRef = useRef(() => {});
   measureLiftRef.current = () => {
+    // A spot chosen in a wider player (theater) can put the box's right edge
+    // past a narrower one's: pull it back in, keeping the saved position.
+    const box = rootRef.current;
+    const holder = box?.offsetParent as HTMLElement | null;
+    if (box && holder && !centered) {
+      const over = box.offsetLeft + box.offsetWidth - holder.clientWidth;
+      const next = Math.round(clamp(over, 0, box.offsetLeft));
+      setShiftPx((prev) => (prev === next ? prev : next));
+    }
     if (!controlsVisible) suppressLiftRef.current = false;
     if (
       !captionLiftActive(controlsVisible, dragging, suppressLiftRef.current)
@@ -372,6 +383,9 @@ export default function SubtitleOverlay({
     const ro = new ResizeObserver(run);
     ro.observe(el);
     if (bar) ro.observe(bar);
+    // The player changing size (theater, default, fullscreen) moves the edge.
+    const holder = el.offsetParent;
+    if (holder) ro.observe(holder);
     window.addEventListener("resize", run);
     return () => {
       ro.disconnect();
@@ -466,7 +480,7 @@ export default function SubtitleOverlay({
           : {
               left: `${clamp(left, 0, 90)}%`,
               bottom: `${clamp(offset, 0, 85)}%`,
-              transform: `translateY(-${liftPx}px)`,
+              transform: `translate(-${dragging ? 0 : shiftPx}px, -${liftPx}px)`,
             }
       }
       aria-hidden

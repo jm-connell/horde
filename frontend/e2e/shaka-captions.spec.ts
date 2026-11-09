@@ -239,3 +239,51 @@ test("on a phone captions are centred and sized to the player", async ({
   // Medium on a 390 px wide picture: about 14 px, not the 20 px desktop floor.
   expect(fontPx).toBeLessThan(16);
 });
+
+test("captions placed far right in theater stay inside the smaller player", async ({
+  page,
+}) => {
+  // A long line: its box is a good part of the player's width.
+  const long = "A caption line long enough to fill a good part of the player";
+  await openStream(page, false);
+  await page.route(/\/api\/preview\/subtitles\?/, (route) =>
+    route.fulfill({
+      contentType: "text/vtt",
+      body: `WEBVTT\n\n00:00:00.000 --> 00:00:06.000\n${long}\n`,
+    })
+  );
+  await page.getByRole("button", { name: "CC (subtitles)" }).click();
+  const overlay = page.locator(".subtitle-overlay");
+  await expect(page.locator(".subtitle-overlay-visible")).toHaveText(long);
+  const video = page.locator("video").first();
+  const reveal = async () => {
+    const box = (await video.boundingBox())!;
+    await page.mouse.move(box.x + 20, box.y + 20);
+    await page.mouse.move(box.x + 24, box.y + 22);
+  };
+
+  await reveal();
+  await page.getByRole("button", { name: "Theater", exact: true }).click();
+  // Once the player has grown, drag the captions as far right as they go.
+  await expect
+    .poll(async () => Math.round((await video.boundingBox())!.width))
+    .toBeGreaterThan(1300);
+  await page.waitForTimeout(400);
+  const start = (await overlay.boundingBox())!;
+  await page.mouse.move(start.x + 5, start.y + start.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 2000, start.y + start.height / 2, {
+    steps: 5,
+  });
+  await page.mouse.up();
+
+  await reveal();
+  await page.getByRole("button", { name: "Theater", exact: true }).click();
+  await expect
+    .poll(async () => {
+      const v = (await video.boundingBox())!;
+      const c = (await overlay.boundingBox())!;
+      return Math.round(c.x + c.width - (v.x + v.width));
+    })
+    .toBeLessThanOrEqual(0);
+});
