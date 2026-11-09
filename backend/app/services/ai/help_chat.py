@@ -763,6 +763,13 @@ class _HelpChat:
                 f"The user's custom CSS ({'on' if on else 'off'}):\n"
                 + (f"```css\n{css[:_CSS_CHARS]}\n```" if css else "(empty)")
             )
+        if help_data.asks_about_ask_channels(question):
+            extra.append(help_data.ask_channels(session))
+            # Offer its settings section, so the answer links it.
+            settings = [
+                *(s for s in catalog.settings if s.id == "ask-channels"),
+                *(s for s in settings if s.id != "ask-channels"),
+            ]
         if self._use_data:
             data = help_data.gather(
                 session,

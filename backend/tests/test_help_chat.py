@@ -503,3 +503,41 @@ def test_help_search_for_a_member_without_ai_on_a_server_with_ai(
         answer = c.get("/api/ai/help/search", params={"q": "presets"}).json()["answer"]
     assert answer.startswith("Your account does not use AI here")
     assert "AI permission" in answer
+
+
+def test_which_channels_are_indexed_for_ask_is_answered_from_the_server(
+    client, help_env, session
+):
+    """The list Settings shows is read into the context (it is not the user's
+    data, so no consent is needed)."""
+    from app.models import KbChannel, KbChannelStatus, KbVideo
+
+    channel = KbChannel(
+        channel_url="https://www.youtube.com/@scamwatch",
+        channel_name="Scam Watch",
+        status=KbChannelStatus.ready,
+    )
+    session.add(channel)
+    session.commit()
+    session.refresh(channel)
+    for n, status in enumerate(["fetched", "fetched", "pending"]):
+        session.add(
+            KbVideo(
+                kb_channel_id=channel.id,
+                yt_id=f"scamvideo{n:02d}",
+                fetch_status=status,
+            )
+        )
+    session.commit()
+
+    client.post(
+        "/api/ai/help/chat",
+        json={"message": "what channels are indexed for ask?"},
+    )
+    system = help_env[0]["system"]
+    assert "Channels indexed for Ask (1):" in system
+    assert "Scam Watch: ready, captions of 2 of 3 uploads indexed" in system
+    # Its section is offered too, so the answer can link it.
+    assert "ask-channels" in system
+    client.post("/api/ai/help/chat", json={"message": "how do I change the theme?"})
+    assert "Channels indexed for Ask" not in help_env[1]["system"]

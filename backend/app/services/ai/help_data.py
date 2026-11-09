@@ -31,6 +31,7 @@ from ...models import (
 from .. import library, playlists, user_state
 from ..auth.accounts import AuthUser
 from ..downloads import device_access
+from ..knowledge import channels as knowledge_channels
 from ..pagination import PageRequest
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,9 @@ _ABOUT_ME = re.compile(
     r"\b(?:did|have|had) i\b|\bi(?:'ve| have)? (?:watched|downloaded|saw|seen|added)\b"
 )
 _WATCH = _words("watch watching")
+#: "Which channels are indexed for Ask?": server data, asked without "my".
+_INDEXED = _words("indexed indexing index")
+_CHANNEL_WORDS = _words("channel channels")
 _MAKE = _words("make create build new add put")
 #: Words that say what to look for rather than what it is about.
 _NOT_SEARCH_TERMS = _words(
@@ -313,6 +317,31 @@ def _library(session: Session) -> str | None:
     return "\n".join(lines)
 
 
+def asks_about_ask_channels(question: str) -> bool:
+    """"Which channels are indexed for Ask?": what Settings lists, read here.
+    Server data, not the user's, so it needs no data consent."""
+    words = set(_WORD.findall(question.lower()))
+    return bool(words & _INDEXED and words & _CHANNEL_WORDS)
+
+
+def ask_channels(session: Session) -> str:
+    """The Ask channels with their state and how far indexing got."""
+    rows = knowledge_channels.list_channels(session)
+    if not rows:
+        return "Channels indexed for Ask: none yet."
+    progress = knowledge_channels.counts(session)
+    lines = []
+    for row in rows[:40]:
+        c = progress.get(require_id(row), knowledge_channels.ChannelCounts())
+        status = row.status.value if hasattr(row.status, "value") else str(row.status)
+        lines.append(
+            f"- {_clip(row.channel_name or row.channel_url, 60)}: {status}, "
+            f"captions of {c.fetched} of {c.videos} uploads indexed"
+        )
+    more = f"\n(and {len(rows) - 40} more)" if len(rows) > 40 else ""
+    return f"Channels indexed for Ask ({len(rows)}):\n" + "\n".join(lines) + more
+
+
 def _gib(size: int | None) -> str:
     return f"{(size or 0) / 1024**3:.1f} GiB"
 
@@ -413,6 +442,7 @@ def gather(
         blocks.append(_playlists(session, user))
     if "library" in wanted:
         blocks.append(_library(session))
+
     seen: list[str] = []
     for block in blocks:
         if block and block not in seen:
