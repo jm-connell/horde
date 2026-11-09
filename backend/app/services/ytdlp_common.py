@@ -858,6 +858,38 @@ def _release_extract_gate() -> None:
         _extract_held = False
 
 
+#: A gated request that waited or ran this long is logged, so a slow stream preview
+#: can be traced to whatever held the gate.
+SLOW_EXTRACT_WAIT_SEC = 10.0
+SLOW_EXTRACT_RUN_SEC = 15.0
+_PRIORITY_NAMES = {
+    EXTRACT_PRIORITY_INTERACTIVE: "interactive",
+    EXTRACT_PRIORITY_DOWNLOAD: "download",
+    EXTRACT_PRIORITY_BACKGROUND: "background",
+}
+
+
+def _log_if_slow(
+    url: str, priority: int, queued_at: float, started_at: float | None
+) -> None:
+    """Warn about a gated request that waited for, or held, the gate a long time.
+
+    ``started_at`` is None when the request never ran (a cache hit after waiting).
+    """
+    now = time.monotonic()
+    waited = (started_at if started_at is not None else now) - queued_at
+    ran = now - started_at if started_at is not None else 0.0
+    if waited < SLOW_EXTRACT_WAIT_SEC and ran < SLOW_EXTRACT_RUN_SEC:
+        return
+    logger.warning(
+        "Slow YouTube request (%s): waited %.1fs for the queue, ran %.1fs: %s",
+        _PRIORITY_NAMES.get(priority, str(priority)),
+        waited,
+        ran,
+        url,
+    )
+
+
 def call_gated[T](
     fn: Callable[[], T], *, url: str, priority: int = EXTRACT_PRIORITY_BACKGROUND
 ) -> T:
@@ -868,12 +900,15 @@ def call_gated[T](
     """
     global _last_extract_at
     ensure_plugins_loaded()
+    queued_at = time.monotonic()
+    started_at: float | None = None
     _acquire_extract_gate(priority)
     try:
         with _extract_gate_lock:
             wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
+        started_at = time.monotonic()
         try:
             return fn()
         except Exception as exc:
@@ -885,6 +920,7 @@ def call_gated[T](
                 _last_extract_at = time.time()
     finally:
         _release_extract_gate()
+        _log_if_slow(url, priority, queued_at, started_at)
 
 
 def ensure_plugins_loaded() -> None:
@@ -978,6 +1014,8 @@ def extract_info_gated(
         _cache_put(auth_key, info)
         return dict(info)
 
+    queued_at = time.monotonic()
+    started_at: float | None = None
     _acquire_extract_gate(priority)
     try:
         if not force:
@@ -995,6 +1033,7 @@ def extract_info_gated(
             wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
+        started_at = time.monotonic()
 
         if prefer_cookies:
             try:
@@ -1031,3 +1070,4 @@ def extract_info_gated(
         return dict(info)
     finally:
         _release_extract_gate()
+        _log_if_slow(url, priority, queued_at, started_at)

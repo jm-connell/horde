@@ -83,3 +83,24 @@ def test_background_waiters_get_the_longer_timeout(monkeypatch):
         ytdlp_common._extract_held = False
         ytdlp_common._extract_waiters.clear()
     assert seen == [10.0, 10.0, 30.0]
+
+
+def test_slow_gated_requests_are_logged(monkeypatch, caplog):
+    """A request that held the gate long names itself, so stalls can be traced."""
+    ytdlp_common._extract_held = False
+    ytdlp_common._extract_waiters.clear()
+    monkeypatch.setattr(ytdlp_common, "_last_extract_at", 0.0)
+    url = "https://www.youtube.com/watch?v=slowslowslo"
+
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(lambda: None, url=url)
+    assert "Slow YouTube request" not in caplog.text
+
+    monkeypatch.setattr(ytdlp_common, "SLOW_EXTRACT_RUN_SEC", 0.0)
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(
+            lambda: None, url=url, priority=ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE
+        )
+    assert "Slow YouTube request (interactive)" in caplog.text
+    assert url in caplog.text
+    assert ytdlp_common._extract_held is False
