@@ -13,7 +13,7 @@ import { queryKeys } from "../../queries/keys";
 import { useStreamAi } from "../../queries/preview";
 import { useAiStatus } from "../../queries/status";
 import type { AiChaptersMode, StreamAi, Video } from "../../types";
-import { chaptersFromApi, formatDate, parseChapters } from "../../utils";
+import { chaptersFromApi, parseChapters } from "../../utils";
 import type { WatchSource } from "./useWatchVideo";
 
 /**
@@ -278,7 +278,6 @@ export function useWatchAi(
     [streamUrl, queryClient]
   );
   const processingSummary = !!video?.processing_summary;
-  const expiresAt = streamAi?.expires_at ?? null;
   const target = useMemo<AiTarget | null>(() => {
     if (videoId != null && askVideo) {
       return {
@@ -290,14 +289,10 @@ export function useWatchAi(
       };
     }
     if (streamUrl && askVideo) {
-      const until = formatDate(expiresAt);
       return {
         key: `stream:${streamUrl}`,
         summary: aiSummary ?? null,
         processingSummary: false,
-        note: until
-          ? `Saved until ${until} \u2014 downloading the video keeps it.`
-          : null,
         summarize: summarizeStream,
         askVideo,
       };
@@ -309,7 +304,6 @@ export function useWatchAi(
     streamUrl,
     aiSummary,
     processingSummary,
-    expiresAt,
     summarizeLibrary,
     summarizeStream,
   ]);

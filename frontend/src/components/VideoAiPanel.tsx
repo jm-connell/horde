@@ -207,7 +207,7 @@ export default function VideoAiPanel({
         </div>
       </div>
 
-      <Collapse open={expanded && (showSummary || !!target.note)}>
+      <Collapse open={expanded && showSummary}>
         <div>
           {showSummary && (
             <div className="ui-panel group relative isolate min-h-0 overflow-hidden rounded-xl border border-ink-700 bg-ink-900 ring-1 ring-ink-700">
@@ -286,9 +286,6 @@ export default function VideoAiPanel({
             </div>
           )}
 
-          {target.note && (
-            <p className="mt-2 text-xs text-muted">{target.note}</p>
-          )}
         </div>
       </Collapse>
     </div>

@@ -160,7 +160,7 @@ async function mockStream(page: Page, related: unknown[] = []) {
   return state;
 }
 
-test("a streamed video gets an AI summary with a retention note, and Chat opens Ask", async ({
+test("a streamed video gets an AI summary, and Chat opens Ask", async ({
   page,
 }) => {
   await enableAi(page);
@@ -172,8 +172,8 @@ test("a streamed video gets an AI summary with a retention note, and Chat opens 
 
   await page.getByRole("button", { name: "Generate summary" }).click();
   await expect(page.getByText(SUMMARY)).toBeVisible();
-  await expect(page.getByText(/Saved until Nov 16, 2026/)).toBeVisible();
-  await expect(page.getByText(/downloading the video keeps it/)).toBeVisible();
+  // No note on how long it is kept: that is the server's business.
+  await expect(page.getByText(/Saved until/)).toHaveCount(0);
 
   await page.getByRole("button", { name: "Chat", exact: true }).click();
   const panel = page.getByRole("dialog", { name: "Ask", exact: true });
@@ -216,7 +216,7 @@ test("AI chapters generated for a stream replace the empty chapter list", async 
   expect(gap).toBeLessThan(40);
 });
 
-test("on a phone the control bar and stream details each stay on one line", async ({
+test("on a phone the control bar stays on one line, and the stream controls share a row", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 430, height: 932 });
@@ -239,16 +239,17 @@ test("on a phone the control bar and stream details each stay on one line", asyn
   expect(Math.abs((await centerY(play)) - (await centerY(speed)))).toBeLessThan(
     6
   );
-  // The download button sits at the right of the channel / duration line.
+  // The download button and the original's link share the controls' row,
+  // under the details when they do not fit beside them.
   const channel = page.getByRole("link", { name: "Test Channel" });
   const download = page.getByRole("button", { name: /^Download / });
-  expect(
-    Math.abs((await centerY(channel)) - (await centerY(download)))
-  ).toBeLessThan(6);
   const original = page.getByRole("link", { name: /^Source$/ });
   expect(
-    Math.abs((await centerY(channel)) - (await centerY(original)))
+    Math.abs((await centerY(original)) - (await centerY(download)))
   ).toBeLessThan(6);
+  expect(await centerY(download)).toBeGreaterThanOrEqual(
+    (await centerY(channel)) - 6
+  );
 });
 
 test("a streamed video links to its original page", async ({ page }) => {
@@ -668,4 +669,25 @@ test("a live broadcast offers no chapters or caption-based AI", async ({
   await expect(
     page.getByRole("button", { name: "Generate chapters" })
   ).toHaveCount(0);
+});
+
+test("a long channel name is shown whole, on its own line on a phone", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  const long = "The Extraordinarily Long Channel Name Of Lighthouse Keepers";
+  await mockStream(page);
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({ json: { ...META, channel: long } })
+  );
+  await page.goto(WATCH);
+  const channel = page.getByRole("link", { name: long });
+  await expect(channel).toBeVisible();
+  // Not cut short: the whole name is laid out, inside the page.
+  const fits = await channel.evaluate(
+    (el) => el.scrollWidth <= el.clientWidth + 1
+  );
+  expect(fits).toBe(true);
+  const box = (await channel.boundingBox())!;
+  expect(box.x + box.width).toBeLessThanOrEqual(390);
 });
