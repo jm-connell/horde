@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -121,10 +121,13 @@ export function HelpTokenLink({
 export function HelpActionCards({
   actions,
   catalog,
+  autoApply = false,
   onNavigate,
 }: {
   actions: HelpAction[];
   catalog: HelpCatalog | undefined;
+  /** Apply personal setting changes at once (a reply that just arrived). */
+  autoApply?: boolean;
   onNavigate: () => void;
 }) {
   if (!actions.length) return null;
@@ -140,6 +143,7 @@ export function HelpActionCards({
               key={key}
               setting={setting}
               raw={action.value}
+              autoApply={autoApply}
               onNavigate={onNavigate}
             />
           );
@@ -199,14 +203,21 @@ function Swatch({ color }: { color: string }) {
   );
 }
 
-/** "Change X to Y" with Apply, then Undo. */
+/**
+ * "Change X to Y" with Apply, then Undo. A change to the user's own
+ * preferences (background, theme, player options) in a reply that just
+ * arrived is applied at once, with Undo: asking for it was the request. A
+ * server-wide change still waits for Apply.
+ */
 function SettingChangeCard({
   setting,
   raw,
+  autoApply,
   onNavigate,
 }: {
   setting: HelpCatalogSetting;
   raw: string;
+  autoApply: boolean;
   onNavigate: () => void;
 }) {
   const [settings, update] = useSettings();
@@ -220,6 +231,15 @@ function SettingChangeCard({
   const [undo, setUndo] = useState<(() => Promise<void> | void) | null>(null);
   const [error, setError] = useState<string | null>(null);
   const key = setting.key ?? setting.id;
+  // Once per card, and only for this user's own preferences; set below once
+  // the value is known to be valid.
+  const autoApplyRef = useRef<(() => void) | null>(null);
+  const autoTried = useRef(false);
+  useEffect(() => {
+    if (autoTried.current || !autoApply || serverSide) return;
+    autoTried.current = true;
+    autoApplyRef.current?.();
+  }, [autoApply, serverSide]);
 
   const link = (
     <Link to={settingHref(setting)} onClick={onNavigate} className={CHIP}>
@@ -275,6 +295,10 @@ function SettingChangeCard({
       setError(errorText(err));
       setPhase("idle");
     }
+  };
+
+  autoApplyRef.current = () => {
+    if (!already) void apply(resolved.value);
   };
 
   const valueText = (

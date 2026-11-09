@@ -175,10 +175,13 @@ function AssistantReply({
   catalog,
   references,
   untrusted,
+  autoApply,
   onNavigate,
 }: {
   content: string;
   streaming: boolean;
+  /** A reply that just arrived: apply its personal settings at once. */
+  autoApply: boolean;
   renderers: InlineRenderers;
   catalog: HelpCatalog | undefined;
   /** Ask channel answers: markers become links to these. */
@@ -223,6 +226,7 @@ function AssistantReply({
           <HelpActionCards
             actions={actions}
             catalog={catalog}
+            autoApply={autoApply}
             onNavigate={onNavigate}
           />
           {cssBlocks(content).map((css) => (
@@ -295,6 +299,9 @@ export default function HelpChatPanel({
   const promptPos = useRef<number | null>(null);
   /** What was being typed before stepping into the history. */
   const promptStash = useRef("");
+  /** Replies that arrived while the panel was open (not restored ones):
+   *  their simple personal settings apply by themselves. */
+  const liveReplies = useRef(new Set<string>());
   const [settings] = useSettings();
   // A new set each time the panel opens (it mounts on open).
   const [prompts] = useState(() =>
@@ -402,6 +409,7 @@ export default function HelpChatPanel({
     const stamp = Date.now();
     const userId = `user-${stamp}`;
     const replyId = `reply-${stamp}`;
+    liveReplies.current.add(replyId);
     setMessages((prev) => [
       ...prev,
       { id: userId, role: "user", content: text },
@@ -975,6 +983,7 @@ export default function HelpChatPanel({
                       catalog={catalog}
                       references={m.references}
                       untrusted={!!(m.references || m.video)}
+                      autoApply={liveReplies.current.has(m.id)}
                       onNavigate={onNavigate}
                     />
                   )}

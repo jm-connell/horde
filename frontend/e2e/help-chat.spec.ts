@@ -239,7 +239,7 @@ async function ask(page: import("@playwright/test").Page, question: string) {
   return panel;
 }
 
-test("a setting link opens its tab and rings it, and Apply changes it", async ({
+test("a setting link opens its tab and rings it, and a personal change applies at once", async ({
   page,
 }) => {
   await stubAnswer(
@@ -251,10 +251,10 @@ test("a setting link opens its tab and rings it, and Apply changes it", async ({
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   const panel = await ask(page, "rain background please");
 
-  // The action token became a card, not text.
+  // The action token became a card, not text, and a change to the user's
+  // own preferences is made at once (asking was the request), with Undo.
   await expect(panel.getByText("[[set:")).toHaveCount(0);
-  await expect(panel.getByText("Change")).toContainText("Rain");
-  await panel.getByRole("button", { name: "Apply" }).click();
+  await expect(panel.getByRole("button", { name: "Apply" })).toHaveCount(0);
   await expect(panel.getByRole("status")).toContainText(
     "Background animation is now Rain"
   );
@@ -776,4 +776,41 @@ test("Up and Down in the question box step through earlier questions", async ({
   const again = dialog.getByRole("textbox", { name: "Your question" });
   await again.press("ArrowUp");
   await expect(again).toHaveValue("second question");
+});
+
+test("a server-wide change still waits for Apply, and a reopened chat changes nothing", async ({
+  page,
+}) => {
+  await stubAnswer(
+    page,
+    "[[set:youtube-library-search=on]] [[set:background-effect=rain]]"
+  );
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = await ask(page, "rain, and no YouTube in search");
+  await expect(panel.getByText("Background animation is now")).toBeVisible();
+  // Everyone's setting: offered, not made.
+  await expect(panel.getByRole("button", { name: "Apply" })).toHaveCount(1);
+  await panel.getByRole("button", { name: "Undo" }).click();
+  await expect(panel.getByText("is back how it was")).toBeVisible();
+
+  // Opened again later, the old reply does not apply itself again.
+  await page.reload();
+  const dialog = page.getByRole("dialog", { name: "Ask", exact: true });
+  await expect(
+    page.getByRole("button", { name: "Ask", exact: true })
+  ).toBeVisible();
+  await page.waitForTimeout(500);
+  if (!(await dialog.isVisible()))
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+  await expect(
+    dialog.getByText("rain, and no YouTube in search")
+  ).toBeVisible();
+  await page.waitForTimeout(300);
+  const effect = await page.evaluate(
+    () =>
+      JSON.parse(localStorage.getItem("horde.settings") || "{}")
+        .backgroundEffect as string
+  );
+  expect(effect).toBe("none");
 });
