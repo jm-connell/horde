@@ -403,3 +403,41 @@ test("the nav follows the keyboard when Search opens it from far down", async ({
   await expect(header).not.toHaveAttribute("data-nav-hidden");
   await expect.poll(async () => (await header.boundingBox())!.y).toBe(300);
 });
+
+const downwards = (y0: number, y1: number, x: number): [number, number][] =>
+  Array.from({ length: 10 }, (_, i) => [x, y0 + ((y1 - y0) * (i + 1)) / 10]);
+
+test("pulling the library down from the top refreshes it", async ({ page }) => {
+  await launch(page, "/");
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  const reloaded = page.waitForRequest((r) => r.url().includes("/api/videos?"));
+  await drag(cdp, downwards(260, 560, 200));
+  await reloaded;
+  await expect(page.locator("[data-horde='pull-to-refresh']")).toHaveCount(0);
+});
+
+test("a short pull does not refresh", async ({ page }) => {
+  await launch(page, "/");
+  await expect(videoCard(page, "Aurora Drift").first()).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  let asked = 0;
+  page.on("request", (r) => {
+    if (r.url().includes("/api/videos?")) asked += 1;
+  });
+  await drag(cdp, downwards(260, 320, 200));
+  await page.waitForTimeout(400);
+  expect(asked).toBe(0);
+});
+
+test("pulling Recommended down reshuffles it", async ({ page }) => {
+  await launch(page, "/");
+  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await expect(page.locator("[data-rec-key]").first()).toBeVisible();
+  const cdp = await page.context().newCDPSession(page);
+  const refreshed = page.waitForRequest(
+    (r) => r.url().includes("/api/discover/refresh") && r.method() === "POST"
+  );
+  await drag(cdp, downwards(260, 560, 200));
+  await refreshed;
+});

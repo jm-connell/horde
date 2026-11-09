@@ -1,4 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import ChannelFeed from "../components/ChannelFeed";
 import GettingStarted from "../components/GettingStarted";
@@ -8,6 +9,7 @@ import { isYoutubeChannelUrl } from "../components/channelFeedYoutubeSearch";
 import { HttpsNotice } from "../components/HttpsHelp";
 import LibraryBulkBar from "../components/LibraryBulkBar";
 import LoadingIndicator from "../components/LoadingIndicator";
+import PullToRefresh from "../components/PullToRefresh";
 import DiscoverHome from "../components/DiscoverHome";
 import { useAskPageChannel } from "../context/HelpChatContext";
 import { useHomeReset } from "../context/HomeResetContext";
@@ -23,6 +25,7 @@ import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
 import { useContinueYoutube } from "../queries/history";
 import { usePrefetchDiscover } from "../queries/discover";
+import { queryKeys } from "../queries/keys";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
 import ChannelHeader from "./library/ChannelHeader";
@@ -232,6 +235,7 @@ function OnlineLibrary() {
   );
   const { submitDownload } = useDownloads();
   const { showToast, showError } = useToast();
+  const queryClient = useQueryClient();
   const showContinueRow =
     settings.showContinueWatching &&
     !activeChannel &&
@@ -403,6 +407,14 @@ function OnlineLibrary() {
         )}
 
         {isHome && !debouncedSearch && <MemberWelcome />}
+        {/* Recommended has its own (it reshuffles, like its Refresh button). */}
+        {isHome && !onRecommendedTab && !debouncedSearch && (
+          <PullToRefresh
+            onRefresh={() =>
+              queryClient.invalidateQueries({ queryKey: queryKeys.videos.all })
+            }
+          />
+        )}
         <div
           key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"

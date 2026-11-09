@@ -32,6 +32,7 @@ import { useHideLive } from "./discover/useHideLive";
 import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
+import PullToRefresh from "./PullToRefresh";
 import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
 
@@ -622,6 +623,7 @@ export default function DiscoverHome({
 
   return (
     <div className="space-y-4">
+      <PullToRefresh onRefresh={refresh} />
       {statusLine && (
         <p className="text-sm text-muted" aria-live="polite">
           {statusLine}

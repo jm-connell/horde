@@ -29,7 +29,10 @@ The installed app behaves more like a native app than a browser tab:
   bar**; everything else is still in the menu at the top right.
 - On iPhone and iPad, swipe right from the left edge of the screen to go
   back, since apps added to the Home Screen have no back button.
-- On a phone or tablet, the page doesn't bounce or pull to refresh past its
+- On the home page, pull down from the top to refresh: Library reloads its
+  videos and Recommended reshuffles and looks for new picks, like its
+  **Refresh** button.
+- Otherwise the page doesn't bounce or pull to reload past its
   ends (on Android, close and reopen the app to reload it), pinching doesn't
   zoom the whole interface (use **Settings → Appearance → Font size** for larger
   text), and long-pressing a thumbnail or the menu doesn't select text or
