@@ -61,11 +61,13 @@ export default function WatchHeader({
           <BackLink className="inline-flex shrink-0 items-center gap-1 text-sm text-gray-400 hover:text-accent" />
         )}
       </div>
-      {/* The items wrap as they need to, the controls inline after them
-          (at the right end on phones). The channel name is never cut short:
-          a long one takes its own line and the rest follows on the next. */}
+      {/* Phones: the details and the controls share a line when they fit,
+          the controls at its right end; when they do not, the details take
+          the line (wrapping a long channel name, never cutting it) and the
+          controls go under them. Wider screens let every item wrap, the
+          controls inline after them. */}
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-400 max-sm:gap-x-2">
-        <div className="contents text-xs sm:text-sm">
+        <div className="flex min-w-0 grow flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:contents sm:text-sm">
           {channelName && (
             <Link
               to={channelHref}
