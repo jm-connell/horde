@@ -109,6 +109,8 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 - Some sources simply lack a usable progressive format under the preview height cap.
 - Preview API errors include a structured `error_kind` when classification succeeds.
 
+**Streamed videos take a long time to start, or the download menu shows HTTP 429:** every YouTube lookup (stream previews, feed resolution badges, metadata fills, channel indexing, Recommended) goes through one queue, one request at a time, with the video you open first in line. A request that waited more than 10 s for that queue, or ran more than 15 s, logs `Slow YouTube request (<priority>): waited …s for the queue, ran …s: <url>`; the lines just before a slow preview name what held the queue. A slow first request right after a restart usually means the `bgutil-pot` sidecar is still warming up.
+
 **Preview plays ~40–60s then Shaka error 1001 / “Compatibility-mode preview failed”, and downloads say “Download produced no file”:** YouTube started rejecting `android_vr` googlevideo URLs after the first minute of Range requests (`Upstream returned 403`). Horde no longer forces that client; yt-dlp 2026.8.19+ uses `visionos` instead. Rebuild so the yt-dlp pin updates (`yt_dlp_version` on Settings → System / `/api/health` should be `2026.08.19` or newer), then retry. If 403s continue, treat it as a [bot check / POT](#bot-checks-youtube-blocks) problem.
 
 ## Library playback fails on iPhone

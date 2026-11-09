@@ -63,6 +63,8 @@ from ..services.workers import shutdown_requested
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
+    EXTRACT_PRIORITY_DOWNLOAD,
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
@@ -260,9 +262,15 @@ def list_presets():
 )
 def preview_download(
     url: str,
+    background: bool = False,
     gate: ExtractionGate = Depends(extraction_gate),
     ctx: AppContext = Depends(get_ctx),
 ):
+    """Read a link's title, presets and sizes.
+
+    ``background=true`` marks a lookup nobody is waiting on (a feed card's
+    resolution badge): it queues behind the videos people are opening.
+    """
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(url)
@@ -282,7 +290,12 @@ def preview_download(
         )
     cleaned = clean_url(url, keep_playlist=True)
     try:
-        return gate.run(ytdlp_extract.extract_preview, cleaned)
+        # Not EXTRACT_PRIORITY_BACKGROUND: that waits behind catalog indexing for
+        # up to 3x as long, holding one of the gate's few slots all the while.
+        priority = (
+            EXTRACT_PRIORITY_DOWNLOAD if background else EXTRACT_PRIORITY_INTERACTIVE
+        )
+        return gate.run(ytdlp_extract.extract_preview, cleaned, priority=priority)
     except HTTPException:
         raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:

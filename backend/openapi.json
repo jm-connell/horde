@@ -20668,6 +20668,7 @@
     },
     "/api/downloads/preview": {
       "get": {
+        "description": "Read a link's title, presets and sizes.\n\n``background=true`` marks a lookup nobody is waiting on (a feed card's\nresolution badge): it queues behind the videos people are opening.",
         "operationId": "preview_download_api_downloads_preview_get",
         "parameters": [
           {
@@ -20677,6 +20678,16 @@
             "schema": {
               "title": "Url",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "background",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Background",
+              "type": "boolean"
             }
           }
         ],

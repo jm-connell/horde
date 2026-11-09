@@ -1802,7 +1802,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview Download */
+        /**
+         * Preview Download
+         * @description Read a link's title, presets and sizes.
+         *
+         *     ``background=true`` marks a lookup nobody is waiting on (a feed card's
+         *     resolution badge): it queues behind the videos people are opening.
+         */
         get: operations["preview_download_api_downloads_preview_get"];
         put?: never;
         post?: never;
@@ -14191,6 +14197,7 @@ export interface operations {
         parameters: {
             query: {
                 url: string;
+                background?: boolean;
             };
             header?: never;
             path?: never;
