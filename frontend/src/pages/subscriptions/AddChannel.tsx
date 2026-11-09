@@ -5,6 +5,7 @@ import { ApiError } from "../../api/client";
 import { describeError } from "../../apiErrors";
 import Collapse from "../../components/Collapse";
 import { button } from "../../components/buttons";
+import { CloseIcon } from "../../components/icons";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { useSubscribe } from "../../queries/follows";
@@ -243,17 +244,33 @@ export default function AddChannel({
             autoComplete="off"
             aria-controls={results.length ? resultsId : undefined}
             aria-busy={loading || undefined}
-            className="w-full rounded-lg border border-ink-700 bg-ink-950 py-2 pl-3 pr-9 text-sm text-gray-100 outline-hidden focus:border-accent"
+            className="w-full rounded-lg border border-ink-700 bg-ink-950 py-2 pl-3 pr-16 text-sm text-gray-100 outline-hidden focus:border-accent"
           />
-          {loading && (
-            <span
-              className="absolute inset-y-0 right-3 flex items-center"
-              role="status"
-              aria-label="Looking for the channel"
-            >
-              <Spinner />
-            </span>
-          )}
+          <span className="absolute inset-y-0 right-1.5 flex items-center gap-1">
+            {loading && (
+              <span
+                className="flex items-center"
+                role="status"
+                aria-label="Looking for the channel"
+              >
+                <Spinner />
+              </span>
+            )}
+            {value && (
+              <button
+                type="button"
+                aria-label="Clear"
+                title="Clear"
+                onClick={() => {
+                  setValue("");
+                  setPicked(null);
+                }}
+                className="ui-interactive rounded-md p-1.5 text-muted hover:text-gray-100"
+              >
+                <CloseIcon />
+              </button>
+            )}
+          </span>
         </div>
         <button
           type="submit"
@@ -264,6 +281,13 @@ export default function AddChannel({
         </button>
       </div>
 
+      {loading && results.length === 0 && (
+        <p className="mt-2 text-xs text-muted" aria-hidden>
+          {LINK_RE.test(text)
+            ? "Looking up the channel…"
+            : "Searching YouTube for channels…"}
+        </p>
+      )}
       {results.length > 0 && (
         <ul
           id={resultsId}

@@ -1,4 +1,4 @@
-import { expect, openNav, test } from "./fixtures";
+import { CSRF_HEADERS, expect, openNav, test } from "./fixtures";
 
 function card(page: import("@playwright/test").Page, name: string) {
   return page
@@ -284,4 +284,59 @@ test("typing a channel you already have narrows the list to it", async ({
   await box.fill("");
   await expect(card(page, "Pottery Wheel")).toBeVisible();
   await expect(card(page, "Trail Notes")).toBeVisible();
+});
+
+test("the channel search says it is searching, and clears with its X", async ({
+  page,
+}) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/channels\/search\?/, async (route) => {
+    await held;
+    await route.fulfill({ json: { results: [] } });
+  });
+  await page.goto("/subscriptions");
+  const box = page.getByLabel("Find a YouTube channel: name, link or @handle");
+  await box.fill("pottery");
+  await expect(page.getByText("Searching YouTube for channels…")).toBeVisible();
+  release();
+  await expect(
+    page.getByText("No channels found.", { exact: false })
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(box).toHaveValue("");
+});
+
+test("subscriptions can be sorted, and the order is remembered", async ({
+  page,
+}) => {
+  // Alpha first, so by name it leads and by recency beta does.
+  for (const handle of ["@e2esortalpha", "@e2esortbeta"]) {
+    await page.request.put("/api/follows", {
+      data: { channel_url: handle, channel_name: handle.slice(1) },
+      headers: CSRF_HEADERS,
+    });
+  }
+  await page.goto("/subscriptions");
+  const list = page.getByRole("list", { name: "Subscriptions" });
+  const names = () =>
+    list
+      .locator(":scope > li")
+      .evaluateAll((els) => els.map((e) => e.textContent ?? ""));
+  const order = async () => {
+    const all = await names();
+    return ["e2esortalpha", "e2esortbeta"].sort(
+      (a, b) =>
+        all.findIndex((t) => t.includes(a)) -
+        all.findIndex((t) => t.includes(b))
+    );
+  };
+  expect(await order()).toEqual(["e2esortalpha", "e2esortbeta"]);
+  await page.getByRole("button", { name: "Sort subscriptions" }).click();
+  await page.getByRole("option", { name: "Recently subscribed" }).click();
+  await expect.poll(order).toEqual(["e2esortbeta", "e2esortalpha"]);
+  await page.reload();
+  await expect(
+    page.getByRole("button", { name: "Sort subscriptions" })
+  ).toContainText("Recently subscribed");
 });

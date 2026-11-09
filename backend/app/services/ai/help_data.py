@@ -318,7 +318,7 @@ def _library(session: Session) -> str | None:
 
 
 def asks_about_ask_channels(question: str) -> bool:
-    """"Which channels are indexed for Ask?": what Settings lists, read here.
+    """ "Which channels are indexed for Ask?": what Settings lists, read here.
     Server data, not the user's, so it needs no data consent."""
     words = set(_WORD.findall(question.lower()))
     return bool(words & _INDEXED and words & _CHANNEL_WORDS)

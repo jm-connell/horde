@@ -2001,6 +2001,8 @@ class SubscriptionRead(BaseModel):
     subscriber_count: int | None = None
     #: When Horde last finished reading the channel's uploads.
     checked_at: datetime | None = None
+    #: When the signed-in user subscribed (None when they do not).
+    followed_at: datetime | None = None
 
 
 class SubscriptionList(BaseModel):

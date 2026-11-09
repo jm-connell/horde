@@ -20,7 +20,15 @@ import { formatCompactCount, formatRelative } from "../utils";
 import { findAskChannel } from "./ask/askLinks";
 import { saveChannelUrl } from "./libraryStorage";
 import AddChannel from "./subscriptions/AddChannel";
-import { subscriptionMatches } from "./subscriptions/match";
+import {
+  isSubscriptionSort,
+  SUBSCRIPTION_SORTS,
+  sortSubscriptions,
+  subscriptionMatches,
+  type SubscriptionSort,
+} from "./subscriptions/match";
+import ThemedSelect from "../components/ThemedSelect";
+import { getItem, setItem } from "../storage";
 import { normalizeChannelUrl } from "../utils/followUrl";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
 import {
@@ -271,13 +279,27 @@ function SubscriptionSettings({
   );
 }
 
+/** The chosen order, remembered on this device. */
+const SORT_KEY = "horde.subscriptions.sort";
+
 export default function Subscriptions() {
   const { can } = useAuth();
   const { items, isLoading, isError, error } = useSubscriptions();
   const askChannels = useAskChannels(true).data?.items ?? [];
   const [open, setOpen] = useState<Subscription | null>(null);
   const [typed, setTyped] = useState("");
-  const allMine = items.filter((s) => s.following);
+  const [sort, setSortState] = useState<SubscriptionSort>(() => {
+    const saved = getItem(SORT_KEY);
+    return isSubscriptionSort(saved) ? saved : "name";
+  });
+  const setSort = (next: SubscriptionSort) => {
+    setSortState(next);
+    setItem(SORT_KEY, next);
+  };
+  const allMine = sortSubscriptions(
+    items.filter((s) => s.following),
+    sort
+  );
   const allServer = items.filter((s) => !s.following);
   // Typing a channel you already have narrows the list to it; a channel you
   // do not have leaves the whole list in view.
@@ -313,6 +335,18 @@ export default function Subscriptions() {
           }
           onTextChange={setTyped}
         />
+      )}
+      {allMine.length > 1 && (
+        <div className="mb-3 flex justify-end">
+          <ThemedSelect
+            value={sort}
+            options={SUBSCRIPTION_SORTS}
+            onChange={setSort}
+            size="compact"
+            align="right"
+            aria-label="Sort subscriptions"
+          />
+        </div>
       )}
       <p role="status" className="mb-2 text-sm text-muted empty:hidden">
         {filtering

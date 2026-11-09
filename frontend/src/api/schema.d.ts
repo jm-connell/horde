@@ -9010,6 +9010,8 @@ export interface components {
             channel_url: string;
             /** Checked At */
             checked_at?: string | null;
+            /** Followed At */
+            followed_at?: string | null;
             /**
              * Following
              * @default false

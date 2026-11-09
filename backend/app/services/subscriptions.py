@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from sqlmodel import Session, select
 
-from ..models import ChannelAutodownload, ChannelCatalog, ChannelRetention
+from ..models import ChannelAutodownload, ChannelCatalog, ChannelRetention, as_utc
 from ..schemas import ChannelRetentionSummary, SubscriptionRead
 from . import follows, library
 
@@ -25,7 +25,9 @@ def list_for(session: Session, user_id: int) -> list[SubscriptionRead]:
         return found
 
     for item in follows.list_follows(session, user_id):
-        row(item.channel_url, item.channel_name).following = True
+        sub = row(item.channel_url, item.channel_name)
+        sub.following = True
+        sub.followed_at = as_utc(item.created_at)
 
     for policy in session.exec(
         select(ChannelAutodownload).where(ChannelAutodownload.enabled == True)  # noqa: E712 - SQL column comparison, not a Python truth test
