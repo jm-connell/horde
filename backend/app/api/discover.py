@@ -56,6 +56,7 @@ from ..schemas import (
     RecTuningWrite,
     StreamWatchWrite,
 )
+from ..services import watch_stats
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import (
     algorithms,
@@ -76,7 +77,7 @@ from ..services.pagination import (
     offset_cursor,
     parse_cursor,
 )
-from ..services.url_clean import youtube_thumbnail_url
+from ..services.url_clean import youtube_thumbnail_url, youtube_video_id
 from .video_serialize import to_read_many
 
 router = APIRouter(prefix="/api/discover", tags=["discover"])
@@ -690,9 +691,23 @@ def remove_feedback(
 def record_stream_watch(
     payload: StreamWatchWrite,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Note how far the user got in a video they streamed without downloading."""
+    """Note how far the user got in a video they streamed without downloading,
+    and the time it stands for (History stats)."""
+    yt_id = youtube_video_id(payload.url or "")
+    if yt_id:
+        watch_stats.record_stream_save(
+            session,
+            ctx.watch_refs,
+            user.id,
+            yt_id,
+            (payload.channel or "").strip()[:200] or None,
+            payload.position_sec,
+            payload.duration_sec,
+            finished=payload.finished,
+        )
     try:
         row = history.record_stream_watch(
             session,

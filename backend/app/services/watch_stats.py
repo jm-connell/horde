@@ -43,6 +43,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, col, select
 
 from ..models import (
+    UserStreamState,
     UserVideoState,
     UserWatchTime,
     Video,
@@ -71,6 +72,9 @@ SLACK_SEC = 3.0
 MAX_LIVE_GAP_SEC = 75.0
 #: (user, video) pairs whose previous save is remembered; the oldest go first.
 REF_LIMIT = 4096
+#: A stream's first watch report has no earlier one to compare with (it comes
+#: once 20 s have played): credit at most this much for it.
+STREAM_FIRST_REPORT_SEC = 30.0
 RANGE_DAYS: dict[str, int | None] = {"7d": 7, "30d": 30, "365d": 365, "all": None}
 TOP_CHANNELS = 6
 TOP_TAGS = 12
@@ -91,12 +95,12 @@ class WatchRefs:
 
     def __init__(self, limit: int = REF_LIMIT) -> None:
         self._limit = limit
-        self._refs: OrderedDict[tuple[int, int], WatchRef] = OrderedDict()
+        self._refs: OrderedDict[tuple[int, int | str], WatchRef] = OrderedDict()
         self._lock = threading.Lock()
 
     def step(
         self,
-        key: tuple[int, int],
+        key: tuple[int, int | str],
         fallback: WatchRef | None,
         decide: Callable[[WatchRef | None], tuple[float, WatchRef | None]],
     ) -> float:
@@ -118,6 +122,95 @@ class WatchRefs:
 
 def _hour(at: datetime) -> datetime:
     return as_utc(at).replace(minute=0, second=0, microsecond=0)
+
+
+def _counted(
+    ref: WatchRef,
+    stamp: datetime,
+    position_sec: float,
+    duration: float,
+    *,
+    finished: bool,
+    late: bool,
+) -> tuple[float, WatchRef | None]:
+    """The seconds a save at ``position_sec`` stands for after ``ref``, and the
+    reference to keep (None: keep the old one)."""
+    if ref.at > stamp:
+        return 0.0, None  # an older late save than the one remembered
+    elapsed = (stamp - ref.at).total_seconds()
+    if not late:
+        elapsed = min(elapsed, MAX_LIVE_GAP_SEC)
+    if finished:
+        tail = duration - ref.position if ref.position > 0 else 0.0
+        played = ref.tail_credit + elapsed
+        counted = min(tail, played * SPEED_ALLOWANCE + SLACK_SEC)
+        return max(0.0, counted), WatchRef(0.0, stamp)
+    if position_sec == 0 and ref.position > 0:
+        # From 90% on the player saves 0: keep the position for the finish.
+        return 0.0, replace(ref, at=stamp, tail_credit=ref.tail_credit + elapsed)
+    delta = position_sec - ref.position
+    fits = 0 < delta <= elapsed * SPEED_ALLOWANCE + SLACK_SEC
+    return (delta if fits else 0.0), WatchRef(position_sec, stamp)
+
+
+def record_stream_save(
+    session: Session,
+    refs: WatchRefs,
+    user_id: int,
+    yt_id: str,
+    channel: str | None,
+    position_sec: float,
+    duration_sec: float | None,
+    *,
+    finished: bool,
+) -> None:
+    """Add the watch time a streamed video's watch report stands for.
+
+    Like ``record_save`` for a library video, from the reports the player sends
+    every 30 s while a stream plays (``useStreamWatchReporter``). Call it before
+    ``history.record_stream_watch`` updates the stream's row. The first report of
+    a stream (no earlier one) credits up to ``STREAM_FIRST_REPORT_SEC``.
+    """
+    stamp = utcnow()
+    state = session.get(UserStreamState, (user_id, yt_id))
+    fallback = (
+        WatchRef(state.watched_sec, as_utc(state.last_watched_at))
+        if state is not None and state.last_watched_at is not None
+        else None
+    )
+    duration = duration_sec or (state.duration_sec if state else None) or 0.0
+
+    def decide(ref: WatchRef | None) -> tuple[float, WatchRef | None]:
+        if ref is None:
+            first = min(max(0.0, position_sec), STREAM_FIRST_REPORT_SEC)
+            return (0.0 if finished else first), WatchRef(position_sec, stamp)
+        return _counted(
+            ref, stamp, position_sec, duration, finished=finished, late=False
+        )
+
+    seconds = refs.step((user_id, f"yt:{yt_id}"), fallback, decide)
+    if seconds <= 0 and not finished:
+        return
+    statement = sqlite_insert(UserWatchTime).values(
+        user_id=user_id,
+        yt_id=yt_id,
+        channel=channel,
+        hour_start=_hour(stamp),
+        seconds=seconds,
+        finished=1 if finished else 0,
+    )
+    excluded = statement.excluded
+    session.execute(
+        statement.on_conflict_do_update(
+            index_elements=["user_id", "hour_start", "yt_id"],
+            set_={
+                "seconds": col(UserWatchTime.seconds) + excluded.seconds,
+                "finished": col(UserWatchTime.finished) + excluded.finished,
+                "channel": func.coalesce(excluded.channel, col(UserWatchTime.channel)),
+            },
+        )
+    )
+    session.commit()
 
 
 def record_save(
@@ -151,24 +244,14 @@ def record_save(
     duration = video.duration_sec or 0.0
 
     def decide(ref: WatchRef | None) -> tuple[float, WatchRef | None]:
-        if ref is None:
-            ref = WatchRef(0.0, stamp)
-        if ref.at > stamp:
-            return 0.0, None  # an older late save than the one remembered
-        elapsed = (stamp - ref.at).total_seconds()
-        if not late:
-            elapsed = min(elapsed, MAX_LIVE_GAP_SEC)
-        if finished:
-            tail = duration - ref.position if ref.position > 0 else 0.0
-            played = ref.tail_credit + elapsed
-            counted = min(tail, played * SPEED_ALLOWANCE + SLACK_SEC)
-            return max(0.0, counted), WatchRef(0.0, stamp)
-        if position_sec == 0 and ref.position > 0:
-            # From 90% on the player saves 0: keep the position for the finish.
-            return 0.0, replace(ref, at=stamp, tail_credit=ref.tail_credit + elapsed)
-        delta = position_sec - ref.position
-        fits = 0 < delta <= elapsed * SPEED_ALLOWANCE + SLACK_SEC
-        return (delta if fits else 0.0), WatchRef(position_sec, stamp)
+        return _counted(
+            ref or WatchRef(0.0, stamp),
+            stamp,
+            position_sec,
+            duration,
+            finished=finished,
+            late=late,
+        )
 
     seconds = refs.step((user_id, video_id), fallback, decide)
     if seconds <= 0 and not finished:
@@ -258,6 +341,22 @@ def _distinct_videos(
     """Videos watched (or finished) since ``since``."""
     both = _watched_union(user_id, since, finished=finished)
     return int(session.scalar(select(func.count()).select_from(both)) or 0)
+
+
+def _stream_ids(
+    session: Session, user_id: int, since: datetime | None, *, finished: bool
+) -> set[str]:
+    """YouTube ids of the streamed videos watched (or finished) since ``since``."""
+    query = select(col(UserWatchTime.yt_id)).where(
+        col(UserWatchTime.user_id) == user_id,
+        col(UserWatchTime.yt_id).is_not(None),
+        (col(UserWatchTime.finished) > 0)
+        if finished
+        else col(UserWatchTime.seconds) > 0,
+    )
+    if since is not None:
+        query = query.where(col(UserWatchTime.hour_start) >= since)
+    return {str(yt) for yt in session.exec(query.distinct()).all() if yt}
 
 
 def _watched_youtube_ids(
@@ -388,7 +487,15 @@ def compute(
     in_range = [(local, n) for local, n in youtube if start <= local.date() <= today]
     youtube_views = sum(n for _local, n in in_range)
     youtube_hours: list[list[int]] | None = None
-    videos_started = _distinct_videos(session, user_id, since, finished=False)
+    # Streams count once each; one downloaded later counts as its library copy.
+    library_yt = _watched_youtube_ids(session, user_id, since)
+    streamed = _stream_ids(session, user_id, since, finished=False) - library_yt
+    videos_started = _distinct_videos(session, user_id, since, finished=False) + len(
+        streamed
+    )
+    videos_finished = _distinct_videos(session, user_id, since, finished=True) + len(
+        _stream_ids(session, user_id, since, finished=True) - library_yt
+    )
     channels = _top_channels(session, user_id, since)
     # Only a range with YouTube views changes anything (ranking included).
     if youtube_views:
@@ -403,9 +510,7 @@ def compute(
                 .distinct()
             ).all()
         }
-        videos_started += len(
-            on_youtube - _watched_youtube_ids(session, user_id, since)
-        )
+        videos_started += len(on_youtube - library_yt - streamed)
         channels = _with_youtube_channels(
             session,
             _top_channels(session, user_id, since, limit=None),
@@ -423,7 +528,7 @@ def compute(
             watch_seconds=watch_seconds,
             previous_watch_seconds=previous,
             videos_started=videos_started,
-            videos_finished=_distinct_videos(session, user_id, since, finished=True),
+            videos_finished=videos_finished,
             active_days=len(active_days),
             current_streak_days=_streak(active, today),
             youtube_views=youtube_views,
@@ -457,7 +562,16 @@ def _top_channels(
     name = func.coalesce(col(Video.channel), col(UserWatchTime.channel))
     total = func.sum(col(UserWatchTime.seconds))
     rows = session.exec(
-        select(name, total, func.count(func.distinct(col(UserWatchTime.video_id))))
+        select(
+            name,
+            total,
+            # A library video by its id, a streamed one by its YouTube id.
+            func.count(
+                func.distinct(
+                    func.coalesce(col(UserWatchTime.video_id), col(UserWatchTime.yt_id))
+                )
+            ),
+        )
         .select_from(UserWatchTime)
         .outerjoin(Video, col(Video.id) == col(UserWatchTime.video_id))
         .where(col(UserWatchTime.user_id) == user_id, _range_filter(since))

@@ -716,6 +716,8 @@ class UserVideoState(SQLModel, table=True):
 class UserWatchTime(SQLModel, table=True):
     """Seconds one user spent watching one video within one UTC hour.
 
+    A library video's rows carry ``video_id``; a streamed (not downloaded)
+    one's carry its YouTube id in ``yt_id`` instead (from its watch reports).
     Written only by ``services/watch_stats.py`` from progress saves; the History
     stats read it. Hours rather than days so the viewer's own time zone decides
     where a day starts (and the weekday × hour chart has something to show). The
@@ -733,6 +735,13 @@ class UserWatchTime(SQLModel, table=True):
             "video_id",
             unique=True,
         ),
+        Index(
+            "ux_user_watch_time_stream_bucket",
+            "user_id",
+            "hour_start",
+            "yt_id",
+            unique=True,
+        ),
         _AUTOINCREMENT,
     )
 
@@ -741,6 +750,8 @@ class UserWatchTime(SQLModel, table=True):
     video_id: int | None = Field(
         default=None, foreign_key="videos.id", index=True, ondelete="SET NULL"
     )
+    #: A streamed video's YouTube id (None for a library video's rows).
+    yt_id: str | None = None
     #: The video's channel when the time was recorded (read when the video is gone).
     channel: str | None = None
     #: Start of the UTC hour the watching happened in.

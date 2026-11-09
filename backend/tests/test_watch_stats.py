@@ -419,3 +419,46 @@ def test_a_video_row_without_a_channel_is_left_out_of_top_channels(
     stats = _stats(session, admin_user)
     assert stats.totals.watch_seconds == 50
     assert stats.channels == []
+
+
+# --- Streamed videos ---------------------------------------------------------------
+
+
+def _report(c, position, *, finished=False, channel="Streamer"):
+    body = {
+        "url": "https://www.youtube.com/watch?v=strmwatch01",
+        "title": "A stream",
+        "channel": channel,
+        "position_sec": position,
+        "duration_sec": 600,
+        "finished": finished,
+    }
+    resp = c.post("/api/discover/history", json=body)
+    assert resp.status_code == 200, resp.text
+
+
+def test_watching_a_stream_counts_toward_the_stats(client, init_db, clock):
+    """Streams report every 30 s while playing; even a partial watch counts."""
+    for wall, position in [(0, 20), (30, 50), (60, 80)]:
+        clock.at(wall)
+        _report(client, position)
+    rows = _rows(init_db["engine"])
+    assert [r.yt_id for r in rows] == ["strmwatch01"]
+    # The first report credits what played before it, then each step counts.
+    assert _seconds(init_db["engine"]) == 20 + 30 + 30
+
+    stats = client.get("/api/history/stats", params={"range": "7d", "tz": "UTC"}).json()
+    assert stats["totals"]["watch_seconds"] == 80
+    assert stats["totals"]["videos_started"] == 1
+    assert stats["channels"][0]["name"] == "Streamer"
+    assert stats["channels"][0]["videos"] == 1
+    today = stats["days"][-1]
+    assert today["seconds"] == 80
+
+
+def test_a_seek_in_a_stream_is_not_watching(client, init_db, clock):
+    clock.at(0)
+    _report(client, 20)
+    clock.at(30)
+    _report(client, 400)  # jumped ahead
+    assert _seconds(init_db["engine"]) == 20
