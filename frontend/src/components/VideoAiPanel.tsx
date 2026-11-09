@@ -285,7 +285,6 @@ export default function VideoAiPanel({
               )}
             </div>
           )}
-
         </div>
       </Collapse>
     </div>

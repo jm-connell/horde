@@ -58,7 +58,9 @@ test("the account menu offers account settings and sign out only", async ({
   await expect(page.getByLabel("Username")).toHaveCount(0);
 });
 
-test("a profile picture can be edited, uploaded and removed", async ({ page }) => {
+test("a profile picture can be edited, uploaded and removed", async ({
+  page,
+}) => {
   await page.goto("/account");
   const profile = page.getByRole("region", { name: "Profile" });
   await expect(profile.locator("img")).toHaveCount(0);
