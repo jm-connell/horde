@@ -357,3 +357,33 @@ test("on a phone a tap shows or hides the controls and the centre button plays",
   await page.touchscreen.tap(box.x + box.width / 2, barBox.y + 8);
   await expect(bar).toHaveAttribute("data-visible", "false");
 });
+
+test("phones get a PiP button when the browser can do picture in picture", async ({
+  page,
+}) => {
+  test.skip((page.viewportSize()?.width ?? 0) > 640, "phone layout only");
+  await page.addInitScript(() => {
+    (window as unknown as { __pip: number }).__pip = 0;
+    Object.defineProperty(Document.prototype, "pictureInPictureEnabled", {
+      get: () => true,
+      configurable: true,
+    });
+    HTMLVideoElement.prototype.requestPictureInPicture = function () {
+      (window as unknown as { __pip: number }).__pip += 1;
+      return Promise.reject(new Error("not in tests"));
+    };
+  });
+  await page.goto("/");
+  await videoCard(page, "Aurora Drift").first().click();
+  await expect(page).toHaveURL(/\/watch\//);
+  const video = page.locator("video").first();
+  // Opted in to switching by itself when the app is left mid-playback.
+  await expect(video).toHaveAttribute("autopictureinpicture", "");
+  await video.click();
+  await page.getByRole("button", { name: "PiP (picture in picture)" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { __pip: number }).__pip)
+    )
+    .toBe(1);
+});

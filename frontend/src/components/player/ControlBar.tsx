@@ -64,6 +64,8 @@ interface Props {
   castDeviceName: string | null;
   onCastClick: () => void;
   onTogglePiP: () => void;
+  /** The browser can do picture in picture (shown on phones only then). */
+  pipSupported?: boolean;
   onToggleTheater: () => void;
   onToggleWindowed: () => void;
   isNativeFullscreen: boolean;
@@ -127,6 +129,7 @@ export default function ControlBar({
   castDeviceName,
   onCastClick,
   onTogglePiP,
+  pipSupported = false,
   onToggleTheater,
   onToggleWindowed,
   isNativeFullscreen,
@@ -254,6 +257,17 @@ export default function ControlBar({
               }
             >
               Cast
+            </button>
+          )}
+          {isMobile && pipSupported && (
+            <button
+              type="button"
+              onClick={onTogglePiP}
+              className={playerChromeBtn(false)}
+              aria-label="PiP (picture in picture)"
+              title="Picture in picture"
+            >
+              PiP
             </button>
           )}
           {isMobile && (

@@ -79,7 +79,7 @@ Library files typically play as progressive local media; if DASH fails on a stre
 
 ## Picture-in-Picture
 
-Use the PiP control (or browser PiP) to keep video visible while browsing. When PiP (or iOS native fullscreen) owns the pixels, Horde switches to native text tracks so captions still work.
+Use the PiP control (or browser PiP) to keep video visible while browsing. On a phone the **PiP** button shows when the browser supports picture in picture (Safari on iPhone and iPad, including an app added to the Home Screen, and Chrome on Android), and leaving the app while a video plays asks the browser to switch to PiP by itself where it allows that (Safari does; Chrome on Android does for an installed app, and may ask first). When PiP (or iOS native fullscreen) owns the pixels, Horde switches to native text tracks so captions still work.
 
 ## Mini player
 

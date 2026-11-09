@@ -140,7 +140,7 @@ export default function VideoPlayer({
     toggleNativeFullscreen,
     userInitiatedFullscreen,
   } = useFullscreen(playerRootRef, videoRef);
-  const { requestPiP } = usePictureInPicture(videoRef, isMobile);
+  const { requestPiP, pipSupported } = usePictureInPicture(videoRef, isMobile);
   usePlayerBodyFlags(playing, isMini, mode);
   const [videoAspect, setVideoAspect] = useState<number | null>(null);
 
@@ -682,6 +682,7 @@ export default function VideoPlayer({
             castDeviceName={castDeviceName}
             onCastClick={onCastClick}
             onTogglePiP={requestPiP}
+            pipSupported={pipSupported}
             onToggleTheater={toggleTheater}
             onToggleWindowed={toggleWindowed}
             isNativeFullscreen={isNativeFullscreen}
