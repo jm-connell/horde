@@ -26,7 +26,8 @@ import {
 } from "../offline/hooks";
 import LiquidNav from "./LiquidNav";
 import NavAskButton from "./NavAskButton";
-import { isLinkActive, useNavLinks } from "./navLinks";
+import { isLinkActive, useNavBarLinks } from "./navLinks";
+import { moveNavItem, NAV_ITEM_LABELS, type NavItem } from "../navItems";
 import YoutubeSearchChip from "./YoutubeSearchChip";
 import { actionForKey, resolveHotkeys } from "../hotkeys";
 import {
@@ -58,7 +59,7 @@ export default function TopNav() {
   const { activeCount } = useDownloads();
   const { search, setSearch, commitSearch } = useSearch();
   const { resetHome } = useHomeReset();
-  const [settings] = useSettings();
+  const [settings, updateSettings] = useSettings();
   const location = useLocation();
   const navigate = useNavigate();
   const { mode } = usePlaybackSession();
@@ -82,7 +83,16 @@ export default function TopNav() {
     activeOffline,
     offlineSnap.liveBytes
   ).progress;
-  const NAV_LINKS = useNavLinks();
+  const savedLinks = useNavBarLinks();
+  // While a nav link is dragged, the order it would land in.
+  const [dragOrder, setDragOrder] = useState<NavItem[] | null>(null);
+  const dragging = useRef<NavItem | null>(null);
+  const NAV_LINKS = dragOrder
+    ? dragOrder.flatMap((id) => {
+        const link = savedLinks.find((l) => l.id === id);
+        return link ? [link] : [];
+      })
+    : savedLinks;
   // Matches Watch.tsx's `isWide` so the nav breaks out full-bleed with the player.
   const isTheaterWide =
     !isMobile && mode === "theater" && location.pathname.startsWith("/watch");
@@ -377,6 +387,40 @@ export default function TopNav() {
         ? downloadBadge
         : null;
 
+  // Drag a link along the bar to reorder it (the order is saved with the
+  // account; Settings -> Appearance -> Nav bar also hides pages).
+  const dragProps = (id: NavItem | undefined) =>
+    id
+      ? {
+          draggable: true,
+          onDragStart: (e: React.DragEvent) => {
+            dragging.current = id;
+            e.dataTransfer.effectAllowed = "move";
+            e.dataTransfer.setData("text/plain", NAV_ITEM_LABELS[id]);
+            setDragOrder(settings.navItems);
+          },
+          onDragOver: (e: React.DragEvent) => {
+            const from = dragging.current;
+            if (!from) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "move";
+            if (from !== id)
+              setDragOrder((order) => moveNavItem(order ?? [], from, id));
+          },
+          onDrop: (e: React.DragEvent) => {
+            if (!dragging.current) return;
+            e.preventDefault();
+            if (dragOrder) updateSettings({ navItems: dragOrder });
+            dragging.current = null;
+            setDragOrder(null);
+          },
+          onDragEnd: () => {
+            dragging.current = null;
+            setDragOrder(null);
+          },
+        }
+      : {};
+
   const desktopLinks = NAV_LINKS.map((link) => {
     const active = isLinkActive(location.pathname, link.to, link.end);
     return (
@@ -387,6 +431,8 @@ export default function TopNav() {
         onClick={link.to === "/" ? onHomeClick : undefined}
         className={linkClass}
         data-liquid-active={active ? "true" : undefined}
+        data-nav-item={link.id}
+        {...dragProps(link.id)}
       >
         <span className="flex items-center gap-2">
           {link.label}

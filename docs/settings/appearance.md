@@ -176,6 +176,10 @@ Sliders are always visible. First install defaults to **50%** transparency and *
 
 Legacy `translucentPanels` (bool) is still read: `false` → both sliders 0%; `true` keeps the saved strength and converts the old coupled blur.
 
+### Nav bar (`navItems`)
+
+On a computer, **Nav bar** chooses which pages the bar at the top shows and in what order: move a page earlier or later, hide it, or show a hidden one again. You can also drag the pages along the bar itself. **Settings** always stays, so the list can be changed back; **Reset** puts back the default. Pages this account cannot use are left out either way, and **Offline** shows (before Settings) whenever there are offline downloads. The order is saved with your account, so it follows you to other browsers.
+
 ### Tab bar (`tabBarItems`)
 
 On a phone, the installed app (added to the Home Screen) shows a floating bar of tabs at the bottom of the screen. **Tab bar** chooses which tabs it shows and in what order (up to 5): move a tab earlier or later, remove it, or add one from the list below. **Reset** puts back the default.

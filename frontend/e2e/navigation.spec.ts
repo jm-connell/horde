@@ -263,3 +263,36 @@ test.describe("route render failure", () => {
     ).toBeVisible();
   });
 });
+
+test("the nav bar's pages can be hidden in Settings and dragged into order", async ({
+  page,
+}) => {
+  test.skip(
+    (page.viewportSize()?.width ?? 0) < 1024,
+    "the bar is desktop only"
+  );
+  await page.goto("/settings?tab=appearance");
+  const section = page.locator('[data-setting="nav-bar"]');
+  await section.getByRole("button", { name: "Hide History" }).click();
+  // Settings itself always stays.
+  await expect(
+    section.getByRole("button", { name: "Hide Settings" })
+  ).toBeDisabled();
+  const bar = page.locator("[data-nav-item]");
+  await expect(page.locator('[data-nav-item="history"]')).toHaveCount(0);
+
+  // Drag Settings onto Home: it moves to the front, and stays there.
+  await page
+    .locator('[data-nav-item="settings"]')
+    .dragTo(page.locator('[data-nav-item="home"]'));
+  await expect(bar.first()).toHaveAttribute("data-nav-item", "settings");
+  await page.reload();
+  await expect(bar.first()).toHaveAttribute("data-nav-item", "settings");
+
+  await page
+    .locator('[data-setting="nav-bar"]')
+    .getByRole("button", { name: "Reset" })
+    .click();
+  await expect(bar.first()).toHaveAttribute("data-nav-item", "home");
+  await expect(page.locator('[data-nav-item="history"]')).toHaveCount(1);
+});

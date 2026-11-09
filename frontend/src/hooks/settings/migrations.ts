@@ -7,6 +7,7 @@ import {
 } from "../../fonts";
 import { normalizeHotkeyOverrides } from "../../hotkeys";
 import { PRESET_ORDER } from "../../presets";
+import { normalizeNavItems } from "../../navItems";
 import { normalizeTabBarItems } from "../../tabBar";
 import { isLoadingStyle } from "../../loadingStyles";
 import {
@@ -488,6 +489,7 @@ export function normalizeSettings(
     ),
     hotkeys: normalizeHotkeyOverrides(parsed.hotkeys),
     tabBarItems: normalizeTabBarItems(parsed.tabBarItems),
+    navItems: normalizeNavItems(parsed.navItems),
     previewOnHover: normalizeBool(
       parsed.previewOnHover,
       DEFAULTS.previewOnHover

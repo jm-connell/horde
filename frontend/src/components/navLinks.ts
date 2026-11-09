@@ -1,8 +1,12 @@
 import type { Permission } from "../types";
 import { useAuth } from "../context/AuthContext";
+import { useSettings } from "../hooks/useSettings";
+import type { NavItem } from "../navItems";
 import { useConnectivity, useOfflineDownloads } from "../offline/hooks";
 
 export interface NavLinkDef {
+  /** Its name in the nav bar setting (none for Offline, which comes and goes). */
+  id?: NavItem;
   to: string;
   label: string;
   end: boolean;
@@ -13,16 +17,30 @@ export interface NavLinkDef {
 }
 
 const BASE_LINKS: NavLinkDef[] = [
-  { to: "/", label: "Home", end: true },
-  { to: "/playlists", label: "Playlists", end: false, serverOnly: true },
+  { id: "home", to: "/", label: "Home", end: true },
   {
+    id: "playlists",
+    to: "/playlists",
+    label: "Playlists",
+    end: false,
+    serverOnly: true,
+  },
+  {
+    id: "subscriptions",
     to: "/subscriptions",
     label: "Subscriptions",
     end: false,
     serverOnly: true,
   },
-  { to: "/history", label: "History", end: false, serverOnly: true },
   {
+    id: "history",
+    to: "/history",
+    label: "History",
+    end: false,
+    serverOnly: true,
+  },
+  {
+    id: "download",
     to: "/download",
     label: "Download",
     end: false,
@@ -30,13 +48,14 @@ const BASE_LINKS: NavLinkDef[] = [
     permission: "download",
   },
   {
+    id: "import",
     to: "/import",
     label: "Import",
     end: false,
     serverOnly: true,
     permission: "download",
   },
-  { to: "/settings", label: "Settings", end: false },
+  { id: "settings", to: "/settings", label: "Settings", end: false },
 ];
 
 const OFFLINE_LINK: NavLinkDef = {
@@ -64,6 +83,29 @@ export function useNavLinks(): NavLinkDef[] {
       !(offlineMode && link.serverOnly) &&
       (!link.permission || can(link.permission))
   );
+}
+
+/**
+ * The nav bar's links: those this account can open now, in the order and
+ * with the pages chosen in Settings (Offline, when it shows, before Settings
+ * or at the end).
+ */
+export function useNavBarLinks(): NavLinkDef[] {
+  const links = useNavLinks();
+  const [settings] = useSettings();
+  const byId = new Map(
+    links.flatMap((l) => (l.id ? [[l.id, l] as const] : []))
+  );
+  const out = settings.navItems.flatMap((id) => {
+    const link = byId.get(id);
+    return link ? [link] : [];
+  });
+  const offline = links.find((l) => !l.id);
+  if (offline) {
+    const at = out.findIndex((l) => l.id === "settings");
+    out.splice(at < 0 ? out.length : at, 0, offline);
+  }
+  return out;
 }
 
 export function isLinkActive(
