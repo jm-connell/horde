@@ -280,7 +280,12 @@ export function useShakaDashLoad({
           abr: {
             enabled: abrEnabled,
             defaultBandwidthEstimate: bwEstimate,
-            switchInterval: 8,
+            // Step up within a couple of segments on a good connection (the
+            // default waits 8 s between switches, so a stream sat at 480p).
+            switchInterval: 2,
+            // The browser's hint is coarse (Chrome caps it at 10 Mbps, and
+            // phones often report less): go by what the segments measure.
+            useNetworkInformation: false,
           },
           preferredVideo: preferVideoCodecs(
             preferAv1 ? ["av01", "avc1"] : ["avc1"]

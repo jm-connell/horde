@@ -244,7 +244,22 @@ export function readBandwidthEstimate(): number | null {
   return Number.isFinite(n) && n > 100_000 ? n : null;
 }
 
+/**
+ * What to remember after a new reading: the reading when it is higher, else
+ * the old value eased down only a little. A stream starts from this, and
+ * Shaka's first readings (small first segments, where latency dominates) run
+ * low: remembering them as they are made the next video open at 480p.
+ */
+export function blendBandwidthEstimate(
+  previous: number | null,
+  reading: number
+): number {
+  if (previous == null || reading >= previous) return reading;
+  return Math.max(reading, previous * 0.9);
+}
+
 export function writeBandwidthEstimate(bps: number): void {
   if (!Number.isFinite(bps) || bps < 100_000) return;
-  setItem(BW_KEY, String(Math.round(bps)));
+  const next = blendBandwidthEstimate(readBandwidthEstimate(), bps);
+  setItem(BW_KEY, String(Math.round(next)));
 }
