@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { button } from "../../components/buttons";
 import { useToast } from "../../context/ToastContext";
+import { queryKeys } from "../../queries/keys";
 import type { RecFeedback } from "../../types";
 
 const KIND_LABEL: Record<string, string> = {
@@ -13,6 +15,7 @@ const KIND_LABEL: Record<string, string> = {
 /** What you asked Recommended to leave out, and a way to take it back. */
 export default function RecommendationsSection() {
   const { showError } = useToast();
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<RecFeedback[] | null>(null);
 
   useEffect(() => {
@@ -32,6 +35,9 @@ export default function RecommendationsSection() {
 
   const remove = (row: RecFeedback) => {
     setItems((prev) => prev?.filter((r) => r.id !== row.id) ?? null);
+    // Recommended shown last time left this out: load it afresh next time.
+    queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
+    queryClient.removeQueries({ queryKey: queryKeys.discover.channels });
     api.removeRecFeedback(row.id).catch(() => {
       showError("Could not undo that");
       setItems((prev) => (prev ? [row, ...prev] : [row]));

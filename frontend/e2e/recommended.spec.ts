@@ -381,3 +381,103 @@ test("a thumbnail that fails to load leaves the card's plain placeholder", async
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.locator("img.ui-fade-img")).toHaveCount(0);
 });
+
+test("a thumbnail that fails is retried from YouTube's other copies", async ({
+  page,
+}) => {
+  await page.route(/i\.ytimg\.com\/vi\/[^/]+\/hqdefault/, (route) =>
+    route.abort()
+  );
+  await page.route(/i\.ytimg\.com\/vi\/[^/]+\/mqdefault/, (route) =>
+    route.fulfill({
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+        "base64"
+      ),
+    })
+  );
+  await openRecommended(page);
+  const card = page.locator('[data-rec-key="discover001"]');
+  await expect(card.locator("img.ui-fade-img")).toHaveAttribute(
+    "src",
+    /discover001\/mqdefault\.jpg/
+  );
+});
+
+/** Answer the feed with its cards in reverse order (a "different" ranking). */
+async function reversedFeed(page: Page) {
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    const response = await route.fetch();
+    const body = (await response.json()) as { items: unknown[] };
+    await route.fulfill({
+      response,
+      json: { ...body, items: [...body.items].reverse() },
+    });
+  });
+}
+
+async function cardOrder(page: Page): Promise<string[]> {
+  return page
+    .locator("[data-rec-key]")
+    .evaluateAll((els) => els.map((e) => e.getAttribute("data-rec-key") ?? ""));
+}
+
+test.describe("with a changed ranking on the server", () => {
+  // The page's own requests only: the service worker would answer around
+  // the routes that change the ranking.
+  test.use({ serviceWorkers: "block" });
+
+  test("coming back to Recommended keeps the cards where they were", async ({
+    page,
+  }) => {
+    await openRecommended(page);
+    const before = await cardOrder(page);
+    expect(before.length).toBeGreaterThan(1);
+    // Leave for another page; meanwhile the server's order changes.
+    await page.getByRole("link", { name: "History" }).first().click();
+    await expect(page).toHaveURL(/\/history/);
+    await expect(page.locator("[data-rec-key]")).toHaveCount(0);
+    await reversedFeed(page);
+    const asked: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().includes("/api/discover/feed")) asked.push(r.url());
+    });
+    await page.getByRole("link", { name: "Home" }).first().click();
+    await expect(page.getByText(FOUND)).toBeVisible();
+    // It asks again (so the visit counts), and the reversed answer arrives...
+    await expect.poll(() => asked.length).toBeGreaterThan(0);
+    await page.waitForTimeout(800);
+    // ...but the cards on screen stay where they were.
+    expect(await cardOrder(page)).toEqual(before);
+  });
+
+  test("a page kept from an earlier visit shows at once, and newer picks wait for a click", async ({
+    page,
+  }) => {
+    await openRecommended(page);
+    const before = await cardOrder(page);
+    // As if the app was closed for a while: the page in memory is gone and the
+    // one kept on this device is half an hour old.
+    await page.evaluate(() => {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i) ?? "";
+        if (!key.startsWith("horde.discover.kept.")) continue;
+        const kept = JSON.parse(localStorage.getItem(key) ?? "{}");
+        kept.at = Date.now() - 30 * 60_000;
+        localStorage.setItem(key, JSON.stringify(kept));
+      }
+    });
+    await reversedFeed(page);
+    await page.reload();
+    await page
+      .getByRole("button", { name: "Recommended", exact: true })
+      .click();
+    await expect(page.getByText(FOUND)).toBeVisible();
+    const newer = page.getByRole("button", { name: "Show new picks" });
+    await expect(newer).toBeVisible();
+    expect(await cardOrder(page)).toEqual(before);
+    await newer.click();
+    await expect.poll(() => cardOrder(page)).toEqual([...before].reverse());
+  });
+});

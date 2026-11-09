@@ -9,6 +9,7 @@ import {
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { applyPageId } from "./customCss";
+import { useKeptDiscoverPage } from "./queries/discover";
 import Library from "./pages/Library";
 import {
   Account,
@@ -150,7 +151,8 @@ function AppShell() {
   useServiceWorkerUpdate();
   useOfflineQuotaToast();
   const { ready, completed } = useSetupGate();
-  const { isAdmin } = useAuth();
+  const { isAdmin, user } = useAuth();
+  useKeptDiscoverPage(user?.id);
 
   if (!ready) {
     return (

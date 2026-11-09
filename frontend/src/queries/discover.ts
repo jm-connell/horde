@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import type {
@@ -8,6 +8,7 @@ import type {
   RecTopicWrite,
   RecTuningWrite,
 } from "../types";
+import { getJson, removeItem, setJson } from "../storage";
 import { queryKeys } from "./keys";
 
 /** Cards per Recommended page. */
@@ -45,6 +46,67 @@ export function usePrefetchDiscover(enabled: boolean) {
     }, PREFETCH_DELAY_MS);
     return () => window.clearTimeout(timer);
   }, [enabled, queryClient]);
+}
+
+/** How long a first page kept on this device is still shown at once. */
+const KEPT_MS = 12 * 60 * 60_000;
+const KEPT_QUERIES = [
+  ["firstPage", queryKeys.discover.firstPage],
+  ["channels", queryKeys.discover.channels],
+] as const;
+
+type Kept = { at: number; data: unknown };
+
+function isKept(value: unknown): value is Kept {
+  const kept = value as Kept | null;
+  return typeof kept?.at === "number" && kept.data != null;
+}
+
+/**
+ * Keep Recommended's first page and channel shelf on this device, so after
+ * the app was closed (a PWA reopened after a break) the tab opens at once
+ * with what it showed last. The copy follows the query cache: seeded from it
+ * on start, rewritten when it is set and dropped when it is removed (a block,
+ * a new algorithm), so it is never staler than what memory would have held.
+ */
+export function useKeptDiscoverPage(userId: number | undefined) {
+  const queryClient = useQueryClient();
+  const keyOf = (name: string) =>
+    userId == null ? null : `horde.discover.kept.${name}.${userId}`;
+  // During the first render, before Recommended reads the cache.
+  useState(() => {
+    for (const [name, queryKey] of KEPT_QUERIES) {
+      const key = keyOf(name);
+      if (!key || queryClient.getQueryData(queryKey) !== undefined) continue;
+      const kept = getJson<Kept | null>(key, isKept, null);
+      if (kept && Date.now() - kept.at < KEPT_MS)
+        queryClient.setQueryData(queryKey, kept.data, { updatedAt: kept.at });
+    }
+    return null;
+  });
+  useEffect(() => {
+    if (userId == null) return;
+    const watched = new Map(
+      KEPT_QUERIES.map(([name, queryKey]) => [
+        JSON.stringify(queryKey),
+        `horde.discover.kept.${name}.${userId}`,
+      ])
+    );
+    return queryClient.getQueryCache().subscribe((event) => {
+      const key = watched.get(JSON.stringify(event.query.queryKey));
+      if (!key) return;
+      if (event.type === "removed") removeItem(key);
+      else if (
+        event.type === "updated" &&
+        event.action.type === "success" &&
+        event.query.state.data !== undefined
+      )
+        setJson(key, {
+          at: event.query.state.dataUpdatedAt,
+          data: event.query.state.data,
+        });
+    });
+  }, [queryClient, userId]);
 }
 
 /** The signed-in user's Recommended algorithm: a preset or their own values. */

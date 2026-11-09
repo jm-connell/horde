@@ -67,16 +67,28 @@ function titleOf(item: DiscoverItem): string {
   return item.video?.title ?? item.stream?.title ?? "";
 }
 
-/** Today's first page, loaded ahead (or shown last time) and still recent. */
-function recentFirstPage(
+/**
+ * What to show at once: the first page loaded ahead or shown last time (kept
+ * on this device across app restarts, see useKeptDiscoverPage). `recent` is
+ * false when it is older than DISCOVER_PREVIEW_MS: newer picks are then
+ * offered, not swapped in.
+ */
+function previewPage(
   queryClient: ReturnType<typeof useQueryClient>
-): DiscoverFeed | undefined {
+):
+  | { page: DiscoverFeed; recent: boolean; channels?: SuggestedChannelsPage }
+  | undefined {
   const state = queryClient.getQueryState<DiscoverFeed>(
     queryKeys.discover.firstPage
   );
-  return state?.data && Date.now() - state.dataUpdatedAt < DISCOVER_PREVIEW_MS
-    ? state.data
-    : undefined;
+  if (!state?.data) return undefined;
+  return {
+    page: state.data,
+    recent: Date.now() - state.dataUpdatedAt < DISCOVER_PREVIEW_MS,
+    channels: queryClient.getQueryData<SuggestedChannelsPage>(
+      queryKeys.discover.channels
+    ),
+  };
 }
 
 function newSeed(): number {
@@ -124,10 +136,17 @@ export default function DiscoverHome({
   const [reloadKey, setReloadKey] = useState(0);
   /** The AI category open (null: the whole feed, "For you"). */
   const [category, setCategory] = useState<string | null>(null);
-  // Loaded ahead by the home page: shown at once, then asked for again
-  // (quietly) so the visit counts and the order is current.
-  const [preview] = useState(() => recentFirstPage(queryClient));
-  const quietLoad = useRef(Boolean(preview));
+  // Loaded ahead by the home page (or shown last time): shown at once, then
+  // asked for again quietly so the visit counts. The cards on screen never
+  // change under the user: a recent page keeps its cards, an older one gets
+  // "Show new picks" once the new page is in.
+  const [previewState] = useState(() => previewPage(queryClient));
+  const preview = previewState?.page;
+  const quietLoad = useRef<"keep" | "offer" | null>(
+    previewState ? (previewState.recent ? "keep" : "offer") : null
+  );
+  /** A newer first page waiting for "Show new picks". */
+  const pendingPage = useRef<DiscoverFeed | null>(null);
   /** Cards the user took off ("Not interested", a blocked channel). */
   const removedKeys = useRef(new Set<string>());
   const [items, setItems] = useState<DiscoverItem[]>(
@@ -140,16 +159,10 @@ export default function DiscoverHome({
     () => preview?.status ?? null
   );
   const [channels, setChannels] = useState<SuggestedChannel[]>(
-    () =>
-      queryClient.getQueryData<SuggestedChannelsPage>(
-        queryKeys.discover.channels
-      )?.items ?? []
+    () => previewState?.channels?.items ?? []
   );
   const [channelsCursor, setChannelsCursor] = useState<string | null>(
-    () =>
-      queryClient.getQueryData<SuggestedChannelsPage>(
-        queryKeys.discover.channels
-      )?.next_cursor ?? null
+    () => previewState?.channels?.next_cursor ?? null
   );
   const loadingChannels = useRef(false);
   const [loading, setLoading] = useState(!preview);
@@ -175,14 +188,34 @@ export default function DiscoverHome({
     sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
   }`;
 
+  /** Show a first page (fresh from the server, or one held back). */
+  const applyPage = useCallback(
+    (page: DiscoverFeed) => {
+      // A card taken off while this was loading stays off.
+      setItems(page.items.filter((i) => !removedKeys.current.has(i.key)));
+      setCategories(page.categories ?? []);
+      setCursor(page.next_cursor ?? null);
+      setStatus(page.status);
+      queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
+      queryClient.setQueryData(queryKeys.discover.blocked, page.blocked ?? []);
+      runAtLoad.current = page.status.last_run_at ?? null;
+    },
+    [queryClient]
+  );
+
   useEffect(() => {
     let active = true;
     generation.current += 1;
-    if (quietLoad.current) quietLoad.current = false;
-    else if (hasItems.current) setUpdating(true);
+    const quiet = quietLoad.current;
+    quietLoad.current = null;
+    pendingPage.current = null;
+    if (quiet) {
+      // Cards from the preview are on screen already.
+    } else if (hasItems.current) setUpdating(true);
     else setLoading(true);
     setError(null);
     setFreshReady(false);
+    const wholeFeed = seed === undefined && category === null;
     api
       .getDiscoverFeed({
         limit: DISCOVER_PAGE_SIZE,
@@ -191,23 +224,32 @@ export default function DiscoverHome({
       })
       .then((page) => {
         if (!active) return;
-        // A card taken off while this was loading stays off.
-        setItems(page.items.filter((i) => !removedKeys.current.has(i.key)));
-        setCategories(page.categories ?? []);
-        setCursor(page.next_cursor ?? null);
-        setStatus(page.status);
-        queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
-        queryClient.setQueryData(
-          queryKeys.discover.blocked,
-          page.blocked ?? []
-        );
-        runAtLoad.current = page.status.last_run_at ?? null;
+        if (quiet === "keep") {
+          // Same day's order, a moment later: keep the cards in place.
+          setStatus(page.status);
+          setCategories(page.categories ?? []);
+          queryClient.setQueryData(queryKeys.discover.mix, page.mix ?? []);
+          queryClient.setQueryData(
+            queryKeys.discover.blocked,
+            page.blocked ?? []
+          );
+          runAtLoad.current = page.status.last_run_at ?? null;
+          return;
+        }
+        if (quiet === "offer") {
+          // An older page is on screen: offer the new one instead of swapping.
+          pendingPage.current = page;
+          setStatus(page.status);
+          setFreshReady(true);
+          return;
+        }
+        applyPage(page);
         // Today's order: shown at once the next time the tab opens.
-        if (seed === undefined && category === null)
+        if (wholeFeed)
           queryClient.setQueryData(queryKeys.discover.firstPage, page);
       })
       .catch(() => {
-        if (active) setError("Could not load recommendations.");
+        if (active && !quiet) setError("Could not load recommendations.");
       })
       .finally(() => {
         if (active) {
@@ -215,8 +257,9 @@ export default function DiscoverHome({
           setUpdating(false);
         }
       });
-    // The channel shelf is part of the whole feed only.
-    if (category === null)
+    // The channel shelf is part of the whole feed only. With cards kept from
+    // a preview, so is the shelf beside them.
+    if (category === null && !quiet)
       api
         .getSuggestedChannels(seed)
         .then((data) => {
@@ -230,7 +273,7 @@ export default function DiscoverHome({
     return () => {
       active = false;
     };
-  }, [seed, reloadKey, category, queryClient]);
+  }, [seed, reloadKey, category, queryClient, applyPage]);
 
   // While the gatherer works for us, watch for it to finish: an empty feed
   // reloads by itself, a full one offers the new picks.
@@ -472,7 +515,26 @@ export default function DiscoverHome({
       {freshReady && (
         <button
           type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
+          onClick={() => {
+            const page = pendingPage.current;
+            if (!page) {
+              setReloadKey((k) => k + 1);
+              return;
+            }
+            pendingPage.current = null;
+            setFreshReady(false);
+            applyPage(page);
+            queryClient.setQueryData(queryKeys.discover.firstPage, page);
+            // The shelf goes with the new cards.
+            api
+              .getSuggestedChannels()
+              .then((data) => {
+                setChannels(data.items);
+                setChannelsCursor(data.next_cursor ?? null);
+                queryClient.setQueryData(queryKeys.discover.channels, data);
+              })
+              .catch(() => undefined);
+          }}
           className={button("secondary", "sm")}
         >
           Show new picks
