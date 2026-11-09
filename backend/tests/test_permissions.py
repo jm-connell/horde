@@ -34,6 +34,7 @@ GATES: dict[tuple[str, str], str] = {
             ("DELETE", "/api/users/{user_id}/sessions"),
             ("DELETE", "/api/users/{user_id}/sessions/{session_id}"),
             ("DELETE", "/api/users/{user_id}/two-factor"),
+            ("PUT", "/api/users/{user_id}/allowed-channels"),
             ("GET", "/api/users/invites"),
             ("POST", "/api/users/invites"),
             ("DELETE", "/api/users/invites/{invite_id}"),

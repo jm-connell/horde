@@ -15,6 +15,7 @@ from ..openapi_responses import (
     SUBTITLES,
     VIDEO_STREAM,
 )
+from ..parental_guard import video_guard
 from ..response_schemas import (
     SpriteGenerateResult,
     SpriteMetaRead,
@@ -53,7 +54,7 @@ from .video_serialize import (
     to_read as _to_read,
 )
 
-router = APIRouter(prefix="/api", tags=["videos"])
+router = APIRouter(prefix="/api", tags=["videos"], dependencies=[Depends(video_guard)])
 
 CHUNK_SIZE = 1024 * 1024
 

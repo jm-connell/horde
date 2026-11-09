@@ -24,6 +24,7 @@ from ..openapi_responses import (
     SUBTITLES,
     VIDEO_STREAM,
 )
+from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import (
     ChannelFeedEntry,
     NextPartRead,
@@ -34,6 +35,7 @@ from ..schemas import (
 from ..services import (
     library,
     next_part,
+    parental,
     stream_preview,
     stream_related,
     video_game,
@@ -401,6 +403,7 @@ def preview_meta(
     url: str = Query(...),
     session: Session = Depends(get_session),
     gate: ExtractionGate = Depends(extraction_gate),
+    user: AuthUser = Depends(current_user),
 ):
     cleaned = _require_video_url(url)
     try:
@@ -409,6 +412,14 @@ def preview_meta(
         raise  # 429 / 504 from the gate
     except Exception as exc:
         raise preview_extraction_error(exc, cleaned) from exc
+    try:
+        # Parental controls: another channel's video is refused, an allowed
+        # one's later requests (manifest, media, ...) pass.
+        parental.check_stream_meta(
+            user.allowed, user.id, youtube_video_id(cleaned) or meta.get("id"), meta
+        )
+    except parental.Restricted as exc:
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed") from exc
 
     library_video_id = None
     yt_id = meta.get("id")
@@ -443,7 +454,9 @@ def preview_meta(
     )
 
 
-@router.get("/game", response_model=StreamGameRead)
+@router.get(
+    "/game", response_model=StreamGameRead, dependencies=[Depends(stream_guard)]
+)
 async def preview_game(
     request: Request, url: str = Query(..., max_length=2048)
 ) -> StreamGameRead:
@@ -551,7 +564,11 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
     return body
 
 
-@router.get("/related", response_model=StreamRelatedPage)
+@router.get(
+    "/related",
+    response_model=StreamRelatedPage,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_related(
     request: Request,
     url: str = Query(..., max_length=4000),
@@ -577,6 +594,9 @@ async def preview_related(
     if full is None:
         full = await _mixed_related(request, cleaned, youtube_id, may_embed)
         cache.put((youtube_id, may_embed), full)
+    if user.allowed is not None:
+        # The list is shared; this member sees only allowed channels' videos.
+        full = [e for e in full if parental.entry_allowed(user.allowed, e)]
     end = page.offset + limit
     return StreamRelatedPage(
         items=full[page.offset : end],
@@ -630,7 +650,9 @@ def _mix(local, pinned: int, raw_up_next: list[dict], youtube_id: str):
     return stream_related.mix_with_up_next(local, up_next, pinned=pinned)
 
 
-@router.get("/next-part", response_model=NextPartRead)
+@router.get(
+    "/next-part", response_model=NextPartRead, dependencies=[Depends(stream_guard)]
+)
 def preview_next_part(
     url: str = Query(..., max_length=4000),
     session: Session = Depends(get_session),
@@ -660,7 +682,12 @@ def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now)
         )
 
 
-@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
+@router.get(
+    "/subtitles",
+    response_class=RAW,
+    responses=SUBTITLES,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_subtitles(
     request: Request,
     url: str = Query(...),
@@ -679,12 +706,16 @@ async def preview_subtitles(
 
 # One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
 # document has a single operation id (api_route would emit it twice and warn).
-@router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
+@router.head(
+    "/manifest",
+    include_in_schema=False,
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
+)
 @router.get(
     "/manifest",
     response_class=RAW,
     responses=DASH_MANIFEST,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
 )
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
@@ -779,7 +810,12 @@ async def preview_media_head(
     return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.get("/stream", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/stream",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = await run_in_threadpool(_require_video_url, url)

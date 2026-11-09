@@ -11,6 +11,7 @@ from sqlmodel import Session
 from ..auth import current_user, require_admin, require_permission
 from ..context import get_session
 from ..models import Video, require_id
+from ..parental_guard import video_guard
 from ..response_schemas import CompatCancelResult, CompatSummaryRead
 from ..schemas import CompatState
 from ..services import compat_rendition
@@ -21,7 +22,7 @@ from ..services.ytdlp_formats import compat_copy_cap
 from . import member_view
 from .video_serialize import resolve_media
 
-router = APIRouter(prefix="/api", tags=["compat"])
+router = APIRouter(prefix="/api", tags=["compat"], dependencies=[Depends(video_guard)])
 
 
 class CompatRequest(BaseModel):

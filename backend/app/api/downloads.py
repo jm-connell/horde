@@ -28,6 +28,7 @@ from ..models import (
     require_id,
 )
 from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
+from ..parental_guard import NOT_ALLOWED
 from ..schemas import (
     ClipCreate,
     DownloadBulkCreate,
@@ -41,7 +42,7 @@ from ..schemas import (
     DownloadQueueStatus,
     SubscribePrompt,
 )
-from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
+from ..services import follows, parental, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
 from ..services.channel_catalog.runtime import is_youtube_channel_url
@@ -415,6 +416,11 @@ def create_download(
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(payload.url)
+    if user.allowed is not None and not parental.stream_allowed(
+        session, user.allowed, user.id, youtube_video_id(payload.url)
+    ):
+        # Parental controls: only an allowed channel's video, to the device.
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
 
     if is_youtube_short_url(payload.url):
         raise HTTPException(status_code=400, detail="Don't watch Shorts")

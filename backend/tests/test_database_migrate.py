@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0031_stream_watch_time"
+HEAD = "0032_parental_controls"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1074,6 +1074,7 @@ def test_orphans_do_not_block_a_pending_migration(init_db):
             DROP TABLE download_requesters;
             DROP TABLE stream_ai_chat_messages;
             DROP TABLE stream_ai_state;
+            ALTER TABLE users DROP COLUMN allowed_channels;
             ALTER TABLE users DROP COLUMN share_downloads;
             ALTER TABLE users DROP COLUMN avatar_version;
             ALTER TABLE download_jobs DROP COLUMN origin;

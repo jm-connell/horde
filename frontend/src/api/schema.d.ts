@@ -1554,7 +1554,8 @@ export interface paths {
         put?: never;
         /**
          * Record Stream Watch
-         * @description Note how far the user got in a video they streamed without downloading.
+         * @description Note how far the user got in a video they streamed without downloading,
+         *     and the time it stands for (History stats).
          */
         post: operations["record_stream_watch_api_discover_history_post"];
         delete?: never;
@@ -3774,6 +3775,30 @@ export interface paths {
         patch: operations["update_user_api_users__user_id__patch"];
         trace?: never;
     };
+    "/api/users/{user_id}/allowed-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Allowed Channels
+         * @description Parental controls: limit a member to these channels (``null`` lifts it).
+         *
+         *     A restricted member sees and plays only these channels' videos, cannot
+         *     search YouTube, and keeps only the permissions that stay inside the list.
+         *     An administrator cannot be restricted.
+         */
+        put: operations["set_allowed_channels_api_users__user_id__allowed_channels_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{user_id}/sessions": {
         parameters: {
             query?: never;
@@ -5152,6 +5177,24 @@ export interface components {
              */
             target: "chat" | "embed";
         };
+        /**
+         * AllowedChannelRead
+         * @description A channel a restricted member may watch (parental controls).
+         */
+        AllowedChannelRead: {
+            /** Name */
+            name?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
+         * AllowedChannelsWrite
+         * @description The channels a member may watch; ``null`` lifts the restriction.
+         */
+        AllowedChannelsWrite: {
+            /** Channels */
+            channels?: components["schemas"]["AllowedChannelRead"][] | null;
+        };
         /** AppSettingsRead */
         AppSettingsRead: {
             ai?: components["schemas"]["AiSettingsRead"];
@@ -5532,6 +5575,8 @@ export interface components {
          * @description The signed-in user. ``permissions`` is effective: all of them for an admin.
          */
         AuthUserRead: {
+            /** Allowed Channels */
+            allowed_channels?: components["schemas"]["AllowedChannelRead"][] | null;
             /** Avatar Version */
             avatar_version?: number | null;
             /** Id */
@@ -9692,6 +9737,8 @@ export interface components {
         };
         /** UserRead */
         UserRead: {
+            /** Allowed Channels */
+            allowed_channels?: components["schemas"]["AllowedChannelRead"][] | null;
             /** Avatar Version */
             avatar_version?: number | null;
             /**
@@ -18976,6 +19023,50 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UserUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    set_allowed_channels_api_users__user_id__allowed_channels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllowedChannelsWrite"];
             };
         };
         responses: {

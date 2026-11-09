@@ -13,6 +13,7 @@ from ..auth import current_user, require_admin, require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import DownloadJob, JobStatus, Video, require_id
+from ..parental_guard import video_guard
 from ..response_schemas import (
     TagPage,
     TagStatPage,
@@ -32,7 +33,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library, media_sidecars, trash, user_state
+from ..services import library, media_sidecars, parental, trash, user_state
 from ..services import next_part as next_part_svc
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips
@@ -45,6 +46,7 @@ from ..services.pagination import (
     offset_cursor,
     parse_cursor,
 )
+from ..services.parental import AllowList
 from ..services.paths import (
     is_manual_import,
     manual_import_rel_path,
@@ -68,7 +70,7 @@ from .video_serialize import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["videos"])
+router = APIRouter(prefix="/api", tags=["videos"], dependencies=[Depends(video_guard)])
 
 #: Set on the 204 of a delete that moved the video to the trash, so the client can
 #: offer Undo (``POST /api/trash/{id}/restore``). The bulk form lists the ids.
@@ -134,6 +136,7 @@ class _Filters(TypedDict):
     watched_only: bool
     seed: int | None
     user_id: int
+    allowed: AllowList | None
 
 
 @router.get("/videos", response_model=VideoPage)
@@ -199,6 +202,17 @@ def list_videos(
             )
             return [v.id for v in found if v.id is not None], found_chunks
 
+        def only_allowed(ids: list[int]) -> list[int]:
+            # Parental controls: the shared ranking, less other channels.
+            if user.allowed is None:
+                return ids
+            ok = set(
+                session.exec(
+                    select(col(Video.id)).where(parental.video_clause(user.allowed))
+                ).all()
+            )
+            return [i for i in ids if i in ok]
+
         if sort == "last_watched_at":
             # Ordered by the caller's watch history, which changes with every
             # play and is not part of the cache's invalidation: rank afresh.
@@ -207,6 +221,7 @@ def list_videos(
             ranked_ids, chunks = cache.ranking(
                 key, lambda: library_fingerprint(session), rank
             )
+        ranked_ids = only_allowed(ranked_ids)
         window_ids = ranked_ids[page.offset : page.offset + page.fetch]
         by_id = {
             v.id: v
@@ -254,6 +269,7 @@ def list_videos(
         watched_only=watched_only,
         seed=seed,
         user_id=user.id,
+        allowed=user.allowed,
     )
     videos = library.query_videos(session, page=page, **filters)
     total = None
@@ -426,6 +442,7 @@ def related_videos(
     rows = library.related_videos(
         session, video_id, limit=limit, offset=offset, user_id=user.id
     )
+    rows = [r for r in rows if parental.video_allowed(user.allowed, r)]
     return _to_read_many(rows, session, viewer=user, compact=True)
 
 

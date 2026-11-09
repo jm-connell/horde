@@ -1059,6 +1059,19 @@ class ReadyResponse(BaseModel):
 # --- Accounts ---------------------------------------------------------------
 
 
+class AllowedChannelRead(BaseModel):
+    """A channel a restricted member may watch (parental controls)."""
+
+    url: str | None = Field(default=None, max_length=2048)
+    name: str | None = Field(default=None, max_length=300)
+
+
+class AllowedChannelsWrite(BaseModel):
+    """The channels a member may watch; ``null`` lifts the restriction."""
+
+    channels: list[AllowedChannelRead] | None = Field(default=None, max_length=500)
+
+
 class AuthUserRead(BaseModel):
     """The signed-in user. ``permissions`` is effective: all of them for an admin."""
 
@@ -1075,6 +1088,8 @@ class AuthUserRead(BaseModel):
     #: An administrator requires two-step sign-in and this account has not set it up:
     #: until it does, the server answers everything but the setup routes with 403.
     two_factor_enrollment_required: bool = False
+    #: Parental controls: the only channels this account may watch (null: any).
+    allowed_channels: list[AllowedChannelRead] | None = None
 
 
 class AuthState(BaseModel):
@@ -1235,7 +1250,8 @@ class UserRead(BaseModel):
     username: str
     is_admin: bool
     disabled: bool
-    #: Effective permissions (all of them for an admin).
+    #: Granted permissions (all of them for an admin). Parental controls
+    #: (``allowed_channels``) withhold some while they are on.
     permissions: list[str]
     created_at: datetime
     last_login_at: datetime | None = None
@@ -1243,6 +1259,8 @@ class UserRead(BaseModel):
     avatar_version: int | None = None
     share_downloads: bool = True
     two_factor_enabled: bool = False
+    #: Parental controls: the only channels this member may watch (null: any).
+    allowed_channels: list[AllowedChannelRead] | None = None
 
 
 class UserCreate(BaseModel):

@@ -38,7 +38,7 @@ from ...models import (
     as_utc,
     utcnow,
 )
-from .. import app_settings, playlist_owners
+from .. import app_settings, parental, playlist_owners
 from ..css_sanitize import sanitize_ui_css
 from . import passwords, permissions
 
@@ -122,6 +122,12 @@ class AuthUser:
     #: The administrator requires two-step sign-in and this account has not set it
     #: up: set by ``AuthMiddleware``, which then refuses everything but enrollment.
     must_enroll_two_factor: bool = False
+    #: Parental controls: the channels this member may watch (None: any).
+    allowed: parental.AllowList | None = None
+
+    @property
+    def restricted(self) -> bool:
+        return self.allowed is not None
 
     @classmethod
     def of(cls, user: User) -> AuthUser:
@@ -134,6 +140,7 @@ class AuthUser:
             share_downloads=user.share_downloads,
             two_factor_enabled=user.totp_enabled_at is not None
             and bool(user.totp_secret),
+            allowed=None if user.is_admin else parental.parse(user.allowed_channels),
         )
 
     def can(self, permission: str) -> bool:
@@ -143,7 +150,11 @@ class AuthUser:
 def effective_permissions(user: User) -> frozenset[str]:
     if user.is_admin:
         return permissions.ALL_PERMISSIONS
-    return permissions.parse(user.permissions)
+    granted = permissions.parse(user.permissions)
+    if user.allowed_channels is not None:
+        # Parental controls: nothing that reaches past the allowed channels.
+        return granted & parental.KEPT_PERMISSIONS
+    return granted
 
 
 def _checked_permissions(names: list[str] | set[str] | frozenset[str]) -> str:

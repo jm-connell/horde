@@ -14,6 +14,7 @@ from ..auth import current_user, require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import ChannelRetention
+from ..parental_guard import NOT_ALLOWED, restricted_forbidden
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
@@ -82,8 +83,10 @@ def list_channels(
     sort: str = Query("recent_download"),
     order: str = Query("desc"),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     rules = {r.channel: r for r in channel_retention.enabled_rows(session)}
+    allowed = user.allowed
     return [
         ChannelStat(
             channel=row.channel,
@@ -94,6 +97,7 @@ def list_channels(
             retention=_retention_summary(rules.get(row.channel)),
         )
         for row in library.channel_stats(session, sort=sort, order=order)
+        if allowed is None or allowed.allows(row.channel_url, row.channel)
     ]
 
 
@@ -155,10 +159,18 @@ def rename_channel(
     }
 
 
+def _require_allowed_channel(
+    user: AuthUser, channel_url: str | None, channel_name: str | None
+) -> None:
+    """Parental controls: a channel page outside the allowed list is refused."""
+    if user.allowed is not None and not user.allowed.allows(channel_url, channel_name):
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
+
+
 @router.get(
     "/channels/search",
     response_model=ChannelSearchResponse,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(restricted_forbidden), Depends(ytdlp_slot)],
 )
 def search_channels(
     q: str = Query(..., min_length=1),
@@ -586,6 +598,7 @@ def channel_youtube_search(
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
+    _require_allowed_channel(user, channel_url, channel_name)
     empty = ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
@@ -623,7 +636,7 @@ def channel_youtube_search(
 @router.get(
     "/youtube/search",
     response_model=ChannelFeedPage,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(restricted_forbidden), Depends(ytdlp_slot)],
 )
 def youtube_video_search(
     q: str = Query(..., min_length=2),
@@ -694,6 +707,14 @@ def channel_catalog_search(
         channel_url=channel_url,
         global_search=global_search,
     )
+    if user.allowed is not None:
+        entries = [
+            e
+            for e in entries
+            if user.allowed.allows(
+                e.channel_url or channel_url, e.channel or channel_name
+            )
+        ]
     return ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
@@ -752,6 +773,7 @@ def channel_feed(
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
+    _require_allowed_channel(user, channel_url, channel_name)
     if not channel_url:
         return ChannelFeedPage(
             channel=channel_name, channel_url=None, entries=[], has_more=False

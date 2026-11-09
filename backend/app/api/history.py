@@ -186,5 +186,6 @@ def continue_youtube(
                 channel_url=v.channel_url,
             )
             for v in views
+            if user.allowed is None or user.allowed.allows(v.channel_url, v.channel)
         ]
     )
