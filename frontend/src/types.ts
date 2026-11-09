@@ -179,6 +179,7 @@ export type AuthUser = Omit<S["AuthUserRead"], "permissions"> & {
 export type AuthState = Omit<S["AuthState"], "user"> & {
   user: AuthUser | null;
 };
+export type AllowedChannel = S["AllowedChannelRead"];
 export type UserAccount = Omit<S["UserRead"], "permissions"> & {
   permissions: Permission[];
 };

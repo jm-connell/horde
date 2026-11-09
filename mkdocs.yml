@@ -144,6 +144,7 @@ nav:
       - 0029 Video questions in Ask: adr/0029-video-questions-in-ask.md
       - 0030 Ask routes on its own: adr/0030-ask-routes-on-its-own.md
       - 0031 Published image by default: adr/0031-published-image-by-default.md
+      - 0032 Parental controls: adr/0032-parental-controls.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
