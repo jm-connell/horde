@@ -21,7 +21,7 @@ The top bar has **Home** (the library), **Playlists**, **History**, **Download**
 
 Paste a [yt-dlp](https://github.com/yt-dlp/yt-dlp)-supported URL (YouTube is the well-tested path), pick a quality preset, and watch a FIFO queue with live progress. Pause and resume the queue. YouTube playlists can be imported as individual videos or turned into a Horde playlist.
 
-![Download page with URL field, quality presets, and queue](assets/screenshots/downloads.webp)
+![Download page with URL field, quality, and destination](assets/screenshots/downloads.webp)
 
 Presets range from **best** (highest AV1 when YouTube offers it) through height caps (2160p down to 480p) and audio-only. After metadata loads, the UI can hide formats the source does not actually have. Horde does **not** download YouTube Shorts.
 
@@ -43,7 +43,9 @@ Why this layout: [Channel/year layout](design/channel-year-layout.md). Storage m
 
 The home screen is a video grid (or channel feed), a channel sidebar, search, tags, sorting, and bulk actions.
 
-![Library grid with channel sidebar, tags, and continue watching](assets/screenshots/library.webp)
+![Library grid with continue watching](assets/screenshots/library.webp)
+
+![Recommended feed with category shelves and channels you might like](assets/screenshots/recommended.webp)
 
 - **Channel sidebar** — filter by creator; search local channels and discover remote YouTube channels
 - **Sort** — recently added, publish date, title, duration, size, views, or random (session override lasts 3 hours)
@@ -58,6 +60,8 @@ Full guide: [Library](guides/library.md). Search behavior: [Search](guides/searc
 Open a channel from the sidebar to see its **feed**: videos already in your library, plus optional **undownloaded** catalog entries from YouTube.
 
 ![Channel feed with downloaded videos and undownloaded catalog rows](assets/screenshots/channel-feed.webp)
+
+![Subscriptions page listing followed channels](assets/screenshots/subscriptions.webp)
 
 Catalogs are **YouTube-only**. You can browse, stream-preview, and queue downloads without leaving the feed. Sidebar search (≥ 2 characters) can also find remote channels you do not have yet. Non-YouTube yt-dlp URLs still download; they just do not get a remote catalog.
 
@@ -77,7 +81,7 @@ Full guide: [Import & review](guides/import-review.md).
 
 Library watch and stream preview share the same player.
 
-![Watch page with the Horde player, chapters, and related chrome](assets/screenshots/player.webp)
+![Watch page with the Horde player, chapter markers, AI summary, and related videos](assets/screenshots/player.webp)
 
 | Mode | Behavior |
 |------|----------|
@@ -113,7 +117,7 @@ Full guide: [YouTube history](guides/youtube-history.md).
 
 Turn the archive into something you can actually ask questions of. Use any OpenAI-compatible provider: a cloud one such as **OpenRouter** (often cheaper and lower maintenance for this app), a server you run such as **Ollama** or LM Studio, or a cloud model for chat with local embeddings.
 
-![Settings → AI provider settings](assets/screenshots/settings-ai.webp)
+![Settings → AI → Features toggles](assets/screenshots/settings-ai.webp)
 
 | Feature | Needs |
 |---------|--------|
