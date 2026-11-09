@@ -691,3 +691,57 @@ test("a long channel name is shown whole, on its own line on a phone", async ({
   const box = (await channel.boundingBox())!;
   expect(box.x + box.width).toBeLessThanOrEqual(390);
 });
+
+test("a stream shows when it was posted, its game, and dated suggestions", async ({
+  page,
+}) => {
+  await mockStream(page, [
+    {
+      id: "rem1",
+      url: "https://video.example.test/watch?v=rem1",
+      title: "Not yet downloaded clip",
+      duration: 75,
+      thumbnail_url: null,
+      channel: "Other Channel",
+      published_at: "2026-11-02T00:00:00+00:00",
+      in_library: false,
+      video_id: null,
+    },
+    {
+      id: "live1",
+      url: "https://video.example.test/watch?v=live1",
+      title: "Grand final, live",
+      channel: "Other Channel",
+      live_status: "is_live",
+      concurrent_viewers: 48213,
+      in_library: false,
+      video_id: null,
+    },
+  ]);
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        ...META,
+        published_at: "2026-10-30T00:00:00+00:00",
+        categories: ["Gaming"],
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/game\?/, (route) =>
+    route.fulfill({ json: { game: "Counter-Strike 2" } })
+  );
+  await page.goto(WATCH);
+  const details = page
+    .getByRole("link", { name: "Test Channel" })
+    .locator("xpath=..");
+  await expect(details).toContainText("Oct 30, 2026");
+  await expect(details).toContainText("Game Counter-Strike 2");
+
+  const items = page.locator('[data-horde="related-item"]');
+  const clip = items.filter({ hasText: "Not yet downloaded clip" }).first();
+  await expect(clip).toContainText("Nov 2, 2026");
+  // The length sits on the thumbnail, not in the text under it.
+  await expect(clip.locator(".aspect-video")).toContainText("1:15");
+  const live = items.filter({ hasText: "Grand final, live" }).first();
+  await expect(live).toContainText("48.2K watching");
+});

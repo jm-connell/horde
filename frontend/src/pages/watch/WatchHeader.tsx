@@ -1,9 +1,11 @@
 import { Link } from "react-router-dom";
 import {
   formatDate,
+  formatPublishedAt,
   formatResolution,
   formatSize,
   formatViewCount,
+  formatWatching,
   safeHref,
   watchProcessingLabel,
 } from "../../utils";
@@ -13,6 +15,7 @@ import StreamDownloadControl from "./StreamDownloadControl";
 import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
 import { ExternalIcon } from "../../components/icons";
+import { useStreamGame } from "../../queries/preview";
 import BackLink from "./BackLink";
 
 /**
@@ -50,6 +53,21 @@ export default function WatchHeader({
     : safeHref(source.meta.source_url ?? source.url);
   const originalLabel =
     originalHref && extractYouTubeId(originalHref, "") ? "YouTube" : "Source";
+  const posted =
+    isLibrary || isLive
+      ? ""
+      : formatPublishedAt(
+          source.meta.published_at,
+          source.meta.published_label
+        );
+  const watching = isLibrary
+    ? ""
+    : formatWatching(source.meta.concurrent_viewers);
+  // The game card YouTube shows under a Gaming video's description.
+  const game = useStreamGame(
+    isLibrary ? undefined : (source.meta.source_url ?? source.url),
+    !isLibrary && (source.meta.categories ?? []).includes("Gaming")
+  );
 
   return (
     <div className="mt-5">
@@ -89,8 +107,19 @@ export default function WatchHeader({
               Live
             </span>
           )}
-          {!isLibrary && source.meta.view_count != null && (
-            <span>{formatViewCount(source.meta.view_count)}</span>
+          {isLive && watching ? (
+            <span>{watching}</span>
+          ) : (
+            !isLibrary &&
+            source.meta.view_count != null && (
+              <span>{formatViewCount(source.meta.view_count)}</span>
+            )
+          )}
+          {posted && <span>{posted}</span>}
+          {game && (
+            <span title="The game this video is about (from YouTube)">
+              <span className="text-muted">Game</span> {game}
+            </span>
           )}
           {resolution && (
             <span className="text-xs text-muted">{resolution}</span>

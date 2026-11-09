@@ -5,6 +5,7 @@ import type {
   DownloadOverrides,
   DownloadPreview,
   DownloadQueueStatus,
+  StreamGame,
   StreamPreviewMeta,
   Video,
 } from "../types";
@@ -25,6 +26,14 @@ export const downloadsApi = {
   getPreviewMeta(url: string, opts?: ReadOptions): Promise<StreamPreviewMeta> {
     return request<StreamPreviewMeta>(
       `/api/preview/meta?url=${encodeURIComponent(url)}`,
+      opts
+    );
+  },
+
+  /** The game card of a YouTube Gaming video (read from its page, kept a week). */
+  getStreamGame(url: string, opts?: ReadOptions): Promise<StreamGame> {
+    return request<StreamGame>(
+      `/api/preview/game?url=${encodeURIComponent(url)}`,
       opts
     );
   },

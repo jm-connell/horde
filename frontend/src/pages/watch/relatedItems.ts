@@ -1,6 +1,10 @@
 import { listThumbnailUrl, thumbnailUrl } from "../../api";
 import type { ChannelFeedEntry, Video } from "../../types";
-import { youtubeThumbnailUrl } from "../../utils";
+import {
+  formatPublishedAt,
+  formatWatching,
+  youtubeThumbnailUrl,
+} from "../../utils";
 import { watchHref } from "../../utils/watchHref";
 import type { QueueEntry } from "../../context/playbackQueue";
 
@@ -12,6 +16,9 @@ export interface RelatedItem {
   thumb: string | null;
   channel: string | null;
   durationSec: number | null;
+  /** When it was posted ("Nov 6, 2026", "3 years ago"), or how many are
+   *  watching a live one ("12K watching"). */
+  facts: string | null;
   /** Set on the stream page, where related videos can be either. */
   downloaded?: boolean;
   /** A broadcast that is live now. */
@@ -28,6 +35,7 @@ export function libraryRelatedItems(videos: Video[]): RelatedItem[] {
     thumb: thumbnailUrl(v),
     channel: v.channel ?? null,
     durationSec: v.duration_sec ?? null,
+    facts: formatPublishedAt(v.published_at ?? null, null) || null,
     queueEntry: v,
   }));
 }
@@ -51,6 +59,11 @@ export function streamRelatedItems(entries: ChannelFeedEntry[]): RelatedItem[] {
       thumb,
       channel: e.channel ?? null,
       durationSec: e.duration ?? null,
+      facts:
+        (e.live_status === "is_live"
+          ? formatWatching(e.concurrent_viewers)
+          : formatPublishedAt(e.published_at ?? null, e.published_label)) ||
+        null,
       downloaded,
       live: e.live_status === "is_live",
       queueEntry: e.url

@@ -87,6 +87,8 @@ def feed_entry(pick: LivePick) -> ChannelFeedEntry:
         channel=pick.channel_name,
         channel_url=pick.channel_url,
         live_status="is_live",
+        concurrent_viewers=b.viewers,
+        game=b.game,
     )
 
 

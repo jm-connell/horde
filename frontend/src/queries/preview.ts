@@ -17,6 +17,18 @@ export function useStreamAi(url: string, enabled: boolean) {
   return useQuery(streamAiQuery(url, enabled));
 }
 
+/** The game a YouTube Gaming video is about (null when none or not Gaming). */
+export function useStreamGame(url: string | undefined, gaming: boolean) {
+  const query = useQuery({
+    queryKey: queryKeys.preview.game(url ?? ""),
+    queryFn: ({ signal }) => api.getStreamGame(url ?? "", { signal }),
+    enabled: !!url && gaming,
+    staleTime: Infinity,
+    retry: false,
+  });
+  return query.data?.game ?? null;
+}
+
 /** Related videos for a stream: library and not-downloaded ones, marked. */
 export function useStreamRelated(url: string | undefined) {
   const query = useQuery({

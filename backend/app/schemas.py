@@ -346,6 +346,20 @@ class StreamPreviewMeta(BaseModel):
     was_live: bool = False
     #: YouTube's thumbnails for scrubbing; None for live or when there are none.
     storyboard: StoryboardRead | None = None
+    #: When it was posted: a sort key, and an honest label when the day is
+    #: not known ("3 years ago"), like a channel feed's cards.
+    published_at: str | None = None
+    published_label: str | None = None
+    #: People watching right now (live broadcasts only).
+    concurrent_viewers: int | None = None
+    #: YouTube's categories (``Gaming``: ask ``/api/preview/game`` for the game).
+    categories: list[str] = []
+
+
+class StreamGameRead(BaseModel):
+    """The game YouTube shows under a Gaming video's description, if any."""
+
+    game: str | None = None
 
 
 class StreamAiRead(BaseModel):
@@ -534,6 +548,10 @@ class ChannelFeedEntry(BaseModel):
     match_reason: SearchMatchReason | None = None
     #: yt-dlp live_status: ``is_live`` (live now), ``was_live`` (a past stream), ...
     live_status: str | None = None
+    #: People watching right now, on a live broadcast's card.
+    concurrent_viewers: int | None = None
+    #: The game card of a live Gaming broadcast, when known.
+    game: str | None = None
     #: The viewer watched it on YouTube (their imported Takeout history).
     youtube_watched: bool = False
 

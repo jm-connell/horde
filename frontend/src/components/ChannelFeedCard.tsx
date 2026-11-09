@@ -13,6 +13,7 @@ import {
   formatLikeRatio,
   formatResolution,
   formatViewCount,
+  formatWatching,
   joinDotList,
   youtubeThumbnailRetries,
   youtubeThumbnailUrl,
@@ -86,9 +87,16 @@ function feedFacts(entry: ChannelFeedEntry, inLibrary: boolean): CardFact[] {
     entry.published_at,
     entry.published_label
   );
-  if (dateLabel) facts.push({ text: dateLabel });
-  if (entry.view_count != null) {
-    facts.push({ text: formatViewCount(entry.view_count) });
+  if (entry.live_status === "is_live") {
+    // Live: how many are watching now, and the game, not a date.
+    const watching = formatWatching(entry.concurrent_viewers);
+    if (watching) facts.push({ text: watching });
+    if (entry.game) facts.push({ text: entry.game });
+  } else {
+    if (dateLabel) facts.push({ text: dateLabel });
+    if (entry.view_count != null) {
+      facts.push({ text: formatViewCount(entry.view_count) });
+    }
   }
   const likeLabel = formatLikeRatio(entry.like_count, entry.dislike_count);
   if (likeLabel) {

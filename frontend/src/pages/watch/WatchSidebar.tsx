@@ -10,6 +10,16 @@ import type { RelatedItem } from "./relatedItems";
 import type { RelatedFeed } from "./useRelatedFeed";
 import { PlayIcon } from "../../components/icons";
 
+/** The length over a thumbnail's corner, as on every other card. */
+function DurationBadge({ seconds }: { seconds: number | null }) {
+  if (seconds == null || seconds <= 0) return null;
+  return (
+    <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/80 px-1 py-0.5 text-[11px] font-medium leading-none text-white">
+      {formatDuration(seconds)}
+    </span>
+  );
+}
+
 function DownloadedBadge() {
   return (
     <span className="text-xs font-medium leading-none text-success">
@@ -71,6 +81,7 @@ export function WatchSidebar({
                       className="right-1 top-1 px-1.5 py-0.5 text-[11px]"
                     />
                   )}
+                  {!v.live && <DurationBadge seconds={v.durationSec} />}
                 </div>
                 <div className="min-w-0 flex-1 py-0.5">
                   <Link
@@ -87,9 +98,9 @@ export function WatchSidebar({
                       {v.channel}
                     </Link>
                   )}
-                  {v.durationSec != null && (
-                    <p className="mt-0.5 text-xs text-muted">
-                      {formatDuration(v.durationSec)}
+                  {v.facts && (
+                    <p className="mt-0.5 truncate text-xs text-muted">
+                      {v.facts}
                     </p>
                   )}
                   {v.live && (
@@ -149,6 +160,7 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
           >
             <div className="relative aspect-video w-full overflow-hidden rounded-lg bg-ink-800">
               {v.queueEntry && <QueueButton entry={v.queueEntry} />}
+              {!v.live && <DurationBadge seconds={v.durationSec} />}
               {v.thumb ? (
                 <img
                   decoding="async"
@@ -172,10 +184,8 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
                   {v.channel}
                 </p>
               )}
-              <p className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-                {v.durationSec != null && (
-                  <span>{formatDuration(v.durationSec)}</span>
-                )}
+              <p className="mt-0.5 flex min-w-0 items-center gap-2 text-xs text-muted">
+                {v.facts && <span className="truncate">{v.facts}</span>}
                 {v.live && <LiveNowLabel />}
                 {v.downloaded && <DownloadedBadge />}
               </p>

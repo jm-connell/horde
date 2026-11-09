@@ -12,6 +12,7 @@ export const queryKeys = {
     download: (url: string) => ["preview", "download", url] as const,
     ai: (url: string) => ["preview", "ai", url] as const,
     related: (url: string) => ["preview", "related", url] as const,
+    game: (url: string) => ["preview", "game", url] as const,
   },
   discover: {
     tuning: ["discover", "tuning"] as const,

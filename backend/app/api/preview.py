@@ -14,17 +14,29 @@ from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
+from .. import e2e_mode
 from ..auth import current_user
 from ..context import get_engine, get_session
-from ..errors import extraction_error
+from ..errors import CodedHTTPException, extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,
     RAW,
     SUBTITLES,
     VIDEO_STREAM,
 )
-from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, stream_preview, stream_related
+from ..schemas import (
+    NextPartRead,
+    StreamGameRead,
+    StreamPreviewMeta,
+    StreamRelatedPage,
+)
+from ..services import (
+    library,
+    next_part,
+    stream_preview,
+    stream_related,
+    video_game,
+)
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
@@ -421,7 +433,32 @@ def preview_meta(
         is_live=bool(meta.get("is_live")),
         was_live=bool(meta.get("was_live")),
         storyboard=meta.get("storyboard"),
+        published_at=meta.get("published_at"),
+        published_label=meta.get("published_label"),
+        concurrent_viewers=meta.get("concurrent_viewers"),
+        categories=meta.get("categories") or [],
     )
+
+
+@router.get("/game", response_model=StreamGameRead)
+async def preview_game(
+    request: Request, url: str = Query(..., max_length=2048)
+) -> StreamGameRead:
+    """The game card under a YouTube video's description (one page read, kept a
+    week). The page asks only for videos in YouTube's Gaming category."""
+    yt_id = youtube_video_id(url)
+    if not yt_id:
+        raise CodedHTTPException(400, "Not a YouTube video URL", "invalid_url")
+    games = video_game.cache()
+    known, game = games.get(yt_id)
+    if not known and not e2e_mode.enabled():
+        try:
+            async with request.app.state.ytdlp_slots.slot():
+                game = await run_in_threadpool(video_game.read_game, yt_id)
+        except video_game.GameUnreadable:
+            logger.debug("could not read the watch page of %s", yt_id, exc_info=True)
+        games.put(yt_id, game)
+    return StreamGameRead(game=game)
 
 
 async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:

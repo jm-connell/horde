@@ -2812,6 +2812,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/preview/game": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Game
+         * @description The game card under a YouTube video's description (one page read, kept a
+         *     week). The page asks only for videos in YouTube's Gaming category.
+         */
+        get: operations["preview_game_api_preview_game_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/preview/manifest": {
         parameters: {
             query?: never;
@@ -5890,10 +5911,14 @@ export interface components {
             channel?: string | null;
             /** Channel Url */
             channel_url?: string | null;
+            /** Concurrent Viewers */
+            concurrent_viewers?: number | null;
             /** Dislike Count */
             dislike_count?: number | null;
             /** Duration */
             duration?: number | null;
+            /** Game */
+            game?: string | null;
             /** Id */
             id?: string | null;
             /**
@@ -8760,6 +8785,14 @@ export interface components {
             /** Youtube Id */
             youtube_id?: string | null;
         };
+        /**
+         * StreamGameRead
+         * @description The game YouTube shows under a Gaming video's description, if any.
+         */
+        StreamGameRead: {
+            /** Game */
+            game?: string | null;
+        };
         /** StreamPreviewMeta */
         StreamPreviewMeta: {
             /**
@@ -8767,10 +8800,17 @@ export interface components {
              * @default []
              */
             available_presets: string[];
+            /**
+             * Categories
+             * @default []
+             */
+            categories: string[];
             /** Channel */
             channel?: string | null;
             /** Channel Url */
             channel_url?: string | null;
+            /** Concurrent Viewers */
+            concurrent_viewers?: number | null;
             /** Description */
             description?: string | null;
             /** Duration */
@@ -8786,6 +8826,10 @@ export interface components {
             library_video_id?: number | null;
             /** Preview Height */
             preview_height?: number | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Published Label */
+            published_label?: string | null;
             /** Source Url */
             source_url?: string | null;
             storyboard?: components["schemas"]["StoryboardRead"] | null;
@@ -16781,6 +16825,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StreamAiRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_game_api_preview_game_get: {
+        parameters: {
+            query: {
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StreamGameRead"];
                 };
             };
             /** @description Validation error */

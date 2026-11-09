@@ -38,6 +38,7 @@ export type DownloadJob = S["DownloadJobRead"];
 export type ClipCreate = S["ClipCreate"];
 export type DownloadPreview = S["DownloadPreview"];
 export type StreamPreviewMeta = S["StreamPreviewMeta"];
+export type StreamGame = S["StreamGameRead"];
 export type StreamAi = S["StreamAiRead"];
 export type StreamRelatedPage = S["StreamRelatedPage"];
 export type DownloadBulkSkip = S["DownloadBulkSkip"];

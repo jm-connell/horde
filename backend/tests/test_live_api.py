@@ -631,3 +631,65 @@ def test_preview_meta_is_live_defaults_to_false(client, monkeypatch):
     assert resp.status_code == 200
     assert resp.json()["is_live"] is False
     assert resp.json()["was_live"] is False
+
+
+def test_preview_meta_carries_the_post_date_viewers_and_categories(client, monkeypatch):
+    from app.services import stream_preview
+
+    info = {
+        "id": VID,
+        "title": "Major final",
+        "upload_date": "20261102",
+        "concurrent_view_count": 48213,
+        "categories": ["Gaming"],
+        "formats": [],
+    }
+    monkeypatch.setattr(stream_preview, "_extract_preview_info", lambda url: info)
+    meta = stream_preview.extract_stream_preview_meta(
+        f"https://www.youtube.com/watch?v={VID}"
+    )
+    assert meta["published_at"].startswith("2026-11-02")
+    assert meta["concurrent_viewers"] == 48213
+    assert meta["categories"] == ["Gaming"]
+    monkeypatch.setattr(
+        "app.services.stream_preview.extract_stream_preview_meta", lambda url: meta
+    )
+    body = client.get(
+        "/api/preview/meta", params={"url": f"https://www.youtube.com/watch?v={VID}"}
+    ).json()
+    assert body["published_at"].startswith("2026-11-02")
+    assert body["concurrent_viewers"] == 48213
+    assert body["categories"] == ["Gaming"]
+
+
+def test_preview_game_reads_the_card_once(client, monkeypatch):
+    import json
+
+    from app.services import video_game
+    from app.services.url_safety import FetchResult
+
+    data = {
+        "richMetadataRenderer": {
+            "style": "RICH_METADATA_RENDERER_STYLE_BOX_ART",
+            "title": {"simpleText": "Counter-Strike 2"},
+        }
+    }
+    page = f"<script>var ytInitialData = {json.dumps(data)};</script>".encode()
+    fetched: list[str] = []
+
+    def fetch(url, **_kw):
+        fetched.append(url)
+        return FetchResult(page, "text/html", url)
+
+    monkeypatch.setattr(video_game, "fetch_bytes", fetch)
+    monkeypatch.setattr("app.api.preview.e2e_mode.enabled", lambda: False)
+    url = f"https://www.youtube.com/watch?v={VID}"
+    for _ in range(2):
+        resp = client.get("/api/preview/game", params={"url": url})
+        assert resp.status_code == 200, resp.text
+        assert resp.json() == {"game": "Counter-Strike 2"}
+    assert fetched == [f"https://www.youtube.com/watch?v={VID}"]
+
+    bad = client.get("/api/preview/game", params={"url": "https://vimeo.com/1"})
+    assert bad.status_code == 400
+    assert bad.json()["code"] == "invalid_url"

@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 from xml.sax.saxutils import escape as xml_escape
 
+from .feed_meta_cache import published_meta_from_entry
 from .url_safety import UnsafeUrlError, fetch_bytes
 from .ytdlp_common import (
     EXTRACT_PRIORITY_INTERACTIVE,
@@ -691,6 +692,9 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         except TypeError, ValueError:
             duration = None
     source = info.get("webpage_url") or info.get("original_url") or url
+    published = published_meta_from_entry(info)
+    viewers = info.get("concurrent_view_count")
+    categories = [str(c) for c in info.get("categories") or [] if isinstance(c, str)]
     subtitles = [
         {"lang": t["lang"], "auto": t["auto"]} for t in _collect_preview_subtitles(info)
     ]
@@ -711,6 +715,12 @@ def extract_stream_preview_meta(url: str) -> dict[str, Any]:
         "was_live": info.get("was_live") is True
         or info.get("live_status") in ("was_live", "post_live"),
         "storyboard": _storyboard(info),
+        "published_at": published.iso,
+        "published_label": published.label,
+        "concurrent_viewers": int(viewers)
+        if isinstance(viewers, (int, float)) and viewers > 0
+        else None,
+        "categories": categories,
     }
 
 

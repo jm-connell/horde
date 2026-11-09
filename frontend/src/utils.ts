@@ -291,6 +291,12 @@ export function formatCompactCount(count: number): string {
   return String(count);
 }
 
+/** A live broadcast's audience right now: "12K watching". */
+export function formatWatching(count: number | null | undefined): string {
+  if (count == null || count <= 0) return "";
+  return `${count < 1_000 ? count : formatCompactCount(count)} watching`;
+}
+
 export function formatViewCount(count: number | null): string {
   if (count === null || count < 0) return "";
   if (count < 1_000) return `${count} views`;

@@ -3798,6 +3798,17 @@
             ],
             "title": "Channel Url"
           },
+          "concurrent_viewers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrent Viewers"
+          },
           "dislike_count": {
             "anyOf": [
               {
@@ -3819,6 +3830,17 @@
               }
             ],
             "title": "Duration"
+          },
+          "game": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game"
           },
           "id": {
             "anyOf": [
@@ -11920,6 +11942,24 @@
         "title": "StreamAiRead",
         "type": "object"
       },
+      "StreamGameRead": {
+        "description": "The game YouTube shows under a Gaming video's description, if any.",
+        "properties": {
+          "game": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Game"
+          }
+        },
+        "title": "StreamGameRead",
+        "type": "object"
+      },
       "StreamPreviewMeta": {
         "properties": {
           "available_presets": {
@@ -11928,6 +11968,14 @@
               "type": "string"
             },
             "title": "Available Presets",
+            "type": "array"
+          },
+          "categories": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Categories",
             "type": "array"
           },
           "channel": {
@@ -11951,6 +11999,17 @@
               }
             ],
             "title": "Channel Url"
+          },
+          "concurrent_viewers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Concurrent Viewers"
           },
           "description": {
             "anyOf": [
@@ -12011,6 +12070,28 @@
               }
             ],
             "title": "Preview Height"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "published_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Label"
           },
           "source_url": {
             "anyOf": [
@@ -24150,6 +24231,60 @@
           }
         },
         "summary": "Summarize Stream",
+        "tags": [
+          "preview"
+        ]
+      }
+    },
+    "/api/preview/game": {
+      "get": {
+        "description": "The game card under a YouTube video's description (one page read, kept a\nweek). The page asks only for videos in YouTube's Gaming category.",
+        "operationId": "preview_game_api_preview_game_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "url",
+            "required": true,
+            "schema": {
+              "maxLength": 2048,
+              "title": "Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StreamGameRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Game",
         "tags": [
           "preview"
         ]
