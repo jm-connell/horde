@@ -37,11 +37,14 @@ import {
   type HelpMessage,
   isAskState,
   isHelpThread,
+  isPromptHistory,
   parseAskVideo,
   parseReferences,
   parseScopeChannels,
   parseSources,
+  rememberPrompt,
   savedSources,
+  stepPromptHistory,
 } from "./helpChat";
 import { describePage } from "./helpPage";
 import {
@@ -283,7 +286,15 @@ export default function HelpChatPanel({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { isAdmin, can } = useAuth();
+  const { isAdmin, can, user } = useAuth();
+  // Questions sent before (this account, this device) for the Up / Down keys.
+  const promptKey = `horde.help.prompts.${user?.id ?? "anon"}`;
+  const promptHistory = useRef<string[] | null>(null);
+  promptHistory.current ??= getJson(promptKey, isPromptHistory, []);
+  /** The history entry shown in the box, or null while typing a new one. */
+  const promptPos = useRef<number | null>(null);
+  /** What was being typed before stepping into the history. */
+  const promptStash = useRef("");
   const [settings] = useSettings();
   // A new set each time the panel opens (it mounts on open).
   const [prompts] = useState(() =>
@@ -362,6 +373,9 @@ export default function HelpChatPanel({
     if (!text || sending) return;
     setDraft("");
     setError(null);
+    promptHistory.current = rememberPrompt(promptHistory.current ?? [], text);
+    setJson(promptKey, promptHistory.current);
+    promptPos.current = null;
     if (isWhatCanYouDo(text)) {
       // Answered here: it is about this app, not something to look up.
       const stamp = Date.now();
@@ -1039,12 +1053,46 @@ export default function HelpChatPanel({
           id={inputId}
           ref={inputRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            promptPos.current = null;
+            setDraft(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter" && !e.shiftKey) {
               e.preventDefault();
               void send(draft);
+              return;
             }
+            // Up on the first line / Down on the last: earlier questions.
+            if (
+              (e.key !== "ArrowUp" && e.key !== "ArrowDown") ||
+              e.shiftKey ||
+              e.altKey ||
+              e.metaKey ||
+              e.ctrlKey
+            )
+              return;
+            const box = e.currentTarget;
+            const up = e.key === "ArrowUp";
+            const caret = box.selectionStart;
+            const onEdge = up
+              ? !box.value.slice(0, caret).includes("\n")
+              : !box.value.slice(box.selectionEnd).includes("\n");
+            if (!onEdge) return;
+            const step = stepPromptHistory(
+              promptHistory.current ?? [],
+              promptPos.current,
+              up ? -1 : 1
+            );
+            if (!step) return;
+            e.preventDefault();
+            if (promptPos.current === null) promptStash.current = draft;
+            promptPos.current = step.pos;
+            const text = step.text ?? promptStash.current;
+            setDraft(text);
+            requestAnimationFrame(() =>
+              box.setSelectionRange(text.length, text.length)
+            );
           }}
           rows={2}
           maxLength={4000}

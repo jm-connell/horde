@@ -742,3 +742,38 @@ test("the chat minimizes to a bar and comes back as it was", async ({
   await page.getByRole("button", { name: "Ask", exact: true }).click();
   await expect(panel).not.toHaveAttribute("data-minimized", "true");
 });
+
+test("Up and Down in the question box step through earlier questions", async ({
+  page,
+}) => {
+  await stubAnswer(page, "Sure.");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const panel = await ask(page, "first question");
+  await expect(panel.getByText("Sure.").first()).toBeVisible();
+  await ask(page, "second question");
+  await expect(panel.getByText("Sure.").nth(1)).toBeVisible();
+  const input = panel.getByRole("textbox", { name: "Your question" });
+  await input.fill("half typed");
+  await input.press("ArrowUp");
+  await expect(input).toHaveValue("second question");
+  await input.press("ArrowUp");
+  await expect(input).toHaveValue("first question");
+  await input.press("ArrowDown");
+  await input.press("ArrowDown");
+  // Past the newest, what was being typed comes back.
+  await expect(input).toHaveValue("half typed");
+
+  // They are remembered after the app is reopened.
+  await page.reload();
+  const dialog = page.getByRole("dialog", { name: "Ask", exact: true });
+  await expect(
+    page.getByRole("button", { name: "Ask", exact: true })
+  ).toBeVisible();
+  await page.waitForTimeout(500);
+  if (!(await dialog.isVisible()))
+    await page.getByRole("button", { name: "Ask", exact: true }).click();
+  const again = dialog.getByRole("textbox", { name: "Your question" });
+  await again.press("ArrowUp");
+  await expect(again).toHaveValue("second question");
+});

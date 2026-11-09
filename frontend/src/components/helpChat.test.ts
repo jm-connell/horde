@@ -6,7 +6,10 @@ import {
   parseAskVideo,
   isHelpThread,
   parseSources,
+  PROMPT_HISTORY_MAX,
+  rememberPrompt,
   savedSources,
+  stepPromptHistory,
 } from "./helpChat";
 
 const msg = (i: number, content = `turn ${i}`): HelpMessage => ({
@@ -105,5 +108,30 @@ describe("videos Ask answers from", () => {
     expect(isAskState({ threadId: null, scope: [], video: { id: 1 } })).toBe(
       false
     );
+  });
+});
+
+describe("prompt history", () => {
+  it("remembers questions, not twice in a row, and keeps the last 50", () => {
+    let h: string[] = [];
+    h = rememberPrompt(h, " first ");
+    h = rememberPrompt(h, "first");
+    h = rememberPrompt(h, "second");
+    expect(h).toEqual(["first", "second"]);
+    for (let i = 0; i < 60; i++) h = rememberPrompt(h, `q${i}`);
+    expect(h).toHaveLength(PROMPT_HISTORY_MAX);
+    expect(h[h.length - 1]).toBe("q59");
+  });
+
+  it("steps back and forward like a terminal", () => {
+    const h = ["a", "b"];
+    expect(stepPromptHistory(h, null, -1)).toEqual({ pos: 1, text: "b" });
+    expect(stepPromptHistory(h, 1, -1)).toEqual({ pos: 0, text: "a" });
+    expect(stepPromptHistory(h, 0, -1)).toBeNull();
+    expect(stepPromptHistory(h, 0, 1)).toEqual({ pos: 1, text: "b" });
+    // Past the newest: back to what was being typed.
+    expect(stepPromptHistory(h, 1, 1)).toEqual({ pos: null, text: null });
+    expect(stepPromptHistory(h, null, 1)).toBeNull();
+    expect(stepPromptHistory([], null, -1)).toBeNull();
   });
 });

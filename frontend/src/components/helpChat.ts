@@ -200,3 +200,36 @@ export function isHelpThread(value: unknown): value is HelpMessage[] {
     )
   );
 }
+
+/** Questions remembered for the chat box's Up / Down keys. */
+export const PROMPT_HISTORY_MAX = 50;
+
+export function isPromptHistory(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((v) => typeof v === "string");
+}
+
+/** The history with `text` added last (a repeat of the last one is not added twice). */
+export function rememberPrompt(history: string[], text: string): string[] {
+  const t = text.trim();
+  if (!t) return history;
+  const next = history[history.length - 1] === t ? history : [...history, t];
+  return next.slice(-PROMPT_HISTORY_MAX);
+}
+
+/**
+ * Step through the history like a terminal: `pos` is the entry shown (null
+ * while typing a new question). Up goes back, Down forward; past the newest
+ * entry the question being typed comes back. Returns the new position and the
+ * text to show, or null when there is nowhere to go.
+ */
+export function stepPromptHistory(
+  history: string[],
+  pos: number | null,
+  dir: -1 | 1
+): { pos: number | null; text: string | null } | null {
+  const at = pos ?? history.length;
+  const next = at + dir;
+  if (next < 0 || (at === history.length && dir === 1)) return null;
+  if (next >= history.length) return { pos: null, text: null };
+  return { pos: next, text: history[next] };
+}

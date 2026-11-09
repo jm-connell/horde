@@ -58,7 +58,7 @@ This needs **AI video chat** on (Settings → AI → Features); with it off, vid
 
 ## Conversations
 
-Conversations are saved on the server for your account (nobody else sees them). **History** in Ask lists them, whether they were answered from Horde, a video or channels; **New chat** starts another.
+Conversations are saved on the server for your account (nobody else sees them). **History** in Ask lists them, whether they were answered from Horde, a video or channels; **New chat** starts another. In the question box, **↑** (on its first line) and **↓** (on its last) step through the questions you asked before, as in a terminal; the last 50 are kept on the device.
 
 ## What it needs
 
