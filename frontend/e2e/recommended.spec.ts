@@ -490,3 +490,12 @@ test.describe("with a changed ranking on the server", () => {
     await expect.poll(() => cardOrder(page)).toEqual([...before].reverse());
   });
 });
+
+test("Recommended shows Continue watching too, like Library", async ({
+  page,
+}) => {
+  await openRecommended(page);
+  await expect(
+    page.getByRole("heading", { name: "Continue watching" })
+  ).toBeVisible();
+});

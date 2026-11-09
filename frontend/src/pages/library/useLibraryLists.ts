@@ -38,10 +38,8 @@ export function useLibraryLists(input: {
     const matchIds = new Set(videos.map((v) => v.id));
     return restList.videos.filter((v) => !matchIds.has(v.id));
   }, [debouncedSearch, videos, restList.videos]);
-  const continueWatching = useVideoList(
-    { continue_watching: true },
-    !skipLibrary
-  ).videos;
+  // Shown on the Recommended tab as well.
+  const continueWatching = useVideoList({ continue_watching: true }).videos;
   const channels =
     useChannels(input.channelSort, input.channelOrder).data ?? NO_CHANNELS;
   const tags =

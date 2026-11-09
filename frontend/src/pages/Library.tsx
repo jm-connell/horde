@@ -236,7 +236,6 @@ function OnlineLibrary() {
     settings.showContinueWatching &&
     !activeChannel &&
     !activeTag &&
-    !onRecommendedTab &&
     !debouncedSearch &&
     visibleContinueWatching.length + continueYoutube.length > 0;
 
@@ -378,7 +377,7 @@ function OnlineLibrary() {
           </p>
         )}
 
-        {showContinueRow && !onChannelPage && !onRecommendedTab && (
+        {showContinueRow && !onChannelPage && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
             youtube={continueYoutube}

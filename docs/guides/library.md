@@ -95,7 +95,7 @@ For API clients: the `204` of `DELETE /api/videos/{id}?delete_file=true` and of 
 
 ## Continue watching
 
-On the home Library tab (not Recommended, not a channel page), Horde shows a **Continue watching** row for videos with meaningful in-progress playback. Resuming opens the [watch page](watching.md) at the saved position.
+On the home Library and Recommended tabs (not a channel page), Horde shows a **Continue watching** row for videos with meaningful in-progress playback. Resuming opens the [watch page](watching.md) at the saved position.
 
 !!! note "Window vs expiry"
     The continue-watching list uses a fixed backend window of **7 days** (not user-configurable). Separate from that, [progress expiry](history.md) (`progress_expiry_days`, default **14**) clears stale `last_position_sec` values.
