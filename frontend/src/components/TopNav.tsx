@@ -255,16 +255,15 @@ export default function TopNav() {
 
   const openSearch = () => {
     // Render the box and focus it within the tap: iOS only raises the
-    // keyboard for a focus made while handling the user's gesture.
+    // keyboard for a focus made while handling the user's gesture. It opens
+    // where we are (the watch page keeps playing); typing goes home
+    // (onSearchInput).
     flushSync(() => {
       setMenuOpen(false);
       setNavHidden(false);
       setSearchOpen(true);
     });
     (useHamburger ? searchInputRef : desktopSearchRef).current?.focus();
-    if (location.pathname !== "/" || location.search) {
-      navigate({ pathname: "/", search: "" });
-    }
   };
 
   // The installed app's tab bar has a Search tab (BottomTabBar). No

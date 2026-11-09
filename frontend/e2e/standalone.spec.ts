@@ -215,7 +215,8 @@ test("the Search tab opens the search box and Ask opens the chat", async ({
   await launch(page, "/history");
   const tabs = page.getByRole("navigation", { name: "Tabs" });
   await tabs.getByRole("button", { name: "Search" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  // The box opens where we are; typing is what goes to the results.
+  await expect(page).toHaveURL(/\/history$/);
   await expect(
     page.getByRole("searchbox", { name: "Search library" })
   ).toBeFocused();
@@ -440,4 +441,20 @@ test("pulling Recommended down reshuffles it", async ({ page }) => {
   );
   await drag(cdp, downwards(260, 560, 200));
   await refreshed;
+});
+
+test("Search on the watch page opens the box without leaving the video", async ({
+  page,
+}) => {
+  await openFirstVideo(page);
+  const watching = page.url();
+  const tabs = page.getByRole("navigation", { name: "Tabs" });
+  await tabs.getByRole("button", { name: "Search" }).click();
+  const box = page.getByRole("searchbox", { name: "Search library" });
+  await expect(box).toBeFocused();
+  expect(page.url()).toBe(watching);
+  await expect(page.locator("video").first()).toBeAttached();
+  // Typing a query shows its results on the home page.
+  await box.fill("kiln");
+  await expect(page).toHaveURL(/\/$/);
 });
