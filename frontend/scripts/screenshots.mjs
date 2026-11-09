@@ -51,6 +51,11 @@ const SHOTS = [
     hint: "Open a channel with downloaded videos and undownloaded catalog entries.",
   },
   {
+    name: "subscriptions",
+    path: "/subscriptions",
+    hint: "With a good number of followed channels.",
+  },
+  {
     name: "downloads",
     path: "/download",
     hint: "Ideally with a few items in the queue.",
