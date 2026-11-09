@@ -11,7 +11,7 @@ body:
     attributes:
       label: Horde version
       description: Settings → System → Updates, or `curl -s http://<host>:8686/api/health` while signed in. "Report a bug or idea" in Horde's footer fills this in.
-      placeholder: "1.3.0"
+      placeholder: "1.3.1"
     validations:
       required: true
   - type: dropdown
