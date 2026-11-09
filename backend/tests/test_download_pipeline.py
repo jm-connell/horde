@@ -49,10 +49,10 @@ def fake(init_db, monkeypatch):
     return f
 
 
-def _add_job(init_db, url: str = URL, **fields) -> int:
+def _add_job(init_db, url: str = URL, quality_preset: str = "best", **fields) -> int:
     with Session(init_db["engine"]) as s:
         job = DownloadJob(
-            url=url, quality_preset="best", status=JobStatus.queued, **fields
+            url=url, quality_preset=quality_preset, status=JobStatus.queued, **fields
         )
         s.add(job)
         s.commit()
@@ -148,6 +148,56 @@ def test_failed_format_falls_back_to_the_next_selector(init_db, fake):
     assert [d["opts"]["format"] for d in fake.downloads] == chain[:2]
     assert _job(init_db, job_id).status == JobStatus.completed
     assert len(_videos(init_db)) == 1
+
+
+def test_a_height_cap_on_a_link_without_video_downloads_the_audio(init_db, fake):
+    """A default quality such as 1080p reaches audio-only links (podcasts,
+    SoundCloud) from places that cannot see the formats first. Every
+    height-capped selector matches nothing there, so the job falls back to
+    the selectors of "best" instead of failing."""
+    from app.services.ytdlp_formats import format_chain
+
+    url = "https://soundcloud.example.test/artist/track"
+    fake.add(
+        url,
+        make_info(
+            "track01",
+            "Track",
+            width=None,
+            height=None,
+            formats=[{"format_id": "mp3", "vcodec": "none", "acodec": "mp3"}],
+        ),
+    )
+
+    def no_video_formats(_path, _info):
+        if "height" in fake.downloads[-1]["opts"]["format"]:
+            raise RuntimeError("Requested format is not available")
+
+    fake.before_merge = no_video_formats
+    job_id = _add_job(init_db, url=url, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    tried = [d["opts"]["format"] for d in fake.downloads]
+    # Every capped selector first (the runner pins the link's own audio
+    # stream in them), then the first selector of "best", which has no cap.
+    capped = len(format_chain("1080p", "av1"))
+    assert len(tried) == capped + 1
+    assert all("height" in fmt for fmt in tried[:capped])
+    assert "height" not in tried[-1]
+    assert _job(init_db, job_id).status == JobStatus.completed
+
+
+def test_a_height_cap_never_falls_back_to_best_on_a_video(init_db, fake):
+    def nothing_under_the_cap(_path, _info):
+        if "height" in fake.downloads[-1]["opts"]["format"]:
+            raise RuntimeError("Requested format is not available")
+
+    fake.before_merge = nothing_under_the_cap
+    job_id = _add_job(init_db, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    assert all("height" in d["opts"]["format"] for d in fake.downloads)
+    assert _job(init_db, job_id).status == JobStatus.error
 
 
 def test_every_selector_failing_ends_the_job_in_error(init_db, fake):

@@ -8,7 +8,12 @@ import { isActiveJob, useDownloads } from "../../context/DownloadContext";
 import { usePlaybackActions } from "../../context/PlaybackContext";
 import { useConfirm } from "../../context/ConfirmContext";
 import { useToast } from "../../context/ToastContext";
-import { PRESET_ORDER, resolveQualityPreset } from "../../presets";
+import { useSettings } from "../../hooks/useSettings";
+import {
+  PRESET_ORDER,
+  defaultPresetFor,
+  resolveQualityPreset,
+} from "../../presets";
 import { downloadProgressPercent } from "../../utils";
 import { isLongStream, longStreamConfirm } from "../../utils/longStream";
 import { setWatchResume } from "../../utils/watchHandoff";
@@ -16,10 +21,6 @@ import type { WatchSource } from "./useWatchVideo";
 
 const STAY_DOWNLOAD_TOAST =
   "Downloading - Video will switch to full quality when ready";
-
-function bestAvailablePreset(presets: string[]): string {
-  return resolveQualityPreset("best", presets);
-}
 
 function orderPresets(presets: string[]): string[] {
   const set = new Set(presets);
@@ -44,6 +45,12 @@ export function useStreamDownload({
   channelParam: string;
 }) {
   const navigate = useNavigate();
+  const [settings] = useSettings();
+  const defaultPreset = settings.defaultDownloadPreset;
+  // Read by the reset below, which runs per stream: a default changed in
+  // another tab must not throw away a quality picked here.
+  const defaultPresetRef = useRef(defaultPreset);
+  defaultPresetRef.current = defaultPreset;
   const queryClient = useQueryClient();
   const { showToast, showError } = useToast();
   const confirm = useConfirm();
@@ -54,7 +61,7 @@ export function useStreamDownload({
   // Stream download controls
   const [queuing, setQueuing] = useState(false);
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState("best");
+  const [selectedPreset, setSelectedPreset] = useState(defaultPreset);
   const [availablePresets, setAvailablePresets] = useState<string[]>([]);
   const [presetSizes, setPresetSizes] = useState<Record<string, number>>({});
   const [presetMenuOpen, setPresetMenuOpen] = useState(false);
@@ -66,7 +73,7 @@ export function useStreamDownload({
 
   useEffect(() => {
     if (libraryValid || !streamUrlParam) return;
-    setSelectedPreset("best");
+    setSelectedPreset(defaultPresetRef.current);
     setAvailablePresets([]);
     setPresetSizes({});
     setPresetMenuOpen(false);
@@ -89,8 +96,9 @@ export function useStreamDownload({
       const ordered = orderPresets(presetsList);
       if (ordered.length === 0) return;
       setAvailablePresets(ordered);
-      if (!userPickedPresetRef.current) {
-        setSelectedPreset(bestAvailablePreset(ordered));
+      // A queued job keeps its own quality: leave the selection matching it.
+      if (!userPickedPresetRef.current && activeJobIdRef.current == null) {
+        setSelectedPreset(defaultPresetFor(defaultPreset, ordered));
       }
     };
     if (streamMetaPresets?.length) applyPresets(streamMetaPresets);
@@ -100,7 +108,7 @@ export function useStreamDownload({
     if (p.preset_sizes && Object.keys(p.preset_sizes).length > 0) {
       setPresetSizes(p.preset_sizes);
     }
-  }, [streamMetaPresets, streamPreviewData]);
+  }, [streamMetaPresets, streamPreviewData, defaultPreset]);
 
   useEffect(() => {
     if (!presetMenuOpen) return;
@@ -270,8 +278,8 @@ export function useStreamDownload({
       activeJobId != null ? jobs.find((j) => j.id === activeJobId) : undefined;
     const fromJob = job?.available_presets ?? [];
     if (fromJob.length > 0) return orderPresets(fromJob);
-    return ["best"];
-  }, [availablePresets, activeJobId, jobs]);
+    return [defaultPreset];
+  }, [availablePresets, activeJobId, jobs, defaultPreset]);
 
   return {
     queuing,

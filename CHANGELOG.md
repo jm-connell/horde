@@ -7,7 +7,11 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
-## [1.3.0] - 2026-11-08
+## [1.3.1] - 2026-11-08
+
+This is the release planned as 1.3.0. The `v1.3.0` tag was put on the wrong
+commit and never built, so there is no 1.3.0 image or release; update straight
+from 1.2.x to 1.3.1.
 
 ### Added
 
@@ -52,6 +56,12 @@ All notable changes to Horde are documented here. The format follows
 - **Minimize Ask.** A button in its header folds the chat to a small bar at
   the bottom of the window, keeping the conversation and a half-typed
   question; the bar or the top bar's **Ask** brings it back as it was.
+- **Default quality.** Pick the quality every download you start uses
+  unless you choose another: the Download page, the watch page, the
+  one-click download buttons, playlist subscriptions, channel pages and
+  Ask. Set it in the setup wizard's Downloads step or Settings → Library →
+  Downloads (Best available by default); it is saved with your account.
+  Channel auto-download keeps its own per-channel quality.
 
 ### Changed
 
@@ -100,6 +110,12 @@ All notable changes to Horde are documented here. The format follows
   or video. Settings → Library → Ask channels is now **Channels Ask can
   answer from**, and the permission **Manage channel indexing**. The button
   that docks the chat at the side is an expand arrow.
+- The one-click download buttons (Recommended, Continue watching, search
+  results, History, rewatched suggestions) use your default quality. They
+  always downloaded 1080p before; set Default quality to 1080p to keep that.
+- A resolution picked on a channel page applies until you leave the page,
+  instead of being remembered in the browser; the default quality covers
+  the rest.
 
 ### Fixed
 
@@ -117,6 +133,9 @@ All notable changes to Horde are documented here. The format follows
   `git clone`.
 - A broken link from Comments to "Chat about a video" in the AI features
   guide.
+- A download capped at a resolution (such as 1080p) from a link with no
+  video, like a podcast or a SoundCloud track, downloads the audio instead
+  of failing.
 
 ### Upgrade notes
 
@@ -124,18 +143,18 @@ All notable changes to Horde are documented here. The format follows
   `HORDE_IMAGE` in `.env`) switches to the published image at its first
   update to this release. To keep building, add
   `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` to `.env`
-  once you are on 1.3.0, not before: the file it names does not exist in
+  once you are on 1.3.1, not before: the file it names does not exist in
   1.2.x, so a rollback to 1.2.x would leave Compose unable to start Horde.
   If you have a `docker-compose.override.yml`, append
   `:docker-compose.override.yml` to that line, since `COMPOSE_FILE`
   replaces Compose's automatic use of it. On `HORDE_UPDATE_CHANNEL=main`,
-  the first update after 1.3.0 adds the line itself.
+  the first update after 1.3.1 adds the line itself.
 - A `HORDE_IMAGE` pinned to a version (`:1.2.2`) stays on that version, and
-  from 1.3.0 on `update.sh` stops instead of reporting an update; remove the
+  from 1.3.1 on `update.sh` stops instead of reporting an update; remove the
   line, or end it in `:latest`, to update.
 - Following `HORDE_UPDATE_CHANNEL=main` from 1.2.x: wait until this release
   is out before updating. The old `update.sh` starts the newest release
-  image rather than building `main`; once on 1.3.0, the next update switches
+  image rather than building `main`; once on 1.3.1, the next update switches
   to building.
 - An install already stopped by "would go BACKWARDS" (cloned from `main`,
   running the published image) updates normally again once this release is
@@ -1092,8 +1111,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.3.0...main
-[1.3.0]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.0
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.3.1...main
+[1.3.1]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.1
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0

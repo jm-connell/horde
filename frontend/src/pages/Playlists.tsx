@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../context/AuthContext";
+import { useSettings } from "../hooks/useSettings";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { describeError } from "../apiErrors";
@@ -25,7 +26,10 @@ export default function Playlists() {
   const { playlists, isPending: loading } = usePlaylists();
   const [name, setName] = useState("");
   const [subscribeUrl, setSubscribeUrl] = useState("");
-  const [subscribePreset, setSubscribePreset] = useState("best");
+  const [settings] = useSettings();
+  // Null until the user picks one: their default quality.
+  const [pickedPreset, setPickedPreset] = useState<string | null>(null);
+  const subscribePreset = pickedPreset ?? settings.defaultDownloadPreset;
   const allPresets = usePresets([...PRESET_ORDER]);
   // Anyone may make a private playlist; App-wide takes the Manage playlists grant.
   const canShare = can("manage_playlists");
@@ -209,7 +213,7 @@ export default function Playlists() {
                     value: p,
                     label: presetOptionLabel(p, undefined),
                   }))}
-                  onChange={setSubscribePreset}
+                  onChange={setPickedPreset}
                   className="w-44 shrink-0"
                   buttonClassName="w-full py-2"
                 />

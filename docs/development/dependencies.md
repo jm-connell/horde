@@ -83,3 +83,11 @@ npm audit --omit=dev --audit-level=high
 
 Node 24 or newer is required (`engines` in `package.json`); the image, CI and
 `.nvmrc` at the repo root use Node 26.
+
+`overrides` in `package.json` forces a patched version of a dependency that a
+package pins to a vulnerable range. Today it holds one: `minimatch` 11 for
+`@typescript-eslint/typescript-estree`, which still asks for 10.x
+([GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249);
+lint-time only, nothing ships in the image). Remove it once a
+`typescript-eslint` release depends on `minimatch` 11.0.1 or newer, then run
+`npm install` and `npm audit`.

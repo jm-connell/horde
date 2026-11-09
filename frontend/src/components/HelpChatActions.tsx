@@ -357,7 +357,10 @@ function DownloadCard({
   const { can } = useAuth();
   const { submitDownload } = useDownloads();
   const presets = usePresets();
-  const [preset, setPreset] = useState("best");
+  const [settings] = useSettings();
+  // Null until the user picks one: their default quality.
+  const [pickedPreset, setPickedPreset] = useState<string | null>(null);
+  const preset = pickedPreset ?? settings.defaultDownloadPreset;
   const [phase, setPhase] = useState<"idle" | "busy" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
   if (!can("download")) return null;
@@ -384,7 +387,7 @@ function DownloadCard({
               value: p,
               label: PRESET_LABELS[p] ?? p,
             }))}
-            onChange={setPreset}
+            onChange={setPickedPreset}
           />
           <button
             type="button"

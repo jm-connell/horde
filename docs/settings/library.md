@@ -56,11 +56,12 @@ Saved watch position resets after this many days of **inactivity**. Server-wide:
 
 ## Downloads
 
-Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the two personal rows below are per user.
+Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the three personal rows below are per user.
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
 | Show active download count in navigation | `showDownloadNavBadge` | `true` | Badge on Download while jobs are queued/running |
+| Default quality | `defaultDownloadPreset` | `"best"` | Quality of every download you start: the Download page, the watch page, the one-click download buttons (Recommended, Continue watching, search, History), playlist subscriptions and imports, channel pages and Ask. One of `best`, `2160p`, `1440p`, `1080p`, `720p`, `480p`, `audio`, `audio-160`, `audio-128`, `audio-64`. A cap means "up to": a video without that tier gets the best one under it, and a link with no video at all (a podcast) gets its audio. You can still pick another each time; a resolution picked on a channel page applies until you leave it. Not affected: channel auto-download (its own per-channel quality), clips, retries and re-downloads (the job's quality) |
 | Normalize volume on download | `normalizeVolumeOnDownload` | `true` | Loudness normalization via ffmpeg on new downloads |
 | Playback compatibility | `downloadVideoCodec` | `"av1"` | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (server key `download_video_codec`). Stamped onto every new download as `video_codec`. Legacy `h264` / `h265` migrate to `h264_convert`. |
 | H.264 copy resolution | `compatCopyResolution` | `"1080p"` | `1080p` \| `source` (server key `compat_copy_resolution`). Short-side cap for H.264 copies: 1080 or full size up to 4K. See [copy resolution](../guides/downloads.md#how-the-sidecar-works). |

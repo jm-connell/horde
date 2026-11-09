@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  defaultPresetFor,
   finishedQualityLabel,
   maxPresetLabel,
   mergePinnedPreset,
@@ -57,5 +58,19 @@ describe("presets", () => {
     expect(finishedQualityLabel("best", null, ["1440p", "720p"])).toBe("1440p");
     expect(finishedQualityLabel("audio", 1080)).toBe("Audio (best)");
     expect(finishedQualityLabel("720p", 720)).toBe("720p");
+  });
+
+  it("maps the default quality onto what a link offers", () => {
+    const video = ["1080p", "720p", "480p", "audio", "audio-128"];
+    expect(defaultPresetFor("best", video)).toBe("1080p");
+    expect(defaultPresetFor("720p", video)).toBe("720p");
+    // A cap above what the video has: its best tier under the cap.
+    expect(defaultPresetFor("2160p", video)).toBe("1080p");
+    // A cap below everything it has: its lowest tier.
+    expect(defaultPresetFor("480p", ["1080p", "720p", "audio"])).toBe("720p");
+    expect(defaultPresetFor("audio-64", video)).toBe("audio");
+    // An audio-only link never gets a video cap, which yt-dlp cannot satisfy.
+    expect(defaultPresetFor("1080p", ["audio", "audio-128"])).toBe("audio");
+    expect(defaultPresetFor("audio-160", ["audio-128"])).toBe("audio-128");
   });
 });

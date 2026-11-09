@@ -12,6 +12,7 @@ On a Linux host with Docker and Git:
 
 ```bash
 git clone https://github.com/jm-connell/horde.git && cd horde
+git checkout -B horde-release "$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*')"   # newest release
 cp .env.example .env    # set PUID, PGID, DOWNLOADS_PATH and DATA_PATH
 docker compose up -d
 ```
