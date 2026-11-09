@@ -58,7 +58,7 @@ test("the account menu offers account settings and sign out only", async ({
   await expect(page.getByLabel("Username")).toHaveCount(0);
 });
 
-test("a profile picture can be uploaded and removed", async ({ page }) => {
+test("a profile picture can be edited, uploaded and removed", async ({ page }) => {
   await page.goto("/account");
   const profile = page.getByRole("region", { name: "Profile" });
   await expect(profile.locator("img")).toHaveCount(0);
@@ -68,7 +68,13 @@ test("a profile picture can be uploaded and removed", async ({ page }) => {
     mimeType: "image/png",
     buffer: PNG,
   });
+  // It opens in an editor first: a round frame to crop, zoom and turn it.
+  const editor = page.getByRole("dialog", { name: "Edit profile picture" });
+  await expect(editor).toBeVisible();
+  await editor.getByRole("button", { name: "Rotate right" }).click();
+  await editor.getByRole("button", { name: "Use picture" }).click();
   await expect(page.getByText("Profile picture updated")).toBeVisible();
+  await expect(editor).toHaveCount(0);
   const picture = profile.locator('img[src*="/api/auth/avatar/"]');
   await expect(picture).toBeVisible();
   await expect

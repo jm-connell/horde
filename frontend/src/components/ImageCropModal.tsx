@@ -132,12 +132,15 @@ export default function ImageCropModal({
   file,
   title = "Edit cover",
   confirmLabel = "Use cover",
+  shape = "cover",
   onCancel,
   onConfirm,
 }: {
   file: File;
   title?: string;
   confirmLabel?: string;
+  /** "cover": a 16:9 frame; "avatar": a square, with the round picture marked. */
+  shape?: "cover" | "avatar";
   onCancel: () => void;
   onConfirm: (file: File) => void | Promise<void>;
 }) {
@@ -339,7 +342,11 @@ export default function ImageCropModal({
     setBusy(true);
     setActionError(null);
     try {
-      const next = await cropToJpegFile(image, cropInput(), "cover.jpg");
+      const next = await cropToJpegFile(
+        image,
+        cropInput(),
+        shape === "avatar" ? "avatar.jpg" : "cover.jpg"
+      );
       await onConfirm(next);
     } catch (err) {
       if (!mountedRef.current) return;
@@ -376,7 +383,9 @@ export default function ImageCropModal({
               {title}
             </h2>
             <p className="mt-1 text-sm text-gray-400">
-              Drag to reposition. Crop stays 16:9.
+              {shape === "avatar"
+                ? "Drag to reposition; the circle is what shows."
+                : "Drag to reposition. Crop stays 16:9."}
             </p>
           </div>
           <button
@@ -392,9 +401,11 @@ export default function ImageCropModal({
 
         <div
           ref={viewportRef}
-          className={`relative aspect-video w-full overflow-hidden rounded-lg bg-ink-950 ring-1 ring-ink-700 ${
-            ready ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""
-          }`}
+          className={`relative overflow-hidden rounded-lg bg-ink-950 ring-1 ring-ink-700 ${
+            shape === "avatar"
+              ? "mx-auto aspect-square w-full max-w-sm"
+              : "aspect-video w-full"
+          } ${ready ? (dragging ? "cursor-grabbing" : "cursor-grab") : ""}`}
           style={{ touchAction: "none" }}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
@@ -436,6 +447,10 @@ export default function ImageCropModal({
               <div className="absolute inset-x-0 top-1/3 h-px bg-white/20" />
               <div className="absolute inset-x-0 top-2/3 h-px bg-white/20" />
               <div className="absolute inset-0 rounded-lg ring-1 ring-inset ring-white/25" />
+              {shape === "avatar" && (
+                // What shows in the round picture; the corners are cut off.
+                <div className="absolute inset-0 rounded-full shadow-[0_0_0_9999px_rgba(0,0,0,0.45)] ring-1 ring-white/40" />
+              )}
             </div>
           ) : null}
           {!ready && !loadError ? (

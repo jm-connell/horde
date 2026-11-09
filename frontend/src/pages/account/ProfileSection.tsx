@@ -1,6 +1,7 @@
-import { useRef, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { api } from "../../api";
 import UserAvatar from "../../components/auth/UserAvatar";
+import { ImageCropModal } from "../../components/lazy";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
 import { PANEL_BTN } from "../settings/constants";
@@ -11,6 +12,8 @@ export default function ProfileSection() {
   const { showToast, showError } = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  /** A picked picture being cropped, rotated and zoomed before it is saved. */
+  const [draft, setDraft] = useState<File | null>(null);
   if (!user) return null;
 
   const run = async (action: () => Promise<unknown>, done: string) => {
@@ -30,7 +33,7 @@ export default function ProfileSection() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    void run(() => api.uploadAvatar(file), "Profile picture updated");
+    setDraft(file);
   };
 
   const hasPicture = user.avatar_version != null;
@@ -92,10 +95,27 @@ export default function ProfileSection() {
             )}
           </div>
           <p className="text-xs text-muted">
-            Any image; it is cropped to a square.
+            Any image: crop, zoom and turn it before saving.
           </p>
         </div>
       </div>
+      {draft && (
+        <Suspense fallback={null}>
+          <ImageCropModal
+            file={draft}
+            shape="avatar"
+            title="Edit profile picture"
+            confirmLabel="Use picture"
+            onCancel={() => setDraft(null)}
+            onConfirm={async (cropped) => {
+              await api.uploadAvatar(cropped);
+              setDraft(null);
+              await refresh();
+              showToast("Profile picture updated");
+            }}
+          />
+        </Suspense>
+      )}
     </section>
   );
 }
