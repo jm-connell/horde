@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import type { ChannelFeedEntry } from "../types";
 import { queryKeys } from "./keys";
@@ -29,17 +29,33 @@ export function useStreamGame(url: string | undefined, gaming: boolean) {
   return query.data?.game ?? null;
 }
 
-/** Related videos for a stream: library and not-downloaded ones, marked. */
+/**
+ * Related videos for a stream: library and not-downloaded ones, marked, woven
+ * with YouTube's up next. Paged: `loadMore` asks for the next page.
+ */
 export function useStreamRelated(url: string | undefined) {
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: queryKeys.preview.related(url ?? ""),
-    queryFn: ({ signal }) => api.getStreamRelated(url ?? "", 24, { signal }),
+    queryFn: ({ pageParam, signal }) =>
+      api.getStreamRelated(url ?? "", 24, { signal }, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.next_cursor ?? undefined,
     enabled: !!url,
     staleTime: 5 * 60_000,
   });
   const items = useMemo<ChannelFeedEntry[]>(
-    () => query.data?.items ?? [],
+    () => (query.data?.pages ?? []).flatMap((p) => p.items),
     [query.data]
   );
-  return { items, loading: query.isLoading };
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+  const loadMore = useCallback(() => {
+    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  return {
+    items,
+    loading: query.isLoading,
+    hasMore: Boolean(hasNextPage),
+    loadingMore: isFetchingNextPage,
+    loadMore,
+  };
 }

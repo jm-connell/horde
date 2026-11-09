@@ -745,3 +745,35 @@ test("a stream shows when it was posted, its game, and dated suggestions", async
   const live = items.filter({ hasText: "Grand final, live" }).first();
   await expect(live).toContainText("48.2K watching");
 });
+
+test("a stream's suggestions keep loading as the page scrolls", async ({
+  page,
+}) => {
+  const card = (i: number) => ({
+    id: `more${String(i).padStart(7, "0")}`,
+    url: `https://video.example.test/watch?v=more${i}`,
+    title: `Suggestion ${i}`,
+    duration: 60,
+    channel: `Channel ${i}`,
+    in_library: false,
+    video_id: null,
+  });
+  await mockStream(page);
+  await page.route(/\/api\/preview\/related\?/, (route) => {
+    const cursor = new URL(route.request().url()).searchParams.get("cursor");
+    return route.fulfill({
+      json: cursor
+        ? { items: [card(99)], next_cursor: null }
+        : {
+            items: Array.from({ length: 24 }, (_, i) => card(i)),
+            next_cursor: "page-2",
+          },
+    });
+  });
+  await page.goto(WATCH);
+  const items = page.locator('[data-horde="related-item"]');
+  await expect(items.first()).toBeVisible();
+  await expect(page.getByText("Suggestion 99")).toHaveCount(0);
+  await items.last().scrollIntoViewIfNeeded();
+  await expect(page.getByText("Suggestion 99")).toBeVisible();
+});

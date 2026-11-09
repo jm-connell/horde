@@ -2923,7 +2923,8 @@ export interface paths {
         };
         /**
          * Preview Related
-         * @description Library and indexed-channel videos related to a stream.
+         * @description Videos related to a stream: library and indexed-channel ones, woven with
+         *     YouTube's own up next list. Paged; the pages of one visit share one list.
          */
         get: operations["preview_related_api_preview_related_get"];
         put?: never;
@@ -8854,7 +8855,7 @@ export interface components {
          * StreamRelatedPage
          * @description Related videos for a stream: library and not-downloaded ones, marked.
          *
-         *     One page; ``next_cursor`` is always None (kept for the list envelope).
+         *     One page of a list kept for a few minutes; ``next_cursor`` asks for the next.
          */
         StreamRelatedPage: {
             /** Items */
@@ -17096,6 +17097,7 @@ export interface operations {
             query: {
                 url: string;
                 limit?: number;
+                cursor?: string | null;
             };
             header?: never;
             path?: never;

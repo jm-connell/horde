@@ -12,11 +12,19 @@ videos, each marked with whether it is in the library:
 A live stream first lists the channel's other broadcasts that are live now, so
 a tournament's A and B streams sit side by side (``live_now_on_channel``).
 Otherwise the channel's next part of the same series leads (``next_part``).
+
+``mix_with_up_next`` then makes the list varied and long enough to scroll:
+YouTube's own up next list for the stream is woven in (a third of the first
+page, two thirds after it, so variety grows as the list is scrolled), and no
+channel takes more than ``CHANNEL_CAP`` of any ``CHANNEL_WINDOW`` cards in a
+row, so one indexed channel cannot fill the column.
 """
 
 from __future__ import annotations
 
 import logging
+import threading
+import time
 from typing import Any
 
 from sqlmodel import Session, col, select
@@ -36,6 +44,16 @@ _CATALOG_MIN_SCORE = 0.35
 _QUERY_DESCRIPTION_CHARS = 1000
 # Live broadcasts sit at the top of a channel's streams tab; a few rows is enough.
 _LIVE_SCAN = 10
+#: Local candidates gathered before mixing (the whole scrollable list).
+LOCAL_LIMIT = 72
+#: At most this many cards of one channel in any window of this many.
+CHANNEL_CAP = 2
+CHANNEL_WINDOW = 6
+#: The first page, where local picks lead.
+FIRST_PAGE = 24
+#: A stream's mixed list is kept this long, so its pages come from one list.
+LIST_TTL_SEC = 15 * 60
+LIST_CACHE_SIZE = 64
 
 
 def _query_vector(
@@ -171,6 +189,22 @@ def related_for_stream(
     stored embedding (the caller may use AI). ``live_now`` (the channel's live
     broadcasts, for a live stream) goes first.
     """
+    return related_parts(
+        session, youtube_id, meta, limit=limit, may_embed=may_embed, live_now=live_now
+    )[0]
+
+
+def related_parts(
+    session: Session,
+    youtube_id: str,
+    meta: dict[str, Any],
+    *,
+    limit: int = 24,
+    may_embed: bool = True,
+    live_now: list[ChannelFeedEntry] | None = None,
+) -> tuple[list[ChannelFeedEntry], int]:
+    """``related_for_stream``'s list, and how many entries lead it (live now,
+    next part) that must stay first."""
     out = _Collector(limit, youtube_id)
     lib_map = _LibraryIds(session)
     for entry in live_now or []:
@@ -178,6 +212,7 @@ def related_for_stream(
     following = next_part.find_stream_next_part(session, youtube_id)
     if following is not None:
         out.add(following.to_entry())
+    pinned = len(out.items)
     skipped_by_catalog: dict[int, set[str]] = {}
 
     def visible(video: ChannelCatalogVideo) -> bool:
@@ -250,4 +285,126 @@ def related_for_stream(
         )
         for row in rows:
             out.add(_catalog_entry(row, channel_name or channel or None, lib_map))
-    return out.items
+    return out.items, pinned
+
+
+def _channel_key(entry: ChannelFeedEntry) -> str:
+    return (entry.channel_url or entry.channel or "").strip().casefold()
+
+
+def diversify(
+    entries: list[ChannelFeedEntry],
+    *,
+    cap: int = CHANNEL_CAP,
+    window: int = CHANNEL_WINDOW,
+) -> list[ChannelFeedEntry]:
+    """``entries`` in about their order, but no channel more than ``cap`` times
+    in any ``window`` cards in a row (a card that would be is moved later).
+    When only over-represented channels are left, they follow as they are."""
+    pending = list(entries)
+    out: list[ChannelFeedEntry] = []
+    while pending:
+        recent = [_channel_key(e) for e in out[-(window - 1) :]] if window > 1 else []
+        for i, entry in enumerate(pending):
+            key = _channel_key(entry)
+            if not key or recent.count(key) < cap:
+                out.append(pending.pop(i))
+                break
+        else:
+            out.append(pending.pop(0))
+    return out
+
+
+def up_next_entries(
+    session: Session, raw: list[dict[str, Any]], exclude_yt_id: str
+) -> list[ChannelFeedEntry]:
+    """YouTube's up next cards as feed entries, marked when downloaded."""
+    lib_map = _LibraryIds(session)
+    out: list[ChannelFeedEntry] = []
+    for item in raw:
+        yt_id = str(item.get("id") or "")
+        if not yt_id or yt_id == exclude_yt_id:
+            continue
+        try:
+            entry = ChannelFeedEntry.model_validate(
+                {
+                    **item,
+                    "url": item.get("url")
+                    or f"https://www.youtube.com/watch?v={yt_id}",
+                }
+            )
+        except ValueError:
+            logger.debug("skipped an unreadable up next card", exc_info=True)
+            continue
+        lib = lib_map.get(yt_id)
+        if lib is not None:
+            entry.in_library = True
+            entry.video_id = lib[0]
+            entry.library_height_px = lib[1]
+        out.append(entry)
+    return out
+
+
+def mix_with_up_next(
+    local: list[ChannelFeedEntry],
+    up_next: list[ChannelFeedEntry],
+    *,
+    pinned: int = 0,
+) -> list[ChannelFeedEntry]:
+    """The scrollable list: the first ``pinned`` local entries (live now, next
+    part) as they are, then local and up next woven together (2:1 on the first
+    page, 1:2 after it), with channels spread out, duplicates dropped."""
+    head, rest = local[:pinned], local[pinned:]
+    woven: list[ChannelFeedEntry] = []
+    a, b = list(rest), list(up_next)
+    while a or b:
+        first_page = len(head) + len(woven) < FIRST_PAGE
+        take_local = 2 if first_page else 1
+        take_yt = 1 if first_page else 2
+        for _ in range(take_local):
+            if a:
+                woven.append(a.pop(0))
+        for _ in range(take_yt):
+            if b:
+                woven.append(b.pop(0))
+    seen: set[str] = set()
+    unique: list[ChannelFeedEntry] = []
+    for entry in head + diversify(woven):
+        key = entry.id or (f"lib:{entry.video_id}" if entry.video_id else entry.url)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(entry)
+    return unique
+
+
+class RelatedListCache:
+    """``(youtube id, may embed) -> (mixed list, when made)``, so the pages of
+    one visit come from one list and YouTube's up next is asked once."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._entries: dict[tuple[str, bool], tuple[list[ChannelFeedEntry], float]] = {}
+
+    def get(self, key: tuple[str, bool]) -> list[ChannelFeedEntry] | None:
+        with self._lock:
+            hit = self._entries.get(key)
+        if hit is None or time.monotonic() - hit[1] > LIST_TTL_SEC:
+            return None
+        return hit[0]
+
+    def put(self, key: tuple[str, bool], items: list[ChannelFeedEntry]) -> None:
+        with self._lock:
+            self._entries[key] = (items, time.monotonic())
+            if len(self._entries) > LIST_CACHE_SIZE:
+                oldest = min(self._entries, key=lambda k: self._entries[k][1])
+                del self._entries[oldest]
+
+
+def list_cache() -> RelatedListCache:
+    from ..context import current
+
+    found: RelatedListCache = current().caches.setdefault(
+        "stream_related", RelatedListCache()
+    )
+    return found

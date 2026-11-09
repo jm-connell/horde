@@ -84,6 +84,8 @@ def stream_env(monkeypatch):
 
     monkeypatch.setattr(stream_preview, "extract_stream_preview_meta", fake_meta)
     monkeypatch.setattr(stream_ai_api, "fetch_preview_vtt", fake_vtt)
+    # YouTube's up next list (woven into related videos): none unless a test says.
+    monkeypatch.setattr(ytdlp_extract, "youtube_up_next", lambda yt_id: [])
     llm = FakeLlm()
     for module in (tasks, stream_ai):
         monkeypatch.setattr(module, "llm_features_allowed", lambda: (True, None))
@@ -385,9 +387,11 @@ def test_a_live_stream_lists_its_channels_other_live_streams_first(
     ]
     assert asked == [(CHANNEL_URL, "streams")]
 
-    # A stream that is not live does not look for live siblings.
+    # A stream that is not live does not look for live siblings (a new visit:
+    # the list kept for this one is dropped).
     meta["is_live"] = False
     asked.clear()
+    member_client.app.state.ctx.caches.pop("stream_related", None)
     member_client.get("/api/preview/related", params={"url": URL})
     assert asked == []
 
@@ -533,3 +537,72 @@ def test_finalize_and_the_sweep_adopt(session, add_video, admin_user, monkeypatc
     stream_ai.sweep()
     session.expire_all()
     assert session.exec(select(StreamAiState)).all() == []
+
+
+def _entry(n: int, channel: str):
+    from app.schemas import ChannelFeedEntry
+
+    return ChannelFeedEntry(
+        id=f"{channel[:4]}{n:07d}",
+        url=f"https://www.youtube.com/watch?v={channel[:4]}{n:07d}",
+        title=f"{channel} {n}",
+        channel=channel,
+    )
+
+
+def test_one_channel_cannot_fill_the_related_column():
+    from app.services import stream_related
+
+    highlights = [_entry(i, "PGL Highlights") for i in range(8)]
+    others = [_entry(i, f"Other{i}") for i in range(4)]
+    out = stream_related.diversify(highlights + others)
+    top = [e.channel for e in out[: stream_related.CHANNEL_WINDOW]]
+    # The other channels are seen at once, not after eight highlights.
+    assert top.count("PGL Highlights") == stream_related.CHANNEL_CAP
+    assert {c for c in top if c != "PGL Highlights"} == {e.channel for e in others}
+    # Nothing is lost: the extra highlights follow.
+    assert sorted(e.id for e in out) == sorted(e.id for e in highlights + others)
+
+
+def test_up_next_is_woven_in_more_as_the_list_goes_on():
+    from app.services import stream_related
+
+    local = [_entry(i, f"Local{i}") for i in range(40)]
+    yt = [_entry(i, f"Tube{i}") for i in range(40)]
+    out = stream_related.mix_with_up_next(local, yt, pinned=1)
+    assert out[0].id == local[0].id  # pinned (live now / next part) stays first
+    first = out[: stream_related.FIRST_PAGE]
+    later = out[stream_related.FIRST_PAGE : stream_related.FIRST_PAGE * 2]
+    share = lambda part: sum(e.channel.startswith("Tube") for e in part) / len(part)  # noqa: E731 - a one-line helper reads best inline
+    assert share(first) < 0.5 < share(later)
+
+
+def test_related_videos_page_through_one_list_with_up_next(
+    member_client, stream_env, monkeypatch
+):
+    calls: list[str] = []
+
+    def up_next(yt_id):
+        calls.append(yt_id)
+        return [
+            {
+                "id": f"upnext{i:05d}",
+                "url": f"https://www.youtube.com/watch?v=upnext{i:05d}",
+                "title": f"Up next {i}",
+                "channel": f"Channel {i}",
+            }
+            for i in range(30)
+        ]
+
+    monkeypatch.setattr(ytdlp_extract, "youtube_up_next", up_next)
+    first = member_client.get("/api/preview/related", params={"url": URL}).json()
+    assert len(first["items"]) == 24
+    assert first["next_cursor"]
+    second = member_client.get(
+        "/api/preview/related", params={"url": URL, "cursor": first["next_cursor"]}
+    ).json()
+    titles = [i["title"] for i in first["items"] + second["items"]]
+    assert len(titles) == 30 and len(set(titles)) == 30
+    assert second["next_cursor"] is None
+    # YouTube was asked once for the whole visit.
+    assert calls == [YT_ID]

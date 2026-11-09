@@ -193,10 +193,12 @@ export const aiApi = {
   getStreamRelated(
     url: string,
     limit = 24,
-    opts?: ReadOptions
+    opts?: ReadOptions,
+    cursor?: string | null
   ): Promise<StreamRelatedPage> {
+    const more = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
     return request<StreamRelatedPage>(
-      `/api/preview/related?url=${encodeURIComponent(url)}&limit=${limit}`,
+      `/api/preview/related?url=${encodeURIComponent(url)}&limit=${limit}${more}`,
       opts
     );
   },

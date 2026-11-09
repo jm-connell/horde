@@ -144,7 +144,15 @@ export function RelatedGrid({ related }: { related: RelatedFeed }) {
 }
 
 /** "More like this" for a stream, as a grid under the video when there is no sidebar. */
-export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
+export function StreamRelatedGrid({
+  items,
+  sentinelRef,
+  loadingMore = false,
+}: {
+  items: RelatedItem[];
+  sentinelRef?: Ref<HTMLDivElement>;
+  loadingMore?: boolean;
+}) {
   return (
     <div className="mt-6">
       <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-400">
@@ -193,6 +201,8 @@ export function StreamRelatedGrid({ items }: { items: RelatedItem[] }) {
           </Link>
         ))}
       </div>
+      {sentinelRef && <div ref={sentinelRef} className="h-4" />}
+      {loadingMore && <LoadingIndicator />}
     </div>
   );
 }

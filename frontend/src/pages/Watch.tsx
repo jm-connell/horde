@@ -23,7 +23,7 @@ import {
   WatchSidebar,
 } from "./watch/WatchSidebar";
 import { libraryRelatedItems, streamRelatedItems } from "./watch/relatedItems";
-import { useRelatedFeed } from "./watch/useRelatedFeed";
+import { useLoadMoreSentinel, useRelatedFeed } from "./watch/useRelatedFeed";
 import { useStreamDownload } from "./watch/useStreamDownload";
 import { useWatchActions } from "./watch/useWatchActions";
 import { useWatchAi } from "./watch/useWatchAi";
@@ -121,6 +121,10 @@ export default function Watch() {
   const related = useRelatedFeed(video?.id);
   const streamRelated = useStreamRelated(
     source?.kind === "stream" ? source.url : undefined
+  );
+  const streamSentinelRef = useLoadMoreSentinel(
+    streamRelated.hasMore,
+    streamRelated.loadMore
   );
   const relatedItems = useMemo(
     () =>
@@ -229,15 +233,21 @@ export default function Watch() {
             (video ? (
               <RelatedGrid related={related} />
             ) : (
-              <StreamRelatedGrid items={relatedItems} />
+              <StreamRelatedGrid
+                items={relatedItems}
+                sentinelRef={streamSentinelRef}
+                loadingMore={streamRelated.loadingMore}
+              />
             ))}
         </WatchPlayerSection>
 
         {showRelatedRight && (
           <WatchSidebar
             items={relatedItems}
-            sentinelRef={video ? related.sentinelRef : undefined}
-            loadingMore={video ? related.loadingMore : false}
+            sentinelRef={video ? related.sentinelRef : streamSentinelRef}
+            loadingMore={
+              video ? related.loadingMore : streamRelated.loadingMore
+            }
             hasQueue={queueVisible}
           />
         )}

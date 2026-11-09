@@ -25,6 +25,7 @@ from ..openapi_responses import (
     VIDEO_STREAM,
 )
 from ..schemas import (
+    ChannelFeedEntry,
     NextPartRead,
     StreamGameRead,
     StreamPreviewMeta,
@@ -36,9 +37,11 @@ from ..services import (
     stream_preview,
     stream_related,
     video_game,
+    ytdlp_extract,
 )
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
+from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
 from ..services.ytdlp_common import (
@@ -553,13 +556,43 @@ async def preview_related(
     request: Request,
     url: str = Query(..., max_length=4000),
     limit: int = Query(24, ge=1, le=48),
+    cursor: str | None = Query(None, max_length=512),
     user: AuthUser = Depends(current_user),
 ):
-    """Library and indexed-channel videos related to a stream."""
+    """Videos related to a stream: library and indexed-channel ones, woven with
+    YouTube's own up next list. Paged; the pages of one visit share one list."""
+    try:
+        page = parse_cursor(
+            cursor, limit=limit, sort=_RELATED_SORT, order="desc", kind="offset"
+        )
+    except InvalidCursor as exc:
+        raise CodedHTTPException(400, str(exc), "invalid_cursor") from exc
     cleaned = await run_in_threadpool(_require_video_url, url)
     youtube_id = youtube_video_id(cleaned)
     if youtube_id is None:
         return StreamRelatedPage(items=[])
+    may_embed = user.can("use_ai")
+    cache = stream_related.list_cache()
+    full = cache.get((youtube_id, may_embed))
+    if full is None:
+        full = await _mixed_related(request, cleaned, youtube_id, may_embed)
+        cache.put((youtube_id, may_embed), full)
+    end = page.offset + limit
+    return StreamRelatedPage(
+        items=full[page.offset : end],
+        next_cursor=offset_cursor(sort=_RELATED_SORT, order="desc", offset=end)
+        if len(full) > end
+        else None,
+    )
+
+
+_RELATED_SORT = "stream_related"
+
+
+async def _mixed_related(
+    request: Request, cleaned: str, youtube_id: str, may_embed: bool
+) -> list[ChannelFeedEntry]:
+    """The whole scrollable related list of a stream (see ``stream_related``)."""
     try:
         meta = await _in_ytdlp_thread(
             request, stream_preview.extract_stream_preview_meta, cleaned
@@ -574,10 +607,27 @@ async def preview_related(
         if meta.get("is_live") and channel_url
         else []
     )
-    items = await run_in_threadpool(
-        _related, youtube_id, meta, limit, user.can("use_ai"), live_now
+    local, pinned = await run_in_threadpool(
+        _related, youtube_id, meta, stream_related.LOCAL_LIMIT, may_embed, live_now
     )
-    return StreamRelatedPage(items=items)
+    raw_up_next: list[dict] = []
+    if not e2e_mode.enabled():
+        try:
+            raw_up_next = await _in_ytdlp_thread(
+                request, ytdlp_extract.youtube_up_next, youtube_id
+            )
+        except HTTPException:
+            raise
+        except Exception:
+            # Variety is a bonus: the local list still stands.
+            logger.warning("up next for %s unreadable", youtube_id, exc_info=True)
+    return await run_in_threadpool(_mix, local, pinned, raw_up_next, youtube_id)
+
+
+def _mix(local, pinned: int, raw_up_next: list[dict], youtube_id: str):
+    with Session(get_engine()) as session:
+        up_next = stream_related.up_next_entries(session, raw_up_next, youtube_id)
+    return stream_related.mix_with_up_next(local, up_next, pinned=pinned)
 
 
 @router.get("/next-part", response_model=NextPartRead)
@@ -600,7 +650,7 @@ def preview_next_part(
 
 def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now):
     with Session(get_engine()) as session:
-        return stream_related.related_for_stream(
+        return stream_related.related_parts(
             session,
             youtube_id,
             meta,

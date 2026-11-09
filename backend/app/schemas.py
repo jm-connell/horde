@@ -570,7 +570,7 @@ class NextPartRead(BaseModel):
 class StreamRelatedPage(BaseModel):
     """Related videos for a stream: library and not-downloaded ones, marked.
 
-    One page; ``next_cursor`` is always None (kept for the list envelope).
+    One page of a list kept for a few minutes; ``next_cursor`` asks for the next.
     """
 
     items: list[ChannelFeedEntry]

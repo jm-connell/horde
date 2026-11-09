@@ -12165,7 +12165,7 @@
         "type": "object"
       },
       "StreamRelatedPage": {
-        "description": "Related videos for a stream: library and not-downloaded ones, marked.\n\nOne page; ``next_cursor`` is always None (kept for the list envelope).",
+        "description": "Related videos for a stream: library and not-downloaded ones, marked.\n\nOne page of a list kept for a few minutes; ``next_cursor`` asks for the next.",
         "properties": {
           "items": {
             "items": {
@@ -24587,7 +24587,7 @@
     },
     "/api/preview/related": {
       "get": {
-        "description": "Library and indexed-channel videos related to a stream.",
+        "description": "Videos related to a stream: library and indexed-channel ones, woven with\nYouTube's own up next list. Paged; the pages of one visit share one list.",
         "operationId": "preview_related_api_preview_related_get",
         "parameters": [
           {
@@ -24610,6 +24610,23 @@
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
             }
           }
         ],
