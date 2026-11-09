@@ -18,8 +18,10 @@ from ..auth import (
 )
 from ..context import get_session
 from ..errors import CodedHTTPException
-from ..models import User, UserInvite, as_utc, require_id
+from ..models import User, UserInvite, as_utc, require_id, utcnow
 from ..schemas import (
+    AllowedChannelRead,
+    AllowedChannelsWrite,
     InviteCreate,
     InviteCreated,
     InviteRead,
@@ -30,6 +32,7 @@ from ..schemas import (
     UserRead,
     UserUpdate,
 )
+from ..services import parental
 from ..services.auth import (
     accounts,
     avatars,
@@ -59,13 +62,65 @@ def _read(user: User) -> UserRead:
         username=user.username,
         is_admin=user.is_admin,
         disabled=user.disabled,
-        permissions=sorted(accounts.effective_permissions(user)),
+        # What was granted, even while parental controls withhold some of it
+        # (the editor saves this list back; the member's own state is trimmed).
+        permissions=sorted(
+            permissions.ALL_PERMISSIONS
+            if user.is_admin
+            else permissions.parse(user.permissions)
+        ),
         created_at=as_utc(user.created_at),
         last_login_at=as_utc(user.last_login_at),
         avatar_version=user.avatar_version,
         share_downloads=user.share_downloads,
         two_factor_enabled=two_factor.is_enabled(user),
+        allowed_channels=_allowed_read(user),
     )
+
+
+def _allowed_read(user: User) -> list[AllowedChannelRead] | None:
+    allowed = None if user.is_admin else parental.parse(user.allowed_channels)
+    if allowed is None:
+        return None
+    return [AllowedChannelRead(url=c.url, name=c.name) for c in allowed.channels]
+
+
+@router.put("/{user_id}/allowed-channels", response_model=UserRead)
+def set_allowed_channels(
+    user_id: int,
+    payload: AllowedChannelsWrite,
+    session: Session = Depends(get_session),
+) -> UserRead:
+    """Parental controls: limit a member to these channels (``null`` lifts it).
+
+    A restricted member sees and plays only these channels' videos, cannot
+    search YouTube, and keeps only the permissions that stay inside the list.
+    An administrator cannot be restricted.
+    """
+    user = session.get(User, user_id)
+    if user is None:
+        raise CodedHTTPException(404, "User not found", "not_found")
+    if user.is_admin and payload.channels is not None:
+        raise CodedHTTPException(
+            400, "An administrator cannot be restricted", "admin_unrestricted"
+        )
+    channels = (
+        None
+        if payload.channels is None
+        else [
+            parental.AllowedChannel(
+                url=(c.url or "").strip() or None, name=(c.name or "").strip() or None
+            )
+            for c in payload.channels
+            if (c.url or "").strip() or (c.name or "").strip()
+        ]
+    )
+    user.allowed_channels = parental.dump(channels)
+    user.updated_at = utcnow()
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return _read(user)
 
 
 @router.get("", response_model=list[UserRead])

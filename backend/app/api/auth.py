@@ -21,6 +21,7 @@ from ..context import get_ctx, get_session
 from ..models import User, as_utc, require_id
 from ..openapi_responses import IMAGE_JPEG, RAW
 from ..schemas import (
+    AllowedChannelRead,
     AuthLoginResult,
     AuthState,
     AuthUserRead,
@@ -84,6 +85,11 @@ def user_read(user: AuthUser) -> AuthUserRead:
         share_downloads=user.share_downloads,
         two_factor_enabled=user.two_factor_enabled,
         two_factor_enrollment_required=user.must_enroll_two_factor,
+        allowed_channels=None
+        if user.allowed is None
+        else [
+            AllowedChannelRead(url=c.url, name=c.name) for c in user.allowed.channels
+        ],
     )
 
 

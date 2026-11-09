@@ -6,6 +6,7 @@ from sqlmodel import Session
 from ..auth import current_user, require_permission
 from ..context import get_session
 from ..models import Video
+from ..parental_guard import video_guard
 from ..schemas import (
     VideoRead,
 )
@@ -17,7 +18,7 @@ from .video_serialize import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api", tags=["videos"])
+router = APIRouter(prefix="/api", tags=["videos"], dependencies=[Depends(video_guard)])
 
 
 @router.post(

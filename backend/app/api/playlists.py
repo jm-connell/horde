@@ -40,6 +40,7 @@ from ..schemas import (
 )
 from ..services import (
     library,
+    parental,
     playlist_entries,
     stream_preview,
     uploads,
@@ -246,6 +247,18 @@ def _playlist_detail(
 ) -> PlaylistDetail:
     items = _playlist_items(session, require_id(playlist))
     found = playlist_entries.resolve(session, items)
+    if viewer.allowed is not None:
+        # Parental controls: other channels' entries are left out.
+        allowed = viewer.allowed
+        items = [
+            i
+            for i in items
+            if (
+                parental.video_allowed(allowed, found[require_id(i)])
+                if require_id(i) in found
+                else allowed.allows(i.channel_url, i.channel)
+            )
+        ]
     in_order = [found[require_id(i)] for i in items if require_id(i) in found]
     reads = _to_read_many(in_order, session, viewer=viewer)
     read_by_id = {r.id: r for r in reads}

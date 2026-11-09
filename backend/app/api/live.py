@@ -27,6 +27,7 @@ from ..config import LIVE_POLL_SEC
 from ..context import get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..openapi_responses import RAW, media_response
+from ..parental_guard import stream_guard
 from ..schemas import ChannelLiveResponse, LiveChannelRead, LiveListResponse
 from ..services import follows, stream_preview
 from ..services.auth.accounts import AuthUser
@@ -46,7 +47,9 @@ from ..services.url_safety import UnsafeUrlError, UrlFetchError
 from ..services.ytdlp_extract import is_youtube_url
 from .preview import _send_validated, get_preview_client
 
-router = APIRouter(prefix="/api/live", tags=["live"])
+router = APIRouter(
+    prefix="/api/live", tags=["live"], dependencies=[Depends(stream_guard)]
+)
 logger = logging.getLogger(__name__)
 
 HLS_PLAYLIST = media_response(
@@ -77,6 +80,10 @@ def live_now(
     for state in directory.live(followed):
         item = _live_read(state)
         if item is None or item.video_id in seen:
+            continue
+        if user.allowed is not None and not user.allowed.allows(
+            item.channel_url, item.channel_name
+        ):
             continue
         seen.add(item.video_id)
         items.append(item)

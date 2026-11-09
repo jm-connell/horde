@@ -14,8 +14,9 @@ from sqlalchemy.orm import Mapped
 from sqlmodel import Session, col, select
 
 from ..models import ChannelRetention, UserVideoState, Video, VideoTag, require_id
-from . import next_part
+from . import next_part, parental
 from .pagination import PageRequest, random_key
+from .parental import AllowList
 from .search_text import fts_match_expression, keyword_match_clause
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,7 @@ def query_videos(
     page: PageRequest | None = None,
     *,
     ids: Collection[int] | None = None,
+    allowed: AllowList | None = None,
     count_only: Literal[True],
 ) -> int: ...
 
@@ -229,6 +231,7 @@ def query_videos(
     page: PageRequest | None = None,
     *,
     ids: Collection[int] | None = None,
+    allowed: AllowList | None = None,
     count_only: Literal[False] = False,
 ) -> list[Video]: ...
 
@@ -248,13 +251,15 @@ def query_videos(
     page: PageRequest | None = None,
     *,
     ids: Collection[int] | None = None,
+    allowed: AllowList | None = None,
     count_only: bool = False,
 ) -> list[Video] | int:
     """Library rows, newest first by default.
 
     With ``page`` the result is that page plus one extra row (so the caller can tell
     whether another page follows); ``count_only`` returns how many rows match.
-    ``ids`` limits the rows to those videos.
+    ``ids`` limits the rows to those videos, ``allowed`` (parental controls) to
+    the videos of those channels.
 
     Anything that reads watch state (``continue_watching``, ``watched_only``,
     ``sort="last_watched_at"``) needs ``user_id``: history belongs to one user,
@@ -274,6 +279,8 @@ def query_videos(
 
     if ids is not None:
         statement = statement.where(col(Video.id).in_(list(ids)))
+    if allowed is not None:
+        statement = statement.where(parental.video_clause(allowed))
     if needs_review is not None:
         statement = statement.where(Video.needs_review == needs_review)
     if continue_watching:
