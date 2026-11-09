@@ -32,11 +32,13 @@ import {
   type AskScopeChannel,
   type AskSourceState,
   type AskVideo,
+  ASK_CHAT_AT_KEY,
   askVideoKey,
   HELP_CHAT_STORAGE_KEY,
   type HelpMessage,
   isAskState,
   isHelpThread,
+  isNumber,
   isPromptHistory,
   parseAskVideo,
   parseReferences,
@@ -44,6 +46,7 @@ import {
   parseSources,
   rememberPrompt,
   savedSources,
+  staleVideoChat,
   stepPromptHistory,
 } from "./helpChat";
 import { describePage } from "./helpPage";
@@ -277,12 +280,24 @@ export default function HelpChatPanel({
       "session"
     )
   );
-  const [fresh] = useState(() => !!opening && !resumes(opening, saved));
+  const [fresh] = useState(
+    () =>
+      (!!opening && !resumes(opening, saved)) ||
+      (!opening &&
+        staleVideoChat(
+          saved,
+          getJson(ASK_CHAT_AT_KEY, isNumber, 0, "session"),
+          pageVideo?.pathname === window.location.pathname
+            ? pageVideo.video
+            : null
+        ))
+  );
   const [messages, setMessages] = useState<HelpMessage[]>(() =>
     fresh ? [] : getJson(HELP_CHAT_STORAGE_KEY, isHelpThread, [], "session")
   );
   const [ask, setAsk] = useState<AskChatState>(() => {
-    if (!fresh || !opening) return saved;
+    if (!fresh) return saved;
+    if (!opening) return { threadId: null, scope: [] };
     const source = requestedSource(opening);
     return { threadId: null, ...source, picked: source };
   });
@@ -341,7 +356,8 @@ export default function HelpChatPanel({
   }, [messages, sending]);
   useEffect(() => {
     setJson(ASK_CHAT_STORAGE_KEY, ask, "session");
-  }, [ask]);
+    setJson(ASK_CHAT_AT_KEY, Date.now(), "session");
+  }, [ask, messages]);
 
   // "Ask <channel>" or "Chat" while the panel is open: a new conversation.
   useEffect(() => {

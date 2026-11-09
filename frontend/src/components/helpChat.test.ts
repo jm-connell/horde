@@ -9,6 +9,7 @@ import {
   PROMPT_HISTORY_MAX,
   rememberPrompt,
   savedSources,
+  staleVideoChat,
   stepPromptHistory,
 } from "./helpChat";
 
@@ -133,5 +134,24 @@ describe("prompt history", () => {
     expect(stepPromptHistory(h, 1, 1)).toEqual({ pos: null, text: null });
     expect(stepPromptHistory(h, null, 1)).toBeNull();
     expect(stepPromptHistory([], null, -1)).toBeNull();
+  });
+});
+
+describe("staleVideoChat", () => {
+  const video = { library_id: 7, youtube_id: null, url: null, title: "A" };
+  const other = { library_id: 8, youtube_id: null, url: null, title: "B" };
+  const now = 1_000_000_000;
+  it("starts afresh after a break away from the chat's video", () => {
+    const state = { threadId: 3, scope: [], video };
+    expect(staleVideoChat(state, now - 15 * 60_000, null, now)).toBe(true);
+    expect(staleVideoChat(state, now - 15 * 60_000, other, now)).toBe(true);
+  });
+  it("carries on soon after, on the same video, or for a chat about Horde", () => {
+    const state = { threadId: 3, scope: [], video };
+    expect(staleVideoChat(state, now - 60_000, null, now)).toBe(false);
+    expect(staleVideoChat(state, now - 15 * 60_000, video, now)).toBe(false);
+    expect(
+      staleVideoChat({ threadId: 3, scope: [] }, now - 15 * 60_000, null, now)
+    ).toBe(false);
   });
 });

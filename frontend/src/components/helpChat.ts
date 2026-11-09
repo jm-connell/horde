@@ -233,3 +233,29 @@ export function stepPromptHistory(
   if (next >= history.length) return { pos: null, text: null };
   return { pos: next, text: history[next] };
 }
+
+/** When the chat was last used (the installed app keeps it when reopened). */
+export const ASK_CHAT_AT_KEY = "horde.askChat.at";
+/** A chat about a video left this long is not picked up again elsewhere. */
+const STALE_VIDEO_CHAT_MS = 10 * 60_000;
+
+export function isNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * Opening Ask after a break, away from the video the last chat was about:
+ * start a new chat (the old one is in History) instead of carrying on about
+ * a video that is no longer here.
+ */
+export function staleVideoChat(
+  state: AskChatState,
+  lastUsedAt: number,
+  hereVideo: AskVideo | null,
+  now = Date.now()
+): boolean {
+  if (!state.video) return false;
+  if (hereVideo && askVideoKey(hereVideo) === askVideoKey(state.video))
+    return false;
+  return now - lastUsedAt > STALE_VIDEO_CHAT_MS;
+}
