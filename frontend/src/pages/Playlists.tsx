@@ -160,10 +160,15 @@ export default function Playlists() {
             can("download") ? "md:grid-cols-2" : ""
           }`}
         >
+          {/* Each column: a heading, a line on what it does, one row of
+              controls, so the two line up with no gap under either. */}
           <div className="min-w-0">
-            <h2 className="mb-3 text-sm font-medium text-gray-200">
+            <h2 className="text-sm font-medium text-gray-200">
               New Horde playlist
             </h2>
+            <p className="mb-3 mt-0.5 text-xs text-muted">
+              A list of your own: library videos and streams.
+            </p>
             <div className="flex gap-2">
               <input
                 value={name}
@@ -183,48 +188,45 @@ export default function Playlists() {
           </div>
           {can("download") && (
             <div className="min-w-0">
-              <h2 className="mb-3 text-sm font-medium text-gray-200">
-                Subscribe to YouTube playlist
+              <h2 className="text-sm font-medium text-gray-200">
+                Subscribe to a YouTube playlist
               </h2>
-              <div className="flex gap-2">
+              <p className="mb-3 mt-0.5 text-xs text-muted">
+                Horde checks it now and then and downloads new videos.
+              </p>
+              <div className="flex flex-wrap gap-2">
                 <input
                   value={subscribeUrl}
                   onChange={(e) => setSubscribeUrl(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && subscribe()}
                   placeholder="YouTube playlist URL"
-                  className="min-w-0 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
+                  className="min-w-40 flex-1 rounded-lg border border-ink-700 bg-ink-950 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent"
                 />
-                <button
-                  onClick={subscribe}
-                  disabled={subscribing || !subscribeUrl.trim()}
-                  className={`${button("primary")} shrink-0`}
-                >
-                  {subscribing ? "Subscribing…" : "Subscribe"}
-                </button>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
-                <span className="shrink-0 text-sm text-gray-400">
-                  Max resolution
-                </span>
-                <ThemedSelect
-                  aria-label="Max resolution"
-                  value={subscribePreset}
-                  options={allPresets.map((p) => ({
-                    value: p,
-                    label: presetOptionLabel(p, undefined),
-                  }))}
-                  onChange={setPickedPreset}
-                  className="w-44 shrink-0"
-                  buttonClassName="w-full py-2"
-                />
-                <p className="min-w-40 flex-1 text-xs leading-snug text-muted">
-                  Horde periodically checks for and downloads new playlist
-                  videos.
-                </p>
+                <div className="flex shrink-0 gap-2">
+                  <ThemedSelect
+                    aria-label="Max resolution"
+                    value={subscribePreset}
+                    options={allPresets.map((p) => ({
+                      value: p,
+                      label: presetOptionLabel(p, undefined),
+                    }))}
+                    onChange={setPickedPreset}
+                    className="w-36 shrink-0"
+                    buttonClassName="w-full py-2"
+                  />
+                  <button
+                    onClick={subscribe}
+                    disabled={subscribing || !subscribeUrl.trim()}
+                    className={`${button("primary")} shrink-0`}
+                  >
+                    {subscribing ? "Subscribing…" : "Subscribe"}
+                  </button>
+                </div>
               </div>
             </div>
           )}
-          <div className="md:col-span-full">
+          {/* Applies to both: a playlist made either way. */}
+          <div className="border-t border-ink-700 pt-4 md:col-span-full">
             <PlaylistVisibilityPicker
               legend="Who can see new playlists"
               value={visibility}

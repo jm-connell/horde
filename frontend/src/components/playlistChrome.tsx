@@ -1,3 +1,4 @@
+import FadeImage from "./FadeImage";
 import type { DragEvent } from "react";
 
 export function ExpandChevron({ open }: { open: boolean }) {
@@ -109,32 +110,38 @@ export function PlaylistThumb({
   src: string | null;
   className?: string;
 }) {
+  // No cover, or one that does not load (a deleted video's thumbnail): the
+  // plain placeholder, not a broken image.
+  const empty = (
+    <div className="flex h-full w-full items-center justify-center text-muted">
+      <svg
+        viewBox="0 0 24 24"
+        className="h-5 w-5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden
+      >
+        <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />
+        <path d="M8 12.5h8M10 9.5h4" strokeLinecap="round" />
+      </svg>
+    </div>
+  );
   return (
     <div
       className={`relative overflow-hidden rounded-md bg-ink-800 ${className}`}
     >
       {src ? (
-        <img
+        <FadeImage
           loading="lazy"
           decoding="async"
           src={src}
           alt=""
           className="h-full w-full object-cover"
+          fallback={empty}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-muted">
-          <svg
-            viewBox="0 0 24 24"
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            aria-hidden
-          >
-            <rect x="3.5" y="5.5" width="17" height="13" rx="1.5" />
-            <path d="M8 12.5h8M10 9.5h4" strokeLinecap="round" />
-          </svg>
-        </div>
+        empty
       )}
     </div>
   );

@@ -5,7 +5,9 @@ test("playlists expand, create, and keep the subscribe form closed", async ({
 }) => {
   await page.goto("/playlists");
   await expect(page.getByText("New Horde playlist")).toBeVisible();
-  await expect(page.getByText("Subscribe to YouTube playlist")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Subscribe to a YouTube playlist" })
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Subscribe" })).toBeDisabled();
   await expect(
     page.getByRole("button", { name: "Max resolution" })
