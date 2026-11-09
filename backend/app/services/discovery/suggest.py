@@ -1,9 +1,10 @@
 """Channels to follow: the new channels the Recommended feed liked most.
 
-A channel qualifies with at least ``MIN_SUPPORT`` of its videos in the feed's
-"new" bucket above the floor; it ranks by its best three videos (the best counts
-most) plus a little for each distinct watch that led to it, so a channel several
-interests point at beats a one-off.
+A channel with at least ``MIN_SUPPORT`` of its videos in the feed's "new" bucket
+above the floor ranks by its best three videos (the best counts most) plus a
+little for each distinct watch that led to it, so a channel several interests
+point at beats a one-off. Channels with a single picked video follow them, so a
+shelf scrolled past the strong picks keeps finding new channels.
 
 Each suggestion carries up to ``MAX_TAGS`` short tags saying what the channel is
 about: the AI categories its picked videos fall in (most first), then the
@@ -20,7 +21,9 @@ from .candidates import Candidate
 from .feed import Feed, _short
 from .feedback import Exclusions
 
-MAX_SUGGESTIONS = 8
+#: The shelf's first page; more load as it is scrolled, up to MAX_SUGGESTIONS.
+PAGE_SIZE = 8
+MAX_SUGGESTIONS = 48
 MAX_TAGS = 2
 #: A search used as a tag is cut to this many words.
 TAG_WORDS = 3
@@ -71,7 +74,7 @@ def suggestions(
     """The best channels to follow; ``categories``: each AI category's picks."""
     out: list[Suggestion] = []
     for stat in feed.new_channels.values():
-        if not stat.url or len(stat.items) < MIN_SUPPORT:
+        if not stat.url or not stat.items:
             continue
         if excluded.blocks_channel(stat.url, stat.name) or excluded.dismissed(
             stat.url, stat.name
@@ -84,6 +87,8 @@ def suggestions(
         weights = (1.0, 0.5, 0.25)
         score = sum(w * s for w, s in zip(weights, top, strict=False))
         score += 0.03 * min(len(stat.seeds), 3)
+        if len(stat.items) < MIN_SUPPORT:
+            score -= 10.0  # After every channel the feed picked more than once.
         seed = sorted(stat.seeds)[0] if stat.seeds and not feed.cold else None
         views = _typical([c.view_count for c in stat.items if c.view_count])
         seconds = _typical([c.duration for c in stat.items if c.duration])

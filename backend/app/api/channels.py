@@ -102,23 +102,23 @@ async def get_channel_avatar(
     request: Request,
     url: str = Query(..., max_length=2048, description="The channel's URL"),
 ):
-    """The channel's profile picture, read from its YouTube page and remembered."""
+    """The channel's profile picture and bio, read from its YouTube page and remembered."""
     channel_url = follows.normalize_channel_url(url)
     if not channel_url or not ytdlp_extract.is_youtube_url(channel_url):
         raise CodedHTTPException(400, "Not a YouTube channel URL", "invalid_url")
     avatars = channel_avatar.cache()
-    known, avatar = avatars.get(channel_url)
+    known, avatar, about = avatars.get(channel_url)
     if not known and not e2e_mode.enabled():
         try:
             async with request.app.state.ytdlp_slots.slot():
-                found = await run_in_threadpool(channel_avatar.read_avatar, channel_url)
+                avatar, about = await run_in_threadpool(
+                    channel_avatar.read_avatar, channel_url
+                )
         except channel_avatar.AvatarUnreadable:
             # Keep what was known (or remember "none") and try again later.
             logger.debug("could not read the channel page of %s", url, exc_info=True)
-            found = avatar
-        avatar = found
-        avatars.put(channel_url, avatar)
-    return ChannelAvatarRead(url=avatar)
+        avatars.put(channel_url, avatar, about)
+    return ChannelAvatarRead(url=avatar, about=about)
 
 
 def _retention_summary(row: ChannelRetention | None) -> ChannelRetentionSummary | None:

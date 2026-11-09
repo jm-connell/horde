@@ -1110,6 +1110,35 @@ def test_channel_suggestion_says_what_the_channel_is_like():
     assert pick.tags == ["Astronomy", "Travel"]
 
 
+def test_channels_seen_once_follow_the_strong_suggestions():
+    """A channel with one picked video is still suggested, after every channel
+    the feed picked more than once, so a scrolled shelf keeps finding more."""
+    from app.services.discovery.candidates import Candidate
+    from app.services.discovery.feed import ChannelStat, Feed
+    from app.services.discovery.feedback import Exclusions
+    from app.services.discovery.suggest import suggestions
+
+    def stat(name: str, scores: list[float]) -> ChannelStat:
+        st = ChannelStat(name, f"https://youtube.com/@{name}")
+        st.items = [
+            Candidate(
+                key=f"{name}{i:06d}",
+                pool="discovery",
+                title=name,
+                channel=name,
+                channel_url=st.url,
+            )
+            for i in range(len(scores))
+        ]
+        st.scores = scores
+        return st
+
+    once = stat("once", [0.99])
+    twice = stat("twice", [0.3, 0.2])
+    feed = Feed(items=[], new_channels={s.url: s for s in (once, twice)}, cold=False)
+    assert [p.name for p in suggestions(feed, Exclusions())] == ["twice", "once"]
+
+
 def test_a_prefetched_page_does_not_count_as_shown(client, session, admin_user):
     """The home page loads Recommended+ ahead of time; only opening it counts."""
     from app.models import DiscoveryState, RecImpression

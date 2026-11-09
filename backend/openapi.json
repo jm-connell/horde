@@ -3376,6 +3376,17 @@
       "ChannelAvatarRead": {
         "description": "A channel's profile picture on YouTube's image host (null when unknown).",
         "properties": {
+          "about": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "About"
+          },
           "url": {
             "anyOf": [
               {
@@ -12565,6 +12576,17 @@
             },
             "title": "Items",
             "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
           }
         },
         "required": [
@@ -18327,7 +18349,7 @@
     },
     "/api/channels/avatar": {
       "get": {
-        "description": "The channel's profile picture, read from its YouTube page and remembered.",
+        "description": "The channel's profile picture and bio, read from its YouTube page and remembered.",
         "operationId": "get_channel_avatar_api_channels_avatar_get",
         "parameters": [
           {
@@ -19584,7 +19606,7 @@
     },
     "/api/discover/channels": {
       "get": {
-        "description": "Channels new to the user that their Recommended feed leans on most.",
+        "description": "Channels new to the user that their Recommended feed leans on most.\n\nPaged: the shelf asks for more as it is scrolled.",
         "operationId": "discover_channels_api_discover_channels_get",
         "parameters": [
           {
@@ -19603,6 +19625,35 @@
                 }
               ],
               "title": "Seed"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 512,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 8,
+              "maximum": 48,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           }
         ],

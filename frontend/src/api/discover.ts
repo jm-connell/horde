@@ -49,10 +49,17 @@ export const discoverApi = {
 
   getSuggestedChannels(
     seed?: number,
-    opts?: ReadOptions
+    opts?: ReadOptions,
+    cursor?: string
   ): Promise<SuggestedChannels> {
-    const q = seed != null ? `?seed=${seed}` : "";
-    return request<SuggestedChannels>(`/api/discover/channels${q}`, opts);
+    const q = new URLSearchParams();
+    if (seed != null) q.set("seed", String(seed));
+    if (cursor) q.set("cursor", cursor);
+    const qs = q.toString();
+    return request<SuggestedChannels>(
+      `/api/discover/channels${qs ? `?${qs}` : ""}`,
+      opts
+    );
   },
 
   refreshDiscover(): Promise<DiscoverRefresh> {

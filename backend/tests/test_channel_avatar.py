@@ -11,9 +11,10 @@ CHANNEL = "https://www.youtube.com/@kilnworks"
 AVATAR = "https://yt3.googleusercontent.com/abc_DEF-123=s900-c-k-c0x00ffffff-no-rj"
 
 
-def _page(image: str) -> bytes:
+def _page(image: str, about: str = "") -> bytes:
     return (
         '<html><head><meta property="og:title" content="Kiln Works">'
+        f'<meta property="og:description" content="{about}">'
         f'<meta property="og:image" content="{image}"></head></html>'
     ).encode()
 
@@ -42,7 +43,8 @@ def test_avatar_is_read_once_and_sized_for_the_header(client, pages):
     first = client.get("/api/channels/avatar", params={"url": CHANNEL})
     assert first.status_code == 200, first.text
     assert first.json() == {
-        "url": "https://yt3.googleusercontent.com/abc_DEF-123=s176-c-k-c0x00ffffff-no-rj"
+        "url": "https://yt3.googleusercontent.com/abc_DEF-123=s176-c-k-c0x00ffffff-no-rj",
+        "about": None,
     }
     again = client.get("/api/channels/avatar", params={"url": CHANNEL + "/"})
     assert again.json() == first.json()
@@ -52,13 +54,13 @@ def test_avatar_is_read_once_and_sized_for_the_header(client, pages):
 def test_a_page_without_a_youtube_avatar_answers_null(client, pages):
     pages.body = _page("https://evil.example/tracker.png")
     body = client.get("/api/channels/avatar", params={"url": CHANNEL}).json()
-    assert body == {"url": None}
+    assert body == {"url": None, "about": None}
 
 
 def test_a_failed_read_answers_null(client, pages):
     pages.fail = True
     body = client.get("/api/channels/avatar", params={"url": CHANNEL}).json()
-    assert body == {"url": None}
+    assert body == {"url": None, "about": None}
 
 
 def test_only_youtube_channels_are_read(client, pages):
@@ -77,3 +79,13 @@ def test_a_failed_refresh_keeps_the_known_avatar(client, pages, monkeypatch):
     body = client.get("/api/channels/avatar", params={"url": CHANNEL}).json()
     assert body["url"] and "=s176" in body["url"]
     assert len(pages.fetched) == 2
+
+
+def test_the_bio_comes_back_on_one_line_and_cut_short(client, pages):
+    long_bio = "Pottery &amp; kilns.\n" + "We fire stoneware every week " * 20
+    pages.body = _page(AVATAR, long_bio)
+    about = client.get("/api/channels/avatar", params={"url": CHANNEL}).json()["about"]
+    assert about.startswith("Pottery & kilns. We fire stoneware")
+    assert "\n" not in about
+    assert len(about) <= channel_avatar.ABOUT_MAX_CHARS
+    assert about.endswith("…")

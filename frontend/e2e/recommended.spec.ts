@@ -269,6 +269,40 @@ test("suggested channels show the channel's picture", async ({ page }) => {
   await expect(shelf.getByText("T", { exact: true })).toBeVisible();
 });
 
+test("a suggested channel card shows the channel's bio and opens as a whole", async ({
+  page,
+}) => {
+  const bio = "Night skies over the north, filmed from lighthouses.";
+  await page.route(/\/api\/channels\/avatar\?/, (route) => {
+    const url = new URL(route.request().url()).searchParams.get("url");
+    return route.fulfill({
+      json: { url: null, about: url?.includes("northernskies") ? bio : null },
+    });
+  });
+  await openRecommended(page);
+  const shelf = page.getByRole("region", { name: "Channels you might like" });
+  const card = shelf
+    .locator('[data-horde="suggested-channel"]')
+    .filter({ hasText: "Northern Skies" });
+  await expect(card.getByText(bio)).toBeVisible();
+  // Tags stay on one line however many there are.
+  const tags = card.getByRole("list");
+  if (await tags.count()) {
+    const lines = await tags.evaluate((ul) => {
+      const tops = new Set(
+        [...ul.children].map((li) => (li as HTMLElement).offsetTop)
+      );
+      return tops.size;
+    });
+    expect(lines).toBe(1);
+  }
+  // Clicking the bio (not the name) opens the channel.
+  await card.getByText(bio).click({ force: true });
+  await expect(
+    page.getByRole("heading", { name: "Northern Skies", level: 1 })
+  ).toBeVisible();
+});
+
 test("Recommended is loaded ahead and opens at once", async ({ page }) => {
   await lookingOnYoutube(page);
   await page.addInitScript(() =>

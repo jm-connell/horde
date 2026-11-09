@@ -1093,7 +1093,7 @@ export interface paths {
         };
         /**
          * Get Channel Avatar
-         * @description The channel's profile picture, read from its YouTube page and remembered.
+         * @description The channel's profile picture and bio, read from its YouTube page and remembered.
          */
         get: operations["get_channel_avatar_api_channels_avatar_get"];
         put?: never;
@@ -1457,6 +1457,8 @@ export interface paths {
         /**
          * Discover Channels
          * @description Channels new to the user that their Recommended feed leans on most.
+         *
+         *     Paged: the shelf asks for more as it is scrolled.
          */
         get: operations["discover_channels_api_discover_channels_get"];
         put?: never;
@@ -5722,6 +5724,8 @@ export interface components {
          * @description A channel's profile picture on YouTube's image host (null when unknown).
          */
         ChannelAvatarRead: {
+            /** About */
+            about?: string | null;
             /** Url */
             url?: string | null;
         };
@@ -9010,6 +9014,8 @@ export interface components {
         SuggestedChannelsRead: {
             /** Items */
             items: components["schemas"]["SuggestedChannelRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
         };
         /** SystemActivityRead */
         SystemActivityRead: {
@@ -13346,6 +13352,8 @@ export interface operations {
         parameters: {
             query?: {
                 seed?: number | null;
+                cursor?: string | null;
+                limit?: number;
             };
             header?: never;
             path?: never;

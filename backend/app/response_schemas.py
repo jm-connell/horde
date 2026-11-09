@@ -642,6 +642,7 @@ class SuggestedChannelRead(BaseModel):
 
 class SuggestedChannelsRead(BaseModel):
     items: list[SuggestedChannelRead]
+    next_cursor: str | None = None
 
 
 class RecFeedbackRead(BaseModel):

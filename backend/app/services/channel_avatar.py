@@ -1,7 +1,8 @@
-"""A YouTube channel's profile picture, read from its channel page.
+"""A YouTube channel's profile picture and short bio, read from its channel page.
 
 The page's ``og:image`` is the avatar on YouTube's image host; the browser loads
-it from there like video thumbnails. Answers are remembered on the app context
+it from there like video thumbnails. ``og:description`` is the channel's "about"
+text, cut to ``ABOUT_MAX_CHARS``. Answers are remembered on the app context
 (a week when found, a few hours when not) so a channel page does not read
 YouTube on every visit.
 """
@@ -23,7 +24,10 @@ MISSING_TTL_SEC = 6 * 3600
 #: The header shows it at 44 px; this is enough for a 4x screen.
 AVATAR_SIZE_PX = 176
 _MAX_PAGE_BYTES = 6 * 1024 * 1024
+#: The bio is a tagline on a card, not the whole about page.
+ABOUT_MAX_CHARS = 160
 _OG_IMAGE_RE = re.compile(r'<meta property="og:image" content="([^"]+)"')
+_OG_DESC_RE = re.compile(r'<meta property="og:description" content="([^"]*)"')
 _SIZE_RE = re.compile(r"=s\d+(?=-|$)")
 AVATAR_HOSTS = frozenset({"yt3.googleusercontent.com", "yt3.ggpht.com"})
 
@@ -40,26 +44,42 @@ def parse_avatar(page: str) -> str | None:
     return _SIZE_RE.sub(f"=s{AVATAR_SIZE_PX}", url, count=1)
 
 
+def parse_about(page: str) -> str | None:
+    """The channel's bio from its page, on one line and cut short, or None."""
+    match = _OG_DESC_RE.search(page)
+    if not match:
+        return None
+    text = " ".join(html.unescape(match.group(1)).split())
+    if not text:
+        return None
+    if len(text) > ABOUT_MAX_CHARS:
+        cut = text[: ABOUT_MAX_CHARS - 1].rsplit(" ", 1)[0]
+        text = cut.rstrip(" ,.;:-") + "…"
+    return text
+
+
 class AvatarCache:
-    """channel URL -> (avatar URL or None, when it was read)."""
+    """channel URL -> (avatar URL or None, bio or None, when it was read)."""
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
-        self._entries: dict[str, tuple[str | None, float]] = {}
+        self._entries: dict[str, tuple[str | None, str | None, float]] = {}
 
-    def get(self, channel_url: str) -> tuple[bool, str | None]:
-        """(known, avatar): ``known`` is False when the channel must be read."""
+    def get(self, channel_url: str) -> tuple[bool, str | None, str | None]:
+        """(known, avatar, about): ``known`` is False when it must be read."""
         with self._lock:
             entry = self._entries.get(channel_url)
         if entry is None:
-            return False, None
-        avatar, at = entry
+            return False, None, None
+        avatar, about, at = entry
         ttl = FOUND_TTL_SEC if avatar else MISSING_TTL_SEC
-        return time.time() - at < ttl, avatar
+        return time.time() - at < ttl, avatar, about
 
-    def put(self, channel_url: str, avatar: str | None) -> None:
+    def put(
+        self, channel_url: str, avatar: str | None, about: str | None = None
+    ) -> None:
         with self._lock:
-            self._entries[channel_url] = (avatar, time.time())
+            self._entries[channel_url] = (avatar, about, time.time())
 
 
 def cache() -> AvatarCache:
@@ -82,9 +102,10 @@ def read_channel_page(channel_url: str) -> str:
     return result.body.decode("utf-8", errors="replace")
 
 
-def read_avatar(channel_url: str) -> str | None:
-    """Read the channel page for its avatar (None when it has none).
+def read_avatar(channel_url: str) -> tuple[str | None, str | None]:
+    """Read the channel page for its (avatar, bio); each None when it has none.
 
     Raises AvatarUnreadable when the page cannot be read.
     """
-    return parse_avatar(read_channel_page(channel_url))
+    page = read_channel_page(channel_url)
+    return parse_avatar(page), parse_about(page)

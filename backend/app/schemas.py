@@ -497,6 +497,8 @@ class ChannelAvatarRead(BaseModel):
     """A channel's profile picture on YouTube's image host (null when unknown)."""
 
     url: str | None = None
+    #: The channel's bio ("about" text), cut short; null when it has none.
+    about: str | None = None
 
 
 class ChannelSearchHit(BaseModel):

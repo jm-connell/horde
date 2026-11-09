@@ -132,15 +132,20 @@ export function useLiveNow({ enabled }: { enabled: boolean }) {
   return { ...query, live: query.data?.items ?? NO_LIVE };
 }
 
-/** A YouTube channel's profile picture URL (null when it has none or is not known). */
-export function useChannelAvatar(url: string | null) {
+/** What a YouTube channel's page says: its picture and short bio (null when unknown). */
+export function useChannelPage(url: string | null) {
   const query = useQuery({
     queryKey: queryKeys.channels.avatar(url ?? ""),
     queryFn: ({ signal }) => api.getChannelAvatar(url ?? "", { signal }),
     enabled: Boolean(url),
     staleTime: Infinity,
   });
-  return query.data?.url ?? null;
+  return { avatar: query.data?.url ?? null, about: query.data?.about ?? null };
+}
+
+/** A YouTube channel's profile picture URL (null when it has none or is not known). */
+export function useChannelAvatar(url: string | null) {
+  return useChannelPage(url).avatar;
 }
 
 /**

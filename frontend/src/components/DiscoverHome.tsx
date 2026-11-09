@@ -36,13 +36,13 @@ import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
 
 /**
- * How many cards come before the channel suggestions: two full rows (four on
- * a narrow grid), or as many full rows as there are, so no row above them is
- * left part-empty.
+ * How many cards come before the channel suggestions: three full rows (four
+ * on a narrow grid), or as many full rows as there are, so no row above them
+ * is left part-empty.
  */
 function suggestionsAfter(columns: number, cards: number): number {
   const full = Math.floor(cards / columns) * columns;
-  return Math.min(columns * (columns >= 3 ? 2 : 4), full || cards);
+  return Math.min(columns * (columns >= 3 ? 3 : 4), full || cards);
 }
 const STATUS_POLL_MS = 8000;
 /** Stop asking after this long (the gatherer may be waiting on YouTube). */
@@ -145,6 +145,13 @@ export default function DiscoverHome({
         queryKeys.discover.channels
       )?.items ?? []
   );
+  const [channelsCursor, setChannelsCursor] = useState<string | null>(
+    () =>
+      queryClient.getQueryData<SuggestedChannelsPage>(
+        queryKeys.discover.channels
+      )?.next_cursor ?? null
+  );
+  const loadingChannels = useRef(false);
   const [loading, setLoading] = useState(!preview);
   const [categories, setCategories] = useState<string[]>(
     () => preview?.categories ?? []
@@ -215,6 +222,7 @@ export default function DiscoverHome({
         .then((data) => {
           if (!active) return;
           setChannels(data.items);
+          setChannelsCursor(data.next_cursor ?? null);
           if (seed === undefined)
             queryClient.setQueryData(queryKeys.discover.channels, data);
         })
@@ -401,6 +409,24 @@ export default function DiscoverHome({
     }
   };
 
+  const loadMoreChannels = () => {
+    if (!channelsCursor || loadingChannels.current) return;
+    loadingChannels.current = true;
+    api
+      .getSuggestedChannels(undefined, undefined, channelsCursor)
+      .then((data) => {
+        setChannels((prev) => {
+          const seen = new Set(prev.map((c) => c.url));
+          return [...prev, ...data.items.filter((c) => !seen.has(c.url))];
+        });
+        setChannelsCursor(data.next_cursor ?? null);
+      })
+      .catch(() => setChannelsCursor(null))
+      .finally(() => {
+        loadingChannels.current = false;
+      });
+  };
+
   const dismissChannel = (ch: SuggestedChannel) => {
     dropPreview();
     setChannels((prev) => prev.filter((c) => c.url !== ch.url));
@@ -583,6 +609,7 @@ export default function DiscoverHome({
               }
               onDismiss={dismissChannel}
               onOpen={(ch) => onChannelClick({ name: ch.name, url: ch.url })}
+              onLoadMore={channelsCursor ? loadMoreChannels : undefined}
             />
             {items.slice(splitAt).map(card)}
           </div>

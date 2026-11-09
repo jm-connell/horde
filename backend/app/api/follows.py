@@ -119,7 +119,7 @@ def preview_channel(
             502, "YouTube is not answering right now", "youtube_unavailable"
         ) from exc
     avatar = channel_avatar.parse_avatar(page)
-    channel_avatar.cache().put(url, avatar)
+    channel_avatar.cache().put(url, avatar, channel_avatar.parse_about(page))
     return FollowPreviewRead(
         channel_url=url,
         channel_name=name or parse_channel_name(page),

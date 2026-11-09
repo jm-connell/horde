@@ -80,6 +80,8 @@ from .video_serialize import to_read_many
 
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
+#: Cursor tag of the channel shelf (its pages are a ranked list too).
+_CHANNEL_SORT = "suggested_channels"
 _SORT = "discover"
 
 
@@ -515,24 +517,34 @@ def discover_status(
 @router.get("/channels", response_model=SuggestedChannelsRead)
 def discover_channels(
     seed: int | None = Query(None, ge=0, lt=SEED_RANGE),
+    cursor: str | None = Query(None, max_length=512),
+    limit: int = Query(suggest.PAGE_SIZE, ge=1, le=suggest.MAX_SUGGESTIONS),
     session: Session = Depends(get_session),
     ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
-    """Channels new to the user that their Recommended feed leans on most."""
+    """Channels new to the user that their Recommended feed leans on most.
+
+    Paged: the shelf asks for more as it is scrolled.
+    """
+    try:
+        page = parse_cursor(
+            cursor, limit=limit, sort=_CHANNEL_SORT, order="desc", kind="offset"
+        )
+    except InvalidCursor as exc:
+        raise CodedHTTPException(400, str(exc), "invalid_cursor") from exc
+    use_seed = page.seed if page.seed is not None else seed
+    if use_seed is None:
+        use_seed = _today_seed()
     # Loaded beside the feed's first page: share its ranking when it exists.
-    feed = ranked_feed(
-        session,
-        ctx.discovery,
-        user.id,
-        _today_seed() if seed is None else seed,
-        fresh=False,
-    )
+    feed = ranked_feed(session, ctx.discovery, user.id, use_seed, fresh=False)
     picks = suggest.suggestions(
         feed,
         feedback.exclusions(session, user.id),
         discover_categories.feed_categories(session, ctx.discovery, feed),
     )
+    window = picks[page.offset : page.offset + limit]
+    more = len(picks) > page.offset + limit
     return SuggestedChannelsRead(
         items=[
             SuggestedChannelRead(
@@ -545,8 +557,16 @@ def discover_channels(
                 typical_minutes=s.typical_minutes,
                 tags=s.tags,
             )
-            for s in picks
-        ]
+            for s in window
+        ],
+        next_cursor=offset_cursor(
+            sort=_CHANNEL_SORT,
+            order="desc",
+            offset=page.offset + limit,
+            seed=use_seed,
+        )
+        if more
+        else None,
     )
 
 
