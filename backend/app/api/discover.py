@@ -13,6 +13,7 @@ from ..auth import current_user
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import (
+    AiCategory,
     DiscoveryHit,
     DiscoveryState,
     RecAlgorithm,
@@ -214,6 +215,8 @@ def discover_feed(
         if category
         else feed.items
     )
+    if category and not cursor and not prefetch:
+        _fill_thin_category(session, ctx, user.id, category, picks)
     window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
@@ -501,6 +504,38 @@ def delete_algorithm(
     algorithms.delete(session, row)
     ctx.discovery.forget_feeds(user.id)
     return read
+
+
+def _is_new(item: FeedItem) -> bool:
+    """A pick from a channel the user neither follows nor has in the library."""
+    c = item.candidate
+    return (
+        c.video_id is None
+        and not item.followed
+        and c.pool not in ("catalog", "history")
+    )
+
+
+def _fill_thin_category(
+    session: Session,
+    ctx: AppContext,
+    user_id: int,
+    category: str,
+    picks: list[FeedItem],
+) -> None:
+    """A category with few picks from new channels asks YouTube for more.
+
+    The gatherer searches the category soon (its usual budget and back-off
+    apply); the page shows "Looking on YouTube" and reloads when it is done.
+    """
+    if sum(1 for i in picks if _is_new(i)) >= gather.CATEGORY_MIN_NEW:
+        return
+    if not gather.enabled() or not tuning.for_user(session, user_id).use_youtube:
+        return
+    row = session.exec(select(AiCategory).where(AiCategory.name == category)).first()
+    if row is None:
+        return
+    gather.request_category(session, ctx.discovery, user_id, row.name, row.blurb)
 
 
 @router.get("/status", response_model=DiscoverStatusRead)

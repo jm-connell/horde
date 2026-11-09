@@ -1199,3 +1199,65 @@ def test_recommended_plus_can_be_browsed_by_category(
     assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
     tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
     assert tide == ["poolfound01"]
+
+
+def test_a_thin_category_asks_youtube_for_more(
+    client, session, admin_user, monkeypatch, tmp_dirs
+):
+    """Opening a category with few picks from new channels queues searches for
+    it (its name, then its blurb), first in the next run, once a day."""
+    import json
+
+    from app.models import AiCategory, DiscoveryState
+    from app.services.discovery import gather
+
+    monkeypatch.setattr(gather, "enabled", lambda: True)
+    session.add(
+        AiCategory(
+            name="Scam Investigations",
+            blurb="Deep dives into frauds, cons and the people behind them.",
+            embedding=embeddings.pack_vector(_vec(0.0)),
+            dim=4,
+            model="m",
+        )
+    )
+    session.commit()
+    _discovered(session, admin_user, "scamfound01", "A con", "Sleuth", _vec(0.02))
+
+    runtime = tmp_dirs["ctx"].discovery
+    _feed(client, category="Scam Investigations")
+    asks = runtime.take_category_asks(admin_user.id)
+    assert asks == ["Scam Investigations", "Deep dives into frauds cons and"]
+    state = session.get(DiscoveryState, admin_user.id)
+    session.refresh(state)
+    assert state.requested_at is not None
+
+    # Paging through it, or loading it ahead, asks nothing more.
+    _feed(client, category="Scam Investigations", prefetch="true")
+    assert runtime.take_category_asks(admin_user.id) == []
+
+    # Once searched, not again within the day.
+    state.asked_json = json.dumps(
+        {f"q:{q.lower()}": datetime.now(UTC).isoformat() for q in asks}
+    )
+    session.add(state)
+    session.commit()
+    _feed(client, category="Scam Investigations")
+    assert runtime.take_category_asks(admin_user.id) == []
+
+
+def test_category_searches_come_first_in_a_run(
+    session, add_video, set_watch, admin_user, youtube, tmp_dirs
+):
+    from app.services.discovery import gather
+
+    calls, _answers = youtube
+    runtime = tmp_dirs["ctx"].discovery
+    _history(session, add_video, set_watch, admin_user)
+    runtime.ask_category(admin_user.id, ["scam investigations"])
+    gather.gather_for(session, runtime, admin_user.id)
+    searches = [q for kind, q in calls if kind == "search"]
+    assert searches[0] == "scam investigations"
+    assert len(searches) <= gather.SEARCHES_PER_RUN
+    # Done: it is not asked again by the next run.
+    assert runtime.take_category_asks(admin_user.id) == []

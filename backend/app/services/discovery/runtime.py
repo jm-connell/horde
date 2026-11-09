@@ -16,6 +16,8 @@ FEED_CACHE_SIZE = 16
 FEED_CACHE_TTL_SEC = 15 * 60
 #: Hand-added topics' vectors kept (every user's together).
 TOPIC_VECTOR_CACHE_SIZE = 512
+#: Category searches waiting per user.
+CATEGORY_ASKS_KEPT = 6
 
 
 @dataclass
@@ -47,6 +49,30 @@ class DiscoveryRuntime:
         self.gathering_for: int | None = None
         #: Vectors of hand-added topics by (embed model, text); see ``topics``.
         self._topic_vectors: OrderedDict[tuple[str, str], Any] = OrderedDict()
+        #: Searches asked for by opening a thin category, by user (in order).
+        self._category_asks: dict[int, list[str]] = {}
+
+    def ask_category(self, user_id: int, queries: list[str]) -> None:
+        """Search these soon for ``user_id`` (a category with few new picks)."""
+        with self._lock:
+            pending = self._category_asks.setdefault(user_id, [])
+            for q in queries:
+                if q not in pending:
+                    pending.append(q)
+            del pending[:-CATEGORY_ASKS_KEPT]
+
+    def take_category_asks(self, user_id: int) -> list[str]:
+        with self._lock:
+            return self._category_asks.pop(user_id, [])
+
+    def put_back_category_asks(self, user_id: int, queries: list[str]) -> None:
+        """Searches a run did not get to: first in line next time."""
+        if not queries:
+            return
+        with self._lock:
+            pending = self._category_asks.setdefault(user_id, [])
+            pending[:0] = [q for q in queries if q not in pending]
+            del pending[CATEGORY_ASKS_KEPT:]
 
     def topic_vector(self, key: tuple[str, str]) -> Any | None:
         with self._lock:

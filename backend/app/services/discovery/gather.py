@@ -82,6 +82,12 @@ SEED_COOLDOWN = timedelta(days=7)
 #: and again after a day (they may be for something coming up soon).
 TOPIC_SEARCHES_PER_RUN = 2
 TOPIC_COOLDOWN = timedelta(days=1)
+#: A category opened with fewer new picks than this asks YouTube for more.
+CATEGORY_MIN_NEW = 12
+#: Searches a thin category may add to a run (they count toward SEARCHES_PER_RUN).
+CATEGORY_SEARCHES_PER_RUN = 2
+#: Words of a category's blurb used as its second search.
+CATEGORY_BLURB_WORDS = 6
 BACKOFF_START_SEC = 30 * 60.0
 BACKOFF_MAX_SEC = 12 * 3600.0
 #: Found videos stop being candidates after this; a later run finds new ones.
@@ -154,6 +160,55 @@ def request_refresh(session: Session, runtime: DiscoveryRuntime, user_id: int) -
     return True
 
 
+def category_queries(name: str, blurb: str | None) -> list[str]:
+    """What to search for a category: its name, then the start of its blurb."""
+    out = [" ".join(name.split())]
+    words = (blurb or "").split()[:CATEGORY_BLURB_WORDS]
+    extra = " ".join(w.strip(".,;:") for w in words).strip()
+    if extra and extra.lower() != out[0].lower():
+        out.append(extra)
+    return [q for q in out if q]
+
+
+def request_category(
+    session: Session,
+    runtime: DiscoveryRuntime,
+    user_id: int,
+    name: str,
+    blurb: str | None,
+) -> bool:
+    """A category the user opened has few new picks: search YouTube for it soon.
+
+    False when a search for it ran lately (``TOPIC_COOLDOWN``) or one is
+    already waiting. Shares the run's budget, cap and back-off like any run.
+    """
+    queries = category_queries(name, blurb)
+    asked = _asked(_state(session, user_id))
+    now = utcnow()
+
+    def recent(q: str) -> bool:
+        when = asked.get(f"q:{q.lower()}")
+        try:
+            return (
+                bool(when)
+                and now - as_utc(datetime.fromisoformat(str(when))) < TOPIC_COOLDOWN
+            )
+        except ValueError:
+            return False
+
+    fresh = [q for q in queries if not recent(q)]
+    if not fresh:
+        return False
+    runtime.ask_category(user_id, fresh)
+    row = _state(session, user_id)
+    row.requested_at = now
+    row.last_viewed_at = now
+    session.add(row)
+    session.commit()
+    runtime.wake()
+    return True
+
+
 def due_users(session: Session, now: datetime) -> list[int]:
     rows = session.exec(
         select(DiscoveryState).where(
@@ -202,11 +257,14 @@ def plan_requests(
     asked: dict[str, str],
     now: datetime,
     typed: list[str] | None = None,
+    categories: list[str] | None = None,
 ) -> list[_Request]:
     """This run's searches and up next lists, best first, skipping recent repeats.
 
     ``typed``: the user's own interests (strongest first), searched before the
-    rest. They share the run's searches, so YouTube is asked no more often.
+    rest. ``categories``: searches for categories the user opened that had few
+    new picks, first of all. They share the run's searches, so YouTube is
+    asked no more often.
     """
 
     def fresh(key: str, cooldown: timedelta) -> bool:
@@ -220,10 +278,15 @@ def plan_requests(
 
     searches: list[_Request] = [
         _Request("search", q, "recent")
+        for q in (categories or [])
+        if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN)
+    ][:CATEGORY_SEARCHES_PER_RUN]
+    searches += [
+        _Request("search", q, "recent")
         for q in (typed or [])
         if fresh(f"q:{q.lower()}", TOPIC_COOLDOWN)
-    ][:TOPIC_SEARCHES_PER_RUN]
-    typed_keys = {q.lower() for q in (typed or [])}
+    ][: max(0, min(TOPIC_SEARCHES_PER_RUN, SEARCHES_PER_RUN - len(searches)))]
+    typed_keys = {q.lower() for q in [*(typed or []), *(categories or [])]}
     # One slot in four for a dormant interest, the rest by weight, round robin.
     throwback = [
         _Request("search", q, "throwback")
@@ -502,6 +565,7 @@ def gather_for(
     ]
     found = 0
     error: str | None = None
+    category_asks = runtime.take_category_asks(user_id)
     try:
         in_library = {yt for yt in session.exec(select(Video.youtube_id)).all() if yt}
         remember_streams(
@@ -519,7 +583,13 @@ def gather_for(
         typed = topics.active(session, user_id, now)
         for n, request in enumerate(
             plan_requests(
-                recent, dormant, history, asked, now, [t.text for t in typed.interests]
+                recent,
+                dormant,
+                history,
+                asked,
+                now,
+                [t.text for t in typed.interests],
+                category_asks,
             )
         ):
             if stopping() or (n and pause(REQUEST_PAUSE_SEC)):
@@ -551,6 +621,8 @@ def gather_for(
                 error = message
                 continue
             asked[request.asked_key] = now.isoformat()
+            if request.key in category_asks:
+                category_asks.remove(request.key)
             found += store_results(
                 session,
                 user_id,
@@ -564,6 +636,12 @@ def gather_for(
     except _Halt as halt:
         logger.info("Recommended run for user %s stopped early: %s", user_id, halt)
     finally:
+        # Category searches this run did not reach (cut short, or over the
+        # per-run share) wait for the next one.
+        runtime.put_back_category_asks(
+            user_id,
+            [q for q in category_asks if f"q:{q.lower()}" not in asked],
+        )
         session.rollback()
         # The run's record first: a failure below must not make the same
         # searches repeat on the next pass.

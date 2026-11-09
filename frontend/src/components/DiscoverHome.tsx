@@ -507,7 +507,9 @@ export default function DiscoverHome({
       : status.backing_off
         ? "YouTube asked Horde to slow down; looking for new videos again later."
         : status.gathering
-          ? "Looking on YouTube for videos you might like…"
+          ? category
+            ? `Looking on YouTube for more ${category} videos…`
+            : "Looking on YouTube for videos you might like…"
           : null;
 
   const actions = (
