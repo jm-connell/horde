@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState, type RefObject } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
 import { ExternalIcon, HeartIcon, RefreshIcon } from "../../components/icons";
@@ -18,7 +18,7 @@ import {
   safeHref,
 } from "../../utils";
 
-/** Threads shown at first, and how many more each "Show more" adds. */
+/** Threads shown at first, and how many more each scroll to the end adds. */
 const FIRST = 5;
 const STEP = 20;
 /** The first read from YouTube when nothing is saved (top comments). */
@@ -169,8 +169,41 @@ function Comment({
 }
 
 /**
+ * At the end of the comment list: asks for more when it scrolls into view
+ * inside the list's own scroll box (and again after each batch, while it is
+ * still in view).
+ */
+function MoreOnScroll({
+  root,
+  onMore,
+  revision,
+}: {
+  root: RefObject<HTMLElement | null>;
+  onMore: () => void;
+  /** Changes when a batch arrives, so a sentinel still in view asks again. */
+  revision: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const more = useRef(onMore);
+  more.current = onMore;
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) more.current();
+      },
+      { root: root.current, rootMargin: "200px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [root, revision]);
+  return <div ref={ref} aria-hidden className="h-px" />;
+}
+
+/**
  * Comments under the video: the ones saved with a library video, then more
- * read from YouTube on request ("Show more" past the saved ones). A streamed
+ * read from YouTube as the list is scrolled (past the saved ones). A streamed
  * video has none saved, so its comments load when asked for.
  */
 export default function CommentsPanel({
@@ -193,6 +226,7 @@ export default function CommentsPanel({
   const [shown, setShown] = useState(FIRST);
   const { can } = useAuth();
   const refresh = useRefreshVideoComments(videoId);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Shown once the server says the video has comments to show (not for a file
   // that never came from YouTube), so the panel never flashes in and out.
@@ -235,6 +269,23 @@ export default function CommentsPanel({
   const total = latestOk?.total_count ?? saved.data?.total_count ?? null;
   const loadingLive = current?.isFetching ?? false;
   const liveFailed = !loadingLive && current?.isError === true;
+  // Scrolling to the end shows the next ones read already, then reads the
+  // next batch from YouTube.
+  const readMore = () => {
+    if (nextLimit === null || loadingLive || liveFailed || refresh.isPending)
+      return;
+    setLimits((steps) =>
+      steps[steps.length - 1] === nextLimit ? steps : [...steps, nextLimit]
+    );
+    setShown((n) => n + STEP);
+  };
+  const loadMore = () => {
+    if (shown < items.length) setShown((n) => n + STEP);
+    // Only once the list was scrolled: a short list does not read YouTube
+    // by itself (the button below does).
+    else if ((listRef.current?.scrollTop ?? 0) > 0) readMore();
+  };
+  const hasMore = shown < items.length || nextLimit !== null;
 
   let note: string | null = null;
   const refused = liveSteps.find((q) => q.data && q.data.status !== "ok")?.data;
@@ -306,7 +357,7 @@ export default function CommentsPanel({
               rel="noreferrer"
               className="ui-interactive inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
             >
-              On YouTube <ExternalIcon />
+              YouTube <ExternalIcon />
             </a>
           )}
         </div>
@@ -318,11 +369,25 @@ export default function CommentsPanel({
       {note && <p className="mt-2 text-sm text-muted">{note}</p>}
 
       {items.length > 0 && youtubeId && (
-        <ol className="mt-3 space-y-4">
-          {items.slice(0, shown).map((c) => (
-            <Comment key={c.id} comment={c} youtubeId={youtubeId} />
-          ))}
-        </ol>
+        <div
+          ref={listRef}
+          data-horde="comments-list"
+          className="horde-meta-scrollbar mt-3 max-h-[36rem] overflow-y-auto overscroll-contain pr-1"
+        >
+          <ol className="space-y-4">
+            {items.slice(0, shown).map((c) => (
+              <Comment key={c.id} comment={c} youtubeId={youtubeId} />
+            ))}
+          </ol>
+          {hasMore && !liveFailed && (
+            <MoreOnScroll
+              root={listRef}
+              onMore={loadMore}
+              revision={`${shown}:${items.length}:${loadingLive}`}
+            />
+          )}
+          {loadingLive && <LoadingIndicator className="py-3" />}
+        </div>
       )}
 
       {refresh.isError && (
@@ -353,19 +418,7 @@ export default function CommentsPanel({
             {videoId === null ? "Load comments" : "Load them now from YouTube"}
           </button>
         )}
-        {shown < items.length ? (
-          <button
-            type="button"
-            className={button("secondary", "xs")}
-            onClick={() => setShown((n) => n + STEP)}
-          >
-            Show more comments
-          </button>
-        ) : loadingLive && items.length > 0 ? (
-          <button type="button" className={button("secondary", "xs")} disabled>
-            Loading from YouTube…
-          </button>
-        ) : liveFailed && current ? (
+        {liveFailed && current ? (
           <button
             type="button"
             className={button("secondary", "xs")}
@@ -375,16 +428,15 @@ export default function CommentsPanel({
           </button>
         ) : (
           items.length > 0 &&
-          nextLimit !== null && (
+          shown >= items.length &&
+          nextLimit !== null &&
+          !loadingLive && (
             <button
               type="button"
               className={button("secondary", "xs")}
               // A refresh replaces the list this would add to.
               disabled={refresh.isPending}
-              onClick={() => {
-                setLimits((steps) => [...steps, nextLimit]);
-                setShown((n) => n + STEP);
-              }}
+              onClick={readMore}
             >
               Show more comments
             </button>

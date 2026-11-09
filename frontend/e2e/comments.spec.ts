@@ -24,8 +24,7 @@ test("saved comments show under the video, creator's note first, replies on requ
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading")).toHaveText("Comments 2.4K");
 
-  const threads = panel.locator(":scope > ol > li");
-  await expect(threads).toHaveCount(5);
+  const threads = panel.locator('[data-horde="comments-list"] > ol > li');
   const pinned = threads.first();
   await expect(pinned).toContainText("Pinned");
   await expect(pinned).toContainText("Thanks for watching!");
@@ -43,9 +42,9 @@ test("saved comments show under the video, creator's note first, replies on requ
   await expect(glue).toContainText("Titebond III, clamped overnight.");
   await expect(glue).toContainText("Same here, works great.");
 
-  // The saved comments come in steps; fewer than YouTube's first 100 means
-  // there is nothing more to read from YouTube.
-  await panel.getByRole("button", { name: "Show more comments" }).click();
+  // The saved comments come in steps as the list scrolls (all of them here:
+  // they fit its box); fewer than YouTube's first 100 means there is nothing
+  // more to read from YouTube.
   await expect(threads).toHaveCount(10);
   await expect(
     panel.getByRole("button", { name: "Show more comments" })
@@ -139,14 +138,14 @@ test("more comments are read from YouTube, and a failed read keeps what is shown
 
   await page.goto(`/watch/${id}`);
   const panel = page.getByRole("region", { name: /Comments/ });
-  const threads = panel.locator(":scope > ol > li");
-  await panel.getByRole("button", { name: "Show more comments" }).click();
+  const threads = panel.locator('[data-horde="comments-list"] > ol > li');
+  // The saved ones show as the list fills; a list too short to scroll
+  // offers the next read from YouTube as a button.
   await expect(threads).toHaveCount(10);
-
   await panel.getByRole("button", { name: "Show more comments" }).click();
   await expect(
-    panel.getByRole("button", { name: "Loading from YouTube…" })
-  ).toBeDisabled();
+    panel.getByRole("button", { name: "Show more comments" })
+  ).toHaveCount(0);
   release();
   await expect(panel.getByRole("status")).toHaveText(
     "Could not reach YouTube; try again later."
@@ -218,7 +217,7 @@ test("a streamed video loads its comments on request and keeps replies on the ne
   await page.goto(`/watch?url=${encodeURIComponent(url)}`);
   const panel = page.getByRole("region", { name: /Comments/ });
   await panel.getByRole("button", { name: "Load comments" }).click();
-  const threads = panel.locator(":scope > ol > li");
+  const threads = panel.locator('[data-horde="comments-list"] > ol > li');
   await expect(threads).toHaveCount(1);
   await panel.getByRole("button", { name: "Show more comments" }).click();
   await expect(threads).toHaveCount(2);
@@ -256,9 +255,9 @@ test("the refresh button fetches and saves the comments again", async ({
   const button = panel.getByRole("button", { name: "Refresh comments" });
   await expect(button).toHaveAttribute("title", /^Refresh comments \(saved /);
   await button.click();
-  await expect(panel.locator(":scope > ol > li").first()).toContainText(
-    "A new top comment"
-  );
+  await expect(
+    panel.locator('[data-horde="comments-list"] > ol > li').first()
+  ).toContainText("A new top comment");
   await expect(panel.getByRole("heading")).toHaveText("Comments 2.5K");
   expect(refreshed).toBe(1);
 });
@@ -308,4 +307,84 @@ test("saved comments are kept when comments go off, and can then be deleted", as
     await page.request.get(`/api/videos/${id}/comments`)
   ).json();
   expect(saved.items).toEqual([]);
+});
+
+test("scrolling to the end of a long comment list reads more from YouTube", async ({
+  page,
+}) => {
+  const url = "https://www.youtube.com/watch?v=strm0000002";
+  await page.route(/\/api\/preview\/meta\?/, (route) =>
+    route.fulfill({
+      json: {
+        id: "strm0000002",
+        title: "Streamed climb",
+        channel: "Test Channel",
+        channel_url: null,
+        description: "",
+        duration: 600,
+        thumbnail_url: null,
+        source_url: url,
+        library_video_id: null,
+        subtitles: [],
+        available_presets: [],
+        view_count: 10,
+      },
+    })
+  );
+  await page.route(/\/api\/preview\/(manifest|stream|subtitles)\?/, (route) =>
+    route.fulfill({ status: 404, json: { detail: "no media", code: "x" } })
+  );
+  await page.route(/\/api\/preview\/related\?/, (route) =>
+    route.fulfill({ json: { items: [], next_cursor: null } })
+  );
+  const many = (n: number) =>
+    Array.from({ length: n }, (_, i) =>
+      comment(`m-${i}`, `Comment number ${i} `.repeat(6))
+    );
+  await page.route(
+    /\/api\/comments\/youtube\/strm0000002\?limit=100$/,
+    (route) =>
+      route.fulfill({
+        json: {
+          status: "ok",
+          total_count: 900,
+          items: many(40),
+          next_limit: 300,
+        },
+      })
+  );
+  let read = false;
+  await page.route(
+    /\/api\/comments\/youtube\/strm0000002\?limit=300$/,
+    (route) => {
+      read = true;
+      return route.fulfill({
+        json: {
+          status: "ok",
+          total_count: 900,
+          items: many(60),
+          next_limit: null,
+        },
+      });
+    }
+  );
+
+  await page.goto(`/watch?url=${encodeURIComponent(url)}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  await panel.getByRole("button", { name: "Load comments" }).click();
+  const list = panel.locator('[data-horde="comments-list"]');
+  const threads = list.locator(":scope > ol > li");
+  await expect(threads.first()).toBeVisible();
+  // The list scrolls inside its own box; nothing is read before scrolling.
+  expect(await list.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(
+    true
+  );
+  expect(read).toBe(false);
+  for (let i = 0; i < 6 && !read; i++) {
+    await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+    await page.waitForTimeout(200);
+  }
+  await expect.poll(() => read).toBe(true);
+  await list.evaluate((el) => el.scrollTo({ top: el.scrollHeight }));
+  await expect(threads).toHaveCount(60);
 });
