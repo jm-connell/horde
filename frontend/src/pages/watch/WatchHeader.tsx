@@ -12,7 +12,8 @@ import AddToPlaylist from "../../components/AddToPlaylist";
 import StreamDownloadControl from "./StreamDownloadControl";
 import type { StreamDownload } from "./useStreamDownload";
 import type { WatchSource } from "./useWatchVideo";
-import { ArrowIcon, ExternalIcon } from "../../components/icons";
+import { ExternalIcon } from "../../components/icons";
+import BackLink from "./BackLink";
 
 /**
  * Title, channel, size/date/resolution line and (for a stream) the download
@@ -49,9 +50,6 @@ export default function WatchHeader({
     : safeHref(source.meta.source_url ?? source.url);
   const originalLabel =
     originalHref && extractYouTubeId(originalHref, "") ? "YouTube" : "Source";
-  const backHref = channelParam
-    ? `/?channel=${encodeURIComponent(channelParam)}`
-    : "/";
 
   return (
     <div className="mt-5">
@@ -60,13 +58,7 @@ export default function WatchHeader({
           {title}
         </h1>
         {!isLibrary && (
-          <Link
-            to={backHref}
-            className="inline-flex shrink-0 items-center gap-1 text-sm text-gray-400 hover:text-accent"
-          >
-            <ArrowIcon />
-            Back
-          </Link>
+          <BackLink className="inline-flex shrink-0 items-center gap-1 text-sm text-gray-400 hover:text-accent" />
         )}
       </div>
       {/* The items wrap as they need to, the controls inline after them

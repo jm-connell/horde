@@ -499,3 +499,30 @@ test("Recommended shows Continue watching too, like Library", async ({
     page.getByRole("heading", { name: "Continue watching" })
   ).toBeVisible();
 });
+
+test("Back on a video opened from Recommended returns to Recommended", async ({
+  page,
+}) => {
+  await openRecommended(page);
+  await page
+    .locator('[data-rec-key="discover001"]')
+    .getByRole("link", { name: FOUND })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/watch\?/);
+  // The watch URL names the channel, but Back is not the channel's page.
+  await page.getByRole("link", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.locator('[data-rec-key="discover001"]')).toBeVisible();
+});
+
+test("Back on a video opened directly goes home", async ({ page }) => {
+  await page.goto(
+    `/watch?url=${encodeURIComponent("https://www.youtube.com/watch?v=discover001")}&channel=Northern%20Skies`
+  );
+  await page.getByRole("link", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(
+    page.getByRole("heading", { name: "Home", level: 1 })
+  ).toBeVisible();
+});

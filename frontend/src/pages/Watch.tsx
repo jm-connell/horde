@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Link,
-  useLocation,
-  useParams,
-  useSearchParams,
-} from "react-router-dom";
+import { useLocation, useParams, useSearchParams } from "react-router-dom";
 import LoadingIndicator from "../components/LoadingIndicator";
 import {
   usePlaybackActions,
@@ -33,7 +28,7 @@ import { useStreamDownload } from "./watch/useStreamDownload";
 import { useWatchActions } from "./watch/useWatchActions";
 import { useWatchAi } from "./watch/useWatchAi";
 import { useWatchVideo } from "./watch/useWatchVideo";
-import { ArrowIcon } from "../components/icons";
+import BackLink from "./watch/BackLink";
 
 /**
  * The watch page: a library video (`/watch/:id`) or a not-yet-downloaded
@@ -156,19 +151,10 @@ export default function Watch() {
   }
 
   if (error || !source) {
-    const backHref = channelParam
-      ? `/?channel=${encodeURIComponent(channelParam)}`
-      : "/";
     return (
       <div className="mx-auto max-w-lg space-y-4 py-16 text-center">
         <p className="text-gray-300">{error || "Video unavailable"}</p>
-        <Link
-          to={backHref}
-          className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
-        >
-          <ArrowIcon />
-          Back
-        </Link>
+        <BackLink className="inline-flex items-center gap-1 text-sm text-accent hover:underline" />
       </div>
     );
   }
