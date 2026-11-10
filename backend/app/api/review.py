@@ -11,6 +11,7 @@ from ..config import VIDEO_EXTENSIONS
 from ..context import AppContext, get_ctx, get_paths, get_session
 from ..errors import CodedHTTPException, extraction_error
 from ..models import Video, require_id
+from ..parental_guard import restricted_forbidden
 from ..response_schemas import VideoPage
 from ..schemas import (
     ApproveSuggestedResult,
@@ -45,7 +46,12 @@ from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/review", tags=["review"])
+router = APIRouter(
+    prefix="/api/review",
+    tags=["review"],
+    # The import queue lists every channel's videos: not for a restricted member.
+    dependencies=[Depends(restricted_forbidden)],
+)
 
 
 class DuplicateGroupRead(BaseModel):

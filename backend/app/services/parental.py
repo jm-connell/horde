@@ -30,7 +30,7 @@ from collections import OrderedDict
 from dataclasses import dataclass
 from typing import Any
 
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlmodel import Session, col, func, select
 
 from ..models import ChannelCatalog, ChannelCatalogVideo, Video
@@ -81,17 +81,33 @@ class AllowList:
 
     @property
     def names(self) -> frozenset[str]:
+        """Every allowed channel's name (matched for videos without a URL)."""
         return frozenset(
             c.name.strip().lower() for c in self.channels if c.name and c.name.strip()
         )
 
+    @property
+    def names_without_url(self) -> frozenset[str]:
+        """Names of allowed channels known only by name (any video matches)."""
+        return frozenset(
+            c.name.strip().lower()
+            for c in self.channels
+            if c.name and c.name.strip() and not c.url
+        )
+
     def allows(self, url: str | None, name: str | None) -> bool:
-        """Whether a video of the channel ``url`` / ``name`` may be shown."""
+        """Whether a video of the channel ``url`` / ``name`` may be shown.
+
+        When both sides have a URL, only the URL counts: anyone can name a
+        channel like an allowed one.
+        """
         normalized = normalize_channel_url(url) if url else None
         if normalized and normalized in self.urls:
             return True
         key = (name or "").strip().lower()
-        return bool(key) and key in self.names
+        if not key:
+            return False
+        return key in (self.names_without_url if normalized else self.names)
 
 
 def parse(raw: str | None) -> AllowList | None:
@@ -128,10 +144,19 @@ def dump(channels: list[AllowedChannel] | None) -> str | None:
 def video_clause(allowed: AllowList) -> Any:
     """SQL: the videos of allowed channels (an empty list matches none)."""
     names = sorted(allowed.names)
+    bare = sorted(allowed.names_without_url)
     urls = sorted(allowed.raw_urls)
     clauses = []
     if names:
-        clauses.append(func.lower(col(Video.channel)).in_(names))
+        # By name only for a video without a channel URL (see ``allows``).
+        clauses.append(
+            and_(
+                col(Video.channel_url).is_(None),
+                func.lower(col(Video.channel)).in_(names),
+            )
+        )
+    if bare:
+        clauses.append(func.lower(col(Video.channel)).in_(bare))
     if urls:
         clauses.append(col(Video.channel_url).in_(urls))
     if not clauses:
@@ -168,6 +193,12 @@ class VerifiedStreams:
             self._seen.move_to_end((user_id, yt_id))
             while len(self._seen) > VERIFIED_LIMIT:
                 self._seen.popitem(last=False)
+
+    def forget_user(self, user_id: int) -> None:
+        """The member's list changed: check their streams again."""
+        with self._lock:
+            for key in [k for k in self._seen if k[0] == user_id]:
+                del self._seen[key]
 
     def has(self, user_id: int, yt_id: str) -> bool:
         with self._lock:

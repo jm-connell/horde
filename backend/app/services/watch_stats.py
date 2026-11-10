@@ -37,7 +37,7 @@ from datetime import UTC, date, datetime, timedelta, tzinfo
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from sqlalchemy import func, union
+from sqlalchemy import String, func, union
 from sqlalchemy import select as sa_select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlmodel import Session, col, select
@@ -360,10 +360,11 @@ def _stream_ids(
 
 
 def _watched_youtube_ids(
-    session: Session, user_id: int, since: datetime | None
+    session: Session, user_id: int, since: datetime | None, *, finished: bool = False
 ) -> set[str]:
-    """YouTube ids of the library videos watched since ``since`` (to not count twice)."""
-    both = _watched_union(user_id, since, finished=False)
+    """YouTube ids of the library videos watched (or finished) since ``since``
+    (to not count them twice)."""
+    both = _watched_union(user_id, since, finished=finished)
     return {
         str(yt)
         for yt in session.exec(
@@ -494,7 +495,8 @@ def compute(
         streamed
     )
     videos_finished = _distinct_videos(session, user_id, since, finished=True) + len(
-        _stream_ids(session, user_id, since, finished=True) - library_yt
+        _stream_ids(session, user_id, since, finished=True)
+        - _watched_youtube_ids(session, user_id, since, finished=True)
     )
     channels = _top_channels(session, user_id, since)
     # Only a range with YouTube views changes anything (ranking included).
@@ -565,10 +567,15 @@ def _top_channels(
         select(
             name,
             total,
-            # A library video by its id, a streamed one by its YouTube id.
+            # A video by its YouTube id when it has one (a stream and its
+            # later download are one video), else by its library id.
             func.count(
                 func.distinct(
-                    func.coalesce(col(UserWatchTime.video_id), col(UserWatchTime.yt_id))
+                    func.coalesce(
+                        col(Video.youtube_id),
+                        col(UserWatchTime.yt_id),
+                        func.cast(col(UserWatchTime.video_id), String),
+                    )
                 )
             ),
         )

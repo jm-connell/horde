@@ -116,6 +116,7 @@ def set_allowed_channels(
         ]
     )
     user.allowed_channels = parental.dump(channels)
+    parental.verified_streams().forget_user(user_id)
     user.updated_at = utcnow()
     session.add(user)
     session.commit()

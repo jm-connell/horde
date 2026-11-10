@@ -462,3 +462,18 @@ def test_a_seek_in_a_stream_is_not_watching(client, init_db, clock):
     clock.at(30)
     _report(client, 400)  # jumped ahead
     assert _seconds(init_db["engine"]) == 20
+
+
+def test_a_stream_downloaded_later_counts_once_per_channel(
+    client, add_video, init_db, clock
+):
+    """Review finding: the stream row and the library row counted as two."""
+    for wall, position in [(0, 20), (30, 50)]:
+        clock.at(wall)
+        _report(client, position)
+    video = add_video(duration_sec=600.0, channel="Streamer", yt_id="strmwatch01")
+    _play(client, clock, video.id, [(100, 50), (105, 55)])
+    stats = client.get("/api/history/stats", params={"range": "7d", "tz": "UTC"}).json()
+    assert stats["totals"]["videos_started"] == 1
+    (channel,) = [c for c in stats["channels"] if c["name"] == "Streamer"]
+    assert channel["videos"] == 1

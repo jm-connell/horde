@@ -594,6 +594,11 @@ def create_downloads_bulk(
         except UnsafeUrlError:
             skips.append(DownloadBulkSkip(url=raw.strip(), reason="invalid_url"))
             continue
+        if user.allowed is not None and not parental.stream_allowed(
+            session, user.allowed, user.id, youtube_video_id(raw)
+        ):
+            # Parental controls: only an allowed channel's video.
+            raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
         if is_youtube_short_url(raw):
             skips.append(DownloadBulkSkip(url=raw.strip(), reason="shorts"))
             continue

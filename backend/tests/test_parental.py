@@ -169,3 +169,93 @@ def test_downloads_reach_only_allowed_videos(member_client, restricted):
     )
     assert resp.status_code == 403
     assert member_client.get("/api/downloads").json() == []
+
+
+def test_a_url_without_a_readable_youtube_id_is_refused(member_client, restricted):
+    """Review finding: unusual YouTube forms and other sites passed the guard."""
+    for url in (
+        "https://www.youtube.com/watch_popup?v=otherviden1",
+        "https://www.youtube-nocookie.com/embed/otherviden1",
+        "https://vimeo.com/123456",
+    ):
+        for path in ("/api/preview/manifest", "/api/preview/stream"):
+            resp = member_client.get(path, params={"url": url})
+            assert resp.status_code == 403, (path, url)
+    # An allowed channel's own URL (its live broadcast) still passes the guard.
+    resp = member_client.get("/api/live/channel", params={"url": KIDS_URL})
+    assert resp.status_code != 403
+
+
+def test_bulk_device_downloads_are_checked_too(member_client, restricted):
+    resp = member_client.post(
+        "/api/downloads/bulk",
+        json={
+            "urls": ["https://www.youtube.com/watch?v=zzzzzzzzzzz"],
+            "destination": "device",
+        },
+    )
+    assert resp.status_code == 403
+    assert member_client.get("/api/downloads").json() == []
+
+
+def test_a_look_alike_channel_name_is_not_enough(
+    member_client, restricted, monkeypatch
+):
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda url: {
+            "id": "lookalike01",
+            "title": "Not really",
+            "channel": "kids craft",
+            "channel_url": "https://www.youtube.com/@impostor",
+        },
+    )
+    resp = member_client.get(
+        "/api/preview/meta",
+        params={"url": "https://www.youtube.com/watch?v=lookalike01"},
+    )
+    assert resp.status_code == 403
+
+
+def test_a_look_alike_library_video_is_hidden(member_client, restricted, add_video):
+    add_video(
+        title="Impostor upload",
+        channel="Kids Craft",
+        channel_url="https://www.youtube.com/@impostor",
+        yt_id="impostor001",
+    )
+    titles = [v["title"] for v in member_client.get("/api/videos").json()["items"]]
+    assert titles == ["Paper boats"]
+
+
+def test_the_import_queue_is_closed(member_client, restricted):
+    assert member_client.get("/api/review").status_code == 403
+
+
+def test_changing_the_list_forgets_checked_streams(
+    client, member_client, member_user, restricted, monkeypatch
+):
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda url: {
+            "id": "streamkids1",
+            "title": "A stream",
+            "channel": "Kids Craft",
+            "channel_url": KIDS_URL,
+        },
+    )
+    kids = "https://www.youtube.com/watch?v=streamkids1"
+    assert (
+        member_client.get("/api/preview/meta", params={"url": kids}).status_code == 200
+    )
+    _restrict(
+        client,
+        member_user,
+        [{"url": "https://www.youtube.com/@other", "name": "Other"}],
+    )
+    resp = member_client.get(
+        "/api/preview/subtitles", params={"url": kids, "lang": "en"}
+    )
+    assert resp.status_code == 403
