@@ -61,7 +61,15 @@ def stream_guard(
         return
     yt_id = _stream_id(request)
     if yt_id is None:
-        return  # no video named (a list: filtered where it is built)
+        url = request.query_params.get("url")
+        if url is None:
+            return  # no video named (a list: filtered where it is built)
+        # A URL without a YouTube video id this can read (another site, an
+        # unusual YouTube form yt-dlp still plays): refused, unless it is an
+        # allowed channel's own URL (its live broadcast, ``/api/live/channel``).
+        if parental.normalize_channel_url(url) in user.allowed.urls:
+            return
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
     if not parental.stream_allowed(session, user.allowed, user.id, yt_id):
         raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
 
