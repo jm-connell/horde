@@ -42,6 +42,23 @@ def _days_ago(n: float):
     return utcnow() - timedelta(days=n)
 
 
+def _age(session, user_id: int, video_id: int, days: float) -> None:
+    """Make a saved viewing ``days`` old, as history that aged on the server.
+
+    A late save cannot date itself that far back (``LATE_SAVE_HORIZON``).
+    """
+    state = session.exec(
+        select(UserVideoState).where(
+            UserVideoState.user_id == user_id, UserVideoState.video_id == video_id
+        )
+    ).one()
+    state.last_watched_at = _days_ago(days)
+    if state.finished_at is not None:
+        state.finished_at = _days_ago(days)
+    session.add(state)
+    session.commit()
+
+
 def _rule(session, *, enabled=True, channel=CHANNEL, **limits) -> ChannelRetention:
     return retention.save(
         session, channel, enabled=enabled, rule=retention.Rule(**limits)
@@ -143,10 +160,8 @@ def test_a_recent_finish_by_another_account_keeps_the_video(
 ):
     """One account's old finish must not remove a video another just watched."""
     (video,) = _news(add_video, 1, start_age=60)
-    long_ago = utcnow() - timedelta(days=40)
-    user_state.record_progress(
-        session, admin_user.id, video.id, 0, long_ago, finished=True
-    )
+    user_state.record_progress(session, admin_user.id, video.id, 0, finished=True)
+    _age(session, admin_user.id, video.id, 40)
     user_state.record_progress(session, member_user.id, video.id, 0, finished=True)
     row = _rule(session, remove_watched_after_days=30)
 
@@ -159,16 +174,39 @@ def test_any_recent_viewing_by_anyone_keeps_a_finished_video(
 ):
     """Past the 7 day in-progress window, a viewing inside the wait still counts."""
     (video,) = _news(add_video, 1, start_age=100)
-    user_state.record_progress(
-        session, admin_user.id, video.id, 0, _days_ago(40), finished=True
-    )
-    user_state.record_progress(session, member_user.id, video.id, 0, _days_ago(10))
+    user_state.record_progress(session, admin_user.id, video.id, 0, finished=True)
+    _age(session, admin_user.id, video.id, 40)
+    user_state.record_progress(session, member_user.id, video.id, 0)
+    _age(session, member_user.id, video.id, 10)
     row = _rule(session, remove_watched_after_days=30)
 
     assert _run(session, row) == 0
 
     # Once nobody has looked at it for the whole wait, it goes.
     assert _run(session, row, now=utcnow() + timedelta(days=25)) == 1
+
+
+def test_a_backdated_finish_does_not_make_a_video_removable(
+    member_client, session, add_video
+):
+    """A client-chosen ``watched_at`` must not claim a finish from long ago."""
+    (video,) = _news(add_video, 1, start_age=100)
+    row = _rule(session, remove_watched_after_days=30)
+
+    resp = member_client.patch(
+        f"/api/videos/{video.id}/progress",
+        json={
+            "position_sec": 0,
+            "finished": True,
+            "watched_at": _days_ago(365).isoformat(),
+        },
+    )
+
+    assert resp.status_code == 204
+    assert retention.plan(session, CHANNEL, retention.rule_of(row)).removals == []
+    assert _run(session, row) == 0
+    # The finish counts as of (at most a day before) the save: the wait still runs.
+    assert _run(session, row, now=utcnow() + timedelta(days=31)) == 1
 
 
 def test_a_half_watch_that_expired_is_not_finished(session, add_video, admin_user):

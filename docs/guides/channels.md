@@ -134,7 +134,7 @@ Set a rule under **Channel settings → Clean up old videos**: tick the limits y
 
 A removed video is not downloaded again by [autodownload](#autodownload), just like a video you delete by hand. The rule follows the channel when you rename it (if the new name already has a rule, that one stays). Renaming onto a name that already has videos merges two channels, so the rules involved are **turned off** instead of applying to videos they were not written for; review and switch them on again. With `HORDE_TRASH_DAYS=0` no rule removes anything, because an unattended permanent delete is never the fallback.
 
-Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Only playing a video to its end counts as finishing it: opening it, seeking back to the start or leaving at 90 % does not.
+Watched videos count from the update that introduced retention: the date a video was finished was not recorded before, so earlier views do not make a video removable. Only playing a video to its end counts as finishing it: opening it, seeking back to the start or leaving at 90 % does not. A finish saved late by a device that was offline counts as at most one day old.
 
 Anyone may see a channel's rule; saving one needs the `delete_videos` permission. The API is `GET` / `PUT /api/channels/retention` and `POST /api/channels/retention/preview`.
 
