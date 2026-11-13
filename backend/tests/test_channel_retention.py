@@ -686,6 +686,63 @@ def test_a_merge_into_a_channel_with_a_rule_disables_that_rule_too(
     assert retention.run_all() == 0
 
 
+def test_a_member_cannot_move_a_video_under_a_rule(member_client, session, add_video):
+    """Without delete_videos, an edit must not hand a video to a rule."""
+    _news(add_video, 2, start_age=100)
+    other = add_video(channel="Other", title="theirs", write_file=True)
+    other.added_at = _days_ago(50)
+    session.add(other)
+    session.commit()
+    _rule(session, keep_latest=2)
+    assert member_client.delete(f"/api/videos/{other.id}").status_code == 403
+
+    resp = member_client.patch(
+        f"/api/videos/{other.id}",
+        json={"channel": CHANNEL, "published_at": "2001-01-01T00:00:00Z"},
+    )
+
+    assert resp.status_code == 200
+    assert retention.run_all() == 0
+    assert "theirs" in _titles(session)
+
+
+def test_an_admin_edit_still_puts_a_video_under_the_rule(client, session, add_video):
+    _news(add_video, 2, start_age=100)
+    other = add_video(channel="Other", title="theirs", write_file=True)
+    other.added_at = _days_ago(50)
+    session.add(other)
+    session.commit()
+    _rule(session, keep_latest=2)
+
+    resp = client.patch(
+        f"/api/videos/{other.id}",
+        json={"channel": CHANNEL, "published_at": "2001-01-01T00:00:00Z"},
+    )
+
+    assert resp.status_code == 200
+    assert retention.run_all() == 1
+    assert "theirs" not in _titles(session)
+
+
+def test_a_member_cannot_strip_a_videos_exemptions(member_client, session, add_video):
+    noted, reviewed = _news(add_video, 2, start_age=100)
+    noted.notes = "keep me"
+    reviewed.needs_review = True
+    session.add(noted)
+    session.add(reviewed)
+    session.commit()
+    _rule(session, max_age_days=30)
+
+    cleared = member_client.patch(
+        "/api/videos/bulk-notes", json={"video_ids": [noted.id], "notes": ""}
+    )
+    skipped = member_client.post(f"/api/review/{reviewed.id}/skip")
+
+    assert (cleared.status_code, skipped.status_code) == (204, 200)
+    assert retention.run_all() == 0
+    assert _titles(session) == {noted.title, reviewed.title}
+
+
 def test_a_merge_reports_nothing_disabled_when_no_rule_was_on(
     client, session, add_video
 ):

@@ -129,6 +129,7 @@ A video that matches any limit goes. Whatever the limits say, these **stay**:
 - videos someone is partway through right now (watched in the last 7 days, not finished);
 - videos added in the last 24 hours;
 - videos you restored from the trash (they are never taken again, even if the rule would match).
+- videos that someone without the `delete_videos` permission moved into the channel, re-dated, cleared the notes of or took out of review while the rule was on (removing videos needs that permission, so such an edit cannot hand a video to the rule).
 
 Set a rule under **Channel settings → Clean up old videos**: tick the limits you want, enter the numbers, switch on **Clean up this channel automatically** and **Save cleanup rule**. The exceptions are listed in small print under the limits. Before you save, a line under the limits says how much the rule would remove and updates as you type ("Right now this would move 12 videos (4.3 GB) to the trash.") and how many videos the exceptions keep. A channel with an enabled rule shows a chip such as **Keeps latest 20** in its header. A saved, enabled rule runs at once and then about every hour. Each removal shows in **Settings → Library → Trash** with the reason ("Retention: keep latest 20"), no name under "deleted by", and **Restore**. Retention does not free disk by itself: the trash still counts toward the [library size limit](../settings/system.md) until it is erased.
 

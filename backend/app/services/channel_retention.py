@@ -69,7 +69,11 @@ ALWAYS_KEPT: tuple[tuple[str, str], ...] = (
     ("notes", "It has notes"),
     ("in_progress", "Someone is partway through it (watched in the last 7 days)"),
     ("new", "It was added in the last 24 hours"),
-    ("restored", "It was restored from the trash"),
+    (
+        "restored",
+        "It was restored from the trash, or someone who may not delete videos "
+        "moved it into this channel or changed its date, notes or review state",
+    ),
 )
 
 
@@ -104,6 +108,51 @@ class Plan:
     removals: list[Removal]
     #: Videos a limit matched that an exception keeps.
     kept_by_exception: int
+
+
+@dataclass(frozen=True)
+class Exposure:
+    """The fields of a video that decide whether, and how, a rule reaches it."""
+
+    channel: str | None
+    published_at: datetime | None
+    has_notes: bool
+    needs_review: bool
+
+    @classmethod
+    def of(cls, video: Video) -> Exposure:
+        return cls(
+            video.channel,
+            video.published_at,
+            bool((video.notes or "").strip()),
+            video.needs_review,
+        )
+
+
+def keep_if_exposed(
+    session: Session, video: Video, before: Exposure, *, may_delete: bool
+) -> None:
+    """Mark ``video`` kept when an edit put it in reach of an enabled rule.
+
+    Removing videos needs ``delete_videos``, and that includes steering a rule:
+    an edit by anyone else that moves a video into a channel with a rule,
+    changes the date ``keep_latest`` ranks by, clears its notes or takes it out
+    of review is applied, but the rule then never removes that video (as after
+    a restore from the trash). The caller commits.
+    """
+    if may_delete or not video.channel:
+        return
+    rule = get(session, video.channel)
+    if rule is None or not rule.enabled:
+        return
+    after = Exposure.of(video)
+    if (
+        after.channel != before.channel
+        or after.published_at != before.published_at
+        or (before.has_notes and not after.has_notes)
+        or (before.needs_review and not after.needs_review)
+    ):
+        session.merge(RetentionKeep(video_id=require_id(video)))
 
 
 def rule_of(row: ChannelRetention) -> Rule:
