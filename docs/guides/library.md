@@ -89,7 +89,7 @@ Things to know:
 - **A storage outage does not shorten the 7 days.** If the downloads share is not mounted, the purge waits.
 - Choosing to **keep the file** when removing a video from the library has nothing to trash; the video is only dropped from the library, as before.
 - `HORDE_TRASH_DAYS=0` turns the trash off: new deletes are immediate and permanent. Anything already in the trash stays for its normal 7 days.
-- Videos Horde removes by itself stay permanent: a library entry whose file vanished from disk, a re-download replacing the old copy, a [factory reset](../settings/system.md) that erases media (it also empties the trash), and deleting an account.
+- Videos Horde removes by itself stay permanent: a library entry whose file vanished from disk, a re-download replacing the old copy (only ever a fresh copy of the same source; see [Watching](watching.md)), a [factory reset](../settings/system.md) that erases media (it also empties the trash), and deleting an account.
 
 For API clients: the `204` of `DELETE /api/videos/{id}?delete_file=true` and of `POST /api/videos/bulk-delete` carries the entry id in the `X-Horde-Trash-Entry` (bulk: `X-Horde-Trash-Entries`, comma separated) header, which `POST /api/trash/{id}/restore` takes. A bulk delete that moves some videos and fails on others answers `500` `trash_failed` and still sends the header for the ones that moved, so a client can offer Undo for them. See [Trash design](../adr/0013-trash-tombstones.md).
 

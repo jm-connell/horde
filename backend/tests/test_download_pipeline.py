@@ -426,6 +426,52 @@ def test_replacing_without_curation_takes_the_remote_copy(init_db, fake, add_vid
     assert library.parse_tags(row.tags) == ["remote"]
 
 
+@pytest.mark.parametrize("explicit_id", [True, False], ids=["replace_id", "same_yt_id"])
+def test_a_download_of_another_source_never_replaces_a_video(
+    init_db, fake, add_video, explicit_id
+):
+    """An edited ``source_url`` must not let a download delete another file."""
+    video = add_video(
+        file_path="Alpha/Home movie.mp4", source_url=URL, title="Home movie"
+    )
+    assert video.youtube_id == YT  # derived from the edited source_url
+    old_media = init_db["downloads"] / video.file_path
+    old_media.parent.mkdir(parents=True, exist_ok=True)
+    old_media.write_bytes(b"home movie")
+    job_id = _add_job(init_db, replace_video_id=video.id if explicit_id else None)
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    assert old_media.read_bytes() == b"home movie"
+    rows = {row.id: row for row in _videos(init_db)}
+    assert len(rows) == 2
+    assert rows[video.id].file_path == "Alpha/Home movie.mp4"
+    assert _job(init_db, job_id).video_id != video.id
+
+
+def test_a_member_cannot_redownload_another_source_over_a_video(
+    init_db, fake, add_video, member_client
+):
+    """edit_metadata + download, without delete_videos, never deletes media."""
+    video = add_video(file_path="Alpha/Home movie.mp4", title="Home movie")
+    old_media = init_db["downloads"] / video.file_path
+    old_media.parent.mkdir(parents=True, exist_ok=True)
+    old_media.write_bytes(b"home movie")
+    assert member_client.delete(f"/api/videos/{video.id}").status_code == 403
+
+    patched = member_client.patch(f"/api/videos/{video.id}", json={"source_url": URL})
+    assert patched.status_code == 200
+    queued = member_client.post(f"/api/videos/{video.id}/redownload", json={})
+    assert queued.status_code == 200
+    with Session(init_db["engine"]) as s:
+        (job,) = s.exec(select(DownloadJob)).all()
+    run_job_inline(job.id)
+
+    assert _job(init_db, job.id).status == JobStatus.completed
+    assert old_media.read_bytes() == b"home movie"
+    assert len(_videos(init_db)) == 2
+
+
 def test_completed_snapshot_carries_quality_and_volume_warnings(
     init_db, fake, monkeypatch
 ):
