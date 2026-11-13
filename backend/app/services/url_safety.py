@@ -23,7 +23,8 @@ Two entry points:
   server that answers differently the second time is not covered there.
 * :func:`fetch_bytes` fetches with httpx and is airtight: redirects are followed
   by hand with a fresh check per hop, and the connection is pinned to the
-  address that was validated.
+  address that was validated. Cookie and authorization headers are dropped once
+  a redirect leaves the first URL's origin.
 
 The AI provider URLs (``base_url``, ``embed_base_url``) are deliberately not
 routed through this module: they are often LAN hosts by design and are
@@ -104,6 +105,10 @@ def _resolve(host: str, port: int) -> list[IPAddress]:
     return out
 
 
+#: Headers that carry credentials for one origin, never sent to another.
+CREDENTIAL_HEADERS = frozenset({"cookie", "authorization", "proxy-authorization"})
+
+
 @dataclass(frozen=True)
 class CheckedUrl:
     url: str
@@ -112,6 +117,16 @@ class CheckedUrl:
     port: int
     #: Validated addresses to connect to. Empty when the name did not resolve.
     addresses: tuple[IPAddress, ...]
+
+    @property
+    def origin(self) -> tuple[str, str, int]:
+        return self.scheme, self.host.lower(), self.port
+
+
+def without_credentials(headers: dict[str, str]) -> dict[str, str]:
+    """``headers`` minus the credential headers: for a redirect to another origin,
+    as browsers and httpx do."""
+    return {k: v for k, v in headers.items() if k.lower() not in CREDENTIAL_HEADERS}
 
 
 def check_url(url: str) -> CheckedUrl:
@@ -203,11 +218,16 @@ def fetch_bytes(
     """
     current = url
     base_headers = dict(headers or {})
+    first_origin: tuple[str, str, int] | None = None
     with httpx.Client(timeout=timeout, follow_redirects=False) as client:
         for _hop in range(max_redirects + 1):
             checked = check_url(current)
             if not checked.addresses:
                 raise UnsafeUrlError("Could not resolve that host")
+            if first_origin is None:
+                first_origin = checked.origin
+            elif checked.origin != first_origin:
+                base_headers = without_credentials(base_headers)
             redirect_to: str | None = None
             last_error: httpx.HTTPError | None = None
             for ip in checked.addresses:

@@ -23,7 +23,11 @@ def upstream(monkeypatch):
     def handler(request: httpx.Request) -> httpx.Response:
         seen.append(request.url.host)
         sent.append(request)
-        return routes.get(request.url.host, httpx.Response(200, content=b"ok"))
+        # Pinned requests carry the name in Host; route by it, then by address.
+        route = routes.get(request.headers.get("host", "")) or routes.get(
+            request.url.host, httpx.Response(200, content=b"ok")
+        )
+        return route(request) if callable(route) else route
 
     client = httpx.AsyncClient(
         transport=httpx.MockTransport(handler), follow_redirects=False
@@ -166,3 +170,76 @@ def test_a_pinned_response_keeps_the_url_by_name(upstream):
     )
 
     assert str(resp.url) == "https://cdn.example/live/index.m3u8"
+
+
+def _with_cookie(url: str) -> dict:
+    return {**_resolved(url), "http_headers": {"Cookie": "SID=secret", "X-Keep": "1"}}
+
+
+def test_stream_proxy_drops_cookies_on_a_redirect_to_another_host(
+    client, monkeypatch, upstream
+):
+    """Cookies yt-dlp scoped to the format URL must not follow it to another host."""
+    _seen, routes, sent = upstream
+    monkeypatch.setattr(
+        stream_preview,
+        "resolve_preview_stream",
+        lambda *_a, **_k: _with_cookie("https://cdn.example/video.mp4"),
+    )
+    routes["cdn.example"] = httpx.Response(
+        302, headers={"Location": "https://other.example/landing"}
+    )
+
+    resp = client.get("/api/preview/stream", params={"url": "https://example.com/v"})
+
+    assert resp.status_code == 200
+    first, second = sent
+    assert first.headers["cookie"] == "SID=secret"
+    assert second.headers["host"] == "other.example"
+    assert "cookie" not in second.headers
+    assert second.headers["x-keep"] == "1"
+
+
+def test_stream_proxy_keeps_cookies_on_a_same_origin_redirect(
+    client, monkeypatch, upstream
+):
+    _seen, routes, sent = upstream
+    monkeypatch.setattr(
+        stream_preview,
+        "resolve_preview_stream",
+        lambda *_a, **_k: _with_cookie("https://cdn.example/video.mp4"),
+    )
+    routes["cdn.example"] = lambda request: (
+        httpx.Response(302, headers={"Location": "/v2.mp4"})
+        if request.url.path == "/video.mp4"
+        else httpx.Response(200, content=b"ok")
+    )
+
+    resp = client.get("/api/preview/stream", params={"url": "https://example.com/v"})
+
+    assert resp.status_code == 200
+    assert [r.url.path for r in sent] == ["/video.mp4", "/v2.mp4"]
+    assert all(r.headers["cookie"] == "SID=secret" for r in sent)
+
+
+def test_fetch_bytes_drops_cookies_on_a_redirect_to_another_host(monkeypatch):
+    sent: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        sent.append(request)
+        if request.headers["host"] == "cdn.example":
+            return httpx.Response(302, headers={"Location": "http://other.example/x"})
+        return httpx.Response(200, content=b"ok")
+
+    real_client = httpx.Client
+    monkeypatch.setattr(
+        url_safety.httpx,
+        "Client",
+        lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
+    )
+
+    url_safety.fetch_bytes(
+        "http://cdn.example/a", max_bytes=10, headers={"Cookie": "SID=secret"}
+    )
+
+    assert [r.headers.get("cookie") for r in sent] == ["SID=secret", None]

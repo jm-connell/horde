@@ -36,6 +36,7 @@ from ..services.url_safety import (
     check_url,
     pinned_request,
     validate_public_url,
+    without_credentials,
 )
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
@@ -109,13 +110,22 @@ async def _send_validated(
     could be handed an internal one. A name that does not resolve is refused.
     Raises UnsafeUrlError (HTTP 400) otherwise.
 
+    The headers (with a format's cookies) belong to the first URL's origin: once a
+    redirect leaves it (scheme, host or port), Cookie and authorization headers
+    are dropped, as browsers and httpx do.
+
     The response's ``url`` is the URL by name, so relative links in it (an HLS
     playlist) resolve as usual.
     """
+    first_origin: tuple[str, str, int] | None = None
     for _hop in range(MAX_REDIRECTS + 1):
         checked = await run_in_threadpool(check_url, url)
         if not checked.addresses:
             raise UnsafeUrlError("Could not resolve that host")
+        if first_origin is None:
+            first_origin = checked.origin
+        elif checked.origin != first_origin:
+            headers = without_credentials(headers)
         response = await _send_pinned(client, method, checked, headers, stream=stream)
         response.request = client.build_request(method, checked.url, headers=headers)
         if response.status_code not in REDIRECT_STATUSES:
