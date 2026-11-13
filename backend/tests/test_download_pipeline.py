@@ -648,3 +648,22 @@ def test_finishing_a_restart_of_an_already_completed_job_keeps_its_quality(
     assert _job(init_db, job_id).quality_preset == "720p"
     assert _job(init_db, job_id).status == JobStatus.completed
     assert requeued == []
+
+
+@pytest.mark.parametrize(
+    ("info_id", "token", "same"),
+    [
+        ("pipeline001", "pipeline001", True),
+        ("pipeline001", "pipeline002", False),
+        ("pipeline-01", "pipeline_01", False),  # plain ids must match exactly
+        ("abc:def", "abc：def", True),  # yt-dlp's fullwidth rewrite
+        ("a/b", "a⧸b", True),
+        ("a/b", "a_b", True),
+        ("a/b", "a_c", False),
+    ],
+)
+def test_same_source_tolerates_ids_yt_dlp_rewrites_in_file_names(info_id, token, same):
+    from app.services.downloads.finalize import _same_source
+
+    video = Video(file_path=f"Chan/2024/Title [{token}].mp4", title="t")
+    assert _same_source(video, {"id": info_id}) is same

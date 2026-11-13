@@ -507,6 +507,8 @@ def _resolve_target(
 
 #: The ``[<id>]`` yt-dlp puts at the end of every library download's name.
 _ID_TOKEN_RE = re.compile(r"\[([^\[\]]+)\]$")
+_PLAIN_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+_NOT_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
 
 
 def _same_source(video: Video, info: dict[str, Any]) -> bool:
@@ -520,9 +522,15 @@ def _same_source(video: Video, info: dict[str, Any]) -> bool:
     if info_id is None or str(info_id) == "":
         return False
     match = _ID_TOKEN_RE.search(Path(video.file_path).stem)
-    return match is not None and match.group(1) == truncate_bytes(
-        str(info_id), ID_BYTES
-    )
+    if match is None:
+        return False
+    token, expected = match.group(1), truncate_bytes(str(info_id), ID_BYTES)
+    if _PLAIN_ID_RE.fullmatch(expected):  # every YouTube id: exact match
+        return token == expected
+    # yt-dlp rewrites characters a file name cannot hold ("a/b" -> "a⧸b" or
+    # "a_b"), so compare the letters and digits it keeps.
+    kept = _NOT_ALNUM_RE.sub("", expected)
+    return bool(kept) and _NOT_ALNUM_RE.sub("", token) == kept
 
 
 def _stale_files_of(video: Video, final_path: Path) -> list[Path]:
