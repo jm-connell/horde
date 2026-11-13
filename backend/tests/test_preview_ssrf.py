@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import http.server
 import ipaddress
 import socket
+import threading
 
 import httpx
 import pytest
@@ -64,15 +66,14 @@ def test_media_proxy_rechecks_every_redirect_hop(client, monkeypatch, upstream):
         "lookup_preview_media",
         lambda *_a, **_k: _resolved("http://cdn.example/v.mp4"),
     )
-    # The connection is pinned: the mock sees the validated address.
-    routes["93.184.216.34"] = httpx.Response(
+    routes["cdn.example"] = httpx.Response(
         302, headers={"Location": "http://127.0.0.1:9/secret"}
     )
 
     resp = client.get("/api/preview/media", params={"token": "t", "itag": "18"})
 
     assert resp.status_code == 400
-    assert seen == ["93.184.216.34"]
+    assert seen == ["cdn.example"]
 
 
 def test_legacy_stream_proxy_refuses_an_internal_extractor_url(
@@ -112,25 +113,69 @@ def test_dash_probe_refuses_an_internal_extractor_url():
         stream_preview._probe_mp4_ranges("http://127.0.0.1:8080/seg.mp4", {})
 
 
-def test_stream_proxy_connects_only_to_the_address_it_checked(
-    client, monkeypatch, upstream
-):
-    """DNS answering a public address to the check must not let httpx resolve the
-    name again (and be handed loopback): the connection goes to the checked IP."""
-    seen, _routes, sent = upstream
+@pytest.fixture
+def loopback_server():
+    """A real HTTP server on 127.0.0.1 that records the Host of every request."""
+    hosts: list[str] = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            hosts.append(self.headers.get("Host", ""))
+            self.send_response(200)
+            self.send_header("Content-Length", "6")
+            self.end_headers()
+            self.wfile.write(b"secret")
+
+        def log_message(self, *_args):
+            return None
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server.server_address[1], hosts
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+def _fetch_with_real_client(url: str) -> httpx.Response:
+    async def run() -> httpx.Response:
+        transport = url_safety.pinned_async_transport(httpx.Limits())
+        async with httpx.AsyncClient(transport=transport) as client:
+            return await preview._send_validated(client, "GET", url, {}, stream=False)
+
+    return asyncio.run(run())
+
+
+def test_dns_rebinding_cannot_reach_loopback(monkeypatch, loopback_server):
+    """DNS answers the check with a public address and the connect with loopback."""
+    port, hosts = loopback_server
+    answers = iter(["93.184.216.34"])
+
+    def rebinding(host: str, port: int):
+        return [ipaddress.ip_address(next(answers, "127.0.0.1"))]
+
+    monkeypatch.setattr(url_safety, "_resolve", rebinding)
+
+    with pytest.raises(url_safety.UnsafeUrlError):
+        _fetch_with_real_client(f"http://rebind.example:{port}/secret")
+    assert hosts == []
+
+
+def test_pinned_client_connects_by_name(monkeypatch, loopback_server):
+    """Where LAN sources are allowed the same client reaches the server, by name."""
+    port, hosts = loopback_server
+    monkeypatch.setenv("HORDE_ALLOW_PRIVATE_URLS", "1")
     monkeypatch.setattr(
-        stream_preview,
-        "resolve_preview_stream",
-        lambda *_a, **_k: _resolved("https://rebind.example/video.mp4"),
+        url_safety, "_resolve", lambda _h, _p: [ipaddress.ip_address("127.0.0.1")]
     )
 
-    resp = client.get("/api/preview/stream", params={"url": "https://example.com/v"})
+    resp = _fetch_with_real_client(f"http://media.example:{port}/v")
 
-    assert resp.status_code == 200
-    assert seen == ["93.184.216.34"]
-    (request,) = sent
-    assert request.headers["host"] == "rebind.example"
-    assert request.extensions["sni_hostname"] == "rebind.example"
+    assert resp.content == b"secret"
+    assert hosts == [f"media.example:{port}"]
 
 
 def test_stream_proxy_refuses_a_host_that_does_not_resolve(
@@ -155,21 +200,6 @@ def test_stream_proxy_refuses_a_host_that_does_not_resolve(
 
     assert resp.status_code == 400
     assert seen == []
-
-
-def test_a_pinned_response_keeps_the_url_by_name(upstream):
-    """Relative links in an HLS playlist resolve against ``response.url``."""
-    resp = asyncio.run(
-        preview._send_validated(
-            preview.get_preview_client(),
-            "GET",
-            "https://cdn.example/live/index.m3u8",
-            {},
-            stream=False,
-        )
-    )
-
-    assert str(resp.url) == "https://cdn.example/live/index.m3u8"
 
 
 def _with_cookie(url: str) -> dict:

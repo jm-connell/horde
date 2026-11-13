@@ -31,10 +31,9 @@ from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import (
     MAX_REDIRECTS,
     REDIRECT_STATUSES,
-    CheckedUrl,
     UnsafeUrlError,
     check_url,
-    pinned_request,
+    pinned_async_transport,
     validate_public_url,
     without_credentials,
 )
@@ -67,10 +66,13 @@ async def init_preview_client() -> None:
         return
     _preview_client = httpx.AsyncClient(
         timeout=httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0),
-        limits=httpx.Limits(
-            max_connections=32,
-            max_keepalive_connections=16,
-            keepalive_expiry=60.0,
+        # Connects only to checked public addresses (and ignores HTTP(S)_PROXY).
+        transport=pinned_async_transport(
+            httpx.Limits(
+                max_connections=32,
+                max_keepalive_connections=16,
+                keepalive_expiry=60.0,
+            )
         ),
         follow_redirects=False,  # redirects are followed by _send_validated
     )
@@ -105,17 +107,14 @@ async def _send_validated(
 
     yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
     each URL (the first and every redirect target) must pass the same public-address
-    check as user-supplied URLs, and the connection is pinned to an address that
-    passed it (as ``url_safety.fetch_bytes`` does): httpx resolving the name again
-    could be handed an internal one. A name that does not resolve is refused.
-    Raises UnsafeUrlError (HTTP 400) otherwise.
+    check as user-supplied URLs; a name that does not resolve is refused. The
+    preview client connects through ``url_safety.PinnedNetworkBackend``, which
+    checks the addresses it actually connects to, so DNS cannot answer the check
+    and the connection differently. Raises UnsafeUrlError (HTTP 400) otherwise.
 
     The headers (with a format's cookies) belong to the first URL's origin: once a
     redirect leaves it (scheme, host or port), Cookie and authorization headers
     are dropped, as browsers and httpx do.
-
-    The response's ``url`` is the URL by name, so relative links in it (an HLS
-    playlist) resolve as usual.
     """
     first_origin: tuple[str, str, int] | None = None
     for _hop in range(MAX_REDIRECTS + 1):
@@ -126,8 +125,8 @@ async def _send_validated(
             first_origin = checked.origin
         elif checked.origin != first_origin:
             headers = without_credentials(headers)
-        response = await _send_pinned(client, method, checked, headers, stream=stream)
-        response.request = client.build_request(method, checked.url, headers=headers)
+        request = client.build_request(method, checked.url, headers=headers)
+        response = await client.send(request, stream=stream)
         if response.status_code not in REDIRECT_STATUSES:
             return response
         location = response.headers.get("location")
@@ -139,32 +138,6 @@ async def _send_validated(
             )
         url = urljoin(checked.url, location)
     raise HTTPException(status_code=502, detail="Upstream redirected too many times")
-
-
-async def _send_pinned(
-    client: httpx.AsyncClient,
-    method: str,
-    checked: CheckedUrl,
-    headers: dict[str, str],
-    *,
-    stream: bool,
-) -> httpx.Response:
-    """Send to the validated addresses of ``checked`` in order until one connects.
-
-    HTTPS still sends the host name as SNI and verifies the certificate for it.
-    """
-    last_error: httpx.HTTPError | None = None
-    for ip in checked.addresses:
-        target, pinned_headers, extensions = pinned_request(checked, ip, headers)
-        request = client.build_request(
-            method, target, headers=pinned_headers, extensions=extensions
-        )
-        try:
-            return await client.send(request, stream=stream)
-        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
-            last_error = exc  # try the next validated address
-    assert last_error is not None  # noqa: S101 - addresses is never empty here
-    raise last_error
 
 
 async def _open_upstream(
