@@ -10,7 +10,7 @@ accounts were introduced (``services/auth/accounts.py``).
 from __future__ import annotations
 
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sqlalchemy import or_, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -18,6 +18,11 @@ from sqlmodel import Session, col, select
 
 from ..database import rowcount
 from ..models import UserVideoState, as_utc, utcnow
+
+#: How far back a late (offline-queued) save may date what it stores. A client
+#: chooses ``watched_at``, and retention's "watched" rule trusts these stamps, so
+#: a save must not be able to claim a finish from long ago.
+LATE_SAVE_HORIZON = timedelta(days=1)
 
 # SQLite allows 32766 bound parameters; stay well under it for IN (...) lists.
 _CHUNK = 500
@@ -57,7 +62,9 @@ def record_progress(
     one, queued on a device while the server was unreachable, carries the time
     it was made and applies only when the user has saved nothing newer since:
     a phone coming back online must not rewind the place the user reached on
-    another device meanwhile. A time in the future counts as now.
+    another device meanwhile. A time in the future counts as now; what is stored
+    is never older than ``LATE_SAVE_HORIZON`` (the comparison still uses the
+    time the save was made).
 
     ``finished`` is the player saying the video played to its end: it stamps
     ``finished_at`` (the position is saved as 0). A plain 0 is not a finish, the
@@ -65,7 +72,8 @@ def record_progress(
     leaves ``finished_at`` as it was; a position above 0 clears it again.
     """
     now = utcnow()
-    stamp = now if watched_at is None else min(as_utc(watched_at), now)
+    made_at = now if watched_at is None else min(as_utc(watched_at), now)
+    stamp = max(made_at, now - LATE_SAVE_HORIZON)
     if finished:
         position_sec = 0.0
     finished_at = stamp if finished else None
@@ -81,7 +89,7 @@ def record_progress(
         if watched_at is None
         else or_(
             col(UserVideoState.last_watched_at).is_(None),
-            col(UserVideoState.last_watched_at) < stamp,
+            col(UserVideoState.last_watched_at) < made_at,
         )
     )
     changes: dict[str, object] = {

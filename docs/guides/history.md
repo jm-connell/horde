@@ -87,7 +87,7 @@ After those come up to five videos you watched on YouTube inside the same window
 | Save cadence | About every **5 seconds** while playing; the position you paused or sought to within 5 seconds; at once when the page is hidden or closed |
 | Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) and the time is recorded as `finished_at` (watching it again clears it); a channel's [retention rule](channels.md#retention) uses it |
 | History stamp | `last_watched_at` updates as you watch |
-| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device |
+| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device. History stores it as at most one day old (an older time counts as one day ago), so a late save cannot make a channel's [retention](channels.md#retention) "watched" rule remove a video early |
 
 Full watch-page behavior (related, autoplay, stream handoff) is in [Watching](watching.md).
 

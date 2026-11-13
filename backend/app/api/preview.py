@@ -28,7 +28,15 @@ from ..services import library, next_part, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
-from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
+from ..services.url_safety import (
+    MAX_REDIRECTS,
+    REDIRECT_STATUSES,
+    UnsafeUrlError,
+    check_url,
+    pinned_async_transport,
+    validate_public_url,
+    without_credentials,
+)
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
@@ -58,10 +66,13 @@ async def init_preview_client() -> None:
         return
     _preview_client = httpx.AsyncClient(
         timeout=httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0),
-        limits=httpx.Limits(
-            max_connections=32,
-            max_keepalive_connections=16,
-            keepalive_expiry=60.0,
+        # Connects only to checked public addresses (and ignores HTTP(S)_PROXY).
+        transport=pinned_async_transport(
+            httpx.Limits(
+                max_connections=32,
+                max_keepalive_connections=16,
+                keepalive_expiry=60.0,
+            )
         ),
         follow_redirects=False,  # redirects are followed by _send_validated
     )
@@ -96,11 +107,25 @@ async def _send_validated(
 
     yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
     each URL (the first and every redirect target) must pass the same public-address
-    check as user-supplied URLs. Raises UnsafeUrlError (HTTP 400) otherwise.
+    check as user-supplied URLs; a name that does not resolve is refused. The
+    preview client connects through ``url_safety.PinnedNetworkBackend``, which
+    checks the addresses it actually connects to, so DNS cannot answer the check
+    and the connection differently. Raises UnsafeUrlError (HTTP 400) otherwise.
+
+    The headers (with a format's cookies) belong to the first URL's origin: once a
+    redirect leaves it (scheme, host or port), Cookie and authorization headers
+    are dropped, as browsers and httpx do.
     """
+    first_origin: tuple[str, str, int] | None = None
     for _hop in range(MAX_REDIRECTS + 1):
-        await run_in_threadpool(validate_public_url, url)
-        request = client.build_request(method, url, headers=headers)
+        checked = await run_in_threadpool(check_url, url)
+        if not checked.addresses:
+            raise UnsafeUrlError("Could not resolve that host")
+        if first_origin is None:
+            first_origin = checked.origin
+        elif checked.origin != first_origin:
+            headers = without_credentials(headers)
+        request = client.build_request(method, checked.url, headers=headers)
         response = await client.send(request, stream=stream)
         if response.status_code not in REDIRECT_STATUSES:
             return response
@@ -111,7 +136,7 @@ async def _send_validated(
             raise HTTPException(
                 status_code=502, detail="Upstream redirect had no target"
             )
-        url = urljoin(url, location)
+        url = urljoin(checked.url, location)
     raise HTTPException(status_code=502, detail="Upstream redirected too many times")
 
 

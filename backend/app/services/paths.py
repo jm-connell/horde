@@ -171,9 +171,10 @@ def safe_filename(
     """Make ``name`` safe as one path component on Linux, SMB and Content-Disposition.
 
     Replaces path separators and Windows-illegal characters, drops control
-    characters, trailing dots/spaces, ``.``/``..`` and Windows reserved device
-    names (``CON``, ``NUL``, ``COM1``... with or without an extension), and
-    truncates to ``max_bytes`` of UTF-8 on a character boundary.
+    characters, leading and trailing dots/spaces (so a name is never hidden and
+    never one of Horde's reserved ``.horde-*`` folders), ``.``/``..`` and Windows
+    reserved device names (``CON``, ``NUL``, ``COM1``... with or without an
+    extension), and truncates to ``max_bytes`` of UTF-8 on a character boundary.
     """
     cleaned = _ILLEGAL_CHARS_RE.sub("_", name or "")
     cleaned = "".join(
@@ -184,8 +185,8 @@ def safe_filename(
     def _finish(value: str) -> str:
         return truncate_bytes(value, max_bytes).rstrip(". ")
 
-    cleaned = _finish(cleaned).lstrip()
-    if not cleaned or set(cleaned) <= {"."}:
+    cleaned = _finish(cleaned).lstrip(" .")
+    if not cleaned:
         return default
     if cleaned.split(".", 1)[0].strip().upper() in _WINDOWS_RESERVED:
         cleaned = _finish(f"_{cleaned}")

@@ -65,7 +65,7 @@ If you customized a library video’s title and a metadata resync finds that the
 
 You can adopt the new source title or keep your custom title. This appears when `title_is_custom` is set and `source_title` ≠ current `title`. A similar banner appears for custom descriptions when `source_description` drifts.
 
-Redownload (“Change resolution”) and auto-replace of the same YouTube id keep curated title/description/notes (and locked tags); only the media file and non-custom metadata refresh.
+Redownload (“Change resolution”) and auto-replace of the same YouTube id keep curated title/description/notes (and locked tags); only the media file and non-custom metadata refresh. A download replaces a video only when it is a fresh copy of the same source: the old file's name must end in the same `[id]` yt-dlp wrote when it was first downloaded. Anything else, such as a manual import whose source URL was set or edited by hand, is added as a separate video and the old one is left untouched; delete whichever you no longer want (it goes to the trash).
 
 ## Watch overflow menu
 

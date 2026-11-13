@@ -6,6 +6,7 @@ database transaction that makes the video visible.
 """
 
 import logging
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,11 +32,13 @@ from ..metadata import (
     sprite_image_path,
     sprite_meta_path,
 )
+from ..outtmpl import ID_BYTES
 from ..paths import (
     find_video_by_path,
     media_server_sidecar_paths,
     resolve_compat_path,
     to_rel_path,
+    truncate_bytes,
 )
 from ..thumbnails import save_from_url
 from ..video_delete import delete_video_cascade, remove_files
@@ -472,6 +475,18 @@ def _resolve_target(
                 replace_video_id = existing.id
 
     video = session.get(Video, replace_video_id) if replace_video_id else None
+    if video is not None and not _same_source(video, info):
+        # Replacing deletes the old copy for good, so it must be this source's
+        # own earlier download. ``source_url`` (and the YouTube id derived from
+        # it) is editable and proves nothing: keep both, as separate videos.
+        logger.warning(
+            "job %s did not download the source of video %s; "
+            "importing it as a new video instead of replacing it",
+            spec.job_id,
+            replace_video_id,
+        )
+        replace_video_id = None
+        video = None
     if replace_video_id and video is None:
         # The row was deleted while the download ran (its job FK is now
         # SET NULL): keep the download as a new library video.
@@ -488,6 +503,34 @@ def _resolve_target(
         video = Video(file_path=request.rel_path)  # type: ignore[call-arg]  # table models skip validation; _apply_display_title sets title before the flush
         session.add(video)
     return video, False, []
+
+
+#: The ``[<id>]`` yt-dlp puts at the end of every library download's name.
+_ID_TOKEN_RE = re.compile(r"\[([^\[\]]+)\]$")
+_PLAIN_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+_NOT_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
+
+
+def _same_source(video: Video, info: dict[str, Any]) -> bool:
+    """True when ``video``'s file is an earlier download of the video in ``info``.
+
+    Every library download is named ``... [<id>].<ext>`` (``library_outtmpl``) and
+    only manual imports are ever renamed, so that token is a record the server
+    wrote. A manual import (no token) is never the same source.
+    """
+    info_id = info.get("id")
+    if info_id is None or str(info_id) == "":
+        return False
+    match = _ID_TOKEN_RE.search(Path(video.file_path).stem)
+    if match is None:
+        return False
+    token, expected = match.group(1), truncate_bytes(str(info_id), ID_BYTES)
+    if _PLAIN_ID_RE.fullmatch(expected):  # every YouTube id: exact match
+        return token == expected
+    # yt-dlp rewrites characters a file name cannot hold ("a/b" -> "a⧸b" or
+    # "a_b"), so compare the letters and digits it keeps.
+    kept = _NOT_ALNUM_RE.sub("", expected)
+    return bool(kept) and _NOT_ALNUM_RE.sub("", token) == kept
 
 
 def _stale_files_of(video: Video, final_path: Path) -> list[Path]:
