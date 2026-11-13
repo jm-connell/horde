@@ -706,6 +706,24 @@ def test_a_member_cannot_move_a_video_under_a_rule(member_client, session, add_v
     assert "theirs" in _titles(session)
 
 
+@pytest.mark.parametrize("published", ["2001-01-01T00:00:00Z", "2030-01-01T00:00:00Z"])
+def test_a_member_cannot_push_another_video_out_of_keep_latest(
+    member_client, session, add_video, published
+):
+    """The kept video must not take a keep_latest place from the others."""
+    _news(add_video, 2, start_age=100)
+    other = add_video(channel="Other", title="theirs", write_file=True)
+    _rule(session, keep_latest=2)
+
+    resp = member_client.patch(
+        f"/api/videos/{other.id}", json={"channel": CHANNEL, "published_at": published}
+    )
+
+    assert resp.status_code == 200
+    assert retention.run_all() == 0
+    assert _titles(session) == {"Episode 0", "Episode 1", "theirs"}
+
+
 def test_an_admin_edit_still_puts_a_video_under_the_rule(client, session, add_video):
     _news(add_video, 2, start_age=100)
     other = add_video(channel="Other", title="theirs", write_file=True)

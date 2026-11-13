@@ -276,8 +276,16 @@ def plan(
     reasons: dict[int, str] = {}
 
     if rule.keep_latest is not None and keep_reason:
+        # A kept video (restored, or edited by someone who may not delete) must
+        # not take one of the N places either: it would push another video out.
+        kept_for_good = _ids(
+            session,
+            select(col(RetentionKeep.video_id))
+            .join(Video, col(Video.id) == col(RetentionKeep.video_id))
+            .where(col(Video.channel) == channel),
+        )
         newest_first = sorted(
-            videos,
+            (v for v in videos if require_id(v) not in kept_for_good),
             key=lambda v: (as_utc(v.published_at or v.added_at), require_id(v)),
             reverse=True,
         )
