@@ -74,6 +74,11 @@ def reap_staging_dirs() -> list[Path]:
         elif child.is_symlink():
             remove_staging_dir(child)
         else:
+            # Only job dirs belong here; a loose file a video points at is media.
+            with Session(get_engine()) as session:
+                if _referenced(session, f"{STAGING_DIR_NAME}/{child.name}"):
+                    logger.warning("kept %s: a library video points at it", child)
+                    continue
             safe_unlink(child)
         removed.append(child)
     return removed

@@ -367,3 +367,38 @@ def test_shutdown_keeps_staged_fragments_and_the_next_run_reuses_the_dir(init_db
     assert {Path(d["path"]).parent for d in fake.downloads} == {
         staging / "Chan" / "2024"
     }
+
+
+def test_a_channel_named_like_the_staging_dir_cannot_get_media_reaped(
+    member_client, init_db, add_video
+):
+    """A manual import renamed into ``.horde-staging`` would be lost at boot."""
+    from app.services.temp_sweep import reap_staging_dirs
+
+    video = add_video(file_path="Alpha/Home movie.mp4", title="Home movie")
+    (init_db["downloads"] / "Alpha").mkdir(parents=True, exist_ok=True)
+    (init_db["downloads"] / video.file_path).write_bytes(OLD)
+
+    resp = member_client.patch(
+        f"/api/videos/{video.id}", json={"channel": STAGING_DIR_NAME}
+    )
+    assert resp.status_code == 200
+    rel = resp.json()["file_path"]
+    assert not rel.startswith(".")
+    reap_staging_dirs()
+    assert (init_db["downloads"] / rel).read_bytes() == OLD
+
+
+def test_boot_reap_keeps_a_loose_file_a_video_points_at(init_db, add_video):
+    from app.services.temp_sweep import reap_staging_dirs
+
+    rel = f"{STAGING_DIR_NAME}/Home movie.mp4"
+    add_video(file_path=rel, title="Home movie")
+    media = init_db["downloads"] / rel
+    media.parent.mkdir(parents=True, exist_ok=True)
+    media.write_bytes(OLD)
+    stray = init_db["downloads"] / STAGING_DIR_NAME / "stray.part"
+    stray.write_bytes(b"x")
+    reap_staging_dirs()
+    assert media.read_bytes() == OLD
+    assert not stray.exists()
