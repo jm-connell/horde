@@ -169,7 +169,7 @@ class FetchResult:
     final_url: str
 
 
-def _pinned_request(checked: CheckedUrl, ip: IPAddress, headers: dict[str, str]):
+def pinned_request(checked: CheckedUrl, ip: IPAddress, headers: dict[str, str]):
     """URL, headers and extensions that connect to the validated address ``ip``."""
     parts = urlsplit(checked.url)
     ip_text = f"[{ip}]" if ip.version == 6 else str(ip)
@@ -211,7 +211,7 @@ def fetch_bytes(
             redirect_to: str | None = None
             last_error: httpx.HTTPError | None = None
             for ip in checked.addresses:
-                target, req_headers, extensions = _pinned_request(
+                target, req_headers, extensions = pinned_request(
                     checked, ip, base_headers
                 )
                 try:

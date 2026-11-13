@@ -28,7 +28,15 @@ from ..services import library, next_part, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
-from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
+from ..services.url_safety import (
+    MAX_REDIRECTS,
+    REDIRECT_STATUSES,
+    CheckedUrl,
+    UnsafeUrlError,
+    check_url,
+    pinned_request,
+    validate_public_url,
+)
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
@@ -96,12 +104,20 @@ async def _send_validated(
 
     yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
     each URL (the first and every redirect target) must pass the same public-address
-    check as user-supplied URLs. Raises UnsafeUrlError (HTTP 400) otherwise.
+    check as user-supplied URLs, and the connection is pinned to an address that
+    passed it (as ``url_safety.fetch_bytes`` does): httpx resolving the name again
+    could be handed an internal one. A name that does not resolve is refused.
+    Raises UnsafeUrlError (HTTP 400) otherwise.
+
+    The response's ``url`` is the URL by name, so relative links in it (an HLS
+    playlist) resolve as usual.
     """
     for _hop in range(MAX_REDIRECTS + 1):
-        await run_in_threadpool(validate_public_url, url)
-        request = client.build_request(method, url, headers=headers)
-        response = await client.send(request, stream=stream)
+        checked = await run_in_threadpool(check_url, url)
+        if not checked.addresses:
+            raise UnsafeUrlError("Could not resolve that host")
+        response = await _send_pinned(client, method, checked, headers, stream=stream)
+        response.request = client.build_request(method, checked.url, headers=headers)
         if response.status_code not in REDIRECT_STATUSES:
             return response
         location = response.headers.get("location")
@@ -111,8 +127,34 @@ async def _send_validated(
             raise HTTPException(
                 status_code=502, detail="Upstream redirect had no target"
             )
-        url = urljoin(url, location)
+        url = urljoin(checked.url, location)
     raise HTTPException(status_code=502, detail="Upstream redirected too many times")
+
+
+async def _send_pinned(
+    client: httpx.AsyncClient,
+    method: str,
+    checked: CheckedUrl,
+    headers: dict[str, str],
+    *,
+    stream: bool,
+) -> httpx.Response:
+    """Send to the validated addresses of ``checked`` in order until one connects.
+
+    HTTPS still sends the host name as SNI and verifies the certificate for it.
+    """
+    last_error: httpx.HTTPError | None = None
+    for ip in checked.addresses:
+        target, pinned_headers, extensions = pinned_request(checked, ip, headers)
+        request = client.build_request(
+            method, target, headers=pinned_headers, extensions=extensions
+        )
+        try:
+            return await client.send(request, stream=stream)
+        except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
+            last_error = exc  # try the next validated address
+    assert last_error is not None  # noqa: S101 - addresses is never empty here
+    raise last_error
 
 
 async def _open_upstream(
