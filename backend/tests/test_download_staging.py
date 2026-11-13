@@ -402,3 +402,16 @@ def test_boot_reap_keeps_a_loose_file_a_video_points_at(init_db, add_video):
     reap_staging_dirs()
     assert media.read_bytes() == OLD
     assert not stray.exists()
+
+
+def test_boot_reap_keeps_a_folder_holding_a_library_video(init_db, add_video):
+    """A download made into a channel folder named like the staging dir."""
+    from app.services.temp_sweep import reap_staging_dirs
+
+    rel = f"{STAGING_DIR_NAME}/2024/Clip [abcdefghijk].mp4"
+    add_video(file_path=rel, title="Clip")
+    media = init_db["downloads"] / rel
+    media.parent.mkdir(parents=True, exist_ok=True)
+    media.write_bytes(OLD)
+    reap_staging_dirs()
+    assert media.read_bytes() == OLD
