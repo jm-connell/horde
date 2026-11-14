@@ -387,6 +387,21 @@ test("the Recommended actions share the home tabs' row", async ({ page }) => {
   await expect(note).toHaveCount(0);
 });
 
+test("a Recommended card's menu adds its video to the queue", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Recommended" }).click();
+  const card = page
+    .locator("[data-rec-key]")
+    .filter({ has: page.locator("[data-horde='video-card']") })
+    .first();
+  await card.getByRole("button", { name: "Tune recommendations" }).click();
+  await page.getByRole("menuitem", { name: "Add to queue" }).click();
+  await expect(page.getByText("Added to the queue")).toBeVisible();
+  await expect(page.getByText(/^Up next \(1\)$/)).toBeVisible();
+});
+
 test("the Recommended tab works without AI", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("tab", { name: "Recommended", exact: true }).click();

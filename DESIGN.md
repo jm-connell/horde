@@ -279,7 +279,12 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   so there is never a gap under the title or at the bottom. The action (a small
   accent download icon, a success check when downloaded, Live, Upcoming)
   always sits at the bottom right, never on a line of its own. "+ Queue"
-  appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
+  appears on hover or focus and confirms with a check and "Queued". A
+  Recommended card's ⋯ menu sits top-left, clear of it, and also has **Add to
+  queue**, the dependable way to queue on a touch screen. Small actions
+  inside a card (the download icon, a ✕) keep their look but widen what a
+  finger can hit with an `::after` inset (44px on coarse pointers where
+  there is room). Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`

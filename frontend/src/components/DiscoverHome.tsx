@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { usePlaybackActions } from "../context/PlaybackContext";
 import { useSubscribe } from "../queries/follows";
 import { useDownloads } from "../context/DownloadContext";
 import { useGridColumns } from "../hooks/useGridColumns";
@@ -106,6 +107,7 @@ export default function DiscoverHome({
   onChannelClick: (hit: ChannelHit) => void;
 }) {
   const { showToast, showError } = useToast();
+  const { addToQueue } = usePlaybackActions();
   const { can, isAdmin } = useAuth();
   const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
@@ -499,6 +501,7 @@ export default function DiscoverHome({
 
   const card = (item: DiscoverItem) => {
     const channel = channelOf(item);
+    const video = item.video;
     return (
       <div
         key={item.key}
@@ -533,6 +536,14 @@ export default function DiscoverHome({
         <RecMenu
           channel={channel.name || null}
           onWhy={() => setWhyItem(item)}
+          onQueue={
+            video
+              ? () => {
+                  addToQueue(video);
+                  showToast("Added to the queue");
+                }
+              : undefined
+          }
           onNotInterested={() => notInterested(item)}
           onBlockChannel={() => blockChannel(item)}
           onHideLive={

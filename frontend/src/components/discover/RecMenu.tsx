@@ -3,12 +3,14 @@ import { FlipMenuPanel, useFlipMenu } from "../../hooks/useFlipMenu";
 import { MoreIcon } from "../icons";
 
 /**
- * "Why this video?", "Not interested", "Don't recommend this channel" and, on
- * a live card, "Hide live streams from this channel" on a recommendation card.
+ * "Why this video?", "Add to queue", "Not interested", "Don't recommend this
+ * channel" and, on a live card, "Hide live streams from this channel" on a
+ * recommendation card.
  */
 export default function RecMenu({
   channel,
   onWhy,
+  onQueue,
   onNotInterested,
   onBlockChannel,
   onHideLive,
@@ -17,6 +19,11 @@ export default function RecMenu({
   channel: string | null;
   /** Show how the feed placed it (Recommended only). */
   onWhy?: () => void;
+  /**
+   * A downloaded video: add it to the play queue. The card's "+ Queue" shows
+   * on hover, so on a touch screen this is the dependable way to queue it.
+   */
+  onQueue?: () => void;
   onNotInterested?: () => void;
   onBlockChannel?: () => void;
   /** A live card: hide the channel's live streams (it stays followed). */
@@ -83,6 +90,19 @@ export default function RecMenu({
             }}
           >
             Why this video?
+          </button>
+        )}
+        {onQueue && (
+          <button
+            type="button"
+            role="menuitem"
+            className={itemClass}
+            onClick={() => {
+              setOpen(false);
+              onQueue();
+            }}
+          >
+            Add to queue
           </button>
         )}
         {onHideLive && (
