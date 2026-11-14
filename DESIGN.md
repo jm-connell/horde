@@ -232,10 +232,11 @@ bulk-select bar cover it instead. A browser tab has no tab bar.
 Two gestures stand in for the browser chrome the installed app lacks
 (touch screens only). Swiping right from the left edge goes back (iOS,
 `EdgeSwipeBack`), and pulling a page down from its top refreshes it
-(`PullToRefresh`): a 40px round mark, `ink-800` with an `ink-600` ring,
-drops in under the top bar, its refresh icon turning with the pull (still
-under reduced motion), and fills with the accent once letting go will
-refresh. A page reloads unless it handles the `horde:pull-refresh` event
+(`PullToRefresh`): a 40px round glass mark (`ink-900/60` with a backdrop
+blur and an `ink-600` ring) drops in under the top bar, its refresh icon
+turning with the pull (still under reduced motion), and turns accent (icon,
+`accent/60` ring, an `accent/15` tint, never a solid fill) once letting go
+will refresh. A page reloads unless it handles the `horde:pull-refresh` event
 itself; Recommended reshuffles, like its Refresh button.
 
 ## Elevation & Depth

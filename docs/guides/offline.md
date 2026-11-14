@@ -30,7 +30,7 @@ The installed app behaves more like a native app than a browser tab:
 - On iPhone and iPad, swipe right from the left edge of the screen to go
   back, since apps added to the Home Screen have no back button.
 - On a phone or tablet, pull a page down from its top to refresh it: a
-  refresh mark drops in under the top bar and fills in once letting go will
+  refresh mark drops in under the top bar and lights up once letting go will
   reload. On **Recommended** the pull reshuffles the feed, like **Refresh**.
 - Otherwise the page doesn't bounce past its ends, pinching doesn't
   zoom the whole interface (use **Settings → Appearance → Font size** for larger

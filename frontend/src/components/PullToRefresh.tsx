@@ -47,7 +47,7 @@ function blocksPull(target: EventTarget | null): boolean {
  * the installed app on a touch screen: there the browser's own pull to
  * refresh is off (index.css stops the page overscrolling) or, on iOS, never
  * existed. A refresh mark drops in under the top bar, turning with the pull,
- * and fills with the accent once letting go will refresh.
+ * and takes the accent once letting go will refresh.
  */
 export default function PullToRefresh() {
   const installed = useInstalledApp();
@@ -136,10 +136,11 @@ export default function PullToRefresh() {
       aria-hidden
       data-horde="pull-to-refresh"
       data-ready={ready ? "true" : undefined}
-      className={`pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full shadow-xl ring-1 transition-colors duration-150 ${
+      // Glass over whatever is under the top bar; the accent only tints it.
+      className={`pointer-events-none fixed left-1/2 z-50 flex h-10 w-10 items-center justify-center rounded-full shadow-lg ring-1 backdrop-blur-md transition-colors duration-150 ${
         ready
-          ? "bg-accent text-on-accent ring-accent"
-          : "bg-ink-800 text-gray-300 ring-ink-600"
+          ? "bg-accent/15 text-accent ring-accent/60"
+          : "bg-ink-900/60 text-gray-300 ring-ink-600"
       }`}
       style={{
         top: pull.top,
