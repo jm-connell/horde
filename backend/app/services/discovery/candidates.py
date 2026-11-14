@@ -15,6 +15,7 @@ import threading
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from functools import lru_cache
 from typing import Any
 
 import numpy as np
@@ -34,6 +35,7 @@ from ...models import (
 )
 from ..channel_catalog.query import is_hidden_catalog_video
 from ..follows import normalize_channel_url
+from ..ytdlp_common import cookie_configured
 from .history import library_key
 
 
@@ -43,6 +45,12 @@ def parse_published(raw: str | datetime | None) -> datetime | None:
         return None
     if isinstance(raw, datetime):
         return raw if raw.tzinfo else raw.replace(tzinfo=UTC)
+    return _parse_published_text(raw)
+
+
+@lru_cache(maxsize=8192)
+def _parse_published_text(raw: str) -> datetime | None:
+    # Cached: a feed parses tens of thousands of dates, most of them repeats.
     text = raw.strip()
     if not text:
         return None
@@ -121,8 +129,69 @@ def library_candidates(session: Session) -> list[Candidate]:
     return out
 
 
-def catalog_candidates(session: Session, exclude: set[str]) -> list[Candidate]:
-    """Visible catalog videos of every indexed channel (not only followed ones)."""
+class CatalogPool:
+    """The catalog's candidates, kept between feeds.
+
+    Held on the ``DiscoveryRuntime``. They are the same for every user and
+    most of a feed's loading time, so they are read again only when the
+    catalog changed (a cheap aggregate query decides). The candidates are
+    shared between feeds: never change one.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._built: tuple[tuple[Any, ...], list[Candidate]] | None = None
+
+    @staticmethod
+    def _fingerprint(session: Session) -> tuple[Any, ...]:
+        videos = session.execute(
+            sa_select(
+                func.count(col(ChannelCatalogVideo.id)),
+                func.max(col(ChannelCatalogVideo.id)),
+                func.max(col(ChannelCatalogVideo.indexed_at)),
+            )
+        ).one()
+        skips = session.execute(
+            sa_select(
+                func.count(col(ChannelCatalogSkip.id)),
+                func.max(col(ChannelCatalogSkip.id)),
+            )
+        ).one()
+        catalogs = session.execute(
+            sa_select(
+                func.count(col(ChannelCatalog.id)),
+                func.max(col(ChannelCatalog.updated_at)),
+            )
+        ).one()
+        # Members-only videos are hidden only without cookies.
+        return (*videos, *skips, *catalogs, cookie_configured())
+
+    def candidates(self, session: Session) -> list[Candidate]:
+        fingerprint = self._fingerprint(session)
+        with self._lock:
+            built = self._built
+            if built is not None and built[0] == fingerprint:
+                return built[1]
+        out = _load_catalog_candidates(session)
+        with self._lock:
+            self._built = (fingerprint, out)
+        return out
+
+
+def catalog_candidates(
+    session: Session, exclude: set[str], pool: CatalogPool | None = None
+) -> list[Candidate]:
+    """Visible catalog videos of every indexed channel (not only followed ones),
+    without those in ``exclude`` (which gains the ones returned)."""
+    rows = pool.candidates(session) if pool else _load_catalog_candidates(session)
+    out = [c for c in rows if c.yt_id not in exclude]
+    exclude.update(c.yt_id for c in out if c.yt_id)
+    return out
+
+
+def _load_catalog_candidates(session: Session) -> list[Candidate]:
+    """Every visible catalog video, once each (the first catalog listing it)."""
+    exclude: set[str] = set()
     names = {
         cid: (normalize_channel_url(url), (name or "").strip())
         for cid, url, name in session.exec(
