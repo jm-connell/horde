@@ -99,8 +99,13 @@ export function usePlayerSource({
     }, 4000);
   }, []);
 
+  // Only a new source or start position sets where to begin: the switch to
+  // compatibility mode has just stored the playhead here and must keep it.
   useEffect(() => {
     pendingSeekRef.current = initialPosition;
+  }, [initialPosition, src]);
+
+  useEffect(() => {
     const el = videoRef.current;
     if (!el || initialPosition <= 1) return;
     // Do not treat a leftover Shaka MediaSource as "already loaded" file
