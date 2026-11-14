@@ -20,7 +20,7 @@ async function openRecommended(page: Page) {
   });
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
 }
 
@@ -175,11 +175,11 @@ test("with the chat open too, the panel shows tabs instead of two panels", async
   ).toBeVisible();
 
   // Elsewhere in the app it hides; back on the feed it is there again.
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toHaveCount(0);
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(
     page.getByRole("dialog", { name: "Recommendation algorithm" })
   ).toBeVisible();

@@ -6,9 +6,10 @@ import HomeTabs from "./HomeTabs";
 
 /**
  * The row above the home and tag lists: title, home tabs (with the
- * Recommended outline legend beside them) and `children` for the page's
- * search and sort controls. Channel pages have
- * their own header (ChannelHeader).
+ * Recommended outline legend beside them from `md`; on phones it is in the
+ * Algorithm panel) and `children` for the page's search and sort controls,
+ * or Recommended's actions. Channel pages have their own header
+ * (ChannelHeader).
  */
 export default function LibraryHeader({
   headline,
@@ -27,6 +28,9 @@ export default function LibraryHeader({
   settings: Settings;
   children: ReactNode;
 }) {
+  // Recommended's actions are two small buttons: on phones they stay on the
+  // tabs' row instead of taking a full row like the library's sort controls.
+  const onRecommended = showHomeTabs && homeTab === "recommended";
   return (
     <div
       className={`mb-5 flex min-w-0 items-center gap-x-2 gap-y-3 sm:gap-x-3 ${
@@ -48,11 +52,13 @@ export default function LibraryHeader({
           onSelect={onHomeTab}
         />
       )}
-      {showHomeTabs && homeTab === "recommended" && <SourceLegend />}
+      {onRecommended && <SourceLegend className="max-md:hidden" />}
 
       <div
         data-header-filters
-        className="ml-auto flex min-w-0 w-full basis-full flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:w-auto md:flex-1 md:basis-auto md:flex-nowrap"
+        className={`ml-auto flex min-w-0 flex-wrap items-center justify-end gap-1.5 sm:gap-2 md:w-auto md:flex-1 md:basis-auto md:flex-nowrap ${
+          onRecommended ? "flex-1" : "w-full basis-full"
+        }`}
       >
         {children}
       </div>

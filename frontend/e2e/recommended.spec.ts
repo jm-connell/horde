@@ -25,7 +25,7 @@ async function lookingOnYoutube(page: Page) {
 async function openRecommended(page: Page) {
   await lookingOnYoutube(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
 }
 
@@ -69,7 +69,7 @@ test("source marks tell downloaded, your channels and new apart", async ({
 
   // Always on: no toggle, and the legend sits beside the home tabs.
   await expect(page.getByRole("button", { name: "Sources" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await expect(legend).toHaveCount(0);
 });
 
@@ -83,7 +83,7 @@ test("there is one Recommended tab, and an old Recommended+ choice lands on it",
   await page.goto("/");
   await expect(page.getByText(FOUND)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Recommended", exact: true })
+    page.getByRole("tab", { name: "Recommended", exact: true })
   ).toHaveAttribute("data-liquid-active", "true");
   await expect(page.getByRole("button", { name: "Recommended+" })).toHaveCount(
     0
@@ -95,7 +95,7 @@ test("the home tab is remembered between visits, and a search does not change it
 }) => {
   await lookingOnYoutube(page);
   await page.goto("/");
-  const recommended = page.getByRole("button", {
+  const recommended = page.getByRole("tab", {
     name: "Recommended",
     exact: true,
   });
@@ -123,10 +123,10 @@ test("the home tab is remembered between visits, and a search does not change it
   await expect(page.getByText(FOUND)).toBeVisible();
 
   // Library is remembered the same way.
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Library", exact: true })
+    page.getByRole("tab", { name: "Library", exact: true })
   ).toHaveAttribute("data-liquid-active", "true");
 });
 
@@ -143,7 +143,7 @@ test("the home tab follows the account to another browser", async ({
       r.request().method() === "PATCH" &&
       r.ok()
   );
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await saved;
 
   const other = await contextAs(browser, baseURL, "admin");
@@ -151,7 +151,7 @@ test("the home tab follows the account to another browser", async ({
     const elsewhere = await other.newPage();
     await elsewhere.goto("/");
     await expect(
-      elsewhere.getByRole("button", { name: "Recommended", exact: true })
+      elsewhere.getByRole("tab", { name: "Recommended", exact: true })
     ).toHaveAttribute("data-liquid-active", "true");
   } finally {
     await other.close();
@@ -308,7 +308,7 @@ test("Recommended is loaded ahead and opens at once", async ({ page }) => {
     await held;
     await route.continue();
   });
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
   release();
 });

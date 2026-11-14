@@ -154,7 +154,7 @@ test("one-click download buttons use the default quality", async ({ page }) => {
     );
   });
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   const found = page.locator(`[data-rec-key="discover001"]`);
   await found.getByRole("button", { name: "Download" }).click();
   await expect.poll(() => posted).toEqual(["720p"]);

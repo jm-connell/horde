@@ -93,6 +93,10 @@ function OnlineLibrary() {
   const showHomeTabs = isHome;
   // Recommended renders its own data and order.
   const onRecommendedTab = showHomeTabs && homeTab === "recommended";
+  /** The header's slot that Recommended renders its actions into. */
+  const [recActionsSlot, setRecActionsSlot] = useState<HTMLDivElement | null>(
+    null
+  );
 
   const { refreshKey, refreshLibrary, reloadChannels } =
     useLibraryRefresh(mainFilters);
@@ -369,6 +373,13 @@ function OnlineLibrary() {
                 selection.selectMode ? selection.exit : selection.enter
               }
             />
+            {onRecommendedTab && (
+              <div
+                ref={setRecActionsSlot}
+                data-horde="rec-actions"
+                className="flex items-center gap-1.5 sm:gap-2"
+              />
+            )}
           </LibraryHeader>
         )}
 
@@ -424,6 +435,11 @@ function OnlineLibrary() {
         <div
           key={onChannelPage ? "feed" : onRecommendedTab ? homeTab : "library"}
           className="page-shell page-shell--animate"
+          {...(showHomeTabs && {
+            id: "home-panel",
+            role: "tabpanel",
+            "aria-labelledby": `home-tab-${homeTab}`,
+          })}
         >
           {onChannelPage ? (
             <ChannelFeed
@@ -445,6 +461,7 @@ function OnlineLibrary() {
             />
           ) : onRecommendedTab && !debouncedSearch ? (
             <DiscoverHome
+              actionsSlot={recActionsSlot}
               sidebarCollapsed={settings.sidebarCollapsed}
               onChannelClick={channelNav.openFeedChannel}
             />

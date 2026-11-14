@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { chipClass } from "./chipClass";
 import { ChevronIcon } from "./icons";
 
@@ -13,19 +7,17 @@ const ARROW =
 
 /**
  * "For you" and the AI categories as a scrolling row of chips on Recommended,
- * with arrows when it overflows. `children` go after the row.
+ * with arrows when it overflows.
  */
 export default function CategoryChips({
   categories,
   active,
   onSelect,
-  children,
 }: {
   categories: string[];
   /** The open category; null for "For you". */
   active: string | null;
   onSelect: (category: string | null) => void;
-  children?: ReactNode;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
@@ -61,9 +53,8 @@ export default function CategoryChips({
   };
 
   return (
-    // On a phone the chips get the full width and `children` wrap below them.
-    <div className="relative flex flex-wrap items-center gap-2">
-      <div className="flex min-w-0 basis-full items-center gap-2 sm:flex-1 sm:basis-0">
+    <div className="relative flex items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
         {canScrollLeft && (
           <button
             type="button"
@@ -107,11 +98,6 @@ export default function CategoryChips({
           </button>
         )}
       </div>
-      {children && (
-        <div className="ml-auto flex shrink-0 items-center gap-2">
-          {children}
-        </div>
-      )}
     </div>
   );
 }

@@ -286,9 +286,24 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
   has indexed), none (a channel new to them); a live card keeps its red ring
   instead. Square on phones' edge-to-edge
-  cards. A legend of dots sits beside the home tabs. Only the theme's accent, so the
-  marks follow every theme; why a card is there is its hover title, not a line
-  under it.
+  cards. A legend of keys drawn as tiny cards in the same outlines (the
+  plain card's key takes the card's `ink-700` hairline) sits beside the home tabs
+  from `md` and at the top of the Algorithm panel on phones. Only the
+  theme's accent, so the marks follow every theme; why a card is there is
+  its hover title, not a line under it. The faded mark is as faint in the
+  legend as on the cards; that is the mark's own contrast, kept on purpose.
+- **Home tabs and Recommended header.** Library / Recommended is a real
+  tablist (`role="tab"`, `aria-selected`, arrow keys, as on Settings), 40px
+  tall on coarse pointers. Everything the tab owns sits on the tabs' row in
+  the header's right-hand slot, so switching tabs swaps the slot instead of
+  moving the page: Sort and Select on Library; Algorithm and Refresh on
+  Recommended, as text buttons from `md` and 40px icon squares on phones
+  (sliders and refresh icons, the name kept for screen readers). Below the
+  row, "Looking on YouTube is off" is one muted line with a **Turn it on**
+  link for the admin (`?find=discovery`) and a close ✕ remembered on the
+  device; live states (looking, backing off) are an unclosable muted line.
+  When new picks are ready, **Show new picks** is a centred accent pill
+  above the grid, the view's one primary action.
 - **Search placeholder card.** Holds a late result's place in a grid (YouTube
   in mixed search results) so nothing moves when it lands: the video card's
   frame, a thumbnail of `accent/15` fading into `ink-800`/`ink-900` with a

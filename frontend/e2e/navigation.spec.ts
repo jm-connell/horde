@@ -177,7 +177,7 @@ test("Home clears the search and its results", async ({ page }) => {
 test("Home keeps the Recommended tab", async ({ page }) => {
   await withReadyAi(page);
   await page.goto("/");
-  const recommended = page.getByRole("button", {
+  const recommended = page.getByRole("tab", {
     name: "Recommended",
     exact: true,
   });
