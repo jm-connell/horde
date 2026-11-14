@@ -294,6 +294,37 @@ test("Recommended is loaded ahead and opens at once", async ({ page }) => {
   release();
 });
 
+test("coming back to Recommended later shows the last page while it loads", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.addInitScript(() =>
+    localStorage.setItem("horde.home.tab", "recommended")
+  );
+  await lookingOnYoutube(page);
+  await page.goto("/");
+  await expect(page.getByText(FOUND)).toBeVisible();
+  // Away for a while (watching something), long past the query cache's time.
+  // (An in-app navigation: a page load would start a new session.)
+  await page.evaluate(() => {
+    history.pushState({}, "", "/history");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(
+    page.getByRole("heading", { name: "History", level: 1 })
+  ).toBeVisible();
+  await page.clock.fastForward("20:00");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goBack();
+  await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
+  release();
+});
+
 test("Recommended can be browsed by AI category", async ({ page }) => {
   // The browser suite has no AI: the server's answer gets a category, and a
   // category request keeps only the night sky video.
