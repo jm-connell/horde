@@ -12,6 +12,8 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queries/keys";
 import {
   api,
   liveMasterUrl,
@@ -88,7 +90,10 @@ export interface StreamSession {
   /** For the user's stream history (Recommended). */
   durationSec?: number | null;
   channelUrl?: string | null;
-  /** Start here (seconds) instead of the beginning: `?t=` on the watch page. */
+  /**
+   * Start here (seconds) instead of the beginning: `?t=` on the watch page,
+   * or where this account left the stream.
+   */
   startSec?: number | null;
 }
 
@@ -291,8 +296,25 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   });
   const progressSaver = useProgressSaver(noteSaved);
   const streamWatch = useStreamWatchReporter();
-  // A stream's last position is sent when another one (or a library video) starts.
-  useEffect(() => () => streamWatch.flush(), [stream?.url, streamWatch]);
+  // A stream's last position is sent when another one (or a library video)
+  // starts. Its cached details hold the position it was opened at: drop them,
+  // so opening it again asks the server where it was left. A watch page still
+  // showing them (about to navigate away) keeps them, or it would load them
+  // again and restart the stream.
+  const queryClient = useQueryClient();
+  const playingStreamUrl = stream?.url;
+  useEffect(
+    () => () => {
+      streamWatch.flush();
+      if (playingStreamUrl) {
+        queryClient.removeQueries({
+          queryKey: queryKeys.preview.meta(playingStreamUrl),
+          type: "inactive",
+        });
+      }
+    },
+    [playingStreamUrl, streamWatch, queryClient]
+  );
 
   useEffect(() => {
     setJson(QUEUE_KEY, queue, "session");

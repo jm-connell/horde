@@ -14,7 +14,7 @@ from sqlmodel import Session, SQLModel, select
 
 from app.migrations.runner import CONTEXT_OPTIONS, SchemaTooNewError
 
-HEAD = "0030_grant_manage_subscriptions"
+HEAD = "0031_stream_resume_position"
 LEGACY_SQL = Path(__file__).parent / "fixtures" / "pre_alembic_schema.sql"
 
 
@@ -1459,3 +1459,48 @@ def test_manage_subscriptions_revision_keeps_members_subscribing(tmp_dirs):
     assert json.loads(users["viewer"]) == ["manage_subscriptions"]
     assert json.loads(users["already"]) == ["manage_subscriptions"]
     assert "manage_subscriptions" in json.loads(invite)
+
+
+def test_stream_resume_revision_resumes_unfinished_streams(tmp_dirs):
+    """0030 -> 0031: a stream watched before the upgrade resumes from the
+    furthest point it reached; a finished one starts over."""
+    from alembic import command
+
+    from app.database import init_db
+    from app.migrations.runner import alembic_config
+
+    engine = tmp_dirs["engine"]
+    command.upgrade(alembic_config(engine), "0030_grant_manage_subscriptions")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "INSERT INTO users (id, username, username_norm, password_hash, "
+                "is_admin, created_at, updated_at, disabled, permissions, "
+                "share_downloads) VALUES (1, 'boss', 'boss', 'x', 1, "
+                "'2024-01-01 00:00:00', '2024-01-01 00:00:00', 0, '[]', 1)"
+            )
+        )
+        for yt_id, watched, finished_at in [
+            ("halfway0001", 2640.0, None),
+            ("finished001", 3600.0, "2024-01-02 00:00:00"),
+        ]:
+            conn.execute(
+                text(
+                    "INSERT INTO user_stream_state (user_id, yt_id, url, "
+                    "watched_sec, last_watched_at, finished_at) VALUES (1, :y, "
+                    "'https://www.youtube.com/watch?v=' || :y, :w, "
+                    "'2024-01-02 00:00:00', :f)"
+                ),
+                {"y": yt_id, "w": watched, "f": finished_at},
+            )
+
+    init_db()
+
+    assert _revision(engine) == HEAD
+    with engine.connect() as conn:
+        rows = dict(
+            conn.execute(
+                text("SELECT yt_id, position_sec FROM user_stream_state")
+            ).fetchall()
+        )
+    assert rows == {"halfway0001": 2640.0, "finished001": 0.0}

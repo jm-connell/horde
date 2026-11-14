@@ -12001,6 +12001,11 @@
             ],
             "title": "Preview Height"
           },
+          "resume_sec": {
+            "default": 0.0,
+            "title": "Resume Sec",
+            "type": "number"
+          },
           "source_url": {
             "anyOf": [
               {

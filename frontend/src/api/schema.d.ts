@@ -8782,6 +8782,11 @@ export interface components {
             library_video_id?: number | null;
             /** Preview Height */
             preview_height?: number | null;
+            /**
+             * Resume Sec
+             * @default 0
+             */
+            resume_sec: number;
             /** Source Url */
             source_url?: string | null;
             storyboard?: components["schemas"]["StoryboardRead"] | null;
