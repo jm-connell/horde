@@ -51,7 +51,7 @@ The home screen is a video grid (or channel feed), a channel sidebar, search, ta
 - **Sort** — recently added, publish date, title, duration, size, views, or random (session override lasts 3 hours)
 - **Tags** — chips from downloads, manual edits, or AI enrich
 - **Select mode** — click, Shift-click ranges, then bulk add-to-playlist, notes, resync, download, or delete
-- **Continue watching** — in-progress row on the home Library tab (7-day window)
+- **Continue watching** — in-progress row on the home Library tab (7-day window); on Recommended it also carries streams you left part-way
 
 Full guide: [Library](guides/library.md). Search behavior: [Search](guides/search.md).
 

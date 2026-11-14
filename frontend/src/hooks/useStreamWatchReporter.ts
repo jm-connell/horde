@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import type { StreamWatchWrite } from "../types";
+import { youtubeVideoIdFromUrl } from "../utils";
+import { undismissContinueYoutube } from "./useContinueWatchingDismiss";
 
 /** A stream counts as watched once this much of it played... */
 export const STREAM_WATCH_MIN_SEC = 20;
@@ -94,6 +96,9 @@ export function useStreamWatchReporter(): StreamWatchReporter {
   const [reporter] = useState(
     () =>
       new StreamWatchReporter((body) => {
+        // Resuming a stream (≥30s) brings it back to Continue watching.
+        const ytId = youtubeVideoIdFromUrl(body.url);
+        if (ytId && body.position_sec >= 30) undismissContinueYoutube(ytId);
         void api.recordStreamWatch(body).catch(() => undefined);
       })
   );

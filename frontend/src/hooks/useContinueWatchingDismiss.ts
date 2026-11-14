@@ -73,7 +73,20 @@ const YT_STORAGE_KEY = "horde.continue-watching-dismissed-youtube";
 const isKeyList = (v: unknown): v is string[] =>
   Array.isArray(v) && v.every((k) => typeof k === "string");
 
-/** Imported YouTube views dismissed from Continue watching, by YouTube id. */
+/** Bring a dismissed stream back to Continue watching (it was resumed). */
+export function undismissContinueYoutube(id: string) {
+  const dismissed = getJson(YT_STORAGE_KEY, isKeyList, []);
+  if (!dismissed.includes(id)) return;
+  setJson(
+    YT_STORAGE_KEY,
+    dismissed.filter((k) => k !== id)
+  );
+}
+
+/**
+ * Streams and imported YouTube views dismissed from Continue watching, by
+ * YouTube id.
+ */
 export function useContinueYoutubeDismiss() {
   const [dismissed, setDismissed] = useState<Set<string>>(
     () => new Set(getJson(YT_STORAGE_KEY, isKeyList, []))

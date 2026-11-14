@@ -13,6 +13,8 @@ from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import Video
 from ..response_schemas import (
+    ContinueStreamRead,
+    ContinueStreamsRead,
     ContinueYoutubeRead,
     HistoryRemovedRead,
     HistoryTasteRead,
@@ -160,6 +162,36 @@ def set_watch_taste(
     watch_history.set_taste(session, user.id, payload.keys, use=payload.use)
     ctx.discovery.forget_feeds(user.id)
     return HistoryTasteRead(keys=payload.keys, excluded=not payload.use)
+
+
+@router.get("/continue-streams", response_model=ContinueStreamsRead)
+def continue_streams(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Videos the user streamed without downloading and left part-way, within
+    the Continue watching window."""
+    days = int(
+        app_settings.load().get("continue_watching_days", CONTINUE_WATCHING_DAYS)
+    )
+    rows = watch_history.continue_streams(
+        session, user.id, days=days, now=datetime.now(UTC)
+    )
+    return ContinueStreamsRead(
+        items=[
+            ContinueStreamRead(
+                id=row.yt_id,
+                url=row.url,
+                title=row.title,
+                duration=row.duration_sec,
+                thumbnail_url=youtube_thumbnail_url(row.yt_id),
+                channel=row.channel,
+                channel_url=row.channel_url,
+                position_sec=row.position_sec,
+            )
+            for row in rows
+        ]
+    )
 
 
 @router.get("/continue-youtube", response_model=ContinueYoutubeRead)

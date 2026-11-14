@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { ChannelFeedEntry, Video } from "../types";
+import type { ChannelFeedEntry, ContinueStream, Video } from "../types";
 import ChannelFeedCard from "./ChannelFeedCard";
 import VideoCard from "./VideoCard";
 import { ChevronIcon, CloseIcon } from "./icons";
 
 interface Props {
   videos: Video[];
-  /** Videos watched on YouTube lately (from the import), after the library's. */
+  /** Streamed (not downloaded) videos left part-way, after the library's. */
+  streams?: ContinueStream[];
+  /** Videos watched on YouTube lately (from the import), last. */
   youtube?: ChannelFeedEntry[];
   showProgress?: boolean;
   onDismiss: (id: number) => void;
@@ -26,6 +28,7 @@ const arrowClass =
 
 export default function ContinueWatchingRow({
   videos,
+  streams = [],
   youtube = [],
   showProgress = true,
   onDismiss,
@@ -57,7 +60,7 @@ export default function ContinueWatchingRow({
       el.removeEventListener("scroll", updateScrollState);
       ro.disconnect();
     };
-  }, [videos, updateScrollState]);
+  }, [videos, streams, youtube, updateScrollState]);
 
   const scrollByDir = (dir: -1 | 1) => {
     const el = scrollRef.current;
@@ -89,7 +92,7 @@ export default function ContinueWatchingRow({
     globalThis.setTimeout(done, 500);
   };
 
-  if (videos.length === 0 && youtube.length === 0) return null;
+  if (videos.length + streams.length + youtube.length === 0) return null;
 
   return (
     <section className="mb-6">
@@ -100,7 +103,9 @@ export default function ContinueWatchingRow({
         <button
           onClick={() => {
             onDismissAll(videos.map((v) => v.id));
-            onDismissYoutube?.(youtube.map((e) => e.id ?? e.url));
+            onDismissYoutube?.(
+              [...streams, ...youtube].map((e) => e.id ?? e.url)
+            );
           }}
           className="text-xs text-muted hover:text-accent"
         >
@@ -148,6 +153,35 @@ export default function ContinueWatchingRow({
                 <VideoCard
                   video={v}
                   progress={showProgress ? watchProgress(v) : undefined}
+                />
+              </div>
+            ))}
+            {streams.map((e) => (
+              <div
+                key={e.url}
+                className="group relative w-56 shrink-0 sm:w-64"
+                data-continue-stream={e.id ?? undefined}
+              >
+                <button
+                  onClick={() => onDismissYoutube?.([e.id ?? e.url])}
+                  className="absolute left-2 top-2 z-10 rounded-full bg-black/70 px-1.5 py-0.5 text-xs text-white opacity-100 hover:bg-black hover:text-white sm:opacity-0 sm:group-hover:opacity-100"
+                  title="Remove from continue watching"
+                  aria-label="Remove from continue watching"
+                >
+                  <CloseIcon />
+                </button>
+                <ChannelFeedCard
+                  entry={e}
+                  channelName={e.channel || "Unknown channel"}
+                  layout="grid"
+                  inLibrary={false}
+                  onDownload={() => onDownloadYoutube?.(e)}
+                  skipRemotePreview
+                  progress={
+                    showProgress && e.duration && e.duration > 0
+                      ? Math.min(1, e.position_sec / e.duration)
+                      : undefined
+                  }
                 />
               </div>
             ))}

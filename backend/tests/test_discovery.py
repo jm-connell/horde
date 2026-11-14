@@ -1170,3 +1170,42 @@ def test_recommended_plus_can_be_browsed_by_category(
     assert _feed(client)["categories"] == ["Night sky", "Tide pools"]
     tide = [i["key"] for i in _feed(client, category="Tide pools")["items"]]
     assert tide == ["poolfound01"]
+
+
+def test_the_cached_catalog_follows_the_catalog(client, session, admin_user):
+    """The catalog's candidates are kept between feeds; a channel indexed
+    further, a video updated or skipped since must show in the next ranking."""
+    from app.models import ChannelCatalogSkip
+
+    def keys(seed):  # A new seed is a new ranking.
+        return {i["key"] for i in _feed(client, seed=seed)["items"]}
+
+    _catalog(session, "Cached", [("cachedvid01", "First upload", 2, None)])
+    assert keys(1) == {"cachedvid01"}
+
+    catalog = session.exec(select(ChannelCatalog)).one()
+    session.add(
+        ChannelCatalogVideo(
+            catalog_id=catalog.id,
+            yt_id="cachedvid02",
+            url=_yt("cachedvid02"),
+            title="Second upload",
+            duration=600.0,
+            position=1,
+        )
+    )
+    session.commit()
+    assert keys(2) == {"cachedvid01", "cachedvid02"}
+
+    first = session.exec(
+        select(ChannelCatalogVideo).where(ChannelCatalogVideo.yt_id == "cachedvid01")
+    ).one()
+    first.live_status = "is_live"  # Now on the Live row instead.
+    first.indexed_at = datetime.now(UTC)
+    session.add(first)
+    session.commit()
+    assert keys(3) == {"cachedvid02"}
+
+    session.add(ChannelCatalogSkip(catalog_id=catalog.id, yt_id="cachedvid02"))
+    session.commit()
+    assert keys(4) == set()

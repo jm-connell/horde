@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..workers import BackgroundWorker
-from .candidates import VectorStore
+from .candidates import CatalogPool, VectorStore
 
 #: Ranked feeds kept for paging (one per user and refresh).
 FEED_CACHE_SIZE = 16
@@ -34,6 +34,7 @@ class DiscoveryRuntime:
 
     def __init__(self) -> None:
         self.vectors = VectorStore()
+        self.catalog = CatalogPool()
         self._lock = threading.Lock()
         self._feeds: OrderedDict[tuple[Any, ...], _CachedFeed] = OrderedDict()
         self.worker: BackgroundWorker | None = None
