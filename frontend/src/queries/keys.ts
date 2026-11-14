@@ -100,6 +100,7 @@ export const queryKeys = {
       ["history", "stats", range, youtube] as const,
     watches: ["history", "watches"] as const,
     continueYoutube: ["history", "continue-youtube"] as const,
+    continueStreams: ["history", "continue-streams"] as const,
   },
   takeout: {
     all: ["takeout"] as const,

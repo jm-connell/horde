@@ -557,6 +557,19 @@ class ContinueYoutubeRead(BaseModel):
     next_cursor: str | None = None
 
 
+class ContinueStreamRead(ChannelFeedEntry):
+    """A stream left part-way: ``duration`` is its length, when known."""
+
+    position_sec: float
+
+
+class ContinueStreamsRead(BaseModel):
+    """Streamed (not downloaded) videos to carry on with, newest first."""
+
+    items: list[ContinueStreamRead]
+    next_cursor: str | None = None
+
+
 class RecTopicRead(BaseModel):
     id: int
     kind: Literal["interest", "block"]

@@ -67,8 +67,8 @@ If you [imported your YouTube history](youtube-history.md), **Include YouTube in
 
 ### Where it appears
 
-- **Library home** — a **Continue watching** row above the main grid
-- Not shown on the **Recommended** tab
+- **Library home** — a **Continue watching** row above the main grid, with library videos only
+- **Recommended** tab — the same row, followed by what is not in the library: videos you streamed without downloading and left part-way, then videos watched on YouTube lately
 - Not shown on **channel** pages
 
 ### Who qualifies
@@ -77,7 +77,9 @@ Roughly: videos with a saved resume position for you that still look in-progress
 
 Clicking a card opens `/watch/:id` and seeks to the saved position.
 
-After those come up to five videos you watched on YouTube inside the same window, newest first, if you [imported your YouTube history](youtube-history.md) (marked **Watched on YouTube**; Takeout does not say how far one played, so any recent view counts). Downloaded videos follow the library's rules instead. Dismissing one hides it on this device. API: `GET /api/history/continue-youtube`.
+On the **Recommended** tab, the library's videos are followed by videos you streamed without downloading, by the same rule (at least 30 seconds in, not past 90%, inside the window; newest first, with a progress bar). Clicking one opens the stream where you left it. A stream you download since follows the library's rules instead. API: `GET /api/history/continue-streams`.
+
+After those, also on **Recommended** only, come up to five videos you watched on YouTube inside the same window, newest first, if you [imported your YouTube history](youtube-history.md) (marked **Watched on YouTube**; Takeout does not say how far one played, so any recent view counts). Downloaded videos follow the library's rules instead. Dismissing a stream or a YouTube view hides it on this device (resuming a dismissed stream brings it back). API: `GET /api/history/continue-youtube`.
 
 ## How progress works
 
