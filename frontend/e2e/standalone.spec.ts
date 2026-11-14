@@ -41,6 +41,18 @@ async function drag(cdp: CDPSession, points: [number, number][]) {
 const rightwards = (x0: number, x1: number, y: number): [number, number][] =>
   Array.from({ length: 8 }, (_, i) => [x0 + ((x1 - x0) * (i + 1)) / 8, y]);
 
+const downwards = (x: number, y0: number, y1: number): [number, number][] =>
+  Array.from({ length: 8 }, (_, i) => [x, y0 + ((y1 - y0) * (i + 1)) / 8]);
+
+/** Set a flag on the page; a reload clears it. */
+async function mark(page: Page) {
+  await page.evaluate(() => {
+    (window as Window & { kept?: boolean }).kept = true;
+  });
+}
+const kept = (page: Page) =>
+  page.evaluate(() => (window as Window & { kept?: boolean }).kept === true);
+
 /** Open `path` as the installed app would show it. Chromium cannot emulate
  *  `display-mode: standalone`, so this applies the part of the app's
  *  standalone CSS that matters here: without it, a horizontal drag is
@@ -402,4 +414,47 @@ test("the nav follows the keyboard when Search opens it from far down", async ({
   await showKeyboard(page);
   await expect(header).not.toHaveAttribute("data-nav-hidden");
   await expect.poll(async () => (await header.boundingBox())!.y).toBe(300);
+});
+
+test("pulling a page down from its top reloads it", async ({ page }) => {
+  await openFirstVideo(page);
+  await mark(page);
+  const cdp = await page.context().newCDPSession(page);
+  const reloaded = page.waitForEvent("load");
+  // Start below the player, on the page itself.
+  await drag(cdp, [[195, 560], ...downwards(195, 560, 760)]);
+  await reloaded;
+  expect(await kept(page)).toBe(false);
+  await expect(page).toHaveURL(/\/watch\//);
+});
+
+test("a short pull, or one on a scrolled page, does not refresh", async ({
+  page,
+}) => {
+  await launch(page, "/");
+  await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
+  await mark(page);
+  const cdp = await page.context().newCDPSession(page);
+  await drag(cdp, [[195, 400], ...downwards(195, 400, 460)]);
+  await expect(page.locator("[data-horde='pull-to-refresh']")).toHaveCount(0);
+  await page.evaluate(() => window.scrollTo(0, 400));
+  await drag(cdp, [[195, 300], ...downwards(195, 300, 600)]);
+  await page.waitForTimeout(500);
+  expect(await kept(page)).toBe(true);
+});
+
+test("pulling Recommended down reshuffles it instead of reloading", async ({
+  page,
+}) => {
+  await launch(page, "/");
+  await page.getByRole("tab", { name: "Recommended" }).click();
+  await expect(page.locator("[data-rec-key]").first()).toBeVisible();
+  await mark(page);
+  const refreshed = page.waitForRequest(
+    (r) => r.url().endsWith("/api/discover/refresh") && r.method() === "POST"
+  );
+  const cdp = await page.context().newCDPSession(page);
+  await drag(cdp, [[195, 300], ...downwards(195, 300, 520)]);
+  await refreshed;
+  expect(await kept(page)).toBe(true);
 });

@@ -35,6 +35,7 @@ import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import { CloseIcon, RefreshIcon, SlidersIcon } from "./icons";
 import LoadingIndicator from "./LoadingIndicator";
+import { PULL_REFRESH_EVENT } from "./PullToRefresh";
 import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
 import { getJson, setJson } from "../storage";
@@ -316,6 +317,17 @@ export default function DiscoverHome({
       })
       .catch(() => undefined);
   };
+
+  // Pulling the installed app down reshuffles, like Refresh, instead of
+  // reloading the page into the same order.
+  useEffect(() => {
+    const onPull = (e: Event) => {
+      e.preventDefault();
+      refresh();
+    };
+    window.addEventListener(PULL_REFRESH_EVENT, onPull);
+    return () => window.removeEventListener(PULL_REFRESH_EVENT, onPull);
+  });
 
   /** The page loaded ahead no longer matches: the next open asks afresh. */
   const dropPreview = () => {
