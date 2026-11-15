@@ -603,7 +603,7 @@ def index_catalog(catalog_id: int) -> None:
                         ),
                     )
                     if listing_skips >= 3:
-                        reached_end = True
+                        # Gave up, not the end: the size stays unknown.
                         break
                     offset += limit
                     time.sleep(0.35)

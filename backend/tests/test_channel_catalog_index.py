@@ -174,3 +174,37 @@ def test_an_empty_description_is_fetched_once(session, monkeypatch):
     session.refresh(row)
     assert row.description == ""
     assert len(calls) == 1
+
+
+def test_giving_up_on_failing_pages_leaves_the_total_unknown(session, monkeypatch):
+    catalog = _catalog(session)
+
+    def fake_page(_url: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:
+        if offset == 0:
+            return {
+                "channel": "Alpha",
+                "entries": _entries(50),
+                "fetched": 50,
+                "has_more": True,
+                "playlist_count": None,
+            }
+        raise RuntimeError("Login required / age-restricted")
+
+    monkeypatch.setattr(
+        idx,
+        "_flat_pages",
+        lambda url: nullcontext(lambda offset, limit: fake_page(url, offset, limit)),
+    )
+    monkeypatch.setattr(idx, "_run_description_pass", lambda *_a, **_k: None)
+    monkeypatch.setattr(idx, "_enqueue_catalog_embeds", lambda *_a, **_k: None)
+    monkeypatch.setattr(idx, "after_catalog_update", lambda *_a, **_k: None)
+    monkeypatch.setattr(idx.time, "sleep", lambda _s: None)
+
+    idx.index_catalog(catalog.id)
+    session.refresh(catalog)
+
+    assert catalog.status == ChannelCatalogStatus.ready
+    assert catalog.indexed_count == 50
+    assert catalog.channel_total is None
+    assert catalog.complete is False
+
