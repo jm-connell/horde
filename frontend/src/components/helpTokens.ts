@@ -32,7 +32,8 @@ const ACTION_KINDS = new Set([
   "playlist-new",
   "playlist-add",
 ]);
-const ID_RE = /^[a-z0-9-]{1,60}$/;
+// Any casing or underscores: findSetting matches `autoplayRelated` too.
+const ID_RE = /^[A-Za-z0-9_-]{1,60}$/;
 /** Videos one playlist card resolves and adds. */
 const MAX_VIDEOS = 50;
 const MAX_NAME = 120;
