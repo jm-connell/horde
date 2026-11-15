@@ -296,6 +296,16 @@ def test_info_route_hides_the_model_from_members(client, member_client, monkeypa
             {"playlists", "downloads", "suggest"},
         ),
         ("what's going on with my stuff", set()),
+        # Asked in fresh chats on a live server, these had fetched nothing, so
+        # the model asked "my downloads, my library or my watch history?" or
+        # made up videos with ids it invented.
+        ("do i have any videos about the rtx 5090", {"search"}),
+        ("how many videos do i have", {"library"}),
+        ("find that video about the 4runner", {"search"}),
+        ("find that cooking video", {"search"}),
+        ("any videos about cities skylines in my library?", {"library", "search"}),
+        ("what's downloading right now", {"downloads"}),
+        ("recommend something", {"suggest"}),
     ],
 )
 def test_topics_follow_the_question(question, expected):
@@ -313,7 +323,7 @@ def test_topics_follow_the_question(question, expected):
         "Should I use Ollama or OpenRouter?",
         "How does Recommended+ pick videos?",
         "How do I download a playlist?",
-        "find that cooking video",
+        "How do I find a video?",
     ],
 )
 def test_how_to_questions_need_no_data(question):
@@ -335,6 +345,9 @@ def test_search_terms_drop_the_question_words():
     )
     assert help_data.search_terms("find the video") == ""
     assert help_data.search_terms("make me a playlist of space videos") == "space"
+    assert help_data.search_terms("do i have any videos about the rtx 5090") == (
+        "rtx 5090"
+    )
 
 
 @pytest.fixture

@@ -1,8 +1,9 @@
 """The user's own data for Ask about Horde, when they allow it.
 
 Only a question about the user's own things gets any ("my downloads", "did I
-watch", "what should I watch", "make a playlist"); a how-to question gets
-none, even when it says "my password". The question's words (and the previous
+watch", "do I have", "what should I watch", "make a playlist", and without
+"my": "find that cooking video", "what's downloading?", "recommend
+something"); a how-to question gets none, even when it says "my password". The question's words (and the previous
 question's, for a follow-up like "and mine?") and the page then pick the
 topics, and each topic has a fixed size. Everything is read as the asking
 user sees it: their own history, playlists they can open and download jobs
@@ -65,7 +66,20 @@ _PERSONAL = _words("my mine")
 #: "did I watch", "have I seen", "I downloaded": about the user without "my".
 _ABOUT_ME = re.compile(
     r"\b(?:did|have|had) i\b|\bi(?:'ve| have)? (?:watched|downloaded|saw|seen|added)\b"
+    r"|\bdo i (?:have|own)\b"
 )
+#: "videos about X", "anything on X": something to look for in the library.
+_ABOUT_THING = re.compile(
+    r"\b(?:videos?|clips?|anything|something) (?:about|on|with|from|called|named)\b"
+)
+#: "what's downloading?", "anything in the queue?": the queue right now.
+_QUEUE_NOW = re.compile(
+    r"\b(?:what'?s|what is|anything|something) (?:downloading|queued|in the queue)\b"
+    r"|\bdownloading (?:right )?now\b"
+)
+_VIDEO_WORDS = _words("video videos clip clips")
+_RECOMMEND = _words("recommend suggest")
+_ANY_THING = _words("something anything")
 _WATCH = _words("watch watching")
 _MAKE = _words("make create build new add put")
 #: Words that say what to look for rather than what it is about.
@@ -73,7 +87,8 @@ _NOT_SEARCH_TERMS = _words(
     "a an the and or of to in on at for from with about that this these those "
     "it its is was are were be been do does did can could would should i me my "
     "mine you your find search looking look show tell give list which what "
-    "where when who how video videos clip clips watched watch watching saw seen "
+    "where when who how video videos clip clips watched watch watching saw seen have "
+    "has had got own "
     "remember called named titled one ones thing something last ago month months "
     "week weeks year years day days yesterday today recently recent there some "
     "any all library download downloaded please make create build new add put "
@@ -112,8 +127,18 @@ def topics(question: str, previous: str = "", page: str = "") -> set[str]:
         for prefix, name in _PAGE_TOPICS:
             if f"({prefix}" in page:
                 found.add(name)
+    if personal and _ABOUT_THING.search(text):
+        found.add("search")
+    # Said without "my", these are still about the user's own things:
+    # "find that cooking video", "what's downloading?", "recommend something".
+    if words & _TOPIC_WORDS["search"] and words & _VIDEO_WORDS and search_terms(text):
+        found.add("search")
+    if _QUEUE_NOW.search(text):
+        found.add("downloads")
     # "What should I watch next?" is about the user without saying "my".
-    if words & _TOPIC_WORDS["suggest"] and words & (_WATCH | {"unwatched"}):
+    if (words & _TOPIC_WORDS["suggest"] and words & (_WATCH | {"unwatched"})) or (
+        words & _RECOMMEND and words & _ANY_THING
+    ):
         found.add("suggest")
     if playlist_request:
         # The model needs real video ids to put in it.

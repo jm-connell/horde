@@ -365,6 +365,17 @@ def test_user_data_is_sent_only_when_allowed(client, help_env, add_video):
     assert "The user lets you read their downloads" in with_data
 
 
+def test_a_question_that_looks_nothing_up_says_so(client, help_env, add_video):
+    # With nothing to go on, a model had listed made-up videos ("[[video|12345]]").
+    add_video(title="Sourdough basics", channel="Bakery")
+    body = {"message": "how do I change my password?", "data_consent": "cloud"}
+    client.post("/api/ai/help/chat", json=body)
+    system = help_env[0]["system"]
+    assert "The user's data: nothing was looked up for this question." in system
+    assert "never guess or make up their videos" in system
+    assert "Sourdough" not in system
+
+
 def test_css_questions_get_the_reference_and_the_users_css(
     client, help_env, index, admin_user, session
 ):

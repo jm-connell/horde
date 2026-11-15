@@ -567,8 +567,10 @@ def system_prompt(
             "The user lets you read their downloads, library, watch history and "
             "playlists. When a question is about their own things, what it needs "
             f"is below (sent to {data_label}); answer from it and say so when it "
-            "does not contain the answer. If nothing is below, ask them to say "
-            'which, for example "my downloads" or "my library".'
+            "does not contain the answer. When it says nothing was looked up, "
+            "never guess or make up their videos, ids, counts or downloads: say "
+            'you did not look, and that naming it (for example "in my library" '
+            'or "my downloads") makes you look.'
         )
     else:
         data = (
@@ -772,8 +774,11 @@ class _HelpChat:
                 page=self._page,
                 semantic=self._semantic,
             )
-            if data:
-                extra.append(f"The user's data:\n{data}")
+            extra.append(
+                f"The user's data:\n{data}"
+                if data
+                else "The user's data: nothing was looked up for this question."
+            )
         return format_context(
             index.primer,
             excerpts,
