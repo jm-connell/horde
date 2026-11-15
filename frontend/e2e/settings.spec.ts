@@ -77,6 +77,17 @@ test("settings search jumps to SponsorBlock", async ({ page }) => {
   await expect(page.getByText("Enable SponsorBlock")).toBeVisible();
 });
 
+test("settings search finds an AI feature by its own label", async ({
+  page,
+}) => {
+  await page.goto("/settings");
+  const search = page.getByLabel("Search settings");
+  for (const label of ["AI video chat", "AI video summaries"]) {
+    await search.fill(label.toLowerCase());
+    await expect(page.getByText(label, { exact: true })).toBeVisible();
+  }
+});
+
 test("library settings persist sort default, dates, and progress expiry", async ({
   page,
 }) => {
