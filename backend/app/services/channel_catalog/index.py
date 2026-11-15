@@ -603,13 +603,18 @@ def index_catalog(catalog_id: int) -> None:
                 )
             ).one()
             catalog.indexed_count = int(count or 0)
+            # yt-dlp reports no count for a paged listing, so the end of this
+            # listing is the only size we know. A total kept from an earlier,
+            # shorter listing would make a capped index look complete.
             if channel_total is not None:
                 catalog.channel_total = channel_total
+            elif reached_end:
+                catalog.channel_total = catalog.indexed_count
+            else:
+                catalog.channel_total = None
             # Don't mark complete until descriptions finish — flat pass alone
             # would make the UI look done while enrichment is still running.
             catalog.complete = False
-            if reached_end and catalog.channel_total is None:
-                catalog.channel_total = catalog.indexed_count
             catalog.updated_at = utcnow()
             session.add(catalog)
             session.commit()
