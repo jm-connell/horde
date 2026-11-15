@@ -837,6 +837,56 @@ def test_a_picked_video_leaves_only_for_a_plain_horde_question(session):
     assert route("what did I download yesterday?") == ask_chat.Route(picked=video)
 
 
+#: Asked on a Watch page, about the app: Ask had answered these from the video
+#: ("The video doesn't show how to change the background").
+APP_QUESTIONS_ON_A_VIDEO = [
+    "how to change background",
+    "how do i change the background",
+    "make subtitles bigger",
+    "turn off autoplay",
+    "switch to dark mode",
+    "please turn on sponsorblock",
+    "how do i subscribe to a channel",
+    "is my ai working",
+    "download this https://youtu.be/dQw4w9WgXcQ",
+    "my subtitles are out of sync",
+]
+#: About what the video shows, including how-tos and instructions that are not
+#: about the app: these stay on the video.
+VIDEO_QUESTIONS = [
+    "what mods does his 4runner have",
+    "does he win",
+    "what cpu",
+    "are the joysticks hall effect?",
+    "how much did he pay for the 3090s",
+    "what is this",
+    "summarize this video",
+    "how do i mount a light bar like that",
+    "how can i improve the quality of my welds",
+    "how do i make an intro like that",
+    "make a list of the mods",
+    "when should I change it?",
+]
+
+
+@pytest.mark.parametrize("picked", [False, True])
+def test_app_questions_leave_the_video_and_video_questions_stay(session, picked):
+    video = ask_chat.VideoRef(library_id=1, title="4Runner build")
+
+    def to_video(message: str) -> bool:
+        route = ask_chat.pick_route(
+            session, message, channel_ids=None, video=video, video_picked=picked
+        )
+        return route.video == video
+
+    for question in APP_QUESTIONS_ON_A_VIDEO:
+        assert not to_video(question), question
+    # Once a video is picked, only a how-to or instruction leaves it.
+    assert to_video("how much have i spent on ai") == picked
+    for question in VIDEO_QUESTIONS:
+        assert to_video(question), question
+
+
 def test_a_question_on_a_library_video_answers_from_it(
     client, session, video_chat, add_video
 ):

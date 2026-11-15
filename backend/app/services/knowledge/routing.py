@@ -28,7 +28,23 @@ _HORDE = re.compile(
     r"import(s|ed|ing)?|playlists?|library|queue|account|password|log ?in|"
     r"sign ?in|theme|css|subtitles? (setting|size|position)|captions? setting|"
     r"ollama|openrouter|api key|provider|server|docker|storage|disk|backup|"
-    r"permissions?|admin|bug|error message|keyboard shortcut|hotkey)\b",
+    r"permissions?|admin|bug|error message|keyboard shortcut|hotkey|"
+    r"my ai|spent on ai|ai (providers?|models?|costs?|spend(ing)?|budget|features?))\b"
+    r"|https?://",
+    re.IGNORECASE,
+)
+# Things only the app has: a how-to or an instruction that names one is about
+# Horde ("make subtitles bigger", "turn off autoplay", "how to change the
+# background"). Kept to words a video's subject rarely shares: no bare
+# "quality", "volume", "intro" or "light", which a viewer asks about too.
+_APP_THING = re.compile(
+    r"\b(autoplay|subtitles?|captions?|themes?|dark mode|light mode|"
+    r"accent colou?r|fonts?|typeface|background|wallpaper|css|sponsor ?block|"
+    r"skip (sponsors?|intros?|outros?)|hotkeys?|keyboard shortcuts?|"
+    r"notifications?|ntfy|jellyfin|plex|kodi|transcod(e|ing)|video quality|"
+    r"download quality|playback speed|loudness|hover previews?|sidebar|tab bar|"
+    r"nav ?bar|username|two.factor|2fa|watch history|subscriptions?|subscribe|"
+    r"offline)\b",
     re.IGNORECASE,
 )
 
@@ -44,8 +60,11 @@ _ABOUT_VIDEO = re.compile(
 )
 # The user setting something up or doing something: a how-to.
 _HOW_TO = re.compile(
-    r"\b(how (do|can|should|would) i|(can|could|should) i|where (do|can) i"
-    r"|i (want|need|would like) to|help me|my)\b",
+    r"\b(how (do|can|should|would) i|how to|(can|could|should) i|where (do|can) i"
+    r"|i (want|need|would like) to|help me|my)\b"
+    # An instruction: "make subtitles bigger", "turn off autoplay".
+    r"|^\W*(please |can you |could you )?(make|turn|switch|change|set|enable|"
+    r"disable|hide|increase|decrease|reset|download)\b",
     re.IGNORECASE,
 )
 # Words that make a question about a channel's other videos, not the one on screen.
@@ -105,7 +124,10 @@ def named_channels(message: str, channels: list[KbChannel]) -> list[KbChannel]:
 
 def about_horde(message: str) -> bool:
     """True for a question about the app itself (its settings, downloads, ...)."""
-    return bool(_HORDE.search(message or ""))
+    text = message or ""
+    return bool(
+        _HORDE.search(text) or (_HOW_TO.search(text) and _APP_THING.search(text))
+    )
 
 
 def names_horde(message: str) -> bool:
