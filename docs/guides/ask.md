@@ -27,7 +27,9 @@ Only the administrator, and members given **Manage channel indexing** (Account �
 
 ## Asking a channel
 
-Dock Ask at the side with the expand button (⤢) in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. A question that names no channel is answered from Horde.
+Dock Ask at the side with the expand button (⤢) in its header to keep it open beside what you are watching or browsing. A question goes to a channel when it **names** it: *"What does Linus Tech Tips say about…"*, *"@TheCarCareNut on…"*, *"does carcarenut recommend…"*. Name two channels to compare them, or ask about *"all my channels"*. In a question about what a channel says, its initials work too (*"what does LTT say about…"*). A question that names no channel is answered from Horde.
+
+Horde knows which channels Ask can answer from: ask *"which channels are indexed?"* or *"is LTT indexed?"* and it lists each channel's progress. If you ask what a channel says and it is not indexed (or not ready yet), Horde says so and where to index it; with **Use my data** on, it also lists that channel's videos in your library, whose **Chat** answers from one video.
 
 If an answer about Horde comes from a channel you named (*"how do I stop indexing The Car Care Nut?"*), **Ask Horde instead** under it fixes that. **New chat** starts on what the chat was focused on, and that is kept while the browser tab is open.
 
@@ -48,7 +50,7 @@ The model never writes times itself. It only cites passages; Horde then finds th
 With Ask not focused on anything, a question on a watch page goes to that video too (the question box reads *Ask this video or Horde…*). Either way Ask still sends a question elsewhere when that fits better, without you switching:
 
 - naming Horde, or about your own library, downloads, history or playlists (*"what should I watch next?"*): Horde;
-- about Horde's features, such as its theme, downloads or storage (*"how do I change the theme?"*): Horde, unless the question is about someone or something in the video (*"what backup tool does he use?"* stays on the video). Once Ask is focused on the video (from **Chat**, or **Ask \<video\> instead**), only a how-to (*"how do I…"*, *"can I…"*) leaves it this way;
+- about Horde's features, such as its theme, downloads or storage (*"how do I change the theme?"*), or asking it to change one (*"make subtitles bigger"*, *"turn off autoplay"*, *"switch to dark mode"*): Horde, unless the question is about someone or something in the video (*"what backup tool does he use?"* stays on the video). Once Ask is focused on the video (from **Chat**, or **Ask \<video\> instead**), only a how-to or an instruction (*"how do I…"*, *"can I…"*, *"turn off…"*) leaves it this way;
 - naming a channel, or *"all my channels"*: those channels;
 - about the video's whole channel, when Ask indexes it (*"what does this channel say about…"*, *"in his other videos"*): that channel.
 

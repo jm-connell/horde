@@ -181,7 +181,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "features",
     keywords:
-      "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
+      "features ai video chat ask conversation subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
   },
   // System
   {

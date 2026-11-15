@@ -32,7 +32,8 @@ const ACTION_KINDS = new Set([
   "playlist-new",
   "playlist-add",
 ]);
-const ID_RE = /^[a-z0-9-]{1,60}$/;
+// Any casing or underscores: findSetting matches `autoplayRelated` too.
+const ID_RE = /^[A-Za-z0-9_-]{1,60}$/;
 /** Videos one playlist card resolves and adds. */
 const MAX_VIDEOS = 50;
 const MAX_NAME = 120;
@@ -140,11 +141,24 @@ export function settingHref(s: HelpCatalogSetting): string {
   return `${s.path || "/settings"}?${params.toString()}`;
 }
 
+const squash = (text: string) => text.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * The setting a token names. Models sometimes write the storage key or another
+ * casing (`autoplayRelated` for `autoplay-related`), so those count too.
+ */
 export function findSetting(
   catalog: HelpCatalog | undefined,
   id: string
 ): HelpCatalogSetting | undefined {
-  return catalog?.settings.find((s) => s.id === id);
+  const settings = catalog?.settings ?? [];
+  const wanted = squash(id);
+  return (
+    settings.find((s) => s.id === id) ??
+    settings.find(
+      (s) => squash(s.id) === wanted || (!!s.key && squash(s.key) === wanted)
+    )
+  );
 }
 
 export function findPage(

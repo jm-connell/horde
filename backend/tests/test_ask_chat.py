@@ -115,6 +115,18 @@ def test_named_channels_ignores_unrelated_questions():
     assert routing.named_channels("the nut came loose", [channel]) == []
 
 
+def test_initials_name_a_channel_only_when_asking_what_it_says():
+    ltt = KbChannel(
+        id=1,
+        channel_url="https://youtube.com/@linustechtips",
+        channel_name="Linus Tech Tips",
+    )
+    assert routing.named_channels("what does ltt say about the 5090?", [ltt]) == [ltt]
+    assert routing.named_channels("according to LTT, is it worth it", [ltt]) == [ltt]
+    # Elsewhere three letters can be anything.
+    assert routing.named_channels("is ltt a good name for a cat", [ltt]) == []
+
+
 def test_named_channels_finds_several():
     a = KbChannel(
         id=1, channel_url="https://youtube.com/@a", channel_name="The Car Care Nut"
@@ -835,6 +847,102 @@ def test_a_picked_video_leaves_only_for_a_plain_horde_question(session):
     assert route("how do I change the theme?") == ask_chat.Route(picked=video)
     assert route("is Horde able to do this?") == ask_chat.Route(picked=video)
     assert route("what did I download yesterday?") == ask_chat.Route(picked=video)
+
+
+#: Asked on a Watch page, about the app: Ask had answered these from the video
+#: ("The video doesn't show how to change the background").
+APP_QUESTIONS_ON_A_VIDEO = [
+    "how to change background",
+    "how do i change the background",
+    "make subtitles bigger",
+    "turn off autoplay",
+    "switch to dark mode",
+    "please turn on sponsorblock",
+    "how do i subscribe to a channel",
+    "is my ai working",
+    "download this https://youtu.be/dQw4w9WgXcQ",
+    "hey, turn off autoplay",
+    "can you please turn off autoplay",
+]
+#: About what the video shows, including how-tos and instructions that are not
+#: about the app: these stay on the video.
+VIDEO_QUESTIONS = [
+    "what mods does his 4runner have",
+    "does he win",
+    "what cpu",
+    "are the joysticks hall effect?",
+    "how much did he pay for the 3090s",
+    "what is this",
+    "summarize this video",
+    "how do i mount a light bar like that",
+    "how can i improve the quality of my welds",
+    "how do i make an intro like that",
+    "make a list of the mods",
+    "when should I change it?",
+    # Tutorial and tech questions that name an app word: found in review.
+    "how do i get a blurry background like that",
+    "how to remove the background in photoshop",
+    "how do i make subtitles like that",
+    "how do i add captions in premiere",
+    "how do i install that font",
+    "increase the font size in word",
+    "how do i enable dark mode in windows 11",
+    "can i run llama offline",
+    "should i subscribe to chatgpt plus",
+    "turn off notifications on the iphone",
+    "how do i enable subtitles on my tv",
+    "how to replace the sidebar mirror",
+    "my background is in electrical engineering, does this apply to me",
+    "can i use this song in the background of my video",
+    "how do i fix my car's background noise",
+    "which ai model should i use for this",
+    "how can i make my ai images look like this",
+    "is this the same as https://example.com/product",
+    # ...and ones that only look like a question about the user's things.
+    "how many bolts do i have to remove",
+    "do i have to watch part 1 first",
+    "is there anything on my 4runner i should upgrade",
+    "can you recommend anything for cleaning leather seats",
+    "recommend something similar",
+    "what was the clip at 3:00 called",
+    "i'm looking for a video that explains this better",
+]
+
+
+@pytest.mark.parametrize("picked", [False, True])
+def test_app_questions_leave_the_video_and_video_questions_stay(session, picked):
+    video = ask_chat.VideoRef(library_id=1, title="4Runner build")
+
+    def to_video(message: str) -> bool:
+        route = ask_chat.pick_route(
+            session, message, channel_ids=None, video=video, video_picked=picked
+        )
+        return route.video == video
+
+    for question in APP_QUESTIONS_ON_A_VIDEO:
+        assert not to_video(question), question
+    # Once a video is picked, only a how-to or instruction leaves it.
+    assert to_video("how much have i spent on ai") == picked
+    for question in VIDEO_QUESTIONS:
+        assert to_video(question), question
+
+
+def test_a_question_about_the_host_stays_on_the_page_channel(session):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+
+    def scope(message: str) -> list[KbChannel]:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=nut.id
+        ).channels
+
+    for question in (
+        "what ai models does he recommend",
+        "how do i make my subtitles look like his",
+        "what backup tool does he use?",
+    ):
+        assert scope(question) == [nut], question
+    assert scope("turn off autoplay") == []
 
 
 def test_a_question_on_a_library_video_answers_from_it(
