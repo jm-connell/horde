@@ -560,3 +560,33 @@ def test_preview_network_failure_is_a_502_not_a_500(client, monkeypatch):
     body = res.json()
     assert body["extra"]["error_kind"] == "network"
     assert "could not reach" in body["detail"]
+
+
+def test_preview_background_lookups_wait_behind_interactive_ones(client, monkeypatch):
+    """A feed card's badge lookup must not compete with a video being opened."""
+    from app.services import ytdlp_common, ytdlp_extract
+
+    seen: list[int] = []
+
+    def record(url: str, *, priority: int = ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE):
+        seen.append(priority)
+        return {
+            "is_playlist": False,
+            "title": "t",
+            "channel": None,
+            "channel_url": None,
+            "entry_count": 1,
+            "available_presets": [],
+        }
+
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", record)
+    url = "https://example.com/watch"
+    assert client.get("/api/downloads/preview", params={"url": url}).status_code == 200
+    res = client.get(
+        "/api/downloads/preview", params={"url": url, "background": "true"}
+    )
+    assert res.status_code == 200
+    assert seen == [
+        ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE,
+        ytdlp_common.EXTRACT_PRIORITY_DOWNLOAD,
+    ]
