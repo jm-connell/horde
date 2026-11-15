@@ -1,9 +1,10 @@
 """Background fill of a channel feed's missing views, dates and votes.
 
 Opening or scrolling a channel feed asks for the entries it shows that lack those
-fields. Each video is looked up once at a time, and one that came back empty is
-left alone for ``RETRY_AFTER_SEC``: otherwise every feed load re-queued the same
-unresolvable videos and kept YouTube busy. The lookups run at background priority
+fields. Each video is looked up once at a time and then left alone for
+``RETRY_AFTER_SEC``, whatever came back: a lookup that fills nothing, or only some
+of the fields (a thumbnail, a relative date), leaves the entry looking incomplete,
+and every feed load used to re-queue those videos and keep YouTube busy. The lookups run at background priority
 so they wait behind previews, downloads and the catalog indexer's turn order.
 """
 
@@ -26,17 +27,17 @@ from .ytdlp_common import EXTRACT_PRIORITY_BACKGROUND
 
 logger = logging.getLogger(__name__)
 
-#: How long a video whose lookup came back empty is skipped.
+#: How long a video is skipped after its last lookup finished.
 RETRY_AFTER_SEC = 3600.0
 
 
 @dataclass
 class FeedEnrichState:
-    """Lookups in flight and recent empty results, keyed ``meta:<id>`` / ``votes:<id>``."""
+    """Lookups in flight and recently finished, keyed ``meta:<id>`` / ``votes:<id>``."""
 
     lock: threading.Lock = field(default_factory=threading.Lock)
     inflight: set[str] = field(default_factory=set)
-    empty_at: dict[str, float] = field(default_factory=dict)
+    attempted_at: dict[str, float] = field(default_factory=dict)
 
 
 def _state() -> FeedEnrichState:
@@ -47,17 +48,18 @@ def _state() -> FeedEnrichState:
 
 
 def _claim(state: FeedEnrichState, keys: list[str]) -> list[str]:
-    """Mark and return the keys nobody is looking up and that did not just fail."""
+    """Mark and return the keys nobody is looking up or looked up recently."""
     now = time.monotonic()
     claimed: list[str] = []
     with state.lock:
+        expired = [
+            key for key, at in state.attempted_at.items() if now - at >= RETRY_AFTER_SEC
+        ]
+        for key in expired:
+            del state.attempted_at[key]
         for key in keys:
-            if key in state.inflight:
+            if key in state.inflight or key in state.attempted_at:
                 continue
-            failed = state.empty_at.get(key)
-            if failed is not None and now - failed < RETRY_AFTER_SEC:
-                continue
-            state.empty_at.pop(key, None)
             state.inflight.add(key)
             claimed.append(key)
     return claimed
@@ -72,7 +74,7 @@ def schedule(
 
     ``meta_rows`` are ``(yt_id, url)`` pairs missing views or a date; ``vote_ids``
     are missing like/dislike counts. Returns the thread, or None when every video
-    is already being looked up or recently came back empty.
+    is already being looked up or was looked up recently.
     """
     state = _state()
     urls = dict(meta_rows)
@@ -92,11 +94,10 @@ def schedule(
     return thread
 
 
-def _finish(state: FeedEnrichState, key: str, *, empty: bool) -> None:
+def _finish(state: FeedEnrichState, key: str) -> None:
     with state.lock:
         state.inflight.discard(key)
-        if empty:
-            state.empty_at[key] = time.monotonic()
+        state.attempted_at[key] = time.monotonic()
 
 
 def _lookup_meta(entry_url: str) -> dict | None:
@@ -149,7 +150,7 @@ def _run(
                     row = {"id": yt_id, **found}
                     updates.append(row)
                     catalog_field_updates.append(row)
-                _finish(state, f"meta:{yt_id}", empty=not found)
+                _finish(state, f"meta:{yt_id}")
                 pending.discard(f"meta:{yt_id}")
                 done += 1
                 handle.update(done=done, detail=f"{done}/{total}")
@@ -163,7 +164,7 @@ def _run(
                             "dislike_count": votes["dislike_count"],
                         }
                     )
-                _finish(state, f"votes:{yt_id}", empty=not votes)
+                _finish(state, f"votes:{yt_id}")
                 pending.discard(f"votes:{yt_id}")
                 done += 1
                 handle.update(done=done, detail=f"{done}/{total}")

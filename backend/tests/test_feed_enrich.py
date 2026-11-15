@@ -94,3 +94,21 @@ def test_videos_that_came_back_empty_are_not_retried_on_every_load(feed, monkeyp
     _join_enrichment()
 
     assert len(calls) == len(IDS)
+
+
+def test_partly_filled_videos_are_not_retried_on_every_load(feed, monkeypatch):
+    # A thumbnail alone is stored, but the entry still lacks views and a date.
+    calls: list[str] = []
+
+    def thumbnail_only(url: str, *, priority: int = -1) -> dict[str, Any]:
+        calls.append(url)
+        return {"thumbnail_url": "https://i.ytimg.com/vi/x/hq.jpg"}
+
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", thumbnail_only)
+
+    feed()
+    _join_enrichment()
+    feed()
+    _join_enrichment()
+
+    assert len(calls) == len(IDS)
