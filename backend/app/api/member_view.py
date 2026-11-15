@@ -119,10 +119,13 @@ def health(payload: dict[str, Any]) -> dict[str, Any]:
 
 def catalog_status(payload: dict[str, Any]) -> dict[str, Any]:
     """Channel catalog progress without the extractor's text for a failed index."""
+
+    def scrub(row: dict[str, Any]) -> dict[str, Any]:
+        return {**row, "last_error": CATALOG_ERROR if row.get("last_error") else None}
+
+    channel_catalog = payload.get("channel_catalog")
     return {
         **payload,
-        "catalogs": [
-            {**row, "last_error": CATALOG_ERROR if row.get("last_error") else None}
-            for row in payload.get("catalogs") or []
-        ],
+        "catalogs": [scrub(row) for row in payload.get("catalogs") or []],
+        "channel_catalog": scrub(channel_catalog) if channel_catalog else None,
     }

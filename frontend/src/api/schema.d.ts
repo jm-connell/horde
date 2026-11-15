@@ -5849,6 +5849,7 @@ export interface components {
              * @default []
              */
             catalogs: components["schemas"]["ChannelCatalogStatusItem"][];
+            channel_catalog?: components["schemas"]["ChannelCatalogStatusItem"] | null;
             /** Current Channel */
             current_channel?: string | null;
             /** Current Channel Url */
@@ -12698,7 +12699,12 @@ export interface operations {
     };
     channel_catalog_status_api_channels_catalog_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also return this channel's catalog as channel_catalog. */
+                channel_url?: string | null;
+                /** @description Channel name, for URL aliases. */
+                channel?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;

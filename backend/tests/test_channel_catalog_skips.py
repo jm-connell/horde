@@ -1,5 +1,7 @@
 """Age-restricted / gated catalog videos are skipped without aborting the index."""
 
+from contextlib import nullcontext
+
 from sqlmodel import select
 
 from app.models import (
@@ -202,7 +204,11 @@ def test_index_catalog_continues_after_age_restricted_page(session, monkeypatch)
             "playlist_count": 12,
         }
 
-    monkeypatch.setattr(idx, "_fetch_flat_page", fake_page)
+    monkeypatch.setattr(
+        idx,
+        "_flat_pages",
+        lambda url: nullcontext(lambda offset, limit: fake_page(url, offset, limit)),
+    )
     monkeypatch.setattr(idx, "_run_description_pass", lambda *_a, **_k: None)
     monkeypatch.setattr(idx, "_enqueue_catalog_embeds", lambda *_a, **_k: None)
     monkeypatch.setattr(idx, "after_catalog_update", lambda *_a, **_k: None)
@@ -225,9 +231,11 @@ def test_index_catalog_still_fails_on_bot_check(session, monkeypatch):
     catalog = _catalog(session)
     monkeypatch.setattr(
         idx,
-        "_fetch_flat_page",
-        lambda *_a, **_k: (_ for _ in ()).throw(
-            RuntimeError("Sign in to confirm you’re not a bot")
+        "_flat_pages",
+        lambda _url: nullcontext(
+            lambda *_a: (_ for _ in ()).throw(
+                RuntimeError("Sign in to confirm you’re not a bot")
+            )
         ),
     )
     monkeypatch.setattr(idx, "_run_description_pass", lambda *_a, **_k: None)

@@ -103,8 +103,21 @@ export const channelsApi = {
     );
   },
 
-  getChannelCatalogStatus(opts?: ReadOptions): Promise<ChannelCatalogStatus> {
-    return request<ChannelCatalogStatus>("/api/channels/catalog/status", opts);
+  /** With `channel`, the response's `channel_catalog` is that channel's row. */
+  getChannelCatalogStatus(
+    channel?: { url: string; name?: string | null },
+    opts?: ReadOptions
+  ): Promise<ChannelCatalogStatus> {
+    const qs = new URLSearchParams();
+    if (channel) {
+      qs.set("channel_url", channel.url);
+      if (channel.name) qs.set("channel", channel.name);
+    }
+    const text = qs.toString();
+    return request<ChannelCatalogStatus>(
+      `/api/channels/catalog/status${text ? `?${text}` : ""}`,
+      opts
+    );
   },
 
   searchChannelYoutube(params: {
