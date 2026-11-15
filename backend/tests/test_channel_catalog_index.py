@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager, nullcontext
 from typing import Any
 
 import pytest
@@ -38,7 +40,7 @@ def _catalog(session, **kwargs: Any) -> ChannelCatalog:
 
 @pytest.fixture
 def channel(monkeypatch):
-    """A channel with ``uploads`` videos; pages come from ``_fetch_flat_page``."""
+    """A channel with ``uploads`` videos, served a page at a time."""
     state: dict[str, Any] = {"uploads": []}
 
     def fake_page(_url: str, offset: int = 0, limit: int = 50) -> dict[str, Any]:
@@ -51,7 +53,11 @@ def channel(monkeypatch):
             "playlist_count": None,  # yt-dlp reports none for a paged listing
         }
 
-    monkeypatch.setattr(idx, "_fetch_flat_page", fake_page)
+    monkeypatch.setattr(
+        idx,
+        "_flat_pages",
+        lambda url: nullcontext(lambda offset, limit: fake_page(url, offset, limit)),
+    )
     monkeypatch.setattr(idx, "_run_description_pass", lambda *_a, **_k: None)
     monkeypatch.setattr(idx, "_enqueue_catalog_embeds", lambda *_a, **_k: None)
     monkeypatch.setattr(idx, "after_catalog_update", lambda *_a, **_k: None)
@@ -86,3 +92,56 @@ def test_cap_reached_is_not_complete_even_with_a_stale_total(session, channel):
     assert catalog.channel_total is None
     assert catalog.complete is False
     assert catalog.status == ChannelCatalogStatus.ready
+
+
+@pytest.fixture
+def listing(monkeypatch):
+    """A fake streamed listing that counts how often it is opened."""
+    state: dict[str, Any] = {"uploads": [], "opens": 0, "fail_at": None}
+
+    @contextmanager
+    def fake_open(_url: str, *, tab: str = "videos") -> Iterator[dict[str, Any]]:
+        state["opens"] += 1
+
+        def entries() -> Iterator[dict[str, Any]]:
+            for i, entry in enumerate(state["uploads"]):
+                if i == state["fail_at"]:
+                    state["fail_at"] = None
+                    raise RuntimeError("Login required / age-restricted")
+                yield entry
+
+        yield {"channel": "Alpha", "playlist_count": None, "entries": entries()}
+
+    monkeypatch.setattr("app.services.ytdlp_extract.open_channel_listing", fake_open)
+    return state
+
+
+def test_pages_in_order_come_from_one_listing(listing):
+    listing["uploads"] = _entries(120)
+    with idx._flat_pages(URL) as fetch:
+        pages = [fetch(0, 50), fetch(50, 50), fetch(100, 50)]
+    assert listing["opens"] == 1
+    assert [p["fetched"] for p in pages] == [50, 50, 20]
+    assert [p["has_more"] for p in pages] == [True, True, False]
+    assert pages[2]["entries"][0]["id"] == "v0000000100"
+
+
+def test_a_page_after_a_failed_one_reopens_at_its_offset(listing):
+    listing["uploads"] = _entries(120)
+    listing["fail_at"] = 10
+    with idx._flat_pages(URL) as fetch:
+        with pytest.raises(RuntimeError):
+            fetch(0, 50)
+        page = fetch(50, 50)
+    assert listing["opens"] == 2
+    assert page["entries"][0]["id"] == "v0000000050"
+
+
+def test_listing_skips_entries_the_feed_drops(listing):
+    # open_channel_listing yields None for shorts and the like: they count
+    # towards the page size but are not indexed.
+    listing["uploads"] = [None, *_entries(2)]
+    with idx._flat_pages(URL) as fetch:
+        page = fetch(0, 50)
+    assert page["fetched"] == 3
+    assert [e["id"] for e in page["entries"]] == ["v0000000000", "v0000000001"]

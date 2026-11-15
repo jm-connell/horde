@@ -5,6 +5,10 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections import deque
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
+from itertools import islice
 from typing import Any
 
 from sqlmodel import Session, col, func, select
@@ -62,6 +66,67 @@ def _fetch_flat_page(channel_url: str, offset: int, limit: int) -> dict[str, Any
     from ..ytdlp_extract import fetch_channel_feed
 
     return fetch_channel_feed(channel_url, offset=offset, limit=limit)
+
+
+class _ListingPages:
+    """The pages of one channel listing, for the full index.
+
+    Pages asked for in order are read from one streamed listing. A page asked
+    for anywhere else (the index skipped past one that failed) reopens the
+    listing and reads up to it.
+    """
+
+    def __init__(self, channel_url: str) -> None:
+        self._url = channel_url
+        self._stack: ExitStack | None = None
+        self._listing: dict[str, Any] = {}
+        self._pos = 0
+
+    def fetch(self, offset: int, limit: int) -> dict[str, Any]:
+        if self._stack is None or self._pos != offset:
+            self._open(offset)
+        try:
+            items = list(islice(self._listing["entries"], limit))
+        except Exception:
+            self.close()
+            raise
+        self._pos += len(items)
+        return {
+            "channel": self._listing.get("channel"),
+            "entries": [e for e in items if e is not None],
+            "fetched": len(items),
+            "has_more": len(items) == limit,
+            "playlist_count": self._listing.get("playlist_count"),
+        }
+
+    def _open(self, offset: int) -> None:
+        from ..ytdlp_extract import open_channel_listing
+
+        self.close()
+        stack = ExitStack()
+        try:
+            self._listing = stack.enter_context(open_channel_listing(self._url))
+            deque(islice(self._listing["entries"], offset), maxlen=0)
+        except Exception:
+            stack.close()
+            raise
+        self._stack = stack
+        self._pos = offset
+
+    def close(self) -> None:
+        if self._stack is not None:
+            self._stack.close()
+            self._stack = None
+
+
+@contextmanager
+def _flat_pages(channel_url: str) -> Iterator[Callable[[int, int], dict[str, Any]]]:
+    """``fetch(offset, limit)`` for the full index's flat pass."""
+    pages = _ListingPages(channel_url)
+    try:
+        yield pages.fetch
+    finally:
+        pages.close()
 
 
 def _apply_mapped_fields(row: ChannelCatalogVideo, raw: dict[str, Any]) -> None:
@@ -515,81 +580,86 @@ def index_catalog(catalog_id: int) -> None:
         reached_end = False
         channel_total: int | None = None
         listing_skips = 0
-        while position < max_videos and not should_stop():
-            limit = min(_PAGE_SIZE, max_videos - position)
-            try:
-                data = _fetch_flat_page(channel_url, offset=offset, limit=limit)
-            except Exception as exc:
-                kind, _message = classify_ytdlp_error(
-                    exc, url=channel_url, channel=channel_name
+        with _flat_pages(channel_url) as fetch_page:
+            while position < max_videos and not should_stop():
+                limit = min(_PAGE_SIZE, max_videos - position)
+                try:
+                    data = fetch_page(offset, limit)
+                except Exception as exc:
+                    kind, _message = classify_ytdlp_error(
+                        exc, url=channel_url, channel=channel_name
+                    )
+                    if not is_skippable_catalog_kind(kind):
+                        raise
+                    listing_skips += 1
+                    _note_catalog_warning(
+                        catalog_id,
+                        catalog_skip_message(
+                            kind, url=channel_url, channel=channel_name
+                        ),
+                    )
+                    if listing_skips >= 3:
+                        reached_end = True
+                        break
+                    offset += limit
+                    time.sleep(0.35)
+                    continue
+                listing_skips = 0
+                entries = data.get("entries") or []
+                raw_fetched = data.get("fetched")
+                fetched = int(raw_fetched) if raw_fetched is not None else len(entries)
+                if data.get("channel") and not channel_name:
+                    channel_name = data.get("channel")
+                pc = data.get("playlist_count")
+                if isinstance(pc, int) and pc > 0:
+                    channel_total = pc
+                with Session(get_engine()) as session:
+                    catalog = session.get(ChannelCatalog, catalog_id)
+                    if catalog is None:
+                        act.discard()
+                        return
+                    if channel_name and catalog.channel_name != channel_name:
+                        catalog.channel_name = channel_name
+                    if channel_total is not None:
+                        catalog.channel_total = channel_total
+                    position, new_ids = _upsert_flat_entries(
+                        session,
+                        catalog,
+                        entries,
+                        position,
+                        allow_gated=cookie_configured(),
+                    )
+                    catalog.indexed_count = position
+                    catalog.updated_at = utcnow()
+                    session.add(catalog)
+                    session.commit()
+                try:
+                    after_catalog_update(
+                        channel_url, new_yt_ids=new_ids, source="index"
+                    )
+                except Exception:
+                    logger.debug(
+                        "autodownload after index page failed for %s",
+                        channel_url,
+                        exc_info=True,
+                    )
+                _set_runtime(
+                    done=position,
+                    total=channel_total or max_videos,
+                    current_channel=channel_name,
                 )
-                if not is_skippable_catalog_kind(kind):
-                    raise
-                listing_skips += 1
-                _note_catalog_warning(
-                    catalog_id,
-                    catalog_skip_message(kind, url=channel_url, channel=channel_name),
+                act.update(
+                    done=position,
+                    total=channel_total or max_videos,
+                    detail=f"{channel_name or channel_url} · listing videos",
+                    label="Indexing channel catalog",
                 )
-                if listing_skips >= 3:
+                if fetched <= 0 or not data.get("has_more"):
                     reached_end = True
                     break
-                offset += limit
+                offset += fetched
+                # Brief yield so downloads/previews can use the extract gate.
                 time.sleep(0.35)
-                continue
-            listing_skips = 0
-            entries = data.get("entries") or []
-            raw_fetched = data.get("fetched")
-            fetched = int(raw_fetched) if raw_fetched is not None else len(entries)
-            if data.get("channel") and not channel_name:
-                channel_name = data.get("channel")
-            pc = data.get("playlist_count")
-            if isinstance(pc, int) and pc > 0:
-                channel_total = pc
-            with Session(get_engine()) as session:
-                catalog = session.get(ChannelCatalog, catalog_id)
-                if catalog is None:
-                    act.discard()
-                    return
-                if channel_name and catalog.channel_name != channel_name:
-                    catalog.channel_name = channel_name
-                if channel_total is not None:
-                    catalog.channel_total = channel_total
-                position, new_ids = _upsert_flat_entries(
-                    session,
-                    catalog,
-                    entries,
-                    position,
-                    allow_gated=cookie_configured(),
-                )
-                catalog.indexed_count = position
-                catalog.updated_at = utcnow()
-                session.add(catalog)
-                session.commit()
-            try:
-                after_catalog_update(channel_url, new_yt_ids=new_ids, source="index")
-            except Exception:
-                logger.debug(
-                    "autodownload after index page failed for %s",
-                    channel_url,
-                    exc_info=True,
-                )
-            _set_runtime(
-                done=position,
-                total=channel_total or max_videos,
-                current_channel=channel_name,
-            )
-            act.update(
-                done=position,
-                total=channel_total or max_videos,
-                detail=f"{channel_name or channel_url} · listing videos",
-                label="Indexing channel catalog",
-            )
-            if fetched <= 0 or not data.get("has_more"):
-                reached_end = True
-                break
-            offset += fetched
-            # Brief yield so downloads/previews can use the extract gate.
-            time.sleep(0.35)
 
         with Session(get_engine()) as session:
             catalog = session.get(ChannelCatalog, catalog_id)
