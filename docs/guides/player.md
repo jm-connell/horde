@@ -77,6 +77,8 @@ Stream preview uses adaptive **DASH** (Shaka) when available. Quality choices:
 
 Library files typically play as progressive local media; if DASH fails on a stream, Horde falls back to a progressive URL when possible.
 
+A stream that freezes restarts itself. When it should be playing but the clock has stood still (5 seconds with video buffered, 20 seconds while it waits for video and none arrives), the player reloads the stream at the same position, staying in fullscreen; after two reloads that do not get it moving it switches to the progressive URL. This covers Safari on iPad and iPhone leaving a stream stuck after the sound moves between devices (AirPods switching to a phone and back).
+
 ## Picture-in-Picture
 
 Use the PiP control (or browser PiP) to keep video visible while browsing. When PiP (or iOS native fullscreen) owns the pixels, Horde switches to native text tracks so captions still work.

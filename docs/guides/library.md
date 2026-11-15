@@ -95,7 +95,7 @@ For API clients: the `204` of `DELETE /api/videos/{id}?delete_file=true` and of 
 
 ## Continue watching
 
-On the home Library tab (not Recommended, not a channel page), Horde shows a **Continue watching** row for videos with meaningful in-progress playback. Resuming opens the [watch page](watching.md) at the saved position.
+On the home Library tab (not a channel page), Horde shows a **Continue watching** row for library videos with meaningful in-progress playback. The Recommended tab shows the same row and adds what is not in the library: streams you left part-way and videos watched on YouTube lately (see [History](history.md#continue-watching)). Resuming opens the [watch page](watching.md) at the saved position.
 
 !!! note "Window vs expiry"
     The continue-watching list uses a fixed backend window of **7 days** (not user-configurable). Separate from that, [progress expiry](history.md) (`progress_expiry_days`, default **14**) clears stale `last_position_sec` values.
@@ -109,7 +109,7 @@ The home page has two tabs, and your account remembers the one you were on: come
 
 With AI categories set up, category chips sit above the feed: pick one to see only the picks in it (downloaded, from indexed channels or found on YouTube alike), in the feed's order. A video counts by its own embedding, so one not embedded yet is only under **For you**. Categories are refreshed under Settings → AI → Jobs.
 
-Followed channels that are live right now lead Recommended when you watched them in the last two weeks, and appear a few cards in otherwise (up to three of each).
+Channels you subscribe to that are live right now lead Recommended when you watched them in the last two weeks, and appear a few cards in otherwise (up to three of each).
 
 Hover a Recommended card to see why it is there; its **⋯** menu offers **Why this video?** (the kind of pick, where it was found and every part of its score), **Not interested** and **Don't recommend** the channel (with Undo). Account settings → **Hidden from recommendations** lists them and can take them back. Each card is outlined in your theme's accent by where it comes from: a solid outline for a video you have downloaded, a faded one for a video from a channel you follow or have indexed, and none for a channel new to you, with a legend beside the home tabs. Live cards keep their red ring instead. **Refresh** reshuffles the less certain picks and asks for new videos (at most every 20 minutes).
 

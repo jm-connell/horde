@@ -899,6 +899,8 @@ class UserStreamState(SQLModel, table=True):
     duration_sec: float | None = None
     #: The furthest point reached, so a rewatch from the start keeps what was seen.
     watched_sec: float = 0.0
+    #: Where it was last left, to resume from; 0 once it played to the end.
+    position_sec: float = 0.0
     last_watched_at: datetime = Field(default_factory=utcnow)
     finished_at: datetime | None = None
 

@@ -15,6 +15,7 @@ import {
 import type { HistoryWatch } from "../types";
 import HistoryMenu from "./history/HistoryMenu";
 import HistoryStatsBand from "./history/HistoryStatsBand";
+import { useSettings } from "../hooks/useSettings";
 
 /** Parse API datetimes as UTC when no timezone is present (legacy naive strings). */
 function parseUtc(iso: string | null | undefined): Date | null {
@@ -105,6 +106,7 @@ type Confirm = { keys: string[]; label: string } | null;
 export default function History() {
   const { showToast, showError } = useToast();
   const { submitDownload } = useDownloads();
+  const [settings] = useSettings();
   const query = useHistoryWatches();
   const remove = useRemoveHistory();
   const taste = useSetHistoryTaste();
@@ -213,7 +215,7 @@ export default function History() {
     const stream = entry.stream;
     if (!stream?.url || downloading.has(stream.url)) return;
     setDownloading((prev) => new Set(prev).add(stream.url));
-    void submitDownload(stream.url, "1080p", {
+    void submitDownload(stream.url, settings.defaultDownloadPreset, {
       title: stream.title ?? undefined,
       channel: stream.channel ?? "Unknown channel",
     })

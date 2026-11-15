@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { queryKeys } from "./keys";
 
 /**
  * One client per app instance (built in `App`, not at module level, so a test
@@ -11,9 +12,10 @@ import { QueryClient } from "@tanstack/react-query";
  *   did; pollers simply try again on their next tick.
  * - `refetchOnWindowFocus` is off by default; status data opts in per query.
  * - Background tabs do not poll (`refetchIntervalInBackground: false`).
+ * - Recommended's first page is kept for the whole session (see below).
  */
 export function createQueryClient(): QueryClient {
-  return new QueryClient({
+  const client = new QueryClient({
     defaultOptions: {
       queries: {
         networkMode: "always",
@@ -29,4 +31,10 @@ export function createQueryClient(): QueryClient {
       },
     },
   });
+  // Recommended's last first page and channel shelf stay for the session:
+  // opening the tab again shows them at once while a fresh page loads (the
+  // server may take seconds to rank again after something was watched).
+  client.setQueryDefaults(queryKeys.discover.firstPage, { gcTime: Infinity });
+  client.setQueryDefaults(queryKeys.discover.channels, { gcTime: Infinity });
+  return client;
 }

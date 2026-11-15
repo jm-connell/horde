@@ -27,7 +27,7 @@ Horde is built for that archive. The product metaphor is closer to a **personal 
 | Ops | [One container](single-container.md), TrueNAS / Dockge friendly, [simple accounts](no-auth.md) on a trusted LAN |
 | Intelligence | Optional [local or cloud AI](local-vs-cloud-ai.md) for search, tags, summaries, recommendations |
 
-If TubeArchivist already fits your habits, use it. Horde exists for people who wanted the UI, layout, and AI layer shaped a particular way — and who were willing to [vibecode](vibecoded.md) toward that shape.
+If TubeArchivist already fits your habits, use it. Horde exists for people who wanted the UI, layout, and AI layer shaped a particular way — and who were willing to [build it with AI assistants](vibecoded.md) to get that shape.
 
 ## Archive-first, not feed-first
 
@@ -47,4 +47,4 @@ It is not primarily a live YouTube client. Stream preview exists so you can chec
 
 - Day-to-day use: [Library](../guides/library.md), [Downloads](../guides/downloads.md), [Watching](../guides/watching.md)
 - Install: [Docker](../getting-started/install-docker.md), [TrueNAS / Dockge](../getting-started/truenas-dockge.md)
-- Design siblings: [security model](no-auth.md), [single container](single-container.md), [vibecoded](vibecoded.md)
+- Design siblings: [security model](no-auth.md), [single container](single-container.md), [how Horde is built](vibecoded.md)

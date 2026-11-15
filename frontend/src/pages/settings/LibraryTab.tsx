@@ -21,6 +21,8 @@ import {
   type LibrarySort,
 } from "../../hooks/useLibrarySort";
 import HelpTip from "../../components/HelpTip";
+import ThemedSelect from "../../components/ThemedSelect";
+import { DEFAULT_PRESET_OPTIONS } from "../../presets";
 import AskChannelsSection from "./AskChannelsSection";
 import CommentsSetting from "./CommentsSetting";
 import HelpDataSection from "./HelpDataSection";
@@ -79,6 +81,8 @@ const DOWNLOAD_PREF_TERMS = [
   "normalize volume",
   "loudness",
   "downloads",
+  "default quality",
+  "resolution",
 ];
 
 const COMPAT_TERMS = [
@@ -410,6 +414,21 @@ export default function LibraryTab() {
                     showDownloadNavBadge: !settings.showDownloadNavBadge,
                   })
                 }
+              />
+            }
+          />
+          <SettingRow
+            anchor="default-download-quality"
+            title="Default quality"
+            description="Used for every download you start. You can still pick another each time. Channel auto-download keeps its own quality."
+            hidden={!!q && !match("default quality", "resolution", "downloads")}
+            control={
+              <ThemedSelect
+                aria-label="Default quality"
+                value={settings.defaultDownloadPreset}
+                options={DEFAULT_PRESET_OPTIONS}
+                onChange={(value) => update({ defaultDownloadPreset: value })}
+                className="w-full min-w-40 max-w-56"
               />
             }
           />

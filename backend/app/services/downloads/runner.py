@@ -10,6 +10,7 @@ import enum
 import errno
 import logging
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -45,10 +46,13 @@ from ..ytdlp_common import (
 )
 from ..ytdlp_extract import estimate_download_bytes, is_youtube_short_entry
 from ..ytdlp_formats import (
+    PRESET_MAX_HEIGHT,
     apply_audio_format_id,
     format_chain,
     format_sort_for,
+    has_audio,
     pick_original_audio_format,
+    video_heights,
 )
 from . import clips, dbwrite, lifecycle
 from .artifacts import cleanup_partial_files, reject_unplayable, resolve_merged_video
@@ -243,9 +247,30 @@ class DownloadRun:
 
     # -- the attempt loop ------------------------------------------------------
 
+    def _format_selectors(self) -> Iterator[str]:
+        """The preset's selectors, then, for a link without video, those of best.
+
+        A height cap (a user's default quality such as 1080p) matches nothing on
+        an audio-only link (a podcast, a SoundCloud track) and Horde cannot
+        always see the formats before queueing. Read lazily, once the capped
+        selectors have failed and the metadata is known; a video keeps its cap.
+        """
+        spec = self.spec
+        chain = format_chain(spec.quality_preset, spec.video_codec)
+        yield from chain
+        info = self.metadata_info
+        if (
+            PRESET_MAX_HEIGHT.get(spec.quality_preset)
+            and not video_heights(info)
+            and has_audio(info)
+        ):
+            for fmt in format_chain("best", spec.video_codec):
+                if fmt not in chain:
+                    yield fmt
+
     def _run_formats(self) -> bool:
         """Try each format selector until one yields a file; True if the job was skipped."""
-        for fmt in format_chain(self.spec.quality_preset, self.spec.video_codec):
+        for fmt in self._format_selectors():
             self.attempt_paths = set()
             try:
                 outcome = self._attempt(fmt)

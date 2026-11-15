@@ -30,6 +30,8 @@ to Horde has their own position in the same video.
 
 Continue watching on the [Library](library.md) and [History](history.md) pages uses the same progress fields.
 
+A **stream preview** (a video you watch without downloading it) resumes too: where you left it is kept for your account (`user_stream_state.position_sec`) and reopening it, on any device, carries on from there. It is saved once 20 seconds have played, then about every 30 seconds and when you close the video or leave the page, and a stream watched to 90% starts over. `?t=` in the link wins over the saved position. Live broadcasts are not resumed.
+
 !!! note "Expiry"
     Stale positions are cleared by `progress_expiry_days` (default **14**). The continue-watching *list* only includes recent activity within a fixed **7-day** backend window. See [History](history.md).
 

@@ -2111,6 +2111,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/history/continue-streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Continue Streams
+         * @description Videos the user streamed without downloading and left part-way, within
+         *     the Continue watching window.
+         */
+        get: operations["continue_streams_api_history_continue_streams_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/history/continue-youtube": {
         parameters: {
             query?: never;
@@ -6291,6 +6312,67 @@ export interface components {
             videos: number;
         };
         /**
+         * ContinueStreamRead
+         * @description A stream left part-way: ``duration`` is its length, when known.
+         */
+        ContinueStreamRead: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Dislike Count */
+            dislike_count?: number | null;
+            /** Duration */
+            duration?: number | null;
+            /** Id */
+            id?: string | null;
+            /**
+             * In Library
+             * @default false
+             */
+            in_library: boolean;
+            /** Library Height Px */
+            library_height_px?: number | null;
+            /** Like Count */
+            like_count?: number | null;
+            /** Live Status */
+            live_status?: string | null;
+            match_reason?: components["schemas"]["SearchMatchReason"] | null;
+            /** Max Height */
+            max_height?: number | null;
+            /** Position Sec */
+            position_sec: number;
+            /** Published At */
+            published_at?: string | null;
+            /** Published Label */
+            published_label?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+            /** Video Id */
+            video_id?: number | null;
+            /** View Count */
+            view_count?: number | null;
+            /**
+             * Youtube Watched
+             * @default false
+             */
+            youtube_watched: boolean;
+        };
+        /**
+         * ContinueStreamsRead
+         * @description Streamed (not downloaded) videos to carry on with, newest first.
+         */
+        ContinueStreamsRead: {
+            /** Items */
+            items: components["schemas"]["ContinueStreamRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * ContinueYoutubeRead
          * @description Videos watched on YouTube lately (from the import), for Continue watching.
          */
@@ -8782,6 +8864,11 @@ export interface components {
             library_video_id?: number | null;
             /** Preview Height */
             preview_height?: number | null;
+            /**
+             * Resume Sec
+             * @default 0
+             */
+            resume_sec: number;
             /** Source Url */
             source_url?: string | null;
             storyboard?: components["schemas"]["StoryboardRead"] | null;
@@ -15093,6 +15180,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthFull"] | components["schemas"]["HealthPublic"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    continue_streams_api_history_continue_streams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinueStreamsRead"];
                 };
             };
             /** @description Validation error */

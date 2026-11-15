@@ -10,6 +10,7 @@ import { useToast } from "../../context/ToastContext";
 import { extractYouTubeId } from "../../hooks/useSponsorBlock";
 import type { ChannelFeedEntry, Video } from "../../types";
 import { YOUTUBE_SEARCH_PAGE_SIZE } from "../libraryCatalogProgress";
+import { useSettings } from "../../hooks/useSettings";
 
 /**
  * Results beyond the library for a home-page search: videos from indexed
@@ -29,6 +30,7 @@ export function useGlobalSearch(input: {
     useSearch();
   const { showToast } = useToast();
   const { submitDownload } = useDownloads();
+  const [settings] = useSettings();
 
   const [streamResults, setStreamResults] = useState<ChannelFeedEntry[]>([]);
   const [streamLoading, setStreamLoading] = useState(false);
@@ -215,7 +217,7 @@ export function useGlobalSearch(input: {
     if (!entry.url || streamDownloading.has(entry.url)) return;
     const channelName = entry.channel || "Unknown channel";
     setStreamDownloading((prev) => new Set(prev).add(entry.url));
-    void submitDownload(entry.url, "1080p", {
+    void submitDownload(entry.url, settings.defaultDownloadPreset, {
       title: entry.title ?? undefined,
       channel: channelName,
     })

@@ -41,6 +41,10 @@ from .takeout import history as takeout_history
 
 #: The newest imported YouTube views that may join Continue watching.
 CONTINUE_YOUTUBE_MAX = 5
+#: The newest part-watched streams that may join Continue watching.
+CONTINUE_STREAMS_MAX = 20
+#: A stream left before this point was only opened, not started.
+CONTINUE_MIN_POSITION_SEC = 30
 
 
 @dataclass
@@ -307,6 +311,28 @@ def set_taste(
         return
     for key in wanted:
         feedback.add(session, user_id, kind="taste", key=key, label=None)
+
+
+def continue_streams(
+    session: Session, user_id: int, *, days: int, now: datetime
+) -> list[UserStreamState]:
+    """Streams the user left part-way within the last ``days`` days, newest
+    first, by the library's Continue watching rule: at least 30 seconds in and
+    not finished. Videos downloaded since follow the library's own rules."""
+    in_library = select(col(Video.youtube_id)).where(col(Video.youtube_id).is_not(None))
+    return list(
+        session.exec(
+            select(UserStreamState)
+            .where(
+                col(UserStreamState.user_id) == user_id,
+                col(UserStreamState.position_sec) >= CONTINUE_MIN_POSITION_SEC,
+                col(UserStreamState.last_watched_at) >= now - timedelta(days=days),
+                col(UserStreamState.yt_id).not_in(in_library),
+            )
+            .order_by(col(UserStreamState.last_watched_at).desc())
+            .limit(CONTINUE_STREAMS_MAX)
+        ).all()
+    )
 
 
 @dataclass

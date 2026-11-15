@@ -48,7 +48,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | Table | Purpose |
 |-------|---------|
 | `users` | Accounts: `username_norm` (unique), scrypt `password_hash`, `is_admin`, `disabled`, `permissions` (JSON list of granted names; admins implicitly have all) |
-| `user_stream_state` | Videos a user streamed without downloading (by YouTube id): furthest point, duration, finished; recommendations read it as history |
+| `user_stream_state` | Videos a user streamed without downloading (by YouTube id): furthest point, where it was left (to resume), duration, finished; recommendations read it as history |
 | `rec_feedback` | What a user told recommendations to leave out: `video`, `channel` or dismissed channel `suggestion` |
 | `rec_impressions` | How many separate visits a recommendation was shown on without being watched |
 | `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |

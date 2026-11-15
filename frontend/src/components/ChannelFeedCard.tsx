@@ -180,7 +180,10 @@ function FeedThumbnail({
   previewActive,
   queueEntry,
   watchedOnYoutube = false,
+  progress,
 }: {
+  /** How much of it was watched (0 to 1): a bar along the bottom. */
+  progress?: number;
   /** Shows a "+ Queue" button on hover. */
   queueEntry?: QueueEntry | null;
   /** The viewer watched it on YouTube (their imported Takeout history). */
@@ -265,6 +268,14 @@ function FeedThumbnail({
             {duration}
           </span>
         )}
+        {progress !== undefined && progress > 0 && !previewing && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 bg-black/50">
+            <div
+              className="h-full bg-accent"
+              style={{ width: `${Math.min(100, progress * 100)}%` }}
+            />
+          </div>
+        )}
       </div>
       {queueEntry && <QueueButton entry={queueEntry} />}
       <MatchReasonBadge text={matchTip} />
@@ -283,7 +294,10 @@ export default function ChannelFeedCard({
   skipRemotePreview = false,
   searchQuery = "",
   onChannelClick,
+  progress,
 }: {
+  /** How much of it was watched (0 to 1), shown on the thumbnail. */
+  progress?: number;
   entry: ChannelFeedEntry;
   channelName: string;
   layout: "grid" | "list";
@@ -504,6 +518,7 @@ export default function ChannelFeedCard({
           duration={duration}
           live={isLive}
           className="aspect-video w-full"
+          progress={progress}
           matchTip={matchTip}
           previewSrc={previewSrc}
           previewVideoId={libraryVideoId}

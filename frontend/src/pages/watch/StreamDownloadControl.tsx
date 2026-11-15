@@ -10,6 +10,8 @@ import { CheckIcon, ChevronIcon } from "../../components/icons";
 function downloadButtonLabel(preset: string): string {
   if (preset === "best") return "Download best quality";
   if (preset === "audio") return "Download audio only";
+  if (preset.startsWith("audio-"))
+    return `Download audio only (${preset.slice("audio-".length)} kbps)`;
   if (preset === "2160p") return "Download 4K";
   return `Download ${preset}`;
 }
