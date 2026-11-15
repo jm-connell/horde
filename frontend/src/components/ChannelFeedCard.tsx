@@ -399,14 +399,17 @@ export default function ChannelFeedCard({
 
     const el = cardRef.current;
     if (!el) return;
-    let cancelled = false;
+    const controller = new AbortController();
     const observer = new IntersectionObserver(
       ([hit]) => {
         if (!hit?.isIntersecting) return;
         observer.disconnect();
-        enqueueYtPreview(() => api.previewDownload(entry.url))
+        enqueueYtPreview(
+          () => api.previewDownload(entry.url, { background: true }),
+          controller.signal
+        )
           .then((preview) => {
-            if (cancelled || preview.is_playlist) return;
+            if (controller.signal.aborted || preview.is_playlist) return;
             const label = maxPresetLabel(preview.available_presets);
             if (label) {
               maxResCache.set(entry.url, label);
@@ -419,7 +422,7 @@ export default function ChannelFeedCard({
     );
     observer.observe(el);
     return () => {
-      cancelled = true;
+      controller.abort();
       observer.disconnect();
     };
   }, [
