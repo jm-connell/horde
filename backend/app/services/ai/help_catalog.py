@@ -119,8 +119,31 @@ def _value_text(value: str | float) -> str:
     return str(value)
 
 
-def setting_line(s: HelpCatalogSetting) -> str:
-    """One line describing a setting to the model."""
+def current_values(settings: list[HelpCatalogSetting]) -> dict[str, str]:
+    """The current value of each server-wide or AI setting the chat may change.
+
+    Personal settings are left out: the server knows only the ones a user
+    changed, not the defaults their browser shows.
+    """
+    from .. import app_settings
+
+    stores = {"server": app_settings.load, "ai": app_settings.ai_settings}
+    loaded: dict[str, dict] = {}
+    out: dict[str, str] = {}
+    for s in settings:
+        if s.chat != "change" or not s.key or s.scope not in stores:
+            continue
+        data = loaded.setdefault(s.scope, stores[s.scope]())
+        value = data.get(s.key)
+        if isinstance(value, bool):
+            out[s.id] = "true" if value else "false"
+        elif isinstance(value, (str, int, float)):
+            out[s.id] = _value_text(value)
+    return out
+
+
+def setting_line(s: HelpCatalogSetting, now: str | None = None) -> str:
+    """One line describing a setting to the model (with its value, when known)."""
     where = s.tab.capitalize() if s.tab else s.path
     if s.chat == "link":
         how = "link only, you cannot change it"
@@ -133,6 +156,8 @@ def setting_line(s: HelpCatalogSetting) -> str:
         how = f"change: a number from {_value_text(s.min or 0.0)} to {_value_text(s.max or 0.0)}"
     else:
         how = "change: a #rrggbb color"
+    if now is not None:
+        how += f"; now: {now}"
     return f"- {s.id}: {s.label} ({where}) [{how}] {s.about}"
 
 

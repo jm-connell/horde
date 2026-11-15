@@ -115,6 +115,18 @@ def test_named_channels_ignores_unrelated_questions():
     assert routing.named_channels("the nut came loose", [channel]) == []
 
 
+def test_initials_name_a_channel_only_when_asking_what_it_says():
+    ltt = KbChannel(
+        id=1,
+        channel_url="https://youtube.com/@linustechtips",
+        channel_name="Linus Tech Tips",
+    )
+    assert routing.named_channels("what does ltt say about the 5090?", [ltt]) == [ltt]
+    assert routing.named_channels("according to LTT, is it worth it", [ltt]) == [ltt]
+    # Elsewhere three letters can be anything.
+    assert routing.named_channels("is ltt a good name for a cat", [ltt]) == []
+
+
 def test_named_channels_finds_several():
     a = KbChannel(
         id=1, channel_url="https://youtube.com/@a", channel_name="The Car Care Nut"

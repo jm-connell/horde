@@ -521,7 +521,9 @@ def _token_rules(user: AuthUser) -> str:
         "- [[set:ID=VALUE]] shows an Apply button that changes a setting marked "
         "change. Use it only when the user asks you to change something, with a "
         "value from its list (true or false for a switch). Never for a setting "
-        "marked link only: link that one and say they can change it there.",
+        "marked link only: link that one and say they can change it there. "
+        '"now:" is a setting\'s current value: if it already has the value '
+        "asked for, say so instead of offering the change.",
         "- [[video:ID|Title]] links to a library video from the data below.",
         "- [[playlist-new:Name|ID,ID]] offers to create a playlist with those "
         "library videos; [[playlist-add:PLAYLIST_ID|ID,ID]] offers to add them "
@@ -752,6 +754,7 @@ class _HelpChat:
         catalog = help_catalog.for_user(self._user)
         query = query_terms(question, self._history, self._page)
         settings = help_catalog.best_settings(catalog, query)
+        now = help_catalog.current_values(settings)
         extra: list[str] = []
         if asks_css(question, self._history):
             reference = css_reference(index.root)
@@ -765,6 +768,14 @@ class _HelpChat:
                 f"The user's custom CSS ({'on' if on else 'off'}):\n"
                 + (f"```css\n{css[:_CSS_CHARS]}\n```" if css else "(empty)")
             )
+        # Imported here: the knowledge package imports this module.
+        from ..knowledge import help_note
+
+        note = help_note.for_question(
+            session, question, self._user, use_data=self._use_data
+        )
+        if note:
+            extra.append(note)
         if self._use_data:
             data = help_data.gather(
                 session,
@@ -783,7 +794,7 @@ class _HelpChat:
             index.primer,
             excerpts,
             pages=[help_catalog.page_line(p) for p in catalog.pages],
-            settings=[help_catalog.setting_line(s) for s in settings],
+            settings=[help_catalog.setting_line(s, now.get(s.id)) for s in settings],
             extra=extra,
         )
 

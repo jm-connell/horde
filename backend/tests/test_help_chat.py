@@ -514,3 +514,80 @@ def test_help_search_for_a_member_without_ai_on_a_server_with_ai(
         answer = c.get("/api/ai/help/search", params={"q": "presets"}).json()["answer"]
     assert answer.startswith("Your account does not use AI here")
     assert "AI permission" in answer
+
+
+# --- Ask's channels and current setting values -------------------------------
+
+
+def _ltt_video(add_video):
+    return add_video(
+        title="RTX 5090 review",
+        channel="Linus Tech Tips",
+        channel_url="https://www.youtube.com/@LinusTechTips",
+    )
+
+
+def test_a_channel_that_is_not_indexed_is_named_with_its_videos(
+    client, help_env, add_video
+):
+    # Live, Ask had answered "what does ltt say about the rtx 5090" by asking
+    # which data to use, and "is the ltt channel indexed?" with "I can't check".
+    video = _ltt_video(add_video)
+    body = {"message": "what does ltt say about the rtx 5090", "data_consent": "cloud"}
+    client.post("/api/ai/help/chat", json=body)
+    system = help_env[0]["system"]
+    assert "- none: no channel is indexed yet" in system
+    assert "Linus Tech Tips is not indexed for Ask; the library has 1 of its" in system
+    assert f'#{video.id} "RTX 5090 review"' in system
+    assert "[[setting:ask-channels]]" in system
+
+    # Without consent: the indexing fact, not the library's videos.
+    client.post("/api/ai/help/chat", json={**body, "data_consent": "off"})
+    system = help_env[1]["system"]
+    assert "Linus Tech Tips is not indexed for Ask." in system
+    assert "RTX 5090 review" not in system
+
+
+def test_indexing_questions_get_each_channels_progress(client, help_env, session):
+    from app.models import KbChannel, KbChannelStatus
+
+    session.add(
+        KbChannel(
+            channel_url="https://www.youtube.com/@LinusTechTips",
+            channel_name="Linus Tech Tips",
+            status=KbChannelStatus.indexing,
+        )
+    )
+    session.commit()
+    client.post("/api/ai/help/chat", json={"message": "is the ltt channel indexed?"})
+    assert (
+        "- Linus Tech Tips: indexing, 0 of 0 videos checked" in (help_env[0]["system"])
+    )
+    # A question that is not about Ask's channels gets none of this.
+    client.post("/api/ai/help/chat", json={"message": "how do I change the theme?"})
+    assert "Ask's channels" not in help_env[1]["system"]
+
+
+def test_members_who_cannot_manage_ask_are_not_sent_to_its_settings(
+    member_client, help_env
+):
+    member_client.post(
+        "/api/ai/help/chat", json={"message": "which channels are indexed?"}
+    )
+    system = help_env[0]["system"]
+    note = system.split("Ask's channels (Ask answers")[1].split("\n\n")[0]
+    assert "added by an administrator" in note
+    assert "[[setting:ask-channels]]" not in note
+
+
+def test_server_settings_show_their_current_value(client, help_env):
+    # Live, "turn on ai video chat" offered to turn on a setting already on.
+    from app.services import app_settings
+
+    app_settings.save({"ai": {"ai_chat": True}})
+    client.post("/api/ai/help/chat", json={"message": "turn on ai video chat"})
+    system = help_env[0]["system"]
+    assert "- ai-video-chat: AI video chat (Ai) [change: true|false; now: true]" in (
+        system
+    )
+    assert "now:" not in system.split("- theme:")[-1].split("\n")[0]
