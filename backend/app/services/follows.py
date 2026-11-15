@@ -15,6 +15,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from functools import lru_cache
 from typing import Literal
 from urllib.parse import urlsplit
 
@@ -45,6 +46,7 @@ _TAB_SUFFIXES = frozenset(
 )
 
 
+@lru_cache(maxsize=8192)
 def normalize_channel_url(channel_url: str) -> str:
     """The stored form of a channel URL. ``frontend/src/utils/followUrl.ts`` mirrors it.
 

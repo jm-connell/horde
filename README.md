@@ -14,7 +14,7 @@ Horde started as an archive, and now also supports streaming from YouTube
 without downloading, live streams included. Nearly everything is adjustable in
 Settings.
 
-![Library home with constellation background, channel sidebar, and video grid](docs/assets/screenshots/library.webp)
+![Library home with Continue watching and the video grid](docs/assets/screenshots/library.webp)
 
 It's built for a household, not just one person: one administrator plus member
 accounts, each with their own watch history, recommendations, AI chats and
@@ -116,9 +116,13 @@ including how to reset a lost admin password.
 
 ## Screenshots
 
-![Download page with URL field, quality presets, and queue](docs/assets/screenshots/downloads.webp)
+![Watch page with the Horde player, AI summary, and related videos](docs/assets/screenshots/player.webp)
 
-![Watch page with the Horde player](docs/assets/screenshots/player.webp)
+![Recommended feed with category shelves and live and new-to-you videos](docs/assets/screenshots/recommended.webp)
+
+![Subscriptions page listing followed channels](docs/assets/screenshots/subscriptions.webp)
+
+![Download page with URL field, quality, and destination](docs/assets/screenshots/downloads.webp)
 
 ## Quick start
 

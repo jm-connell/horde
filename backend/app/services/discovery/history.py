@@ -56,7 +56,12 @@ def record_stream_watch(
     row.channel_url = normalized or row.channel_url
     if duration_sec and duration_sec > 0:
         row.duration_sec = float(duration_sec)
-    row.watched_sec = max(row.watched_sec, max(0.0, float(position_sec)))
+    position = max(0.0, float(position_sec))
+    row.watched_sec = max(row.watched_sec, position)
+    ended = finished or bool(
+        row.duration_sec and position >= row.duration_sec * FINISHED_FRACTION
+    )
+    row.position_sec = 0.0 if ended else position
     if not finished and row.duration_sec:
         finished = row.watched_sec >= row.duration_sec * FINISHED_FRACTION
     if finished:
@@ -81,6 +86,12 @@ def record_stream_watch(
         )
     session.refresh(row)
     return row
+
+
+def stream_resume_position(session: Session, user_id: int, yt_id: str) -> float:
+    """Where ``user_id`` left the stream ``yt_id`` (0: play from the start)."""
+    row = session.get(UserStreamState, (user_id, yt_id))
+    return row.position_sec if row is not None else 0.0
 
 
 def library_key(video_id: int | None, yt_id: str | None) -> str:

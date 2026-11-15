@@ -4930,6 +4930,238 @@
         "title": "CompatSummaryRead",
         "type": "object"
       },
+      "ContinueStreamRead": {
+        "description": "A stream left part-way: ``duration`` is its length, when known.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "dislike_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dislike Count"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "in_library": {
+            "default": false,
+            "title": "In Library",
+            "type": "boolean"
+          },
+          "library_height_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Height Px"
+          },
+          "like_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Like Count"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
+          },
+          "match_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "position_sec": {
+            "title": "Position Sec",
+            "type": "number"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "published_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Label"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count"
+          },
+          "youtube_watched": {
+            "default": false,
+            "title": "Youtube Watched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "position_sec"
+        ],
+        "title": "ContinueStreamRead",
+        "type": "object"
+      },
+      "ContinueStreamsRead": {
+        "description": "Streamed (not downloaded) videos to carry on with, newest first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContinueStreamRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ContinueStreamsRead",
+        "type": "object"
+      },
       "ContinueYoutubeRead": {
         "description": "Videos watched on YouTube lately (from the import), for Continue watching.",
         "properties": {
@@ -12000,6 +12232,11 @@
               }
             ],
             "title": "Preview Height"
+          },
+          "resume_sec": {
+            "default": 0.0,
+            "title": "Resume Sec",
+            "type": "number"
           },
           "source_url": {
             "anyOf": [
@@ -21850,6 +22087,48 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/history/continue-streams": {
+      "get": {
+        "description": "Videos the user streamed without downloading and left part-way, within\nthe Continue watching window.",
+        "operationId": "continue_streams_api_history_continue_streams_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinueStreamsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Continue Streams",
+        "tags": [
+          "history"
+        ]
       }
     },
     "/api/history/continue-youtube": {

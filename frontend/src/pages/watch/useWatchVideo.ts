@@ -171,8 +171,20 @@ export function useWatchVideo({
   ]);
 
   // Start stream playback
+  /** Where the account left this stream, read once as it opens. */
+  const streamResumeRef = useRef<{ url: string; sec: number | null } | null>(
+    null
+  );
   useEffect(() => {
     if (source?.kind !== "stream") return;
+    if (streamResumeRef.current?.url !== source.url) {
+      // A later refresh of the details must not move the start position.
+      const left = source.meta.is_live ? 0 : source.meta.resume_sec;
+      streamResumeRef.current = {
+        url: source.url,
+        sec: left > 1 ? left : null,
+      };
+    }
     playStream({
       url: source.url,
       title: source.meta.title || "Untitled",
@@ -188,7 +200,7 @@ export function useWatchVideo({
       storyboard: source.meta.storyboard ?? null,
       durationSec: source.meta.duration ?? null,
       channelUrl: source.meta.channel_url ?? null,
-      startSec: appliedStartRef.current,
+      startSec: appliedStartRef.current ?? streamResumeRef.current.sec,
     });
   }, [source, channelParam, playStream]);
 

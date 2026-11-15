@@ -85,6 +85,17 @@ export function useSetHistoryTaste() {
   });
 }
 
+/** Streams left part-way, for Continue watching on Recommended. */
+export function useContinueStreams(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.history.continueStreams,
+    queryFn: ({ signal }) => api.continueStreams({ signal }),
+    enabled,
+    // Positions move while watching: ask again each time the row shows.
+    staleTime: 0,
+  });
+}
+
 /** Imported YouTube views of the last few days, for Continue watching. */
 export function useContinueYoutube(enabled = true) {
   return useQuery({
