@@ -45,6 +45,7 @@ from ..services import (
     channel_avatar,
     channel_catalog,
     channel_retention,
+    feed_enrich,
     feed_meta_cache,
     follows,
     library,
@@ -169,8 +170,18 @@ def search_channels(
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
-def channel_catalog_status(user: AuthUser = Depends(current_user)):
-    payload = channel_catalog.get_runtime_status()
+def channel_catalog_status(
+    channel_url: str | None = Query(
+        None, description="Also return this channel's catalog as channel_catalog."
+    ),
+    channel: str | None = Query(None, description="Channel name, for URL aliases."),
+    user: AuthUser = Depends(current_user),
+):
+    # Only matched against stored catalogs, never fetched: no URL safety check.
+    payload = channel_catalog.get_runtime_status(
+        (channel_url or "").strip() or None,
+        channel_name=(channel or "").strip() or None,
+    )
     if not user.is_admin:
         payload = member_view.catalog_status(payload)
     return ChannelCatalogStatusResponse(**payload)
@@ -962,92 +973,11 @@ def channel_feed(
         e for e in entries if e.id and (e.like_count is None or e.dislike_count is None)
     ][:8]
     if missing_meta or missing_votes:
-        from ..services import return_youtube_dislike
-
-        def _enrich(
-            meta_rows: list[tuple[str, str]],
-            vote_ids: list[str],
-            catalog_url: str | None,
-        ) -> None:
-            from ..services import activity
-
-            total = len(meta_rows) + len(vote_ids)
-            with activity.track(
-                "feed_enrich",
-                "Enriching channel feed metadata",
-                reason="Channel feed opened with missing view counts, dates, or votes",
-                engine="yt-dlp",
-                detail=f"0/{total}" if total else None,
-                total=total or None,
-                done=0,
-            ) as handle:
-                updates: list[dict] = []
-                catalog_field_updates: list[dict] = []
-                done = 0
-                for yt_id, entry_url in meta_rows:
-                    try:
-                        preview = ytdlp_extract.extract_preview(entry_url)
-                    except Exception:
-                        logger.debug(
-                            "feed enrichment failed for %s", entry_url, exc_info=True
-                        )
-                        done += 1
-                        handle.update(done=done, detail=f"{done}/{total}")
-                        continue
-                    if preview.get("is_playlist"):
-                        done += 1
-                        handle.update(done=done, detail=f"{done}/{total}")
-                        continue
-                    row: dict = {"id": yt_id}
-                    if preview.get("view_count") is not None:
-                        row["view_count"] = preview["view_count"]
-                    if preview.get("thumbnail_url"):
-                        row["thumbnail_url"] = preview["thumbnail_url"]
-                    if preview.get("published_at") or preview.get("published_label"):
-                        row["published_at"] = preview.get("published_at")
-                        row["published_label"] = preview.get("published_label")
-                    if len(row) > 1:
-                        updates.append(row)
-                        catalog_field_updates.append(row)
-                    done += 1
-                    handle.update(done=done, detail=f"{done}/{total}")
-                for yt_id in vote_ids:
-                    votes = return_youtube_dislike.fetch_votes(yt_id)
-                    if votes:
-                        updates.append(
-                            {
-                                "id": yt_id,
-                                "like_count": votes["like_count"],
-                                "dislike_count": votes["dislike_count"],
-                            }
-                        )
-                    done += 1
-                    handle.update(done=done, detail=f"{done}/{total}")
-                if updates:
-                    feed_meta_cache.upsert_many(updates)
-                if catalog_url and catalog_field_updates:
-                    try:
-                        channel_catalog.update_catalog_video_fields(
-                            catalog_url, catalog_field_updates
-                        )
-                    except Exception:
-                        logger.warning(
-                            "could not store enriched feed metadata in the catalog for %s",
-                            catalog_url,
-                            exc_info=True,
-                        )
-
-        import threading
-
-        threading.Thread(
-            target=_enrich,
-            args=(
-                [(e.id, e.url) for e in missing_meta if e.id],
-                [e.id for e in missing_votes if e.id],
-                channel_url,
-            ),
-            daemon=True,
-        ).start()
+        feed_enrich.schedule(
+            [(e.id, e.url) for e in missing_meta if e.id],
+            [e.id for e in missing_votes if e.id],
+            channel_url,
+        )
 
     progress = channel_catalog.catalog_progress(session, channel_url)
     # Prefer live page flags when serving from catalog mid-index.

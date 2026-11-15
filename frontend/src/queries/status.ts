@@ -89,15 +89,25 @@ export function useCompatSummary() {
 }
 
 /** Query definition, also used with `queryClient.fetchQuery` to force a read. */
-export const channelCatalogStatusQuery = () => ({
-  queryKey: queryKeys.channels.catalogStatus,
+export const channelCatalogStatusQuery = (channel?: {
+  url: string;
+  name?: string | null;
+}) => ({
+  queryKey: [
+    ...queryKeys.channels.catalogStatus,
+    channel?.url ?? null,
+    channel?.name ?? null,
+  ],
   queryFn: ({ signal }: { signal: AbortSignal }) =>
-    api.getChannelCatalogStatus({ signal }),
+    api.getChannelCatalogStatus(channel, { signal }),
 });
 
-export function useChannelCatalogStatus(opts: PollOptions = {}) {
+export function useChannelCatalogStatus(
+  opts: PollOptions = {},
+  channel?: { url: string; name?: string | null }
+) {
   return useQuery({
-    ...channelCatalogStatusQuery(),
+    ...channelCatalogStatusQuery(channel),
     ...statusOptions(opts),
   });
 }
