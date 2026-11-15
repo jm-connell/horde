@@ -378,7 +378,11 @@ def _fetch_description(
     title: str | None = None,
     channel: str | None = None,
 ) -> tuple[str | None, str | None]:
-    """Full extract for description; also returns published_at when yt-dlp has it."""
+    """Full extract for description; also returns published_at when yt-dlp has it.
+
+    The description is "" for a video that has none and None when the extract
+    failed, so the next pass retries only the failures.
+    """
     opts = {
         "quiet": True,
         "no_warnings": True,
@@ -407,10 +411,10 @@ def _fetch_description(
             ) from exc
         return None, None
     desc = info.get("description")
-    if not isinstance(desc, str) or not desc.strip():
+    if not isinstance(desc, str):
         desc_out = None
     else:
-        desc_out = desc[:_MAX_DESC_CHARS]
+        desc_out = desc.strip() and desc[:_MAX_DESC_CHARS]
     meta = published_meta_from_entry(info)
     published = meta.iso if meta.precision == "day" else None
     return desc_out, published
@@ -438,7 +442,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             purge_catalog_video(session, row)
             _set_runtime(done=i + 1)
             continue
-        if row.description:
+        if row.description is not None:
             _set_runtime(done=i + 1)
             continue
         try:
@@ -462,7 +466,7 @@ def _run_description_pass(session: Session, catalog: ChannelCatalog) -> None:
             _set_runtime(done=i + 1)
             continue
         changed = False
-        if desc:
+        if desc is not None:
             row.description = desc
             changed = True
         if published and not row.published_at:

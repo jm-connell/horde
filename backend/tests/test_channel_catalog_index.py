@@ -145,3 +145,32 @@ def test_listing_skips_entries_the_feed_drops(listing):
         page = fetch(0, 50)
     assert page["fetched"] == 3
     assert [e["id"] for e in page["entries"]] == ["v0000000000", "v0000000001"]
+
+
+def test_an_empty_description_is_fetched_once(session, monkeypatch):
+    from app.models import ChannelCatalogVideo
+
+    catalog = _catalog(session)
+    row = ChannelCatalogVideo(
+        catalog_id=catalog.id,
+        yt_id="v0000000000",
+        url="https://www.youtube.com/watch?v=v0000000000",
+        title="No words",
+        position=0,
+    )
+    session.add(row)
+    session.commit()
+    calls: list[str] = []
+
+    def fake_extract(url: str, opts: dict, **_kwargs: Any) -> dict[str, Any]:
+        calls.append(url)
+        return {"id": "v0000000000", "description": ""}
+
+    monkeypatch.setattr(idx, "extract_info_gated", fake_extract)
+
+    idx._run_description_pass(session, catalog)
+    idx._run_description_pass(session, catalog)
+
+    session.refresh(row)
+    assert row.description == ""
+    assert len(calls) == 1
