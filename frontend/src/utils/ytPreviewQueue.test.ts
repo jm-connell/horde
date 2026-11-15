@@ -48,12 +48,32 @@ describe("enqueueYtPreview", () => {
     await expect(next).resolves.toBe("after");
   });
 
-  it("hands the signal to the task so it can cancel its request", async () => {
+  it("waits for a started task even when its signal aborts", async () => {
+    let releaseFirst!: () => void;
     const controller = new AbortController();
-    const seen = await enqueueYtPreview(
-      async (signal) => signal,
+    // A task that would cancel its request if it were handed the signal.
+    const first = enqueueYtPreview(
+      (signal?: AbortSignal) =>
+        new Promise<void>((resolve, reject) => {
+          releaseFirst = resolve;
+          signal?.addEventListener("abort", () =>
+            reject(new DOMException("Aborted", "AbortError"))
+          );
+        }),
       controller.signal
     );
-    expect(seen).toBe(controller.signal);
+    const next = vi.fn(async () => "next");
+    const second = enqueueYtPreview(next);
+
+    await vi.waitFor(() => expect(releaseFirst).toBeTypeOf("function"));
+    // The card unmounts while its lookup is on the server.
+    controller.abort();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(next).not.toHaveBeenCalled();
+
+    releaseFirst();
+    await first;
+    await expect(second).resolves.toBe("next");
   });
 });

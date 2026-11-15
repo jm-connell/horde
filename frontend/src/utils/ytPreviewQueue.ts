@@ -1,6 +1,6 @@
 /** Serialize feed max-res badge fetches so we don't burst yt-dlp extracts. */
 
-type Task<T> = (signal?: AbortSignal) => Promise<T>;
+type Task<T> = () => Promise<T>;
 
 let chain: Promise<unknown> = Promise.resolve();
 
@@ -9,7 +9,9 @@ let chain: Promise<unknown> = Promise.resolve();
  *
  * A task whose ``signal`` has aborted by its turn (its card left the page) is
  * skipped, so leaving a feed does not keep sending YouTube lookups for cards
- * nobody can see.
+ * nobody can see. A task that has started is not cancelled: the server keeps
+ * working on a request the browser abandons, so the next task waits for it to
+ * answer and one tab never holds more than one lookup on the server.
  */
 export function enqueueYtPreview<T>(
   task: Task<T>,
@@ -19,7 +21,7 @@ export function enqueueYtPreview<T>(
     if (signal?.aborted) {
       return Promise.reject(new DOMException("Aborted", "AbortError"));
     }
-    return task(signal);
+    return task();
   };
   const run = chain.then(start, start);
   // Keep the chain alive even if a task fails.

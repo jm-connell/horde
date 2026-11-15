@@ -405,8 +405,7 @@ export default function ChannelFeedCard({
         if (!hit?.isIntersecting) return;
         observer.disconnect();
         enqueueYtPreview(
-          (signal) =>
-            api.previewDownload(entry.url, { signal, background: true }),
+          () => api.previewDownload(entry.url, { background: true }),
           controller.signal
         )
           .then((preview) => {
