@@ -221,7 +221,7 @@ def pick_route(
         ):
             return Route(picked=picked)
         return Route(video=video, picked=picked)
-    if page and not routing.about_horde(message):
+    if page and (routing.about_video(message) or not routing.about_horde(message)):
         return Route(page)
     return Route()
 

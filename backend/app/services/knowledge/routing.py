@@ -29,22 +29,39 @@ _HORDE = re.compile(
     r"sign ?in|theme|css|subtitles? (setting|size|position)|captions? setting|"
     r"ollama|openrouter|api key|provider|server|docker|storage|disk|backup|"
     r"permissions?|admin|bug|error message|keyboard shortcut|hotkey|"
-    r"my ai|spent on ai|ai (providers?|models?|costs?|spend(ing)?|budget|features?))\b"
-    r"|https?://",
+    r"is (my |the )?ai (working|on|off|broken|down)|"
+    r"my ai (provider|model|settings?|features?)|spent on ai|"
+    r"ai (costs?|spend(ing)?|budget))\b",
     re.IGNORECASE,
 )
-# Things only the app has: a how-to or an instruction that names one is about
-# Horde ("make subtitles bigger", "turn off autoplay", "how to change the
-# background"). Kept to words a video's subject rarely shares: no bare
-# "quality", "volume", "intro" or "light", which a viewer asks about too.
+# Things only the app has: asking how to do something with one, or to do it,
+# is about Horde ("make subtitles bigger", "turn off autoplay", "how to change
+# the background"). Kept to phrases a video's subject rarely shares: no bare
+# "font", "offline", "quality", "css" or "notifications", which tutorials use.
 _APP_THING = re.compile(
     r"\b(autoplay|subtitles?|captions?|themes?|dark mode|light mode|"
-    r"accent colou?r|fonts?|typeface|background|wallpaper|css|sponsor ?block|"
-    r"skip (sponsors?|intros?|outros?)|hotkeys?|keyboard shortcuts?|"
-    r"notifications?|ntfy|jellyfin|plex|kodi|transcod(e|ing)|video quality|"
-    r"download quality|playback speed|loudness|hover previews?|sidebar|tab bar|"
-    r"nav ?bar|username|two.factor|2fa|watch history|subscriptions?|subscribe|"
-    r"offline)\b",
+    r"accent colou?r|background( image| animation| effect| colou?r)?(?! noise| music| sound)|"
+    r"font size|(change|bigger|smaller|larger) (the )?fonts?|fonts? (bigger|smaller|larger)|"
+    r"sponsor ?block|skip (sponsors?|intros?|outros?)|hotkeys?|keyboard shortcuts?|"
+    r"video quality|download quality|playback speed|loudness|hover previews?|"
+    r"tab bar|nav ?bar|watch history|subscribe to (a|this|the|that) channel|"
+    r"watch (videos )?offline|offline mode)\b",
+    re.IGNORECASE,
+)
+# An instruction: "turn off autoplay", "hey, make subtitles bigger".
+_INSTRUCTION = (
+    r"^\W*((hey|hi|ok|okay|please|pls|can you|could you)\W+)*"
+    r"(make|turn|switch|change|set|enable|disable|hide|increase|decrease|reset|"
+    r"download)\b"
+)
+# Asking for something to be done: "how do I…", "how to…" or an instruction.
+_DO = re.compile(rf"\bhow (do|can) i\b|\bhow to\b|{_INSTRUCTION}", re.IGNORECASE)
+# The thing is somewhere else or on screen: "in photoshop", "on my tv",
+# "like that". ("turn on autoplay" is not "on" a place.)
+_ELSEWHERE = re.compile(
+    r"\blike (that|this|his|hers?|theirs|them|him)\b"
+    r"|(?<!turn )(?<!switch )\b(in|on|for|with|using) "
+    r"(?!horde\b|here\b|this app\b|the app\b)\w",
     re.IGNORECASE,
 )
 
@@ -61,10 +78,7 @@ _ABOUT_VIDEO = re.compile(
 # The user setting something up or doing something: a how-to.
 _HOW_TO = re.compile(
     r"\b(how (do|can|should|would) i|how to|(can|could|should) i|where (do|can) i"
-    r"|i (want|need|would like) to|help me|my)\b"
-    # An instruction: "make subtitles bigger", "turn off autoplay".
-    r"|^\W*(please |can you |could you )?(make|turn|switch|change|set|enable|"
-    r"disable|hide|increase|decrease|reset|download)\b",
+    rf"|i (want|need|would like) to|help me|my)\b|{_INSTRUCTION}",
     re.IGNORECASE,
 )
 # Words that make a question about a channel's other videos, not the one on screen.
@@ -126,7 +140,10 @@ def about_horde(message: str) -> bool:
     """True for a question about the app itself (its settings, downloads, ...)."""
     text = message or ""
     return bool(
-        _HORDE.search(text) or (_HOW_TO.search(text) and _APP_THING.search(text))
+        _HORDE.search(text)
+        or (
+            _DO.search(text) and _APP_THING.search(text) and not _ELSEWHERE.search(text)
+        )
     )
 
 

@@ -849,7 +849,8 @@ APP_QUESTIONS_ON_A_VIDEO = [
     "how do i subscribe to a channel",
     "is my ai working",
     "download this https://youtu.be/dQw4w9WgXcQ",
-    "my subtitles are out of sync",
+    "hey, turn off autoplay",
+    "can you please turn off autoplay",
 ]
 #: About what the video shows, including how-tos and instructions that are not
 #: about the app: these stay on the video.
@@ -866,6 +867,33 @@ VIDEO_QUESTIONS = [
     "how do i make an intro like that",
     "make a list of the mods",
     "when should I change it?",
+    # Tutorial and tech questions that name an app word: found in review.
+    "how do i get a blurry background like that",
+    "how to remove the background in photoshop",
+    "how do i make subtitles like that",
+    "how do i add captions in premiere",
+    "how do i install that font",
+    "increase the font size in word",
+    "how do i enable dark mode in windows 11",
+    "can i run llama offline",
+    "should i subscribe to chatgpt plus",
+    "turn off notifications on the iphone",
+    "how do i enable subtitles on my tv",
+    "how to replace the sidebar mirror",
+    "my background is in electrical engineering, does this apply to me",
+    "can i use this song in the background of my video",
+    "how do i fix my car's background noise",
+    "which ai model should i use for this",
+    "how can i make my ai images look like this",
+    "is this the same as https://example.com/product",
+    # ...and ones that only look like a question about the user's things.
+    "how many bolts do i have to remove",
+    "do i have to watch part 1 first",
+    "is there anything on my 4runner i should upgrade",
+    "can you recommend anything for cleaning leather seats",
+    "recommend something similar",
+    "what was the clip at 3:00 called",
+    "i'm looking for a video that explains this better",
 ]
 
 
@@ -885,6 +913,24 @@ def test_app_questions_leave_the_video_and_video_questions_stay(session, picked)
     assert to_video("how much have i spent on ai") == picked
     for question in VIDEO_QUESTIONS:
         assert to_video(question), question
+
+
+def test_a_question_about_the_host_stays_on_the_page_channel(session):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+
+    def scope(message: str) -> list[KbChannel]:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=nut.id
+        ).channels
+
+    for question in (
+        "what ai models does he recommend",
+        "how do i make my subtitles look like his",
+        "what backup tool does he use?",
+    ):
+        assert scope(question) == [nut], question
+    assert scope("turn off autoplay") == []
 
 
 def test_a_question_on_a_library_video_answers_from_it(
