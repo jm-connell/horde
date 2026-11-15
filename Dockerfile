@@ -7,7 +7,7 @@
 # always built on the build host (fast, no emulation) even for arm64 images.
 
 # --- Stage 1: build the React frontend ---
-FROM --platform=$BUILDPLATFORM node:26.13.0-alpine3.24@sha256:c6ad9e9c1d80f6eb607c26b4b0a132ff7a2344fad1c78ea3baa2a7d4c8de6d94 AS frontend
+FROM --platform=$BUILDPLATFORM node:26.13.0-alpine3.24@sha256:8996bb5821d62a8fd9bb27c1cb07462f3fdce6e47d640c6a881ead0b064ce216 AS frontend
 WORKDIR /build
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -18,7 +18,7 @@ COPY backend/app/services/ai/help_catalog.json /backend/app/services/ai/help_cat
 RUN npm run build
 
 # --- Stage 2: build the MkDocs wiki ---
-FROM --platform=$BUILDPLATFORM python:3.14.10-slim-bookworm@sha256:516b51cb9db2ef061e465c803e50f64361b82cefd91e525b889b967b83e83527 AS docs
+FROM --platform=$BUILDPLATFORM python:3.14.10-slim-bookworm@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b AS docs
 WORKDIR /docs
 COPY docs/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
@@ -27,7 +27,7 @@ COPY docs/ ./docs/
 RUN mkdocs build -d /docs-out --strict
 
 # --- Stage 3: python runtime serving API + static build + wiki ---
-FROM python:3.14.10-slim-bookworm@sha256:516b51cb9db2ef061e465c803e50f64361b82cefd91e525b889b967b83e83527 AS runtime
+FROM python:3.14.10-slim-bookworm@sha256:3fe1a0b6c2d6b2ebb572906cdabeca75aeb558c0c17db5ffefbcf8094871c32b AS runtime
 WORKDIR /app
 
 # Which ffmpeg to ship. The build FAILS if the requested flavor cannot be

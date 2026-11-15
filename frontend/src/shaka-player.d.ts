@@ -66,6 +66,8 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
     selectVariantTrack(track: ShakaVariantTrack, clearBuffer?: boolean): void;
     getStats(): ShakaStats;
     retryStreaming(retryDelay?: number): boolean;
+    /** Waiting for media (rebuffering), as opposed to playing or paused. */
+    isBuffering(): boolean;
     isLive(): boolean;
     /** Seekable window in media time (a live stream's DVR window). */
     seekRange(): { start: number; end: number };

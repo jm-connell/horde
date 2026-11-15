@@ -192,6 +192,8 @@ export interface Settings {
   /** Tabs on the installed app's bottom island on phones, in order. */
   tabBarItems: TabBarItem[];
   normalizeVolumeOnDownload: boolean;
+  /** Quality preselected on the Download page (a `PRESET_ORDER` value). */
+  defaultDownloadPreset: string;
   downloadVideoCodec: DownloadVideoCodec;
   /** Short-side cap for H.264 copies: 1080p (cheap) or source (up to 4K). */
   compatCopyResolution: CompatCopyResolution;

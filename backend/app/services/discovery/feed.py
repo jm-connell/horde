@@ -27,6 +27,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 import numpy as np
 from sqlmodel import Session, col, select
@@ -180,7 +181,9 @@ class Feed:
     categories: tuple[object, dict[str, set[str]]] | None = None
 
 
+@lru_cache(maxsize=16384)
 def _name(text: str) -> str:
+    # Cached: ranking asks for the same channel names many thousands of times.
     return " ".join((text or "").lower().split())
 
 
@@ -741,7 +744,7 @@ def build_feed(
     hits = _hits(session, user_id)
     pool = library_candidates(session)
     taken = {c.yt_id for c in pool if c.yt_id}
-    pool += catalog_candidates(session, taken)
+    pool += catalog_candidates(session, taken, runtime.catalog)
     pool += discovered_candidates(session, taken, set(hits))
     cands = [
         c

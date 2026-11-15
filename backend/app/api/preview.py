@@ -26,6 +26,7 @@ from ..openapi_responses import (
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
 from ..services import library, next_part, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
+from ..services.discovery import history as stream_history
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
@@ -386,6 +387,7 @@ def preview_meta(
     url: str = Query(...),
     session: Session = Depends(get_session),
     gate: ExtractionGate = Depends(extraction_gate),
+    user: AuthUser = Depends(current_user),
 ):
     cleaned = _require_video_url(url)
     try:
@@ -396,6 +398,7 @@ def preview_meta(
         raise preview_extraction_error(exc, cleaned) from exc
 
     library_video_id = None
+    resume_sec = 0.0
     yt_id = meta.get("id")
     if not yt_id:
         yt_id = _youtube_video_id(urlparse(cleaned))
@@ -403,6 +406,10 @@ def preview_meta(
         existing = library.find_video_by_youtube_id(session, str(yt_id))
         if existing is not None:
             library_video_id = existing.id
+        elif not meta.get("is_live"):
+            resume_sec = stream_history.stream_resume_position(
+                session, user.id, str(yt_id)
+            )
 
     return StreamPreviewMeta(
         id=meta.get("id"),
@@ -421,6 +428,7 @@ def preview_meta(
         is_live=bool(meta.get("is_live")),
         was_live=bool(meta.get("was_live")),
         storyboard=meta.get("storyboard"),
+        resume_sec=resume_sec,
     )
 
 

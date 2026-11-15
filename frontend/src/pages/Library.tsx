@@ -21,7 +21,7 @@ import {
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
 import { useChannelLive } from "../queries/follows";
-import { useContinueYoutube } from "../queries/history";
+import { useContinueStreams, useContinueYoutube } from "../queries/history";
 import { usePrefetchDiscover } from "../queries/discover";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
@@ -220,25 +220,41 @@ function OnlineLibrary() {
     () => continueWatching.filter((v) => !isDismissed(v.id)),
     [continueWatching, isDismissed]
   );
-  // Videos watched on YouTube lately (the import): after the library's.
+  // Recommended's row also carries what is not in the library: streams left
+  // part-way, then videos watched on YouTube lately (the import). The Library
+  // tab shows library videos only.
   const { dismissedYoutube, dismissYoutube } = useContinueYoutubeDismiss();
-  const youtubeRecent = useContinueYoutube(settings.showContinueWatching).data;
-  const continueYoutube = useMemo(
+  const continueRemote = settings.showContinueWatching && onRecommendedTab;
+  const streamsLeft = useContinueStreams(continueRemote).data;
+  const youtubeRecent = useContinueYoutube(continueRemote).data;
+  const continueStreams = useMemo(
     () =>
-      (youtubeRecent?.items ?? []).filter(
-        (e) => !dismissedYoutube.has(e.id ?? e.url)
-      ),
-    [youtubeRecent, dismissedYoutube]
+      continueRemote
+        ? (streamsLeft?.items ?? []).filter(
+            (e) => !dismissedYoutube.has(e.id ?? e.url)
+          )
+        : [],
+    [continueRemote, streamsLeft, dismissedYoutube]
   );
+  const continueYoutube = useMemo(() => {
+    if (!continueRemote) return [];
+    const streamed = new Set(continueStreams.map((e) => e.id ?? e.url));
+    return (youtubeRecent?.items ?? []).filter((e) => {
+      const key = e.id ?? e.url;
+      return !dismissedYoutube.has(key) && !streamed.has(key);
+    });
+  }, [continueRemote, youtubeRecent, continueStreams, dismissedYoutube]);
   const { submitDownload } = useDownloads();
   const { showToast, showError } = useToast();
   const showContinueRow =
     settings.showContinueWatching &&
     !activeChannel &&
     !activeTag &&
-    !onRecommendedTab &&
     !debouncedSearch &&
-    visibleContinueWatching.length + continueYoutube.length > 0;
+    visibleContinueWatching.length +
+      continueStreams.length +
+      continueYoutube.length >
+      0;
 
   const queueDock = useQueueDock({
     selectMode: selection.selectMode,
@@ -378,16 +394,17 @@ function OnlineLibrary() {
           </p>
         )}
 
-        {showContinueRow && !onChannelPage && !onRecommendedTab && (
+        {showContinueRow && !onChannelPage && (
           <ContinueWatchingRow
             videos={visibleContinueWatching}
+            streams={continueStreams}
             youtube={continueYoutube}
             showProgress={settings.showProgressOnContinueWatching}
             onDismiss={dismiss}
             onDismissAll={dismissAll}
             onDismissYoutube={dismissYoutube}
             onDownloadYoutube={(e) =>
-              void submitDownload(e.url, "1080p", {
+              void submitDownload(e.url, settings.defaultDownloadPreset, {
                 title: e.title ?? undefined,
                 channel: e.channel ?? "Unknown channel",
               })

@@ -1,6 +1,7 @@
 import type {
   MediaToken,
   NextPart,
+  ContinueStreams,
   ContinueYoutube,
   HistoryRemoved,
   HistoryStats,
@@ -309,6 +310,11 @@ export const videosApi = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ keys, use }),
     });
+  },
+
+  /** Streamed (not downloaded) videos left part-way, for Continue watching. */
+  continueStreams(opts?: ReadOptions): Promise<ContinueStreams> {
+    return request<ContinueStreams>("/api/history/continue-streams", opts);
   },
 
   /** The newest imported YouTube views for Continue watching (at most five). */

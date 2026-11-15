@@ -10,7 +10,6 @@ import { useAlgorithmPanelHere, useHelpChat } from "../context/HelpChatContext";
 import { useToast } from "../context/ToastContext";
 import {
   DISCOVER_PAGE_SIZE,
-  DISCOVER_PREVIEW_MS,
   useRecTopics,
   useRecTuning,
 } from "../queries/discover";
@@ -33,6 +32,7 @@ import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
 import LoadingIndicator from "./LoadingIndicator";
 import VideoCard from "./VideoCard";
+import { useSettings } from "../hooks/useSettings";
 
 /**
  * How many cards come before the channel suggestions: two full rows (four on
@@ -66,16 +66,14 @@ function titleOf(item: DiscoverItem): string {
   return item.video?.title ?? item.stream?.title ?? "";
 }
 
-/** Today's first page, loaded ahead (or shown last time) and still recent. */
-function recentFirstPage(
+/**
+ * The first page loaded ahead or shown last time this session, however long
+ * ago: it fills the tab at once while the current one loads.
+ */
+function lastFirstPage(
   queryClient: ReturnType<typeof useQueryClient>
 ): DiscoverFeed | undefined {
-  const state = queryClient.getQueryState<DiscoverFeed>(
-    queryKeys.discover.firstPage
-  );
-  return state?.data && Date.now() - state.dataUpdatedAt < DISCOVER_PREVIEW_MS
-    ? state.data
-    : undefined;
+  return queryClient.getQueryData<DiscoverFeed>(queryKeys.discover.firstPage);
 }
 
 function newSeed(): number {
@@ -98,6 +96,7 @@ export default function DiscoverHome({
   const { can } = useAuth();
   const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
+  const [settings] = useSettings();
   const queryClient = useQueryClient();
   const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
   useAlgorithmPanelHere();
@@ -122,9 +121,9 @@ export default function DiscoverHome({
   const [reloadKey, setReloadKey] = useState(0);
   /** The AI category open (null: the whole feed, "For you"). */
   const [category, setCategory] = useState<string | null>(null);
-  // Loaded ahead by the home page: shown at once, then asked for again
-  // (quietly) so the visit counts and the order is current.
-  const [preview] = useState(() => recentFirstPage(queryClient));
+  // Loaded ahead by the home page, or shown last time: shown at once, then
+  // asked for again (quietly) so the visit counts and the order is current.
+  const [preview] = useState(() => lastFirstPage(queryClient));
   const quietLoad = useRef(Boolean(preview));
   /** Cards the user took off ("Not interested", a blocked channel). */
   const removedKeys = useRef(new Set<string>());
@@ -410,7 +409,7 @@ export default function DiscoverHome({
   const downloadStream = (entry: ChannelFeedEntry) => {
     if (!entry.url || downloading.has(entry.url)) return;
     setDownloading((prev) => new Set(prev).add(entry.url));
-    void submitDownload(entry.url, "1080p", {
+    void submitDownload(entry.url, settings.defaultDownloadPreset, {
       title: entry.title ?? undefined,
       channel: entry.channel ?? "Unknown channel",
     })

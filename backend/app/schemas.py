@@ -346,6 +346,8 @@ class StreamPreviewMeta(BaseModel):
     was_live: bool = False
     #: YouTube's thumbnails for scrubbing; None for live or when there are none.
     storyboard: StoryboardRead | None = None
+    #: Where this user left the stream (seconds); 0 plays from the start.
+    resume_sec: float = 0.0
 
 
 class StreamAiRead(BaseModel):

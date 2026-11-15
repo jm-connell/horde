@@ -162,7 +162,7 @@ nav:
       - Single-flight AI: design/single-flight-ai.md
       - Application context: design/app-context.md
       - Channel knowledge (Ask): design/channel-knowledge.md
-      - Vibecoded: design/vibecoded.md
+      - How Horde is built: design/vibecoded.md
   - Reference:
       - Keyboard shortcuts: reference/keyboard-shortcuts.md
       - Glossary: reference/glossary.md

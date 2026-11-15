@@ -6,6 +6,8 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 
 ## Quality presets
 
+Every download you start uses your **Default quality** (Settings → Library → Downloads, or the setup wizard): this page, the watch page, the one-click download buttons, playlist subscriptions, channel pages and Ask. Change it per download in the **Quality** menu. A cap means "up to", and a link with no video (a podcast) downloads its audio. Channel [auto-download](channels.md#autodownload) uses its own per-channel quality.
+
 | Preset | Meaning |
 |--------|---------|
 | **best** | Highest resolution **AV1** (then other codecs) + AAC when YouTube offers it |
