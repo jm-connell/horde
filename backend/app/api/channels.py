@@ -169,8 +169,18 @@ def search_channels(
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
-def channel_catalog_status(user: AuthUser = Depends(current_user)):
-    payload = channel_catalog.get_runtime_status()
+def channel_catalog_status(
+    channel_url: str | None = Query(
+        None, description="Also return this channel's catalog as channel_catalog."
+    ),
+    channel: str | None = Query(None, description="Channel name, for URL aliases."),
+    user: AuthUser = Depends(current_user),
+):
+    # Only matched against stored catalogs, never fetched: no URL safety check.
+    payload = channel_catalog.get_runtime_status(
+        (channel_url or "").strip() or None,
+        channel_name=(channel or "").strip() or None,
+    )
     if not user.is_admin:
         payload = member_view.catalog_status(payload)
     return ChannelCatalogStatusResponse(**payload)

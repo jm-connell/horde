@@ -696,6 +696,8 @@ class ChannelCatalogStatusResponse(BaseModel):
     catalog_id: int | None = None
     queue_depth: int = 0
     catalogs: list[ChannelCatalogStatusItem] = []
+    # The row for the channel_url query parameter, when one was given and matched.
+    channel_catalog: ChannelCatalogStatusItem | None = None
     direct_youtube_search: bool = True
 
 

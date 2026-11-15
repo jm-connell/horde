@@ -10,14 +10,6 @@ import {
 import type { ChannelAutodownload } from "../../types";
 import type { CatalogProgress } from "../libraryCatalogProgress";
 
-/** Compare channel URLs without the tab suffix or a trailing slash. */
-export function normalizeChannelUrl(url: string): string {
-  return url
-    .replace(/\/+$/, "")
-    .replace(/\/(videos|shorts|streams|playlists|featured|about|search)$/i, "")
-    .toLowerCase();
-}
-
 export type AutodownloadPayload = {
   enabled: boolean;
   previous_mode: ChannelAutodownload["previous_mode"];
@@ -74,10 +66,14 @@ export function useChannelCatalog(
     };
   }, [onChannelPage, activeChannel, activeChannelUrl]);
 
-  const catalogStatusQuery = useChannelCatalogStatus({
-    enabled: onChannelPage && !!activeChannelUrl,
-    interval: 5000,
-  });
+  // The server matches the channel to its catalog (www, handle case, aliases).
+  const catalogChannel = activeChannelUrl
+    ? { url: activeChannelUrl, name: activeChannel }
+    : undefined;
+  const catalogStatusQuery = useChannelCatalogStatus(
+    { enabled: onChannelPage && !!activeChannelUrl, interval: 5000 },
+    catalogChannel
+  );
   const catalogStatus = catalogStatusQuery.data;
 
   useEffect(() => {
@@ -90,15 +86,9 @@ export function useChannelCatalog(
     if (!catalogStatus) return;
     const status = catalogStatus;
 
-    const target = normalizeChannelUrl(activeChannelUrl);
-    const hit =
-      status.catalogs.find(
-        (c) => normalizeChannelUrl(c.channel_url) === target
-      ) ?? null;
+    const hit = status.channel_catalog ?? null;
     const isCurrentJob =
-      status.running &&
-      status.current_channel_url != null &&
-      normalizeChannelUrl(status.current_channel_url) === target;
+      status.running && hit != null && status.catalog_id === hit.id;
     const maxVideos = hit?.max_videos || 1000;
     const lastError = hit?.last_error ?? null;
     if (!catalogErrorSeededRef.current) {
@@ -166,13 +156,15 @@ export function useChannelCatalog(
       showToast(result.detail || "Channel indexing queued");
       // Refresh progress immediately so the status line updates.
       queryClient
-        .fetchQuery({ ...channelCatalogStatusQuery(), staleTime: 0 })
+        .fetchQuery({
+          ...channelCatalogStatusQuery({
+            url: activeChannelUrl,
+            name: activeChannel,
+          }),
+          staleTime: 0,
+        })
         .then((status) => {
-          if (!activeChannelUrl) return;
-          const target = normalizeChannelUrl(activeChannelUrl);
-          const hit = status.catalogs.find(
-            (c) => normalizeChannelUrl(c.channel_url) === target
-          );
+          const hit = status.channel_catalog;
           setCatalogProgress((prev) => ({
             indexed: hit?.indexed_count ?? 0,
             total: hit?.channel_total ?? null,

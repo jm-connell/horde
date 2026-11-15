@@ -3628,6 +3628,16 @@
             "title": "Catalogs",
             "type": "array"
           },
+          "channel_catalog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelCatalogStatusItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "current_channel": {
             "anyOf": [
               {
@@ -18780,6 +18790,44 @@
     "/api/channels/catalog/status": {
       "get": {
         "operationId": "channel_catalog_status_api_channels_catalog_status_get",
+        "parameters": [
+          {
+            "description": "Also return this channel's catalog as channel_catalog.",
+            "in": "query",
+            "name": "channel_url",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Also return this channel's catalog as channel_catalog.",
+              "title": "Channel Url"
+            }
+          },
+          {
+            "description": "Channel name, for URL aliases.",
+            "in": "query",
+            "name": "channel",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Channel name, for URL aliases.",
+              "title": "Channel"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

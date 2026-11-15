@@ -230,3 +230,42 @@ test("the header shows the channel's picture and its index beside Subscribe", as
     i && f && Math.abs(i.y + i.height / 2 - (f.y + f.height / 2))
   ).toBeLessThan(4);
 });
+
+test("the header shows the index state the server matched to the channel", async ({
+  page,
+}) => {
+  await giveKilnAYoutubeUrl(page);
+  // The catalog stores the normalized URL (no www, lowercase handle); only the
+  // server's channel_catalog links it to the library's URL.
+  await page.route(/\/api\/channels\/catalog\/status(\?.*)?$/, (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const row = {
+      id: 7,
+      channel_url: "https://youtube.com/@kiln",
+      channel_name: "Kiln",
+      status: "ready",
+      indexed_count: 1000,
+      channel_total: 1000,
+      complete: true,
+      max_videos: 1000,
+    };
+    return route.fulfill({
+      json: {
+        enabled: true,
+        running: false,
+        queue_depth: 0,
+        catalogs: [row],
+        channel_catalog: params.get("channel_url") === CHANNEL_URL ? row : null,
+        direct_youtube_search: true,
+      },
+    });
+  });
+  await page.goto("/?channel=Kiln");
+
+  await expect(
+    page.getByRole("button", { name: "Fully indexed (1000)" })
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Not indexed" })).toHaveCount(
+    0
+  );
+});
