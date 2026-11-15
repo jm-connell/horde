@@ -305,7 +305,18 @@ def test_info_route_hides_the_model_from_members(client, member_client, monkeypa
         ("find that cooking video", {"search"}),
         ("any videos about cities skylines in my library?", {"library", "search"}),
         ("what's downloading right now", {"downloads"}),
+        ("what\u2019s downloading?", {"downloads"}),
         ("recommend something", {"suggest"}),
+        ("can you recommend something to watch?", {"suggest"}),
+        # Not about the user's own things, so no data leaves the server.
+        ("how many bolts do i have to remove", set()),
+        ("do i have to watch part 1 first", set()),
+        ("is there anything on my 4runner i should upgrade", set()),
+        ("will my car handle something with more boost", set()),
+        ("can you recommend anything for cleaning leather seats", set()),
+        ("recommend something similar", set()),
+        ("what was the clip at 3:00 called", set()),
+        ("i'm looking for a video that explains this better", set()),
     ],
 )
 def test_topics_follow_the_question(question, expected):
@@ -324,6 +335,8 @@ def test_topics_follow_the_question(question, expected):
         "How does Recommended+ pick videos?",
         "How do I download a playlist?",
         "How do I find a video?",
+        "How do I find videos about cooking?",
+        "How do I search for videos about sourdough?",
     ],
 )
 def test_how_to_questions_need_no_data(question):
@@ -437,6 +450,12 @@ def test_gather_searches_the_library(session, library_data, monkeypatch):
     assert 'matching "rocket"' in text and "Rocket engines explained" in text
     assert "not watched" in text
     assert "Tomato" not in text
+
+
+def test_a_lookup_that_finds_nothing_says_it_looked(session, member_user):
+    # An empty library: "nothing was looked up" would be wrong here.
+    text = help_data.gather(session, AuthUser.of(member_user), "recommend something")
+    assert text == "Looked up (suggest): nothing found."
 
 
 def test_how_to_questions_send_no_data(session, library_data):

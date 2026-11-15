@@ -63,23 +63,28 @@ _TOPIC_WORDS: dict[str, frozenset[str]] = {
 }
 #: A question about the user's own things ("I" alone is in every how-to).
 _PERSONAL = _words("my mine")
-#: "did I watch", "have I seen", "I downloaded": about the user without "my".
+#: "did I watch", "have I seen", "I downloaded", "do I have": about the user
+#: without "my" (not "do I have to…").
 _ABOUT_ME = re.compile(
     r"\b(?:did|have|had) i\b|\bi(?:'ve| have)? (?:watched|downloaded|saw|seen|added)\b"
-    r"|\bdo i (?:have|own)\b"
+    r"|\bdo i (?:have|own)\b(?! to\b)"
 )
-#: "videos about X", "anything on X": something to look for in the library.
-_ABOUT_THING = re.compile(
-    r"\b(?:videos?|clips?|anything|something) (?:about|on|with|from|called|named)\b"
-)
+#: "videos about X": something to look for in the user's library.
+_ABOUT_THING = re.compile(r"\b(?:videos?|clips?) (?:about|on|with|from|called|named)\b")
+#: "find that cooking video", without "my" (but not "how do I find…").
+_FIND = _words("find search")
+_HOW_DO_I = re.compile(r"\bhow (?:do|can|would|should) i\b|\bhow to\b")
 #: "what's downloading?", "anything in the queue?": the queue right now.
 _QUEUE_NOW = re.compile(
     r"\b(?:what'?s|what is|anything|something) (?:downloading|queued|in the queue)\b"
     r"|\bdownloading (?:right )?now\b"
 )
+#: "recommend something" and nothing else: a pick from the user's library.
+_RECOMMEND_ANY = re.compile(
+    r"^\W*(?:(?:can|could) you |please )*(?:recommend|suggest) (?:me )?"
+    r"(?:something|anything)(?: (?:to watch|for me|good))?\W*$"
+)
 _VIDEO_WORDS = _words("video videos clip clips")
-_RECOMMEND = _words("recommend suggest")
-_ANY_THING = _words("something anything")
 _WATCH = _words("watch watching")
 _MAKE = _words("make create build new add put")
 #: Words that say what to look for rather than what it is about.
@@ -110,9 +115,14 @@ def _vocab_topics(words: set[str]) -> set[str]:
     return {name for name, vocab in _TOPIC_WORDS.items() if words & vocab}
 
 
+def _plain(text: str) -> str:
+    """Lowercase, with the curly apostrophe phones type ("what’s") made plain."""
+    return text.lower().replace("\u2019", "'")
+
+
 def topics(question: str, previous: str = "", page: str = "") -> set[str]:
     """Which kinds of the user's data the question needs (empty: none)."""
-    text = question.lower()
+    text = _plain(question)
     words = set(_WORD.findall(text))
     playlist_request = bool(words & _TOPIC_WORDS["playlists"] and words & _MAKE)
     personal = bool(words & _PERSONAL or _ABOUT_ME.search(text) or playlist_request)
@@ -131,14 +141,15 @@ def topics(question: str, previous: str = "", page: str = "") -> set[str]:
         found.add("search")
     # Said without "my", these are still about the user's own things:
     # "find that cooking video", "what's downloading?", "recommend something".
-    if words & _TOPIC_WORDS["search"] and words & _VIDEO_WORDS and search_terms(text):
+    looking = words & _FIND and words & _VIDEO_WORDS and not _HOW_DO_I.search(text)
+    if looking and search_terms(text):
         found.add("search")
     if _QUEUE_NOW.search(text):
         found.add("downloads")
     # "What should I watch next?" is about the user without saying "my".
-    if (words & _TOPIC_WORDS["suggest"] and words & (_WATCH | {"unwatched"})) or (
-        words & _RECOMMEND and words & _ANY_THING
-    ):
+    if (
+        words & _TOPIC_WORDS["suggest"] and words & (_WATCH | {"unwatched"})
+    ) or _RECOMMEND_ANY.search(text):
         found.add("suggest")
     if playlist_request:
         # The model needs real video ids to put in it.
@@ -148,7 +159,7 @@ def topics(question: str, previous: str = "", page: str = "") -> set[str]:
 
 def search_terms(question: str) -> str:
     """The words worth searching the library for (empty when none are left)."""
-    words = [w for w in _WORD.findall(question.lower()) if w not in _NOT_SEARCH_TERMS]
+    words = [w for w in _WORD.findall(_plain(question)) if w not in _NOT_SEARCH_TERMS]
     return " ".join(words[:8])
 
 
@@ -442,4 +453,7 @@ def gather(
     for block in blocks:
         if block and block not in seen:
             seen.append(block)
+    if wanted and not seen:
+        # Looked, found nothing: not the same as "nothing was looked up".
+        return f"Looked up ({', '.join(sorted(wanted))}): nothing found."
     return "\n\n".join(seen)
