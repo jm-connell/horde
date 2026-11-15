@@ -667,10 +667,15 @@ def refresh_stale_catalogs() -> None:
 
 
 def _next_queued(session: Session) -> ChannelCatalog | None:
+    """Channels never indexed first, so one just asked for does not wait behind
+    the periodic refresh of every catalog; then oldest request first."""
     return session.exec(
         select(ChannelCatalog)
         .where(ChannelCatalog.status == ChannelCatalogStatus.queued)
-        .order_by(col(ChannelCatalog.updated_at).asc())
+        .order_by(
+            col(ChannelCatalog.finished_at).is_not(None),
+            col(ChannelCatalog.updated_at).asc(),
+        )
         .limit(1)
     ).first()
 

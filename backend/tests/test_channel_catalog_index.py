@@ -208,3 +208,26 @@ def test_giving_up_on_failing_pages_leaves_the_total_unknown(session, monkeypatc
     assert catalog.channel_total is None
     assert catalog.complete is False
 
+
+def test_never_indexed_channels_go_before_refreshes(session):
+    from datetime import timedelta
+
+    from app.models import utcnow
+    from app.services.channel_catalog.runtime import _next_queued
+
+    now = utcnow()
+    refresh = _catalog(session, finished_at=now - timedelta(days=1))
+    refresh.updated_at = now - timedelta(hours=2)
+    session.add(refresh)
+    new = ChannelCatalog(
+        channel_url="https://youtube.com/@beta",
+        channel_name="Beta",
+        status=ChannelCatalogStatus.queued,
+        updated_at=now,
+    )
+    session.add(new)
+    session.commit()
+
+    job = _next_queued(session)
+    assert job is not None
+    assert job.id == new.id
