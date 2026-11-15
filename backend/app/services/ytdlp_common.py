@@ -872,16 +872,21 @@ _PRIORITY_NAMES = {
 def _log_if_slow(
     url: str, priority: int, queued_at: float, started_at: float | None
 ) -> None:
-    """Warn about a gated request that waited for, or held, the gate a long time.
+    """Log a gated request that waited for, or held, the gate a long time.
 
     ``started_at`` is None when the request never ran (a cache hit after waiting).
+    Background requests wait behind everything else by design, so they log at debug.
     """
     now = time.monotonic()
     waited = (started_at if started_at is not None else now) - queued_at
     ran = now - started_at if started_at is not None else 0.0
     if waited < SLOW_EXTRACT_WAIT_SEC and ran < SLOW_EXTRACT_RUN_SEC:
         return
-    logger.warning(
+    level = (
+        logging.DEBUG if priority == EXTRACT_PRIORITY_BACKGROUND else logging.WARNING
+    )
+    logger.log(
+        level,
         "Slow YouTube request (%s): waited %.1fs for the queue, ran %.1fs: %s",
         _PRIORITY_NAMES.get(priority, str(priority)),
         waited,

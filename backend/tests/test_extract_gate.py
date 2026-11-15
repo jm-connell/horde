@@ -104,3 +104,11 @@ def test_slow_gated_requests_are_logged(monkeypatch, caplog):
     assert "Slow YouTube request (interactive)" in caplog.text
     assert url in caplog.text
     assert ytdlp_common._extract_held is False
+
+    # Background requests queue behind everything by design: debug, not warning.
+    caplog.clear()
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(
+            lambda: None, url=url, priority=ytdlp_common.EXTRACT_PRIORITY_BACKGROUND
+        )
+    assert "Slow YouTube request" not in caplog.text
