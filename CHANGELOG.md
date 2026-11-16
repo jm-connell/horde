@@ -7,6 +7,13 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A download on a server without ffmpeg failed with "Download produced no
+  file"; it now says ffmpeg is not installed. An ffmpeg set with
+  `FFMPEG_BIN` (or installed after Horde started) is now used to merge
+  downloads too, without a restart.
+
 ## [1.4.0] - 2026-11-16
 
 ### Added
