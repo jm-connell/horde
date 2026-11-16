@@ -1,21 +1,26 @@
-"""The Recommended feed: four kinds of picks, ranked separately, then mixed.
+"""The Recommended feed: six kinds of picks, ranked separately, then mixed.
 
-Every unwatched candidate (``candidates``) lands in exactly one bucket:
+Every candidate (``candidates``) lands in exactly one bucket:
 
 * **subscriptions**: recent uploads of channels the user follows or watches a lot
   right now. The videos they will recognise.
 * **similar**: close to what they watched in the last weeks (embeddings, or
-  channels and tags without AI), from channels they already know.
+  channels and tags without AI), from channels they already know, or already
+  downloaded.
 * **new**: as close, but from a channel they have never watched: discovery.
 * **throwback**: close to an interest they have not touched lately, or from a
   channel they used to watch and stopped.
+* **interest**: matches a topic they typed in (``topics``).
+* **rewatch**: finished a while ago; the one bucket that shows watched videos.
 
-Each bucket is sorted by its own score, and the feed takes from the buckets in
-turn by the user's shares (smooth weighted round robin), spreading channels out. A
-small seeded jitter, larger in ``new``, keeps the order from freezing and lets
-a less certain new channel through now and then; ``seed`` changes on refresh.
-Videos shown on many visits without being watched sink, then drop to the end.
-Tuning notes: ``docs/adr/0019-recommended-plus.md``.
+``build_feed`` decides the bucket and the reason shown; what a pick is scored
+on is its recipe (``scoring``), how well it fits is ``relevance``, and ``mix``
+takes from the buckets in turn by the user's shares, spreading channels out.
+A small seeded jitter, larger in ``new``, keeps the order from freezing and
+lets a less certain new channel through now and then; ``seed`` changes on
+refresh. Videos shown on many visits without being watched sink, then drop to
+the end. Design: ``docs/adr/0019-recommended-plus.md`` and
+``docs/adr/0024-tunable-recommended-plus.md``.
 """
 
 from __future__ import annotations
@@ -369,6 +374,7 @@ def build_feed(
     worn: list[FeedItem] = []
     new_channels: dict[str, ChannelStat] = {}
     sub_window = timedelta(days=t.subscription_window_days)
+    scorer = scoring.Scorer(t, now)
 
     for i, c in enumerate(cands):
         name = name_key(c.channel)
@@ -482,14 +488,8 @@ def build_feed(
                     "similar", f"More from {c.channel}" if c.channel else "For you"
                 )
             eligible = rel >= floor["similar"] or lift >= scoring.COWATCH_QUALIFIES
-        parts = scoring.parts(
-            scoring.RECIPES[recipe],
-            signals,
-            published=published,
-            now=now,
-            views=scoring.quality(c.view_count),
-            tuning=t,
-            labels=labels,
+        parts = scorer.parts(
+            recipe, signals, published, scoring.quality(c.view_count), labels
         )
 
         if c.pool == "library" and t.library_bonus:

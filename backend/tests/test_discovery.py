@@ -404,15 +404,13 @@ def test_a_recipe_scores_its_terms_in_order():
     from app.services.discovery import scoring
 
     now = datetime.now(UTC)
-    signals = {"channel_now": 0.6, "taste_capped": 0.5}
-    parts = scoring.parts(
-        scoring.RECIPES["subscriptions"],
-        signals,
-        published=now - timedelta(days=10),
-        now=now,
-        views=0.5,
-        tuning=DEFAULTS,
-        labels={"channel_now": "Followed channel"},
+    scorer = scoring.Scorer(DEFAULTS, now)
+    parts = scorer.parts(
+        "subscriptions",
+        {"channel_now": 0.6, "taste_capped": 0.5},
+        now - timedelta(days=10),
+        0.5,
+        {"channel_now": "Followed channel"},
     )
     assert [label for label, _value in parts] == [
         "Freshness",
@@ -424,13 +422,11 @@ def test_a_recipe_scores_its_terms_in_order():
     assert parts[0][1] == pytest.approx(0.55 / 2)
     assert [value for _label, value in parts[1:]] == pytest.approx([0.15, 0.1, 0.0])
     # A rewatch is not scored on views at all.
-    rewatch = scoring.parts(
-        scoring.RECIPES["rewatch"],
+    rewatch = scorer.parts(
+        "rewatch",
         {"taste_capped": 1.0, "known": 1.0, "rewatched": 1.0, "time_away": 1.0},
-        published=None,
-        now=now,
-        views=1.0,
-        tuning=DEFAULTS,
+        None,
+        1.0,
     )
     assert sum(value for _label, value in rewatch) == pytest.approx(1.0)
     assert "Popularity" not in dict(rewatch)

@@ -55,7 +55,7 @@ class Term:
     #: What "Why this?" calls it.
     label: str
     weight: float
-    #: The signal it weighs: a key of the signals given to ``parts``, or ``FRESH``.
+    #: The signal it weighs: a key of the signals given to ``Scorer.parts``, or ``FRESH``.
     signal: str
 
 
@@ -163,42 +163,52 @@ def quality(views: int | None) -> float:
     return float(min(1.0, max(0.0, (math.log10(views + 1) - 3.0) / 3.5)))
 
 
-def popularity(base: float, quality: float, t: Tuning) -> float:
-    """A kind's popularity prior plus the user's lean: toward popular videos
-    (positive) or hidden gems (negative); an unknown view count is neutral."""
-    return base * quality + t.popularity_delta * (2 * quality - 1)
-
-
 def unembedded_hit(floor: float, rank: int) -> float:
     """The relevance a found video without a vector gets from its place in
     the search or up next list that found it (``floor``: the "new" floor)."""
     return floor + UNEMBEDDED_HIT_LIFT * UNEMBEDDED_HIT_DECAY**rank
 
 
-def parts(
-    recipe: Recipe,
-    signals: Mapping[str, float],
-    *,
-    published: datetime | None,
-    now: datetime,
-    views: float,
-    tuning: Tuning,
-    labels: Mapping[str, str] | None = None,
-) -> list[tuple[str, float]]:
-    """The recipe's terms for one candidate, as (label, score) in its order.
+class Scorer:
+    """The recipes with one user's settings applied, for one ranking."""
 
-    ``views`` is the candidate's ``quality``; ``labels`` renames a term by its
-    signal where the text depends on the candidate.
-    """
-    out: list[tuple[str, float]] = []
-    for term in recipe.terms:
-        value = (
-            fresh(published, now, recipe.half_life_days * tuning.half_life_scale)
-            if term.signal == FRESH
-            else signals[term.signal]
-        )
-        label = labels.get(term.signal, term.label) if labels else term.label
-        out.append((label, term.weight * value))
-    if recipe.popularity is not None:
-        out.append(("Popularity", popularity(recipe.popularity, views, tuning)))
-    return out
+    def __init__(self, tuning: Tuning, now: datetime) -> None:
+        self._now = now
+        scale = tuning.half_life_scale
+        #: Each recipe's freshness half-life as this user set it.
+        self._half_life = {
+            kind: recipe.half_life_days * scale for kind, recipe in RECIPES.items()
+        }
+        #: The user's lean toward popular videos (positive) or hidden gems
+        #: (negative), added to each recipe's own; an unknown view count is neutral.
+        self._lean = tuning.popularity_delta
+
+    def parts(
+        self,
+        kind: str,
+        signals: Mapping[str, float],
+        published: datetime | None,
+        views: float,
+        labels: Mapping[str, str] | None = None,
+    ) -> list[tuple[str, float]]:
+        """The terms of the recipe ``kind`` for one candidate, as (label,
+        score) in the recipe's order.
+
+        ``views`` is the candidate's ``quality``; ``labels`` renames a term by
+        its signal where the text depends on the candidate.
+        """
+        recipe = RECIPES[kind]
+        out: list[tuple[str, float]] = []
+        for term in recipe.terms:
+            value = (
+                fresh(published, self._now, self._half_life[kind])
+                if term.signal == FRESH
+                else signals[term.signal]
+            )
+            label = labels.get(term.signal, term.label) if labels else term.label
+            out.append((label, term.weight * value))
+        if recipe.popularity is not None:
+            out.append(
+                ("Popularity", recipe.popularity * views + self._lean * (2 * views - 1))
+            )
+        return out
