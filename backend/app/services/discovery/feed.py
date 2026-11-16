@@ -1252,13 +1252,24 @@ def ranked_feed(
     topic_ids = topic_store.active_ids(session, user_id)
     key = (user_id, seed, tuned.model_dump_json(), topic_ids)
     fingerprint = history_fingerprint(session, user_id)
-    cached = runtime.feed(key)
-    if (
-        isinstance(cached, tuple)
-        and isinstance(cached[1], Feed)
-        and (not fresh or cached[0] == fingerprint)
-    ):
-        return cached[1]
-    feed = build_feed(session, runtime, user_id, seed, tuned)
-    runtime.store_feed(key, (fingerprint, feed))
+
+    def kept() -> Feed | None:
+        cached = runtime.feed(key)
+        if (
+            isinstance(cached, tuple)
+            and isinstance(cached[1], Feed)
+            and (not fresh or cached[0] == fingerprint)
+        ):
+            return cached[1]
+        return None
+
+    feed = kept()
+    if feed is not None:
+        return feed
+    with runtime.ranking(user_id):
+        # A request that arrived beside this one may have ranked it meanwhile.
+        feed = kept()
+        if feed is None:
+            feed = build_feed(session, runtime, user_id, seed, tuned)
+            runtime.store_feed(key, (fingerprint, feed))
     return feed

@@ -971,6 +971,45 @@ def test_paging_keeps_the_visits_ranking_when_the_user_watches_meanwhile(
     assert first["items"][0]["key"] not in again
 
 
+def test_requests_that_arrive_together_share_one_ranking(
+    session, init_db, admin_user, tmp_dirs, monkeypatch
+):
+    """The home page asks for the first page and the channel suggestions at
+    once; the second waits for the first's ranking instead of ranking too."""
+    import threading
+    import time
+
+    from sqlmodel import Session
+
+    from app import context
+    from app.services.discovery import feed
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    runtime = context.current().discovery
+    built = []
+    real = feed.build_feed
+
+    def slow(*args, **kwargs):
+        built.append(1)
+        time.sleep(0.3)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(feed, "build_feed", slow)
+    feeds = []
+
+    def ask(fresh):
+        with Session(init_db["engine"]) as own:
+            feeds.append(feed.ranked_feed(own, runtime, admin_user.id, 7, fresh=fresh))
+
+    threads = [threading.Thread(target=ask, args=(fresh,)) for fresh in (True, False)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert len(built) == 1
+    assert feeds[0] is feeds[1]
+
+
 def test_household_switch_stops_cold_start_pooling(
     session, add_video, set_watch, admin_user, member_user, client
 ):

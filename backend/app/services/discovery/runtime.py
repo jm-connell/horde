@@ -37,6 +37,7 @@ class DiscoveryRuntime:
         self.catalog = CatalogPool()
         self._lock = threading.Lock()
         self._feeds: OrderedDict[tuple[Any, ...], _CachedFeed] = OrderedDict()
+        self._ranking: dict[int, threading.Lock] = {}
         self.worker: BackgroundWorker | None = None
         #: No YouTube request before this (monotonic seconds) after a bot check
         #: or rate limit; ``backoff_sec`` doubles each time it happens again.
@@ -63,6 +64,12 @@ class DiscoveryRuntime:
     def wake(self) -> None:
         if self.worker is not None:
             self.worker.wake()
+
+    def ranking(self, user_id: int) -> threading.Lock:
+        """Held while a user's feed is ranked, so requests that arrive together
+        (the first page and the channel suggestions) share one ranking."""
+        with self._lock:
+            return self._ranking.setdefault(user_id, threading.Lock())
 
     def feed(self, key: tuple[Any, ...]) -> Any | None:
         now = time.monotonic()
