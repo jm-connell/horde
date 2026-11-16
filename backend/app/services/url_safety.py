@@ -184,7 +184,8 @@ class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
     ) -> httpcore.AsyncNetworkStream:
         addresses = await anyio.to_thread.run_sync(_checked_addresses, host, port)
         if not addresses:
-            raise UnsafeUrlError("Could not resolve that host")
+            # An upstream failure, not a refusal: httpx reports it as ConnectError.
+            raise httpcore.ConnectError(f"Could not resolve {host}")
         last_error: Exception | None = None
         for ip in addresses:  # an IPv6-first host still works from an IPv4-only box
             try:

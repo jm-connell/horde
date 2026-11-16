@@ -32,7 +32,6 @@ from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
 from ..services.url_safety import (
     MAX_REDIRECTS,
     REDIRECT_STATUSES,
-    UnsafeUrlError,
     check_url,
     pinned_async_transport,
     validate_public_url,
@@ -108,10 +107,12 @@ async def _send_validated(
 
     yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
     each URL (the first and every redirect target) must pass the same public-address
-    check as user-supplied URLs; a name that does not resolve is refused. The
-    preview client connects through ``url_safety.PinnedNetworkBackend``, which
-    checks the addresses it actually connects to, so DNS cannot answer the check
-    and the connection differently. Raises UnsafeUrlError (HTTP 400) otherwise.
+    check as user-supplied URLs. The preview client connects through
+    ``url_safety.PinnedNetworkBackend``, which checks the addresses it actually
+    connects to, so DNS cannot answer the check and the connection differently.
+    Raises UnsafeUrlError (HTTP 400) for a refused address, and httpx.ConnectError
+    for a name that does not resolve: that is an upstream failure (a DNS blip on a
+    CDN host), which callers answer with 502 or retry, never a connection.
 
     The headers (with a format's cookies) belong to the first URL's origin: once a
     redirect leaves it (scheme, host or port), Cookie and authorization headers
@@ -120,13 +121,13 @@ async def _send_validated(
     first_origin: tuple[str, str, int] | None = None
     for _hop in range(MAX_REDIRECTS + 1):
         checked = await run_in_threadpool(check_url, url)
-        if not checked.addresses:
-            raise UnsafeUrlError("Could not resolve that host")
         if first_origin is None:
             first_origin = checked.origin
         elif checked.origin != first_origin:
             headers = without_credentials(headers)
         request = client.build_request(method, checked.url, headers=headers)
+        if not checked.addresses:
+            raise httpx.ConnectError("Could not resolve that host", request=request)
         response = await client.send(request, stream=stream)
         if response.status_code not in REDIRECT_STATUSES:
             return response

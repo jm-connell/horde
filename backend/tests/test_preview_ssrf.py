@@ -198,8 +198,27 @@ def test_stream_proxy_refuses_a_host_that_does_not_resolve(
 
     resp = client.get("/api/preview/stream", params={"url": "https://example.com/v"})
 
-    assert resp.status_code == 400
+    # An upstream failure (502, retried by the player), not a 400 refusal.
+    assert resp.status_code == 502
     assert seen == []
+
+
+def test_pinned_client_reports_an_unresolved_name_as_a_connect_error(monkeypatch):
+    """Callers catch httpx.HTTPError for upstream failures (the live proxy's grace
+    period, the stream proxy's 502); a DNS failure must arrive as one."""
+
+    def unresolvable(host: str, port: int):
+        raise socket.gaierror("no such name")
+
+    monkeypatch.setattr(url_safety, "_resolve", unresolvable)
+
+    async def run() -> None:
+        transport = url_safety.pinned_async_transport(httpx.Limits())
+        async with httpx.AsyncClient(transport=transport) as client:
+            await client.get("http://gone.example/v")
+
+    with pytest.raises(httpx.ConnectError):
+        asyncio.run(run())
 
 
 def _with_cookie(url: str) -> dict:
