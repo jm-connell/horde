@@ -283,3 +283,47 @@ def test_continue_watching_streams_shows_only_allowed_channels(
     resp = member_client.get("/api/history/continue-streams")
     assert resp.status_code == 200, resp.text
     assert [i["id"] for i in resp.json()["items"]] == ["kidsstrm001"]
+
+
+def test_an_allowed_channel_url_cannot_carry_another_video(
+    member_client, restricted, monkeypatch
+):
+    """Review finding: ``@allowed?v=OTHER`` passed the guard as the allowed
+    channel's own URL, and yt-dlp then played OTHER."""
+    seen: list[str] = []
+
+    def resolve(url):
+        seen.append(url)
+        return object()
+
+    monkeypatch.setattr(stream_preview, "resolve_preview_manifest", resolve)
+    monkeypatch.setattr(stream_preview, "build_dash_manifest", lambda s: "<MPD/>")
+    for url in (
+        f"{KIDS_URL}?v=otherviden1",
+        f"{KIDS_URL}/live?v=otherviden1",
+        f"{KIDS_URL}#v=otherviden1",
+        f"{KIDS_URL}/videos",
+        "https://www.youtube.com/channel/UCkidscraft0000000000000?v=otherviden1",
+    ):
+        for method, path in (
+            ("GET", "/api/preview/manifest"),
+            ("HEAD", "/api/preview/manifest"),
+            ("GET", "/api/preview/stream"),
+            ("GET", "/api/preview/subtitles"),
+        ):
+            resp = member_client.request(
+                method, path, params={"url": url, "lang": "en"}
+            )
+            assert resp.status_code == 403, (method, path, url)
+    assert seen == []
+
+
+def test_the_live_check_takes_only_an_allowed_channel(member_client, restricted):
+    resp = member_client.get(
+        "/api/live/channel", params={"url": "https://www.youtube.com/@nightfrights"}
+    )
+    assert resp.status_code == 403
+    for url in (KIDS_URL, f"{KIDS_URL}/live", f"{KIDS_URL}?v=otherviden1"):
+        # The check reads only the channel's own /live page, whatever the query.
+        resp = member_client.get("/api/live/channel", params={"url": url})
+        assert resp.status_code == 200, (url, resp.text)

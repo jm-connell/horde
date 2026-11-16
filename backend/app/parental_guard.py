@@ -4,7 +4,8 @@ Added as router dependencies, they answer for a restricted member before a
 route runs: ``video_guard`` 404s a library video of another channel named by
 the ``video_id`` path parameter; ``stream_guard`` 403s a YouTube video (the
 ``youtube_id`` / ``video_id`` path parameter, or the ``url`` query) that is not
-known to belong to an allowed channel. Unrestricted users pass at once.
+known to belong to an allowed channel, and any ``url`` it cannot read a YouTube
+video id from. Unrestricted users pass at once.
 """
 
 from __future__ import annotations
@@ -21,6 +22,8 @@ from .services.auth.accounts import AuthUser
 from .services.url_clean import youtube_video_id
 
 NOT_ALLOWED = "This channel is not one you can watch"
+#: ``api/live.py``'s channel live check, which takes a channel URL.
+CHANNEL_LIVE_PATH = "/api/live/channel"
 
 
 def video_guard(
@@ -65,9 +68,10 @@ def stream_guard(
         if url is None:
             return  # no video named (a list: filtered where it is built)
         # A URL without a YouTube video id this can read (another site, an
-        # unusual YouTube form yt-dlp still plays): refused, unless it is an
-        # allowed channel's own URL (its live broadcast, ``/api/live/channel``).
-        if parental.normalize_channel_url(url) in user.allowed.urls:
+        # unusual YouTube form yt-dlp still plays, a channel URL with ``?v=``
+        # that yt-dlp turns into that video): refused. Only the channel live
+        # check takes a channel URL, and it checks the channel itself.
+        if request.url.path == CHANNEL_LIVE_PATH:
             return
         raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
     if not parental.stream_allowed(session, user.allowed, user.id, yt_id):
