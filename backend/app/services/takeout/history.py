@@ -271,19 +271,44 @@ def video_channels(
     One query over the whole import, without titles: what Recommended reads to
     know which channels the user has watched, however long the history.
     """
+    mine = col(YoutubeWatchEvent.user_id) == user_id
+    # The channel as ``latest_details`` names it: from the newest view that
+    # has a title, else the newest view (a channel may have been renamed
+    # between two imports).
+    newest = (
+        func.row_number()
+        .over(
+            partition_by=col(YoutubeWatchEvent.yt_id),
+            order_by=(
+                col(YoutubeWatchEvent.title).is_(None),
+                col(YoutubeWatchEvent.watched_at).desc(),
+            ),
+        )
+        .label("newest")
+    )
+    named = (
+        sa_select(col(YoutubeWatchEvent.yt_id), col(YoutubeWatchEvent.channel), newest)
+        .where(mine)
+        .subquery()
+    )
+    channels = {
+        str(yt_id): channel
+        for yt_id, channel in session.execute(
+            sa_select(named.c.yt_id, named.c.channel).where(named.c.newest == 1)
+        ).all()
+    }
     rows = session.execute(
         sa_select(
             col(YoutubeWatchEvent.yt_id),
             func.max(col(YoutubeWatchEvent.watched_at)),
             func.count(),
-            func.max(col(YoutubeWatchEvent.channel)),
         )
-        .where(col(YoutubeWatchEvent.user_id) == user_id)
+        .where(mine)
         .group_by(col(YoutubeWatchEvent.yt_id))
     ).all()
     return [
-        (str(yt_id), as_utc(when), int(views), channel)
-        for yt_id, when, views, channel in rows
+        (str(yt_id), as_utc(when), int(views), channels.get(str(yt_id)))
+        for yt_id, when, views in rows
     ]
 
 

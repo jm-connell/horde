@@ -303,7 +303,7 @@ def watch_log(session: Session, user_id: int) -> list[Watch]:
     whole history stays cheap.
     """
     out: dict[str, Watch] = {}
-    for vid, yt_id, channel, duration, position, when in session.execute(
+    for vid, yt_id, channel, duration, position, when, done in session.execute(
         sa_select(
             col(Video.id),
             col(Video.youtube_id),
@@ -311,6 +311,7 @@ def watch_log(session: Session, user_id: int) -> list[Watch]:
             col(Video.duration_sec),
             col(UserVideoState.position_sec),
             col(UserVideoState.last_watched_at),
+            col(UserVideoState.finished_at),
         )
         .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
         .where(
@@ -329,7 +330,7 @@ def watch_log(session: Session, user_id: int) -> list[Watch]:
             channel_url="",
             watched_at=as_utc(when),
             engagement=library_engagement(position, duration),
-            finished=position <= 0,
+            finished=done is not None or position <= 0,
             fraction=library_fraction(position, duration),
         )
     for row in session.exec(

@@ -1026,8 +1026,11 @@ def test_requests_that_arrive_together_share_one_ranking(
     built = []
     real = feed.build_feed
 
+    ranking = threading.Event()
+
     def slow(*args, **kwargs):
         built.append(1)
+        ranking.set()
         time.sleep(0.3)
         return real(*args, **kwargs)
 
@@ -1039,8 +1042,10 @@ def test_requests_that_arrive_together_share_one_ranking(
             feeds.append(feed.ranked_feed(own, runtime, admin_user.id, 7, fresh=fresh))
 
     threads = [threading.Thread(target=ask, args=(fresh,)) for fresh in (True, False)]
-    for thread in threads:
-        thread.start()
+    threads[0].start()
+    # The second asks while the first is ranking, so it cannot find it cached.
+    assert ranking.wait(timeout=10)
+    threads[1].start()
     for thread in threads:
         thread.join()
     assert len(built) == 1
@@ -1133,12 +1138,25 @@ def test_the_watch_log_reads_every_source_once(
         ("labvideo001", "Lab", 1.0),
         ("oldimport01", "Imported", history.YOUTUBE_REWATCH_ENGAGEMENT),
     ]
-    assert log[0].video_id == video.id
     older = history.watches(
         session, admin_user.id, limit=1, older_than=now - timedelta(days=60)
     )
     assert [w.key for w in older] == ["labvideo001", "oldimport01"]
     assert older[1].title == "Old"
+    # A channel renamed between two imports goes by its newest name, as in
+    # ``watches``, whichever name sorts last.
+    takeout.store_views(
+        session,
+        admin_user.id,
+        [
+            WatchView("renamed0001", now - timedelta(days=400), "Clip", "Zeta Old"),
+            WatchView("renamed0001", now - timedelta(days=300), "Clip", "Alpha New"),
+        ],
+    )
+    names = {w.key: w.channel for w in history.watch_log(session, admin_user.id)}
+    assert names["renamed0001"] == "Alpha New"
+    assert names == {w.key: w.channel for w in history.watches(session, admin_user.id)}
+    assert log[0].video_id == video.id
 
 
 def test_a_downloaded_video_is_not_a_new_channel(
