@@ -98,7 +98,7 @@ def list_channels(
             retention=_retention_summary(rules.get(row.channel)),
         )
         for row in library.channel_stats(session, sort=sort, order=order)
-        if allowed is None or allowed.allows(row.channel_url, row.channel)
+        if allowed is None or allowed.allows_library(row.channel_url, row.channel)
     ]
 
 

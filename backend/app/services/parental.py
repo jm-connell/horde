@@ -96,18 +96,26 @@ class AllowList:
         )
 
     def allows(self, url: str | None, name: str | None) -> bool:
-        """Whether a video of the channel ``url`` / ``name`` may be shown.
+        """Whether YouTube data of the channel ``url`` / ``name`` (a stream, a
+        catalog, a feed entry, a channel a request names) may be shown.
 
-        When both sides have a URL, only the URL counts: anyone can name a
-        channel like an allowed one.
+        A URL decides when there is one: anyone can name a YouTube channel like
+        an allowed one. The name counts only without a URL.
         """
         normalized = normalize_channel_url(url) if url else None
-        if normalized and normalized in self.urls:
+        if normalized:
+            return normalized in self.urls
+        key = (name or "").strip().lower()
+        return bool(key) and key in self.names
+
+    def allows_library(self, url: str | None, name: str | None) -> bool:
+        """``allows`` for a library video, which was downloaded, so its channel
+        is what it says: a channel allowed by name only also covers its videos
+        that have a URL. ``video_clause`` is the same rule in SQL."""
+        if self.allows(url, name):
             return True
         key = (name or "").strip().lower()
-        if not key:
-            return False
-        return key in (self.names_without_url if normalized else self.names)
+        return bool(key) and key in self.names_without_url
 
 
 def parse(raw: str | None) -> AllowList | None:
@@ -148,7 +156,7 @@ def video_clause(allowed: AllowList) -> Any:
     urls = sorted(allowed.raw_urls)
     clauses = []
     if names:
-        # By name only for a video without a channel URL (see ``allows``).
+        # By name only for a video without a channel URL (``allows_library``).
         clauses.append(
             and_(
                 col(Video.channel_url).is_(None),
@@ -165,7 +173,7 @@ def video_clause(allowed: AllowList) -> Any:
 
 
 def video_allowed(allowed: AllowList | None, video: Video) -> bool:
-    return allowed is None or allowed.allows(video.channel_url, video.channel)
+    return allowed is None or allowed.allows_library(video.channel_url, video.channel)
 
 
 def entry_allowed(allowed: AllowList | None, entry: Any) -> bool:

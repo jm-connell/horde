@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import pytest
 
-from app.services import stream_preview
+from app.models import ChannelCatalog, ChannelCatalogVideo
+from app.services import parental, stream_preview, ytdlp_extract
 
 KIDS_URL = "https://www.youtube.com/@kidscraft"
 
@@ -327,3 +328,86 @@ def test_the_live_check_takes_only_an_allowed_channel(member_client, restricted)
         # The check reads only the channel's own /live page, whatever the query.
         resp = member_client.get("/api/live/channel", params={"url": url})
         assert resp.status_code == 200, (url, resp.text)
+
+
+HOME = {"url": None, "name": "Home Videos"}
+NIGHT_URL = "https://www.youtube.com/@nightfrights"
+
+
+def test_a_name_counts_only_without_a_url():
+    """Review finding: a name-only entry matched YouTube data that named it
+    under any channel URL."""
+    allowed = parental.parse(
+        '[{"url": null, "name": "Home Videos"}, '
+        '{"url": "https://www.youtube.com/@kidscraft", "name": "Kids Craft"}]'
+    )
+    assert allowed is not None
+    assert allowed.allows(KIDS_URL, "Anything")
+    assert allowed.allows(None, "home videos")
+    assert allowed.allows(None, "Kids Craft")
+    assert not allowed.allows(NIGHT_URL, "Home Videos")
+    assert not allowed.allows(NIGHT_URL, "Kids Craft")
+    # A library video was downloaded, so its channel is what it says: a
+    # channel allowed by name only covers its videos with a URL too.
+    assert allowed.allows_library(NIGHT_URL, "Home Videos")
+    assert not allowed.allows_library(NIGHT_URL, "Kids Craft")
+
+
+def test_a_channel_page_named_like_an_allowed_channel_is_refused(
+    member_client, member_user, client, monkeypatch
+):
+    _restrict(client, member_user, [HOME])
+
+    def fetch(*_args, **_kwargs):
+        raise AssertionError("fetched a channel outside the list")
+
+    monkeypatch.setattr(ytdlp_extract, "fetch_channel_feed", fetch)
+    resp = member_client.get(
+        "/api/channels/feed",
+        params={"url": NIGHT_URL, "channel": "Home Videos", "tab": "streams"},
+    )
+    assert resp.status_code == 403
+
+
+def test_a_catalog_named_like_an_allowed_channel_plays_nothing(
+    member_client, member_user, client, session
+):
+    """Anyone who opens a channel page names its catalog; the name proves nothing."""
+    catalog = ChannelCatalog(channel_url=NIGHT_URL, channel_name="Home Videos")
+    session.add(catalog)
+    session.commit()
+    session.add(
+        ChannelCatalogVideo(
+            catalog_id=catalog.id,
+            yt_id="nightvid001",
+            url="https://www.youtube.com/watch?v=nightvid001",
+        )
+    )
+    session.commit()
+    _restrict(client, member_user, [HOME])
+    resp = member_client.get(
+        "/api/preview/subtitles",
+        params={"url": "https://www.youtube.com/watch?v=nightvid001", "lang": "en"},
+    )
+    assert resp.status_code == 403
+
+
+def test_a_stream_of_a_channel_named_like_an_allowed_one_is_refused(
+    member_client, member_user, client, monkeypatch
+):
+    _restrict(client, member_user, [HOME])
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda url: {
+            "id": "impostor001",
+            "title": "Not home videos",
+            "channel": "Home Videos",
+            "channel_url": NIGHT_URL,
+        },
+    )
+    resp = member_client.get(
+        "/api/preview/meta",
+        params={"url": "https://www.youtube.com/watch?v=impostor001"},
+    )
+    assert resp.status_code == 403
