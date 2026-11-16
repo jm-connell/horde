@@ -823,9 +823,9 @@ sqlalchemy==2.1.4 \
     # via
     #   alembic
     #   sqlmodel
-sqlmodel==0.0.48 \
-    --hash=sha256:5582e87e845e23bb1179a7d8b11a4f5e441b4494528a41ee2fe1d129ffe91543 \
-    --hash=sha256:8d389bf735b03a17508e93e888c13a30ef1ddca22dd8e57add12317401e4112e
+sqlmodel==0.0.50 \
+    --hash=sha256:8828720c5b6c397df72cdd055286846a352b614da80c1ba05ab7a57b2bb90821 \
+    --hash=sha256:df518bc74287e1da0b0d7833cd00f55e77cb1cdc8c27bc29f77eea27acb51c1a
     # via -r backend/requirements.txt
 starlette==1.8.0 \
     --hash=sha256:1565dc0b35d5737a271ed1e0e04e949f4e81198799f216d2667b0a0fb9cf9522 \
