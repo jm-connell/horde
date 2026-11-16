@@ -44,6 +44,18 @@ def ffprobe_bin() -> str:
     return found or "ffprobe"
 
 
+def below_playback(cmd: list[str]) -> list[str]:
+    """Prefix ``nice -n 15`` so background work yields CPU to playback.
+
+    Raising niceness needs no privileges, and ``nice`` execs the command, so a
+    timeout or process-group kill still reaches ffmpeg. Unchanged where there
+    is no ``nice`` (non-POSIX, or a minimal image without coreutils).
+    """
+    if os.name != "posix" or shutil.which("nice") is None:
+        return cmd
+    return ["nice", "-n", "15", *cmd]
+
+
 def ffmpeg_available() -> bool:
     path = ffmpeg_bin()
     if _executable(path):

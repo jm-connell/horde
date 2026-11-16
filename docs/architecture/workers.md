@@ -22,7 +22,7 @@ The registry also feeds [`GET /api/ready`](../ops/monitoring.md#ready) and the `
 |------------------------|-------|
 | `ffmpeg-children` | Terminates ffmpeg processes still running at shutdown. |
 | `download-queue`, `ffmpeg-queue`, `download-reaper` | Download threads (bounded by `MAX_DOWNLOAD_CONCURRENCY`), the postprocess pool and the stuck-job reaper (which also re-checks held downloads every 30 s). |
-| `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. |
+| `sprites` | One bounded pool of `SPRITE_CONCURRENCY` threads fed from a queue; a bulk import queues entries, not threads. Stopping the pool cancels the running ffmpeg. Sprite ffmpeg (and the scanner's thumbnail grab) runs under `nice -n 15` where `nice` exists, so it yields CPU to playback and streaming on small servers. |
 | `scanner-watchdog`, `scanner-poller` | File watcher and the polling walk. |
 | `metadata-sync`, `horde-ai-worker`, `horde-ai-timer`, `horde-channel-catalog`, `autodownload-poller`, `subtitle-retry`, `ask`, `comments`, `stream-ai`, `discovery`, `job-metadata`, `trash-purge`, `channel-retention`, `notifications`, `media-sidecars`, `codec-probe-backfill`, `pot-probe`, `nightly-backup` | The loops described below. |
 

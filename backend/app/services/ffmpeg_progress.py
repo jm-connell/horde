@@ -11,6 +11,7 @@ import threading
 import time
 from collections.abc import Callable
 
+from .ffmpeg_bin import below_playback
 from .workers import CallbackWorker
 
 logger = logging.getLogger(__name__)
@@ -176,12 +177,19 @@ def run_ffmpeg(
     on_progress: Callable[[float], None] | None = None,
     cancel_event: threading.Event | None = None,
     timeout: float | None = None,
+    low_priority: bool = False,
 ) -> subprocess.CompletedProcess[bytes]:
     """Run ffmpeg, optionally reporting 0–100 progress from out_time.
+
+    ``low_priority`` runs it under ``nice`` (background work only: sprites and
+    thumbnails, never something a user is waiting on).
 
     Raises FfmpegCancelled when ``cancel_event`` is set.
     """
     full = _with_progress_args(list(cmd))
+    if low_priority:
+        # After the progress args, which go right after the ffmpeg binary.
+        full = below_playback(full)
     proc = subprocess.Popen(
         full,
         stdout=subprocess.PIPE,
