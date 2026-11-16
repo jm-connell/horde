@@ -297,10 +297,11 @@ def list_tags(
     limit: int = Query(1000, ge=1, le=5000),
     cursor: str | None = None,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Every tag, alphabetically, ``limit`` at a time (keyset on the tag itself)."""
     page = _tag_page_request(cursor, limit, sort="tags", kind="keyset")
-    tags = library.all_tags(session)
+    tags = library.all_tags(session, user.allowed)
     if page.has_position:
         if not isinstance(page.value, str):
             raise HTTPException(status_code=400, detail="Invalid cursor")
@@ -321,10 +322,11 @@ def tag_stats(
     limit: int = Query(500, ge=1, le=2000),
     cursor: str | None = None,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Tags with their video counts, most common first, ``limit`` at a time."""
     page = _tag_page_request(cursor, limit, sort="tagstats", kind="offset")
-    ranked = library.tag_stats(session, channel=channel)
+    ranked = library.tag_stats(session, channel=channel, allowed=user.allowed)
     window = ranked[page.offset : page.offset + page.limit]
     more = len(ranked) > page.offset + page.limit
     return TagStatPage(

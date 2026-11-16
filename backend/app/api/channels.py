@@ -51,6 +51,7 @@ from ..services import (
     follows,
     library,
     media_sidecars,
+    parental,
     subscriptions,
     trash,
     ytdlp_extract,
@@ -196,7 +197,33 @@ def channel_catalog_status(
     )
     if not user.is_admin:
         payload = member_view.catalog_status(payload)
+    if user.allowed is not None:
+        payload = _allowed_catalog_status(user.allowed, payload)
     return ChannelCatalogStatusResponse(**payload)
+
+
+def _allowed_catalog_status(
+    allowed: parental.AllowList, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Parental controls: only the allowed channels' catalogs."""
+
+    def ok(row: dict[str, Any] | None) -> bool:
+        return row is not None and allowed.allows(
+            row.get("channel_url"), row.get("channel_name")
+        )
+
+    current = allowed.allows(
+        payload.get("current_channel_url"), payload.get("current_channel")
+    )
+    return {
+        **payload,
+        "catalogs": [row for row in payload.get("catalogs") or [] if ok(row)],
+        "channel_catalog": payload.get("channel_catalog")
+        if ok(payload.get("channel_catalog"))
+        else None,
+        "current_channel": payload.get("current_channel") if current else None,
+        "current_channel_url": payload.get("current_channel_url") if current else None,
+    }
 
 
 @router.post(
@@ -282,7 +309,11 @@ def list_subscriptions(
 ) -> SubscriptionList:
     """Followed channels and every channel with automatic downloads or a cleanup
     rule, in one list (one page; ``next_cursor`` is always null)."""
-    return SubscriptionList(items=subscriptions.list_for(session, user.id))
+    items = subscriptions.list_for(session, user.id)
+    if user.allowed is not None:
+        allowed = user.allowed
+        items = [i for i in items if allowed.allows(i.channel_url, i.channel_name)]
+    return SubscriptionList(items=items)
 
 
 @router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)

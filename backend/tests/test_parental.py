@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from app.context import get_paths
-from app.models import ChannelCatalog, ChannelCatalogVideo
+from app.models import (
+    ChannelAutodownload,
+    ChannelCatalog,
+    ChannelCatalogVideo,
+    UserWatchTime,
+)
 from app.services import parental, stream_preview, ytdlp_extract
 
 KIDS_URL = "https://www.youtube.com/@kidscraft"
@@ -483,3 +490,61 @@ def test_a_streamed_playlist_entry_must_be_of_an_allowed_channel(
     )
     assert resp.status_code == 403
     assert member_client.get(f"/api/playlists/{own}").json()["entries"] == []
+
+
+def test_lists_do_not_name_other_channels(
+    client, member_client, member_user, add_video, set_watch, session
+):
+    """Review finding: tags, subscriptions, catalog status and the member's own
+    history still named other channels and their videos."""
+    add_video(
+        title="Paper boats",
+        channel="Kids Craft",
+        channel_url=KIDS_URL,
+        yt_id="kidsvideo01",
+        tags=["origami"],
+    )
+    other = add_video(
+        title="Late night horror",
+        channel="Night Frights",
+        channel_url=NIGHT_URL,
+        yt_id="otherviden1",
+        tags=["slasher"],
+    )
+    set_watch(member_user, other, 30.0)
+    hour = datetime.now(UTC).replace(minute=0, second=0, microsecond=0)
+    session.add(
+        UserWatchTime(
+            user_id=member_user.id,
+            video_id=other.id,
+            channel="Night Frights",
+            hour_start=hour,
+            seconds=30.0,
+        )
+    )
+    session.add(
+        ChannelAutodownload(
+            channel_url=NIGHT_URL, channel_name="Night Frights", enabled=True
+        )
+    )
+    session.add(ChannelCatalog(channel_url=NIGHT_URL, channel_name="Night Frights"))
+    session.commit()
+    before = member_client.get("/api/history/stats", params={"range": "all"}).json()
+    assert [c["name"] for c in before["channels"]] == ["Night Frights"]
+    assert member_client.get("/api/history/watches").json()["items"] != []
+    _restrict(client, member_user, [{"url": KIDS_URL, "name": "Kids Craft"}])
+
+    assert member_client.get("/api/tags").json()["items"] == ["origami"]
+    stats = member_client.get("/api/tags/stats", params={"channel": "Night Frights"})
+    assert stats.json()["items"] == []
+    subs = member_client.get("/api/channels/subscriptions").json()["items"]
+    assert [s["channel_name"] for s in subs] == []
+    status = member_client.get(
+        "/api/channels/catalog/status", params={"channel_url": NIGHT_URL}
+    ).json()
+    assert (status["catalogs"], status["channel_catalog"]) == ([], None)
+    watches = member_client.get("/api/history/watches").json()
+    assert watches["items"] == []
+    history = member_client.get("/api/history/stats", params={"range": "all"}).json()
+    assert [c["name"] for c in history["channels"]] == []
+    assert [t["tag"] for t in history["tags"]] == []

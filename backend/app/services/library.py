@@ -508,22 +508,25 @@ def youtube_library_map(
     return mapping
 
 
-def all_tags(session: Session) -> list[str]:
+def all_tags(session: Session, allowed: AllowList | None = None) -> list[str]:
     # Join videos: a tag row whose video is gone (written by code that ran with
     # foreign keys off) must not show up as a library tag.
-    rows = session.exec(
-        select(VideoTag.tag)
-        .join(Video, col(Video.id) == col(VideoTag.video_id))
-        .distinct()
-    ).all()
-    return sorted(rows)
+    statement = select(VideoTag.tag).join(
+        Video, col(Video.id) == col(VideoTag.video_id)
+    )
+    if allowed is not None:
+        statement = statement.where(parental.video_clause(allowed))
+    return sorted(session.exec(statement.distinct()).all())
 
 
-def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, int]]:
+def tag_stats(
+    session: Session, channel: str | None = None, allowed: AllowList | None = None
+) -> list[tuple[str, int]]:
     """Return (tag, count) pairs ordered by most common first.
 
     Counts videos (a tag held under two sources counts once). When ``channel``
-    is given, only tags from that channel's videos are counted.
+    is given, only tags from that channel's videos are counted; ``allowed``
+    (parental controls) limits them to those channels.
     """
     count = func.count(func.distinct(VideoTag.video_id))
     statement = (
@@ -533,6 +536,8 @@ def tag_stats(session: Session, channel: str | None = None) -> list[tuple[str, i
     )
     if channel:
         statement = statement.where(Video.channel == channel)
+    if allowed is not None:
+        statement = statement.where(parental.video_clause(allowed))
     rows = session.exec(statement.group_by(VideoTag.tag)).all()
     return sorted(((tag, int(n)) for tag, n in rows), key=lambda kv: (-kv[1], kv[0]))
 
