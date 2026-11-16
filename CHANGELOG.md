@@ -7,6 +7,93 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-11-16
+
+### Added
+
+- **Streamed videos pick up where you left off.** A video you streamed
+  without downloading starts from where your account stopped, on any device
+  (unless the link has a `?t=`). Live broadcasts start live.
+- **Continue watching on Recommended**, with library videos first, then
+  streams you left part-way, then videos you watched on YouTube lately. The
+  Library tab's row keeps to library videos.
+- **Streaming counts toward History watch time.** An hour of streaming
+  showed as "<1m this week"; it now counts like a library video, and a
+  video streamed then downloaded counts once.
+- **Autoplay after a stream.** With *Autoplay related* on, a streamed video
+  with no next part counts down to its first related video, skipping live
+  broadcasts.
+- **Ask knows your channels.** Questions about indexing, or about what a
+  channel says, get each Ask channel with its status and progress, and
+  "ltt" names Linus Tech Tips in a "what does X say" question.
+
+### Changed
+
+- **Comments load when you open a video** and more load as you scroll,
+  for streamed videos and library videos with nothing saved yet. The
+  *Load comments* and *Show more comments* buttons are gone.
+- **Recommended opens faster.** The last page you saw shows at once while
+  the fresh one loads, and re-ranking after a watch is about three times
+  faster. Throwbacks stay out of the first 12 cards, and a card's menu
+  moved to the top left so it no longer covers **+ Queue**.
+- **Ask routes ordinary questions better.** On a watch page, how-tos about
+  the app ("make subtitles bigger", "turn off autoplay") go to Horde
+  instead of the video. With *Use my data* on, "do I have any videos
+  about…", "what's downloading" and "recommend something" look up your
+  library instead of guessing or asking which one you mean, and say so
+  when nothing matches. Suggested setting changes show an **Apply**
+  button reliably.
+- **Channel indexing is quicker and more honest.** Reading a channel's
+  listing makes about a tenth of the requests it did (1,000 videos in
+  about 15 s), channels never indexed go ahead of the daily refresh, and a
+  run cut short at the cap no longer counts as complete.
+- The System page shows one "Filling in views and dates for <channel>" row
+  per channel instead of one per feed load, and those lookups run at
+  background priority so they no longer hold up a video you open.
+- **Redownloading replaces a video only with a fresh copy of the same
+  source** (matched by the `[id]` in its file name). Any other download is
+  added as a separate video and the old one is left alone; delete it
+  through the trash.
+- An edit by someone without *Delete videos* that would put a video in
+  reach of a channel's retention rule (moving it, changing its date,
+  clearing its notes or taking it out of review) keeps the video, as a
+  restore from the trash does. Kept videos no longer take a `keep_latest`
+  place.
+
+### Fixed
+
+- Every channel page said "Not indexed", and **Index channel** seemed to
+  do nothing.
+- A stream that froze (the clock stood still and Play did nothing) now
+  reloads at the same spot, staying in fullscreen; after two tries it falls
+  back to the compatible stream, which now keeps the playhead.
+- Streamed videos were slow to start, and the download menu could fail
+  with HTTP 429, while channel and Discover feed cards filled their
+  resolution badges. Badge lookups now stop when you leave the page and
+  wait behind the video you open. Slow YouTube requests are logged, with
+  what held the queue.
+- Searching Settings for "chat" or "ai video chat" hid the AI Features
+  section.
+
+### Security
+
+- The preview proxy connects only to addresses it has checked, on every
+  redirect, and drops `Cookie` and `Authorization` headers when a redirect
+  leaves the first site.
+- A file or folder name chosen by a user can no longer become one of
+  Horde's own folders (a leading dot is dropped), and the start-up cleanup
+  of the staging folder leaves anything a library video points at.
+- A late watch save from an offline device can backdate when you finished
+  a video by at most a day, so it cannot hand the video to a "remove
+  watched after N days" rule early.
+
+### Upgrade notes
+
+- Two database migrations run at start (one added column on stream
+  progress, one on watch time); nothing to do.
+- The stream preview and live stream proxy no longer go through
+  `HTTP_PROXY` / `HTTPS_PROXY`, which was never a documented setup.
+
 ## [1.3.1] - 2026-11-08
 
 This is the release planned as 1.3.0. The `v1.3.0` tag was put on the wrong
@@ -1111,7 +1198,8 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.3.1...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.0...main
+[1.4.0]: https://github.com/jm-connell/horde/compare/v1.3.1...v1.4.0
 [1.3.1]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.1
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1

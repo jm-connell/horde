@@ -68,7 +68,7 @@ The same setting applies to one-off copies in the other modes. Devices that can'
 
 - **YouTube videos:** Horde first downloads **YouTube's own avc1 stream** after the main file finishes. That is an extra download, not a conversion, so there is no quality loss and almost no server work. If YouTube has no H.264 for the video, it falls back to encoding locally.
 - **Everything else** (imports, non-YouTube sites, existing library videos): encoded locally from the original with ffmpeg.
-- Sidecars are counted in [storage stats](../ops/storage-layout.md#h264-sidecars), deleted with the video, and moved with it when you rename a manual import. Re-downloading or changing the resolution of a video removes its old copy.
+- Sidecars are counted in [storage stats](../ops/storage-layout.md#h264-sidecars), deleted with the video, and moved with it when you rename a manual import. Re-downloading or changing the resolution of a video removes its old copy (a download of a different source is added as a new video instead).
 - A video that is already 8-bit H.264 within the copy resolution never gets a copy. Audio-only files never do either.
 
 Settings → Library shows the library size, how many copies exist, and a **Create N copies** button that backfills existing videos (with an estimated size and a cancel button). Copies of existing videos use YouTube's H.264 when available, otherwise a local encode.
@@ -253,4 +253,4 @@ See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_k
 
 ## Upgrading: file and folder names
 
-New downloads use byte-limited names and a folder that matches the channel Horde stores for the video (see [storage layout](../ops/storage-layout.md)). Existing files are never renamed. For channels with a very long name (more than 80 bytes), or whose names end in a dot or space, new videos can therefore land in a different folder than older ones from the same channel. Re-downloading a video whose channel you edited also moves it to the edited channel's folder.
+New downloads use byte-limited names and a folder that matches the channel Horde stores for the video (see [storage layout](../ops/storage-layout.md)). Existing files are never renamed. For channels with a very long name (more than 80 bytes), or whose names start or end with a dot or space, new videos can therefore land in a different folder than older ones from the same channel. Re-downloading a video whose channel you edited also moves it to the edited channel's folder.

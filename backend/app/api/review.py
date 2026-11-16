@@ -18,8 +18,15 @@ from ..schemas import (
     ReviewItemRead,
     VideoRead,
 )
+from ..services import (
+    channel_retention,
+    import_suggest,
+    library,
+    media_sidecars,
+    metadata_sync,
+    uploads,
+)
 from ..services import duplicate_groups as duplicate_groups_svc
-from ..services import import_suggest, library, media_sidecars, metadata_sync, uploads
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.metadata import probe_is_playable
@@ -126,6 +133,7 @@ def review_queue(
 )
 def approve_suggested(
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ) -> ApproveSuggestedResult:
     """Approve every review item whose title and channel are known, from the
     video itself or its suggestion, in one pass. Files and thumbnails stay as
@@ -138,7 +146,11 @@ def approve_suggested(
     approved: list[int] = []
     for video in rows:
         suggestion = import_suggest.suggest(video) or ImportSuggestion()
+        before = channel_retention.Exposure.of(video)
         if import_suggest.approve_with(session, video, suggestion):
+            channel_retention.keep_if_exposed(
+                session, video, before, may_delete=user.can("delete_videos")
+            )
             approved.append(require_id(video))
     session.commit()
     for video_id in approved:
@@ -199,6 +211,7 @@ def lookup_on_youtube(
 def approve_from_youtube(
     video_id: int,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
     gate: ExtractionGate = Depends(extraction_gate),
     ctx: AppContext = Depends(get_ctx),
 ) -> ApproveSuggestedResult:
@@ -223,7 +236,12 @@ def approve_from_youtube(
         raise not_in_review
     if import_suggest.has_own_title(video):
         suggestion.title = None
+    before = channel_retention.Exposure.of(video)
     approved = import_suggest.approve_with(session, video, suggestion)
+    if approved:
+        channel_retention.keep_if_exposed(
+            session, video, before, may_delete=user.can("delete_videos")
+        )
     session.commit()
     if approved:
         _after_approval(session, video_id)
@@ -387,7 +405,11 @@ def skip_review(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    before = channel_retention.Exposure.of(video)
     video.needs_review = False
+    channel_retention.keep_if_exposed(
+        session, video, before, may_delete=user.can("delete_videos")
+    )
     session.add(video)
     session.commit()
     session.refresh(video)
