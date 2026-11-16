@@ -398,6 +398,44 @@ def test_mix_stops_at_the_feeds_size():
     assert len(mix.mix(buckets())) == mix.FEED_MAX
 
 
+def test_a_recipe_scores_its_terms_in_order():
+    """A pick's score parts are its recipe's terms, weight times signal, then
+    the popularity lean; a label can be renamed for the candidate."""
+    from app.services.discovery import scoring
+
+    now = datetime.now(UTC)
+    signals = {"channel_now": 0.6, "taste_capped": 0.5}
+    parts = scoring.parts(
+        scoring.RECIPES["subscriptions"],
+        signals,
+        published=now - timedelta(days=10),
+        now=now,
+        views=0.5,
+        tuning=DEFAULTS,
+        labels={"channel_now": "Followed channel"},
+    )
+    assert [label for label, _value in parts] == [
+        "Freshness",
+        "Followed channel",
+        "Match to your taste",
+        "Popularity",
+    ]
+    # Ten days is the subscriptions half-life: half of the freshness weight.
+    assert parts[0][1] == pytest.approx(0.55 / 2)
+    assert [value for _label, value in parts[1:]] == pytest.approx([0.15, 0.1, 0.0])
+    # A rewatch is not scored on views at all.
+    rewatch = scoring.parts(
+        scoring.RECIPES["rewatch"],
+        {"taste_capped": 1.0, "known": 1.0, "rewatched": 1.0, "time_away": 1.0},
+        published=None,
+        now=now,
+        views=1.0,
+        tuning=DEFAULTS,
+    )
+    assert sum(value for _label, value in rewatch) == pytest.approx(1.0)
+    assert "Popularity" not in dict(rewatch)
+
+
 def test_throwbacks_stay_out_of_the_top_of_the_feed():
     from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate

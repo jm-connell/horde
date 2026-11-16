@@ -21,7 +21,6 @@ Tuning notes: ``docs/adr/0019-recommended-plus.md``.
 from __future__ import annotations
 
 import hashlib
-import math
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -33,6 +32,7 @@ from ...models import DiscoveryHit, UserVideoState, Video, utcnow
 from .. import follows
 from ..ai.provider import get_embed_provider
 from ..takeout import history as takeout_history
+from . import scoring
 from . import topics as topic_store
 from .candidates import (
     Candidate,
@@ -63,36 +63,9 @@ from .runtime import DiscoveryRuntime
 from .tuning import DEFAULTS, Tuning
 from .tuning import for_user as load_tuning
 
-#: A channel this strong in the recent history counts like a followed one.
-WATCHED_CHANNEL_LEVEL = 0.25
-#: A channel this strong long ago, and absent lately, is a throwback channel.
-DORMANT_CHANNEL_LEVEL = 0.3
 #: The same "Because you watched ..." is shown at most this often.
 SEED_REASON_MAX = 2
-#: Below these a pick waits at the end of the feed instead of in its bucket.
-#: With embeddings, relevance is calibrated (``_calibrated``): 1 is as close as
-#: the user's own recent watches are to each other. New channels must be clearly
-#: relevant; known ones may be a little less.
-FLOORS = {"similar": 0.45, "new": 0.6, "throwback": 0.55}
-#: Without embeddings relevance is the channel and tag taste (0..1).
-TASTE_FLOORS = {"similar": 0.15, "new": 0.3, "throwback": 0.3}
-JITTER = 0.02
-NEW_JITTER = 0.06
 PAST_LIVE = frozenset({"was_live", "post_live"})
-
-
-def _fresh(when: datetime | None, now: datetime, half_life_days: float) -> float:
-    if when is None:
-        return 0.0
-    days = max(0.0, (now - when).total_seconds() / 86400)
-    return float(0.5 ** (days / half_life_days))
-
-
-def _quality(views: int | None) -> float:
-    """A popularity prior: 1k views or fewer 0, a few million 1; unknown 0.5."""
-    if views is None:
-        return 0.5
-    return float(min(1.0, max(0.0, (math.log10(views + 1) - 3.0) / 3.5)))
 
 
 def _rng(user_id: int, seed: int) -> np.random.Generator:
@@ -149,12 +122,6 @@ def _allowed(c: Candidate, t: Tuning, now: datetime, *, rewatch: bool = False) -
         if t.max_minutes and duration > 60 * t.max_minutes:
             return False
     return True
-
-
-def _popularity(base: float, quality: float, t: Tuning) -> float:
-    """A bucket's popularity prior plus the user's lean: toward popular videos
-    (positive) or hidden gems (negative); an unknown view count is neutral."""
-    return base * quality + t.popularity_delta * (2 * quality - 1)
 
 
 def _wear(seen: int, t: Tuning) -> tuple[float, bool]:
@@ -279,7 +246,6 @@ def build_feed(
 ) -> Feed:
     t = tuning
     now = utcnow()
-    scale = t.half_life_scale
     window = t.window
     topics = topic_store.active(session, user_id, now)
     # Hand-added interests get their own share; the rest scales down to fit.
@@ -378,7 +344,7 @@ def build_feed(
         dormant_seed: list[str | None] = [None] * len(cands)
         topic: list[int | None] = [None] * len(cands)
         topic_shares: dict[int, float] = {}
-        base_floors = TASTE_FLOORS
+        base_floors = scoring.TASTE_FLOORS
     else:
         relevance, has_vector = sim.recent, np.isfinite(sim.recent_raw)
         recent_seed, dormant, dormant_seed = (
@@ -387,7 +353,7 @@ def build_feed(
             sim.dormant_seed,
         )
         topic, topic_shares = sim.topic, sim.topic_shares
-        base_floors = FLOORS
+        base_floors = scoring.FLOORS
     floors = {k: v * t.floor_multiplier(k) for k, v in base_floors.items()}
     # "Prefer downloaded videos" also takes looser matches from the library.
     library_floors = {k: v * t.library_floor_scale for k, v in floors.items()}
@@ -418,43 +384,45 @@ def build_feed(
         hit = hit_of.get(c.key)
         if hit is not None and not has_vector[i]:
             # Found by a search or an up next list but not embedded (yet): the
-            # source's own ranking stands in, just under the "new" floor's reach.
-            rel = max(rel, floors["new"] + 0.3 * 0.9**hit.rank)
-        quality = _quality(c.view_count)
+            # source's own ranking stands in.
+            rel = max(rel, scoring.unembedded_hit(floors["new"], hit.rank))
         published = c.published
         recent_upload = published is not None and now - published <= sub_window
         seed_title = recent_seed[i] or (hit.seed_title if hit else None)
         fav = favorite_of.get(c.key)
-        parts: list[tuple[str, float]] = []
         block = similar_block[i]
         if block is not None:
             blocked[block.id].add(c.key)
             continue
         interest = interest_of[i]
+        lift = cowatch.get(c.video_id, 0.0) if c.video_id else 0.0
+        signals = {
+            "taste": rel,
+            "taste_capped": min(rel, 1.0),
+            "known": known,
+            "channel_now": max(
+                lately, scoring.FOLLOWED_CHANNEL_LEVEL if followed else 0.0
+            ),
+            "long_ago": long_ago,
+            "older": back,
+            "older_or_taste": max(back, rel),
+            "interest": float(interest_fit[i]),
+            "cowatch": lift,
+        }
+        labels: dict[str, str] = {}
         if fav is not None:
-            bucket = "rewatch"
+            bucket = recipe = "rewatch"
             age = (now - fav.watch.watched_at).days
-            parts += [
-                ("Match to your taste", 0.45 * min(rel, 1.0)),
-                ("A channel you watch", 0.25 * known),
-                ("Watched more than once", 0.15 if fav.views > 1 else 0.0),
-                ("Time since you watched it", 0.15 * min(1.0, age / 365)),
-            ]
+            signals["rewatched"] = 1.0 if fav.views > 1 else 0.0
+            signals["time_away"] = min(1.0, age / 365)
             reason = Reason(
                 "rewatch", f"You watched this {_ago(fav.watch.watched_at, now)}"
             )
             eligible = True
-        elif (followed or lately >= WATCHED_CHANNEL_LEVEL) and recent_upload:
-            bucket = "subscriptions"
-            parts += [
-                ("Freshness", 0.55 * _fresh(published, now, 10.0 * scale)),
-                (
-                    "Followed channel" if followed else "A channel you watch lately",
-                    0.25 * max(lately, 0.6 if followed else 0.0),
-                ),
-                ("Match to your taste", 0.20 * min(rel, 1.0)),
-            ]
-            parts.append(("Popularity", _popularity(0.0, quality, t)))
+        elif (followed or lately >= scoring.WATCHED_CHANNEL_LEVEL) and recent_upload:
+            bucket = recipe = "subscriptions"
+            if followed:
+                labels["channel_now"] = "Followed channel"
             text = (
                 f"New from {c.channel}"
                 if followed
@@ -463,38 +431,21 @@ def build_feed(
             reason = Reason("subscription", text)
             eligible = True
         elif interest is not None:
-            bucket = "interest"
-            fit = float(interest_fit[i])
-            parts += [
-                (f"Match to your interest “{short(interest.text, 40)}”", 0.6 * fit),
-                ("Match to your taste", 0.2 * min(rel, 1.0)),
-                ("Freshness", 0.1 * _fresh(published, now, 90.0 * scale)),
-            ]
-            parts.append(("Popularity", _popularity(0.06, quality, t)))
+            bucket = recipe = "interest"
+            labels["interest"] = f"Match to your interest “{short(interest.text, 40)}”"
             reason = Reason("interest", f"For your interest: {interest.text}")
             eligible = True
-        elif long_ago >= DORMANT_CHANNEL_LEVEL and lately == 0 and not followed:
-            bucket = "throwback"
-            parts += [
-                ("How much you used to watch this channel", 0.45 * long_ago),
-                ("Match to an older interest", 0.35 * back),
-                ("Freshness", 0.2 * _fresh(published, now, 180.0 * scale)),
-            ]
-            parts.append(("Popularity", _popularity(0.0, quality, t)))
+        elif long_ago >= scoring.DORMANT_CHANNEL_LEVEL and lately == 0 and not followed:
+            bucket, recipe = "throwback", "throwback_channel"
             reason = Reason("throwback", f"You used to watch {c.channel}")
             eligible = True
-        elif (back >= floor["throwback"] and back > rel + 0.15) or (
+        elif (back >= floor["throwback"] and back > rel + scoring.THROWBACK_LEAD) or (
             hit is not None
             and hit.era == "throwback"
             and (not has_vector[i] or rel < floor["similar"])
         ):
-            bucket = "throwback"
+            bucket, recipe = "throwback", "throwback_interest"
             title = dormant_seed[i] or (hit.seed_title if hit else None)
-            parts += [
-                ("Match to an older interest", 0.7 * max(back, rel)),
-                ("Freshness", 0.15 * _fresh(published, now, 365.0 * scale)),
-            ]
-            parts.append(("Popularity", _popularity(0.15, quality, t)))
             reason = Reason(
                 "throwback",
                 f"Like {short(title, 50)}, from a while back"
@@ -505,12 +456,7 @@ def build_feed(
         elif known == 0 and not followed and c.pool != "library":
             # A downloaded video is not a discovery, even from a channel the
             # user has yet to watch: it ranks with the familiar picks below.
-            bucket = "new"
-            parts += [
-                ("Match to your taste", rel),
-                ("Freshness", 0.05 * _fresh(published, now, 90.0 * scale)),
-            ]
-            parts.append(("Popularity", _popularity(0.08, quality, t)))
+            bucket = recipe = "new"
             reason = Reason(
                 "new_channel",
                 "New channel for you",
@@ -520,15 +466,7 @@ def build_feed(
             )
             eligible = rel >= floor["new"]
         else:
-            bucket = "similar"
-            boost = 0.1 * cowatch.get(c.video_id, 0.0) if c.video_id else 0.0
-            parts += [
-                ("Match to your taste", rel),
-                ("A channel you watch", 0.08 * known),
-                ("Freshness", 0.04 * _fresh(published, now, 60.0 * scale)),
-                ("Liked by people here", boost),
-            ]
-            parts.append(("Popularity", _popularity(0.04, quality, t)))
+            bucket = recipe = "similar"
             if cold:
                 reason = (
                     Reason("library", "Picked from your library")
@@ -543,11 +481,22 @@ def build_feed(
                 reason = Reason(
                     "similar", f"More from {c.channel}" if c.channel else "For you"
                 )
-            eligible = rel >= floor["similar"] or boost >= 0.05
+            eligible = rel >= floor["similar"] or lift >= scoring.COWATCH_QUALIFIES
+        parts = scoring.parts(
+            scoring.RECIPES[recipe],
+            signals,
+            published=published,
+            now=now,
+            views=scoring.quality(c.view_count),
+            tuning=t,
+            labels=labels,
+        )
 
         if c.pool == "library" and t.library_bonus:
             parts.append(("Already downloaded", t.library_bonus))
-        spread = (NEW_JITTER if bucket == "new" else JITTER) * t.jitter_scale
+        spread = (
+            scoring.NEW_JITTER if bucket == "new" else scoring.JITTER
+        ) * t.jitter_scale
         if spread:
             parts.append(("Shuffle", float(jitter[i]) * spread))
         penalty, tired = _wear(visits.get(c.key, 0), t)
