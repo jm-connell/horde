@@ -43,6 +43,7 @@ def ai_on(monkeypatch):
     """Embeddings count as available (vectors are written by the tests)."""
     for target in (
         "app.services.discovery.feed.get_embed_provider",
+        "app.services.discovery.relevance.get_embed_provider",
         "app.services.ai.provider.get_embed_provider",
     ):
         monkeypatch.setattr(target, lambda: object())
@@ -316,12 +317,12 @@ def test_feedback_belongs_to_its_user(client, member_client, session, admin_user
 
 
 def test_mix_follows_the_shares_and_spreads_channels():
-    from app.services.discovery import feed
+    from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate
 
     def items(bucket, n, channels):
         return [
-            feed.FeedItem(
+            picks.FeedItem(
                 Candidate(
                     key=f"{bucket}{i}",
                     pool="discovery",
@@ -331,12 +332,12 @@ def test_mix_follows_the_shares_and_spreads_channels():
                 ),
                 bucket,
                 1.0 - i * 0.01,
-                feed.Reason("x", "x"),
+                picks.Reason("x", "x"),
             )
             for i in range(n)
         ]
 
-    out = feed.mix(
+    out = mix.mix(
         {
             "subscriptions": items(
                 "subscriptions", 40, ["S1", "S2", "S3", "S4", "S5", "S6"]
@@ -367,13 +368,13 @@ def test_mix_follows_the_shares_and_spreads_channels():
 def test_mix_stops_at_the_feeds_size():
     """The mixer places no more picks than the feed keeps: mixing a pool of
     thousands to throw most of it away was half the cost of a ranking."""
-    from app.services.discovery import feed
+    from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate
 
     def buckets():
         return {
             bucket: [
-                feed.FeedItem(
+                picks.FeedItem(
                     Candidate(
                         key=f"{bucket}{i}",
                         pool="discovery",
@@ -383,27 +384,27 @@ def test_mix_stops_at_the_feeds_size():
                     ),
                     bucket,
                     1.0 - i * 0.001,
-                    feed.Reason("x", "x"),
+                    picks.Reason("x", "x"),
                 )
                 for i in range(400)
             ]
             for bucket in ("subscriptions", "similar", "new", "throwback")
         }
 
-    everything = feed.mix(buckets(), limit=1600)
+    everything = mix.mix(buckets(), limit=1600)
     assert len(everything) == 1600
-    top = feed.mix(buckets(), limit=100)
+    top = mix.mix(buckets(), limit=100)
     assert [i.candidate.key for i in top] == [i.candidate.key for i in everything[:100]]
-    assert len(feed.mix(buckets())) == feed.FEED_MAX
+    assert len(mix.mix(buckets())) == mix.FEED_MAX
 
 
 def test_throwbacks_stay_out_of_the_top_of_the_feed():
-    from app.services.discovery import feed
+    from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate
 
     def items(bucket, n):
         return [
-            feed.FeedItem(
+            picks.FeedItem(
                 Candidate(
                     key=f"{bucket}{i}",
                     pool="discovery",
@@ -414,31 +415,31 @@ def test_throwbacks_stay_out_of_the_top_of_the_feed():
                 bucket,
                 # Throwbacks score best, so only the hold keeps them down.
                 (2.0 if bucket == "throwback" else 1.0) - i * 0.01,
-                feed.Reason("x", "x"),
+                picks.Reason("x", "x"),
             )
             for i in range(n)
         ]
 
-    out = feed.mix(
+    out = mix.mix(
         {b: items(b, 30) for b in ("subscriptions", "similar", "new", "throwback")}
     )
-    top = out[: feed.THROWBACK_HOLD]
+    top = out[: mix.THROWBACK_HOLD]
     assert all(i.bucket != "throwback" for i in top)
     # They come in after the hold, spread out rather than in one run.
-    after = [i.bucket for i in out[feed.THROWBACK_HOLD : feed.THROWBACK_HOLD + 20]]
+    after = [i.bucket for i in out[mix.THROWBACK_HOLD : mix.THROWBACK_HOLD + 20]]
     assert 1 <= after.count("throwback") <= 5, after
     # With nothing else to show, throwbacks still fill the feed.
-    assert len(feed.mix({"throwback": items("throwback", 5)})) == 5
+    assert len(mix.mix({"throwback": items("throwback", 5)})) == 5
 
 
 def test_an_empty_bucket_does_not_inflate_the_sprinkles():
-    from app.services.discovery import feed
+    from app.services.discovery import mix
 
-    shares = feed.effective_shares({"similar", "new", "throwback"})
+    shares = mix.effective_shares({"similar", "new", "throwback"})
     assert abs(sum(shares.values()) - 1) < 1e-9
     balanced = DEFAULTS.shares.normalized()
     for bucket in ("new", "throwback"):
-        assert shares[bucket] <= balanced[bucket] * feed.SHARE_CAP_RATIO[bucket]
+        assert shares[bucket] <= balanced[bucket] * mix.SHARE_CAP_RATIO[bucket]
     assert shares["similar"] > balanced["similar"]
 
 
@@ -1140,14 +1141,14 @@ def test_a_downloaded_video_is_not_a_new_channel(
 def test_household_switch_stops_cold_start_pooling(
     session, add_video, set_watch, admin_user, member_user, client
 ):
-    from app.services.discovery import feed
+    from app.services.discovery import household
 
     for n in range(4):
         set_watch(admin_user, add_video(title=f"Admin {n}", channel="Theirs"), 0)
-    pooled, cold = feed.taste_history(session, member_user.id)
+    pooled, cold = household.taste_history(session, member_user.id)
     assert cold and len(pooled) == 4
     client.patch("/api/settings", json={"discovery_household": False})
-    pooled, cold = feed.taste_history(session, member_user.id)
+    pooled, cold = household.taste_history(session, member_user.id)
     assert cold and pooled == []
 
 
@@ -1302,8 +1303,8 @@ def test_channel_suggestion_says_what_the_channel_is_like():
     """A suggestion carries its picks' typical views and length, and a short
     reason naming the watch that led to it."""
     from app.services.discovery.candidates import Candidate
-    from app.services.discovery.feed import ChannelStat, Feed
     from app.services.discovery.feedback import Exclusions
+    from app.services.discovery.picks import ChannelStat, Feed
     from app.services.discovery.suggest import suggestions
 
     def cand(i: int, views: int | None, seconds: float | None) -> Candidate:

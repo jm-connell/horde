@@ -15,7 +15,8 @@ from sqlmodel import Session, select
 
 from ...models import AiCategory
 from ..ai import recommend
-from .feed import Feed, FeedItem, _candidate_sims
+from .picks import Feed, FeedItem
+from .relevance import candidate_sims
 from .runtime import DiscoveryRuntime
 
 
@@ -39,7 +40,7 @@ def feed_categories(
         raw = np.asarray([vec for _, vec in named], dtype=np.float32)
         norms = np.linalg.norm(raw, axis=1, keepdims=True)
         cats = (raw / np.maximum(norms, 1e-12)).astype(np.float32)
-        sims = _candidate_sims(session, runtime, cands, cats)
+        sims = candidate_sims(session, runtime, cands, cats)
         rows = np.flatnonzero(~np.isnan(sims).any(axis=1))
         if rows.size:
             members = recommend.category_members(sims[rows])

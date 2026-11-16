@@ -21,20 +21,16 @@ Tuning notes: ``docs/adr/0019-recommended-plus.md``.
 from __future__ import annotations
 
 import hashlib
-import logging
 import math
 from collections import Counter, defaultdict
-from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
-from functools import lru_cache
 
 import numpy as np
 from sqlmodel import Session, col, select
 
-from ...models import DiscoveryHit, UserVideoState, Video, VideoTag, utcnow
-from .. import app_settings, follows
-from ..ai import vector_index
+from ...models import DiscoveryHit, UserVideoState, Video, utcnow
+from .. import follows
 from ..ai.provider import get_embed_provider
 from ..takeout import history as takeout_history
 from . import topics as topic_store
@@ -58,46 +54,19 @@ from .history import (
     past_favorites,
     watch_log,
     watched_keys,
-    watches,
 )
-from .interests import (
-    DEFAULT_WINDOW,
-    RECENT_HALF_LIFE_DAYS,
-    Interest,
-    TasteWindow,
-    interests,
-    split_history,
-    watch_vectors,
-    watch_weight,
-)
+from .household import cowatched, taste_history
+from .mix import FEED_MAX, mix, mix_stats
+from .picks import ChannelStat, Feed, FeedItem, Reason, name_key, short
+from .relevance import Vectors, channel_maps, similarity, taste_relevance
 from .runtime import DiscoveryRuntime
 from .tuning import DEFAULTS, Tuning
 from .tuning import for_user as load_tuning
-
-logger = logging.getLogger(__name__)
 
 #: A channel this strong in the recent history counts like a followed one.
 WATCHED_CHANNEL_LEVEL = 0.25
 #: A channel this strong long ago, and absent lately, is a throwback channel.
 DORMANT_CHANNEL_LEVEL = 0.3
-#: A channel appears at most this often in the whole feed in these buckets (the
-#: channel suggestions show more of a new channel; ``new`` is the user's own
-#: setting, and how far apart a channel's picks are is ``Tuning.channel_gap``).
-CHANNEL_CAPS = {
-    "new": DEFAULTS.new_channel_cap,
-    "throwback": 3,
-    "rewatch": 2,
-    "interest": 3,
-}
-#: While other buckets have picks left, none takes more than this times its share.
-OVERFILL = 1.3
-#: How far past their asked-for share new channels, throwbacks and rewatches
-#: may grow when another bucket is empty (the rest goes to the familiar ones).
-SHARE_CAP_RATIO = {"new": 1.4, "throwback": 1.3, "rewatch": 1.5, "interest": 1.3}
-#: See ``mix``: how strongly an under-served interest is pulled forward, and the
-#: least share any recent interest is owed.
-TOPIC_BONUS = 0.06
-MIN_TOPIC_SHARE = 0.08
 #: The same "Because you watched ..." is shown at most this often.
 SEED_REASON_MAX = 2
 #: Below these a pick waits at the end of the feed instead of in its bucket.
@@ -109,86 +78,7 @@ FLOORS = {"similar": 0.45, "new": 0.6, "throwback": 0.55}
 TASTE_FLOORS = {"similar": 0.15, "new": 0.3, "throwback": 0.3}
 JITTER = 0.02
 NEW_JITTER = 0.06
-FEED_MAX = 800
 PAST_LIVE = frozenset({"was_live", "post_live"})
-#: How many of the top picks the target-vs-actual mix is measured over.
-MIX_STATS_TOP = 60
-#: Seeds read from the recent history (by weight).
-MAX_SEEDS = 40
-#: The top of the feed is for what the user watches now: no throwback is
-#: placed in its first ``THROWBACK_HOLD`` slots (while anything else can be).
-THROWBACK_HOLD = 12
-
-
-@dataclass
-class Reason:
-    kind: str  # subscription | similar | new_channel | throwback | rewatch | library
-    text: str
-    detail: str | None = None
-
-
-@dataclass
-class FeedItem:
-    candidate: Candidate
-    bucket: str
-    score: float
-    reason: Reason
-    #: The recent interest it matches (see ``mix``), when known.
-    topic: int | None = None
-    #: From a channel the user follows.
-    followed: bool = False
-    #: What the score is made of, for "Why this?" (they add up to ``score``).
-    parts: list[tuple[str, float]] = field(default_factory=list)
-    #: Where the candidate came from (a search, an up next list, the library).
-    found_by: str | None = None
-    #: Close enough to the user's taste for its bucket (else it waits at the end).
-    eligible: bool = True
-
-
-@dataclass
-class ChannelStat:
-    """A channel new to the user, as the feed saw it (for suggestions)."""
-
-    name: str
-    url: str
-    scores: list[float] = field(default_factory=list)
-    items: list[Candidate] = field(default_factory=list)
-    seeds: set[str] = field(default_factory=set)
-    #: The YouTube searches that found its videos, and how many each found.
-    queries: Counter[str] = field(default_factory=Counter)
-
-
-@dataclass
-class MixStat:
-    bucket: str
-    #: The share the user asked for (0..1).
-    target: float
-    #: The share it got among the top ``MIX_STATS_TOP`` picks.
-    actual: float
-
-
-@dataclass
-class Feed:
-    items: list[FeedItem]
-    new_channels: dict[str, ChannelStat]
-    cold: bool
-    mix: list[MixStat] = field(default_factory=list)
-    #: Candidates each block (by topic id) left out of this ranking.
-    blocked: dict[int, int] = field(default_factory=dict)
-    #: Each AI category's picks (keys), measured once per version of the
-    #: categories (``categories.py``): (version, picks by category).
-    categories: tuple[object, dict[str, set[str]]] | None = None
-
-
-@lru_cache(maxsize=16384)
-def _name(text: str) -> str:
-    # Cached: ranking asks for the same channel names many thousands of times.
-    return " ".join((text or "").lower().split())
-
-
-def _scaled(weights: dict[str, float]) -> dict[str, float]:
-    top = max(weights.values(), default=0.0)
-    return {k: v / top for k, v in weights.items()} if top > 0 else {}
 
 
 def _fresh(when: datetime | None, now: datetime, half_life_days: float) -> float:
@@ -205,359 +95,9 @@ def _quality(views: int | None) -> float:
     return float(min(1.0, max(0.0, (math.log10(views + 1) - 3.0) / 3.5)))
 
 
-def _short(title: str, limit: int = 60) -> str:
-    title = " ".join((title or "").split())
-    return title if len(title) <= limit else title[: limit - 1].rstrip() + "…"
-
-
 def _rng(user_id: int, seed: int) -> np.random.Generator:
     digest = hashlib.blake2b(f"{user_id}:{seed}".encode(), digest_size=8).digest()
     return np.random.default_rng(int.from_bytes(digest, "big"))
-
-
-def _household(session: Session, user_id: int) -> tuple[list[Watch], dict[int, float]]:
-    """Other users' watches, and how alike each user's channels are to this one's."""
-    others = session.exec(
-        select(UserVideoState.user_id)
-        .where(UserVideoState.user_id != user_id)
-        .distinct()
-    ).all()
-    mine: dict[str, float] = defaultdict(float)
-    for w in watches(session, user_id, limit=300):
-        mine[_name(w.channel)] += w.engagement
-    pooled: list[Watch] = []
-    similarity: dict[int, float] = {}
-    for other in others:
-        theirs = watches(session, other, limit=300, include_youtube=False)
-        pooled.extend(theirs)
-        counts: dict[str, float] = defaultdict(float)
-        for w in theirs:
-            counts[_name(w.channel)] += w.engagement
-        dot = sum(v * counts.get(k, 0.0) for k, v in mine.items())
-        norm = math.sqrt(sum(v * v for v in mine.values())) * math.sqrt(
-            sum(v * v for v in counts.values())
-        )
-        similarity[other] = dot / norm if norm else 0.0
-    return pooled, similarity
-
-
-def _cowatch(session: Session, user_id: int) -> dict[int, float]:
-    """Library videos people with similar taste here liked, scaled 0..1."""
-    if not app_settings.load().get("discovery_household", True):
-        return {}
-    _pooled, similarity = _household(session, user_id)
-    weights: dict[int, float] = defaultdict(float)
-    for other, sim in similarity.items():
-        if sim < 0.1:
-            continue
-        for w in watches(session, other, limit=300, include_youtube=False):
-            if w.video_id is not None and w.engagement >= 0.7:
-                weights[w.video_id] += sim * w.engagement
-    top = max(weights.values(), default=0.0)
-    return {k: v / top for k, v in weights.items()} if top else {}
-
-
-def taste_history(
-    session: Session, user_id: int, older_than: datetime | None = None
-) -> tuple[list[Watch], bool]:
-    """The user's watches, or (cold start) also what the household watched,
-    when ``discovery_household`` allows it. ``older_than``: see ``watches``."""
-    own = watches(session, user_id, older_than=older_than)
-    if len(own) >= 3:
-        return own, False
-    if not app_settings.load().get("discovery_household", True):
-        return own, True
-    pooled, _sim = _household(session, user_id)
-    if pooled:
-        pooled.sort(key=lambda w: w.watched_at, reverse=True)
-        return own + pooled[:100], True
-    return own, True
-
-
-def _channel_maps(
-    history: list[Watch], now: datetime, window: TasteWindow = DEFAULT_WINDOW
-) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
-    """(recent, all-time, long-ago) channel strengths by lowercased name, 0..1.
-
-    ``history`` is the whole watch log (``watch_log``), not the part read for
-    taste: which channels the user knows, and used to watch, must not depend
-    on how much they watched since.
-    """
-    recent, _sample = split_history(history, now, window)
-    taken = {w.key for w in recent}
-    newest = now - timedelta(days=window.throwback_after_days)
-    oldest = now - timedelta(days=window.throwback_max_days)
-    older = [
-        w for w in history if w.key not in taken and oldest <= w.watched_at <= newest
-    ]
-    recent_w: dict[str, float] = defaultdict(float)
-    for w in recent:
-        recent_w[_name(w.channel)] += watch_weight(w, now, RECENT_HALF_LIFE_DAYS)
-    all_w: dict[str, float] = defaultdict(float)
-    for w in history:
-        all_w[_name(w.channel)] += watch_weight(w, now, 120.0)
-    old_w: dict[str, float] = defaultdict(float)
-    for w in older:
-        old_w[_name(w.channel)] += w.engagement
-    for maps in (recent_w, all_w, old_w):
-        maps.pop("", None)
-    return _scaled(recent_w), _scaled(all_w), _scaled(old_w)
-
-
-def _fit(sims: np.ndarray, w: np.ndarray, centre_sims: np.ndarray) -> np.ndarray:
-    """How well each row fits an interest: its closest watch and closest group.
-
-    The closest single watch catches a series or a very specific topic; the
-    closest group centre (``interests``) is steadier. How *much* of each interest
-    the feed shows is the mixer's job (``mix``), so a small interest's videos fit
-    as well as a big one's. A watch counts a little less when it is old or was
-    half watched (``w``). Rows without a vector (all NaN) stay NaN.
-    """
-    best = np.max(np.nan_to_num(sims * (0.85 + 0.15 * w), nan=-np.inf), axis=1)
-    usable = ~np.all(np.isnan(sims), axis=1)
-    if centre_sims.shape[1]:
-        centre = np.max(np.nan_to_num(centre_sims, nan=-np.inf), axis=1)
-        fit = 0.6 * best + 0.4 * centre
-    else:
-        fit = best
-    out: np.ndarray = np.where(usable, fit, np.nan)
-    return out
-
-
-def _calibrated(
-    raw: np.ndarray, seeds: np.ndarray, w: np.ndarray, centres: np.ndarray
-) -> np.ndarray:
-    """Fit on a scale embed models agree on: 1 is "as close as the user's own
-    watches are to each other", 0 is the bottom tenth of all candidates.
-
-    Cosines differ a lot between models (some put unrelated text at 0.5), and a
-    pool can be mostly relevant (found videos all are), so neither a fixed
-    cut-off nor a percentile of the pool works on its own.
-    """
-    finite = raw[np.isfinite(raw)]
-    if finite.size == 0:
-        return np.zeros_like(raw)
-    lo = float(np.percentile(finite, 10))
-    hi = float("nan")
-    if len(seeds) >= 3:
-        among = seeds @ seeds.T
-        np.fill_diagonal(among, np.nan)
-        hi = float(np.nanmedian(_fit(among, w, seeds @ centres.T)))
-    if not math.isfinite(hi) or hi <= lo:
-        hi = float(np.percentile(finite, 99))
-    span = max(hi - lo, 0.02)
-    out: np.ndarray = np.where(
-        np.isfinite(raw), np.clip((raw - lo) / span, 0.0, 1.25), 0.0
-    )
-    return out
-
-
-@dataclass
-class _Similarity:
-    """Per candidate: fit to recent and to dormant interests, and why."""
-
-    recent: np.ndarray
-    recent_raw: np.ndarray
-    recent_seed: list[str | None]
-    dormant: np.ndarray
-    dormant_seed: list[str | None]
-    #: The recent interest (``interests``) each candidate fits best, and each
-    #: interest's share of the recent history.
-    topic: list[int | None]
-    topic_shares: dict[int, float]
-
-
-def _seed_matrix(
-    picked: list[Watch], weights: list[float], vectors: dict[str, np.ndarray]
-) -> tuple[np.ndarray, np.ndarray, list[Watch]]:
-    rows = [(w, wt) for w, wt in zip(picked, weights, strict=True) if w.key in vectors]
-    rows.sort(key=lambda r: -r[1])
-    rows = rows[:MAX_SEEDS]
-    if not rows:
-        return np.zeros((0, 0), dtype=np.float32), np.zeros(0, dtype=np.float32), []
-    matrix = np.asarray([vectors[w.key] for w, _ in rows], dtype=np.float32)
-    w = np.asarray([wt for _, wt in rows], dtype=np.float32)
-    return matrix, w / max(float(w.max()), 1e-6), [w for w, _ in rows]
-
-
-class _Vectors:
-    """Where each candidate's vector is, looked up once for a ranking.
-
-    A ranking scores the same candidates against several sets of seeds (recent
-    and older watches, their group centres, topics): finding the vectors again
-    for each was a query and a pass over every candidate per set.
-    """
-
-    def __init__(
-        self, session: Session, runtime: DiscoveryRuntime, cands: list[Candidate]
-    ) -> None:
-        self._session = session
-        self._count = len(cands)
-        #: (row in the result, library video id) of the library candidates.
-        self._library = [
-            (i, c.video_id) for i, c in enumerate(cands) if c.video_id is not None
-        ]
-        self._store = runtime.vectors.matrix(session)
-        index = self._store.index
-        stored = [
-            (i, index[c.yt_id])
-            for i, c in enumerate(cands)
-            if c.video_id is None and c.yt_id and c.yt_id in index
-        ]
-        self._stored_at = np.asarray([i for i, _row in stored], dtype=np.int64)
-        self._stored_rows = np.asarray([row for _i, row in stored], dtype=np.int64)
-
-    def sims(self, seeds: np.ndarray) -> np.ndarray:
-        """(candidates, len(seeds)) cosines; NaN rows for candidates without a vector."""
-        out = np.full((self._count, len(seeds)), np.nan, dtype=np.float32)
-        if len(seeds) == 0:
-            return out
-        ids, scores = vector_index.video_scores(self._session, seeds.tolist())
-        row_of = {int(v): i for i, v in enumerate(ids)}
-        for i, video_id in self._library:
-            row = row_of.get(video_id)
-            if row is not None:
-                out[i] = scores[row]
-        if self._store.dim == seeds.shape[1] and self._stored_at.size:
-            out[self._stored_at] = self._store.rows[self._stored_rows] @ seeds.T
-        return out
-
-
-def _candidate_sims(
-    session: Session,
-    runtime: DiscoveryRuntime,
-    cands: list[Candidate],
-    seeds: np.ndarray,
-) -> np.ndarray:
-    """(len(cands), len(seeds)) cosines; NaN rows for candidates without a vector."""
-    return _Vectors(session, runtime, cands).sims(seeds)
-
-
-@dataclass
-class _Interests:
-    """Seeds (watches) and group centres of one part of the history."""
-
-    seeds: np.ndarray
-    weights: np.ndarray
-    watches: list[Watch]
-    centres: np.ndarray
-    shares: list[float]
-
-
-def _interest_matrix(
-    groups: list[Interest],
-    vectors: dict[str, np.ndarray],
-    weight: Callable[[Watch], float],
-) -> _Interests:
-    members = [w for g in groups for w in g.watches]
-    seeds, w, seed_watches = _seed_matrix(
-        members, [weight(x) for x in members], vectors
-    )
-    centred = [
-        g
-        for g in groups
-        if g.centroid is not None and len(g.centroid) == seeds.shape[1]
-    ]
-    centres = (
-        np.asarray([g.centroid for g in centred], dtype=np.float32)
-        if centred
-        else np.zeros((0, seeds.shape[1] if len(seeds) else 0), dtype=np.float32)
-    )
-    total = sum(g.weight for g in centred) or 1.0
-    return _Interests(
-        seeds, w, seed_watches, centres, [g.weight / total for g in centred]
-    )
-
-
-def _similarity(
-    session: Session,
-    runtime: DiscoveryRuntime,
-    cands: list[Candidate],
-    vectors_of: _Vectors,
-    history: list[Watch],
-    now: datetime,
-    window: TasteWindow = DEFAULT_WINDOW,
-) -> _Similarity | None:
-    """Embedding fit, or None without embeddings."""
-    if get_embed_provider() is None or app_settings.ai_settings().get("paused"):
-        return None
-    recent_groups, dormant_groups = interests(session, runtime, history, now, window)
-    recent, older = split_history(history, now, window)
-    vectors = watch_vectors(session, runtime, recent + older)
-    mine = _interest_matrix(
-        recent_groups, vectors, lambda x: watch_weight(x, now, RECENT_HALF_LIFE_DAYS)
-    )
-    if len(mine.seeds) == 0:
-        return None
-    sims = vectors_of.sims(mine.seeds)
-    centre_sims = vectors_of.sims(mine.centres)
-    raw = _fit(sims, mine.weights, centre_sims)
-    best_seed = np.argmax(np.nan_to_num(sims, nan=-np.inf), axis=1)
-    best_centre = (
-        np.argmax(np.nan_to_num(centre_sims, nan=-np.inf), axis=1)
-        if len(mine.centres)
-        else None
-    )
-    recent_seed: list[str | None] = []
-    topic: list[int | None] = []
-    for i in range(len(cands)):
-        usable = bool(np.isfinite(raw[i]))
-        recent_seed.append(mine.watches[int(best_seed[i])].title if usable else None)
-        topic.append(
-            int(best_centre[i]) if usable and best_centre is not None else None
-        )
-
-    old = _interest_matrix(dormant_groups, vectors, lambda x: x.engagement)
-    dormant = np.zeros(len(cands), dtype=np.float32)
-    dormant_seed: list[str | None] = [None] * len(cands)
-    if len(old.seeds) and old.seeds.shape[1] == mine.seeds.shape[1]:
-        old_sims = vectors_of.sims(old.seeds)
-        old_centres = vectors_of.sims(old.centres)
-        dormant = _calibrated(
-            _fit(old_sims, old.weights, old_centres),
-            old.seeds,
-            old.weights,
-            old.centres,
-        )
-        idx = np.argmax(np.nan_to_num(old_sims, nan=-np.inf), axis=1)
-        dormant_seed = [
-            None if np.all(np.isnan(old_sims[i])) else old.watches[int(idx[i])].title
-            for i in range(len(cands))
-        ]
-    return _Similarity(
-        recent=_calibrated(raw, mine.seeds, mine.weights, mine.centres),
-        recent_raw=raw,
-        recent_seed=recent_seed,
-        dormant=dormant,
-        dormant_seed=dormant_seed,
-        topic=topic,
-        topic_shares=dict(enumerate(mine.shares)),
-    )
-
-
-def _taste_relevance(
-    session: Session,
-    cands: list[Candidate],
-    history: list[Watch],
-    all_channels: dict[str, float],
-) -> np.ndarray:
-    """Without AI: the watched channels and tags a candidate shares, 0..1."""
-    rank_of = {w.video_id: r for r, w in enumerate(history[:200]) if w.video_id}
-    engagement = {w.video_id: w.engagement for w in history if w.video_id}
-    tag_w: dict[str, float] = defaultdict(float)
-    if rank_of:
-        for vid, tag in session.exec(
-            select(VideoTag.video_id, VideoTag.tag).where(
-                col(VideoTag.video_id).in_(list(rank_of))
-            )
-        ).all():
-            tag_w[tag.lower()] += 0.97 ** rank_of[vid] * engagement[vid]
-    tags = _scaled(tag_w)
-    out = np.zeros(len(cands), dtype=np.float32)
-    for i, c in enumerate(cands):
-        best = sorted((tags.get(t, 0.0) for t in c.tags), reverse=True)[:3]
-        out[i] = 0.6 * all_channels.get(_name(c.channel), 0.0) + 0.4 * sum(best) / 3
-    return out
 
 
 @dataclass
@@ -646,7 +186,7 @@ def _found_by(c: Candidate, hit: _Hit | None) -> str:
         if hit.source == "search":
             return f"YouTube search: {hit.seed}"
         if hit.seed_title:
-            return f"Up next from {_short(hit.seed_title, 50)}"
+            return f"Up next from {short(hit.seed_title, 50)}"
         return "YouTube's up next"
     return "Found on YouTube"
 
@@ -670,7 +210,7 @@ def _history_candidate(fav: PastFavorite) -> Candidate:
 def _topic_fits(
     runtime: DiscoveryRuntime,
     cands: list[Candidate],
-    vectors_of: _Vectors,
+    vectors_of: Vectors,
     topics: topic_store.Topics,
     hit_of: dict[str, _Hit],
 ) -> tuple[list[topic_store.Topic | None], np.ndarray, list[topic_store.Topic | None]]:
@@ -775,7 +315,7 @@ def build_feed(
     for f in follows.list_follows(session, user_id):
         followed_urls.add(f.channel_url)
         if f.channel_name:
-            followed_names.add(_name(f.channel_name))
+            followed_names.add(name_key(f.channel_name))
 
     hits = _hits(session, user_id)
     pool = library_candidates(session)
@@ -824,14 +364,14 @@ def build_feed(
 
     # Channel strengths (and the reasons that name them) come from the user's
     # own watching, even when the household stands in for a short history.
-    recent_ch, all_ch, old_ch = _channel_maps(
+    recent_ch, all_ch, old_ch = channel_maps(
         [w for w in log if shapes_taste(w)], now, window
     )
-    vectors_of = _Vectors(session, runtime, cands)
-    sim = _similarity(session, runtime, cands, vectors_of, history, now, window)
+    vectors_of = Vectors(session, runtime, cands)
+    sim = similarity(session, runtime, cands, vectors_of, history, now, window)
     base_floors: dict[str, float]
     if sim is None:
-        relevance = _taste_relevance(session, cands, history, all_ch)
+        relevance = taste_relevance(session, cands, history, all_ch)
         has_vector = np.zeros(len(cands), dtype=bool)
         recent_seed: list[str | None] = [None] * len(cands)
         dormant = np.zeros(len(cands), dtype=np.float32)
@@ -854,7 +394,7 @@ def build_feed(
     interest_of, interest_fit, similar_block = _topic_fits(
         runtime, cands, vectors_of, topics, hit_of
     )
-    cowatch = _cowatch(session, user_id) if not cold and t.use_household else {}
+    cowatch = cowatched(session, user_id) if not cold and t.use_household else {}
 
     rng = _rng(user_id, seed)
     jitter = rng.normal(0.0, 1.0, size=len(cands))
@@ -865,7 +405,7 @@ def build_feed(
     sub_window = timedelta(days=t.subscription_window_days)
 
     for i, c in enumerate(cands):
-        name = _name(c.channel)
+        name = name_key(c.channel)
         floor = library_floors if c.pool == "library" else floors
         followed = bool(c.channel_url and c.channel_url in followed_urls) or (
             name in followed_names
@@ -926,7 +466,7 @@ def build_feed(
             bucket = "interest"
             fit = float(interest_fit[i])
             parts += [
-                (f"Match to your interest “{_short(interest.text, 40)}”", 0.6 * fit),
+                (f"Match to your interest “{short(interest.text, 40)}”", 0.6 * fit),
                 ("Match to your taste", 0.2 * min(rel, 1.0)),
                 ("Freshness", 0.1 * _fresh(published, now, 90.0 * scale)),
             ]
@@ -957,7 +497,7 @@ def build_feed(
             parts.append(("Popularity", _popularity(0.15, quality, t)))
             reason = Reason(
                 "throwback",
-                f"Like {_short(title, 50)}, from a while back"
+                f"Like {short(title, 50)}, from a while back"
                 if title and not cold
                 else "From your older interests",
             )
@@ -974,7 +514,7 @@ def build_feed(
             reason = Reason(
                 "new_channel",
                 "New channel for you",
-                f"Because you watched {_short(seed_title)}"
+                f"Because you watched {short(seed_title)}"
                 if seed_title and not cold
                 else None,
             )
@@ -996,7 +536,7 @@ def build_feed(
                     else Reason("similar", "Recommended for you")
                 )
             elif seed_title and rel >= floor["similar"]:
-                reason = Reason("similar", f"Because you watched {_short(seed_title)}")
+                reason = Reason("similar", f"Because you watched {short(seed_title)}")
             elif known == 0 and not followed and c.pool == "library":
                 reason = Reason("library", "Picked from your library")
             else:
@@ -1058,164 +598,9 @@ def build_feed(
         mixed[:FEED_MAX],
         new_channels,
         cold,
-        _mix_stats(mixed[:placed], shares),
+        mix_stats(mixed[:placed], shares),
         {tid: len(keys) for tid, keys in blocked.items()},
     )
-
-
-def _mix_stats(placed: list[FeedItem], shares: dict[str, float]) -> list[MixStat]:
-    """What the user asked each bucket to get, and what the top of the feed got."""
-    top = placed[:MIX_STATS_TOP]
-    counts = Counter(item.bucket for item in top)
-    return [
-        MixStat(bucket, target, counts[bucket] / len(top) if top else 0.0)
-        for bucket, target in shares.items()
-        if target > 0
-    ]
-
-
-def effective_shares(
-    present: set[str], tuning: Tuning = DEFAULTS, interest_share: float = 0.0
-) -> dict[str, float]:
-    """The user's shares over the buckets that still have picks, summing to 1.
-
-    The share of an empty bucket goes to the others in proportion, except that
-    new channels, throwbacks and rewatches stay near what was asked for
-    (``SHARE_CAP_RATIO``): what they cannot take goes to the familiar buckets.
-    """
-    asked = {k: v * (1 - interest_share) for k, v in tuning.shares.normalized().items()}
-    asked["interest"] = interest_share
-    total = sum(asked[n] for n in present)
-    if total <= 0:
-        return {n: 1.0 / len(present) for n in present}
-    out = {n: asked[n] / total for n in present}
-    familiar = [n for n in ("subscriptions", "similar") if out.get(n, 0.0) > 0]
-    if not familiar:
-        return out
-    spare = 0.0
-    for name, ratio in SHARE_CAP_RATIO.items():
-        cap = asked[name] * ratio
-        if name in out and out[name] > cap:
-            spare += out[name] - cap
-            out[name] = cap
-    if spare:
-        base = sum(out[n] for n in familiar)
-        for n in familiar:
-            out[n] += spare * out[n] / base
-    return out
-
-
-def mix(
-    buckets: dict[str, list[FeedItem]],
-    topic_shares: dict[int, float] | None = None,
-    tuning: Tuning = DEFAULTS,
-    interest_share: float = 0.0,
-    limit: int = FEED_MAX,
-) -> list[FeedItem]:
-    """Interleave the buckets by the user's shares (smooth weighted round robin),
-    stopping after ``limit`` picks: the feed keeps no more.
-
-    A pick must keep its channel ``channel_gap`` slots from its last showing and
-    its bucket within ``OVERFILL`` times its share; when no bucket can pick that
-    way, the spacing and share give way, but the per-channel caps never do:
-    picks past a cap wait at the end, best first.
-
-    Within a bucket, a pick from an interest that has had less than its share
-    of the history (``topic_shares``, at least ``MIN_TOPIC_SHARE``) gets
-    ``TOPIC_BONUS`` per missing slot, so a smaller interest still shows up
-    between the big ones.
-
-    Throwbacks sit out the first ``THROWBACK_HOLD`` slots and earn no credit
-    meanwhile, so they do not bunch up right after.
-    """
-    gap = tuning.channel_gap
-    caps = {**CHANNEL_CAPS, "new": tuning.new_channel_cap}
-    shares = {t: max(v, MIN_TOPIC_SHARE) for t, v in (topic_shares or {}).items()}
-    topic_picks: Counter[int] = Counter()
-    #: Picks past their channel's cap: they go after everything else.
-    overflow: list[FeedItem] = []
-    queues = {name: list(items) for name, items in buckets.items() if items}
-    credit = dict.fromkeys(queues, 0.0)
-    picks: defaultdict[str, float] = defaultdict(float)
-    shown: dict[str, Counter[str]] = defaultdict(Counter)
-    out: list[FeedItem] = []
-    last_channels: list[str] = []
-
-    def capped(item: FeedItem) -> bool:
-        cap = caps.get(item.bucket)
-        name = _name(item.candidate.channel)
-        return cap is not None and bool(name) and shown[item.bucket][name] >= cap
-
-    def spaced(item: FeedItem) -> bool:
-        name = _name(item.candidate.channel)
-        return gap <= 1 or not name or name not in last_channels[-(gap - 1) :]
-
-    def within_share(bucket: str) -> bool:
-        if len(queues) == 1:
-            return True
-        limit = max(1, math.floor(share[bucket] * OVERFILL * (len(out) + 1)))
-        return picks[bucket] < limit
-
-    def cost(item: FeedItem) -> float:
-        """What a pick takes of its bucket's share: less for a downloaded one
-        when the user prefers those, so they can fill more of the feed."""
-        return tuning.library_pick_cost if item.candidate.pool == "library" else 1.0
-
-    def priority(item: FeedItem) -> float:
-        if item.topic is None or item.topic not in shares:
-            return item.score
-        owed = shares[item.topic] * (len(out) + 1) - topic_picks[item.topic]
-        return item.score + TOPIC_BONUS * max(0.0, owed)
-
-    def choose(order: list[str], strict: bool) -> tuple[str, int] | None:
-        for name in order:
-            if strict and not within_share(name):
-                continue
-            usable = [
-                (priority(item), -j, j)
-                for j, item in enumerate(queues[name][:12])
-                if not capped(item) and (not strict or spaced(item))
-            ]
-            if usable:
-                return name, max(usable)[2]
-        return None
-
-    share: dict[str, float] = {}
-    while queues and len(out) < limit:
-        active = set(queues)
-        if len(out) < THROWBACK_HOLD and len(active) > 1:
-            active.discard("throwback")
-        share = effective_shares(active, tuning, interest_share)
-        for name in active:
-            credit[name] += share[name]
-        order = sorted(active, key=lambda n: -credit[n])
-        picked = choose(order, strict=True) or choose(order, strict=False)
-        if picked is None:
-            # Only capped picks at the heads: set every capped pick aside, go again.
-            for name in list(queues):
-                overflow.extend(it for it in queues[name] if capped(it))
-                kept = [it for it in queues[name] if not capped(it)]
-                if kept:
-                    queues[name] = kept
-                else:
-                    del queues[name]
-                    credit.pop(name, None)
-            continue
-        name, j = picked
-        item = queues[name].pop(j)
-        credit[name] -= cost(item)
-        picks[name] += cost(item)
-        out.append(item)
-        channel = _name(item.candidate.channel)
-        last_channels.append(channel)
-        shown[item.bucket][channel] += 1
-        if item.topic is not None:
-            topic_picks[item.topic] += 1
-        if not queues[name]:
-            del queues[name]
-            credit.pop(name, None)
-    overflow.sort(key=lambda it: -it.score)
-    return (out + overflow)[:limit]
 
 
 def _vary_reasons(items: list[FeedItem], known: dict[str, float]) -> None:
@@ -1229,7 +614,7 @@ def _vary_reasons(items: list[FeedItem], known: dict[str, float]) -> None:
                 channel = item.candidate.channel
                 reason.text = (
                     f"More from {channel}"
-                    if channel and known.get(_name(channel), 0.0) > 0
+                    if channel and known.get(name_key(channel), 0.0) > 0
                     else "Recommended for you"
                 )
         elif reason.kind == "new_channel" and reason.detail:

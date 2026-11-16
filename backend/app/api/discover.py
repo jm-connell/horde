@@ -69,7 +69,8 @@ from ..services.discovery import (
 )
 from ..services.discovery import categories as discover_categories
 from ..services.discovery.candidates import Candidate
-from ..services.discovery.feed import FeedItem, ranked_feed
+from ..services.discovery.feed import ranked_feed
+from ..services.discovery.picks import FeedItem
 from ..services.live import picks as live_picks
 from ..services.pagination import (
     SEED_RANGE,

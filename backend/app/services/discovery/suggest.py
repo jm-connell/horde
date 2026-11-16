@@ -17,8 +17,8 @@ from dataclasses import dataclass, field
 from statistics import median
 
 from .candidates import Candidate
-from .feed import Feed, _short
 from .feedback import Exclusions
+from .picks import Feed, short
 
 MAX_SUGGESTIONS = 8
 MAX_TAGS = 2
@@ -92,7 +92,7 @@ def suggestions(
                 name=stat.name or stat.url,
                 url=stat.url,
                 score=score,
-                reason=f"Like {_short(seed, 50)}" if seed else None,
+                reason=f"Like {short(seed, 50)}" if seed else None,
                 videos=[c for _, c in ranked[:SAMPLES]],
                 indexed=any(c.pool == "catalog" for c in stat.items),
                 typical_views=round(views) if views is not None else None,
