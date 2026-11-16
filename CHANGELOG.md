@@ -83,15 +83,16 @@ All notable changes to Horde are documented here. The format follows
 - A file or folder name chosen by a user can no longer become one of
   Horde's own folders (a leading dot is dropped), and the start-up cleanup
   of the staging folder leaves anything a library video points at.
-- A late watch save from an offline device can backdate a finish by at
-  most a day.
+- A late watch save from an offline device can backdate when you finished
+  a video by at most a day, so it cannot hand the video to a "remove
+  watched after N days" rule early.
 
 ### Upgrade notes
 
 - Two database migrations run at start (one added column on stream
   progress, one on watch time); nothing to do.
-- The stream preview no longer goes through `HTTP_PROXY` / `HTTPS_PROXY`,
-  which was never a documented setup.
+- The stream preview and live stream proxy no longer go through
+  `HTTP_PROXY` / `HTTPS_PROXY`, which was never a documented setup.
 
 ## [1.3.1] - 2026-11-08
 
