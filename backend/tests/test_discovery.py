@@ -1106,6 +1106,37 @@ def test_the_watch_log_reads_every_source_once(
     assert older[1].title == "Old"
 
 
+def test_a_downloaded_video_is_not_a_new_channel(
+    client, session, add_video, set_watch, admin_user, ai_on
+):
+    """A library video from a channel not watched yet ranks with the familiar
+    picks: it does not take the new-channel share, floor or two-per-channel cap."""
+    for n in range(4):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.02 * n),
+            channel="Lab",
+            title=f"Lab {n}",
+            days_ago=2,
+        )
+    for n in range(3):
+        video = add_video(channel="Shelf", title=f"Shelf {n}")
+        _embed(session, video, _vec(0.03 + 0.01 * n))
+    _discovered(session, admin_user, "strangervid", "Close to Lab", "Stranger", _vec(0.03))
+
+    by_title = {
+        (i.get("video") or i["stream"])["title"]: i for i in _items(client)
+    }
+    for n in range(3):
+        pick = by_title[f"Shelf {n}"]
+        assert pick["why"]["bucket"] == "similar"
+        assert pick["reason"]["kind"] != "new_channel"
+    assert by_title["Close to Lab"]["reason"]["kind"] == "new_channel"
+
+
 def test_household_switch_stops_cold_start_pooling(
     session, add_video, set_watch, admin_user, member_user, client
 ):

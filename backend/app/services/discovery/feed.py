@@ -942,7 +942,9 @@ def build_feed(
                 else "From your older interests",
             )
             eligible = max(back, rel) >= floor["throwback"]
-        elif known == 0 and not followed:
+        elif known == 0 and not followed and c.pool != "library":
+            # A downloaded video is not a discovery, even from a channel the
+            # user has yet to watch: it ranks with the familiar picks below.
             bucket = "new"
             parts += [
                 ("Match to your taste", rel),
@@ -975,6 +977,8 @@ def build_feed(
                 )
             elif seed_title and rel >= floor["similar"]:
                 reason = Reason("similar", f"Because you watched {_short(seed_title)}")
+            elif known == 0 and not followed and c.pool == "library":
+                reason = Reason("library", "Picked from your library")
             else:
                 reason = Reason(
                     "similar", f"More from {c.channel}" if c.channel else "For you"
