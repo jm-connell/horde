@@ -385,6 +385,49 @@ def _seed_matrix(
     return matrix, w / max(float(w.max()), 1e-6), [w for w, _ in rows]
 
 
+class _Vectors:
+    """Where each candidate's vector is, looked up once for a ranking.
+
+    A ranking scores the same candidates against several sets of seeds (recent
+    and older watches, their group centres, topics): finding the vectors again
+    for each was a query and a pass over every candidate per set.
+    """
+
+    def __init__(
+        self, session: Session, runtime: DiscoveryRuntime, cands: list[Candidate]
+    ) -> None:
+        self._session = session
+        self._count = len(cands)
+        #: (row in the result, library video id) of the library candidates.
+        self._library = [
+            (i, c.video_id) for i, c in enumerate(cands) if c.video_id is not None
+        ]
+        self._store = runtime.vectors.matrix(session)
+        index = self._store.index
+        stored = [
+            (i, index[c.yt_id])
+            for i, c in enumerate(cands)
+            if c.video_id is None and c.yt_id and c.yt_id in index
+        ]
+        self._stored_at = np.asarray([i for i, _row in stored], dtype=np.int64)
+        self._stored_rows = np.asarray([row for _i, row in stored], dtype=np.int64)
+
+    def sims(self, seeds: np.ndarray) -> np.ndarray:
+        """(candidates, len(seeds)) cosines; NaN rows for candidates without a vector."""
+        out = np.full((self._count, len(seeds)), np.nan, dtype=np.float32)
+        if len(seeds) == 0:
+            return out
+        ids, scores = vector_index.video_scores(self._session, seeds.tolist())
+        row_of = {int(v): i for i, v in enumerate(ids)}
+        for i, video_id in self._library:
+            row = row_of.get(video_id)
+            if row is not None:
+                out[i] = scores[row]
+        if self._store.dim == seeds.shape[1] and self._stored_at.size:
+            out[self._stored_at] = self._store.rows[self._stored_rows] @ seeds.T
+        return out
+
+
 def _candidate_sims(
     session: Session,
     runtime: DiscoveryRuntime,
@@ -392,27 +435,7 @@ def _candidate_sims(
     seeds: np.ndarray,
 ) -> np.ndarray:
     """(len(cands), len(seeds)) cosines; NaN rows for candidates without a vector."""
-    out = np.full((len(cands), len(seeds)), np.nan, dtype=np.float32)
-    if len(seeds) == 0:
-        return out
-    ids, scores = vector_index.video_scores(session, seeds.tolist())
-    row_of = {int(v): i for i, v in enumerate(ids)}
-    store = runtime.vectors.matrix(session)
-    for i, c in enumerate(cands):
-        if c.video_id is not None and c.video_id in row_of:
-            out[i] = scores[row_of[c.video_id]]
-    if store.dim == seeds.shape[1] and store.keys:
-        need = [
-            (i, store.index[c.yt_id])
-            for i, c in enumerate(cands)
-            if c.video_id is None and c.yt_id and c.yt_id in store.index
-        ]
-        if need:
-            rows = np.asarray([r for _, r in need])
-            sims = store.rows[rows] @ seeds.T
-            for (i, _r), s in zip(need, sims, strict=True):
-                out[i] = s
-    return out
+    return _Vectors(session, runtime, cands).sims(seeds)
 
 
 @dataclass
@@ -455,6 +478,7 @@ def _similarity(
     session: Session,
     runtime: DiscoveryRuntime,
     cands: list[Candidate],
+    vectors_of: _Vectors,
     history: list[Watch],
     now: datetime,
     window: TasteWindow = DEFAULT_WINDOW,
@@ -470,8 +494,8 @@ def _similarity(
     )
     if len(mine.seeds) == 0:
         return None
-    sims = _candidate_sims(session, runtime, cands, mine.seeds)
-    centre_sims = _candidate_sims(session, runtime, cands, mine.centres)
+    sims = vectors_of.sims(mine.seeds)
+    centre_sims = vectors_of.sims(mine.centres)
     raw = _fit(sims, mine.weights, centre_sims)
     best_seed = np.argmax(np.nan_to_num(sims, nan=-np.inf), axis=1)
     best_centre = (
@@ -492,8 +516,8 @@ def _similarity(
     dormant = np.zeros(len(cands), dtype=np.float32)
     dormant_seed: list[str | None] = [None] * len(cands)
     if len(old.seeds) and old.seeds.shape[1] == mine.seeds.shape[1]:
-        old_sims = _candidate_sims(session, runtime, cands, old.seeds)
-        old_centres = _candidate_sims(session, runtime, cands, old.centres)
+        old_sims = vectors_of.sims(old.seeds)
+        old_centres = vectors_of.sims(old.centres)
         dormant = _calibrated(
             _fit(old_sims, old.weights, old_centres),
             old.seeds,
@@ -649,9 +673,9 @@ def _history_candidate(fav: PastFavorite) -> Candidate:
 
 
 def _topic_fits(
-    session: Session,
     runtime: DiscoveryRuntime,
     cands: list[Candidate],
+    vectors_of: _Vectors,
     topics: topic_store.Topics,
     hit_of: dict[str, _Hit],
 ) -> tuple[list[topic_store.Topic | None], np.ndarray, list[topic_store.Topic | None]]:
@@ -689,7 +713,7 @@ def _topic_fits(
     dim = Counter(len(v) for _t, v in usable).most_common(1)[0][0]
     usable = [(t, v) for t, v in usable if len(v) == dim]
     matrix = np.asarray([v for _t, v in usable], dtype=np.float32)
-    sims = _candidate_sims(session, runtime, cands, matrix)
+    sims = vectors_of.sims(matrix)
     z = topic_store.standout(sims)
     raw = np.nan_to_num(sims, nan=-1.0)
     for j, (t, _v) in enumerate(usable):
@@ -808,7 +832,8 @@ def build_feed(
     recent_ch, all_ch, old_ch = _channel_maps(
         [w for w in log if shapes_taste(w)], now, window
     )
-    sim = _similarity(session, runtime, cands, history, now, window)
+    vectors_of = _Vectors(session, runtime, cands)
+    sim = _similarity(session, runtime, cands, vectors_of, history, now, window)
     base_floors: dict[str, float]
     if sim is None:
         relevance = _taste_relevance(session, cands, history, all_ch)
@@ -832,7 +857,7 @@ def build_feed(
     # "Prefer downloaded videos" also takes looser matches from the library.
     library_floors = {k: v * t.library_floor_scale for k, v in floors.items()}
     interest_of, interest_fit, similar_block = _topic_fits(
-        session, runtime, cands, topics, hit_of
+        runtime, cands, vectors_of, topics, hit_of
     )
     cowatch = _cowatch(session, user_id) if not cold and t.use_household else {}
 
