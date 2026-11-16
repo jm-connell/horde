@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import select as sa_select
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, col, select
 
@@ -22,6 +23,9 @@ from ..url_clean import youtube_video_id
 FINISHED_FRACTION = 0.9
 #: Watches read for taste: enough for a year of normal use.
 HISTORY_LIMIT = 600
+#: Watches from before the throwback line read besides those (``older_than``):
+#: a busy history's newest ``HISTORY_LIMIT`` may not reach back that far.
+OLDER_LIMIT = 300
 
 
 class NotAYoutubeVideo(ValueError):
@@ -179,15 +183,40 @@ def watches(
     *,
     limit: int = HISTORY_LIMIT,
     include_youtube: bool = True,
+    older_than: datetime | None = None,
 ) -> list[Watch]:
     """The user's watches, newest first; a video watched both ways counts once.
 
     Includes the YouTube history the user imported from Takeout unless
     ``include_youtube`` is off (other people's histories pooled for the
     household stay Horde-only: an import is for its own account).
+
+    ``older_than`` (the throwback line) adds up to ``OLDER_LIMIT`` watches from
+    before it, so someone who watches a lot (or imported years of YouTube
+    history) still has older watches to draw throwbacks from.
     """
+    out = _newest(session, user_id, limit, include_youtube, None)
+    if older_than is not None:
+        seen = {w.key for w in out}
+        out += [
+            w
+            for w in _newest(session, user_id, OLDER_LIMIT, include_youtube, older_than)
+            if w.key not in seen
+        ]
+        out.sort(key=lambda w: w.watched_at, reverse=True)
+    return out
+
+
+def _newest(
+    session: Session,
+    user_id: int,
+    limit: int,
+    include_youtube: bool,
+    before: datetime | None,
+) -> list[Watch]:
+    """The ``limit`` newest watches (last watched before ``before``, if given)."""
     out: list[Watch] = []
-    for video, state in session.exec(
+    library = (
         select(Video, UserVideoState)
         .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
         .where(
@@ -195,8 +224,13 @@ def watches(
             col(UserVideoState.last_watched_at).is_not(None),
             Video.needs_review == False,  # noqa: E712 - SQL column comparison, not a Python truth test
         )
-        .order_by(col(UserVideoState.last_watched_at).desc())
-        .limit(limit)
+    )
+    streams = select(UserStreamState).where(UserStreamState.user_id == user_id)
+    if before is not None:
+        library = library.where(col(UserVideoState.last_watched_at) < before)
+        streams = streams.where(col(UserStreamState.last_watched_at) < before)
+    for video, state in session.exec(
+        library.order_by(col(UserVideoState.last_watched_at).desc()).limit(limit)
     ).all():
         if state.last_watched_at is None:
             continue
@@ -216,10 +250,7 @@ def watches(
         )
     seen = {w.key for w in out}
     for row in session.exec(
-        select(UserStreamState)
-        .where(UserStreamState.user_id == user_id)
-        .order_by(col(UserStreamState.last_watched_at).desc())
-        .limit(limit)
+        streams.order_by(col(UserStreamState.last_watched_at).desc()).limit(limit)
     ).all():
         if row.yt_id in seen:
             continue
@@ -239,7 +270,9 @@ def watches(
         )
     if include_youtube:
         seen = {w.key for w in out}
-        for viewed in takeout_history.recent_videos(session, user_id, limit=limit):
+        for viewed in takeout_history.recent_videos(
+            session, user_id, limit=limit, before=before
+        ):
             if viewed.yt_id in seen:
                 continue
             out.append(
@@ -259,6 +292,82 @@ def watches(
             )
     out.sort(key=lambda w: w.watched_at, reverse=True)
     return out[:limit]
+
+
+def watch_log(session: Session, user_id: int) -> list[Watch]:
+    """Every watch, newest first, without titles or channel URLs.
+
+    ``watches`` stops at its limits, which is right for taste (what the user
+    is into now) but not for what they know: a channel watched a thousand
+    videos ago is still not new to them. Reads a few columns per watch, so the
+    whole history stays cheap.
+    """
+    out: dict[str, Watch] = {}
+    for vid, yt_id, channel, duration, position, when in session.execute(
+        sa_select(
+            col(Video.id),
+            col(Video.youtube_id),
+            col(Video.channel),
+            col(Video.duration_sec),
+            col(UserVideoState.position_sec),
+            col(UserVideoState.last_watched_at),
+        )
+        .join(UserVideoState, col(UserVideoState.video_id) == col(Video.id))
+        .where(
+            col(UserVideoState.user_id) == user_id,
+            col(UserVideoState.last_watched_at).is_not(None),
+            col(Video.needs_review) == False,  # noqa: E712 - SQL column comparison, not a Python truth test
+        )
+    ).all():
+        key = library_key(vid, yt_id)
+        out[key] = Watch(
+            key=key,
+            yt_id=yt_id,
+            video_id=vid,
+            title="",
+            channel=(channel or "").strip(),
+            channel_url="",
+            watched_at=as_utc(when),
+            engagement=library_engagement(position, duration),
+            finished=position <= 0,
+            fraction=library_fraction(position, duration),
+        )
+    for row in session.exec(
+        select(UserStreamState).where(UserStreamState.user_id == user_id)
+    ).all():
+        out.setdefault(
+            row.yt_id,
+            Watch(
+                key=row.yt_id,
+                yt_id=row.yt_id,
+                video_id=None,
+                title="",
+                channel=(row.channel or "").strip(),
+                channel_url="",
+                watched_at=as_utc(row.last_watched_at),
+                engagement=stream_engagement(row),
+                finished=row.finished_at is not None,
+                fraction=stream_fraction(row),
+            ),
+        )
+    for yt_id, when, views, channel in takeout_history.video_channels(session, user_id):
+        out.setdefault(
+            yt_id,
+            Watch(
+                key=yt_id,
+                yt_id=yt_id,
+                video_id=None,
+                title="",
+                channel=(channel or "").strip(),
+                channel_url="",
+                watched_at=when,
+                engagement=YOUTUBE_REWATCH_ENGAGEMENT
+                if views > 1
+                else YOUTUBE_ENGAGEMENT,
+                finished=False,
+            ),
+        )
+    return sorted(out.values(), key=lambda w: w.watched_at, reverse=True)
 
 
 def watched_keys(session: Session, user_id: int) -> set[str]:

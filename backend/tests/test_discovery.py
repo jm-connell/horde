@@ -1010,6 +1010,102 @@ def test_requests_that_arrive_together_share_one_ranking(
     assert feeds[0] is feeds[1]
 
 
+def test_a_busy_history_keeps_its_old_channels(
+    client, session, add_video, set_watch, admin_user, ai_on
+):
+    """A channel watched long ago stays a throwback, and is not "new", however
+    much was watched since: the newest 600 watches used to be all that was read."""
+    from app import context
+    from app.services.discovery import history
+    from app.services.discovery.feed import build_feed
+
+    now = datetime.now(UTC)
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.0, axis=2),
+            channel="OldFav",
+            title=f"OldFav {n}",
+            days_ago=200 + n,
+        )
+    for n in range(4):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.02 * n),
+            channel="Lab",
+            title=f"Lab {n}",
+            days_ago=2,
+        )
+    _catalog(session, "OldFav", [("oldfavnew01", "New upload", 3, _vec(0.01, axis=2))])
+    session.add_all(
+        UserStreamState(
+            user_id=admin_user.id,
+            yt_id=f"st{n:09d}",
+            url=_yt(f"st{n:09d}"),
+            title=f"Stream {n}",
+            channel=f"Chan{n % 30}",
+            watched_sec=600,
+            duration_sec=600,
+            finished_at=now,
+            last_watched_at=now - timedelta(days=5 + n * 95 / 650),
+        )
+        for n in range(history.HISTORY_LIMIT + 50)
+    )
+    session.commit()
+
+    # The taste read reaches past its newest 600 to the older watches...
+    read = history.watches(
+        session, admin_user.id, older_than=now - timedelta(days=60)
+    )
+    assert sum(1 for w in read if w.channel == "OldFav") == 6
+    assert len(history.watches(session, admin_user.id)) == history.HISTORY_LIMIT
+    # ...and the feed still knows the channel.
+    feed = build_feed(session, context.current().discovery, admin_user.id, 1)
+    pick = next(i for i in feed.items if i.candidate.key == "oldfavnew01")
+    assert (pick.bucket, pick.reason.text) == ("throwback", "You used to watch OldFav")
+    assert pick.eligible
+
+
+def test_the_watch_log_reads_every_source_once(
+    session, add_video, set_watch, admin_user
+):
+    """Library, streamed and imported watches of one video are one watch (the
+    library's), and an imported channel counts as watched."""
+    from app.services.discovery import history
+    from app.services.takeout import history as takeout
+    from app.services.takeout.parse import WatchView
+
+    now = datetime.now(UTC)
+    video = add_video(channel="Lab", title="Lab", source_url=_yt("labvideo001"))
+    set_watch(admin_user, video, 0, now - timedelta(days=1))
+    takeout.store_views(
+        session,
+        admin_user.id,
+        [
+            WatchView("labvideo001", now - timedelta(days=900), "Lab", "Lab"),
+            WatchView("oldimport01", now - timedelta(days=800), "Old", "Imported"),
+            WatchView("oldimport01", now - timedelta(days=700), "Old", "Imported"),
+        ],
+    )
+    log = history.watch_log(session, admin_user.id)
+    assert [(w.key, w.channel, w.engagement) for w in log] == [
+        ("labvideo001", "Lab", 1.0),
+        ("oldimport01", "Imported", history.YOUTUBE_REWATCH_ENGAGEMENT),
+    ]
+    assert log[0].video_id == video.id
+    older = history.watches(
+        session, admin_user.id, limit=1, older_than=now - timedelta(days=60)
+    )
+    assert [w.key for w in older] == ["labvideo001", "oldimport01"]
+    assert older[1].title == "Old"
+
+
 def test_household_switch_stops_cold_start_pooling(
     session, add_video, set_watch, admin_user, member_user, client
 ):

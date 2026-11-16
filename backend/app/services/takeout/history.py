@@ -237,16 +237,20 @@ class RecentVideo:
     channel_url: str | None
 
 
-def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentVideo]:
-    """The ``limit`` videos watched on YouTube most lately, one row each."""
+def recent_videos(
+    session: Session, user_id: int, *, limit: int, before: datetime | None = None
+) -> list[RecentVideo]:
+    """The ``limit`` videos watched on YouTube most lately, one row each
+    (``before``: only those last watched before then)."""
     last = func.max(col(YoutubeWatchEvent.watched_at))
-    rows = session.execute(
+    query = (
         sa_select(col(YoutubeWatchEvent.yt_id), last, func.count())
         .where(col(YoutubeWatchEvent.user_id) == user_id)
         .group_by(col(YoutubeWatchEvent.yt_id))
-        .order_by(last.desc())
-        .limit(limit)
-    ).all()
+    )
+    if before is not None:
+        query = query.having(last < before)
+    rows = session.execute(query.order_by(last.desc()).limit(limit)).all()
     details = latest_details(session, user_id, [str(r[0]) for r in rows])
     out = []
     for yt_id, when, views in rows:
@@ -257,6 +261,30 @@ def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentV
             )
         )
     return out
+
+
+def video_channels(
+    session: Session, user_id: int
+) -> list[tuple[str, datetime, int, str | None]]:
+    """Every video watched on YouTube: (id, last watched, views, channel name).
+
+    One query over the whole import, without titles: what Recommended reads to
+    know which channels the user has watched, however long the history.
+    """
+    rows = session.execute(
+        sa_select(
+            col(YoutubeWatchEvent.yt_id),
+            func.max(col(YoutubeWatchEvent.watched_at)),
+            func.count(),
+            func.max(col(YoutubeWatchEvent.channel)),
+        )
+        .where(col(YoutubeWatchEvent.user_id) == user_id)
+        .group_by(col(YoutubeWatchEvent.yt_id))
+    ).all()
+    return [
+        (str(yt_id), as_utc(when), int(views), channel)
+        for yt_id, when, views, channel in rows
+    ]
 
 
 @dataclass

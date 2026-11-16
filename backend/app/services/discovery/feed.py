@@ -56,6 +56,7 @@ from .history import (
     Watch,
     counts_as_taste,
     past_favorites,
+    watch_log,
     watched_keys,
     watches,
 )
@@ -261,10 +262,12 @@ def _cowatch(session: Session, user_id: int) -> dict[int, float]:
     return {k: v / top for k, v in weights.items()} if top else {}
 
 
-def taste_history(session: Session, user_id: int) -> tuple[list[Watch], bool]:
+def taste_history(
+    session: Session, user_id: int, older_than: datetime | None = None
+) -> tuple[list[Watch], bool]:
     """The user's watches, or (cold start) also what the household watched,
-    when ``discovery_household`` allows it."""
-    own = watches(session, user_id)
+    when ``discovery_household`` allows it. ``older_than``: see ``watches``."""
+    own = watches(session, user_id, older_than=older_than)
     if len(own) >= 3:
         return own, False
     if not app_settings.load().get("discovery_household", True):
@@ -279,8 +282,19 @@ def taste_history(session: Session, user_id: int) -> tuple[list[Watch], bool]:
 def _channel_maps(
     history: list[Watch], now: datetime, window: TasteWindow = DEFAULT_WINDOW
 ) -> tuple[dict[str, float], dict[str, float], dict[str, float]]:
-    """(recent, all-time, long-ago) channel strengths by lowercased name, 0..1."""
-    recent, older = split_history(history, now, window)
+    """(recent, all-time, long-ago) channel strengths by lowercased name, 0..1.
+
+    ``history`` is the whole watch log (``watch_log``), not the part read for
+    taste: which channels the user knows, and used to watch, must not depend
+    on how much they watched since.
+    """
+    recent, _sample = split_history(history, now, window)
+    taken = {w.key for w in recent}
+    newest = now - timedelta(days=window.throwback_after_days)
+    oldest = now - timedelta(days=window.throwback_max_days)
+    older = [
+        w for w in history if w.key not in taken and oldest <= w.watched_at <= newest
+    ]
     recent_w: dict[str, float] = defaultdict(float)
     for w in recent:
         recent_w[_name(w.channel)] += watch_weight(w, now, RECENT_HALF_LIFE_DAYS)
@@ -727,11 +741,11 @@ def build_feed(
     def shapes_taste(w: Watch) -> bool:
         return counts_as_taste(w, t.min_watched_pct) and w.key not in excluded.taste
 
-    history, cold = taste_history(session, user_id)
+    throwback_line = now - timedelta(days=window.throwback_after_days)
+    history, cold = taste_history(session, user_id, throwback_line)
     history = [w for w in history if shapes_taste(w)]
-    own_all = watches(session, user_id)
-    own = [w for w in own_all if shapes_taste(w)]
-    # Everything watched on YouTube is seen, not only the newest part ``own`` holds.
+    log = watch_log(session, user_id)
+    # Everything watched on YouTube is seen, not only the part read for taste.
     own_keys = (
         watched_keys(session, user_id)
         | takeout_history.cached_profile(session, user_id).watched
@@ -761,7 +775,7 @@ def build_feed(
     favorite_of: dict[str, PastFavorite] = {}
     if shares["rewatch"] > 0:
         before = now - timedelta(days=t.rewatch_after_days)
-        recent_keys = {w.key for w in own_all if w.watched_at >= before}
+        recent_keys = {w.key for w in log if w.watched_at >= before}
         by_key = {c.key: c for c in pool}
         # Already a candidate (never the case unless the history lost it): once.
         taken_keys = {c.key for c in cands}
@@ -791,7 +805,9 @@ def build_feed(
 
     # Channel strengths (and the reasons that name them) come from the user's
     # own watching, even when the household stands in for a short history.
-    recent_ch, all_ch, old_ch = _channel_maps(own, now, window)
+    recent_ch, all_ch, old_ch = _channel_maps(
+        [w for w in log if shapes_taste(w)], now, window
+    )
     sim = _similarity(session, runtime, cands, history, now, window)
     base_floors: dict[str, float]
     if sim is None:
