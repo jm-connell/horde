@@ -548,3 +548,11 @@ def test_lists_do_not_name_other_channels(
     history = member_client.get("/api/history/stats", params={"range": "all"}).json()
     assert [c["name"] for c in history["channels"]] == []
     assert [t["tag"] for t in history["tags"]] == []
+
+
+def test_ai_stays_withheld_from_a_restricted_member(member_client, restricted):
+    """The help chat (``services/ai/help_data``) and Ask read the whole library
+    unfiltered: they are safe only while ``use_ai`` is never held under a list.
+    Changing ``KEPT_PERMISSIONS`` must filter them first."""
+    assert frozenset({"offline_download"}) == parental.KEPT_PERMISSIONS
+    assert member_client.get("/api/ai/help/catalog").status_code == 403
