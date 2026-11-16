@@ -259,3 +259,27 @@ def test_changing_the_list_forgets_checked_streams(
         "/api/preview/subtitles", params={"url": kids, "lang": "en"}
     )
     assert resp.status_code == 403
+
+
+def test_continue_watching_streams_shows_only_allowed_channels(
+    member_client, member_user, client, library
+):
+    for yt_id, channel, channel_url in [
+        ("kidsstrm001", "Kids Craft", KIDS_URL),
+        ("otherstrm01", "Night Frights", "https://www.youtube.com/@nightfrights"),
+    ]:
+        resp = member_client.post(
+            "/api/discover/history",
+            json={
+                "url": f"https://www.youtube.com/watch?v={yt_id}",
+                "channel": channel,
+                "channel_url": channel_url,
+                "position_sec": 600,
+                "duration_sec": 3600,
+            },
+        )
+        assert resp.status_code == 200, resp.text
+    _restrict(client, member_user, [{"url": KIDS_URL, "name": "Kids Craft"}])
+    resp = member_client.get("/api/history/continue-streams")
+    assert resp.status_code == 200, resp.text
+    assert [i["id"] for i in resp.json()["items"]] == ["kidsstrm001"]

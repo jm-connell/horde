@@ -190,6 +190,7 @@ def continue_streams(
                 position_sec=row.position_sec,
             )
             for row in rows
+            if user.allowed is None or user.allowed.allows(row.channel_url, row.channel)
         ]
     )
 
