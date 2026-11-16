@@ -1070,8 +1070,10 @@ def mix(
     topic_shares: dict[int, float] | None = None,
     tuning: Tuning = DEFAULTS,
     interest_share: float = 0.0,
+    limit: int = FEED_MAX,
 ) -> list[FeedItem]:
-    """Interleave the buckets by the user's shares (smooth weighted round robin).
+    """Interleave the buckets by the user's shares (smooth weighted round robin),
+    stopping after ``limit`` picks: the feed keeps no more.
 
     A pick must keep its channel ``channel_gap`` slots from its last showing and
     its bucket within ``OVERFILL`` times its share; when no bucket can pick that
@@ -1139,7 +1141,7 @@ def mix(
         return None
 
     share: dict[str, float] = {}
-    while queues:
+    while queues and len(out) < limit:
         active = set(queues)
         if len(out) < THROWBACK_HOLD and len(active) > 1:
             active.discard("throwback")
@@ -1173,7 +1175,7 @@ def mix(
             del queues[name]
             credit.pop(name, None)
     overflow.sort(key=lambda it: -it.score)
-    return out + overflow
+    return (out + overflow)[:limit]
 
 
 def _vary_reasons(items: list[FeedItem], known: dict[str, float]) -> None:

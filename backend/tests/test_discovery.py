@@ -362,6 +362,39 @@ def test_mix_follows_the_shares_and_spreads_channels():
     assert {i.bucket for i in overflow} == {"throwback"}
 
 
+def test_mix_stops_at_the_feeds_size():
+    """The mixer places no more picks than the feed keeps: mixing a pool of
+    thousands to throw most of it away was half the cost of a ranking."""
+    from app.services.discovery import feed
+    from app.services.discovery.candidates import Candidate
+
+    def buckets():
+        return {
+            bucket: [
+                feed.FeedItem(
+                    Candidate(
+                        key=f"{bucket}{i}",
+                        pool="discovery",
+                        title="",
+                        channel=f"{bucket}-{i % 50}",
+                        channel_url="",
+                    ),
+                    bucket,
+                    1.0 - i * 0.001,
+                    feed.Reason("x", "x"),
+                )
+                for i in range(400)
+            ]
+            for bucket in ("subscriptions", "similar", "new", "throwback")
+        }
+
+    everything = feed.mix(buckets(), limit=1600)
+    assert len(everything) == 1600
+    top = feed.mix(buckets(), limit=100)
+    assert [i.candidate.key for i in top] == [i.candidate.key for i in everything[:100]]
+    assert len(feed.mix(buckets())) == feed.FEED_MAX
+
+
 def test_throwbacks_stay_out_of_the_top_of_the_feed():
     from app.services.discovery import feed
     from app.services.discovery.candidates import Candidate
