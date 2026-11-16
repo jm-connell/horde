@@ -23,7 +23,8 @@ Two entry points:
   server that answers differently the second time is not covered there.
 * :func:`fetch_bytes` fetches with httpx and is airtight: redirects are followed
   by hand with a fresh check per hop, and the connection is pinned to the
-  address that was validated.
+  address that was validated. Cookie and authorization headers are dropped once
+  a redirect leaves the first URL's origin.
 
 The AI provider URLs (``base_url``, ``embed_base_url``) are deliberately not
 routed through this module: they are often LAN hosts by design and are
@@ -36,9 +37,12 @@ import ipaddress
 import logging
 import os
 import socket
+from collections.abc import Iterable
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
+import anyio
+import httpcore
 import httpx
 
 logger = logging.getLogger(__name__)
@@ -104,6 +108,10 @@ def _resolve(host: str, port: int) -> list[IPAddress]:
     return out
 
 
+#: Headers that carry credentials for one origin, never sent to another.
+CREDENTIAL_HEADERS = frozenset({"cookie", "authorization", "proxy-authorization"})
+
+
 @dataclass(frozen=True)
 class CheckedUrl:
     url: str
@@ -113,25 +121,22 @@ class CheckedUrl:
     #: Validated addresses to connect to. Empty when the name did not resolve.
     addresses: tuple[IPAddress, ...]
 
+    @property
+    def origin(self) -> tuple[str, str, int]:
+        return self.scheme, self.host.lower(), self.port
 
-def check_url(url: str) -> CheckedUrl:
-    """Validate ``url`` and return the parts needed to connect safely."""
-    raw = (url or "").strip()
-    try:
-        parts = urlsplit(raw)
-        host = parts.hostname
-        explicit_port = parts.port
-    except ValueError as exc:
-        raise UnsafeUrlError("Not a valid URL") from exc
-    if parts.scheme.lower() not in ALLOWED_SCHEMES:
-        raise UnsafeUrlError("Only http and https URLs are allowed")
-    if not host:
-        raise UnsafeUrlError("URL has no host")
-    if parts.username is not None or parts.password is not None:
-        raise UnsafeUrlError("URLs with embedded credentials are not allowed")
-    scheme = parts.scheme.lower()
-    port = explicit_port or (443 if scheme == "https" else 80)
 
+def without_credentials(headers: dict[str, str]) -> dict[str, str]:
+    """``headers`` minus the credential headers: for a redirect to another origin,
+    as browsers and httpx do."""
+    return {k: v for k, v in headers.items() if k.lower() not in CREDENTIAL_HEADERS}
+
+
+def _checked_addresses(host: str, port: int) -> tuple[IPAddress, ...]:
+    """The addresses ``host`` resolves to, all public (else UnsafeUrlError).
+
+    Empty when the name does not resolve.
+    """
     try:
         literal: IPAddress | None = ipaddress.ip_address(host)
     except ValueError:
@@ -154,6 +159,95 @@ def check_url(url: str) -> CheckedUrl:
                     "That address points at this machine or a private network. "
                     "Set HORDE_ALLOW_PRIVATE_URLS=1 to allow LAN sources."
                 )
+    return addresses
+
+
+class PinnedNetworkBackend(httpcore.AsyncNetworkBackend):
+    """Opens TCP connections only to addresses that pass the public-address check.
+
+    The name is resolved once, here, and the connection goes to one of those
+    checked addresses, so a DNS answer cannot change between the check and the
+    connect. httpx keeps working by name above it: connections pool per host,
+    TLS sends the host as SNI and verifies its certificate, cookies stay per host.
+    """
+
+    def __init__(self) -> None:
+        self._inner = httpcore.AnyIOBackend()
+
+    async def connect_tcp(
+        self,
+        host: str,
+        port: int,
+        timeout: float | None = None,
+        local_address: str | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        addresses = await anyio.to_thread.run_sync(_checked_addresses, host, port)
+        if not addresses:
+            raise UnsafeUrlError("Could not resolve that host")
+        last_error: Exception | None = None
+        for ip in addresses:  # an IPv6-first host still works from an IPv4-only box
+            try:
+                return await self._inner.connect_tcp(
+                    str(ip),
+                    port,
+                    timeout=timeout,
+                    local_address=local_address,
+                    socket_options=socket_options,
+                )
+            except (httpcore.ConnectError, httpcore.ConnectTimeout) as exc:
+                last_error = exc
+        assert last_error is not None  # noqa: S101 - addresses is never empty here
+        raise last_error
+
+    async def connect_unix_socket(
+        self,
+        path: str,
+        timeout: float | None = None,
+        socket_options: Iterable[httpcore.SOCKET_OPTION] | None = None,
+    ) -> httpcore.AsyncNetworkStream:
+        raise httpcore.ConnectError("Unix sockets are not allowed")
+
+    async def sleep(self, seconds: float) -> None:
+        await self._inner.sleep(seconds)
+
+
+def pinned_async_transport(limits: httpx.Limits) -> httpx.AsyncHTTPTransport:
+    """An httpx transport that connects through :class:`PinnedNetworkBackend`.
+
+    A client given it ignores ``HTTP(S)_PROXY`` (a proxy would resolve the names).
+    """
+    transport = httpx.AsyncHTTPTransport(limits=limits)
+    # httpx has no network_backend option: rebuild its pool with ours, as it does.
+    transport._pool = httpcore.AsyncConnectionPool(
+        ssl_context=httpx.create_ssl_context(),
+        max_connections=limits.max_connections,
+        max_keepalive_connections=limits.max_keepalive_connections,
+        keepalive_expiry=limits.keepalive_expiry,
+        network_backend=PinnedNetworkBackend(),
+    )
+    return transport
+
+
+def check_url(url: str) -> CheckedUrl:
+    """Validate ``url`` and return the parts needed to connect safely."""
+    raw = (url or "").strip()
+    try:
+        parts = urlsplit(raw)
+        host = parts.hostname
+        explicit_port = parts.port
+    except ValueError as exc:
+        raise UnsafeUrlError("Not a valid URL") from exc
+    if parts.scheme.lower() not in ALLOWED_SCHEMES:
+        raise UnsafeUrlError("Only http and https URLs are allowed")
+    if not host:
+        raise UnsafeUrlError("URL has no host")
+    if parts.username is not None or parts.password is not None:
+        raise UnsafeUrlError("URLs with embedded credentials are not allowed")
+    scheme = parts.scheme.lower()
+    port = explicit_port or (443 if scheme == "https" else 80)
+
+    addresses = _checked_addresses(host, port)
     return CheckedUrl(url=raw, scheme=scheme, host=host, port=port, addresses=addresses)
 
 
@@ -203,11 +297,16 @@ def fetch_bytes(
     """
     current = url
     base_headers = dict(headers or {})
+    first_origin: tuple[str, str, int] | None = None
     with httpx.Client(timeout=timeout, follow_redirects=False) as client:
         for _hop in range(max_redirects + 1):
             checked = check_url(current)
             if not checked.addresses:
                 raise UnsafeUrlError("Could not resolve that host")
+            if first_origin is None:
+                first_origin = checked.origin
+            elif checked.origin != first_origin:
+                base_headers = without_credentials(base_headers)
             redirect_to: str | None = None
             last_error: httpx.HTTPError | None = None
             for ip in checked.addresses:

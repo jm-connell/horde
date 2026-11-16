@@ -32,7 +32,7 @@ from ..schemas import (
     VideoUpdate,
     WatchProgressUpdate,
 )
-from ..services import library, media_sidecars, trash, user_state
+from ..services import channel_retention, library, media_sidecars, trash, user_state
 from ..services import next_part as next_part_svc
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips
@@ -388,13 +388,18 @@ def bulk_delete_videos(
 def bulk_update_notes(
     payload: BulkVideoNotes,
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     note = payload.notes.strip() or None
     for vid_id in payload.video_ids:
         video = session.get(Video, vid_id)
         if video is None:
             continue
+        before = channel_retention.Exposure.of(video)
         video.notes = note
+        channel_retention.keep_if_exposed(
+            session, video, before, may_delete=user.can("delete_videos")
+        )
         session.add(video)
     session.commit()
     return Response(status_code=204)
@@ -465,6 +470,7 @@ def update_video(
         raise HTTPException(status_code=404, detail="Video not found")
 
     data = payload.model_dump(exclude_unset=True)
+    before = channel_retention.Exposure.of(video)
     manual = is_manual_import(video)
     path_fields_changed = "title" in data or "channel" in data
 
@@ -510,6 +516,9 @@ def update_video(
     # Auto-clear the review flag once the required fields are present.
     if video.needs_review and video.title and video.channel:
         video.needs_review = False
+    channel_retention.keep_if_exposed(
+        session, video, before, may_delete=user.can("delete_videos")
+    )
 
     if manual and path_fields_changed and video.title:
         ext = Path(video.file_path).suffix or ".mp4"

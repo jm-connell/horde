@@ -17,7 +17,7 @@ yt-dlp writes (into a [staging dir](#download-staging), then moved here) with th
 <channel>/%(upload_date>%Y|Unknown year)s/%(title).150B [%(id).64B].%(ext)s
 ```
 
-Free-text fields are truncated by **bytes** (Linux limits a name to 255 bytes, so emoji-heavy titles plus yt-dlp's `.f137.mp4.part` suffixes would otherwise fail), and yt-dlp's Windows filename rules are on because the library is often browsed over SMB (no trailing dots/spaces, no `: ? " < > | *`; reserved names like `CON` get a `_` prefix). Files downloaded before this layout keep their names.
+Free-text fields are truncated by **bytes** (Linux limits a name to 255 bytes, so emoji-heavy titles plus yt-dlp's `.f137.mp4.part` suffixes would otherwise fail), and yt-dlp's Windows filename rules are on because the library is often browsed over SMB (no trailing dots/spaces, no `: ? " < > | *`; reserved names like `CON` get a `_` prefix). Leading dots are dropped from channel and title names, so no video lands in a hidden folder or in Horde's own `.horde-staging` / `.horde-trash`. Files downloaded before this layout keep their names.
 
 Example:
 
@@ -51,7 +51,7 @@ Files dropped or uploaded for the [import / review](../guides/import-review.md) 
 downloads/.horde-staging/{job_id}/
 ```
 
-Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. If restoring a replaced file ever fails, its previous copy is kept under `.horde-staging/<job>/.displaced/` (mirroring its library path) and logged at ERROR; boot restores it when its place is empty and never deletes it. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed, and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
+Every library download (new, re-download, change quality, replace) runs in its own staging dir with the same folder layout. Only after the file is validated and post-processed is it moved into the library (a same-path replace is atomic and the old copy is restored if the database write fails), so cancelling or failing a re-download never damages the file a library row points at. Paused jobs keep their staging dir so partial files resume. If restoring a replaced file ever fails, its previous copy is kept under `.horde-staging/<job>/.displaced/` (mirroring its library path) and logged at ERROR; boot restores it when its place is empty and never deletes it. The scanner ignores it. At boot, staging dirs of finished or missing jobs are removed (a loose file there that a library video points at is kept), and stale `.part` / `.ytdl` / ffmpeg temp files older than `HORDE_TEMP_SWEEP_HOURS` (default 6) that nothing references are swept.
 
 ### Trash { #trash }
 

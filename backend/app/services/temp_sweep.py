@@ -64,6 +64,10 @@ def reap_staging_dirs() -> list[Path]:
         if child.name.isdigit() and int(child.name) in active:
             continue
         if child.is_dir() and not child.is_symlink():
+            with Session(get_engine()) as session:
+                if _referenced_under(session, f"{STAGING_DIR_NAME}/{child.name}/"):
+                    logger.warning("kept %s: a library video is inside it", child)
+                    continue
             # A crash between promote and commit can leave the previous copy of
             # a replaced file here: put it back if its place is empty.
             restored = restore_displaced(child)
@@ -74,6 +78,11 @@ def reap_staging_dirs() -> list[Path]:
         elif child.is_symlink():
             remove_staging_dir(child)
         else:
+            # Only job dirs belong here; a loose file a video points at is media.
+            with Session(get_engine()) as session:
+                if _referenced(session, f"{STAGING_DIR_NAME}/{child.name}"):
+                    logger.warning("kept %s: a library video points at it", child)
+                    continue
             safe_unlink(child)
         removed.append(child)
     return removed
@@ -82,6 +91,16 @@ def reap_staging_dirs() -> list[Path]:
 def _referenced(session: Session, rel: str) -> bool:
     row = session.exec(
         select(Video.id).where((Video.file_path == rel) | (Video.compat_path == rel))
+    ).first()
+    return row is not None
+
+
+def _referenced_under(session: Session, prefix: str) -> bool:
+    row = session.exec(
+        select(Video.id).where(
+            col(Video.file_path).startswith(prefix, autoescape=True)
+            | col(Video.compat_path).startswith(prefix, autoescape=True)
+        )
     ).first()
     return row is not None
 
