@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.context import get_paths
 from app.models import ChannelCatalog, ChannelCatalogVideo
 from app.services import parental, stream_preview, ytdlp_extract
 
@@ -411,3 +412,74 @@ def test_a_stream_of_a_channel_named_like_an_allowed_one_is_refused(
         params={"url": "https://www.youtube.com/watch?v=impostor001"},
     )
     assert resp.status_code == 403
+
+
+def test_playlists_show_only_allowed_videos(client, member_client, restricted, session):
+    """Review finding: a playlist's cover and counts came from every entry."""
+    kids, other = restricted
+    thumbs = get_paths().thumbnails
+    thumbs.mkdir(parents=True, exist_ok=True)
+    thumb = thumbs / "night.jpg"
+    thumb.write_bytes(b"\xff\xd8\xffNIGHT")
+    other.thumbnail_path = str(thumb)
+    session.add(other)
+    session.commit()
+    resp = client.post("/api/playlists", json={"name": "Mixed", "visibility": "public"})
+    assert resp.status_code == 200, resp.text
+    mixed = resp.json()["id"]
+    assert (
+        client.post(
+            f"/api/playlists/{mixed}/items/bulk", json={"video_ids": [other.id]}
+        ).status_code
+        == 204
+    )
+    assert client.get(f"/api/playlists/{mixed}/thumbnail").status_code == 200
+
+    (listed,) = [
+        p for p in member_client.get("/api/playlists").json() if p["id"] == mixed
+    ]
+    assert listed["item_count"] == 0
+    assert listed["downloaded_count"] == 0
+    assert listed["thumbnail_video_id"] is None
+    detail = member_client.get(f"/api/playlists/{mixed}").json()
+    assert (detail["videos"], detail["entries"]) == ([], [])
+    assert member_client.get(f"/api/playlists/{mixed}/thumbnail").status_code == 404
+    copies = member_client.get(f"/api/playlists/{mixed}/server-copies").json()
+    assert copies["removable_video_ids"] == []
+
+    # Nor can the member put another channel's video in a playlist of their own.
+    own = member_client.post("/api/playlists", json={"name": "Mine"}).json()["id"]
+    for path, body in (
+        (f"/api/playlists/{own}/items/bulk", {"video_ids": [other.id]}),
+        (f"/api/playlists/{own}/items", {"video_id": other.id}),
+    ):
+        resp = member_client.post(path, json=body)
+        assert resp.status_code == 404, (path, resp.text)
+    assert (
+        member_client.post(
+            f"/api/playlists/{own}/items", json={"video_id": kids.id}
+        ).status_code
+        == 200
+    )
+    assert member_client.get(f"/api/playlists/{own}").json()["videos"] != []
+
+
+def test_a_streamed_playlist_entry_must_be_of_an_allowed_channel(
+    member_client, restricted, monkeypatch
+):
+    monkeypatch.setattr(
+        stream_preview,
+        "extract_stream_preview_meta",
+        lambda url: {
+            "id": "streamnight",
+            "channel": "Night Frights",
+            "channel_url": NIGHT_URL,
+        },
+    )
+    own = member_client.post("/api/playlists", json={"name": "Mine"}).json()["id"]
+    resp = member_client.post(
+        f"/api/playlists/{own}/items",
+        json={"url": "https://www.youtube.com/watch?v=streamnight"},
+    )
+    assert resp.status_code == 403
+    assert member_client.get(f"/api/playlists/{own}").json()["entries"] == []
