@@ -26,4 +26,4 @@ Two limits shape any answer. YouTube has no public recommendation API, and every
 - The "up next" source relies on yt-dlp internals (`_extract_response`, `_extract_lockup_view_model`); a yt-dlp change that renames them makes that source fail quietly until fixed, and the unit test that feeds a recorded card shape to the real parser catches it on the yt-dlp bump.
 - AI spend: the chat model writes a person's searches only when they have the `use_ai` permission (otherwise their searches come from keywords). Embedding found videos is server-side work like embedding catalogs, booked to the cost ledger as `discovery`.
 - `GET /api/discover/feed` (and the For you shelf) record what they showed (`rec_impressions`) and mark the person active for the gatherer. Nothing is deleted or downloaded by a GET.
-- Tuning constants live at the top of `discovery/feed.py`, `interests.py` and `gather.py`; changing shares or floors changes every user's feed.
+- Tuning constants live at the top of `discovery/scoring.py` (what each kind of pick is scored on, and the floors), `mix.py`, `interests.py` and `gather.py`; changing them changes every user's feed.
