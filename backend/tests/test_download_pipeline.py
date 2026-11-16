@@ -33,6 +33,7 @@ from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
+    ERROR_KIND_POSTPROCESS,
     ERROR_KIND_UNKNOWN,
 )
 
@@ -215,6 +216,44 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     assert progress.progress_store[job_id]["status"] == "error"
     assert _videos(init_db) == []
     assert not _staging(init_db, job_id).exists()
+
+
+@pytest.mark.parametrize("has_ffmpeg", [False, True])
+def test_unmerged_streams_without_ffmpeg_say_ffmpeg_is_missing(
+    init_db, fake, monkeypatch, has_ffmpeg
+):
+    # Without ffmpeg yt-dlp leaves the video and audio streams apart and
+    # reports no error, so the attempts end with no file at all.
+    fake.merge = False
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: has_ffmpeg)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.error
+    if has_ffmpeg:
+        assert job.error_kind == ERROR_KIND_UNKNOWN
+        assert "Download produced no file" in job.error
+    else:
+        assert job.error_kind == ERROR_KIND_POSTPROCESS
+        assert "ffmpeg is not installed" in job.error
+        assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_POSTPROCESS
+    assert _videos(init_db) == []
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_yt_dlp_is_given_the_ffmpeg_horde_found(init_db, fake, monkeypatch):
+    # yt-dlp only searches PATH, and caches a failed lookup per path for the
+    # life of the process: an explicit path covers FFMPEG_BIN and a later install.
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: True)
+    monkeypatch.setattr(runner, "ffmpeg_bin", lambda: "/opt/ffmpeg/bin/ffmpeg")
+    run_job_inline(_add_job(init_db))
+    assert fake.downloads[0]["opts"]["ffmpeg_location"] == "/opt/ffmpeg/bin/ffmpeg"
+
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: False)
+    fake.downloads.clear()
+    run_job_inline(_add_job(init_db))
+    assert "ffmpeg_location" not in fake.downloads[0]["opts"]
 
 
 def test_postprocessor_error_after_the_merge_still_completes(init_db, fake):

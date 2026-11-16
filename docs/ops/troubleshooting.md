@@ -23,11 +23,15 @@
 | `members` | Members-only |
 | `rate_limit` | HTTP 429 / temporary block. Caption (timedtext) 429s are retried automatically with backoff; the video file is still kept. |
 | `unavailable` | Removed, geo, no formats |
-| `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
+| `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed, or ffmpeg is not installed (see [below](#ffmpeg-not-installed)) |
 | `disk_full` | The disk ran out of space while writing. The queue holds for a while instead of failing every following job; free space, then retry. See [Disk limits](../guides/downloads.md#disk-limits) |
 | `network` | The server could not reach the site at all: no internet, DNS, a proxy or firewall, a VPN that blocks the container. The link preview answers `502`. |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
+
+### ffmpeg is not installed { #ffmpeg-not-installed }
+
+A download that fails with "ffmpeg is not installed on the server, so the video and audio streams can't be merged" ran on a machine without ffmpeg. YouTube serves most qualities as separate video and audio streams, and yt-dlp needs ffmpeg to join them. The Docker image ships ffmpeg; this comes up in [local development](../getting-started/local-dev.md) or a container that lacks it. Install ffmpeg on the server's `PATH` (for example `sudo apt install ffmpeg` or `sudo dnf install ffmpeg-free`) and retry the download.
 
 ## Restart recovery
 

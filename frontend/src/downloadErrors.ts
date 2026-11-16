@@ -37,7 +37,7 @@ const HINTS: Record<string, string> = {
   rate_limit: "Wait and retry; avoid bursty browsing while downloads run.",
   unavailable: "The source may have removed or geo-blocked this video.",
   postprocess:
-    "The file may still be salvageable — retry or check disk permissions.",
+    "Check that ffmpeg is installed on the server and the disk is writable, then retry.",
   disk_full:
     "Free up space or raise the library limit (Settings → System), then retry.",
   network:
