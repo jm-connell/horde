@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
-import { ExternalIcon, HeartIcon, RefreshIcon } from "../../components/icons";
+import { HeartIcon, RefreshIcon } from "../../components/icons";
 import LinkifiedText from "../../components/LinkifiedText";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { useAuth } from "../../context/AuthContext";
@@ -320,16 +320,6 @@ export default function CommentsPanel({
                 className={refresh.isPending ? "motion-safe:animate-spin" : ""}
               />
             </button>
-          )}
-          {youtubeId && (
-            <a
-              href={safeHref(youtubeUrl(youtubeId))}
-              target="_blank"
-              rel="noreferrer"
-              className="ui-interactive inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
-            >
-              On YouTube <ExternalIcon />
-            </a>
           )}
         </div>
       </div>

@@ -40,6 +40,8 @@ test("saved comments show under the video, creator's note first, replies on requ
   // All ten saved threads fit the first page of the box.
   const threads = threadsOf(panel);
   await expect(threads).toHaveCount(10);
+  // Each comment's date opens it on YouTube; the panel has no link of its own.
+  await expect(panel.getByRole("link", { name: /On YouTube/ })).toHaveCount(0);
   const pinned = threads.first();
   await expect(pinned).toContainText("Pinned");
   await expect(pinned).toContainText("Thanks for watching!");
