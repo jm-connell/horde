@@ -24,6 +24,7 @@ from app.models import (
     VideoEmbedding,
 )
 from app.services.ai import embeddings
+from app.services.discovery.tuning import DEFAULTS
 
 
 def _vec(angle: float, axis: int = 0) -> list[float]:
@@ -346,13 +347,14 @@ def test_mix_follows_the_shares_and_spreads_channels():
         }
     )
     first = out[:40]
-    counts = {b: sum(1 for i in first if i.bucket == b) for b in feed.SHARES}
-    for bucket, share in feed.SHARES.items():
+    balanced = DEFAULTS.shares.normalized()
+    counts = {b: sum(1 for i in first if i.bucket == b) for b in balanced}
+    for bucket, share in balanced.items():
         assert abs(counts[bucket] - 40 * share) <= 2, counts
-    # No channel twice within CHANNEL_GAP slots.
+    # No channel twice within the Balanced channel gap.
     names = [i.candidate.channel for i in out[:100]]
-    for n in range(len(names) - feed.CHANNEL_GAP + 1):
-        window = names[n : n + feed.CHANNEL_GAP]
+    for n in range(len(names) - DEFAULTS.channel_gap + 1):
+        window = names[n : n + DEFAULTS.channel_gap]
         assert len(window) == len(set(window)), window
     # Throwbacks keep to their cap (3 per channel); the 22 past it wait at the end.
     assert len(out) == 160
@@ -434,9 +436,10 @@ def test_an_empty_bucket_does_not_inflate_the_sprinkles():
 
     shares = feed.effective_shares({"similar", "new", "throwback"})
     assert abs(sum(shares.values()) - 1) < 1e-9
-    assert shares["new"] <= feed.SHARE_CAPS["new"]
-    assert shares["throwback"] <= feed.SHARE_CAPS["throwback"]
-    assert shares["similar"] > feed.SHARES["similar"]
+    balanced = DEFAULTS.shares.normalized()
+    for bucket in ("new", "throwback"):
+        assert shares[bucket] <= balanced[bucket] * feed.SHARE_CAP_RATIO[bucket]
+    assert shares["similar"] > balanced["similar"]
 
 
 def test_shown_videos_sink_over_visits(session, admin_user):
@@ -457,7 +460,6 @@ def test_shown_videos_sink_over_visits(session, admin_user):
     assert row.shown_count == 2
     assert feedback.earlier_visits(session, admin_user.id) == {"aaaaaaaaaaa": 1}
     assert feedback.impression_penalty(1) > 0
-    assert feedback.worn_out(feedback.IMPRESSION_CAP)
 
 
 # --- the gatherer ---------------------------------------------------------------

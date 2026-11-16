@@ -11,7 +11,7 @@ Every unwatched candidate (``candidates``) lands in exactly one bucket:
   channel they used to watch and stopped.
 
 Each bucket is sorted by its own score, and the feed takes from the buckets in
-turn by ``SHARES`` (smooth weighted round robin), spreading channels out. A
+turn by the user's shares (smooth weighted round robin), spreading channels out. A
 small seeded jitter, larger in ``new``, keeps the order from freezing and lets
 a less certain new channel through now and then; ``seed`` changes on refresh.
 Videos shown on many visits without being watched sink, then drop to the end.
@@ -76,16 +76,13 @@ from .tuning import for_user as load_tuning
 
 logger = logging.getLogger(__name__)
 
-#: The Balanced shares (a user's own come from their ``tuning.Tuning``).
-SHARES = DEFAULTS.shares.normalized()
 #: A channel this strong in the recent history counts like a followed one.
 WATCHED_CHANNEL_LEVEL = 0.25
 #: A channel this strong long ago, and absent lately, is a throwback channel.
 DORMANT_CHANNEL_LEVEL = 0.3
-#: The same channel appears at most once in any this many slots (by default)...
-CHANNEL_GAP = DEFAULTS.channel_gap
-#: ...and at most this often in the whole feed in these buckets (the channel
-#: suggestions show more of a new channel; ``new`` is the user's own setting).
+#: A channel appears at most this often in the whole feed in these buckets (the
+#: channel suggestions show more of a new channel; ``new`` is the user's own
+#: setting, and how far apart a channel's picks are is ``Tuning.channel_gap``).
 CHANNEL_CAPS = {
     "new": DEFAULTS.new_channel_cap,
     "throwback": 3,
@@ -97,8 +94,6 @@ OVERFILL = 1.3
 #: How far past their asked-for share new channels, throwbacks and rewatches
 #: may grow when another bucket is empty (the rest goes to the familiar ones).
 SHARE_CAP_RATIO = {"new": 1.4, "throwback": 1.3, "rewatch": 1.5, "interest": 1.3}
-#: The Balanced caps, for reference.
-SHARE_CAPS = {k: SHARES[k] * v for k, v in SHARE_CAP_RATIO.items() if k in SHARES}
 #: See ``mix``: how strongly an under-served interest is pulled forward, and the
 #: least share any recent interest is owed.
 TOPIC_BONUS = 0.06
