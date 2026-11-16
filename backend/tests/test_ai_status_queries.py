@@ -11,6 +11,7 @@ from app.models import (
     VideoAiMeta,
     VideoEmbedding,
 )
+from app.services.ai import worker as ai_worker
 from app.services.ai.provider import resolve_embed_model
 
 
@@ -71,3 +72,16 @@ def test_ai_jobs_has_constant_query_count(client, session, add_video, init_db):
     assert len(rows) == 22
     assert rows[0]["title"]
     assert len(big) == len(small), "\n".join(big)
+
+
+def test_ai_process_failure_does_not_echo_the_error(client, monkeypatch):
+    # A provider error can quote its URL (and a key in it); the log keeps it.
+    def boom():
+        raise RuntimeError("http://user:secret@ollama.lan:11434/api/embed refused")
+
+    monkeypatch.setattr(ai_worker, "enqueue_missing_embeds", boom)
+    r = client.post("/api/ai/process", json={"action": "embeds"})
+    assert r.status_code == 500
+    body = r.json()
+    assert body["code"] == "ai_enqueue_failed"
+    assert "secret" not in r.text and "ollama.lan" not in r.text

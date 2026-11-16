@@ -14,6 +14,12 @@ All notable changes to Horde are documented here. The format follows
   `FFMPEG_BIN` (or installed after Horde started) is now used to merge
   downloads too, without a restart.
 
+### Security
+
+- A failed *Process library* request in Settings → AI no longer sends
+  the raw error to the browser, which could quote the AI provider's URL.
+  The error is logged on the server instead.
+
 ## [1.4.0] - 2026-11-16
 
 ### Added
