@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
 import { ExternalIcon, HeartIcon, RefreshIcon } from "../../components/icons";
@@ -18,7 +18,7 @@ import {
   safeHref,
 } from "../../utils";
 
-/** Threads shown at first, and how many more each "Show more" adds. */
+/** Threads shown at first, and how many more each scroll to the end adds. */
 const FIRST = 5;
 const STEP = 20;
 /** The first read from YouTube when nothing is saved (top comments). */
@@ -171,7 +171,7 @@ function Comment({
 /**
  * Comments under the video: the ones saved with a library video, then more
  * read from YouTube on request ("Show more" past the saved ones). A streamed
- * video has none saved, so its comments load when asked for.
+ * video has none saved, so its top comments load from YouTube right away.
  */
 export default function CommentsPanel({
   videoId,
@@ -186,8 +186,17 @@ export default function CommentsPanel({
   const saved = useVideoComments(videoId);
   const youtubeId =
     videoId !== null ? (saved.data?.youtube_id ?? null) : streamYoutubeId;
+  // With nothing saved to show (a streamed video, or a library video whose
+  // comments are not saved yet), the top comments are read from YouTube at once.
+  const autoLive =
+    youtubeId !== null &&
+    (videoId === null ||
+      (saved.data !== undefined &&
+        (saved.data.items ?? []).length === 0 &&
+        (saved.data.status === "pending" || saved.data.status === "failed")));
   // The steps read from YouTube so far (e.g. [300, 1000]); the last is current.
-  const [limits, setLimits] = useState<number[]>([]);
+  const [asked, setLimits] = useState<number[]>([]);
+  const limits = asked.length === 0 && autoLive ? [FIRST_LIVE_LIMIT] : asked;
   const liveSteps = useLiveCommentSteps(youtubeId, limits);
   const current = liveSteps[liveSteps.length - 1] ?? null;
   const [shown, setShown] = useState(FIRST);
@@ -243,24 +252,27 @@ export default function CommentsPanel({
       refused.status === "disabled"
         ? "Comments are turned off for this video."
         : UNAVAILABLE_NOTE;
-  } else if (saved.data && latestOk === null) {
+  } else if (saved.data && latestOk === null && !loadingLive) {
     note = savedNote(saved.data, items.length === 0);
   }
   // Fetching and saving again (Edit details): the saved list replaces what a
-  // live read showed, so "Show more" starts again from the saved ones.
+  // live read showed, so scrolling for more starts again from the saved ones.
   const canRefresh =
     videoId !== null && youtubeId !== null && can("edit_metadata");
   const refreshNow = () =>
     refresh.mutate(undefined, { onSuccess: () => setLimits([]) });
   const savedAt = saved.data?.fetched_at ?? null;
-  // Nothing saved (yet): offer to read them from YouTube now.
-  const canLoadNow =
-    youtubeId !== null &&
-    limits.length === 0 &&
-    items.length === 0 &&
-    (videoId === null ||
-      saved.data?.status === "pending" ||
-      saved.data?.status === "failed");
+  // Scrolling to the end shows more of the list, then reads more from YouTube.
+  const canShowMore = shown < items.length;
+  const canReadMore = items.length > 0 && nextLimit !== null;
+  const more = () => {
+    if (canShowMore) {
+      setShown((n) => n + STEP);
+    } else if (canReadMore) {
+      setLimits([...limits, nextLimit]);
+      setShown((n) => n + STEP);
+    }
+  };
 
   return (
     <section
@@ -339,33 +351,20 @@ export default function CommentsPanel({
         <LoadingIndicator className="py-3" />
       )}
 
-      <div className="mt-3 flex flex-wrap gap-2 empty:hidden">
-        {canLoadNow && (
-          <button
-            type="button"
-            className={button("secondary", "xs")}
-            disabled={refresh.isPending}
-            // With Edit details they are saved, not just shown.
-            onClick={() =>
-              canRefresh ? refreshNow() : setLimits([FIRST_LIVE_LIMIT])
-            }
-          >
-            {videoId === null ? "Load comments" : "Load them now from YouTube"}
-          </button>
+      {(canShowMore || canReadMore) &&
+        !loadingLive &&
+        !liveFailed &&
+        !refresh.isPending && (
+          <MoreOnScroll
+            onMore={more}
+            armKey={`${shown}:${items.length}:${limits.length}`}
+          />
         )}
-        {shown < items.length ? (
-          <button
-            type="button"
-            className={button("secondary", "xs")}
-            onClick={() => setShown((n) => n + STEP)}
-          >
-            Show more comments
-          </button>
-        ) : loadingLive && items.length > 0 ? (
-          <button type="button" className={button("secondary", "xs")} disabled>
-            Loading from YouTube…
-          </button>
-        ) : liveFailed && current ? (
+      {loadingLive && items.length > 0 && (
+        <LoadingIndicator label="Loading more comments" className="py-3" />
+      )}
+      {liveFailed && current && items.length > 0 && (
+        <div className="mt-3">
           <button
             type="button"
             className={button("secondary", "xs")}
@@ -373,24 +372,40 @@ export default function CommentsPanel({
           >
             Try again
           </button>
-        ) : (
-          items.length > 0 &&
-          nextLimit !== null && (
-            <button
-              type="button"
-              className={button("secondary", "xs")}
-              // A refresh replaces the list this would add to.
-              disabled={refresh.isPending}
-              onClick={() => {
-                setLimits((steps) => [...steps, nextLimit]);
-                setShown((n) => n + STEP);
-              }}
-            >
-              Show more comments
-            </button>
-          )
-        )}
-      </div>
+        </div>
+      )}
     </section>
   );
+}
+
+/**
+ * Calls `onMore` when the end of the list scrolls into view (or is in view
+ * already). `armKey` changes after each step, so a list still too short to
+ * fill the screen keeps loading.
+ */
+function MoreOnScroll({
+  onMore,
+  armKey,
+}: {
+  onMore: () => void;
+  armKey: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onMoreRef = useRef(onMore);
+  useEffect(() => {
+    onMoreRef.current = onMore;
+  });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) onMoreRef.current();
+      },
+      { rootMargin: "200px" }
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [armKey]);
+  return <div ref={ref} data-horde="comments-more" aria-hidden="true" />;
 }

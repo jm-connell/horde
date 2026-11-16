@@ -519,7 +519,7 @@ export default function DiscoverHome({
                   hideLive(item.stream.channel_url, channel.name || null)
               : undefined
           }
-          className="absolute right-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
+          className="absolute left-2 top-2 z-10 opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover/rec:opacity-100 [@media(hover:none)]:opacity-100"
         />
       </div>
     );

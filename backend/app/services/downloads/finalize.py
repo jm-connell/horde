@@ -351,6 +351,18 @@ def _queue_follow_up_work(
         logger.warning(
             "could not move stream AI results onto video %s", video_id, exc_info=True
         )
+    # So does the time spent streaming it (History stats).
+    try:
+        from .. import watch_stats
+
+        with Session(get_engine()) as session:
+            video = session.get(Video, video_id)
+            if video is not None:
+                watch_stats.adopt_stream_time(session, video)
+    except Exception:
+        logger.warning(
+            "could not move stream watch time onto video %s", video_id, exc_info=True
+        )
     # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
     try:
         from ..ai import enqueue_for_video

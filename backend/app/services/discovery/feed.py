@@ -119,6 +119,9 @@ PAST_LIVE = frozenset({"was_live", "post_live"})
 MIX_STATS_TOP = 60
 #: Seeds read from the recent history (by weight).
 MAX_SEEDS = 40
+#: The top of the feed is for what the user watches now: no throwback is
+#: placed in its first ``THROWBACK_HOLD`` slots (while anything else can be).
+THROWBACK_HOLD = 12
 
 
 @dataclass
@@ -1079,6 +1082,9 @@ def mix(
     of the history (``topic_shares``, at least ``MIN_TOPIC_SHARE``) gets
     ``TOPIC_BONUS`` per missing slot, so a smaller interest still shows up
     between the big ones.
+
+    Throwbacks sit out the first ``THROWBACK_HOLD`` slots and earn no credit
+    meanwhile, so they do not bunch up right after.
     """
     gap = tuning.channel_gap
     caps = {**CHANNEL_CAPS, "new": tuning.new_channel_cap}
@@ -1134,10 +1140,13 @@ def mix(
 
     share: dict[str, float] = {}
     while queues:
-        share = effective_shares(set(queues), tuning, interest_share)
-        for name in queues:
+        active = set(queues)
+        if len(out) < THROWBACK_HOLD and len(active) > 1:
+            active.discard("throwback")
+        share = effective_shares(active, tuning, interest_share)
+        for name in active:
             credit[name] += share[name]
-        order = sorted(queues, key=lambda n: -credit[n])
+        order = sorted(active, key=lambda n: -credit[n])
         picked = choose(order, strict=True) or choose(order, strict=False)
         if picked is None:
             # Only capped picks at the heads: set every capped pick aside, go again.

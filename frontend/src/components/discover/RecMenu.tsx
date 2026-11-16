@@ -64,7 +64,7 @@ export default function RecMenu({
       <FlipMenuPanel
         open={open}
         flip={flip}
-        align="right"
+        align="left"
         className="w-60"
         menu={{
           label: "Tune recommendations",
