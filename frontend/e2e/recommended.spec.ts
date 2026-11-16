@@ -158,6 +158,25 @@ test("the home tab follows the account to another browser", async ({
   }
 });
 
+test("the card menu and + Queue do not cover each other", async ({ page }) => {
+  await openRecommended(page);
+  const card = page.locator(`[data-rec-key="discover001"]`);
+  await card.hover();
+  const menu = card.getByRole("button", { name: "Tune recommendations" });
+  const queue = card.getByRole("button", { name: "+ Queue" });
+  await expect(menu).toBeVisible();
+  await expect(queue).toBeVisible();
+  const a = await menu.boundingBox();
+  const b = await queue.boundingBox();
+  if (!a || !b) throw new Error("both controls should be laid out");
+  const apart =
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y;
+  expect(apart).toBe(true);
+});
+
 test("not interested removes a video, and undo brings it back", async ({
   page,
 }) => {
