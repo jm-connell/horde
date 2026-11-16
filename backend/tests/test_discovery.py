@@ -1060,9 +1060,7 @@ def test_a_busy_history_keeps_its_old_channels(
     session.commit()
 
     # The taste read reaches past its newest 600 to the older watches...
-    read = history.watches(
-        session, admin_user.id, older_than=now - timedelta(days=60)
-    )
+    read = history.watches(session, admin_user.id, older_than=now - timedelta(days=60))
     assert sum(1 for w in read if w.channel == "OldFav") == 6
     assert len(history.watches(session, admin_user.id)) == history.HISTORY_LIMIT
     # ...and the feed still knows the channel.
@@ -1125,11 +1123,11 @@ def test_a_downloaded_video_is_not_a_new_channel(
     for n in range(3):
         video = add_video(channel="Shelf", title=f"Shelf {n}")
         _embed(session, video, _vec(0.03 + 0.01 * n))
-    _discovered(session, admin_user, "strangervid", "Close to Lab", "Stranger", _vec(0.03))
+    _discovered(
+        session, admin_user, "strangervid", "Close to Lab", "Stranger", _vec(0.03)
+    )
 
-    by_title = {
-        (i.get("video") or i["stream"])["title"]: i for i in _items(client)
-    }
+    by_title = {(i.get("video") or i["stream"])["title"]: i for i in _items(client)}
     for n in range(3):
         pick = by_title[f"Shelf {n}"]
         assert pick["why"]["bucket"] == "similar"
