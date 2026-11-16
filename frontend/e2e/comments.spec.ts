@@ -161,7 +161,7 @@ test("more comments are read from YouTube, and a failed read keeps what is shown
   ).toHaveCount(0);
 });
 
-test("a streamed video loads its comments on request and keeps replies on the next step", async ({
+test("a streamed video loads its comments right away and keeps replies on the next step", async ({
   page,
 }) => {
   const url = "https://www.youtube.com/watch?v=strm0000001";
@@ -217,7 +217,10 @@ test("a streamed video loads its comments on request and keeps replies on the ne
 
   await page.goto(`/watch?url=${encodeURIComponent(url)}`);
   const panel = page.getByRole("region", { name: /Comments/ });
-  await panel.getByRole("button", { name: "Load comments" }).click();
+  // They load on their own: nothing to click first.
+  await expect(
+    panel.getByRole("button", { name: "Load comments" })
+  ).toHaveCount(0);
   const threads = panel.locator(":scope > ol > li");
   await expect(threads).toHaveCount(1);
   await panel.getByRole("button", { name: "Show more comments" }).click();

@@ -171,7 +171,7 @@ function Comment({
 /**
  * Comments under the video: the ones saved with a library video, then more
  * read from YouTube on request ("Show more" past the saved ones). A streamed
- * video has none saved, so its comments load when asked for.
+ * video has none saved, so its top comments load from YouTube right away.
  */
 export default function CommentsPanel({
   videoId,
@@ -187,7 +187,10 @@ export default function CommentsPanel({
   const youtubeId =
     videoId !== null ? (saved.data?.youtube_id ?? null) : streamYoutubeId;
   // The steps read from YouTube so far (e.g. [300, 1000]); the last is current.
-  const [limits, setLimits] = useState<number[]>([]);
+  // A streamed video starts on the first step (the panel is keyed per video).
+  const [limits, setLimits] = useState<number[]>(() =>
+    videoId === null && streamYoutubeId ? [FIRST_LIVE_LIMIT] : []
+  );
   const liveSteps = useLiveCommentSteps(youtubeId, limits);
   const current = liveSteps[liveSteps.length - 1] ?? null;
   const [shown, setShown] = useState(FIRST);
@@ -258,9 +261,7 @@ export default function CommentsPanel({
     youtubeId !== null &&
     limits.length === 0 &&
     items.length === 0 &&
-    (videoId === null ||
-      saved.data?.status === "pending" ||
-      saved.data?.status === "failed");
+    (saved.data?.status === "pending" || saved.data?.status === "failed");
 
   return (
     <section
@@ -350,7 +351,7 @@ export default function CommentsPanel({
               canRefresh ? refreshNow() : setLimits([FIRST_LIVE_LIMIT])
             }
           >
-            {videoId === null ? "Load comments" : "Load them now from YouTube"}
+            Load them now from YouTube
           </button>
         )}
         {shown < items.length ? (
