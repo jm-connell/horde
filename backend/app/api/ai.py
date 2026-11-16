@@ -12,6 +12,7 @@ from sqlmodel import Session
 
 from ..auth import StreamAuthGuard, current_user, require_admin, require_permission
 from ..context import get_session
+from ..errors import CodedHTTPException
 from ..openapi_responses import EVENT_STREAM, RAW
 from ..response_schemas import (
     AiApplyWorkloadResult,
@@ -426,8 +427,10 @@ def ai_process_library(payload: AiProcessRequest = AiProcessRequest()):
         else:
             result = worker.enqueue_library_backlog(force=True)
     except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=str(exc) or "Enqueue failed"
+        # Not str(exc): a provider error can quote its URL.
+        logger.warning("AI process %s failed", action, exc_info=True)
+        raise CodedHTTPException(
+            500, "Could not queue AI work; see the server log", "ai_enqueue_failed"
         ) from exc
     return AiProcessResult(
         enqueued=result["enqueued"],
