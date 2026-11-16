@@ -112,3 +112,52 @@ def test_partly_filled_videos_are_not_retried_on_every_load(feed, monkeypatch):
     _join_enrichment()
 
     assert len(calls) == len(IDS)
+
+
+def test_loads_of_one_channel_share_one_named_fill(client, monkeypatch):
+    from app.services import activity
+
+    pages = iter([IDS, ["ccccccccccc", "ddddddddddd"]])
+
+    def page(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        out = _page()
+        out["entries"] = [
+            {"id": i, "url": f"https://www.youtube.com/watch?v={i}", "title": i}
+            for i in next(pages)
+        ]
+        return out
+
+    started = threading.Event()
+    release = threading.Event()
+    looked_up: list[str] = []
+
+    def slow_preview(url: str, *, priority: int = -1) -> dict[str, Any]:
+        looked_up.append(url[-11:])
+        started.set()
+        release.wait(10)
+        return {"view_count": 5, "published_at": "2026-01-02T00:00:00+00:00"}
+
+    monkeypatch.setattr(ytdlp_extract, "fetch_channel_feed", page)
+    monkeypatch.setattr(ytdlp_extract, "extract_preview", slow_preview)
+    monkeypatch.setattr(return_youtube_dislike, "fetch_votes", lambda yt_id: None)
+
+    def fills() -> list[dict[str, Any]]:
+        snap = activity.snapshot()
+        return [
+            t for t in snap["running"] + snap["recent"] if t["kind"] == "feed_enrich"
+        ]
+
+    before = {t["id"] for t in fills()}
+    params = {"url": CHANNEL, "tab": "streams"}
+    assert client.get("/api/channels/feed", params=params).status_code == 200
+    assert started.wait(10)
+    # The next page arrives while the first is still being filled.
+    assert client.get("/api/channels/feed", params=params).status_code == 200
+    release.set()
+    _join_enrichment()
+
+    assert sorted(looked_up) == sorted([*IDS, "ccccccccccc", "ddddddddddd"])
+    new = [t for t in fills() if t["id"] not in before]
+    assert len(new) == 1, new
+    assert new[0]["label"] == "Filling in views and dates for Alpha"
+    assert (new[0]["done"], new[0]["total"]) == (8, 8)

@@ -977,6 +977,7 @@ def channel_feed(
             [(e.id, e.url) for e in missing_meta if e.id],
             [e.id for e in missing_votes if e.id],
             channel_url,
+            channel_name or data.get("channel"),
         )
 
     progress = channel_catalog.catalog_progress(session, channel_url)
