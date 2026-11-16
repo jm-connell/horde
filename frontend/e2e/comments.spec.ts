@@ -57,6 +57,23 @@ test("saved comments show under the video, creator's note first, replies on requ
   await expect(panel.getByRole("button", { name: /Show more/ })).toHaveCount(0);
 });
 
+test("a timestamp in a comment scrolls back up to the player", async ({
+  page,
+}) => {
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const stamp = panel.getByRole("button", { name: "0:42" });
+  await stamp.scrollIntoViewIfNeeded();
+  // Scroll on past the comments, so the page is well away from the player.
+  await page.evaluate(() => window.scrollBy(0, 200));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await stamp.click();
+  // Soon: the page later shrinks as it settles, which also lands at the top.
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 3_000 })
+    .toBe(0);
+});
+
 test("a library video with nothing saved yet loads its top comments at once", async ({
   page,
 }) => {

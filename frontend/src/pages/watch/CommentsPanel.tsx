@@ -27,6 +27,16 @@ const FIRST_LIVE_LIMIT = 100;
 const LONG_CHARS = 500;
 const LONG_LINES = 8;
 
+/** Back up to the player a comment's timestamp just seeked. */
+function scrollToPlayer() {
+  window.scrollTo({
+    top: 0,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+  });
+}
+
 function youtubeUrl(youtubeId: string, commentId?: string): string {
   const base = `https://www.youtube.com/watch?v=${encodeURIComponent(youtubeId)}`;
   return commentId ? `${base}&lc=${encodeURIComponent(commentId)}` : base;
@@ -116,7 +126,7 @@ function Comment({
           long && !expanded ? "line-clamp-6" : ""
         }`}
       >
-        <LinkifiedText text={comment.text} />
+        <LinkifiedText text={comment.text} onTimestamp={scrollToPlayer} />
       </p>
       {(long || likes > 0 || comment.is_hearted || replies.length > 0) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
