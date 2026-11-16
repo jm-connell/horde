@@ -157,7 +157,11 @@ def probe_frame_rate(path: Path) -> float | None:
 
 
 def _run_ffmpeg_tracked(
-    cmd: list[str], *, timeout: float, cancel_event: threading.Event | None
+    cmd: list[str],
+    *,
+    timeout: float,
+    cancel_event: threading.Event | None,
+    low_priority: bool = False,
 ) -> bool:
     """Run a long ffmpeg through ``run_ffmpeg`` (own session, registered for shutdown).
 
@@ -165,7 +169,12 @@ def _run_ffmpeg_tracked(
     in the debug log.
     """
     try:
-        run_ffmpeg(cmd, timeout=timeout, cancel_event=cancel_event)
+        run_ffmpeg(
+            cmd,
+            timeout=timeout,
+            cancel_event=cancel_event,
+            low_priority=low_priority,
+        )
     except FfmpegCancelled:
         logger.debug("ffmpeg cancelled: %s", cmd[-1])
         return False
@@ -182,8 +191,13 @@ def grab_frame(
     *,
     scale_width: int = 640,
     cancel_event: threading.Event | None = None,
+    low_priority: bool = False,
 ) -> bool:
-    """Extract a single frame as a JPEG thumbnail. Returns True on success."""
+    """Extract a single frame as a JPEG thumbnail. Returns True on success.
+
+    ``low_priority`` for background grabs (scanner, sprites), so they yield CPU
+    to playback; leave it off when a user is waiting on the frame.
+    """
     try:
         output_path.parent.mkdir(parents=True, exist_ok=True)
     except OSError:
@@ -205,6 +219,7 @@ def grab_frame(
         ],
         timeout=60,
         cancel_event=cancel_event,
+        low_priority=low_priority,
     )
     return ok and output_path.exists()
 
@@ -364,6 +379,7 @@ def _sprite_via_ffmpeg_tile(
         ],
         timeout=600,
         cancel_event=cancel_event,
+        low_priority=True,
     )
     return ok and image_path.is_file()
 
@@ -402,6 +418,7 @@ def _sprite_via_frame_montage(
                 at_seconds=at,
                 scale_width=SPRITE_TILE_WIDTH,
                 cancel_event=cancel_event,
+                low_priority=True,
             ):
                 continue
             frames.append(dest)
