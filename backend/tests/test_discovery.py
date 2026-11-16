@@ -362,6 +362,40 @@ def test_mix_follows_the_shares_and_spreads_channels():
     assert {i.bucket for i in overflow} == {"throwback"}
 
 
+def test_throwbacks_stay_out_of_the_top_of_the_feed():
+    from app.services.discovery import feed
+    from app.services.discovery.candidates import Candidate
+
+    def items(bucket, n):
+        return [
+            feed.FeedItem(
+                Candidate(
+                    key=f"{bucket}{i}",
+                    pool="discovery",
+                    title="",
+                    channel=f"{bucket}{i}",
+                    channel_url="",
+                ),
+                bucket,
+                # Throwbacks score best, so only the hold keeps them down.
+                (2.0 if bucket == "throwback" else 1.0) - i * 0.01,
+                feed.Reason("x", "x"),
+            )
+            for i in range(n)
+        ]
+
+    out = feed.mix(
+        {b: items(b, 30) for b in ("subscriptions", "similar", "new", "throwback")}
+    )
+    top = out[: feed.THROWBACK_HOLD]
+    assert all(i.bucket != "throwback" for i in top)
+    # They come in after the hold, spread out rather than in one run.
+    after = [i.bucket for i in out[feed.THROWBACK_HOLD : feed.THROWBACK_HOLD + 20]]
+    assert 1 <= after.count("throwback") <= 5, after
+    # With nothing else to show, throwbacks still fill the feed.
+    assert len(feed.mix({"throwback": items("throwback", 5)})) == 5
+
+
 def test_an_empty_bucket_does_not_inflate_the_sprinkles():
     from app.services.discovery import feed
 
