@@ -45,7 +45,13 @@ import {
   miniPlayerHostInsets,
   type MiniPos,
 } from "../utils/miniPlayerLayout";
-import type { NextPart, Storyboard, SubtitleTrack, Video } from "../types";
+import type {
+  ChannelFeedEntry,
+  NextPart,
+  Storyboard,
+  SubtitleTrack,
+  Video,
+} from "../types";
 import {
   isQueuedStream,
   type QueueEntry,
@@ -630,7 +636,11 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // A related library video, or the channel's next part (maybe not downloaded).
   const [upNext, setUpNext] = useState<QueueEntry | null>(null);
   const [upNextSeconds, setUpNextSeconds] = useState<number | null>(null);
+  /** Under the up-next title ("Next part", "Not downloaded"), if anything. */
+  const [upNextNote, setUpNextNote] = useState<string | null>(null);
   const upNextTimer = useRef<number | null>(null);
+  /** Streams finished lately, so related autoplay does not loop between two. */
+  const recentStreamsRef = useRef<string[]>([]);
 
   const clearUpNext = useCallback(() => {
     if (upNextTimer.current !== null) {
@@ -639,6 +649,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
     }
     setUpNext(null);
     setUpNextSeconds(null);
+    setUpNextNote(null);
   }, []);
 
   useEffect(() => {
@@ -669,9 +680,10 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   );
 
   const startUpNextCountdown = useCallback(
-    (video: QueueEntry) => {
+    (video: QueueEntry, note: string | null = null) => {
       clearUpNext();
       setUpNext(video);
+      setUpNextNote(note);
       setUpNextSeconds(8);
       upNextTimer.current = window.setInterval(() => {
         setUpNextSeconds((s) => {
@@ -709,6 +721,20 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
   // Queue advances immediately; otherwise optionally show related up-next.
   const handleEnded = useCallback(() => {
     const endedKey = playingKeyRef.current;
+    /** A not-downloaded (or downloaded) catalog entry as an up-next pick. */
+    const streamEntry = (entry: ChannelFeedEntry): QueueEntry | null => {
+      const href = watchHref(entry, entry.channel ?? "");
+      if (!href) return null;
+      return {
+        queue_kind: "stream",
+        url: entry.url,
+        href,
+        title: entry.title || "Untitled",
+        channel: entry.channel ?? null,
+        thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
+        duration: entry.duration ?? null,
+      };
+    };
     /** Count down to the next part, when there is one and nothing is queued. */
     const playNextPart = (
       found: Promise<NextPart>,
@@ -719,24 +745,19 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
         .then(({ entry }) => {
           if (queueRef.current.length > 0) return;
           if (playingKeyRef.current !== endedKey) return;
-          const href = entry ? watchHref(entry, entry.channel ?? "") : null;
+          const next = entry ? streamEntry(entry) : null;
           if (
             !entry ||
-            !href ||
+            !next ||
             (entry.video_id != null && exclude.has(entry.video_id))
           ) {
             otherwise();
             return;
           }
-          startUpNextCountdown({
-            queue_kind: "stream",
-            url: entry.url,
-            href,
-            title: entry.title || "Untitled",
-            channel: entry.channel ?? null,
-            thumbnail: youtubeThumbnailUrl(entry.id, entry.thumbnail_url),
-            duration: entry.duration ?? null,
-          });
+          startUpNextCountdown(
+            next,
+            entry.video_id == null ? "Next part · not downloaded" : "Next part"
+          );
         })
         .catch(otherwise);
 
@@ -744,15 +765,43 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
       // A not-downloaded video goes to the stream history and the queue
       // still moves on. Its up-next is only the series' next part.
       streamWatch.finish(watchedStream(stream));
+      const endedUrl = stream.url;
+      recentStreamsRef.current = [
+        endedUrl,
+        ...recentStreamsRef.current.filter((u) => u !== endedUrl),
+      ].slice(0, 12);
       if (queueRef.current.length > 0) {
         advance();
         return;
       }
       if (!settings.autoplayRelated || stream.liveVideoId) return;
+      const recent = new Set(recentStreamsRef.current);
+      // No next part: the first related video not streamed lately (and not live).
+      const playStreamRelated = () => {
+        api
+          .getStreamRelated(endedUrl, 12)
+          .then(({ items }) => {
+            if (queueRef.current.length > 0) return;
+            if (playingKeyRef.current !== endedKey) return;
+            for (const entry of items) {
+              if (recent.has(entry.url)) continue;
+              if (entry.live_status === "is_live") continue;
+              if (entry.live_status === "is_upcoming") continue;
+              const next = streamEntry(entry);
+              if (!next) continue;
+              startUpNextCountdown(
+                next,
+                entry.video_id == null ? "Not downloaded" : null
+              );
+              return;
+            }
+          })
+          .catch(() => undefined);
+      };
       void playNextPart(
-        api.getStreamNextPart(stream.url),
+        api.getStreamNextPart(endedUrl),
         new Set(),
-        () => undefined
+        playStreamRelated
       );
       return;
     }
@@ -1000,11 +1049,7 @@ export function PlaybackProvider({ children }: { children: React.ReactNode }) {
           poster: isQueuedStream(upNext)
             ? upNext.thumbnail
             : thumbnailUrl(upNext),
-          note: isQueuedStream(upNext)
-            ? upNext.href.startsWith("/watch?")
-              ? "Next part · not downloaded"
-              : "Next part"
-            : null,
+          note: upNextNote,
           seconds: upNextSeconds ?? 0,
         }
       : null,

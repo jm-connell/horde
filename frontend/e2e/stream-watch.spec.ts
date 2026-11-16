@@ -327,6 +327,38 @@ test("when a stream ends, the next part of its series comes up next", async ({
   expect(asked).toEqual([STREAM_URL]);
 });
 
+test("when a stream with no next part ends, a related video comes up next", async ({
+  page,
+}) => {
+  const related = (id: string, title: string, extra = {}) => ({
+    id,
+    url: `https://www.youtube.com/watch?v=${id}`,
+    title,
+    channel: "Other Channel",
+    in_library: false,
+    youtube_watched: false,
+    ...extra,
+  });
+  await mockStream(page, [
+    related("live0000001", "Live right now", { live_status: "is_live" }),
+    related("rel00000001", "Valley at dawn"),
+  ]);
+  await page.route(/\/api\/preview\/next-part\?/, (route) =>
+    route.fulfill({ json: { entry: null, reason: null } })
+  );
+  await page.goto(WATCH);
+  const video = page.locator("video").first();
+  await expect(video).toBeAttached();
+  await video.evaluate((el) => el.dispatchEvent(new Event("ended")));
+
+  // A live broadcast is skipped for the next video along.
+  await expect(page.getByText(/^Playing next/)).toBeVisible();
+  const overlay = page.getByText(/^Playing next/).locator("xpath=..");
+  await expect(overlay).toContainText("Valley at dawn");
+  await expect(overlay).toContainText("Not downloaded");
+  await expect(overlay).not.toContainText("Next part");
+});
+
 test("a stream's AI is hidden when the server does not support it", async ({
   page,
 }) => {
