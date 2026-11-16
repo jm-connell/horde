@@ -419,3 +419,135 @@ def test_a_video_row_without_a_channel_is_left_out_of_top_channels(
     stats = _stats(session, admin_user)
     assert stats.totals.watch_seconds == 50
     assert stats.channels == []
+
+
+# --- Streamed (not downloaded) videos ---------------------------------------
+
+STREAM_ID = "strm0000001"
+STREAM_URL = f"https://www.youtube.com/watch?v={STREAM_ID}"
+
+
+@pytest.fixture
+def stream_clock(clock, monkeypatch) -> Clock:
+    monkeypatch.setattr("app.services.discovery.history.utcnow", clock)
+    return clock
+
+
+def _stream(c, clock, wall, position, *, finished=False, duration=100.0):
+    clock.at(wall)
+    resp = c.post(
+        "/api/discover/history",
+        json={
+            "url": STREAM_URL,
+            "title": "Ridge at dusk",
+            "channel": "Streamer",
+            "position_sec": position,
+            "duration_sec": duration,
+            "finished": finished,
+        },
+    )
+    assert resp.status_code == 200, resp.text
+
+
+def test_streaming_counts_like_library_playback(client, init_db, stream_clock):
+    # The player reports a stream every 30 s, the first time at 20 s.
+    _stream(client, stream_clock, 20, 20)
+    _stream(client, stream_clock, 50, 50)
+    _stream(client, stream_clock, 80, 80)
+    _stream(client, stream_clock, 110, 100, finished=True)
+
+    (row,) = _rows(init_db["engine"])
+    assert (row.video_id, row.yt_id, row.channel) == (None, STREAM_ID, "Streamer")
+    assert row.seconds == pytest.approx(100)
+    assert row.finished == 1
+    stats = client.get("/api/history/stats", params={"range": "all"}).json()
+    assert stats["totals"]["watch_seconds"] == pytest.approx(100)
+    assert stats["totals"]["videos_started"] == 1
+    assert stats["totals"]["videos_finished"] == 1
+    assert stats["channels"][0] == {
+        "name": "Streamer",
+        "seconds": pytest.approx(100),
+        "videos": 1,
+        "youtube_views": 0,
+    }
+
+
+def test_a_first_stream_report_far_in_is_not_watching(client, init_db, stream_clock):
+    _stream(client, stream_clock, 20, 600, duration=900.0)
+    _stream(client, stream_clock, 50, 630, duration=900.0)
+    assert _seconds(init_db["engine"]) == pytest.approx(30)
+
+
+def test_downloading_a_stream_moves_its_time_onto_the_video(
+    client, session, add_video, init_db, stream_clock
+):
+    _stream(client, stream_clock, 20, 20)
+    _stream(client, stream_clock, 50, 50)
+    video = add_video(yt_id=STREAM_ID, channel="Streamer", duration_sec=100.0)
+    assert video.youtube_id == STREAM_ID
+
+    assert watch_stats.adopt_stream_time(session, video) == 1
+    # Then watched in the library within the same hour: one row, added up.
+    _play(client, stream_clock, video.id, [(60, 50), (70, 60)])
+
+    (row,) = _rows(init_db["engine"])
+    assert (row.video_id, row.yt_id) == (video.id, None)
+    assert row.seconds == pytest.approx(60)
+    stats = client.get("/api/history/stats", params={"range": "all"}).json()
+    # Streamed and then watched in the library: one video.
+    assert stats["totals"]["videos_started"] == 1
+
+
+def test_adopting_adds_into_an_hour_the_video_already_has(
+    client, session, add_video, init_db, stream_clock
+):
+    video = add_video(yt_id=STREAM_ID, duration_sec=100.0)
+    _play(client, stream_clock, video.id, [(0, 0), (10, 10)])
+    # A stream row of the same video and hour, as left by a save that landed
+    # before the download committed.
+    library_row = _rows(init_db["engine"])[0]
+    session.add(
+        UserWatchTime(
+            user_id=library_row.user_id,
+            yt_id=STREAM_ID,
+            channel="Streamer",
+            hour_start=library_row.hour_start,
+            seconds=20.0,
+            finished=1,
+        )
+    )
+    session.commit()
+    assert len(_rows(init_db["engine"])) == 2
+
+    assert watch_stats.adopt_stream_time(session, video) == 1
+
+    (row,) = _rows(init_db["engine"])
+    assert (row.video_id, row.yt_id) == (video.id, None)
+    assert row.seconds == pytest.approx(30)
+    assert row.finished == 1
+
+
+def test_streaming_a_video_already_in_the_library_adds_to_its_row(
+    client, session, add_video, init_db, stream_clock
+):
+    # Downloaded while it was being streamed: the reports that follow count
+    # on the library row, and the channel shows one video.
+    _stream(client, stream_clock, 20, 20)
+    video = add_video(yt_id=STREAM_ID, channel="Streamer", duration_sec=100.0)
+    watch_stats.adopt_stream_time(session, video)
+    _stream(client, stream_clock, 50, 50)
+
+    (row,) = _rows(init_db["engine"])
+    assert (row.video_id, row.yt_id) == (video.id, None)
+    assert row.seconds == pytest.approx(50)
+    stats = client.get("/api/history/stats", params={"range": "all"}).json()
+    assert stats["channels"][0]["videos"] == 1
+
+
+def test_a_short_stream_finished_before_its_first_report_counts(
+    client, init_db, stream_clock
+):
+    _stream(client, stream_clock, 12, 12, finished=True, duration=12.0)
+    (row,) = _rows(init_db["engine"])
+    assert row.seconds == pytest.approx(12)
+    assert row.finished == 1

@@ -722,6 +722,11 @@ class UserWatchTime(SQLModel, table=True):
     rows are history that outlives the video: deleting it clears ``video_id``
     (the channel name stays, so top channels still add up), a restore from the
     trash links them again. Deleting the account deletes them.
+
+    A streamed (not downloaded) video's row has ``yt_id`` and no ``video_id``;
+    downloading it moves the rows onto the library video and clears ``yt_id``.
+    A library row never has ``yt_id``, so each unique index only ever matches
+    its own kind of row (SQLite treats the NULLs in the other as distinct).
     """
 
     __tablename__ = "user_watch_time"
@@ -733,6 +738,13 @@ class UserWatchTime(SQLModel, table=True):
             "video_id",
             unique=True,
         ),
+        Index(
+            "ux_user_watch_time_stream_bucket",
+            "user_id",
+            "hour_start",
+            "yt_id",
+            unique=True,
+        ),
         _AUTOINCREMENT,
     )
 
@@ -741,6 +753,8 @@ class UserWatchTime(SQLModel, table=True):
     video_id: int | None = Field(
         default=None, foreign_key="videos.id", index=True, ondelete="SET NULL"
     )
+    #: The YouTube id of a streamed video (None on library rows).
+    yt_id: str | None = None
     #: The video's channel when the time was recorded (read when the video is gone).
     channel: str | None = None
     #: Start of the UTC hour the watching happened in.
