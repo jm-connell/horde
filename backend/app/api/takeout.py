@@ -204,6 +204,9 @@ def rewatched(
             )
         ).all()
     }
+    if user.allowed is not None:
+        allowed = user.allowed  # Parental controls: only allowed channels.
+        rows = [r for r in rows if allowed.allows(r.channel_url, r.channel)]
     items = []
     for row in rows:
         known = catalog.get(row.yt_id)

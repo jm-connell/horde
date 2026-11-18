@@ -96,6 +96,7 @@ def list_channels(
             is_admin=user.is_admin,
         )
         for c in kb_channels.list_channels(session)
+        if user.allowed is None or user.allowed.allows(c.channel_url, c.channel_name)
     ]
     return AskChannelList(items=items, available=kb_search.fts_available(session))
 
@@ -208,8 +209,19 @@ def search(
     limit: int = Query(30, ge=1, le=100),
     cursor: str | None = Query(default=None, max_length=500),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     """Passages that mention the query's words, best match first."""
+    if user.allowed is not None:
+        # Parental controls: only the allowed channels' passages.
+        allowed_ids = [
+            require_id(c)
+            for c in kb_channels.list_channels(session)
+            if user.allowed.allows(c.channel_url, c.channel_name)
+        ]
+        channel_id = [i for i in (channel_id or allowed_ids) if i in allowed_ids]
+        if not channel_id:
+            return AskSearchPage(items=[])
     try:
         page = parse_cursor(
             cursor, limit=limit, sort=_SORT, order="desc", kind="offset"

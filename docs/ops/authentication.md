@@ -79,6 +79,10 @@ For administrators, *Account settings* also lists every account under **Users**.
 
 The server refuses any change that would leave **no enabled administrator** (`code: "last_admin"`).
 
+### Parental controls {#parental-controls}
+
+A member's editor under **Users** has **Parental controls**: turn on **Limit … to chosen channels**, tick the library channels they may watch, and **Save allowed channels**. From then on that account sees and plays only those channels' videos, in the library, search, Recommended, the live list, related videos, playlists and channel pages; another channel's video does not open even from a link. YouTube search, downloads (other than saving an allowed video to the device), subscriptions, Ask and AI, editing and deleting are off for it, whatever its permissions say; turning the controls off again restores them. The server enforces all of it, not just the interface. An administrator cannot be limited. See [ADR 0032](../adr/0032-parental-controls.md).
+
 ### Invite links {#invite-links}
 
 Instead of choosing someone's password, an administrator can send them a link. Under **Users**, **Invite links → Make an invite link** asks who it is for (optional, shown on the page they open) and which permissions they get, then shows the link once: `https://<your Horde>/join?token=…`. Copy it and send it however you like. The person opens it, picks a username and password, and is signed in as a **member** with those permissions; an invite can never make an administrator. Their first visit to Home shows a short welcome (what is shared, what is theirs, where to start), which **Got it** closes on every device.

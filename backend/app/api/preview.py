@@ -16,15 +16,16 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..auth import current_user
 from ..context import get_engine, get_session
-from ..errors import extraction_error
+from ..errors import CodedHTTPException, extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,
     RAW,
     SUBTITLES,
     VIDEO_STREAM,
 )
+from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, stream_preview, stream_related
+from ..services import library, next_part, parental, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import history as stream_history
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
@@ -422,6 +423,14 @@ def preview_meta(
         raise  # 429 / 504 from the gate
     except Exception as exc:
         raise preview_extraction_error(exc, cleaned) from exc
+    try:
+        # Parental controls: another channel's video is refused, an allowed
+        # one's later requests (manifest, media, ...) pass.
+        parental.check_stream_meta(
+            user.allowed, user.id, youtube_video_id(cleaned) or meta.get("id"), meta
+        )
+    except parental.Restricted as exc:
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed") from exc
 
     library_video_id = None
     resume_sec = 0.0
@@ -545,7 +554,11 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
     return body
 
 
-@router.get("/related", response_model=StreamRelatedPage)
+@router.get(
+    "/related",
+    response_model=StreamRelatedPage,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_related(
     request: Request,
     url: str = Query(..., max_length=4000),
@@ -574,10 +587,15 @@ async def preview_related(
     items = await run_in_threadpool(
         _related, youtube_id, meta, limit, user.can("use_ai"), live_now
     )
+    if user.allowed is not None:
+        # This member sees only allowed channels' videos.
+        items = [e for e in items if parental.entry_allowed(user.allowed, e)]
     return StreamRelatedPage(items=items)
 
 
-@router.get("/next-part", response_model=NextPartRead)
+@router.get(
+    "/next-part", response_model=NextPartRead, dependencies=[Depends(stream_guard)]
+)
 def preview_next_part(
     url: str = Query(..., max_length=4000),
     session: Session = Depends(get_session),
@@ -607,7 +625,12 @@ def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now)
         )
 
 
-@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
+@router.get(
+    "/subtitles",
+    response_class=RAW,
+    responses=SUBTITLES,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_subtitles(
     request: Request,
     url: str = Query(...),
@@ -626,12 +649,16 @@ async def preview_subtitles(
 
 # One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
 # document has a single operation id (api_route would emit it twice and warn).
-@router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
+@router.head(
+    "/manifest",
+    include_in_schema=False,
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
+)
 @router.get(
     "/manifest",
     response_class=RAW,
     responses=DASH_MANIFEST,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
 )
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
@@ -726,7 +753,12 @@ async def preview_media_head(
     return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.get("/stream", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/stream",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = await run_in_threadpool(_require_video_url, url)
