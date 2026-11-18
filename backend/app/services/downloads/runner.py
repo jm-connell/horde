@@ -49,6 +49,7 @@ from ..ytdlp_common import (
 from ..ytdlp_extract import estimate_download_bytes, is_youtube_short_entry
 from ..ytdlp_formats import (
     PRESET_MAX_HEIGHT,
+    accepts_audio_only,
     apply_audio_format_id,
     format_chain,
     format_sort_for,
@@ -241,12 +242,19 @@ class DownloadRun:
         if self.ytdlp_logger.disk_full:
             raise OSError(errno.ENOSPC, "No space left on device")
 
+    def _audio_ok(self) -> bool:
+        """An audio-only file counts as the download (read late: the link's
+        formats are known only once its metadata is fetched)."""
+        return accepts_audio_only(self.spec.quality_preset, self.metadata_info)
+
     def _settled_final_path(self) -> Path:
         """Pick the finished file after the attempts, or fail with the last error."""
         path = self.final_path
         if path is None or not path.exists():
-            path = resolve_merged_video(self.prepared, self.active_paths)
-        path = reject_unplayable(path, self.active_paths)
+            path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
+        path = reject_unplayable(path, self.active_paths, audio_ok=self._audio_ok())
         if path is None or not path.exists() or path.stat().st_size <= 0:
             if self.last_exc is not None:
                 raise self.last_exc
@@ -310,8 +318,12 @@ class DownloadRun:
         self.last_exc = exc
         if self.ytdlp_logger.members_only or is_members_only_error(exc):
             raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
-        recovered = resolve_merged_video(self.prepared, self.active_paths)
-        recovered = reject_unplayable(recovered, self.attempt_paths)
+        recovered = resolve_merged_video(
+            self.prepared, self.active_paths, audio_ok=self._audio_ok()
+        )
+        recovered = reject_unplayable(
+            recovered, self.attempt_paths, audio_ok=self._audio_ok()
+        )
         if recovered is not None:
             self.final_path = recovered
             return True
@@ -537,8 +549,12 @@ class DownloadRun:
         elif not is_recoverable_download_error(exc):
             raise exc
         else:
-            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
-            self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+            self.final_path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
+            self.final_path = reject_unplayable(
+                self.final_path, self.attempt_paths, audio_ok=self._audio_ok()
+            )
             if self.final_path is None:
                 raise exc
 
@@ -562,13 +578,17 @@ class DownloadRun:
     def _locate_output(self, ydl: Any) -> None:
         """Find the file the download wrote (yt-dlp may name it differently)."""
         if self.final_path is None:
-            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
+            self.final_path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
         if self.final_path is None and self.metadata_info:
             candidate = Path(ydl.prepare_filename(self.metadata_info))
             self.final_path = candidate.with_suffix(".mp4")
             if not self.final_path.exists():
                 self.final_path = candidate if candidate.exists() else None
-        self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+        self.final_path = reject_unplayable(
+            self.final_path, self.attempt_paths, audio_ok=self._audio_ok()
+        )
 
     # -- hand-off --------------------------------------------------------------
 
@@ -644,8 +664,12 @@ class DownloadRun:
 
     def _hand_off_recovered_file(self) -> bool:
         """A failure after yt-dlp finished the file still yields a download."""
-        recovered = resolve_merged_video(self.prepared, self.active_paths)
-        recovered = reject_unplayable(recovered, self.active_paths)
+        recovered = resolve_merged_video(
+            self.prepared, self.active_paths, audio_ok=self._audio_ok()
+        )
+        recovered = reject_unplayable(
+            recovered, self.active_paths, audio_ok=self._audio_ok()
+        )
         if (
             recovered is None
             or not recovered.exists()

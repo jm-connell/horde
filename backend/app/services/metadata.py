@@ -38,8 +38,12 @@ def probe_duration(path: Path) -> float | None:
         return None
 
 
-def probe_is_playable(path: Path) -> bool:
-    """Return True when ffprobe finds a decodable video stream with duration."""
+def probe_is_playable(path: Path, *, audio_ok: bool = False) -> bool:
+    """Return True when ffprobe finds a decodable video stream with duration.
+
+    ``audio_ok`` also accepts a file with only an audio stream (an audio
+    download); a file that has a video stream must still have a valid one.
+    """
     if not path.exists() or path.stat().st_size <= 0:
         return False
     try:
@@ -48,8 +52,6 @@ def probe_is_playable(path: Path) -> bool:
                 ffprobe_bin(),
                 "-v",
                 "error",
-                "-select_streams",
-                "v:0",
                 "-show_entries",
                 "stream=codec_type,width,height",
                 "-show_entries",
@@ -65,15 +67,15 @@ def probe_is_playable(path: Path) -> bool:
         if result.returncode != 0:
             return False
         data = json.loads(result.stdout)
-        streams = data.get("streams", [])
-        if not streams:
-            return False
-        stream = streams[0]
-        if stream.get("codec_type") != "video":
-            return False
-        width = stream.get("width")
-        height = stream.get("height")
-        if not width or not height or int(width) <= 0 or int(height) <= 0:
+        streams = data.get("streams") or []
+        kinds = [s.get("codec_type") for s in streams]
+        if "video" in kinds:
+            stream = streams[kinds.index("video")]
+            width = stream.get("width")
+            height = stream.get("height")
+            if not width or not height or int(width) <= 0 or int(height) <= 0:
+                return False
+        elif not (audio_ok and "audio" in kinds):
             return False
         duration = data.get("format", {}).get("duration")
         if duration is None:
@@ -82,6 +84,40 @@ def probe_is_playable(path: Path) -> bool:
     except subprocess.SubprocessError, ValueError, OSError:
         logger.debug("ffprobe playability check failed", exc_info=True)
         return False
+
+
+def _is_audio_only(path: Path) -> bool:
+    """True only when ffprobe reports audio and no video (False if it fails).
+
+    Cover art (an ``attached_pic`` still, common on podcast MP3s) is not video.
+    """
+    try:
+        result = subprocess.run(
+            [
+                ffprobe_bin(),
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type:stream_disposition=attached_pic",
+                "-of",
+                "json",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        if result.returncode != 0:
+            return False
+        kinds = {
+            s.get("codec_type")
+            for s in json.loads(result.stdout).get("streams", [])
+            if not (s.get("disposition") or {}).get("attached_pic")
+        }
+    except subprocess.SubprocessError, ValueError, OSError:
+        logger.debug("ffprobe stream check failed", exc_info=True)
+        return False
+    return "audio" in kinds and "video" not in kinds
 
 
 def probe_dimensions(path: Path) -> tuple[int, int] | None:
@@ -465,6 +501,9 @@ def generate_sprite_sheet(
     """
     dur = duration if duration is not None else probe_duration(video_path)
     if not dur or dur <= 0:
+        return None
+    if _is_audio_only(video_path):
+        # An audio download: there are no frames to grab.
         return None
 
     interval = sprite_interval_sec(dur)

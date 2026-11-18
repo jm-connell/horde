@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ...config import VIDEO_EXTENSIONS
+from ...config import AUDIO_EXTENSIONS, VIDEO_EXTENSIONS
 from ...context import get_paths
 from ..fsutil import safe_rel, safe_unlink
 from ..metadata import probe_is_playable
@@ -28,14 +28,22 @@ def is_intermediate_media(name: str) -> bool:
     return bool(".xcode." in low or low.endswith(".xcode.mp4"))
 
 
-def find_merged_video(prepared: Path) -> Path | None:
-    """Locate the final merged video when yt-dlp errors on fragment cleanup."""
+def _media_extensions(audio_ok: bool) -> set[str]:
+    return VIDEO_EXTENSIONS | AUDIO_EXTENSIONS if audio_ok else VIDEO_EXTENSIONS
+
+
+def find_merged_video(prepared: Path, *, audio_ok: bool = False) -> Path | None:
+    """Locate the final merged video when yt-dlp errors on fragment cleanup.
+
+    ``audio_ok`` also finds an audio-only file (``.m4a``, ``.opus``, ...).
+    """
+    extensions = _media_extensions(audio_ok)
     mp4 = prepared.with_suffix(".mp4")
     if mp4.exists() and not is_intermediate_media(mp4.name):
         return mp4
     if (
         prepared.exists()
-        and prepared.suffix.lower() in VIDEO_EXTENSIONS
+        and prepared.suffix.lower() in extensions
         and not is_intermediate_media(prepared.name)
     ):
         return prepared
@@ -51,7 +59,7 @@ def find_merged_video(prepared: Path) -> Path | None:
             continue
         if not belongs_to_stem(entry.name, stem):
             continue
-        if entry.suffix.lower() not in VIDEO_EXTENSIONS:
+        if entry.suffix.lower() not in extensions:
             continue
         if is_intermediate_media(entry.name):
             continue
@@ -65,25 +73,31 @@ def find_merged_video(prepared: Path) -> Path | None:
     return best
 
 
-def resolve_merged_video(prepared: Path | None, active_paths: set[str]) -> Path | None:
+def resolve_merged_video(
+    prepared: Path | None, active_paths: set[str], *, audio_ok: bool = False
+) -> Path | None:
     if prepared is not None:
-        found = find_merged_video(prepared)
+        found = find_merged_video(prepared, audio_ok=audio_ok)
         if found is not None:
             return found
     for rel in active_paths:
-        found = find_merged_video(get_paths().downloads / rel)
+        found = find_merged_video(get_paths().downloads / rel, audio_ok=audio_ok)
         if found is not None:
             return found
     return None
 
 
-def validate_playable(path: Path) -> bool:
-    """Return True when the file is a complete, decodable video."""
-    return probe_is_playable(path)
+def validate_playable(path: Path, *, audio_ok: bool = False) -> bool:
+    """Return True when the file is a complete, decodable video (or, with
+    ``audio_ok``, audio-only media)."""
+    return probe_is_playable(path, audio_ok=audio_ok)
 
 
-def cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) -> None:
+def cleanup_download_artifacts(
+    paths: set[str], *, remove_final: bool = False, audio_ok: bool = False
+) -> None:
     """Remove in-progress fragments and optionally corrupt final files."""
+    extensions = _media_extensions(audio_ok)
     for rel in paths:
         full = get_paths().downloads / rel
         parent = full.parent
@@ -98,36 +112,39 @@ def cleanup_download_artifacts(paths: set[str], *, remove_final: bool = False) -
                 continue
             if (
                 remove_final
-                and entry.suffix.lower() in VIDEO_EXTENSIONS
+                and entry.suffix.lower() in extensions
                 and STAGING_FRAGMENT_RE.search(entry.name) is None
                 and COMPAT_SIDECAR_TOKEN not in entry.name
             ):
                 safe_unlink(entry)
 
 
-def cleanup_partial_files(paths: set[str]) -> None:
+def cleanup_partial_files(paths: set[str], *, audio_ok: bool = False) -> None:
     """Remove in-progress fragments; also drop unplayable merged files left by cancel."""
     cleanup_download_artifacts(paths, remove_final=False)
+    extensions = _media_extensions(audio_ok)
     for rel in paths:
         full = get_paths().downloads / rel
         if not full.is_file():
             continue
         if STAGING_FRAGMENT_RE.search(full.name) or full.name.endswith(".part"):
             continue
-        if full.suffix.lower() not in VIDEO_EXTENSIONS:
+        if full.suffix.lower() not in extensions:
             continue
-        if not validate_playable(full):
+        if not validate_playable(full, audio_ok=audio_ok):
             safe_unlink(full)
 
 
-def reject_unplayable(path: Path | None, attempt_paths: set[str]) -> Path | None:
+def reject_unplayable(
+    path: Path | None, attempt_paths: set[str], *, audio_ok: bool = False
+) -> Path | None:
     """Return path if playable; otherwise remove corrupt artifacts and return None."""
     if path is None or not path.exists() or path.stat().st_size <= 0:
         return None
-    if validate_playable(path):
+    if validate_playable(path, audio_ok=audio_ok):
         return path
     rel = safe_rel(path)
     if rel:
-        cleanup_download_artifacts({rel}, remove_final=True)
-    cleanup_partial_files(attempt_paths)
+        cleanup_download_artifacts({rel}, remove_final=True, audio_ok=audio_ok)
+    cleanup_partial_files(attempt_paths, audio_ok=audio_ok)
     return None
