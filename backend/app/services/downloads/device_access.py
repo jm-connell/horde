@@ -26,6 +26,19 @@ def hidden_job_ids(
     """The ids among ``jobs`` that ``user`` may not see."""
     if user.is_admin:
         return set()
+    if user.allowed is not None:
+        # Parental controls: only the member's own jobs (they can start
+        # downloads of allowed videos to their device, nothing else).
+        ids = [j.id for j in jobs if j.id is not None]
+        mine = set(
+            session.exec(
+                select(DownloadRequester.job_id).where(
+                    col(DownloadRequester.job_id).in_(ids),
+                    DownloadRequester.user_id == user.id,
+                )
+            ).all()
+        )
+        return {i for i in ids if i not in mine}
     device_ids = [j.id for j in jobs if j.id is not None and _is_device(j)]
     if not device_ids:
         return set()

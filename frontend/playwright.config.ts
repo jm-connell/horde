@@ -2,14 +2,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig, devices } from "@playwright/test";
 import { storageStatePath } from "./e2e/accounts";
+import { appPort, setupPort } from "./e2e/runtime";
 
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(frontendRoot, "..");
 const python = process.env.E2E_PYTHON || "python3";
 
-// Ports are overridable so several checkouts/agents can run e2e side by side.
-const appPort = Number(process.env.E2E_APP_PORT || 8091);
-const setupPort = Number(process.env.E2E_SETUP_PORT || 8092);
+// Ports are overridable (E2E_APP_PORT / E2E_SETUP_PORT) so several runs can go
+// side by side, even in one checkout: scripts/e2e-shards.sh.
 const appUrl = `http://127.0.0.1:${appPort}`;
 const setupUrl = `http://127.0.0.1:${setupPort}`;
 

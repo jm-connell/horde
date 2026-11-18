@@ -18,6 +18,7 @@ import ThemedSelect from "../ThemedSelect";
 import SavedAlgorithms from "./SavedAlgorithms";
 import TopicsSection from "./TopicsSection";
 import { BUCKET_LABEL, BUCKET_TINT, BUCKETS, sharePercents } from "./buckets";
+import SourceLegend from "./SourceLegend";
 
 /** Slider moves are saved this long after the last one (the feed re-ranks). */
 const SAVE_DELAY_MS = 400;
@@ -945,6 +946,8 @@ export default function TuningPanel({
         aria-label="Recommendation algorithm"
         className="horde-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
       >
+        {/* On phones the outline legend lives here, not beside the home tabs. */}
+        <SourceLegend className="mb-3 md:hidden" />
         {body}
       </div>
     </>

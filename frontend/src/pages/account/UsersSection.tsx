@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import ParentalControls from "./ParentalControls";
 import { api } from "../../api";
 import { Field, FormError } from "../../components/auth/AuthForm";
 import UserAvatar from "../../components/auth/UserAvatar";
@@ -504,6 +505,9 @@ function UserEditor({
             Save account type
           </button>
         </div>
+      )}
+      {!isSelf && !user.is_admin && (
+        <ParentalControls user={user} onChanged={onChanged} />
       )}
       {isSelf ? (
         <p className="text-sm text-muted">

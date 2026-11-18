@@ -26,13 +26,21 @@ from app.models import (
     VideoAiMeta,
 )
 from app.services import activity, library, ytdlp_common
-from app.services.downloads import errors, jobs, postprocess, progress, runner
+from app.services.downloads import (
+    artifacts,
+    errors,
+    jobs,
+    postprocess,
+    progress,
+    runner,
+)
 from app.services.downloads.queue import download_queue
 from app.services.ffmpeg_progress import FfmpegCancelled
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
+    ERROR_KIND_POSTPROCESS,
     ERROR_KIND_UNKNOWN,
 )
 
@@ -217,6 +225,44 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     assert not _staging(init_db, job_id).exists()
 
 
+@pytest.mark.parametrize("has_ffmpeg", [False, True])
+def test_unmerged_streams_without_ffmpeg_say_ffmpeg_is_missing(
+    init_db, fake, monkeypatch, has_ffmpeg
+):
+    # Without ffmpeg yt-dlp leaves the video and audio streams apart and
+    # reports no error, so the attempts end with no file at all.
+    fake.merge = False
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: has_ffmpeg)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.error
+    if has_ffmpeg:
+        assert job.error_kind == ERROR_KIND_UNKNOWN
+        assert "Download produced no file" in job.error
+    else:
+        assert job.error_kind == ERROR_KIND_POSTPROCESS
+        assert "ffmpeg is not installed" in job.error
+        assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_POSTPROCESS
+    assert _videos(init_db) == []
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_yt_dlp_is_given_the_ffmpeg_horde_found(init_db, fake, monkeypatch):
+    # yt-dlp only searches PATH, and caches a failed lookup per path for the
+    # life of the process: an explicit path covers FFMPEG_BIN and a later install.
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: True)
+    monkeypatch.setattr(runner, "ffmpeg_bin", lambda: "/opt/ffmpeg/bin/ffmpeg")
+    run_job_inline(_add_job(init_db))
+    assert fake.downloads[0]["opts"]["ffmpeg_location"] == "/opt/ffmpeg/bin/ffmpeg"
+
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: False)
+    fake.downloads.clear()
+    run_job_inline(_add_job(init_db))
+    assert "ffmpeg_location" not in fake.downloads[0]["opts"]
+
+
 def test_postprocessor_error_after_the_merge_still_completes(init_db, fake):
     fake.fail_after_merge = RuntimeError("Postprocessing: Unable to rename file")
     job_id = _add_job(init_db)
@@ -295,6 +341,71 @@ def test_device_download_stays_out_of_the_library(init_db, fake):
     assert _videos(init_db) == []
     snap = progress.progress_store[job_id]
     assert (snap["status"], snap["destination"]) == ("completed", "device")
+
+
+@pytest.fixture
+def audio_file(fake, monkeypatch):
+    """yt-dlp writes one ``.m4a``; a file without video passes the playable
+    check only where the caller accepts audio."""
+    fake.audio_only = True
+    monkeypatch.setattr(
+        artifacts,
+        "validate_playable",
+        lambda _p, *, audio_ok=False: audio_ok,
+    )
+    return fake
+
+
+def test_audio_preset_downloads_to_the_device(init_db, audio_file):
+    job_id = _add_job(
+        init_db, quality_preset="audio", destination=DownloadDestination.device.value
+    )
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.completed, job.error
+    assert job.device_file_path.endswith(".m4a")
+    assert (init_db["downloads"] / job.device_file_path).is_file()
+
+
+def test_audio_preset_downloads_to_the_library_as_mp4(init_db, audio_file):
+    job_id = _add_job(init_db, quality_preset="audio")
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.completed, job.error
+    (video,) = _videos(init_db)
+    # The same MP4 container under the name the library scans and serves.
+    assert video.file_path.endswith(".mp4")
+    assert (init_db["downloads"] / video.file_path).is_file()
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_a_link_without_video_downloads_its_audio_under_any_preset(init_db, audio_file):
+    url = "https://soundcloud.example.test/artist/song"
+    audio_file.add(
+        url,
+        make_info(
+            "song01",
+            "Song",
+            width=None,
+            height=None,
+            formats=[{"format_id": "m4a", "vcodec": "none", "acodec": "mp4a.40.2"}],
+        ),
+    )
+    job_id = _add_job(init_db, url=url, quality_preset="best")
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    assert len(_videos(init_db)) == 1
+
+
+def test_a_video_preset_still_rejects_a_file_without_video(init_db, audio_file):
+    job_id = _add_job(init_db, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.error
+    assert _videos(init_db) == []
 
 
 def test_unplayable_download_ends_in_error_and_leaves_no_files(

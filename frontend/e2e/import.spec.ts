@@ -1,13 +1,9 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, feedCard, openNav, test, videoCard } from "./fixtures";
+import { appDownloads as downloads } from "./runtime";
 
 // A copy of a seeded video laid out the way yt-dlp and Horde name files.
-const downloads = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../e2e/.runtime/app/downloads"
-);
 const archiveDir = path.join(downloads, "Harbor Archive");
 const archived = path.join(archiveDir, "2023", "Night Pier [abcdefghijk].mp4");
 // Tube Archivist's layout: <channel id>/<video id>.mp4, nothing else to go on.

@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useAuth } from "./AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { appSettingsQuery, useUpdateAppSettings } from "../queries/app";
 
@@ -88,6 +89,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
     };
   }, [queryClient]);
 
+  const restricted = useAuth().user?.allowed_channels != null;
+
   return (
     <SearchContext.Provider
       value={{
@@ -96,7 +99,8 @@ export function SearchProvider({ children }: { children: React.ReactNode }) {
         clearSearch,
         committedQuery,
         commitSearch,
-        youtubeVideoSearch,
+        // Parental controls: a restricted account never searches YouTube.
+        youtubeVideoSearch: youtubeVideoSearch && !restricted,
         youtubeVideoSearchSaving,
         setYoutubeVideoSearch,
         toggleYoutubeVideoSearch,

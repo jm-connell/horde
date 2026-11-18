@@ -1,4 +1,5 @@
 import {
+  useId,
   useLayoutEffect,
   useRef,
   useState,
@@ -13,6 +14,8 @@ import type { MenuBehavior } from "./useMenuKeyboard";
 type Flip = "down" | "up";
 
 const MENU_GAP_PX = 4;
+/** Closest a menu may sit to the left or right edge of the window. */
+const MENU_EDGE_PX = 8;
 
 /**
  * Prefer opening up unless there is clearly enough space below.
@@ -45,19 +48,32 @@ export function useFlipMenu(
   return { flip, anchorRef };
 }
 
-/** Viewport-fixed coords so `.ui-menu` is not flattened by a parent `.ui-panel`. */
+/**
+ * Viewport-fixed coords so `.ui-menu` is not flattened by a parent `.ui-panel`.
+ * Once the menu's width is known, it is shifted back inside the window when
+ * aligning it to the trigger would run it off an edge (a trigger near the
+ * right edge of a phone screen).
+ */
 export function flipMenuFixedStyle(
   rect: Pick<DOMRect, "top" | "bottom" | "left" | "right" | "width">,
   flip: Flip,
   align: "left" | "right",
   viewport: { width: number; height: number },
+  menuWidth?: number,
   gap = MENU_GAP_PX
 ): CSSProperties {
   const style: CSSProperties = { minWidth: rect.width };
   if (flip === "down") style.top = rect.bottom + gap;
   else style.bottom = viewport.height - rect.top + gap;
-  if (align === "left") style.left = rect.left;
-  else style.right = viewport.width - rect.right;
+  const inside = (offset: number) =>
+    menuWidth === undefined
+      ? offset
+      : Math.max(
+          MENU_EDGE_PX,
+          Math.min(offset, viewport.width - menuWidth - MENU_EDGE_PX)
+        );
+  if (align === "left") style.left = inside(rect.left);
+  else style.right = inside(viewport.width - rect.right);
   return style;
 }
 
@@ -78,6 +94,7 @@ export function FlipMenuPanel({
   children: ReactNode;
 }) {
   const markerRef = useRef<HTMLSpanElement>(null);
+  const menuId = useId();
   const [coords, setCoords] = useState<CSSProperties | null>(null);
   const present = useMenuPresence(open);
 
@@ -91,21 +108,28 @@ export function FlipMenuPanel({
 
     const update = () => {
       const rect = anchor.getBoundingClientRect();
+      // Not rendered on the first pass; the next frame measures it.
+      const menuWidth = document.getElementById(menuId)?.offsetWidth;
       setCoords(
-        flipMenuFixedStyle(rect, flip, align, {
-          width: window.innerWidth,
-          height: window.innerHeight,
-        })
+        flipMenuFixedStyle(
+          rect,
+          flip,
+          align,
+          { width: window.innerWidth, height: window.innerHeight },
+          menuWidth
+        )
       );
     };
     update();
+    const frame = window.requestAnimationFrame(update);
     window.addEventListener("scroll", update, true);
     window.addEventListener("resize", update);
     return () => {
+      window.cancelAnimationFrame(frame);
       window.removeEventListener("scroll", update, true);
       window.removeEventListener("resize", update);
     };
-  }, [present, flip, align]);
+  }, [present, flip, align, menuId]);
 
   return (
     <>
@@ -118,6 +142,7 @@ export function FlipMenuPanel({
             open={open}
             unmountOnExit={false}
             menu={menu}
+            id={menuId}
             data-horde="flip-menu"
             className={`fixed z-80 ${className}`}
             style={coords}

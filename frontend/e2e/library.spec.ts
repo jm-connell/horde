@@ -342,19 +342,69 @@ test("the Recommended tab has no sort control", async ({ page }) => {
   const sort = page.getByRole("button", { name: "Sort library" });
   await expect(sort).toBeVisible();
 
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(sort).toHaveCount(0);
   await expect(
     page.locator('button[title="Toggle sort direction"]')
   ).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await expect(sort).toBeVisible();
+});
+
+test("the Recommended actions share the home tabs' row", async ({ page }) => {
+  await page.goto("/");
+  const tabs = page.getByRole("tablist", { name: "Home" });
+  const recommended = tabs.getByRole("tab", { name: "Recommended" });
+  await recommended.click();
+  await expect(recommended).toHaveAttribute("aria-selected", "true");
+  await expect(tabs.getByRole("tab", { name: "Library" })).toHaveAttribute(
+    "aria-selected",
+    "false"
+  );
+
+  // One row on every width: the buttons sit level with the tabs.
+  const algorithm = page.getByRole("button", { name: "Algorithm" });
+  await expect(algorithm).toBeVisible();
+  const tabsBox = (await tabs.boundingBox())!;
+  const algoBox = (await algorithm.boundingBox())!;
+  expect(
+    Math.abs(algoBox.y + algoBox.height / 2 - (tabsBox.y + tabsBox.height / 2))
+  ).toBeLessThan(8);
+
+  // The seed does not look on YouTube: the note says so, links the admin to
+  // the setting, and stays closed once closed.
+  const note = page.locator('[data-horde="discover-off-notice"]');
+  await expect(note).toContainText("Looking on YouTube is off");
+  await expect(note.getByRole("link", { name: "Turn it on" })).toHaveAttribute(
+    "href",
+    "/settings?tab=library&find=discovery"
+  );
+  await note.getByRole("button", { name: "Hide this note" }).click();
+  await expect(note).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Algorithm" })).toBeVisible();
+  await expect(note).toHaveCount(0);
+});
+
+test("a Recommended card's menu adds its video to the queue", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("tab", { name: "Recommended" }).click();
+  const card = page
+    .locator("[data-rec-key]")
+    .filter({ has: page.locator("[data-horde='video-card']") })
+    .first();
+  await card.getByRole("button", { name: "Tune recommendations" }).click();
+  await page.getByRole("menuitem", { name: "Add to queue" }).click();
+  await expect(page.getByText("Added to the queue")).toBeVisible();
+  await expect(page.getByText(/^Up next \(1\)$/)).toBeVisible();
 });
 
 test("the Recommended tab works without AI", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   // Ranked from the watch history alone: the library's videos are listed.
   await expect(page.locator("[data-horde='video-card']").first()).toBeVisible();
 });

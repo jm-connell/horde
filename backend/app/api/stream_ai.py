@@ -16,12 +16,13 @@ from sqlmodel import Session
 from starlette.concurrency import run_in_threadpool
 
 from .. import config
-from ..auth import require_permission
+from ..auth import current_user, require_permission
 from ..context import get_engine, get_session
 from ..errors import CodedHTTPException
 from ..models import StreamAiState, as_utc, require_id
+from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import ChapterRead, StreamAiAction, StreamAiRead
-from ..services import stream_ai, stream_preview
+from ..services import parental, stream_ai, stream_preview
 from ..services.ai.provider import format_provider_error
 from ..services.ai.tasks import ChaptersError, SummarizeError
 from ..services.url_clean import youtube_video_id
@@ -35,7 +36,7 @@ from .preview import (
 router = APIRouter(
     prefix="/api/preview/ai",
     tags=["preview"],
-    dependencies=[Depends(require_permission("use_ai"))],
+    dependencies=[Depends(require_permission("use_ai")), Depends(stream_guard)],
 )
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,7 @@ async def prepared_state(request: Request, url: str) -> tuple[str, int]:
     """
     cleaned, youtube_id = await _youtube_id(url)
     youtube_id = _require_supported(youtube_id)
+    await run_in_threadpool(_require_allowed, request, youtube_id)
     ready = await run_in_threadpool(_ready_state_id, youtube_id)
     if ready is not None:
         return youtube_id, ready
@@ -109,6 +111,17 @@ async def prepared_state(request: Request, url: str) -> tuple[str, int]:
                     return youtube_id, state_id
         await run_in_threadpool(_store_captions, state_id, vtt)
     return youtube_id, state_id
+
+
+def _require_allowed(request: Request, youtube_id: str) -> None:
+    """Parental controls: the body names the stream, so the route guard (which
+    reads the query) cannot; check it here."""
+    user = current_user(request)
+    if user.allowed is None:
+        return
+    with Session(get_engine()) as session:
+        if not parental.stream_allowed(session, user.allowed, user.id, youtube_id):
+            raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
 
 
 def _ready_state_id(youtube_id: str) -> int | None:

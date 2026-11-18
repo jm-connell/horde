@@ -23,6 +23,21 @@ All notable changes to Horde are documented here. The format follows
   your newest 600 watches, so with a YouTube history import or heavy use,
   channels you watched before then showed as "New channel for you" and
   throwbacks dried up. Channels you know now come from your whole history.
+- Audio downloads (the **Audio** presets, and podcasts or other links
+  without video) failed with "Download produced no file", to the library and
+  to a device: the finished file was thrown away because it had no video.
+  They now complete. A library audio download is stored as an audio-only
+  `.mp4`; a device download keeps its `.m4a`.
+- A download on a server without ffmpeg failed with "Download produced no
+  file"; it now says ffmpeg is not installed. An ffmpeg set with
+  `FFMPEG_BIN` (or installed after Horde started) is now used to merge
+  downloads too, without a restart.
+
+### Security
+
+- A failed *Process library* request in Settings → AI no longer sends
+  the raw error to the browser, which could quote the AI provider's URL.
+  The error is logged on the server instead.
 
 ## [1.4.0] - 2026-11-16
 

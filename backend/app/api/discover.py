@@ -217,6 +217,13 @@ def discover_feed(
         if category
         else feed.items
     )
+    if user.allowed is not None:
+        # Parental controls: only the allowed channels' picks.
+        picks = [
+            i
+            for i in picks
+            if user.allowed.allows(i.candidate.channel_url, i.candidate.channel)
+        ]
     window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
@@ -269,7 +276,12 @@ def discover_feed(
     if not cursor and not category:
         items = live_picks.merge(
             items,
-            live_picks.live_picks(session, ctx.live.directory, user.id),
+            [
+                p
+                for p in live_picks.live_picks(session, ctx.live.directory, user.id)
+                if user.allowed is None
+                or user.allowed.allows(p.channel_url, p.channel_name)
+            ],
             _live_item,
             lambda i: i.key,
         )
@@ -538,6 +550,8 @@ def discover_channels(
         feedback.exclusions(session, user.id),
         discover_categories.feed_categories(session, ctx.discovery, feed),
     )
+    if user.allowed is not None:
+        picks = []  # Parental controls: no new channels to suggest.
     return SuggestedChannelsRead(
         items=[
             SuggestedChannelRead(

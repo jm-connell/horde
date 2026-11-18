@@ -169,6 +169,10 @@ class MembersOnlyError(Exception):
     """Raised when a video is YouTube members-only and should be skipped."""
 
 
+class FfmpegMissingError(Exception):
+    """Raised when a download left separate streams because ffmpeg is not installed."""
+
+
 class CatalogSkipError(Exception):
     """Per-video catalog skip (age-restricted, members-only, unavailable)."""
 
@@ -435,6 +439,13 @@ def classify_ytdlp_error(
             ERROR_KIND_MEMBERS,
             "Members-only video — skipped. Member videos can't be downloaded "
             "anonymously.",
+        )
+
+    if isinstance(exc_or_message, FfmpegMissingError):
+        return _finish(
+            ERROR_KIND_POSTPROCESS,
+            "ffmpeg is not installed on the server, so the video and audio "
+            "streams can't be merged. Install ffmpeg and retry.",
         )
 
     raw = _strip_ansi_local(str(exc_or_message or "")).strip()

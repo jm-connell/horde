@@ -19,6 +19,7 @@ from ..models import (
     require_id,
 )
 from ..openapi_responses import IMAGE_JPEG, RAW
+from ..parental_guard import NOT_ALLOWED
 from ..schemas import (
     BulkPlaylistAdd,
     DownloadCreate,
@@ -40,6 +41,7 @@ from ..schemas import (
 )
 from ..services import (
     library,
+    parental,
     playlist_entries,
     stream_preview,
     uploads,
@@ -115,6 +117,32 @@ def _playlist_items(session: Session, playlist_id: int) -> list[PlaylistItem]:
     )
 
 
+def _allowed_items(
+    session: Session,
+    items: list[PlaylistItem],
+    viewer: AuthUser,
+    found: dict[int, Video] | None = None,
+) -> list[PlaylistItem]:
+    """Parental controls: the entries ``viewer`` may see (all when unrestricted).
+
+    ``found`` is ``playlist_entries.resolve`` of ``items`` when already read.
+    """
+    allowed = viewer.allowed
+    if allowed is None:
+        return items
+    if found is None:
+        found = playlist_entries.resolve(session, items)
+    return [
+        i
+        for i in items
+        if (
+            parental.video_allowed(allowed, found[require_id(i)])
+            if require_id(i) in found
+            else allowed.allows(i.channel_url, i.channel)
+        )
+    ]
+
+
 def _thumb_ok(session: Session, video_ids: list[int]) -> dict[int, bool]:
     unique = list(dict.fromkeys(vid for vid in video_ids if vid is not None))
     if not unique:
@@ -162,7 +190,9 @@ def _to_playlist_read(
     thumbs: dict[int, bool] | None = None,
 ) -> PlaylistRead:
     if items is None:
-        items = _playlist_items(session, require_id(playlist))
+        items = _allowed_items(
+            session, _playlist_items(session, require_id(playlist)), viewer
+        )
     if members is None:
         members = _member_video_ids(session, items)
     if thumbs is None:
@@ -223,11 +253,15 @@ def _clear_custom_cover(playlist: Playlist) -> None:
     playlist.cover_path = None
 
 
-def _resolved_cover_file(session: Session, playlist: Playlist) -> Path | None:
+def _resolved_cover_file(
+    session: Session, playlist: Playlist, viewer: AuthUser
+) -> Path | None:
     custom = resolve_thumbnail_file(playlist.cover_path)
     if custom is not None:
         return custom
-    items = _playlist_items(session, require_id(playlist))
+    items = _allowed_items(
+        session, _playlist_items(session, require_id(playlist)), viewer
+    )
     members = _member_video_ids(session, items)
     pinned = (
         playlist.cover_video_id if playlist.cover_video_id in set(members) else None
@@ -246,6 +280,7 @@ def _playlist_detail(
 ) -> PlaylistDetail:
     items = _playlist_items(session, require_id(playlist))
     found = playlist_entries.resolve(session, items)
+    items = _allowed_items(session, items, viewer, found)
     in_order = [found[require_id(i)] for i in items if require_id(i) in found]
     reads = _to_read_many(in_order, session, viewer=viewer)
     read_by_id = {r.id: r for r in reads}
@@ -348,7 +383,9 @@ def _playlist_reads(
     owners = _owners(session, list(playlists))
     out: list[PlaylistRead] = []
     for playlist in playlists:
-        plist = grouped.get(require_id(playlist), [])
+        plist = _allowed_items(
+            session, grouped.get(require_id(playlist), []), user, found
+        )
         members = [
             require_id(found[require_id(item)])
             for item in plist
@@ -537,12 +574,12 @@ def add_item(
             if payload.download:
                 _download_into(session, user, playlist, raw_url)
             else:
-                _add_streamed(session, playlist_id, raw_url, gate)
+                _add_streamed(session, user, playlist_id, raw_url, gate)
             return get_playlist(playlist_id, session, user)
         video_id = found
 
     video = session.get(Video, video_id)
-    if video is None:
+    if video is None or not parental.video_allowed(user.allowed, video):
         raise HTTPException(status_code=404, detail="Video not found")
     _add_library_video(session, playlist_id, video)
     session.commit()
@@ -583,7 +620,11 @@ def _add_library_video(session: Session, playlist_id: int, video: Video) -> bool
 
 
 def _add_streamed(
-    session: Session, playlist_id: int, raw_url: str, gate: ExtractionGate
+    session: Session,
+    user: AuthUser,
+    playlist_id: int,
+    raw_url: str,
+    gate: ExtractionGate,
 ) -> None:
     """Add a video that is not in the library, to be streamed."""
     if is_playlist_only_url(raw_url):
@@ -602,6 +643,10 @@ def _add_streamed(
     except Exception as exc:
         logger.warning("could not read %s for a playlist", url, exc_info=True)
         raise preview_extraction_error(exc, url) from exc
+    if user.allowed is not None and not user.allowed.allows(
+        meta.get("channel_url"), meta.get("channel")
+    ):
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
     session.add(
         PlaylistItem(
             playlist_id=playlist_id,
@@ -626,8 +671,13 @@ def bulk_add_items(
     user: AuthUser = Depends(current_user),
 ):
     access.get_editable(session, user, playlist_id)
-    for video_id in payload.video_ids:
-        video = session.get(Video, video_id)
+    videos = [session.get(Video, video_id) for video_id in payload.video_ids]
+    if any(
+        v is not None and not parental.video_allowed(user.allowed, v) for v in videos
+    ):
+        # Parental controls: as if it did not exist (``video_guard``).
+        raise HTTPException(status_code=404, detail="Video not found")
+    for video in videos:
         if video is not None:
             _add_library_video(session, playlist_id, video)
             session.flush()  # the next one counts this one's position
@@ -710,6 +760,8 @@ def server_copies(
     access.get_visible(session, user, playlist_id)
     items = _playlist_items(session, playlist_id)
     found = playlist_entries.resolve(session, items)
+    items = _allowed_items(session, items, user, found)
+    found = {k: v for k, v in found.items() if k in {require_id(i) for i in items}}
     missing = sum(1 for item in items if require_id(item) not in found and item.url)
     # A video with no link to stream from (an upload, a scanned file) would
     # leave the playlist when deleted, so removing never touches those.
@@ -777,7 +829,7 @@ def get_playlist_thumbnail(
     user: AuthUser = Depends(current_user),
 ):
     playlist = access.get_visible(session, user, playlist_id)
-    path = _resolved_cover_file(session, playlist)
+    path = _resolved_cover_file(session, playlist, user)
     if path is None:
         raise HTTPException(status_code=404, detail="No thumbnail")
     return FileResponse(path, media_type="image/jpeg")

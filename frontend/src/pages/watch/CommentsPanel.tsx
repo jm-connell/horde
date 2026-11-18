@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ApiError } from "../../api";
 import { button } from "../../components/buttons";
-import { ExternalIcon, HeartIcon, RefreshIcon } from "../../components/icons";
+import { HeartIcon, RefreshIcon } from "../../components/icons";
 import LinkifiedText from "../../components/LinkifiedText";
 import LoadingIndicator from "../../components/LoadingIndicator";
 import { useAuth } from "../../context/AuthContext";
@@ -19,13 +19,22 @@ import {
 } from "../../utils";
 
 /** Threads shown at first, and how many more each scroll to the end adds. */
-const FIRST = 5;
-const STEP = 20;
+const PAGE = 20;
 /** The first read from YouTube when nothing is saved (top comments). */
 const FIRST_LIVE_LIMIT = 100;
 /** Longer comments start clamped to a few lines. */
 const LONG_CHARS = 500;
 const LONG_LINES = 8;
+
+/** Back up to the player a comment's timestamp just seeked. */
+function scrollToPlayer() {
+  window.scrollTo({
+    top: 0,
+    behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? "auto"
+      : "smooth",
+  });
+}
 
 function youtubeUrl(youtubeId: string, commentId?: string): string {
   const base = `https://www.youtube.com/watch?v=${encodeURIComponent(youtubeId)}`;
@@ -116,7 +125,7 @@ function Comment({
           long && !expanded ? "line-clamp-6" : ""
         }`}
       >
-        <LinkifiedText text={comment.text} />
+        <LinkifiedText text={comment.text} onTimestamp={scrollToPlayer} />
       </p>
       {(long || likes > 0 || comment.is_hearted || replies.length > 0) && (
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
@@ -169,9 +178,10 @@ function Comment({
 }
 
 /**
- * Comments under the video: the ones saved with a library video, then more
- * read from YouTube on request ("Show more" past the saved ones). A streamed
- * video has none saved, so its top comments load from YouTube right away.
+ * Comments under the video, in a box that scrolls on its own: the ones saved
+ * with a library video, then more read from YouTube as the box nears its end
+ * (past the saved ones). A streamed video has none saved, so its top comments
+ * load from YouTube right away.
  */
 export default function CommentsPanel({
   videoId,
@@ -199,7 +209,7 @@ export default function CommentsPanel({
   const limits = asked.length === 0 && autoLive ? [FIRST_LIVE_LIMIT] : asked;
   const liveSteps = useLiveCommentSteps(youtubeId, limits);
   const current = liveSteps[liveSteps.length - 1] ?? null;
-  const [shown, setShown] = useState(FIRST);
+  const [shown, setShown] = useState(PAGE);
   const { can } = useAuth();
   const refresh = useRefreshVideoComments(videoId);
 
@@ -267,10 +277,10 @@ export default function CommentsPanel({
   const canReadMore = items.length > 0 && nextLimit !== null;
   const more = () => {
     if (canShowMore) {
-      setShown((n) => n + STEP);
+      setShown((n) => n + PAGE);
     } else if (canReadMore) {
       setLimits([...limits, nextLimit]);
-      setShown((n) => n + STEP);
+      setShown((n) => n + PAGE);
     }
   };
 
@@ -311,16 +321,6 @@ export default function CommentsPanel({
               />
             </button>
           )}
-          {youtubeId && (
-            <a
-              href={safeHref(youtubeUrl(youtubeId))}
-              target="_blank"
-              rel="noreferrer"
-              className="ui-interactive inline-flex items-center gap-1 text-xs text-muted hover:text-accent"
-            >
-              On YouTube <ExternalIcon />
-            </a>
-          )}
         </div>
       </div>
 
@@ -330,11 +330,30 @@ export default function CommentsPanel({
       {note && <p className="mt-2 text-sm text-muted">{note}</p>}
 
       {items.length > 0 && youtubeId && (
-        <ol className="mt-3 space-y-4">
-          {items.slice(0, shown).map((c) => (
-            <Comment key={c.id} comment={c} youtubeId={youtubeId} />
-          ))}
-        </ol>
+        <div
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- a scrollable region must be keyboard-focusable (axe scrollable-region-focusable)
+          tabIndex={0}
+          aria-label="Comment threads"
+          className="horde-scrollbar mt-3 max-h-[min(36rem,70vh)] overflow-y-auto rounded-md pr-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        >
+          <ol data-horde="comment-threads" className="space-y-4">
+            {items.slice(0, shown).map((c) => (
+              <Comment key={c.id} comment={c} youtubeId={youtubeId} />
+            ))}
+          </ol>
+          {(canShowMore || canReadMore) &&
+            !loadingLive &&
+            !liveFailed &&
+            !refresh.isPending && (
+              <MoreOnScroll
+                onMore={more}
+                armKey={`${shown}:${items.length}:${limits.length}`}
+              />
+            )}
+          {loadingLive && (
+            <LoadingIndicator label="Loading more comments" className="py-3" />
+          )}
+        </div>
       )}
 
       {refresh.isError && (
@@ -351,18 +370,6 @@ export default function CommentsPanel({
         <LoadingIndicator className="py-3" />
       )}
 
-      {(canShowMore || canReadMore) &&
-        !loadingLive &&
-        !liveFailed &&
-        !refresh.isPending && (
-          <MoreOnScroll
-            onMore={more}
-            armKey={`${shown}:${items.length}:${limits.length}`}
-          />
-        )}
-      {loadingLive && items.length > 0 && (
-        <LoadingIndicator label="Loading more comments" className="py-3" />
-      )}
       {liveFailed && current && items.length > 0 && (
         <div className="mt-3">
           <button
@@ -379,9 +386,9 @@ export default function CommentsPanel({
 }
 
 /**
- * Calls `onMore` when the end of the list scrolls into view (or is in view
- * already). `armKey` changes after each step, so a list still too short to
- * fill the screen keeps loading.
+ * Calls `onMore` when the end of the list scrolls into view of the box it
+ * scrolls in (or is in view already). `armKey` changes after each step, so a
+ * list still too short to fill the box keeps loading.
  */
 function MoreOnScroll({
   onMore,
@@ -397,12 +404,13 @@ function MoreOnScroll({
   });
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    const box = el?.parentElement;
+    if (!el || !box) return;
     const io = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) onMoreRef.current();
       },
-      { rootMargin: "200px" }
+      { root: box, rootMargin: "0px 0px 200px 0px" }
     );
     io.observe(el);
     return () => io.disconnect();

@@ -1,16 +1,13 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import { CSRF_HEADERS, expect, test } from "./fixtures";
+import { appDownloads } from "./runtime";
 
 const YT = "clipstr0001";
 const STREAM_URL = `https://www.youtube.com/watch?v=${YT}`;
 const WATCH = `/watch?url=${encodeURIComponent(STREAM_URL)}`;
 // A real 20 s file from the seeded library stands in for the stream's media.
-const MEDIA = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../e2e/.runtime/app/downloads/Northwind/2024/Aurora Drift.mp4"
-);
+const MEDIA = path.join(appDownloads, "Northwind/2024/Aurora Drift.mp4");
 
 const SHEET = "https://i.ytimg.com/sb/clipstr0001/storyboard3_L2/M0.jpg";
 

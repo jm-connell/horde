@@ -1,5 +1,6 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { appPort } from "./runtime";
 
 /** Accounts seeded by backend/app/e2e_seed.py (app mode). */
 export const ACCOUNTS = {
@@ -13,7 +14,10 @@ export type AccountName = keyof typeof ACCOUNTS;
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-/** Where global setup saves each account's signed-in browser state. */
+/**
+ * Where global setup saves each account's signed-in browser state: per app
+ * port, since each server has its own sessions.
+ */
 export function storageStatePath(name: AccountName): string {
-  return path.join(here, ".auth", `${name}.json`);
+  return path.join(here, ".auth", String(appPort), `${name}.json`);
 }

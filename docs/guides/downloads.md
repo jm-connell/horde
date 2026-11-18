@@ -21,6 +21,8 @@ Every download you start uses your **Default quality** (Settings → Library →
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead). Downloads pick the **original-language** audio track when YouTube also offers autodubs (same scoring as stream preview). Existing library files are not rewritten.
 
+An audio download saved **to this device** keeps its audio file (usually `.m4a`). One saved **to the library** is stored as an audio-only `.mp4`, which plays in the normal player with the thumbnail as its picture and has no seek-preview sprites.
+
 When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label. Finished cards use the probed file height, never **Best available**.
 
 Height-capped presets prefer an exact match (e.g. 1080p) when YouTube offers it, then the best stream under that height — they never fall back to unbounded `best`. Within a height, the default **AV1** [playback mode](#compatibility-codecs) prefers **AV1 + AAC** over a higher-bitrate VP9/H.264 stream, then remuxes to MP4 with `faststart` (video is **copied**). If the finished file is still below the requested tier, the Download/Watch toast shows a **quality warning**.

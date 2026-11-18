@@ -11,7 +11,7 @@ Run the FastAPI backend and Vite frontend on your machine for UI and API work. C
 - Node.js 24 or newer, with npm (`.nvmrc` names the version CI uses)
 - Git (you need a clone of this repo)
 - `curl` (Linux/macOS helper scripts wait on `/api/health`)
-- FFmpeg (`ffmpeg` and `ffprobe` on `PATH`, or `FFMPEG_BIN` / `FFPROBE_BIN`) for downloads, thumbnails and imports; the UI and API start without it
+- FFmpeg (`ffmpeg` and `ffprobe` on `PATH`, or `FFMPEG_BIN` / `FFPROBE_BIN`) for downloads, thumbnails and imports; the UI and API start without it, but downloads fail with "ffmpeg is not installed"
 
 On Fedora, something like `sudo dnf install python3 nodejs npm curl ffmpeg` covers the basics.
 

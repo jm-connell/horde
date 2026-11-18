@@ -12,6 +12,7 @@ from sqlmodel import Session
 from ..auth import current_user, require_permission
 from ..context import get_ctx, get_session
 from ..errors import CodedHTTPException
+from ..parental_guard import restricted_forbidden
 from ..schemas import (
     FollowedChannelRead,
     FollowListResponse,
@@ -86,7 +87,9 @@ _MANAGE = [Depends(require_permission("manage_subscriptions"))]
 
 
 @router.get(
-    "/preview", response_model=FollowPreviewRead, dependencies=[Depends(ytdlp_slot)]
+    "/preview",
+    response_model=FollowPreviewRead,
+    dependencies=[Depends(restricted_forbidden), Depends(ytdlp_slot)],
 )
 def preview_channel(
     request: Request,

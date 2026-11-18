@@ -6,6 +6,7 @@ import {
   videoCard,
 } from "./fixtures";
 import type { Locator, Page, Route } from "@playwright/test";
+import { expectNoSeriousViolations } from "./axe";
 
 /** The seeded id of the library video called `title`. */
 async function videoId(page: Page, title: string): Promise<number> {
@@ -16,9 +17,16 @@ async function videoId(page: Page, title: string): Promise<number> {
   return item.id;
 }
 
-/** Scroll so the end of the comments panel is in view (where more load). */
+/** The comment threads shown, in the box they scroll in. */
+function threadsOf(panel: Locator): Locator {
+  return panel.locator("[data-horde='comment-threads'] > li");
+}
+
+/** Scroll the comments box to its end (where more load). */
 async function scrollToEnd(panel: Locator) {
-  await panel.evaluate((el) => el.scrollIntoView({ block: "end" }));
+  await panel
+    .getByLabel("Comment threads")
+    .evaluate((box) => (box.scrollTop = box.scrollHeight));
 }
 
 test("saved comments show under the video, creator's note first, replies on request", async ({
@@ -29,9 +37,11 @@ test("saved comments show under the video, creator's note first, replies on requ
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("heading")).toHaveText("Comments 2.4K");
 
-  const threads = panel.locator(":scope > ol > li");
-  // The first few, until the end of the list scrolls into view.
-  await expect(threads.first()).toBeVisible();
+  // All ten saved threads fit the first page of the box.
+  const threads = threadsOf(panel);
+  await expect(threads).toHaveCount(10);
+  // Each comment's date opens it on YouTube; the panel has no link of its own.
+  await expect(panel.getByRole("link", { name: /On YouTube/ })).toHaveCount(0);
   const pinned = threads.first();
   await expect(pinned).toContainText("Pinned");
   await expect(pinned).toContainText("Thanks for watching!");
@@ -49,12 +59,30 @@ test("saved comments show under the video, creator's note first, replies on requ
   await expect(glue).toContainText("Titebond III, clamped overnight.");
   await expect(glue).toContainText("Same here, works great.");
 
-  // Scrolling to the end shows the rest of the saved ones; fewer than
-  // YouTube's first 100 means there is nothing more to read from YouTube.
+  // Fewer than YouTube's first 100 means there is nothing more to read.
   await scrollToEnd(panel);
   await expect(threads).toHaveCount(10);
   await expect(panel.locator("[data-horde='comments-more']")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /Show more/ })).toHaveCount(0);
+  // The box scrolls on its own, so it takes keyboard focus.
+  await expectNoSeriousViolations(page, "comments", "[data-horde='comments']");
+});
+
+test("a timestamp in a comment scrolls back up to the player", async ({
+  page,
+}) => {
+  await page.goto(`/watch/${await videoId(page, "Cedar Notes")}`);
+  const panel = page.getByRole("region", { name: /Comments/ });
+  const stamp = panel.getByRole("button", { name: "0:42" });
+  await stamp.scrollIntoViewIfNeeded();
+  // Scroll on past the comments, so the page is well away from the player.
+  await page.evaluate(() => window.scrollBy(0, 200));
+  expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  await stamp.click();
+  // Soon: the page later shrinks as it settles, which also lands at the top.
+  await expect
+    .poll(() => page.evaluate(() => window.scrollY), { timeout: 3_000 })
+    .toBe(0);
 });
 
 test("a library video with nothing saved yet loads its top comments at once", async ({
@@ -180,10 +208,9 @@ test("more comments are read from YouTube, and a failed read keeps what is shown
 
   await page.goto(`/watch/${id}`);
   const panel = page.getByRole("region", { name: /Comments/ });
-  const threads = panel.locator(":scope > ol > li");
+  const threads = threadsOf(panel);
   const end = panel.locator("[data-horde='comments-more']");
-  // At the end: the rest of the saved ones, then a read from YouTube for more.
-  await scrollToEnd(panel);
+  // All the saved ones, then at the end of the box a read from YouTube.
   await expect(threads).toHaveCount(10);
   await scrollToEnd(panel);
   await expect(
@@ -263,7 +290,7 @@ test("a streamed video loads its comments right away and keeps replies on the ne
   await expect(
     panel.getByRole("button", { name: "Load comments" })
   ).toHaveCount(0);
-  const threads = panel.locator(":scope > ol > li");
+  const threads = threadsOf(panel);
   await expect(threads.first()).toContainText("What a view");
   await scrollToEnd(panel);
   await expect(threads).toHaveCount(2);
@@ -301,9 +328,7 @@ test("the refresh button fetches and saves the comments again", async ({
   const button = panel.getByRole("button", { name: "Refresh comments" });
   await expect(button).toHaveAttribute("title", /^Refresh comments \(saved /);
   await button.click();
-  await expect(panel.locator(":scope > ol > li").first()).toContainText(
-    "A new top comment"
-  );
+  await expect(threadsOf(panel).first()).toContainText("A new top comment");
   await expect(panel.getByRole("heading")).toHaveText("Comments 2.5K");
   expect(refreshed).toBe(1);
 });
