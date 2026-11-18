@@ -185,6 +185,23 @@ export function RefreshIcon({ className = "" }: { className?: string }) {
   );
 }
 
+/** Three sliders: tune, adjust how something is picked. */
+export function SlidersIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.75"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M2.5 4h4M9.5 4h4M2.5 8h7M12.5 8h1M2.5 12h2M7.5 12h6M8 2.5v3M11 6.5v3M6 10.5v3" />
+    </svg>
+  );
+}
+
 /** ♥: hearted (a creator's heart on a comment). */
 export function HeartIcon({ className = "" }: { className?: string }) {
   return (

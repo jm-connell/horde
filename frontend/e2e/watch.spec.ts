@@ -101,6 +101,21 @@ test("more actions opens edit details", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("more actions stays inside the window", async ({ page }) => {
+  await page.goto("/");
+  await videoCard(page, "Kiln fire").click();
+  await page.getByTitle("More actions").click();
+  const menu = page.getByRole("menu", { name: "Video actions" });
+  await expect(
+    menu.getByRole("menuitem", { name: "Edit details" })
+  ).toBeVisible();
+  // On a phone the trigger sits near the right edge; the menu must not run off it.
+  const box = await menu.boundingBox();
+  const width = page.viewportSize()!.width;
+  expect(box!.x).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+});
+
 test("a slow response for the previous video does not replace the current one", async ({
   page,
   request,

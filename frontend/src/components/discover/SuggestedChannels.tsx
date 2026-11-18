@@ -49,7 +49,8 @@ export default function SuggestedChannels({
               <button
                 type="button"
                 onClick={() => onDismiss(ch)}
-                className="ui-interactive absolute right-2 top-2 rounded-lg p-1 text-muted hover:text-accent"
+                // The ::after widens what a finger can hit past the 24px icon box.
+                className="ui-interactive absolute right-2 top-2 rounded-lg p-1 text-muted after:absolute after:-inset-2 hover:text-accent"
                 aria-label={`Don't suggest ${ch.name}`}
                 title="Don't suggest this channel"
               >

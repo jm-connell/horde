@@ -141,7 +141,7 @@ test("streams left part-way and YouTube views join Continue watching on Recommen
   await expect(page.getByText("Watched on the phone yesterday")).toHaveCount(0);
   await expect(page.getByText("Streamed halfway last night")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   const stream = page.locator("[data-continue-stream='streamleft1']");
   await expect(stream.getByText("Streamed halfway last night")).toBeVisible();
   await expect(stream.locator("a").first()).toHaveAttribute(

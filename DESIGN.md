@@ -229,6 +229,16 @@ of the screen (mini player, queue dock, toasts, floating panels, the phone
 Ask panel) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.
 
+Two gestures stand in for the browser chrome the installed app lacks
+(touch screens only). Swiping right from the left edge goes back (iOS,
+`EdgeSwipeBack`), and pulling a page down from its top refreshes it
+(`PullToRefresh`): a 40px round glass mark (`ink-900/60` with a backdrop
+blur and an `ink-600` ring) drops in under the top bar, its refresh icon
+turning with the pull (still under reduced motion), and turns accent (icon,
+`accent/60` ring, an `accent/15` tint, never a solid fill) once letting go
+will refresh. A page reloads unless it handles the `horde:pull-refresh` event
+itself; Recommended reshuffles, like its Refresh button.
+
 ## Elevation & Depth
 
 Depth is tonal first: page `ink-950`, panels and cards `ink-900` with a 1px
@@ -279,16 +289,36 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   so there is never a gap under the title or at the bottom. The action (a small
   accent download icon, a success check when downloaded, Live, Upcoming)
   always sits at the bottom right, never on a line of its own. "+ Queue"
-  appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
+  appears on hover or focus and confirms with a check and "Queued". A
+  Recommended card's ⋯ menu sits top-left, clear of it, and also has **Add to
+  queue**, the dependable way to queue on a touch screen. Small actions
+  inside a card (the download icon, a ✕) keep their look but widen what a
+  finger can hit with an `::after` inset (44px on coarse pointers where
+  there is room). Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
   has indexed), none (a channel new to them); a live card keeps its red ring
   instead. Square on phones' edge-to-edge
-  cards. A legend of dots sits beside the home tabs. Only the theme's accent, so the
-  marks follow every theme; why a card is there is its hover title, not a line
-  under it.
+  cards. A legend of keys drawn as tiny cards in the same outlines (the
+  plain card's key takes the card's `ink-700` hairline) sits beside the home tabs
+  from `md` and at the top of the Algorithm panel on phones. Only the
+  theme's accent, so the marks follow every theme; why a card is there is
+  its hover title, not a line under it. The faded mark is as faint in the
+  legend as on the cards; that is the mark's own contrast, kept on purpose.
+- **Home tabs and Recommended header.** Library / Recommended is a real
+  tablist (`role="tab"`, `aria-selected`, arrow keys, as on Settings), 40px
+  tall on coarse pointers. Everything the tab owns sits on the tabs' row in
+  the header's right-hand slot, so switching tabs swaps the slot instead of
+  moving the page: Sort and Select on Library; Algorithm and Refresh on
+  Recommended, as text buttons from `md` and 40px icon squares on phones
+  (sliders and refresh icons, the name kept for screen readers). Below the
+  row, "Looking on YouTube is off" is one muted line with a **Turn it on**
+  link for the admin (`?find=discovery`) and a close ✕ remembered on the
+  device; live states (looking, backing off) are an unclosable muted line.
+  When new picks are ready, **Show new picks** is a centred accent pill
+  above the grid, the view's one primary action.
 - **Search placeholder card.** Holds a late result's place in a grid (YouTube
   in mixed search results) so nothing moves when it lands: the video card's
   frame, a thumbnail of `accent/15` fading into `ink-800`/`ink-900` with a

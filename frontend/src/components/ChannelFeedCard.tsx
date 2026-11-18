@@ -139,8 +139,8 @@ function FeedAction({
       aria-label={downloading ? "Downloading" : "Download"}
       title={downloading ? "Downloading" : "Download"}
       // A 16px line holds a 20px button: the margins keep the line's height,
-      // and the ::after widens what a finger can hit.
-      className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60"
+      // and the ::after widens what a finger can hit (44px on touch screens).
+      className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60 [@media(pointer:coarse)]:after:-inset-3"
     >
       <DownloadIcon className="text-sm" />
     </button>

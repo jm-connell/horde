@@ -31,6 +31,7 @@ One script runs every gate in the order CI does and prints a summary. Run it bef
 ```bash
 scripts/check.sh          # backend + frontend + docs gates
 scripts/check.sh --e2e    # also run the Playwright suite
+E2E_SHARDS=4 scripts/check.sh --e2e   # ...as four parallel shards (much faster)
 ```
 
 | # | Gate | Command (run by the script) |
@@ -48,7 +49,7 @@ scripts/check.sh --e2e    # also run the Playwright suite
 | 7 | Frontend tests | `npm test` (Vitest) |
 | 8 | Production bundle | `npm run build` |
 | 9 | Wiki | `mkdocs build --strict` (skipped when mkdocs is not installed) |
-| 10 | Browser UI (`--e2e` only) | `npx playwright test` |
+| 10 | Browser UI (`--e2e` only) | `npx playwright test`, or `scripts/e2e-shards.sh` with `E2E_SHARDS` > 1 |
 
 Every gate runs even if an earlier one fails, so you see all problems at once; the exit status is non-zero if any failed. Set `PYTHON=/path/to/venv/bin/python` to choose the interpreter (default: `.venv/bin/python` if present, else `python3`).
 
@@ -57,7 +58,10 @@ Auto-fixers: `ruff check --fix . && ruff format .` in `backend/`, `npm run lint:
 Tool configuration lives in `backend/pyproject.toml` (ruff, mypy) and `frontend/eslint.config.js` / `frontend/.prettierrc`. `mypy` is a gate: zero errors, with `check_untyped_defs`, `warn_return_any`, `warn_redundant_casts`, `strict_equality` and `warn_unused_ignores` on. Every `# noqa`, `# type: ignore[code]` and `// eslint-disable` must carry a reason (mypy allows free text only after a second `#`: `# type: ignore[attr-defined]  # why`). Typing notes for SQLModel code: class attributes such as `Video.id` are typed as their Python values, so wrap them in `col()` when building SQL expressions (`col(Video.id).in_(ids)`), and use `require_id(row)` for a primary key that is known to be set.
 
 !!! note "Playwright browser path"
-    By default Playwright uses the Chromium that `npx playwright install chromium` fetches (CI does this). On a machine with a preinstalled browser that does not match the pinned Playwright version, set `PW_CHROMIUM_EXECUTABLE=/path/to/chrome`. Set `E2E_APP_PORT` / `E2E_SETUP_PORT` (defaults 8091 / 8092) to run several checkouts side by side.
+    By default Playwright uses the Chromium that `npx playwright install chromium` fetches (CI does this). On a machine with a preinstalled browser that does not match the pinned Playwright version, set `PW_CHROMIUM_EXECUTABLE=/path/to/chrome`. Set `E2E_APP_PORT` / `E2E_SETUP_PORT` (defaults 8091 / 8092) to run several suites side by side: a run's server data (`e2e/.runtime/<mode>-<port>`) and saved sign-ins (`frontend/e2e/.auth/<port>`) are keyed by port, so runs in one checkout do not collide.
+
+!!! tip "Parallel shards"
+    Within one run the suite is serial (one seeded server, reset before every test), which takes about half an hour. `scripts/e2e-shards.sh` splits it into `E2E_SHARDS` (default 4) Playwright `--shard` runs at once, each with its own ports from `E2E_PORT_BASE` (default 8091: shard *i* uses 8091 + 2(*i*−1) and the next port). Logs go to `frontend/test-results/shard-<i>.log`; extra arguments go to Playwright (`scripts/e2e-shards.sh e2e/watch.spec.ts`). Build the SPA first.
 
 ## Local commands
 

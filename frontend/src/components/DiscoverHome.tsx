@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Link } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
+import { usePlaybackActions } from "../context/PlaybackContext";
 import { useSubscribe } from "../queries/follows";
 import { useDownloads } from "../context/DownloadContext";
 import { useGridColumns } from "../hooks/useGridColumns";
@@ -30,9 +33,12 @@ import { SOURCE } from "./discover/sources";
 import { useHideLive } from "./discover/useHideLive";
 import SuggestedChannels from "./discover/SuggestedChannels";
 import WhyDialog from "./discover/WhyDialog";
+import { CloseIcon, RefreshIcon, SlidersIcon } from "./icons";
 import LoadingIndicator from "./LoadingIndicator";
+import { PULL_REFRESH_EVENT } from "./PullToRefresh";
 import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
+import { getJson, setJson } from "../storage";
 
 /**
  * How many cards come before the channel suggestions: two full rows (four on
@@ -44,6 +50,12 @@ function suggestionsAfter(columns: number, cards: number): number {
   return Math.min(columns * (columns >= 3 ? 2 : 4), full || cards);
 }
 const STATUS_POLL_MS = 8000;
+/** The "Looking on YouTube is off" notice, once closed on this device. */
+const OFF_NOTICE_KEY = "horde.discover-off-notice-dismissed";
+const isTrue = (v: unknown): v is true => v === true;
+/** Icon and name on phones' square buttons, the name alone from `md`. */
+const ACTION_BTN =
+  "max-md:flex max-md:h-10 max-md:w-10 max-md:items-center max-md:justify-center max-md:p-0";
 /** Stop asking after this long (the gatherer may be waiting on YouTube). */
 const STATUS_POLL_MAX = 40;
 
@@ -86,14 +98,18 @@ function newSeed(): number {
  * channels, and throwbacks), with channels to follow.
  */
 export default function DiscoverHome({
+  actionsSlot,
   sidebarCollapsed,
   onChannelClick,
 }: {
+  /** The page header's slot for Algorithm and Refresh (on the tabs' row). */
+  actionsSlot: HTMLElement | null;
   sidebarCollapsed: boolean;
   onChannelClick: (hit: ChannelHit) => void;
 }) {
   const { showToast, showError } = useToast();
-  const { can } = useAuth();
+  const { addToQueue } = usePlaybackActions();
+  const { can, isAdmin } = useAuth();
   const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
   const [settings] = useSettings();
@@ -153,6 +169,9 @@ export default function DiscoverHome({
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [freshReady, setFreshReady] = useState(false);
+  const [offNoticeClosed, setOffNoticeClosed] = useState(() =>
+    getJson(OFF_NOTICE_KEY, isTrue, false)
+  );
   const [downloading, setDownloading] = useState<Set<string>>(new Set());
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [columns, gridRef] = useGridColumns(4);
@@ -299,6 +318,17 @@ export default function DiscoverHome({
       .catch(() => undefined);
   };
 
+  // Pulling the installed app down reshuffles, like Refresh, instead of
+  // reloading the page into the same order.
+  useEffect(() => {
+    const onPull = (e: Event) => {
+      e.preventDefault();
+      refresh();
+    };
+    window.addEventListener(PULL_REFRESH_EVENT, onPull);
+    return () => window.removeEventListener(PULL_REFRESH_EVENT, onPull);
+  });
+
   /** The page loaded ahead no longer matches: the next open asks afresh. */
   const dropPreview = () => {
     queryClient.removeQueries({ queryKey: queryKeys.discover.firstPage });
@@ -428,54 +458,62 @@ export default function DiscoverHome({
       );
   };
 
+  // Live states say what is happening now; "off" is a standing fact, so it
+  // can be closed once read.
   const statusLine = !status
     ? null
     : !status.enabled
-      ? "Looking on YouTube is off (Settings → Library), so these come from your library and indexed channels."
+      ? null
       : status.backing_off
         ? "YouTube asked Horde to slow down; looking for new videos again later."
         : status.gathering
           ? "Looking on YouTube for videos you might like…"
           : null;
+  const showOffNotice = status?.enabled === false && !offNoticeClosed;
+  // Turned on since: the note comes back if it is ever turned off again.
+  const discoveryOn = status?.enabled === true;
+  useEffect(() => {
+    if (!discoveryOn || !offNoticeClosed) return;
+    setJson(OFF_NOTICE_KEY, false);
+    setOffNoticeClosed(false);
+  }, [discoveryOn, offNoticeClosed]);
+  const closeOffNotice = () => {
+    setJson(OFF_NOTICE_KEY, true);
+    setOffNoticeClosed(true);
+  };
 
   const actions = (
     <>
-      {freshReady && (
-        <button
-          type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
-          className={button("secondary", "sm")}
-        >
-          Show new picks
-        </button>
-      )}
       <button
         type="button"
         aria-pressed={algorithmOpen}
         onClick={() => setAlgorithmOpen(!algorithmOpen)}
-        className={`${button("secondary", "sm")} ${algorithmOpen ? "border-accent text-accent" : ""}`}
+        className={`${button("secondary", "sm")} ${ACTION_BTN} ${algorithmOpen ? "border-accent text-accent" : ""}`}
         title="See and change how this feed is picked"
         data-horde="open-algorithm"
       >
-        Algorithm
+        <SlidersIcon className="text-base md:hidden" />
+        <span className="max-md:sr-only">Algorithm</span>
       </button>
       <button
         type="button"
         onClick={refresh}
-        className={button("secondary", "sm")}
+        className={`${button("secondary", "sm")} ${ACTION_BTN}`}
         title={
           status?.enabled === false
             ? "Reshuffle the less certain picks"
             : "Reshuffle, and look for new videos on YouTube"
         }
       >
-        Refresh
+        <RefreshIcon className="text-base md:hidden" />
+        <span className="max-md:sr-only">Refresh</span>
       </button>
     </>
   );
 
   const card = (item: DiscoverItem) => {
     const channel = channelOf(item);
+    const video = item.video;
     return (
       <div
         key={item.key}
@@ -510,6 +548,14 @@ export default function DiscoverHome({
         <RecMenu
           channel={channel.name || null}
           onWhy={() => setWhyItem(item)}
+          onQueue={
+            video
+              ? () => {
+                  addToQueue(video);
+                  showToast("Added to the queue");
+                }
+              : undefined
+          }
           onNotInterested={() => notInterested(item)}
           onBlockChannel={() => blockChannel(item)}
           onHideLive={
@@ -527,22 +573,58 @@ export default function DiscoverHome({
 
   return (
     <div className="space-y-4">
+      {actionsSlot && createPortal(actions, actionsSlot)}
       {statusLine && (
         <p className="text-sm text-muted" aria-live="polite">
           {statusLine}
         </p>
       )}
-      {categories.length > 0 ? (
+      {showOffNotice && (
+        <div
+          data-horde="discover-off-notice"
+          className="flex items-start gap-2 text-sm text-muted"
+        >
+          <p className="min-w-0 flex-1">
+            Looking on YouTube is off, so these come from your library and
+            indexed channels.{" "}
+            {isAdmin ? (
+              <Link
+                to="/settings?tab=library&find=discovery"
+                className="text-accent hover:underline"
+              >
+                Turn it on
+              </Link>
+            ) : (
+              "An admin can turn it on in Settings."
+            )}
+          </p>
+          <button
+            type="button"
+            onClick={closeOffNotice}
+            className="ui-interactive -m-2 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:text-gray-200"
+            aria-label="Hide this note"
+            title="Hide this note"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+      )}
+      {categories.length > 0 && (
         <CategoryChips
           categories={categories}
           active={category}
           onSelect={setCategory}
-        >
-          {actions}
-        </CategoryChips>
-      ) : (
-        <div className="flex flex-wrap items-center justify-end gap-3">
-          {actions}
+        />
+      )}
+      {freshReady && (
+        <div className="flex justify-center">
+          <button
+            type="button"
+            onClick={() => setReloadKey((k) => k + 1)}
+            className={`${button("primary", "sm")} !rounded-full`}
+          >
+            Show new picks
+          </button>
         </div>
       )}
 

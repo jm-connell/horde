@@ -28,7 +28,9 @@ def main() -> None:
     if not index.is_file():
         sys.exit(f"Missing {index}. From frontend/, run: npm run build")
 
-    runtime = ROOT / "e2e" / ".runtime" / args.mode
+    # Keyed by port so several runs can share a checkout (scripts/e2e-shards.sh);
+    # frontend/e2e/runtime.ts finds the app's downloads the same way.
+    runtime = ROOT / "e2e" / ".runtime" / f"{args.mode}-{args.port}"
     if runtime.exists():
         shutil.rmtree(runtime)
     data = runtime / "data"

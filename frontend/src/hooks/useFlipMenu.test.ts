@@ -27,4 +27,31 @@ describe("flipMenuFixedStyle", () => {
       right: 550,
     });
   });
+
+  it("shifts a left-aligned menu back inside a narrow window", () => {
+    const phone = { width: 375, height: 812 };
+    const trigger = { ...rect, left: 295, right: 343, width: 48 };
+    expect(flipMenuFixedStyle(trigger, "down", "left", phone, 208)).toEqual({
+      minWidth: 48,
+      top: 144,
+      left: 159,
+    });
+  });
+
+  it("shifts a right-aligned menu back inside the window", () => {
+    const trigger = { ...rect, left: 20, right: 60, width: 40 };
+    expect(flipMenuFixedStyle(trigger, "up", "right", viewport, 208)).toEqual({
+      minWidth: 40,
+      bottom: 504,
+      right: 584,
+    });
+  });
+
+  it("leaves a menu that fits where it is", () => {
+    expect(flipMenuFixedStyle(rect, "down", "left", viewport, 208)).toEqual({
+      minWidth: 200,
+      top: 144,
+      left: 50,
+    });
+  });
 });
