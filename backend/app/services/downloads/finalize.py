@@ -43,7 +43,7 @@ from ..paths import (
 from ..thumbnails import save_from_url
 from ..video_delete import delete_video_cascade, remove_files
 from ..ytdlp_extract import list_thumbnail_url
-from ..ytdlp_formats import compat_copy_cap, is_audio_preset
+from ..ytdlp_formats import accepts_audio_only, compat_copy_cap, is_audio_preset
 from . import artifacts, dbwrite, postprocess, subtitles
 from .errors import DownloadCancelled
 from .infodict import as_info, collect_tags, published_at
@@ -287,15 +287,19 @@ def _complete_device(
 
 
 def _promote_into_library(
-    final_path: Path, staging_dir: Path
+    final_path: Path, staging_dir: Path, *, audio_ok: bool
 ) -> tuple[Path, MoveJournal]:
     """Validate the processed file, then move it into the library.
 
     A failed move puts everything back; the returned journal lets the caller do
     the same if the database commit fails.
     """
-    if not artifacts.validate_playable(final_path):
+    if not artifacts.validate_playable(final_path, audio_ok=audio_ok):
         raise RuntimeError("Processed file is not playable")
+    if final_path.suffix.lower() == ".m4a":
+        # Audio-only: the same MP4 container, under the extension the library
+        # scans, serves and plays.
+        final_path = final_path.rename(final_path.with_suffix(".mp4"))
     journal = MoveJournal(get_paths().downloads)
     try:
         return promote_from_staging(journal, final_path, staging_dir), journal
@@ -428,7 +432,11 @@ def _complete_library(
     rel_path = to_rel_path(final_path)
     journal: MoveJournal | None = None
     if task.staging_dir is not None:
-        final_path, journal = _promote_into_library(final_path, task.staging_dir)
+        final_path, journal = _promote_into_library(
+            final_path,
+            task.staging_dir,
+            audio_ok=accepts_audio_only(spec.quality_preset, info),
+        )
         rel_path = to_rel_path(final_path)
         scanner.mark_active(rel_path)
 

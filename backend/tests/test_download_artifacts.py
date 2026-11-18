@@ -7,6 +7,8 @@ the folder starting with that prefix was treated as part of the download.
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -18,6 +20,8 @@ from app.services.paths import (
     belongs_to_stem,
     video_stem,
 )
+
+_FFMPEG_SINE = ["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "sine=d=1"]
 
 TITLES = [
     "Learn.fast tricks",
@@ -111,7 +115,7 @@ def test_reject_unplayable_removes_only_the_failed_download(init_db, monkeypatch
     sibling = _touch(folder / "Learn [sibling0001].mp4")
     broken = _touch(folder / f"{target}.mp4")
     part = _touch(folder / f"{target}.f137.mp4.part")
-    monkeypatch.setattr(artifacts, "validate_playable", lambda _p: False)
+    monkeypatch.setattr(artifacts, "validate_playable", lambda _p, **_k: False)
 
     rel = broken.relative_to(init_db["downloads"]).as_posix()
     assert artifacts.reject_unplayable(broken, {rel}) is None
@@ -119,6 +123,44 @@ def test_reject_unplayable_removes_only_the_failed_download(init_db, monkeypatch
     assert not broken.exists()
     assert not part.exists()
     assert sibling.exists()
+
+
+def test_a_rejected_audio_download_is_removed_before_the_next_attempt(
+    init_db, monkeypatch
+):
+    """A truncated .m4a left behind would win the next attempt's search (the
+    largest matching file) over the good file that attempt writes."""
+    folder = init_db["downloads"] / "_device" / "9"
+    broken = _touch(folder / "Song [song00001].m4a", size=4096)
+    monkeypatch.setattr(artifacts, "validate_playable", lambda _p, **_k: False)
+
+    rel = broken.relative_to(init_db["downloads"]).as_posix()
+    assert artifacts.reject_unplayable(broken, {rel}, audio_ok=True) is None
+    assert not broken.exists()
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+def test_an_audio_only_file_is_playable_only_where_audio_is_accepted(tmp_path):
+    audio = tmp_path / "Song [song00001].m4a"
+    subprocess.run(
+        [*_FFMPEG_SINE, "-c:a", "aac", str(audio)], check=True, capture_output=True
+    )
+    assert not artifacts.validate_playable(audio)
+    assert artifacts.validate_playable(audio, audio_ok=True)
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+def test_an_audio_download_is_found_next_to_its_prepared_name(init_db):
+    folder = init_db["downloads"] / "_device" / "7"
+    folder.mkdir(parents=True)
+    audio = folder / "Song [song00001].m4a"
+    subprocess.run(
+        [*_FFMPEG_SINE, "-c:a", "aac", str(audio)], check=True, capture_output=True
+    )
+    # yt-dlp names the file from the metadata, whose own format is a video.
+    prepared = folder / "Song [song00001].mp4"
+    assert artifacts.find_merged_video(prepared) is None
+    assert artifacts.find_merged_video(prepared, audio_ok=True) == audio
 
 
 def test_subtitle_collection_ignores_other_videos(init_db, monkeypatch):

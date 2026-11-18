@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import time
 
+import pytest
 from sqlmodel import Session
 
 from app.models import Video
-from app.services import activity
+from app.services import activity, metadata
 from app.services.sprites import enqueue_sprite_generation, sprites_in_progress
 
 
@@ -101,3 +104,36 @@ def test_sprite_sheet_is_revalidated_so_a_rebuilt_sheet_shows(client, add_video)
 
     assert resp.status_code == 200
     assert resp.headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="needs ffmpeg")
+def test_an_audio_only_file_gets_no_sprite_sheet_and_no_ffmpeg_runs(
+    tmp_path, monkeypatch
+):
+    """Every frame grab would fail: an audio download must not run the
+    per-frame fallback each time its watch page asks for sprites."""
+    # A podcast MP3's cover art survives the Safari remux as a still "video".
+    cover = tmp_path / "cover.jpg"
+    ffmpeg = ["ffmpeg", "-loglevel", "error", "-y"]
+    subprocess.run(
+        [*ffmpeg, "-f", "lavfi", "-i", "color=red:s=64x64:d=1", "-frames:v", "1"]
+        + [str(cover)],
+        check=True,
+        capture_output=True,
+    )
+    audio = tmp_path / "Song [song00001].mp4"
+    subprocess.run(
+        [*ffmpeg, "-f", "lavfi", "-i", "sine=d=30", "-i", str(cover)]
+        + ["-map", "0", "-map", "1", "-c:a", "aac", "-c:v", "mjpeg"]
+        + ["-disposition:v", "attached_pic", str(audio)],
+        check=True,
+        capture_output=True,
+    )
+    ran: list[str] = []
+    for name in ("_sprite_via_ffmpeg_tile", "_sprite_via_frame_montage"):
+        monkeypatch.setattr(
+            metadata, name, lambda *_a, _n=name, **_k: ran.append(_n) or False
+        )
+
+    assert metadata.generate_sprite_sheet(audio, tmp_path / "sprites", 1) is None
+    assert ran == []

@@ -72,6 +72,9 @@ class FakeYtdlp:
         # False leaves the separate streams unmerged and returns without error,
         # the way yt-dlp behaves when ffmpeg is not installed.
         self.merge = True
+        # True writes one audio-only ``.m4a`` and no video, the way yt-dlp
+        # downloads an audio format ("Audio" presets, podcasts).
+        self.audio_only = False
 
     def add(self, url: str, info: dict[str, Any]) -> dict[str, Any]:
         self.infos[url] = info
@@ -117,6 +120,11 @@ class FakeYtdlp:
                 fake.downloads.append({"url": url, "path": path, "opts": self.opts})
                 path.parent.mkdir(parents=True, exist_ok=True)
                 hooks = self.opts.get("progress_hooks") or []
+                if fake.audio_only:
+                    audio = path.with_suffix(".m4a")
+                    audio.write_bytes(b"\x00" * fake.merged_bytes)
+                    fake.written.append(audio)
+                    return {**info, "ext": "m4a", "filepath": str(audio)}
                 video_frag = Path(
                     prepend_extension(str(path.with_suffix(".mp4")), "f137", "mp4")
                 )
@@ -179,7 +187,7 @@ class FakeYtdlp:
 
 def stub_media_probes(monkeypatch, *, playable: bool = True) -> None:
     """The fake media is zero bytes: stub everything that would run ffprobe/ffmpeg."""
-    monkeypatch.setattr(artifacts, "validate_playable", lambda _p: playable)
+    monkeypatch.setattr(artifacts, "validate_playable", lambda _p, **_k: playable)
     for module in (finalize, postprocess):
         monkeypatch.setattr(module, "probe_duration", lambda _p: 12.0)
         monkeypatch.setattr(module, "probe_dimensions", lambda _p: (1280, 720))

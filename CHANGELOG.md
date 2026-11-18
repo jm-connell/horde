@@ -9,6 +9,11 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- Audio downloads (the **Audio** presets, and podcasts or other links
+  without video) failed with "Download produced no file", to the library and
+  to a device: the finished file was thrown away because it had no video.
+  They now complete. A library audio download is stored as an audio-only
+  `.mp4`; a device download keeps its `.m4a`.
 - A download on a server without ffmpeg failed with "Download produced no
   file"; it now says ffmpeg is not installed. An ffmpeg set with
   `FFMPEG_BIN` (or installed after Horde started) is now used to merge
