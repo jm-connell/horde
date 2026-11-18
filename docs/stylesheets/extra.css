@@ -515,3 +515,286 @@ body {
   -webkit-mask-image: var(--md-source-clones-icon);
   mask-image: var(--md-source-clones-icon);
 }
+
+/* ---- Home page (docs/index.md) ---------------------------------------- */
+
+/* The home page is its own layout: no content panel, a wider measure. */
+body:has(.horde-home) .md-grid {
+  max-width: 66rem;
+}
+
+.md-content__inner:has(.horde-home) {
+  background: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0 0 3rem;
+}
+
+.horde-home {
+  --home-rule: rgb(var(--horde-accent) / 0.16);
+  --home-muted: rgb(156 163 175);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.horde-hero {
+  padding: clamp(0.75rem, 3vw, 1.75rem) 0 1.75rem;
+  max-width: 44rem;
+}
+
+.md-typeset .horde-hero__title {
+  margin: 0 0 1.1rem;
+  font-size: clamp(2rem, 5.4vw, 3.5rem);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+  color: rgb(243 244 246);
+  text-wrap: balance;
+}
+
+.md-typeset .horde-hero__lede {
+  margin: 0 0 1.6rem;
+  max-width: 36rem;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.horde-hero__actions > p,
+.horde-platforms > p {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+/* Screens: radio tabs, no script. Inputs stay focusable for the keyboard. */
+.horde-screens {
+  position: relative;
+  margin: 0.5rem 0 0;
+}
+
+.horde-screens__pick {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.horde-screens__tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 -1px;
+  padding: 0 0.6rem;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.horde-screens__tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.horde-screens__tabs label {
+  flex: none;
+  padding: 0.5rem 0.9rem 0.55rem;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 0.6rem 0.6rem 0 0;
+  color: var(--home-muted);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 120ms;
+}
+
+.horde-screens__tabs label:hover {
+  color: rgb(243 244 246);
+}
+
+#screen-library:checked ~ .horde-screens__tabs label[for="screen-library"],
+#screen-recommended:checked ~ .horde-screens__tabs label[for="screen-recommended"],
+#screen-player:checked ~ .horde-screens__tabs label[for="screen-player"],
+#screen-channel:checked ~ .horde-screens__tabs label[for="screen-channel"],
+#screen-subscriptions:checked ~ .horde-screens__tabs label[for="screen-subscriptions"],
+#screen-downloads:checked ~ .horde-screens__tabs label[for="screen-downloads"] {
+  color: rgb(var(--horde-accent));
+  background: rgb(var(--horde-ink-900));
+  border-color: rgb(var(--horde-accent) / 0.3);
+}
+
+#screen-library:focus-visible ~ .horde-screens__tabs label[for="screen-library"],
+#screen-recommended:focus-visible ~ .horde-screens__tabs label[for="screen-recommended"],
+#screen-player:focus-visible ~ .horde-screens__tabs label[for="screen-player"],
+#screen-channel:focus-visible ~ .horde-screens__tabs label[for="screen-channel"],
+#screen-subscriptions:focus-visible ~ .horde-screens__tabs label[for="screen-subscriptions"],
+#screen-downloads:focus-visible ~ .horde-screens__tabs label[for="screen-downloads"] {
+  outline: 2px solid rgb(var(--horde-accent));
+  outline-offset: -2px;
+}
+
+.horde-screens__stage {
+  border: 1px solid rgb(var(--horde-accent) / 0.3);
+  border-radius: 14px;
+  background: rgb(var(--horde-ink-900));
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 0.55),
+    0 0 90px rgb(var(--horde-accent) / 0.07);
+  overflow: hidden;
+}
+
+.md-typeset .horde-screens__shot {
+  display: none;
+  margin: 0;
+}
+
+#screen-library:checked ~ .horde-screens__stage .horde-screens__shot--library,
+#screen-recommended:checked ~ .horde-screens__stage .horde-screens__shot--recommended,
+#screen-player:checked ~ .horde-screens__stage .horde-screens__shot--player,
+#screen-channel:checked ~ .horde-screens__stage .horde-screens__shot--channel,
+#screen-subscriptions:checked ~ .horde-screens__stage .horde-screens__shot--subscriptions,
+#screen-downloads:checked ~ .horde-screens__stage .horde-screens__shot--downloads {
+  display: block;
+}
+
+.md-typeset .horde-screens__shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1440 / 900;
+  object-fit: cover;
+  object-position: top;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.md-typeset .horde-screens__shot figcaption {
+  max-width: none;
+  margin: 0;
+  padding: 0.7rem 1rem 0.8rem;
+  border-top: 1px solid var(--home-rule);
+  color: rgba(226, 232, 240, 0.82);
+  font-size: 0.8rem;
+  font-style: normal;
+  text-align: left;
+}
+
+.horde-section {
+  margin-top: clamp(3rem, 7vw, 5rem);
+}
+
+.md-typeset .horde-section > h2,
+.md-typeset .horde-about h2 {
+  margin: 0 0 1rem;
+  font-size: clamp(1.4rem, 3vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgb(243 244 246);
+}
+
+.horde-section > p,
+.horde-section > .highlight,
+.horde-section > .admonition,
+.horde-section > .md-typeset__scrollwrap {
+  max-width: 46rem;
+}
+
+/* Features and docs: ruled columns, not cards. */
+.horde-features,
+.horde-docs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  column-gap: 2.25rem;
+  margin: 1.5rem 0 1.75rem;
+}
+
+.horde-docs {
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+}
+
+.horde-feature,
+.horde-docs__group {
+  padding: 1.05rem 0 1.15rem;
+  border-top: 1px solid var(--home-rule);
+}
+
+.md-typeset .horde-feature h3,
+.md-typeset .horde-docs__group h3 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: rgb(var(--horde-accent-soft));
+}
+
+.md-typeset .horde-feature p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.84);
+}
+
+.md-typeset .horde-docs__group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.md-typeset .horde-docs__group ul li {
+  margin: 0;
+  padding: 0.14rem 0;
+}
+
+.md-typeset .horde-home h2 .headerlink,
+.md-typeset .horde-home h3 .headerlink {
+  display: none;
+}
+
+.horde-platforms {
+  margin: 1.1rem 0 1.5rem;
+}
+
+.md-typeset .horde-platforms a {
+  padding: 0.3rem 0.75rem;
+  border: 1px solid rgb(var(--horde-ink-700));
+  border-radius: 999px;
+  background: rgb(var(--horde-ink-900) / 0.7);
+  color: rgba(226, 232, 240, 0.9);
+  font-size: 0.8rem;
+}
+
+.md-typeset .horde-platforms a:hover {
+  border-color: rgb(var(--horde-accent));
+  color: rgb(var(--horde-accent-soft));
+}
+
+.horde-about {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(19rem, 1fr));
+  gap: 2rem 3rem;
+  padding-top: 2.5rem;
+  border-top: 1px solid var(--home-rule);
+}
+
+.md-typeset .horde-about h2 {
+  font-size: 1.15rem;
+}
+
+.md-typeset .horde-about p,
+.md-typeset .horde-about li {
+  color: rgba(226, 232, 240, 0.82);
+}
+
+.md-typeset .horde-home a:focus-visible {
+  outline: 2px solid rgb(var(--horde-accent));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .horde-screens__tabs label {
+    transition: none;
+  }
+}
