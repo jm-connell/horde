@@ -303,3 +303,58 @@ export function CollapseIcon({ className = "" }: { className?: string }) {
     </svg>
   );
 }
+
+/** ▦: everything, all of a kind (four tiles). */
+export function GridIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="currentColor"
+      aria-hidden
+    >
+      <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+      <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+      <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+    </svg>
+  );
+}
+
+/** A clock inside an arrow turning back: history, earlier conversations. */
+export function HistoryIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M2.6 8a5.4 5.4 0 1 0 1.7-3.9M2.4 2.6v2.9h2.9" />
+      <path d="M8 5.3V8l1.9 1.2" />
+    </svg>
+  );
+}
+
+/** A plus in a rounded square: start a new one (a new chat). */
+export function NewIcon({ className = "" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      className={cx(className)}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <rect x="2.5" y="2.5" width="11" height="11" rx="2.5" />
+      <path d="M8 5.5v5M5.5 8h5" />
+    </svg>
+  );
+}

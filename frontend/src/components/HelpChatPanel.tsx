@@ -51,7 +51,7 @@ import {
   WHAT_CAN_YOU_DO,
 } from "./helpPrompts";
 import { cssBlocks, splitActions } from "./helpTokens";
-import { CloseIcon } from "./icons";
+import { CloseIcon, HistoryIcon, NewIcon } from "./icons";
 import { PanelHeader } from "./SidePanelFrame";
 import { usePanelFrame } from "./sidePanelContext";
 import TypingDots from "./TypingDots";
@@ -73,6 +73,10 @@ function isAppPath(href: string): boolean {
 
 /** Nothing picked: each question goes to Horde or a channel, by what it asks. */
 const AUTO: AskSourceState = { scope: [], video: null };
+
+/** A title bar action: the size and tone of the frame's window controls. */
+const HEADER_ICON_BTN =
+  "flex h-8 w-8 items-center justify-center rounded-md text-muted hover:text-accent disabled:opacity-40";
 
 /** "Ask … instead" under a reply: the same question, answered from here. */
 type Instead =
@@ -686,7 +690,10 @@ export default function HelpChatPanel({
       : null;
     if (from !== "video" && video)
       insteads.push({
-        label: `Ask ${video.title || "this video"} instead`,
+        // A title in quotes reads as a title, not as part of the sentence.
+        label: video.title
+          ? `Ask “${video.title}” instead`
+          : "Ask this video instead",
         instead: { kind: "video", video },
       });
     if (from !== "channel" && channel)
@@ -783,6 +790,9 @@ export default function HelpChatPanel({
             </span>
           )
         }
+        // The chat's own actions (History, then New chat once there is a
+        // conversation), a hairline, then the frame's window controls
+        // (minimize, dock, close).
         actions={
           <>
             <button
@@ -790,20 +800,30 @@ export default function HelpChatPanel({
               onClick={() => setShowHistory((v) => !v)}
               disabled={sending}
               aria-pressed={showHistory}
-              className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
+              aria-label="History"
+              title={showHistory ? "Back to the chat" : "History"}
+              className={`${HEADER_ICON_BTN} ${
+                showHistory ? "bg-accent/15 text-accent" : ""
+              }`}
             >
-              History
+              <HistoryIcon className="h-4 w-4" />
             </button>
             {(messages.length > 0 || ask.threadId != null) && (
               <button
                 type="button"
                 onClick={clear}
                 disabled={sending}
-                className="rounded-md px-2 py-1.5 text-xs text-muted hover:text-accent disabled:opacity-40"
+                aria-label="New chat"
+                title="New chat"
+                className={HEADER_ICON_BTN}
               >
-                New chat
+                <NewIcon className="h-4 w-4" />
               </button>
             )}
+            <span
+              aria-hidden="true"
+              className="mx-1 h-4 w-px shrink-0 bg-ink-700"
+            />
           </>
         }
       />

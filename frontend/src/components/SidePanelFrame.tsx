@@ -97,23 +97,23 @@ function reducedMotion(): boolean {
 }
 
 /**
- * Docking or floating the panel: glide from where it was to where it lands
- * (its box, not a scale, so the text stays sharp). Under reduced motion it
- * just moves.
+ * The panel changing shape (docked, floating, or minimized to its bar): glide
+ * from where it was to where it lands (its box, not a scale, so the text stays
+ * sharp). Under reduced motion it just moves.
  */
-function useDockMorph(
+function useBoxMorph(
   panelRef: React.RefObject<HTMLElement | null>,
-  docked: boolean
+  shape: "docked" | "floating" | "bar"
 ) {
   const lastRect = useRef<DOMRect | null>(null);
-  const wasDocked = useRef(docked);
-  // Every render: the last box must be current when the dock state flips.
+  const lastShape = useRef(shape);
+  // Every render: the last box must be current when the shape changes.
   useLayoutEffect(() => {
     const el = panelRef.current;
     if (!el) return;
     const from = lastRect.current;
     const to = el.getBoundingClientRect();
-    if (from && wasDocked.current !== docked && !reducedMotion()) {
+    if (from && lastShape.current !== shape && !reducedMotion()) {
       const box = (r: DOMRect) => ({
         top: `${r.top}px`,
         left: `${r.left}px`,
@@ -127,7 +127,7 @@ function useDockMorph(
         easing: EASE_FLUID,
       });
     }
-    wasDocked.current = docked;
+    lastShape.current = shape;
     lastRect.current = to;
   });
 }
@@ -232,7 +232,7 @@ export default function SidePanelFrame({
   const floating = !isMobile && !dockedHere && !minimized;
   const dockWidth = dockWidthFor(wantedDockWidth, vw);
   const navBottom = useNavBottom(dockedHere);
-  useDockMorph(panelRef, dockedHere);
+  useBoxMorph(panelRef, minimized ? "bar" : dockedHere ? "docked" : "floating");
   const { setChatDocked } = usePlaybackActions();
   const floatRef = useRef(() => onDockedChange(false));
   floatRef.current = () => onDockedChange(false);

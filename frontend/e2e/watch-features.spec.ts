@@ -215,9 +215,11 @@ test("with nothing picked, Ask on the watch page answers from its video", async 
   expect(bodies[0].video).toBeNull();
   expect(bodies[0].page_video).toEqual({ library_id: id, url: null });
 
-  // The reply came from Horde: "Ask Aurora Drift instead" asks the video,
+  // The reply came from Horde: Ask “Aurora Drift” instead asks the video,
   // and the chat is about it from then on.
-  await panel.getByRole("button", { name: "Ask Aurora Drift instead" }).click();
+  await panel
+    .getByRole("button", { name: "Ask “Aurora Drift” instead" })
+    .click();
   await expect.poll(() => bodies.length).toBe(2);
   expect(bodies[1].answer_from).toBe("video");
   expect(bodies[1].video).toEqual({ library_id: id, url: null });
