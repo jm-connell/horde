@@ -10,6 +10,7 @@ import {
   INPUT_COMPACT,
   OPENROUTER_PRESETS,
   PANEL_BTN,
+  assistantDefaultModel,
   VRAM_OVERRIDE_TIP,
 } from "../constants";
 import { useSettingsPage } from "../context";
@@ -39,6 +40,10 @@ export default function ConnectionPane() {
   const embedModels = useAiModels("embed", embedUrl).data;
   const separateEmbed = splitOpen || Boolean(aiDraft.embed_base_url);
   const isOpenRouter = aiStatus?.provider === "openrouter";
+  const assistantDefault = assistantDefaultModel(
+    isOpenRouter,
+    aiDraft.chat_model
+  );
   // Empty base_url: the OLLAMA_BASE_URL fallback is in use; name the kind.
   const connectedTo =
     providerLabel(aiDraft.base_url, aiStatus?.provider) ||
@@ -233,13 +238,21 @@ export default function ConnectionPane() {
               </p>
             )}
           <ModelField
-            label="Assistant model"
+            label="Assistant model (Ask)"
             tip={HELP_MODEL_TIP}
             value={aiDraft.help_model}
             models={chatModels?.models ?? []}
             pinRecommended={isOpenRouter}
-            emptyOption="Same as the chat model"
-            placeholder="Empty = the chat model"
+            emptyOption={
+              assistantDefault
+                ? `Default (${assistantDefault})`
+                : "Same as the chat model"
+            }
+            placeholder={
+              assistantDefault
+                ? `Empty = ${assistantDefault}`
+                : "Empty = the chat model"
+            }
             onSave={(v) => void saveModels({ help_model: v })}
           />
           <ModelField

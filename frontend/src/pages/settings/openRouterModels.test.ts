@@ -56,9 +56,12 @@ describe("openRouterSelectOptions", () => {
   });
 
   it("includes every recommended slug in the pin list", () => {
-    expect(OPENROUTER_RECOMMENDED_MODELS).toHaveLength(8);
+    expect(OPENROUTER_RECOMMENDED_MODELS).toHaveLength(9);
     expect(OPENROUTER_RECOMMENDED_MODELS[0]).toBe(
       "google/gemini-2.5-flash-lite"
+    );
+    expect(OPENROUTER_RECOMMENDED_MODELS).toContain(
+      "deepseek/deepseek-v4.1-flash"
     );
   });
 });

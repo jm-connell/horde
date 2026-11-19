@@ -256,6 +256,43 @@ def test_the_assistant_model_wins_over_the_chat_model(app, monkeypatch):
     assert help_model.assistant_model() == "strong-m"
 
 
+def test_on_openrouters_budget_setup_the_assistant_defaults_to_a_stronger_model(
+    app, monkeypatch
+):
+    """Ask on the budget model miscited videos; background jobs stay on it."""
+    from app.services.ai import workload
+    from app.services.ai.provider import (
+        OPENROUTER_ASSISTANT_MODEL,
+        OPENROUTER_PRESETS,
+        Connection,
+    )
+
+    budget, best = OPENROUTER_PRESETS["budget"], OPENROUTER_ASSISTANT_MODEL
+    assert help_model.tier(best) == "large"
+    monkeypatch.setattr(workload, "ensure_quality_chat_model", lambda: "chat-m")
+    monkeypatch.setattr(
+        help_model,
+        "chat_connection",
+        lambda: Connection("https://openrouter.ai/api/v1", "k"),
+    )
+    app_settings.save({"ai": {"chat_model": budget}})
+    assert help_model.assistant_model() == best
+    assert help_model.configured_model() == best
+    # A chosen Assistant model wins; so does a chat model someone picked.
+    app_settings.save({"ai": {"help_model": "anthropic/claude-sonnet-4.5"}})
+    assert help_model.assistant_model() == "anthropic/claude-sonnet-4.5"
+    app_settings.save({"ai": {"help_model": "", "chat_model": "openai/gpt-5"}})
+    assert help_model.assistant_model() == "chat-m"
+    # Another provider's budget model is not OpenRouter's.
+    monkeypatch.setattr(
+        help_model,
+        "chat_connection",
+        lambda: Connection("http://localhost:11434/v1", ""),
+    )
+    app_settings.save({"ai": {"chat_model": budget}})
+    assert help_model.assistant_model() == "chat-m"
+
+
 def test_info_route_hides_the_model_from_members(client, member_client, monkeypatch):
     from app.services.ai import workload
 

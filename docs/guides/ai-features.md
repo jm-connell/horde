@@ -83,7 +83,7 @@ Describe a change to how Horde looks ("rounder video cards", "a frosted top bar"
 
 ### Which model it uses
 
-The assistant uses the chat model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
+The assistant uses the chat model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. On OpenRouter with the Budget chat model it already uses `deepseek/deepseek-v4.1-flash` until you choose another. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
 
 ## Streamed videos
 

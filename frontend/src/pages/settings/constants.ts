@@ -157,7 +157,7 @@ export const CHAT_MODEL_TIP =
   "Chat model — writes summaries, chapters and chat replies, enriches tags, invents category chips and checks duplicates. On Ollama, 3B-class models need about 3–6GB of VRAM.";
 
 export const HELP_MODEL_TIP =
-  "Assistant model — the model Ask uses. Leave it as the chat model, or pick a stronger one so the assistant (and the CSS it writes) is better without paying more for summaries and tags.";
+  "Assistant model — the model Ask answers with: questions about channels, about a video and about Horde. Ask reads dozens of passages and cites each one, so a stronger model answers noticeably better; pick any model here without paying more for summaries and tags, which stay on the chat model. Left empty it is the chat model, except on OpenRouter with the Budget chat model, where it is deepseek/deepseek-v4.1-flash.";
 
 export const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -365,10 +365,28 @@ export const OPENROUTER_PRESETS = [
   },
 ] as const;
 
+/** The server's `OPENROUTER_ASSISTANT_MODEL` (services/ai/provider.py). */
+export const OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash";
+
+/**
+ * What an empty Assistant model means on OpenRouter while the chat model is
+ * the Budget preset (the server's `help_model.default_model`). "" when the
+ * assistant follows the chat model.
+ */
+export function assistantDefaultModel(
+  isOpenRouter: boolean,
+  chatModel: string
+): string {
+  return isOpenRouter && chatModel === OPENROUTER_PRESETS[0].model
+    ? OPENROUTER_ASSISTANT_MODEL
+    : "";
+}
+
 /** Pinned at the top of the OpenRouter chat-model dropdown. */
 export const OPENROUTER_RECOMMENDED_MODELS = [
   "google/gemini-2.5-flash-lite",
   "google/gemini-2.5-flash",
+  "deepseek/deepseek-v4.1-flash",
   "google/gemini-3.1-flash-lite",
   "openai/gpt-4.1-nano",
   "openai/gpt-4o-mini",

@@ -34,6 +34,11 @@ OPENROUTER_PRESETS: dict[str, str] = {
     "best": "google/gemini-2.5-flash",
 }
 OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
+#: What Ask answers with on OpenRouter until an Assistant model is chosen
+#: (``help_model.default_model``). In a comparison on one indexed channel it
+#: gave the best-grounded answers of the cheap models, for less than half the
+#: cost of the Best preset; it thinks first, so its first word takes longer.
+OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 ProviderKind = Literal["openrouter", "ollama", "openai_compatible"]
 Target = Literal["chat", "embed"]
