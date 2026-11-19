@@ -39,6 +39,7 @@ import { PULL_REFRESH_EVENT } from "./PullToRefresh";
 import VideoCard from "./VideoCard";
 import { useSettings } from "../hooks/useSettings";
 import { getJson, setJson } from "../storage";
+import { videoGridClassName } from "../pages/library/videoGridClassName";
 
 /**
  * How many cards come before the channel suggestions: two full rows (four on
@@ -113,6 +114,7 @@ export default function DiscoverHome({
   const { subscribe } = useSubscribe();
   const { submitDownload } = useDownloads();
   const [settings] = useSettings();
+  const showSources = settings.showRecommendedSources;
   const queryClient = useQueryClient();
   const { algorithmOpen, setAlgorithmOpen } = useHelpChat();
   useAlgorithmPanelHere();
@@ -180,9 +182,7 @@ export default function DiscoverHome({
   // Bumped on every reload, so a "load more" answer for an older list is dropped.
   const generation = useRef(0);
 
-  const gridClass = `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
-    sidebarCollapsed ? "xl:grid-cols-5" : "xl:grid-cols-4"
-  }`;
+  const gridClass = videoGridClassName(sidebarCollapsed);
 
   useEffect(() => {
     let active = true;
@@ -538,13 +538,15 @@ export default function DiscoverHome({
           />
         ) : null}
         {/* A live card has its own red ring; a second outline would sit inside it. */}
-        {SOURCE[item.source].outline && item.reason.kind !== "live" && (
-          <span
-            aria-hidden="true"
-            data-horde="source-outline"
-            className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
-          />
-        )}
+        {showSources &&
+          SOURCE[item.source].outline &&
+          item.reason.kind !== "live" && (
+            <span
+              aria-hidden="true"
+              data-horde="source-outline"
+              className={`pointer-events-none absolute inset-0 sm:rounded-xl ${SOURCE[item.source].outline}`}
+            />
+          )}
         <RecMenu
           channel={channel.name || null}
           onWhy={() => setWhyItem(item)}

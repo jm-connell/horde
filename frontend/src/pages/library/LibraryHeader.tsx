@@ -52,7 +52,9 @@ export default function LibraryHeader({
           onSelect={onHomeTab}
         />
       )}
-      {onRecommended && <SourceLegend className="max-md:hidden" />}
+      {onRecommended && settings.showRecommendedSources && (
+        <SourceLegend className="max-md:hidden" />
+      )}
 
       <div
         data-header-filters

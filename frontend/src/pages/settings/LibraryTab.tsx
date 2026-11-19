@@ -186,6 +186,25 @@ export default function LibraryTab() {
             }
           />
           <SettingRow
+            anchor="recommended-sources"
+            title="Color-code Recommended"
+            description="Outline Recommended cards by where they are from (downloaded, your channels, new to you) and show the key beside the tabs."
+            hidden={
+              !!q &&
+              !match("color", "outline", "recommended", "legend", "source")
+            }
+            control={
+              <Toggle
+                checked={settings.showRecommendedSources}
+                onChange={() =>
+                  update({
+                    showRecommendedSources: !settings.showRecommendedSources,
+                  })
+                }
+              />
+            }
+          />
+          <SettingRow
             anchor="progress-continue-watching"
             title="Progress bar on continue watching"
             description="Show watch progress on cards in the continue watching row."

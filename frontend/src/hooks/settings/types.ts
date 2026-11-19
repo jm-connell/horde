@@ -203,6 +203,12 @@ export interface Settings {
   homeTab: "library" | "recommended";
   /** List followed channels that are live in the library sidebar. */
   showLiveStreams: boolean;
+  /**
+   * Outline Recommended cards by where they come from (downloaded, your
+   * channels, new to you) and show the key beside the tabs. Off by default:
+   * the feed reads fine without it.
+   */
+  showRecommendedSources: boolean;
   showDownloadNavBadge: boolean;
   /** Tabs on the installed app's bottom island on phones, in order. */
   tabBarItems: TabBarItem[];

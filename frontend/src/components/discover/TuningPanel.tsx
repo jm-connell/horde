@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "../../api";
 import { useToast } from "../../context/ToastContext";
 import { Toggle } from "../../pages/settings/ui";
+import { useSettings } from "../../hooks/useSettings";
 import {
   useRecTopics,
   useRecTuning,
@@ -361,6 +362,7 @@ export default function TuningPanel({
   variant?: "panel" | "page";
 }) {
   const { showError } = useToast();
+  const [settings] = useSettings();
   const queryClient = useQueryClient();
   const query = useRecTuning();
   const topics = useRecTopics().data?.items;
@@ -947,7 +949,9 @@ export default function TuningPanel({
         className="horde-scrollbar min-h-0 flex-1 overflow-y-auto px-4 py-3"
       >
         {/* On phones the outline legend lives here, not beside the home tabs. */}
-        <SourceLegend className="mb-3 md:hidden" />
+        {settings.showRecommendedSources && (
+          <SourceLegend className="mb-3 md:hidden" />
+        )}
         {body}
       </div>
     </>
