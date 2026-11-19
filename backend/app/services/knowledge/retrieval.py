@@ -2,18 +2,30 @@
 
 1. **Expand** the question once with the chat model: spellings and synonyms the
    captions may use ("4Runner", "4 runner", "for runner"), generations, part names.
-   Skipped for small local models; on any failure the question's own words are used.
+   A follow-up ("what about its battery?") is rewritten with what it refers to,
+   from the conversation so far, and the model says whether the answer depends on
+   what is newest. Skipped for small local models (a follow-up is then searched
+   together with the question before it); on any failure the question's own
+   words are used.
 2. **Search each channel** by keyword (FTS5, every passage naming the terms) and by
-   meaning (embeddings), merged with reciprocal rank fusion.
+   meaning (embeddings), merged with reciprocal rank fusion. The videos whose
+   title names what the question is about (its subjects: "Odin 3") are searched
+   once more by themselves, each subject's separately (a lone one counts double): "its battery life" is answered by
+   the battery passage of the Odin 3 review, which need not say "Odin 3", not
+   by every review's battery passage. For a question about
+   what is current ("the best budget handheld right now"), newer videos count for
+   more.
 3. **Pick** the best videos and their best passages within a character budget
    shared fairly between the channels, and number them in date order, so the model
-   can cite ``[n]`` and notice an opinion that changed over time.
+   can cite ``[n]`` and notice an opinion that changed over time. A question about
+   the channel's newest videos also gets their titles and descriptions.
 """
 
 from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass, field
 
 from sqlmodel import Session, col, select
@@ -28,9 +40,35 @@ from .vectors import VectorCache, top_chunks
 logger = logging.getLogger(__name__)
 
 _RRF_K = 60
-_CANDIDATES = 60
+_CANDIDATES = 80
 _PER_VIDEO = 3
 _EXPAND_TIMEOUT = 45.0
+# Videos searched once more because their title names a subject of the question.
+_SUBJECT_VIDEOS = 60
+# The conversation shown to the expansion: this many messages, each cut to this.
+_EXPAND_HISTORY = 4
+_EXPAND_HISTORY_CHARS = 600
+# A question about what is current: the channel's newest video scores this much
+# more than its oldest (in between, by its place in the channel's uploads).
+_RECENT_BOOST = 0.6
+_RECENT = re.compile(
+    r"\b(latest|newest|recent(ly)?|lately|right now|currently|current|nowadays|"
+    r"these days|this year|today|up to date|so far)\b",
+    re.IGNORECASE,
+)
+# "What are his latest videos about?": answered from the newest uploads themselves.
+_NEWEST_VIDEOS = re.compile(
+    r"\b(latest|newest|recent|new|last (few|couple|\d+))( \w+)? "
+    r"(videos?|uploads?|reviews?|episodes?)\b"
+    r"|\b(uploaded|posted|released|reviewed|covered|made) (lately|recently)\b"
+    r"|\bwhat(\'s| is| has| have) (he|she|they|the channel) been "
+    r"(up to|doing|covering|reviewing|making|uploading|posting)\b",
+    re.IGNORECASE,
+)
+# Of a video's description under its heading in the prompt.
+_ABOUT_CHARS = 300
+_NEWEST_COUNT = 10
+_NEWEST_CHARS = 500
 
 
 @dataclass
@@ -48,27 +86,94 @@ class Excerpt:
     is_description: bool
     library_video_id: int | None = None
     kb_video_id: int = 0
+    #: How the video's description opens: written by the channel, so it spells
+    #: the names the captions garble.
+    about: str = ""
 
 
 @dataclass
 class Expansion:
     terms: list[str] = field(default_factory=list)
     search: str = ""
+    #: The products, people or works the question is about, as titles spell them.
+    subjects: list[str] = field(default_factory=list)
+    #: The answer depends on what is newest ("the best one right now").
+    recent: bool = False
 
 
-def expand(provider, model: str, question: str, channel_names: list[str]) -> Expansion:
+def asks_recent(question: str) -> bool:
+    """ "Right now", "latest", "these days": newer videos should count for more."""
+    return bool(_RECENT.search(question or ""))
+
+
+def asks_newest_videos(question: str) -> bool:
+    """ "What are his latest videos about?": about the newest uploads themselves."""
+    return bool(_NEWEST_VIDEOS.search(question or ""))
+
+
+# A question that leans on the one before it: short, or pointing back at something.
+_FOLLOW_UP = re.compile(
+    r"\b(it|its|that|those|them|they|their|this|these|one|ones|same|also|instead|"
+    r"what about|how about|and the)\b",
+    re.IGNORECASE,
+)
+
+
+def search_question(
+    question: str, history: list[dict[str, str]], expansion: Expansion
+) -> str:
+    """What to search for: the question, with the user's previous one in front
+    when it is a follow-up the expansion did not rewrite ("what about its
+    battery?" alone finds every video about batteries)."""
+    if expansion.search or not history:
+        return question
+    if len(question.split()) > 5 and not _FOLLOW_UP.search(question):
+        return question
+    asked = [t["content"] for t in history if t.get("role") == "user"]
+    return f"{asked[-1]} {question}" if asked else question
+
+
+def _conversation(history: list[dict[str, str]]) -> str:
+    lines = []
+    for turn in history[-_EXPAND_HISTORY:]:
+        who = "Assistant" if turn.get("role") == "assistant" else "User"
+        lines.append(f"{who}: {(turn.get('content') or '')[:_EXPAND_HISTORY_CHARS]}")
+    return "\n".join(lines)
+
+
+def expand(
+    provider,
+    model: str,
+    question: str,
+    channel_names: list[str],
+    history: list[dict[str, str]] | None = None,
+) -> Expansion:
     """Spellings and synonyms to search for. Empty on failure (the caller falls back)."""
     system = (
         "You prepare searches over auto-generated YouTube captions. Return JSON "
-        '{"terms": [...], "search": "..."}. "terms": up to 12 short words or '
+        '{"terms": [...], "subjects": [...], "search": "...", "recent": '
+        'true|false}. "terms": up to 12 short words or '
         "phrases that a video answering the question would say: the key names "
         "and things in the question, with the spellings captions often produce "
         '("4Runner", "4 runner", "for runner"), model generations or year '
         "ranges, part and engine names, and plain synonyms. Leave out the "
-        'channel names and filler words. "search": the question rewritten as one '
-        "plain search sentence."
+        "channel names, filler words and words nearly every video of the "
+        'channel would say. "subjects": the specific products, people, places '
+        "or works the question is about, written the way a video title would "
+        'write them, each with its usual short form ("Retroid Pocket 6", "RP6"); '
+        "at most 6, and empty when the question names nothing specific. "
+        '"search": the question rewritten as one '
+        "plain search sentence. When the question only makes sense with the "
+        'conversation before it ("what about its battery?", "and the cheaper '
+        'one?"), "terms", "subjects" and "search" name what it refers to. '
+        '"recent": true '
+        "when the right answer depends on what is newest (what to buy now, the "
+        "current best, the latest version), else false."
     )
-    prompt = f"Channels: {', '.join(channel_names)}\nQuestion: {question}"
+    prompt = f"Channels: {', '.join(channel_names)}\n"
+    if history:
+        prompt += f"Conversation so far:\n{_conversation(history)}\n"
+    prompt += f"Question: {question}"
     try:
         raw = provider.chat(
             prompt,
@@ -82,6 +187,8 @@ def expand(provider, model: str, question: str, channel_names: list[str]) -> Exp
         data = json.loads(raw)
         raw_terms = data.get("terms") if isinstance(data, dict) else None
         search = data.get("search") if isinstance(data, dict) else None
+        recent = data.get("recent") is True if isinstance(data, dict) else False
+        raw_subjects = data.get("subjects") if isinstance(data, dict) else None
     except Exception:
         logger.info("Ask: query expansion failed; using the question", exc_info=True)
         return Expansion()
@@ -90,7 +197,17 @@ def expand(provider, model: str, question: str, channel_names: list[str]) -> Exp
         if isinstance(raw_terms, list)
         else []
     )
-    return Expansion(terms=terms[:12], search=str(search or "").strip())
+    subjects = (
+        [str(t).strip() for t in raw_subjects if str(t).strip()]
+        if isinstance(raw_subjects, list)
+        else []
+    )
+    return Expansion(
+        terms=terms[:12],
+        search=str(search or "").strip(),
+        subjects=subjects[:6],
+        recent=recent,
+    )
 
 
 def _fuse(rankings: list[list[int]]) -> dict[int, float]:
@@ -101,6 +218,25 @@ def _fuse(rankings: list[list[int]]) -> dict[int, float]:
     return scores
 
 
+def _subject_videos(session: Session, channel: KbChannel, subject: str) -> list[int]:
+    """The channel's videos whose title names ``subject``, newest first."""
+    if len(subject) < 3:
+        return []
+    return [
+        video_id
+        for video_id in session.exec(
+            select(KbVideo.id)
+            .where(
+                KbVideo.kb_channel_id == require_id(channel),
+                col(KbVideo.title).icontains(subject, autoescape=True),
+            )
+            .order_by(col(KbVideo.position))
+            .limit(_SUBJECT_VIDEOS)
+        ).all()
+        if video_id is not None
+    ]
+
+
 def _channel_candidates(
     session: Session,
     cache: VectorCache,
@@ -108,14 +244,33 @@ def _channel_candidates(
     terms: list[str],
     query_vector: list[float] | None,
     model: str,
+    subjects: list[str],
 ) -> dict[int, float]:
+    channel_id = require_id(channel)
     keyword = [
         h.chunk_id
         for h in kb_search.search(
-            session, terms, channel_ids=[require_id(channel)], limit=_CANDIDATES
+            session, terms, channel_ids=[channel_id], limit=_CANDIDATES
         )
     ]
     rankings = [keyword]
+    # One ranking per subject, so in "X vs Y" the side with fewer videos is not
+    # crowded out by the other's; a lone subject counts twice.
+    within = [
+        [
+            h.chunk_id
+            for h in kb_search.search(
+                session,
+                terms,
+                channel_ids=[channel_id],
+                limit=_CANDIDATES,
+                video_ids=about,
+            )
+        ]
+        for about in (_subject_videos(session, channel, s) for s in subjects)
+        if about
+    ]
+    rankings += within * 2 if len(within) == 1 else within
     if query_vector:
         rankings.append(
             [
@@ -208,6 +363,49 @@ def _boost_video(
             scores[chunk_id] += _FOCUS_BOOST
 
 
+def _boost_recent(
+    session: Session, scores: dict[int, float], channel: KbChannel
+) -> None:
+    """Scale each passage's score by how new its video is among the channel's
+    uploads (``KbVideo.position``, 0 = newest; known even without a date)."""
+    if not scores:
+        return
+    channel_id = require_id(channel)
+    last = session.exec(
+        select(KbVideo.position)
+        .where(KbVideo.kb_channel_id == channel_id)
+        .order_by(col(KbVideo.position).desc())
+        .limit(1)
+    ).first()
+    if not last:
+        return
+    rows = session.exec(
+        select(KbChunk.id, KbVideo.position)
+        .join(KbVideo, col(KbVideo.id) == col(KbChunk.kb_video_id))
+        .where(col(KbChunk.id).in_(list(scores)))
+    ).all()
+    for chunk_id, position in rows:
+        if chunk_id is not None:
+            scores[chunk_id] *= 1.0 + _RECENT_BOOST * (1.0 - min(position, last) / last)
+
+
+def _newest_videos(
+    session: Session, channel: KbChannel, count: int
+) -> list[tuple[KbChunk, KbVideo]]:
+    """The title-and-description passages of the channel's newest indexed videos."""
+    rows = session.exec(
+        select(KbChunk, KbVideo)
+        .join(KbVideo, col(KbVideo.id) == col(KbChunk.kb_video_id))
+        .where(
+            KbVideo.kb_channel_id == require_id(channel),
+            KbChunk.chunk_index == chunking.META_CHUNK_INDEX,
+        )
+        .order_by(col(KbVideo.position))
+        .limit(count)
+    ).all()
+    return [(chunk, video) for chunk, video in rows]
+
+
 def retrieve(
     session: Session,
     cache: VectorCache,
@@ -227,16 +425,33 @@ def retrieve(
     # Only vectors from the current model compare with the query's.
     model = resolve_embed_model()
     share = max(2000, budget_chars // max(1, len(channels)))
+    recent = expansion.recent or asks_recent(question)
+    newest = asks_newest_videos(question)
     picked: list[tuple[KbChannel, KbChunk, KbVideo]] = []
+    # Passages shown cut short (a newest video's description), by chunk id.
+    cut: set[int] = set()
     for channel in channels:
         scores = _channel_candidates(
-            session, cache, channel, terms, query_vector, model
+            session, cache, channel, terms, query_vector, model, expansion.subjects
         )
+        if recent or newest:
+            _boost_recent(session, scores, channel)
         if focus_yt_id:
             _boost_video(session, scores, channel, focus_yt_id)
-        picked.extend(
-            (channel, c, v) for c, v in _pick(session, channel, scores, share)
-        )
+        left = share
+        if newest:
+            latest = _newest_videos(
+                session, channel, max(3, _NEWEST_COUNT // len(channels))
+            )
+            for chunk, video in latest:
+                scores.pop(require_id(chunk), None)
+                cut.add(require_id(chunk))
+                picked.append((channel, chunk, video))
+            left = max(0, share - _NEWEST_CHARS * len(latest))
+        if left:
+            picked.extend(
+                (channel, c, v) for c, v in _pick(session, channel, scores, left)
+            )
     yt_ids = {v.yt_id for _, _, v in picked}
     library = {
         yt: vid
@@ -256,20 +471,40 @@ def retrieve(
             published_at=video.published_at,
             start_sec=chunk.start_sec,
             end_sec=chunk.end_sec,
-            text=chunk.text,
+            text=chunk.text[:_NEWEST_CHARS] if chunk.id in cut else chunk.text,
             is_description=chunk.chunk_index == chunking.META_CHUNK_INDEX,
             library_video_id=library.get(video.yt_id),
             kb_video_id=video.id or 0,
+            about=_opening(video.description),
         )
         for i, (channel, chunk, video) in enumerate(picked)
     ]
 
 
+def _opening(description: str | None) -> str:
+    """The description's first paragraph (what the video is about), cut short;
+    the links and credits that follow are left out."""
+    first = (description or "").strip().split("\n\n", 1)[0]
+    text = " ".join(first.split())
+    return text if len(text) <= _ABOUT_CHARS else text[:_ABOUT_CHARS].rstrip() + "…"
+
+
 def format_excerpts(excerpts: list[Excerpt]) -> str:
-    """Excerpts for the prompt. No times: the model cites numbers, the app adds times."""
+    """Excerpts for the prompt, under a heading per video (its channel, title,
+    date and how its description opens), so each passage is read as that
+    video's: captions rarely repeat what is being reviewed, and garble its
+    name when they do. No times: the model cites numbers, the app adds times.
+    """
     lines = []
+    video: tuple[int, str] | None = None
     for e in excerpts:
-        date = (e.published_at or "")[:10] or "undated"
-        kind = " · from the video description" if e.is_description else ""
-        lines.append(f'[{e.n}] {e.channel_name} · "{e.title}" ({date}){kind}\n{e.text}')
+        if (e.channel_id, e.yt_id) != video:
+            video = (e.channel_id, e.yt_id)
+            date = (e.published_at or "")[:10] or "undated"
+            head = f'=== {e.channel_name} · "{e.title}" · {date} ==='
+            if e.about and not e.is_description:
+                head += f"\nThe channel's description of this video: {e.about}"
+            lines.append(head)
+        kind = "(the video's description) " if e.is_description else ""
+        lines.append(f"[{e.n}] {kind}{e.text}")
     return "\n\n".join(lines)

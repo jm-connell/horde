@@ -193,8 +193,10 @@ def search(
     channel_ids: list[int] | None,
     limit: int,
     offset: int = 0,
+    video_ids: list[int] | None = None,
 ) -> list[Hit]:
-    """Passages matching any term, best first. ``channel_ids`` None = every channel."""
+    """Passages matching any term, best first. ``channel_ids`` None = every
+    channel; ``video_ids`` keeps the search to those videos."""
     expression = match_expression(terms)
     if expression is None:
         return []
@@ -208,6 +210,14 @@ def search(
             params[f"c{i}"] = int(cid)
             names.append(f":c{i}")
         channel_filter = f"AND c.kb_channel_id IN ({', '.join(names)})"
+    if video_ids is not None:
+        if not video_ids:
+            return []
+        names = []
+        for i, vid in enumerate(video_ids):
+            params[f"v{i}"] = int(vid)
+            names.append(f":v{i}")
+        channel_filter += f" AND c.kb_video_id IN ({', '.join(names)})"
     sql = text(
         "SELECT c.id, c.kb_video_id, c.kb_channel_id, c.chunk_index, c.start_sec, "  # noqa: S608 - only bound parameter names are interpolated
         "c.end_sec, snippet(kb_chunks_fts, 0, :ms, :me, '…', 32), "

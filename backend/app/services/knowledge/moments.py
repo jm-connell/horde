@@ -15,6 +15,12 @@ from .chunking import Line
 from .search import STOPWORDS
 
 LEAD_IN_SEC = 2.0
+# A reference's quote: about one line of the panel.
+QUOTE_CHARS = 150
+_SENTENCE = re.compile(r"(?<=[.!?])\s+")
+# Words of context kept before the first matching word when a line has no
+# punctuation to cut at.
+_LEAD_WORDS = 3
 _WORD = re.compile(r"[^\W_]+", re.UNICODE)
 
 
@@ -58,3 +64,56 @@ def moment(lines: list[Line], start: float, end: float, wanted: set[str]) -> flo
     if line is None:
         return start
     return max(start, line[0] - LEAD_IN_SEC)
+
+
+def _is_match(word: str, wanted: set[str]) -> bool:
+    w = word.casefold()
+    return w in wanted or any(len(x) >= 4 and w.startswith(x) for x in wanted)
+
+
+def quote(lines: list[Line], line: Line, wanted: set[str]) -> str:
+    """What is said at ``line`` about ``wanted``, short enough to read at a glance.
+
+    A caption line is five seconds of speech: it opens with the end of the
+    sentence before and stops mid-sentence. The quote starts at the sentence
+    that shares the most words with what cites it and runs on into the next
+    line to finish the thought; in captions without punctuation it starts a
+    few words before the first shared word. It is cut to ``QUOTE_CHARS``, and
+    "…" marks each end known to be cut.
+    """
+    whole = line[1].strip()
+    if not re.search(r"[.!?,]", whole):
+        # Captions without punctuation: nothing says where a sentence starts
+        # or ends, so start just before the first shared word and stop with
+        # the line.
+        parts = whole.split()
+        first = next(
+            (
+                i
+                for i, part in enumerate(parts)
+                if any(_is_match(w, wanted) for w in _WORD.findall(part))
+            ),
+            0,
+        )
+        start = max(0, first - _LEAD_WORDS)
+        opens_mid_sentence = start > 0
+        ends_mid_sentence = False
+        text = " ".join(parts[start:])
+    else:
+        sentences = _SENTENCE.split(whole)
+        best = max(
+            range(len(sentences)),
+            key=lambda i: (_match_count(words(sentences[i]), wanted), -i),
+        )
+        opens_mid_sentence = best == 0 and not whole[:1].isupper()
+        text = " ".join(sentences[best:])
+        following = next((t for at, t in lines if at > line[0]), "")
+        if not text.endswith((".", "!", "?")) and following:
+            text = f"{text} {_SENTENCE.split(following.strip())[0]}"
+        ends_mid_sentence = not text.endswith((".", "!", "?"))
+    if len(text) > QUOTE_CHARS:
+        text = text[:QUOTE_CHARS].rsplit(" ", 1)[0].rstrip(",;:")
+        ends_mid_sentence = True
+    return (
+        ("…" if opens_mid_sentence else "") + text + ("…" if ends_mid_sentence else "")
+    )

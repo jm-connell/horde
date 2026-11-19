@@ -34,7 +34,8 @@ class Reference:
     published_at: str | None
     start_sec: float
     library_video_id: int | None
-    #: The caption line the reference opens at ("" for a description).
+    #: What is said where the reference opens, trimmed to the point cited
+    #: (``moments.quote``; "" for a description).
     line: str
     is_description: bool
 
@@ -66,9 +67,10 @@ def resolve(
                 continue
             line: Line | None = None
             start = excerpt.start_sec
+            lines = [] if excerpt.is_description else lines_of(excerpt.kb_video_id)
             if not excerpt.is_description:
                 line = moments.best_line(
-                    lines_of(excerpt.kb_video_id),
+                    lines,
                     excerpt.start_sec,
                     excerpt.end_sec,
                     wanted,
@@ -87,7 +89,7 @@ def resolve(
                     published_at=excerpt.published_at,
                     start_sec=start,
                     library_video_id=excerpt.library_video_id,
-                    line=line[1] if line else "",
+                    line=moments.quote(lines, line, wanted) if line else "",
                     is_description=excerpt.is_description,
                 )
                 refs[key] = ref
@@ -111,6 +113,18 @@ def resolve(
         last = code.end()
     parts.append(_cite_outside_code(reply, last, len(reply), replace))
     return "".join(parts).strip(), sorted(refs.values(), key=lambda r: r.n)
+
+
+def without_markers(reply: str) -> str:
+    """A saved reply without its ``[n]`` markers (code is left as written)."""
+    parts: list[str] = []
+    last = 0
+    for code in _CODE.finditer(reply):
+        parts.append(_cite_outside_code(reply, last, code.start(), lambda _m: ""))
+        parts.append(code.group(0))
+        last = code.end()
+    parts.append(_cite_outside_code(reply, last, len(reply), lambda _m: ""))
+    return "".join(parts)
 
 
 def _cite_outside_code(

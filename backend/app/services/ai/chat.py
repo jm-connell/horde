@@ -24,7 +24,9 @@ from .workload import ensure_quality_chat_model
 logger = logging.getLogger(__name__)
 
 _CHAT_TIMEOUT = 180.0
-_NUM_PREDICT = 1024
+# Thinking counts against the cap, so it leaves a reasoning model room to
+# answer after it (see ``knowledge.ask_chat._NUM_PREDICT``).
+_NUM_PREDICT = 3000
 
 
 class ChatError(Exception):
