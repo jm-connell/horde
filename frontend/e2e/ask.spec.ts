@@ -177,7 +177,13 @@ test("a channel answer links every point to its moment", async ({ page }) => {
     "/watch?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3De2ecedar001&t=40"
   );
   await expect(chatPanel.getByText("[4]")).toHaveCount(0);
+  // The full list is folded under the answer: the numbers already link.
   const list = chatPanel.locator("ol");
+  const references = chatPanel.getByRole("button", {
+    name: /^\d+ references?$/,
+  });
+  await expect(references).toHaveAttribute("aria-expanded", "false");
+  await references.click();
   await expect(
     list.getByRole("link", { name: /Northwind · “Cedar Notes” \(2023\)/ })
   ).toBeVisible();
@@ -251,8 +257,9 @@ test("Ask <channel> on a channel page opens a chat about it", async ({
   await expect(focus).toHaveText("Northwind");
   const input = panel.getByRole("textbox", { name: "Your question" });
   await expect(input).toHaveAttribute("placeholder", "Ask Northwind…");
-  // The download box floats over the panel's corner on this page.
-  await page.getByRole("button", { name: "Hide download panel" }).click();
+  // Nothing else floats over the panel: the feed's download toast shows only
+  // while a download waits, and in the other corner.
+  await expect(page.getByLabel("Download resolution")).toHaveCount(0);
   // × goes back to asking about anything: on its page, its videos'
   // questions still go to the channel, the rest to Horde.
   await panel

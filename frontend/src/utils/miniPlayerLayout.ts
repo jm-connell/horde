@@ -96,18 +96,22 @@ function viewportSize(opts?: {
   };
 }
 
-/** Fixed-position style that keeps a floating panel clear of the mini player. */
+/**
+ * Fixed-position style for a floating panel in the bottom-left corner, clear of
+ * the mini player. Ask, the mini player and toasts open bottom-right, so the
+ * left corner is the free one; only a mini player dragged to the left moves it.
+ */
 export function avoidMiniPlayerStyle(
   rect: MiniPlayerRect | null,
   opts?: {
-    /** Extra lift when a bottom-docked queue is also present (no mini). */
+    /** Extra lift when a bottom-docked queue is also present. */
     queueBottomLiftPx?: number;
     panelWidthRem?: number;
     viewportWidth?: number;
     viewportHeight?: number;
     /**
-     * Undragged mini player: pin with CSS `right` so a stale rect after
-     * resize cannot flip this panel onto a baked `left`.
+     * Undragged mini player: it sits in the bottom-right corner whatever a
+     * stale rect after a resize says.
      */
     cornerAnchor?: boolean;
   }
@@ -120,49 +124,29 @@ export function avoidMiniPlayerStyle(
     maxWidth: "calc(100vw - 2rem)",
     pointerEvents: "none",
   };
-
-  if (!rect) {
-    const lift = opts?.queueBottomLiftPx
-      ? Math.max(GAP, opts.queueBottomLiftPx)
-      : GAP;
-    return { ...base, right: GAP, bottom: `calc(${lift}px + ${BOTTOM_BAR})` };
-  }
-
-  const { vw, vh } = viewportSize(opts);
-  const miniOnRight =
-    opts?.cornerAnchor || rect.left + rect.width / 2 >= vw / 2;
-  const spaceAbove = rect.top - GAP;
-  const spaceBelow = vh - rect.bottom - GAP;
-  const side = opts?.cornerAnchor
-    ? { right: GAP }
-    : miniOnRight
-      ? { right: Math.max(GAP, vw - rect.right) }
-      : { left: Math.max(GAP, rect.left) };
-
-  // Prefer sitting above the mini on the same horizontal side.
-  if (spaceAbove >= PANEL_EST_H) {
-    return {
-      ...base,
-      ...side,
-      bottom: vh - rect.top + GAP,
-    };
-  }
-
-  // Or below it if there's room.
-  if (spaceBelow >= PANEL_EST_H) {
-    return {
-      ...base,
-      ...side,
-      top: rect.bottom + GAP,
-    };
-  }
-
-  // Otherwise park on the opposite horizontal side at the bottom.
-  return {
+  const lift = opts?.queueBottomLiftPx
+    ? Math.max(GAP, opts.queueBottomLiftPx)
+    : GAP;
+  const corner: CSSProperties = {
     ...base,
-    ...(miniOnRight ? { left: GAP } : { right: GAP }),
-    bottom: `calc(${GAP}px + ${BOTTOM_BAR})`,
+    left: GAP,
+    bottom: `calc(${lift}px + ${BOTTOM_BAR})`,
   };
+
+  if (!rect || opts?.cornerAnchor) return corner;
+  const { vw, vh } = viewportSize(opts);
+  if (rect.left + rect.width / 2 >= vw / 2) return corner;
+
+  // The mini player was dragged to the left: sit above it, else below it,
+  // else in the opposite corner.
+  const side = { left: Math.max(GAP, rect.left) };
+  if (rect.top - GAP >= PANEL_EST_H) {
+    return { ...base, ...side, bottom: vh - rect.top + GAP };
+  }
+  if (vh - rect.bottom - GAP >= PANEL_EST_H) {
+    return { ...base, ...side, top: rect.bottom + GAP };
+  }
+  return { ...base, right: GAP, bottom: `calc(${GAP}px + ${BOTTOM_BAR})` };
 }
 
 /** Bottom-docked queue placement opposite the mini player when present. */

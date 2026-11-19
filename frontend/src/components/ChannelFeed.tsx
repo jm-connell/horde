@@ -5,7 +5,6 @@ import ChannelFeedCard from "./ChannelFeedCard";
 import LoadingIndicator from "./LoadingIndicator";
 import { useChannelDownloadQueue } from "../hooks/useChannelDownloadQueue";
 import { useSettings } from "../hooks/useSettings";
-import { useIsMobile } from "../hooks/useIsMobile";
 import { useConfirm } from "../context/ConfirmContext";
 import {
   isLongStream,
@@ -28,6 +27,7 @@ import type {
   SearchMatchReason,
   Video,
 } from "../types";
+import { videoGridClassName } from "../pages/library/videoGridClassName";
 
 type FeedSort = "recent" | "popular";
 type FeedLayout = "grid" | "list";
@@ -194,7 +194,6 @@ export default function ChannelFeed({
   const loadGen = useRef(0);
 
   const {
-    defaultPreset,
     setDefaultPreset,
     allPresets,
     pending,
@@ -209,8 +208,6 @@ export default function ChannelFeed({
     resolveVideoId,
   } = useChannelDownloadQueue(channel);
 
-  const [panelDismissed, setPanelDismissed] = useState(false);
-  const isMobile = useIsMobile();
   const confirm = useConfirm();
   const streamsTab = tab === "streams";
 
@@ -725,11 +722,7 @@ export default function ChannelFeed({
           <div
             className={
               feedLayout === "grid"
-                ? `grid grid-cols-1 gap-4 max-sm:gap-0 max-sm:-mx-3 sm:grid-cols-2 md:grid-cols-3 ${
-                    settings.sidebarCollapsed
-                      ? "xl:grid-cols-5"
-                      : "xl:grid-cols-4"
-                  }`
+                ? videoGridClassName(settings.sidebarCollapsed)
                 : "mx-auto flex w-full max-w-3xl flex-col gap-2"
             }
           >
@@ -761,11 +754,8 @@ export default function ChannelFeed({
         </>
       )}
 
-      {/* Phones skip the idle quality widget; it still appears while a
-          queued download can be cancelled or edited. */}
-      {!panelDismissed && (!isMobile || pending.length > 0) && (
+      {pending.length > 0 && (
         <ChannelDownloadPanel
-          defaultPreset={defaultPreset}
           onDefaultPresetChange={setDefaultPreset}
           allPresets={allPresets}
           pending={pending}
@@ -776,7 +766,6 @@ export default function ChannelFeed({
           onCancel={cancelPending}
           onSubmitNow={submitNow}
           queueDockedBottom={queueDockedBottom}
-          onDismiss={() => setPanelDismissed(true)}
         />
       )}
     </>

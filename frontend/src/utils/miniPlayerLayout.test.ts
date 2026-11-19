@@ -92,62 +92,53 @@ describe("clampMiniPos", () => {
 });
 
 describe("avoidMiniPlayerStyle", () => {
-  it("parks above a bottom-right mini and tracks a wider viewport", () => {
-    const mini = {
-      left: 784,
-      top: 359,
-      width: 400,
-      height: 225,
-      right: 1184,
-      bottom: 584,
-    };
-    const before = avoidMiniPlayerStyle(mini, {
-      viewportWidth: 1200,
-      viewportHeight: 800,
-    });
-    const after = avoidMiniPlayerStyle(
-      {
-        ...mini,
-        left: 1584,
-        right: 1984,
-      },
-      {
-        viewportWidth: 2000,
+  const corner = "calc(16px + var(--horde-bottom-bar, 0px))";
+  const mini = {
+    left: 784,
+    top: 359,
+    width: 400,
+    height: 225,
+    right: 1184,
+    bottom: 584,
+  };
+
+  it("sits bottom-left, away from Ask, toasts and a bottom-right mini", () => {
+    for (const rect of [null, mini]) {
+      const style = avoidMiniPlayerStyle(rect, {
+        viewportWidth: 1200,
         viewportHeight: 800,
-      }
-    );
-    expect(before.right).toBe(16);
-    expect(before.bottom).toBe(800 - 359 + 16);
-    expect(after.right).toBe(16);
-    expect(after.bottom).toBe(800 - 359 + 16);
+      });
+      expect(style.left).toBe(16);
+      expect(style.right).toBeUndefined();
+      expect(style.bottom).toBe(corner);
+      expect(style.width).toBe("22rem");
+    }
   });
 
-  it("stays CSS-right when corner-anchored even if the mini rect is stale", () => {
-    const staleMini = {
-      left: 784,
-      top: 359,
-      width: 400,
-      height: 225,
-      right: 1184,
-      bottom: 584,
-    };
-    const style = avoidMiniPlayerStyle(staleMini, {
+  it("stays bottom-left when corner-anchored even if the mini rect is stale", () => {
+    // After a resize the rect can read as left of centre; the mini is not.
+    const style = avoidMiniPlayerStyle(mini, {
       viewportWidth: 2000,
       viewportHeight: 800,
       cornerAnchor: true,
     });
-    expect(style.right).toBe(16);
-    expect(style.left).toBeUndefined();
+    expect(style.left).toBe(16);
+    expect(style.bottom).toBe(corner);
   });
 
-  it("stays bottom-right when there is no mini player", () => {
-    const style = avoidMiniPlayerStyle(null, {
-      viewportWidth: 800,
-      viewportHeight: 600,
+  it("parks above a mini player dragged to the left", () => {
+    const left = { ...mini, left: 40, right: 440 };
+    const style = avoidMiniPlayerStyle(left, {
+      viewportWidth: 1200,
+      viewportHeight: 800,
     });
-    expect(style.right).toBe(16);
-    expect(style.bottom).toBe("calc(16px + var(--horde-bottom-bar, 0px))");
-    expect(style.width).toBe("22rem");
+    expect(style.left).toBe(40);
+    expect(style.bottom).toBe(800 - 359 + 16);
+  });
+
+  it("lifts above a bottom-docked queue", () => {
+    const style = avoidMiniPlayerStyle(null, { queueBottomLiftPx: 200 });
+    expect(style.bottom).toBe("calc(200px + var(--horde-bottom-bar, 0px))");
   });
 
   it("honors a custom panel width", () => {

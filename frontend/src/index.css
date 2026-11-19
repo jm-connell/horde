@@ -2607,6 +2607,29 @@ html[data-button-press="on"] .ui-panel-toggle:active .ui-panel-toggle-press {
   background-color: rgb(var(--accent) / 0.08);
 }
 
+/* Video card grids (videoGridClassName): from tablets up, as many columns as
+   fit the grid's own width at 12.5rem or more each, capped at
+   --video-grid-max. Sized by the grid, not the window, so docking the chat or
+   opening the channel sidebar drops a column instead of squeezing every card.
+   The cap term is one column's width when exactly the maximum fit. */
+@media (min-width: 640px) {
+  .video-grid {
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(
+        max(
+          12.5rem,
+          calc(
+            (100% - (var(--video-grid-max, 5) - 1) * 1rem) /
+              var(--video-grid-max, 5)
+          )
+        ),
+        1fr
+      )
+    );
+  }
+}
+
 /* The chat docked at the side (HelpChatPanel): the page and footer make room
    for it below the full-width nav. Outside the layers, so it beats w-full and
    mx-auto on those elements. */
