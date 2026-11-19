@@ -24,6 +24,7 @@ from app.models import (
     VideoEmbedding,
 )
 from app.services.ai import embeddings
+from app.services.discovery.tuning import DEFAULTS
 
 
 def _vec(angle: float, axis: int = 0) -> list[float]:
@@ -42,6 +43,7 @@ def ai_on(monkeypatch):
     """Embeddings count as available (vectors are written by the tests)."""
     for target in (
         "app.services.discovery.feed.get_embed_provider",
+        "app.services.discovery.relevance.get_embed_provider",
         "app.services.ai.provider.get_embed_provider",
     ):
         monkeypatch.setattr(target, lambda: object())
@@ -315,12 +317,12 @@ def test_feedback_belongs_to_its_user(client, member_client, session, admin_user
 
 
 def test_mix_follows_the_shares_and_spreads_channels():
-    from app.services.discovery import feed
+    from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate
 
     def items(bucket, n, channels):
         return [
-            feed.FeedItem(
+            picks.FeedItem(
                 Candidate(
                     key=f"{bucket}{i}",
                     pool="discovery",
@@ -330,12 +332,12 @@ def test_mix_follows_the_shares_and_spreads_channels():
                 ),
                 bucket,
                 1.0 - i * 0.01,
-                feed.Reason("x", "x"),
+                picks.Reason("x", "x"),
             )
             for i in range(n)
         ]
 
-    out = feed.mix(
+    out = mix.mix(
         {
             "subscriptions": items(
                 "subscriptions", 40, ["S1", "S2", "S3", "S4", "S5", "S6"]
@@ -346,13 +348,14 @@ def test_mix_follows_the_shares_and_spreads_channels():
         }
     )
     first = out[:40]
-    counts = {b: sum(1 for i in first if i.bucket == b) for b in feed.SHARES}
-    for bucket, share in feed.SHARES.items():
+    balanced = DEFAULTS.shares.normalized()
+    counts = {b: sum(1 for i in first if i.bucket == b) for b in balanced}
+    for bucket, share in balanced.items():
         assert abs(counts[bucket] - 40 * share) <= 2, counts
-    # No channel twice within CHANNEL_GAP slots.
+    # No channel twice within the Balanced channel gap.
     names = [i.candidate.channel for i in out[:100]]
-    for n in range(len(names) - feed.CHANNEL_GAP + 1):
-        window = names[n : n + feed.CHANNEL_GAP]
+    for n in range(len(names) - DEFAULTS.channel_gap + 1):
+        window = names[n : n + DEFAULTS.channel_gap]
         assert len(window) == len(set(window)), window
     # Throwbacks keep to their cap (3 per channel); the 22 past it wait at the end.
     assert len(out) == 160
@@ -362,13 +365,80 @@ def test_mix_follows_the_shares_and_spreads_channels():
     assert {i.bucket for i in overflow} == {"throwback"}
 
 
+def test_mix_stops_at_the_feeds_size():
+    """The mixer places no more picks than the feed keeps: mixing a pool of
+    thousands to throw most of it away was half the cost of a ranking."""
+    from app.services.discovery import mix, picks
+    from app.services.discovery.candidates import Candidate
+
+    def buckets():
+        return {
+            bucket: [
+                picks.FeedItem(
+                    Candidate(
+                        key=f"{bucket}{i}",
+                        pool="discovery",
+                        title="",
+                        channel=f"{bucket}-{i % 50}",
+                        channel_url="",
+                    ),
+                    bucket,
+                    1.0 - i * 0.001,
+                    picks.Reason("x", "x"),
+                )
+                for i in range(400)
+            ]
+            for bucket in ("subscriptions", "similar", "new", "throwback")
+        }
+
+    everything = mix.mix(buckets(), limit=1600)
+    assert len(everything) == 1600
+    top = mix.mix(buckets(), limit=100)
+    assert [i.candidate.key for i in top] == [i.candidate.key for i in everything[:100]]
+    assert len(mix.mix(buckets())) == mix.FEED_MAX
+
+
+def test_a_recipe_scores_its_terms_in_order():
+    """A pick's score parts are its recipe's terms, weight times signal, then
+    the popularity lean; a label can be renamed for the candidate."""
+    from app.services.discovery import scoring
+
+    now = datetime.now(UTC)
+    scorer = scoring.Scorer(DEFAULTS, now)
+    parts = scorer.parts(
+        "subscriptions",
+        {"channel_now": 0.6, "taste_capped": 0.5},
+        now - timedelta(days=10),
+        0.5,
+        {"channel_now": "Followed channel"},
+    )
+    assert [label for label, _value in parts] == [
+        "Freshness",
+        "Followed channel",
+        "Match to your taste",
+        "Popularity",
+    ]
+    # Ten days is the subscriptions half-life: half of the freshness weight.
+    assert parts[0][1] == pytest.approx(0.55 / 2)
+    assert [value for _label, value in parts[1:]] == pytest.approx([0.15, 0.1, 0.0])
+    # A rewatch is not scored on views at all.
+    rewatch = scorer.parts(
+        "rewatch",
+        {"taste_capped": 1.0, "known": 1.0, "rewatched": 1.0, "time_away": 1.0},
+        None,
+        1.0,
+    )
+    assert sum(value for _label, value in rewatch) == pytest.approx(1.0)
+    assert "Popularity" not in dict(rewatch)
+
+
 def test_throwbacks_stay_out_of_the_top_of_the_feed():
-    from app.services.discovery import feed
+    from app.services.discovery import mix, picks
     from app.services.discovery.candidates import Candidate
 
     def items(bucket, n):
         return [
-            feed.FeedItem(
+            picks.FeedItem(
                 Candidate(
                     key=f"{bucket}{i}",
                     pool="discovery",
@@ -379,31 +449,32 @@ def test_throwbacks_stay_out_of_the_top_of_the_feed():
                 bucket,
                 # Throwbacks score best, so only the hold keeps them down.
                 (2.0 if bucket == "throwback" else 1.0) - i * 0.01,
-                feed.Reason("x", "x"),
+                picks.Reason("x", "x"),
             )
             for i in range(n)
         ]
 
-    out = feed.mix(
+    out = mix.mix(
         {b: items(b, 30) for b in ("subscriptions", "similar", "new", "throwback")}
     )
-    top = out[: feed.THROWBACK_HOLD]
+    top = out[: mix.THROWBACK_HOLD]
     assert all(i.bucket != "throwback" for i in top)
     # They come in after the hold, spread out rather than in one run.
-    after = [i.bucket for i in out[feed.THROWBACK_HOLD : feed.THROWBACK_HOLD + 20]]
+    after = [i.bucket for i in out[mix.THROWBACK_HOLD : mix.THROWBACK_HOLD + 20]]
     assert 1 <= after.count("throwback") <= 5, after
     # With nothing else to show, throwbacks still fill the feed.
-    assert len(feed.mix({"throwback": items("throwback", 5)})) == 5
+    assert len(mix.mix({"throwback": items("throwback", 5)})) == 5
 
 
 def test_an_empty_bucket_does_not_inflate_the_sprinkles():
-    from app.services.discovery import feed
+    from app.services.discovery import mix
 
-    shares = feed.effective_shares({"similar", "new", "throwback"})
+    shares = mix.effective_shares({"similar", "new", "throwback"})
     assert abs(sum(shares.values()) - 1) < 1e-9
-    assert shares["new"] <= feed.SHARE_CAPS["new"]
-    assert shares["throwback"] <= feed.SHARE_CAPS["throwback"]
-    assert shares["similar"] > feed.SHARES["similar"]
+    balanced = DEFAULTS.shares.normalized()
+    for bucket in ("new", "throwback"):
+        assert shares[bucket] <= balanced[bucket] * mix.SHARE_CAP_RATIO[bucket]
+    assert shares["similar"] > balanced["similar"]
 
 
 def test_shown_videos_sink_over_visits(session, admin_user):
@@ -424,7 +495,6 @@ def test_shown_videos_sink_over_visits(session, admin_user):
     assert row.shown_count == 2
     assert feedback.earlier_visits(session, admin_user.id) == {"aaaaaaaaaaa": 1}
     assert feedback.impression_penalty(1) > 0
-    assert feedback.worn_out(feedback.IMPRESSION_CAP)
 
 
 # --- the gatherer ---------------------------------------------------------------
@@ -938,17 +1008,199 @@ def test_paging_keeps_the_visits_ranking_when_the_user_watches_meanwhile(
     assert first["items"][0]["key"] not in again
 
 
+def test_requests_that_arrive_together_share_one_ranking(
+    session, init_db, admin_user, tmp_dirs, monkeypatch
+):
+    """The home page asks for the first page and the channel suggestions at
+    once; the second waits for the first's ranking instead of ranking too."""
+    import threading
+    import time
+
+    from sqlmodel import Session
+
+    from app import context
+    from app.services.discovery import feed
+
+    _discovered(session, admin_user, "found000001", "Found", "Chan")
+    runtime = context.current().discovery
+    built = []
+    real = feed.build_feed
+
+    ranking = threading.Event()
+
+    def slow(*args, **kwargs):
+        built.append(1)
+        ranking.set()
+        time.sleep(0.3)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(feed, "build_feed", slow)
+    feeds = []
+
+    def ask(fresh):
+        with Session(init_db["engine"]) as own:
+            feeds.append(feed.ranked_feed(own, runtime, admin_user.id, 7, fresh=fresh))
+
+    threads = [threading.Thread(target=ask, args=(fresh,)) for fresh in (True, False)]
+    threads[0].start()
+    # The second asks while the first is ranking, so it cannot find it cached.
+    assert ranking.wait(timeout=10)
+    threads[1].start()
+    for thread in threads:
+        thread.join()
+    assert len(built) == 1
+    assert feeds[0] is feeds[1]
+
+
+def test_a_busy_history_keeps_its_old_channels(
+    client, session, add_video, set_watch, admin_user, ai_on
+):
+    """A channel watched long ago stays a throwback, and is not "new", however
+    much was watched since: the newest 600 watches used to be all that was read."""
+    from app import context
+    from app.services.discovery import history
+    from app.services.discovery.feed import build_feed
+
+    now = datetime.now(UTC)
+    for n in range(6):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.0, axis=2),
+            channel="OldFav",
+            title=f"OldFav {n}",
+            days_ago=200 + n,
+        )
+    for n in range(4):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.02 * n),
+            channel="Lab",
+            title=f"Lab {n}",
+            days_ago=2,
+        )
+    _catalog(session, "OldFav", [("oldfavnew01", "New upload", 3, _vec(0.01, axis=2))])
+    session.add_all(
+        UserStreamState(
+            user_id=admin_user.id,
+            yt_id=f"st{n:09d}",
+            url=_yt(f"st{n:09d}"),
+            title=f"Stream {n}",
+            channel=f"Chan{n % 30}",
+            watched_sec=600,
+            duration_sec=600,
+            finished_at=now,
+            last_watched_at=now - timedelta(days=5 + n * 95 / 650),
+        )
+        for n in range(history.HISTORY_LIMIT + 50)
+    )
+    session.commit()
+
+    # The taste read reaches past its newest 600 to the older watches...
+    read = history.watches(session, admin_user.id, older_than=now - timedelta(days=60))
+    assert sum(1 for w in read if w.channel == "OldFav") == 6
+    assert len(history.watches(session, admin_user.id)) == history.HISTORY_LIMIT
+    # ...and the feed still knows the channel.
+    feed = build_feed(session, context.current().discovery, admin_user.id, 1)
+    pick = next(i for i in feed.items if i.candidate.key == "oldfavnew01")
+    assert (pick.bucket, pick.reason.text) == ("throwback", "You used to watch OldFav")
+    assert pick.eligible
+
+
+def test_the_watch_log_reads_every_source_once(
+    session, add_video, set_watch, admin_user
+):
+    """Library, streamed and imported watches of one video are one watch (the
+    library's), and an imported channel counts as watched."""
+    from app.services.discovery import history
+    from app.services.takeout import history as takeout
+    from app.services.takeout.parse import WatchView
+
+    now = datetime.now(UTC)
+    video = add_video(channel="Lab", title="Lab", source_url=_yt("labvideo001"))
+    set_watch(admin_user, video, 0, now - timedelta(days=1))
+    takeout.store_views(
+        session,
+        admin_user.id,
+        [
+            WatchView("labvideo001", now - timedelta(days=900), "Lab", "Lab"),
+            WatchView("oldimport01", now - timedelta(days=800), "Old", "Imported"),
+            WatchView("oldimport01", now - timedelta(days=700), "Old", "Imported"),
+        ],
+    )
+    log = history.watch_log(session, admin_user.id)
+    assert [(w.key, w.channel, w.engagement) for w in log] == [
+        ("labvideo001", "Lab", 1.0),
+        ("oldimport01", "Imported", history.YOUTUBE_REWATCH_ENGAGEMENT),
+    ]
+    older = history.watches(
+        session, admin_user.id, limit=1, older_than=now - timedelta(days=60)
+    )
+    assert [w.key for w in older] == ["labvideo001", "oldimport01"]
+    assert older[1].title == "Old"
+    # A channel renamed between two imports goes by its newest name, as in
+    # ``watches``, whichever name sorts last.
+    takeout.store_views(
+        session,
+        admin_user.id,
+        [
+            WatchView("renamed0001", now - timedelta(days=400), "Clip", "Zeta Old"),
+            WatchView("renamed0001", now - timedelta(days=300), "Clip", "Alpha New"),
+        ],
+    )
+    names = {w.key: w.channel for w in history.watch_log(session, admin_user.id)}
+    assert names["renamed0001"] == "Alpha New"
+    assert names == {w.key: w.channel for w in history.watches(session, admin_user.id)}
+    assert log[0].video_id == video.id
+
+
+def test_a_downloaded_video_is_not_a_new_channel(
+    client, session, add_video, set_watch, admin_user, ai_on
+):
+    """A library video from a channel not watched yet ranks with the familiar
+    picks: it does not take the new-channel share, floor or two-per-channel cap."""
+    for n in range(4):
+        _watched(
+            session,
+            add_video,
+            set_watch,
+            admin_user,
+            _vec(0.02 * n),
+            channel="Lab",
+            title=f"Lab {n}",
+            days_ago=2,
+        )
+    for n in range(3):
+        video = add_video(channel="Shelf", title=f"Shelf {n}")
+        _embed(session, video, _vec(0.03 + 0.01 * n))
+    _discovered(
+        session, admin_user, "strangervid", "Close to Lab", "Stranger", _vec(0.03)
+    )
+
+    by_title = {(i.get("video") or i["stream"])["title"]: i for i in _items(client)}
+    for n in range(3):
+        pick = by_title[f"Shelf {n}"]
+        assert pick["why"]["bucket"] == "similar"
+        assert pick["reason"]["kind"] != "new_channel"
+    assert by_title["Close to Lab"]["reason"]["kind"] == "new_channel"
+
+
 def test_household_switch_stops_cold_start_pooling(
     session, add_video, set_watch, admin_user, member_user, client
 ):
-    from app.services.discovery import feed
+    from app.services.discovery import household
 
     for n in range(4):
         set_watch(admin_user, add_video(title=f"Admin {n}", channel="Theirs"), 0)
-    pooled, cold = feed.taste_history(session, member_user.id)
+    pooled, cold = household.taste_history(session, member_user.id)
     assert cold and len(pooled) == 4
     client.patch("/api/settings", json={"discovery_household": False})
-    pooled, cold = feed.taste_history(session, member_user.id)
+    pooled, cold = household.taste_history(session, member_user.id)
     assert cold and pooled == []
 
 
@@ -1103,8 +1355,8 @@ def test_channel_suggestion_says_what_the_channel_is_like():
     """A suggestion carries its picks' typical views and length, and a short
     reason naming the watch that led to it."""
     from app.services.discovery.candidates import Candidate
-    from app.services.discovery.feed import ChannelStat, Feed
     from app.services.discovery.feedback import Exclusions
+    from app.services.discovery.picks import ChannelStat, Feed
     from app.services.discovery.suggest import suggestions
 
     def cand(i: int, views: int | None, seconds: float | None) -> Candidate:

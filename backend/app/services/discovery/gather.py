@@ -497,7 +497,11 @@ def gather_for(
     left_out = exclusions(session, user_id).taste
     history = [
         w
-        for w in watches(session, user_id)
+        for w in watches(
+            session,
+            user_id,
+            older_than=now - timedelta(days=tuned.window.throwback_after_days),
+        )
         if counts_as_taste(w, tuned.min_watched_pct) and w.key not in left_out
     ]
     found = 0

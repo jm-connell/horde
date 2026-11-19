@@ -10,7 +10,14 @@
   lists, ``ytdlp_extract``), with its budget and back-off.
 * ``runtime``: the ``DiscoveryRuntime`` held on the ``AppContext``.
 * ``candidates``: every video Recommended may show, with its vector.
-* ``feed``: the ranked and mixed Recommended feed; ``suggest``: channels to follow.
+* ``relevance``: how well a candidate fits the user's taste, and which
+  channels they know; ``household``: what the other people here add.
+* ``scoring``: what each kind of pick is scored on (one recipe per kind) and
+  the thresholds between kinds; ``mix``: the buckets mixed into one feed.
+* ``feed``: sorts candidates into buckets, ranks and caches the feed;
+  ``picks``: what a feed is made of; ``suggest``: channels to follow.
+* ``tuning``, ``algorithms``, ``topics``: a user's own settings for all of it.
 
-Design and tuning: ``docs/adr/0019-recommended-plus.md``.
+Design and tuning: ``docs/adr/0019-recommended-plus.md`` and
+``docs/adr/0024-tunable-recommended-plus.md``.
 """
