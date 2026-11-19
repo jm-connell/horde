@@ -7,8 +7,22 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **Recommended ranks faster.** Opening the tab ranks the feed once, not
+  twice, and each ranking of a large library with indexed channels is
+  about a quarter quicker.
+- **A downloaded video is no longer a "New channel for you".** A library
+  video from a channel you have not watched yet ranks with the familiar
+  picks, so it is not held to the stricter new-channel match or limited to
+  two per channel, and new-channel slots go to actual discoveries.
+
 ### Fixed
 
+- **Recommended forgot older watching in a busy history.** It read only
+  your newest 600 watches, so with a YouTube history import or heavy use,
+  channels you watched before then showed as "New channel for you" and
+  throwbacks dried up. Channels you know now come from your whole history.
 - Audio downloads (the **Audio** presets, and podcasts or other links
   without video) failed with "Download produced no file", to the library and
   to a device: the finished file was thrown away because it had no video.

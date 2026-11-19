@@ -237,16 +237,20 @@ class RecentVideo:
     channel_url: str | None
 
 
-def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentVideo]:
-    """The ``limit`` videos watched on YouTube most lately, one row each."""
+def recent_videos(
+    session: Session, user_id: int, *, limit: int, before: datetime | None = None
+) -> list[RecentVideo]:
+    """The ``limit`` videos watched on YouTube most lately, one row each
+    (``before``: only those last watched before then)."""
     last = func.max(col(YoutubeWatchEvent.watched_at))
-    rows = session.execute(
+    query = (
         sa_select(col(YoutubeWatchEvent.yt_id), last, func.count())
         .where(col(YoutubeWatchEvent.user_id) == user_id)
         .group_by(col(YoutubeWatchEvent.yt_id))
-        .order_by(last.desc())
-        .limit(limit)
-    ).all()
+    )
+    if before is not None:
+        query = query.having(last < before)
+    rows = session.execute(query.order_by(last.desc()).limit(limit)).all()
     details = latest_details(session, user_id, [str(r[0]) for r in rows])
     out = []
     for yt_id, when, views in rows:
@@ -257,6 +261,55 @@ def recent_videos(session: Session, user_id: int, *, limit: int) -> list[RecentV
             )
         )
     return out
+
+
+def video_channels(
+    session: Session, user_id: int
+) -> list[tuple[str, datetime, int, str | None]]:
+    """Every video watched on YouTube: (id, last watched, views, channel name).
+
+    One query over the whole import, without titles: what Recommended reads to
+    know which channels the user has watched, however long the history.
+    """
+    mine = col(YoutubeWatchEvent.user_id) == user_id
+    # The channel as ``latest_details`` names it: from the newest view that
+    # has a title, else the newest view (a channel may have been renamed
+    # between two imports).
+    newest = (
+        func.row_number()
+        .over(
+            partition_by=col(YoutubeWatchEvent.yt_id),
+            order_by=(
+                col(YoutubeWatchEvent.title).is_(None),
+                col(YoutubeWatchEvent.watched_at).desc(),
+            ),
+        )
+        .label("newest")
+    )
+    named = (
+        sa_select(col(YoutubeWatchEvent.yt_id), col(YoutubeWatchEvent.channel), newest)
+        .where(mine)
+        .subquery()
+    )
+    channels = {
+        str(yt_id): channel
+        for yt_id, channel in session.execute(
+            sa_select(named.c.yt_id, named.c.channel).where(named.c.newest == 1)
+        ).all()
+    }
+    rows = session.execute(
+        sa_select(
+            col(YoutubeWatchEvent.yt_id),
+            func.max(col(YoutubeWatchEvent.watched_at)),
+            func.count(),
+        )
+        .where(mine)
+        .group_by(col(YoutubeWatchEvent.yt_id))
+    ).all()
+    return [
+        (str(yt_id), as_utc(when), int(views), channels.get(str(yt_id)))
+        for yt_id, when, views in rows
+    ]
 
 
 @dataclass

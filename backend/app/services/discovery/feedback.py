@@ -178,10 +178,6 @@ def impression_penalty(visits: int) -> float:
     return IMPRESSION_STEP * min(visits, IMPRESSION_CAP)
 
 
-def worn_out(visits: int) -> bool:
-    return visits >= IMPRESSION_CAP
-
-
 def record_shown(session: Session, user_id: int, keys: Iterable[str]) -> None:
     """Count one visit for each of ``keys`` (a second show within the hour is free)."""
     wanted = [k for k in dict.fromkeys(keys) if k]

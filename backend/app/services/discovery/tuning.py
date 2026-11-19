@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 BUCKETS = ("subscriptions", "similar", "new", "throwback", "rewatch")
 Bucket = Literal["subscriptions", "similar", "new", "throwback", "rewatch"]
-#: The buckets that have a relevance floor (``FLOORS`` in ``feed``).
+#: The buckets that have a relevance floor (``FLOORS`` in ``scoring``).
 FLOORED = ("similar", "new", "throwback")
 
 
