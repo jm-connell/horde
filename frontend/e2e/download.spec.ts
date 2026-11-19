@@ -160,3 +160,41 @@ test("the bookmarklet help builds a link for this server", async ({ page }) => {
   expect(href).toMatch(/^javascript:/);
   expect(href).toContain(`${new URL(page.url()).origin}/download?url=`);
 });
+
+test("a download from a new channel offers to subscribe", async ({ page }) => {
+  // The server asks about new channels (new_channel_subscribe = ask): its
+  // answer for the finished job carries the prompt until it is answered.
+  let answered = false;
+  await page.route(/\/api\/downloads$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const jobs = (await response.json()) as { title: string | null }[];
+    return route.fulfill({
+      response,
+      json: jobs.map((job) =>
+        job.title === "Finished kiln tour" && !answered
+          ? {
+              ...job,
+              subscribe_prompt: {
+                channel_url: "https://youtube.com/@kilnprompt",
+                channel_name: "Kiln Prompt",
+              },
+            }
+          : job
+      ),
+    });
+  });
+  const subscribed = page.waitForRequest(
+    (r) => r.url().endsWith("/api/follows") && r.method() === "PUT"
+  );
+  await page.goto("/download");
+  const tag = page.getByRole("group", { name: "New channel: Kiln Prompt" });
+  await expect(tag).toBeVisible();
+  answered = true;
+  await tag.getByRole("button", { name: "Subscribe" }).click();
+  expect((await subscribed).postDataJSON()).toMatchObject({
+    channel_url: "https://youtube.com/@kilnprompt",
+  });
+  await expect(page.getByText("Subscribed to Kiln Prompt")).toBeVisible();
+  await expect(tag).toBeHidden();
+});

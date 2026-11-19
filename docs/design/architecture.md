@@ -112,7 +112,7 @@ SQLite at `DATA_DIR/horde.db` ([ADR 0001](../adr/0001-sqlite-wal-alembic.md)). S
 | Accounts | `users`, `user_sessions` | The person |
 | History | `user_video_state` (position and last watched, per user per video) | **Per user** |
 | Preferences | `user_settings` (UI JSON) | **Per user** |
-| AI chat | `video_ai_chat_messages` (has `user_id`) | **Per user** |
+| AI chat (Ask) | `ask_threads` / `ask_messages` (has `user_id`) | **Per user** |
 
 Rules that follow from this:
 
@@ -182,7 +182,7 @@ Detail: [AI pipeline](../architecture/ai-pipeline.md).
 
 A catalog is a local index of a YouTube channel's uploads, so the Library can browse, search and preview videos that are not downloaded yet, and so autodownload can decide what is new.
 
-- **Indexing** (`services/channel_catalog/`: `runtime`, `index`, `query`, `skips`, `documents`): one catalog at a time on `horde-channel-catalog`. Phases `flat` (paged upload list), `descriptions` (newest window), `embed` (queues `embed_catalog_video` jobs for the AI worker), then `ready`. Members-only, age-restricted and private ids go to `channel_catalog_skips`. A catalog left `indexing` at a crash is requeued at boot.
+- **Indexing** (`services/channel_catalog/`: `runtime`, `index`, `query`, `skips`, `documents`): one catalog at a time on `horde-channel-catalog`, channels never indexed before the periodic refreshes. Phases `flat` (the upload list, read once as one streamed listing), `descriptions` (newest window), `embed` (queues `embed_catalog_video` jobs for the AI worker), then `ready`. Members-only, age-restricted and private ids go to `channel_catalog_skips`. A catalog left `indexing` at a crash is requeued at boot.
 - **Feed-head sync** (`sync_feed_head`) fetches only the newest uploads and is what keeps a catalog fresh and what autodownload uses.
 - **Autodownload** (`channel_autodownload.py`, policy rows in `channel_autodownloads`): every 15 minutes the `autodownload-poller` syncs the head of each enabled channel and enqueues matching videos as ordinary download jobs built from catalog metadata (no per-video extract).
 - **Search**: `search_catalog` fuses keyword and semantic hits; catalog fetches share the global yt-dlp extract gate with previews (one call at a time, spaced, interactive requests first) so browsing never stampedes YouTube.

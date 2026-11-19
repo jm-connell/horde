@@ -14,7 +14,11 @@ function seekTo(sec: number) {
   window.dispatchEvent(new CustomEvent("horde:seek", { detail: { sec } }));
 }
 
-function renderTextWithTimestamps(text: string, keyPrefix: string) {
+function renderTextWithTimestamps(
+  text: string,
+  keyPrefix: string,
+  onTimestamp?: () => void
+) {
   const parts: ReactNode[] = [];
   let lastIndex = 0;
   const re = new RegExp(TIMESTAMP_INLINE_RE.source, TIMESTAMP_INLINE_RE.flags);
@@ -35,7 +39,10 @@ function renderTextWithTimestamps(text: string, keyPrefix: string) {
       <button
         key={`${keyPrefix}-ts-${i++}`}
         type="button"
-        onClick={() => seekTo(sec)}
+        onClick={() => {
+          seekTo(sec);
+          onTimestamp?.();
+        }}
         className="text-accent hover:underline"
       >
         {label}
@@ -53,7 +60,14 @@ function renderTextWithTimestamps(text: string, keyPrefix: string) {
   return parts.length > 0 ? parts : text;
 }
 
-export default function LinkifiedText({ text }: { text: string }) {
+export default function LinkifiedText({
+  text,
+  onTimestamp,
+}: {
+  text: string;
+  /** Called after a timestamp in the text seeks the player. */
+  onTimestamp?: () => void;
+}) {
   const parts = text.split(URL_RE);
   return (
     <>
@@ -76,7 +90,7 @@ export default function LinkifiedText({ text }: { text: string }) {
         }
         return (
           <Fragment key={i}>
-            {renderTextWithTimestamps(part, String(i))}
+            {renderTextWithTimestamps(part, String(i), onTimestamp)}
           </Fragment>
         );
       })}

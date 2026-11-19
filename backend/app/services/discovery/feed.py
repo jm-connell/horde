@@ -27,6 +27,7 @@ from collections import Counter, defaultdict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from functools import lru_cache
 
 import numpy as np
 from sqlmodel import Session, col, select
@@ -118,6 +119,9 @@ PAST_LIVE = frozenset({"was_live", "post_live"})
 MIX_STATS_TOP = 60
 #: Seeds read from the recent history (by weight).
 MAX_SEEDS = 40
+#: The top of the feed is for what the user watches now: no throwback is
+#: placed in its first ``THROWBACK_HOLD`` slots (while anything else can be).
+THROWBACK_HOLD = 12
 
 
 @dataclass
@@ -180,7 +184,9 @@ class Feed:
     categories: tuple[object, dict[str, set[str]]] | None = None
 
 
+@lru_cache(maxsize=16384)
 def _name(text: str) -> str:
+    # Cached: ranking asks for the same channel names many thousands of times.
     return " ".join((text or "").lower().split())
 
 
@@ -741,7 +747,7 @@ def build_feed(
     hits = _hits(session, user_id)
     pool = library_candidates(session)
     taken = {c.yt_id for c in pool if c.yt_id}
-    pool += catalog_candidates(session, taken)
+    pool += catalog_candidates(session, taken, runtime.catalog)
     pool += discovered_candidates(session, taken, set(hits))
     cands = [
         c
@@ -1076,6 +1082,9 @@ def mix(
     of the history (``topic_shares``, at least ``MIN_TOPIC_SHARE``) gets
     ``TOPIC_BONUS`` per missing slot, so a smaller interest still shows up
     between the big ones.
+
+    Throwbacks sit out the first ``THROWBACK_HOLD`` slots and earn no credit
+    meanwhile, so they do not bunch up right after.
     """
     gap = tuning.channel_gap
     caps = {**CHANNEL_CAPS, "new": tuning.new_channel_cap}
@@ -1131,10 +1140,13 @@ def mix(
 
     share: dict[str, float] = {}
     while queues:
-        share = effective_shares(set(queues), tuning, interest_share)
-        for name in queues:
+        active = set(queues)
+        if len(out) < THROWBACK_HOLD and len(active) > 1:
+            active.discard("throwback")
+        share = effective_shares(active, tuning, interest_share)
+        for name in active:
             credit[name] += share[name]
-        order = sorted(queues, key=lambda n: -credit[n])
+        order = sorted(active, key=lambda n: -credit[n])
         picked = choose(order, strict=True) or choose(order, strict=False)
         if picked is None:
             # Only capped picks at the heads: set every capped pick aside, go again.

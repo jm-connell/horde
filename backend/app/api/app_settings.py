@@ -14,7 +14,7 @@ from ..auth import (
 )
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
-from ..services import app_settings, media_sidecars, user_settings
+from ..services import app_settings, follows, media_sidecars, user_settings
 from ..services import comments as comments_svc
 from ..services.ai.provider import (
     env_key_for,
@@ -26,6 +26,7 @@ from ..services.auth import two_factor
 from ..services.auth.accounts import AuthUser
 from ..services.comments import store as comments_store
 from ..services.css_sanitize import sanitize_ui_css
+from ..services.follows import NewChannelMode
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -139,6 +140,11 @@ class AppSettingsRead(BaseModel):
     comments_enabled: bool = True
     # Who must sign in with a second step (administrators only see this).
     require_two_factor: TwoFactorRequirement = "off"
+    # A finished download from a channel its requester does not subscribe to:
+    # subscribe them, ask on the download's card, or neither.
+    new_channel_subscribe: NewChannelMode = "always"
+    # Whether members' downloads count (and their subscriptions may turn Ask on).
+    new_channel_subscribe_members: bool = True
     # True when app_settings.json is corrupt and unrecoverable (running on defaults).
     settings_degraded: bool = False
     setup_completed: bool = False
@@ -166,6 +172,8 @@ class AppSettingsUpdate(BaseModel):
     media_server_sidecars: bool | None = None
     comments_enabled: bool | None = None
     require_two_factor: TwoFactorRequirement | None = None
+    new_channel_subscribe: NewChannelMode | None = None
+    new_channel_subscribe_members: bool | None = None
     setup_completed: bool | None = None
     ui: dict[str, Any] | None = None
     ai: AiSettingsUpdate | None = None
@@ -304,6 +312,7 @@ def _settings_read(
     except TypeError, ValueError:
         interval = 24
     interval = max(1, min(168, interval))
+    new_mode, members_included = follows.new_channel_setting()
     read = AppSettingsRead(
         progress_expiry_days=data["progress_expiry_days"],
         metadata_sync_interval_hours=interval,
@@ -324,6 +333,8 @@ def _settings_read(
             TwoFactorRequirement,
             two_factor.normalize_requirement(data.get("require_two_factor")),
         ),
+        new_channel_subscribe=new_mode,
+        new_channel_subscribe_members=members_included,
         setup_completed=bool(data.get("setup_completed")),
         settings_degraded=app_settings.is_degraded(),
         ui=ui,
@@ -400,6 +411,10 @@ def update_settings(
         updates[comments_svc.SETTING] = payload.comments_enabled
     if payload.require_two_factor is not None:
         updates["require_two_factor"] = payload.require_two_factor
+    if payload.new_channel_subscribe is not None:
+        updates["new_channel_subscribe"] = payload.new_channel_subscribe
+    if payload.new_channel_subscribe_members is not None:
+        updates["new_channel_subscribe_members"] = payload.new_channel_subscribe_members
     if payload.setup_completed is False:
         raise HTTPException(
             status_code=400,

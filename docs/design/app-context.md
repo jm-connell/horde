@@ -12,12 +12,12 @@ It holds the things that used to be import-time constants and singletons:
 | `notifier` | The outgoing-notification queue and its delivery worker ([Notifications](../ops/notifications.md)) |
 | `sidecars` | The queue of library-wide jobs for the optional Jellyfin / Kodi / Plex files and its worker ([Media servers](../guides/media-servers.md)) |
 | `watch_refs` | The previous progress save of recently watched videos (a bounded LRU), which watch-time counting compares each save with ([History](../guides/history.md#how-watch-time-is-counted)) |
-| `discovery` | Recommended (`DiscoveryRuntime`): the gatherer's worker, back-off and hourly request log, the stacked catalog/discovered vector matrix, and ranked feeds cached for paging ([ADR 0019](../adr/0019-recommended-plus.md)) |
+| `discovery` | Recommended (`DiscoveryRuntime`): the gatherer's worker, back-off and hourly request log, the stacked catalog/discovered vector matrix, the catalog's candidates (read again only when the catalog changes), and ranked feeds cached for paging ([ADR 0019](../adr/0019-recommended-plus.md)) |
 | `auth` | The app's `AuthRuntime` (copied from `app.state.auth`) |
 | `ai` | `AiRuntimeState`: the AI worker's wake event and "blocked" reason |
 | `timedtext` | `TimedtextPacer`: when YouTube's caption endpoint may next be called, by library caption work (the block after a 429 or between retries) and by Ask's indexing (a separate spaced slot that never blocks library work) |
 | `knowledge` | Ask (`KnowledgeRuntime`): the Ask worker's wake event and the per-channel passage vector matrices ([Channel knowledge](channel-knowledge.md)) |
-| `comments` | Saved comments (`CommentsRuntime`): the comment fetcher's wake event, its pause after a rate limit, and comments read live for "Show more" (30 minutes, 16 at most) |
+| `comments` | Saved comments (`CommentsRuntime`): the comment fetcher's wake event, its pause after a rate limit, and comments read live past the saved ones (30 minutes, 16 at most) |
 | `caches` | Request-path caches (`search_cache`, `duplicate_groups`), built by `install_caches`; `app.state` aliases them for the routers |
 | `e2e` | True only in the Playwright process (`HORDE_E2E`) |
 

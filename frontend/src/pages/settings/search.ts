@@ -123,6 +123,15 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
   },
   {
     tab: "library",
+    keywords: "subscriptions subscribe followed channels",
+  },
+  {
+    tab: "library",
+    access: "admin",
+    keywords: "new channels from downloads subscribe members",
+  },
+  {
+    tab: "library",
     access: "delete_videos",
     keywords:
       "trash bin recycle deleted videos restore undo empty trash delete forever",
@@ -206,7 +215,7 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     tab: "ai",
     pane: "features",
     keywords:
-      "features subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
+      "features ai video chat ask conversation subtitles enrich tags duplicate confirmation llm category match strictness score summary summarize captions chapters timestamps transcript short medium long length 3 minutes lyrics on download watch page generate automatic button",
   },
   // System
   {

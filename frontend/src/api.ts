@@ -11,7 +11,6 @@ export {
 } from "./api/client";
 export type {
   ApiErrorField,
-  ChatStreamOptions,
   Page,
   ReadOptions,
   ReauthRequestDetail,

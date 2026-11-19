@@ -23,11 +23,15 @@
 | `members` | Members-only |
 | `rate_limit` | HTTP 429 / temporary block. Caption (timedtext) 429s are retried automatically with backoff; the video file is still kept. |
 | `unavailable` | Removed, geo, no formats |
-| `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed |
+| `postprocess` | Merge / subtitles / ffmpeg salvage or `h264_convert` re-encode failed, or ffmpeg is not installed (see [below](#ffmpeg-not-installed)) |
 | `disk_full` | The disk ran out of space while writing. The queue holds for a while instead of failing every following job; free space, then retry. See [Disk limits](../guides/downloads.md#disk-limits) |
 | `network` | The server could not reach the site at all: no internet, DNS, a proxy or firewall, a VPN that blocks the container. The link preview answers `502`. |
 | `cancelled` | User cancel |
 | `unknown` | Unclassified yt-dlp message |
+
+### ffmpeg is not installed { #ffmpeg-not-installed }
+
+A download that fails with "ffmpeg is not installed on the server, so the video and audio streams can't be merged" ran on a machine without ffmpeg. YouTube serves most qualities as separate video and audio streams, and yt-dlp needs ffmpeg to join them. The Docker image ships ffmpeg; this comes up in [local development](../getting-started/local-dev.md) or a container that lacks it. Install ffmpeg on the server's `PATH` (for example `sudo apt install ffmpeg` or `sudo dnf install ffmpeg-free`) and retry the download.
 
 ## Restart recovery
 
@@ -59,7 +63,7 @@ Docker entrypoint runs Horde as `PUID`:`PGID` (defaults `1000:1000`) and chowns 
 
 **Symptoms:** Dockge has no `horde` stack; `docker compose` cannot find a `Dockerfile`; build context is empty; `update.sh` says `not a git repository`.
 
-Horde is built from a **git clone** of this repo. Compose `build: .` needs `Dockerfile` plus `backend/` and `frontend/` in the same folder as `docker-compose.yml`.
+Horde is installed from a **git clone** of this repo: the stack needs its `docker-compose.yml`, `.env.example` and `update.sh` together, and building from source (`docker-compose.build.yml`) also needs the `Dockerfile`, `backend/` and `frontend/` next to them.
 
 **Fix:**
 
@@ -108,6 +112,8 @@ In-app watch-before-download preview resolves progressive or adaptive formats vi
 - Preview refresh uses `force=True` on extract to bust the 180s info cache when refreshing media URLs.
 - Some sources simply lack a usable progressive format under the preview height cap.
 - Preview API errors include a structured `error_kind` when classification succeeds.
+
+**Streamed videos take a long time to start, or the download menu shows HTTP 429:** every YouTube lookup (stream previews, feed resolution badges, metadata fills, channel indexing, Recommended) goes through one queue, one request at a time, with the video you open first in line. A request that waited more than 10 s for that queue, or ran more than 15 s, logs `Slow YouTube request (<priority>): waited …s for the queue, ran …s: <url>` (background requests such as channel indexing log this at debug, since they wait behind everything else by design). A stream preview or download still waiting after 10 s logs `YouTube queue busy: … the queue is held by a <priority> request running …s: <url>`, naming what it is stuck behind even if that request never finishes. A slow first request right after a restart usually means the `bgutil-pot` sidecar is still warming up.
 
 **Preview plays ~40–60s then Shaka error 1001 / “Compatibility-mode preview failed”, and downloads say “Download produced no file”:** YouTube started rejecting `android_vr` googlevideo URLs after the first minute of Range requests (`Upstream returned 403`). Horde no longer forces that client; yt-dlp 2026.8.19+ uses `visionos` instead. Rebuild so the yt-dlp pin updates (`yt_dlp_version` on Settings → System / `/api/health` should be `2026.08.19` or newer), then retry. If 403s continue, treat it as a [bot check / POT](#bot-checks-youtube-blocks) problem.
 

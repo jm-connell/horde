@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { useAuth } from "../../context/AuthContext";
 import { useSettings } from "../../hooks/useSettings";
 import { useApplyTakeout, useImportTakeout } from "../../queries/takeout";
 import type {
@@ -131,6 +132,8 @@ export default function TakeoutImport({
   const [lists, setLists] = useState<Set<string>>(new Set());
   const importTakeout = useImportTakeout();
   const applyTakeout = useApplyTakeout();
+  // Without the permission its subscriptions are not offered at all.
+  const canSubscribe = useAuth().can("manage_subscriptions");
 
   const upload = async () => {
     if (files.length === 0) return;
@@ -144,7 +147,7 @@ export default function TakeoutImport({
       setSubs(
         new Set(
           result.subscriptions
-            .filter((s) => s.status === "new")
+            .filter((s) => canSubscribe && s.status === "new")
             .map((s) => s.channel_url)
         )
       );
@@ -259,7 +262,8 @@ export default function TakeoutImport({
   if (stage.kind === "done") {
     const { applied } = stage;
     const parts = [
-      applied.followed > 0 && `followed ${plural(applied.followed, "channel")}`,
+      applied.followed > 0 &&
+        `subscribed to ${plural(applied.followed, "channel")}`,
       applied.playlists_created > 0 &&
         `created ${plural(applied.playlists_created, "playlist")}`,
       applied.playlists_updated > 0 &&
@@ -303,23 +307,24 @@ export default function TakeoutImport({
   }
 
   const { result } = stage;
+  const offeredSubs = canSubscribe ? result.subscriptions : [];
   const nothingToChoose =
-    result.subscriptions.length === 0 && result.playlists.length === 0;
+    offeredSubs.length === 0 && result.playlists.length === 0;
   return (
     <div className="space-y-5">
       <HistorySummary result={result} />
-      {result.subscriptions.length > 0 && (
+      {offeredSubs.length > 0 && (
         <TakeoutChoiceList<TakeoutSubscription>
           title="Subscriptions"
-          description="Follow these channels in Horde (just for your account)."
-          items={result.subscriptions}
+          description="Subscribe to these channels in Horde (just for your account)."
+          items={offeredSubs}
           itemKey={(s) => s.channel_url}
           label={(s) => s.channel_name || s.channel_url}
           note={(s) =>
             s.status === "following"
-              ? "Following"
+              ? "Subscribed"
               : s.status === "unfollowed"
-                ? "You unfollowed this"
+                ? "You unsubscribed from this"
                 : null
           }
           locked={(s) => s.status === "following"}

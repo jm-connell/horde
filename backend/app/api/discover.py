@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import date, datetime
 
@@ -55,6 +56,7 @@ from ..schemas import (
     RecTuningWrite,
     StreamWatchWrite,
 )
+from ..services import watch_stats
 from ..services.auth.accounts import AuthUser
 from ..services.discovery import (
     algorithms,
@@ -77,6 +79,8 @@ from ..services.pagination import (
 )
 from ..services.url_clean import youtube_thumbnail_url
 from .video_serialize import to_read_many
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/discover", tags=["discover"])
 
@@ -212,6 +216,13 @@ def discover_feed(
         if category
         else feed.items
     )
+    if user.allowed is not None:
+        # Parental controls: only the allowed channels' picks.
+        picks = [
+            i
+            for i in picks
+            if user.allowed.allows(i.candidate.channel_url, i.candidate.channel)
+        ]
     window = picks[page.offset : page.offset + page.fetch]
     more = len(window) > limit
     window = window[:limit]
@@ -264,7 +275,12 @@ def discover_feed(
     if not cursor and not category:
         items = live_picks.merge(
             items,
-            live_picks.live_picks(session, ctx.live.directory, user.id),
+            [
+                p
+                for p in live_picks.live_picks(session, ctx.live.directory, user.id)
+                if user.allowed is None
+                or user.allowed.allows(p.channel_url, p.channel_name)
+            ],
             _live_item,
             lambda i: i.key,
         )
@@ -533,6 +549,8 @@ def discover_channels(
         feedback.exclusions(session, user.id),
         discover_categories.feed_categories(session, ctx.discovery, feed),
     )
+    if user.allowed is not None:
+        picks = []  # Parental controls: no new channels to suggest.
     return SuggestedChannelsRead(
         items=[
             SuggestedChannelRead(
@@ -635,9 +653,26 @@ def remove_feedback(
 def record_stream_watch(
     payload: StreamWatchWrite,
     session: Session = Depends(get_session),
+    ctx: AppContext = Depends(get_ctx),
     user: AuthUser = Depends(current_user),
 ):
     """Note how far the user got in a video they streamed without downloading."""
+    # Before the state it compares with is replaced (as for a library save).
+    # The History stats are a side record: a failure must not lose the watch.
+    try:
+        watch_stats.record_stream_save(
+            session,
+            ctx.watch_refs,
+            user.id,
+            url=payload.url,
+            channel=payload.channel,
+            position_sec=payload.position_sec,
+            duration_sec=payload.duration_sec,
+            finished=payload.finished,
+        )
+    except Exception:
+        session.rollback()
+        logger.warning("could not record stream watch time", exc_info=True)
     try:
         row = history.record_stream_watch(
             session,

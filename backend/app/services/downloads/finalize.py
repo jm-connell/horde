@@ -6,6 +6,7 @@ database transaction that makes the video visible.
 """
 
 import logging
+import re
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,7 +23,7 @@ from ...models import (
     VideoStatus,
     require_id,
 )
-from .. import activity, compat_rendition, follows, library, media_sidecars, scanner
+from .. import activity, compat_rendition, library, media_sidecars, scanner
 from ..fsutil import MoveJournal, is_within, safe_unlink
 from ..media_info import apply_stream_info, needs_compat, probe_stream_info
 from ..metadata import (
@@ -31,16 +32,18 @@ from ..metadata import (
     sprite_image_path,
     sprite_meta_path,
 )
+from ..outtmpl import ID_BYTES
 from ..paths import (
     find_video_by_path,
     media_server_sidecar_paths,
     resolve_compat_path,
     to_rel_path,
+    truncate_bytes,
 )
 from ..thumbnails import save_from_url
 from ..video_delete import delete_video_cascade, remove_files
 from ..ytdlp_extract import list_thumbnail_url
-from ..ytdlp_formats import compat_copy_cap, is_audio_preset
+from ..ytdlp_formats import accepts_audio_only, compat_copy_cap, is_audio_preset
 from . import artifacts, dbwrite, postprocess, subtitles
 from .errors import DownloadCancelled
 from .infodict import as_info, collect_tags, published_at
@@ -284,15 +287,19 @@ def _complete_device(
 
 
 def _promote_into_library(
-    final_path: Path, staging_dir: Path
+    final_path: Path, staging_dir: Path, *, audio_ok: bool
 ) -> tuple[Path, MoveJournal]:
     """Validate the processed file, then move it into the library.
 
     A failed move puts everything back; the returned journal lets the caller do
     the same if the database commit fails.
     """
-    if not artifacts.validate_playable(final_path):
+    if not artifacts.validate_playable(final_path, audio_ok=audio_ok):
         raise RuntimeError("Processed file is not playable")
+    if final_path.suffix.lower() == ".m4a":
+        # Audio-only: the same MP4 container, under the extension the library
+        # scans, serves and plays.
+        final_path = final_path.rename(final_path.with_suffix(".mp4"))
     journal = MoveJournal(get_paths().downloads)
     try:
         return promote_from_staging(journal, final_path, staging_dir), journal
@@ -350,6 +357,18 @@ def _queue_follow_up_work(
     except Exception:
         logger.warning(
             "could not move stream AI results onto video %s", video_id, exc_info=True
+        )
+    # So does the time spent streaming it (History stats).
+    try:
+        from .. import watch_stats
+
+        with Session(get_engine()) as session:
+            video = session.get(Video, video_id)
+            if video is not None:
+                watch_stats.adopt_stream_time(session, video)
+    except Exception:
+        logger.warning(
+            "could not move stream watch time onto video %s", video_id, exc_info=True
         )
     # Queue metadata embed + tag enrich (subtitles re-embed after finalize).
     try:
@@ -413,7 +432,11 @@ def _complete_library(
     rel_path = to_rel_path(final_path)
     journal: MoveJournal | None = None
     if task.staging_dir is not None:
-        final_path, journal = _promote_into_library(final_path, task.staging_dir)
+        final_path, journal = _promote_into_library(
+            final_path,
+            task.staging_dir,
+            audio_ok=accepts_audio_only(spec.quality_preset, info),
+        )
         rel_path = to_rel_path(final_path)
         scanner.mark_active(rel_path)
 
@@ -448,7 +471,6 @@ def _complete_library(
         error_kind=None,
     )
     attach_download_to_playlist(spec.job_id, video_id)
-    follows.follow_from_download(spec.job_id, video_id)
     progress_store[spec.job_id] = snapshot
     return video_id
 
@@ -473,6 +495,18 @@ def _resolve_target(
                 replace_video_id = existing.id
 
     video = session.get(Video, replace_video_id) if replace_video_id else None
+    if video is not None and not _same_source(video, info):
+        # Replacing deletes the old copy for good, so it must be this source's
+        # own earlier download. ``source_url`` (and the YouTube id derived from
+        # it) is editable and proves nothing: keep both, as separate videos.
+        logger.warning(
+            "job %s did not download the source of video %s; "
+            "importing it as a new video instead of replacing it",
+            spec.job_id,
+            replace_video_id,
+        )
+        replace_video_id = None
+        video = None
     if replace_video_id and video is None:
         # The row was deleted while the download ran (its job FK is now
         # SET NULL): keep the download as a new library video.
@@ -489,6 +523,34 @@ def _resolve_target(
         video = Video(file_path=request.rel_path)  # type: ignore[call-arg]  # table models skip validation; _apply_display_title sets title before the flush
         session.add(video)
     return video, False, []
+
+
+#: The ``[<id>]`` yt-dlp puts at the end of every library download's name.
+_ID_TOKEN_RE = re.compile(r"\[([^\[\]]+)\]$")
+_PLAIN_ID_RE = re.compile(r"[A-Za-z0-9_-]+")
+_NOT_ALNUM_RE = re.compile(r"[^A-Za-z0-9]")
+
+
+def _same_source(video: Video, info: dict[str, Any]) -> bool:
+    """True when ``video``'s file is an earlier download of the video in ``info``.
+
+    Every library download is named ``... [<id>].<ext>`` (``library_outtmpl``) and
+    only manual imports are ever renamed, so that token is a record the server
+    wrote. A manual import (no token) is never the same source.
+    """
+    info_id = info.get("id")
+    if info_id is None or str(info_id) == "":
+        return False
+    match = _ID_TOKEN_RE.search(Path(video.file_path).stem)
+    if match is None:
+        return False
+    token, expected = match.group(1), truncate_bytes(str(info_id), ID_BYTES)
+    if _PLAIN_ID_RE.fullmatch(expected):  # every YouTube id: exact match
+        return token == expected
+    # yt-dlp rewrites characters a file name cannot hold ("a/b" -> "a⧸b" or
+    # "a_b"), so compare the letters and digits it keeps.
+    kept = _NOT_ALNUM_RE.sub("", expected)
+    return bool(kept) and _NOT_ALNUM_RE.sub("", token) == kept
 
 
 def _stale_files_of(video: Video, final_path: Path) -> list[Path]:

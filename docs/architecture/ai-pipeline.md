@@ -97,7 +97,7 @@ Changing the embed model invalidates compatibility — reindex so all rows share
 |---------|-----------|
 | **Hybrid search** | Keyword + embedding similarity over library (and catalog) vectors |
 | **Recommend** | Category chips, the Recommended feed and related videos ([below](#recommendations)) |
-| **Chat RAG** | Retrieve relevant chunks, stream assistant reply (SSE) |
+| **Ask, about a video** | Retrieve the video's relevant caption chunks (plus details and saved comments), stream the reply (SSE) through `POST /api/ask/chat` into the user's Ask thread ([Channel knowledge](../design/channel-knowledge.md), [ADR 0029](../adr/0029-video-questions-in-ask.md)) |
 | **Ask, from Horde** | BM25 over the shipped docs and source (`services/ai/help_chat.py`, built in memory on first use); the panel's `POST /api/ask/chat` streams the reply and saves both turns to the user's thread, and routes to channels instead when the question names one ([Channel knowledge](../design/channel-knowledge.md), [ADR 0028](../adr/0028-one-ask.md)); the older `POST /api/ai/help/chat` stores nothing ([ADR 0018](../adr/0018-help-chat-retrieval.md)). Links and actions are `[[...]]` tokens checked against `help_catalog.json` (served at `GET /api/ai/help/catalog`) and applied by the client only on a click; `help_data.py` adds the user's own data when allowed, `help_model.py` the model's strength ([ADR 0021](../adr/0021-help-chat-acts-through-confirmed-tokens.md)) |
 | **Cost ledger** | `openrouter_usage` + weekly budget / hard limit ([cost_ledger](../ops/ai-setup.md#costs-and-the-weekly-budget)) |
 

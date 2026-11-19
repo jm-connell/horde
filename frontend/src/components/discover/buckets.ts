@@ -7,7 +7,7 @@ export const BUCKETS: { id: Bucket; label: string; hint: string }[] = [
   {
     id: "subscriptions",
     label: "From your channels",
-    hint: "New uploads from channels you follow or watch a lot.",
+    hint: "New uploads from channels you subscribe to or watch a lot.",
   },
   {
     id: "similar",

@@ -19,7 +19,7 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 |---------|-----|---------|---------|
 | Show live streams | `showLiveStreams` | `true` | UI blob |
 
-**Followed channels** (below the toggle) lists the channels you follow, with **Unfollow**, and takes a channel URL or `@handle` to follow a channel that has no videos on the server. Follows are per user. See [Channels → Following and live streams](../guides/channels.md#following-and-live-streams).
+It lists subscribed channels that are live. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
 
 ### Progress expiry
 
@@ -56,11 +56,12 @@ Saved watch position resets after this many days of **inactivity**. Server-wide:
 
 ## Downloads
 
-Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the two personal rows below are per user.
+Formerly the separate Downloads settings tab (legacy `?tab=downloads` → Library). The section is shown to accounts with the `download` permission (every administrator); the three personal rows below are per user.
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
 | Show active download count in navigation | `showDownloadNavBadge` | `true` | Badge on Download while jobs are queued/running |
+| Default quality | `defaultDownloadPreset` | `"best"` | Quality of every download you start: the Download page, the watch page, the one-click download buttons (Recommended, Continue watching, search, History), playlist subscriptions and imports, channel pages and Ask. One of `best`, `2160p`, `1440p`, `1080p`, `720p`, `480p`, `audio`, `audio-160`, `audio-128`, `audio-64`. A cap means "up to": a video without that tier gets the best one under it, and a link with no video at all (a podcast) gets its audio. You can still pick another each time; a resolution picked on a channel page applies until you leave it. Not affected: channel auto-download (its own per-channel quality), clips, retries and re-downloads (the job's quality) |
 | Normalize volume on download | `normalizeVolumeOnDownload` | `true` | Loudness normalization via ffmpeg on new downloads |
 | Playback compatibility | `downloadVideoCodec` | `"av1"` | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (server key `download_video_codec`). Stamped onto every new download as `video_codec`. Legacy `h264` / `h265` migrate to `h264_convert`. |
 | H.264 copy resolution | `compatCopyResolution` | `"1080p"` | `1080p` \| `source` (server key `compat_copy_resolution`). Short-side cap for H.264 copies: 1080 or full size up to 4K. See [copy resolution](../guides/downloads.md#how-the-sidecar-works). |
@@ -111,7 +112,7 @@ When catalog indexing is enabled, Horde background-indexes **YouTube** channel u
 
 **Recommendations learn from the household**: library videos that people here with similar taste liked get a small lift in Recommended. Nobody is shown who watched what.
 
-**Comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give the video chat viewers' reactions. Off turns all of that off for everyone: nothing is fetched, the watch page has no comments section (for streams too), and search and chat leave comments out. Comments already saved stay in the database and come back when it is turned on again. Under the switch, Horde shows how much space they take; while comments are off, **Delete saved comments** removes them (`POST /api/settings/comments/delete`; `409 comments_enabled` while on). See [Comments](../guides/comments.md).
+**Comments**: for every YouTube video in the library, Horde saves the top 100 comments and replies to the most popular threads, in the background (one video every 30 seconds, new downloads first, pausing for an hour when YouTube pushes back). They show under the video, count in library search and give Ask viewers' reactions when it answers about the video. Off turns all of that off for everyone: nothing is fetched, the watch page has no comments section (for streams too), and search and Ask leave comments out. Comments already saved stay in the database and come back when it is turned on again. Under the switch, Horde shows how much space they take; while comments are off, **Delete saved comments** removes them (`POST /api/settings/comments/delete`; `409 comments_enabled` while on). See [Comments](../guides/comments.md).
 
 !!! tip "Large indexes"
     Values above **1000** can take a long time and may slow other YouTube work while indexing. System → Background activity has **Refresh catalogs** / **Full reindex**.
@@ -145,9 +146,28 @@ Writes `.nfo` files and thumbnails next to your videos so Jellyfin, Kodi or Plex
 
 Everyone has it, for their own account. The line sums up your imported YouTube history (views, videos, the period it covers and when you last imported). **Import from Google Takeout** (**Import a newer export** once you have one) opens the import dialog; **Forget** deletes the imported views after a confirm. **Include YouTube in History stats** (`historyIncludeYoutube`, off) counts those views in the [History stats](../guides/history.md#youtube-views-in-the-stats). Details: [YouTube history](../guides/youtube-history.md).
 
-## Channels Ask can answer from
+## Subscriptions
 
-Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one or it is picked beside Ask's title.
+A link to your [Subscriptions](../guides/channels.md#subscriptions). Administrators also choose:
+
+| Setting | Key | Default | Storage |
+|---------|-----|---------|---------|
+| New channels from downloads (**Subscribe** / **Ask on the download** / **Never**) | `new_channel_subscribe` (`always` / `ask` / `never`) | `always` | `app_settings.json` |
+| Include new channels from members | `new_channel_subscribe_members` | `true` | `app_settings.json` |
+
+The first says what a finished download does when its requester does not subscribe to the channel: subscribe them, show a **New channel** tag on the download's card, or nothing. The second appears once the server has member accounts and the first is not **Never**: with it on, members' downloads count too, and their subscriptions may turn Ask on for channels up to 500 uploads without **Manage channel indexing**. Members read both (their download cards depend on them) but cannot change them. Details: [New channels from downloads](../guides/channels.md#new-channels-from-downloads).
+
+## Ask
+
+Everything about [Ask](../guides/ask.md) that is not the AI provider, in one section (models, video chat and summaries are under **Settings → AI**).
+
+### Use my data
+
+Whether Ask may read your own downloads, library, watch history and playlists (`helpChatData`): **Off**, **AI on my network only** or **Any AI, including cloud**. Only questions about your own things send any of it, and only what the question needs.
+
+### Channels Ask can answer from
+
+Shown to anyone with the `manage_ask` permission (**Manage channel indexing**) and administrators. Subscribing to a channel, by hand or through a download, adds it here by itself when it has up to 500 uploads (see [Subscriptions](../guides/channels.md#subscriptions)). The YouTube channels whose captions [Ask](../guides/ask.md) indexes, each with its status, a progress bar and how many videos are indexed, have no captions or could not be fetched. **Add channel** looks a channel up by link or `@handle` and starts indexing it (with **Index past live streams** when it has any). Per channel: **Pause** / **Resume**, **Turn off** (deletes everything indexed for it, after a confirm) and **Index past live streams**. A channel's own settings sheet has the same switch in its **Ask** section. What these channels said is searched from the search bar (**Said in videos**) by everyone, and Ask answers from them when a question names one, or from a channel's page.
 
 ## Trash
 

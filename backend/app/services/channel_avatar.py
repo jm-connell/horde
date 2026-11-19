@@ -71,15 +71,20 @@ class AvatarUnreadable(Exception):
     """The channel page could not be read (as opposed to having no avatar)."""
 
 
-def read_avatar(channel_url: str) -> str | None:
-    """Read the channel page for its avatar (None when it has none).
-
-    Raises AvatarUnreadable when the page cannot be read.
-    """
+def read_channel_page(channel_url: str) -> str:
+    """The HTML of a channel's page. Raises AvatarUnreadable when it cannot be read."""
     try:
         result = fetch_bytes(
             channel_url, max_bytes=_MAX_PAGE_BYTES, timeout=15.0, headers=PAGE_HEADERS
         )
     except (UrlFetchError, UnsafeUrlError) as exc:
         raise AvatarUnreadable(channel_url) from exc
-    return parse_avatar(result.body.decode("utf-8", errors="replace"))
+    return result.body.decode("utf-8", errors="replace")
+
+
+def read_avatar(channel_url: str) -> str | None:
+    """Read the channel page for its avatar (None when it has none).
+
+    Raises AvatarUnreadable when the page cannot be read.
+    """
+    return parse_avatar(read_channel_page(channel_url))

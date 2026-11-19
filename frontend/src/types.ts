@@ -48,6 +48,10 @@ export type FollowedChannel = S["FollowedChannelRead"];
 export type FollowList = S["FollowListResponse"];
 export type Subscription = S["SubscriptionRead"];
 export type SubscriptionList = S["SubscriptionList"];
+export type SubscribeAskIndexResult = S["SubscribeAskIndexResult"];
+export type FollowPreview = S["FollowPreviewRead"];
+export type SubscribePrompt = S["SubscribePrompt"];
+export type NewChannelMode = S["AppSettingsRead"]["new_channel_subscribe"];
 export type UnfollowResult = S["UnfollowResult"];
 export type LiveChannel = S["LiveChannelRead"];
 export type LiveList = S["LiveListResponse"];
@@ -82,7 +86,6 @@ export type RewatchedVideo = S["RewatchedVideo"];
 export type TrashRestored = S["TrashRestored"];
 export type TrashEmptied = S["TrashEmptied"];
 export type AiSettings = S["AiSettingsRead"];
-export type VideoAiChatMessage = S["VideoAiChatMessageRead"];
 export type HelpChatTurn = S["HelpChatTurn"];
 export type HelpCatalog = S["HelpCatalog"];
 export type HelpCatalogSetting = S["HelpCatalogSetting"];
@@ -122,6 +125,8 @@ export type HistoryWatch = S["HistoryWatchRead"];
 export type HistoryWatchList = S["HistoryWatchListRead"];
 export type HistoryRemoved = S["HistoryRemovedRead"];
 export type ContinueYoutube = S["ContinueYoutubeRead"];
+export type ContinueStream = S["ContinueStreamRead"];
+export type ContinueStreams = S["ContinueStreamsRead"];
 export type RecAlgorithm = S["RecAlgorithmRead"];
 export type RecAlgorithmWrite = S["RecAlgorithmWrite"];
 export type RecAlgorithmUpdate = S["RecAlgorithmUpdate"];
@@ -175,6 +180,7 @@ export type AuthUser = Omit<S["AuthUserRead"], "permissions"> & {
 export type AuthState = Omit<S["AuthState"], "user"> & {
   user: AuthUser | null;
 };
+export type AllowedChannel = S["AllowedChannelRead"];
 export type UserAccount = Omit<S["UserRead"], "permissions"> & {
   permissions: Permission[];
 };
@@ -251,4 +257,5 @@ export type Permission =
   | "edit_metadata"
   | "manage_playlists"
   | "use_ai"
+  | "manage_subscriptions"
   | "manage_ask";

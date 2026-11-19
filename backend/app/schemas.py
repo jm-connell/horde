@@ -346,6 +346,8 @@ class StreamPreviewMeta(BaseModel):
     was_live: bool = False
     #: YouTube's thumbnails for scrubbing; None for live or when there are none.
     storyboard: StoryboardRead | None = None
+    #: Where this user left the stream (seconds); 0 plays from the start.
+    resume_sec: float = 0.0
 
 
 class StreamAiRead(BaseModel):
@@ -371,9 +373,11 @@ class StreamAiAction(BaseModel):
     force: bool = False
 
 
-class StreamAiChatRequest(BaseModel):
-    url: str = Field(..., min_length=1, max_length=4000)
-    message: str = Field(..., min_length=1, max_length=4000)
+class SubscribePrompt(BaseModel):
+    """A finished download from a channel its requester does not subscribe to."""
+
+    channel_url: str
+    channel_name: str | None = None
 
 
 class DownloadJobRead(BaseModel):
@@ -410,6 +414,9 @@ class DownloadJobRead(BaseModel):
     #: A clip: the part of the video kept, in seconds from its start.
     clip_start_sec: float | None = None
     clip_end_sec: float | None = None
+    #: Offer the caller to subscribe to the video's channel (new to them, and the
+    #: administrator chose to ask about new channels).
+    subscribe_prompt: SubscribePrompt | None = None
 
     @field_validator("destination", mode="before")
     @classmethod
@@ -689,6 +696,8 @@ class ChannelCatalogStatusResponse(BaseModel):
     catalog_id: int | None = None
     queue_depth: int = 0
     catalogs: list[ChannelCatalogStatusItem] = []
+    # The row for the channel_url query parameter, when one was given and matched.
+    channel_catalog: ChannelCatalogStatusItem | None = None
     direct_youtube_search: bool = True
 
 
@@ -1034,6 +1043,19 @@ class ReadyResponse(BaseModel):
 # --- Accounts ---------------------------------------------------------------
 
 
+class AllowedChannelRead(BaseModel):
+    """A channel a restricted member may watch (parental controls)."""
+
+    url: str | None = Field(default=None, max_length=2048)
+    name: str | None = Field(default=None, max_length=300)
+
+
+class AllowedChannelsWrite(BaseModel):
+    """The channels a member may watch; ``null`` lifts the restriction."""
+
+    channels: list[AllowedChannelRead] | None = Field(default=None, max_length=500)
+
+
 class AuthUserRead(BaseModel):
     """The signed-in user. ``permissions`` is effective: all of them for an admin."""
 
@@ -1050,6 +1072,8 @@ class AuthUserRead(BaseModel):
     #: An administrator requires two-step sign-in and this account has not set it up:
     #: until it does, the server answers everything but the setup routes with 403.
     two_factor_enrollment_required: bool = False
+    #: Parental controls: the only channels this account may watch (null: any).
+    allowed_channels: list[AllowedChannelRead] | None = None
 
 
 class AuthState(BaseModel):
@@ -1210,7 +1234,8 @@ class UserRead(BaseModel):
     username: str
     is_admin: bool
     disabled: bool
-    #: Effective permissions (all of them for an admin).
+    #: Granted permissions (all of them for an admin). Parental controls
+    #: (``allowed_channels``) withhold some while they are on.
     permissions: list[str]
     created_at: datetime
     last_login_at: datetime | None = None
@@ -1218,6 +1243,8 @@ class UserRead(BaseModel):
     avatar_version: int | None = None
     share_downloads: bool = True
     two_factor_enabled: bool = False
+    #: Parental controls: the only channels this member may watch (null: any).
+    allowed_channels: list[AllowedChannelRead] | None = None
 
 
 class UserCreate(BaseModel):
@@ -1312,6 +1339,36 @@ class FollowUpdate(BaseModel):
 class UnfollowResult(BaseModel):
     channel_url: str
     following: bool = False
+
+
+class FollowPreviewRead(BaseModel):
+    """A channel looked up by link or ``@handle`` before subscribing to it."""
+
+    channel_url: str
+    channel_name: str | None = None
+    #: Its profile picture on YouTube's image host (None when unknown).
+    avatar_url: str | None = None
+
+
+class SubscribeAskIndexRequest(BaseModel):
+    """Turn Ask indexing on for a channel the caller subscribes to."""
+
+    channel_url: str = Field(min_length=1, max_length=500)
+    #: Index it even though it has more uploads than subscribing indexes by itself.
+    confirm_large: bool = False
+
+
+class SubscribeAskIndexResult(BaseModel):
+    channel_url: str
+    channel_name: str | None = None
+    #: Uploads on the channel, as YouTube reports them (None: unknown).
+    video_count: int | None = None
+    #: Ask indexes it now (it was just turned on, or was on already).
+    indexed: bool = False
+    #: It was on already.
+    already: bool = False
+    #: Too many uploads to index without ``confirm_large``; nothing was changed.
+    large: bool = False
 
 
 class LiveChannelRead(BaseModel):
@@ -1772,8 +1829,15 @@ class AskSearchPage(BaseModel):
     next_cursor: str | None = None
 
 
+class AskVideoRef(BaseModel):
+    """A video Ask can answer from: a library video, or a stream by its URL."""
+
+    library_id: int | None = None
+    url: str | None = Field(default=None, max_length=4000)
+
+
 class AskChatRequest(BaseModel):
-    """One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels."""
+    """One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video."""
 
     message: str = Field(..., min_length=1, max_length=4000)
     #: Continue this saved conversation; a new one is started when empty.
@@ -1787,9 +1851,16 @@ class AskChatRequest(BaseModel):
     page_channel_id: int | None = None
     #: The YouTube id of the video being watched: its passages come first.
     page_video_id: str | None = Field(default=None, max_length=32)
-    #: The user picked Horde as the source: answer from Horde even when the
-    #: question names a channel (``channel_ids`` and the page's are ignored).
-    horde_only: bool = False
+    #: "Ask … instead" under a reply: answer this turn from Horde, or from the
+    #: video (``video``), whatever the question names or the page is about.
+    answer_from: Literal["horde", "video"] | None = None
+    #: The video the user picked: answered from unless the question names
+    #: Horde, asks how to do something in it or about the user's own things,
+    #: names a channel or is about the page channel as a whole.
+    video: AskVideoRef | None = None
+    #: The watch page's video, when nothing is picked: as ``video``, and also
+    #: left for a question about Horde's features that is not about the video.
+    page_video: AskVideoRef | None = None
     #: Where the user is in the app (Horde answers only).
     page: str | None = Field(default=None, max_length=300)
     data_consent: Literal["off", "local", "cloud"] = "off"
@@ -1927,6 +1998,9 @@ class SubscriptionRead(BaseModel):
     retention: ChannelRetentionSummary | None = None
     #: Videos of the channel in the library.
     video_count: int = 0
+    #: Its YouTube subscriber count, as last read for a library video (None:
+    #: no video of it in the library carries one).
+    subscriber_count: int | None = None
     #: When Horde last finished reading the channel's uploads.
     checked_at: datetime | None = None
 

@@ -16,19 +16,28 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from ..auth import current_user
 from ..context import get_engine, get_session
-from ..errors import extraction_error
+from ..errors import CodedHTTPException, extraction_error
 from ..openapi_responses import (
     DASH_MANIFEST,
     RAW,
     SUBTITLES,
     VIDEO_STREAM,
 )
+from ..parental_guard import NOT_ALLOWED, stream_guard
 from ..schemas import NextPartRead, StreamPreviewMeta, StreamRelatedPage
-from ..services import library, next_part, stream_preview, stream_related
+from ..services import library, next_part, parental, stream_preview, stream_related
 from ..services.auth.accounts import AuthUser
+from ..services.discovery import history as stream_history
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.url_clean import _youtube_video_id, clean_url, youtube_video_id
-from ..services.url_safety import MAX_REDIRECTS, REDIRECT_STATUSES, validate_public_url
+from ..services.url_safety import (
+    MAX_REDIRECTS,
+    REDIRECT_STATUSES,
+    check_url,
+    pinned_async_transport,
+    validate_public_url,
+    without_credentials,
+)
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
@@ -58,10 +67,13 @@ async def init_preview_client() -> None:
         return
     _preview_client = httpx.AsyncClient(
         timeout=httpx.Timeout(connect=10.0, read=20.0, write=10.0, pool=10.0),
-        limits=httpx.Limits(
-            max_connections=32,
-            max_keepalive_connections=16,
-            keepalive_expiry=60.0,
+        # Connects only to checked public addresses (and ignores HTTP(S)_PROXY).
+        transport=pinned_async_transport(
+            httpx.Limits(
+                max_connections=32,
+                max_keepalive_connections=16,
+                keepalive_expiry=60.0,
+            )
         ),
         follow_redirects=False,  # redirects are followed by _send_validated
     )
@@ -96,11 +108,27 @@ async def _send_validated(
 
     yt-dlp can return any URL for a page it was pointed at, and CDNs redirect, so
     each URL (the first and every redirect target) must pass the same public-address
-    check as user-supplied URLs. Raises UnsafeUrlError (HTTP 400) otherwise.
+    check as user-supplied URLs. The preview client connects through
+    ``url_safety.PinnedNetworkBackend``, which checks the addresses it actually
+    connects to, so DNS cannot answer the check and the connection differently.
+    Raises UnsafeUrlError (HTTP 400) for a refused address, and httpx.ConnectError
+    for a name that does not resolve: that is an upstream failure (a DNS blip on a
+    CDN host), which callers answer with 502 or retry, never a connection.
+
+    The headers (with a format's cookies) belong to the first URL's origin: once a
+    redirect leaves it (scheme, host or port), Cookie and authorization headers
+    are dropped, as browsers and httpx do.
     """
+    first_origin: tuple[str, str, int] | None = None
     for _hop in range(MAX_REDIRECTS + 1):
-        await run_in_threadpool(validate_public_url, url)
-        request = client.build_request(method, url, headers=headers)
+        checked = await run_in_threadpool(check_url, url)
+        if first_origin is None:
+            first_origin = checked.origin
+        elif checked.origin != first_origin:
+            headers = without_credentials(headers)
+        request = client.build_request(method, checked.url, headers=headers)
+        if not checked.addresses:
+            raise httpx.ConnectError("Could not resolve that host", request=request)
         response = await client.send(request, stream=stream)
         if response.status_code not in REDIRECT_STATUSES:
             return response
@@ -111,7 +139,7 @@ async def _send_validated(
             raise HTTPException(
                 status_code=502, detail="Upstream redirect had no target"
             )
-        url = urljoin(url, location)
+        url = urljoin(checked.url, location)
     raise HTTPException(status_code=502, detail="Upstream redirected too many times")
 
 
@@ -386,6 +414,7 @@ def preview_meta(
     url: str = Query(...),
     session: Session = Depends(get_session),
     gate: ExtractionGate = Depends(extraction_gate),
+    user: AuthUser = Depends(current_user),
 ):
     cleaned = _require_video_url(url)
     try:
@@ -394,8 +423,17 @@ def preview_meta(
         raise  # 429 / 504 from the gate
     except Exception as exc:
         raise preview_extraction_error(exc, cleaned) from exc
+    try:
+        # Parental controls: another channel's video is refused, an allowed
+        # one's later requests (manifest, media, ...) pass.
+        parental.check_stream_meta(
+            user.allowed, user.id, youtube_video_id(cleaned) or meta.get("id"), meta
+        )
+    except parental.Restricted as exc:
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed") from exc
 
     library_video_id = None
+    resume_sec = 0.0
     yt_id = meta.get("id")
     if not yt_id:
         yt_id = _youtube_video_id(urlparse(cleaned))
@@ -403,6 +441,10 @@ def preview_meta(
         existing = library.find_video_by_youtube_id(session, str(yt_id))
         if existing is not None:
             library_video_id = existing.id
+        elif not meta.get("is_live"):
+            resume_sec = stream_history.stream_resume_position(
+                session, user.id, str(yt_id)
+            )
 
     return StreamPreviewMeta(
         id=meta.get("id"),
@@ -421,6 +463,7 @@ def preview_meta(
         is_live=bool(meta.get("is_live")),
         was_live=bool(meta.get("was_live")),
         storyboard=meta.get("storyboard"),
+        resume_sec=resume_sec,
     )
 
 
@@ -511,7 +554,11 @@ async def fetch_preview_vtt(request: Request, cleaned: str, lang: str) -> bytes:
     return body
 
 
-@router.get("/related", response_model=StreamRelatedPage)
+@router.get(
+    "/related",
+    response_model=StreamRelatedPage,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_related(
     request: Request,
     url: str = Query(..., max_length=4000),
@@ -540,10 +587,15 @@ async def preview_related(
     items = await run_in_threadpool(
         _related, youtube_id, meta, limit, user.can("use_ai"), live_now
     )
+    if user.allowed is not None:
+        # This member sees only allowed channels' videos.
+        items = [e for e in items if parental.entry_allowed(user.allowed, e)]
     return StreamRelatedPage(items=items)
 
 
-@router.get("/next-part", response_model=NextPartRead)
+@router.get(
+    "/next-part", response_model=NextPartRead, dependencies=[Depends(stream_guard)]
+)
 def preview_next_part(
     url: str = Query(..., max_length=4000),
     session: Session = Depends(get_session),
@@ -573,7 +625,12 @@ def _related(youtube_id: str, meta: dict, limit: int, may_embed: bool, live_now)
         )
 
 
-@router.get("/subtitles", response_class=RAW, responses=SUBTITLES)
+@router.get(
+    "/subtitles",
+    response_class=RAW,
+    responses=SUBTITLES,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_subtitles(
     request: Request,
     url: str = Query(...),
@@ -592,12 +649,16 @@ async def preview_subtitles(
 
 # One handler serves both verbs. HEAD stays out of the schema so the OpenAPI
 # document has a single operation id (api_route would emit it twice and warn).
-@router.head("/manifest", include_in_schema=False, dependencies=[Depends(ytdlp_slot)])
+@router.head(
+    "/manifest",
+    include_in_schema=False,
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
+)
 @router.get(
     "/manifest",
     response_class=RAW,
     responses=DASH_MANIFEST,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
 )
 def preview_manifest(request: Request, url: str = Query(...)):
     """DASH MPD for adaptive high-res preview streaming."""
@@ -692,7 +753,12 @@ async def preview_media_head(
     return await _head_upstream(request, resolved, allow_refresh=(token, itag))
 
 
-@router.get("/stream", response_class=RAW, responses=VIDEO_STREAM)
+@router.get(
+    "/stream",
+    response_class=RAW,
+    responses=VIDEO_STREAM,
+    dependencies=[Depends(stream_guard)],
+)
 async def preview_stream(request: Request, url: str = Query(...)):
     """Legacy progressive (<=720p) proxy — kept as fallback."""
     cleaned = await run_in_threadpool(_require_video_url, url)

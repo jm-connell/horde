@@ -209,7 +209,7 @@ screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 
 Theater mode widens the player to the viewport; the mini player docks bottom
 right and the play queue docks beside it. A quiet footer (centred
-`text-muted` links, one secondary-style "Ask" button) closes every
+`text-muted` links) closes every
 page: pinned to the bottom of short pages, set off by an `ink-800` hairline. Respect `env(safe-area-inset-*)` for
 the header and anything fixed to an edge.
 
@@ -228,6 +228,16 @@ the on-screen keyboard is up. Its height (with the home-indicator inset) is `--h
 of the screen (mini player, queue dock, toasts, floating panels, the phone
 Ask panel) adds it to its bottom offset. Bottom sheets and the
 bulk-select bar cover it instead. A browser tab has no tab bar.
+
+Two gestures stand in for the browser chrome the installed app lacks
+(touch screens only). Swiping right from the left edge goes back (iOS,
+`EdgeSwipeBack`), and pulling a page down from its top refreshes it
+(`PullToRefresh`): a 40px round glass mark (`ink-900/60` with a backdrop
+blur and an `ink-600` ring) drops in under the top bar, its refresh icon
+turning with the pull (still under reduced motion), and turns accent (icon,
+`accent/60` ring, an `accent/15` tint, never a solid fill) once letting go
+will refresh. A page reloads unless it handles the `horde:pull-refresh` event
+itself; Recommended reshuffles, like its Refresh button.
 
 ## Elevation & Depth
 
@@ -279,16 +289,36 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   so there is never a gap under the title or at the bottom. The action (a small
   accent download icon, a success check when downloaded, Live, Upcoming)
   always sits at the bottom right, never on a line of its own. "+ Queue"
-  appears on hover or focus and confirms with a check and "Queued". Cards rise in on mount
+  appears on hover or focus and confirms with a check and "Queued". A
+  Recommended card's ⋯ menu sits top-left, clear of it, and also has **Add to
+  queue**, the dependable way to queue on a touch screen. Small actions
+  inside a card (the download icon, a ✕) keep their look but widen what a
+  finger can hit with an `::after` inset (44px on coarse pointers where
+  there is room). Cards rise in on mount
   with a short stagger.
 - **Recommendation source marks.** In Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
   has indexed), none (a channel new to them); a live card keeps its red ring
   instead. Square on phones' edge-to-edge
-  cards. A legend of dots sits beside the home tabs. Only the theme's accent, so the
-  marks follow every theme; why a card is there is its hover title, not a line
-  under it.
+  cards. A legend of keys drawn as tiny cards in the same outlines (the
+  plain card's key takes the card's `ink-700` hairline) sits beside the home tabs
+  from `md` and at the top of the Algorithm panel on phones. Only the
+  theme's accent, so the marks follow every theme; why a card is there is
+  its hover title, not a line under it. The faded mark is as faint in the
+  legend as on the cards; that is the mark's own contrast, kept on purpose.
+- **Home tabs and Recommended header.** Library / Recommended is a real
+  tablist (`role="tab"`, `aria-selected`, arrow keys, as on Settings), 40px
+  tall on coarse pointers. Everything the tab owns sits on the tabs' row in
+  the header's right-hand slot, so switching tabs swaps the slot instead of
+  moving the page: Sort and Select on Library; Algorithm and Refresh on
+  Recommended, as text buttons from `md` and 40px icon squares on phones
+  (sliders and refresh icons, the name kept for screen readers). Below the
+  row, "Looking on YouTube is off" is one muted line with a **Turn it on**
+  link for the admin (`?find=discovery`) and a close ✕ remembered on the
+  device; live states (looking, backing off) are an unclosable muted line.
+  When new picks are ready, **Show new picks** is a centred accent pill
+  above the grid, the view's one primary action.
 - **Search placeholder card.** Holds a late result's place in a grid (YouTube
   in mixed search results) so nothing moves when it lands: the video card's
   frame, a thumbnail of `accent/15` fading into `ink-800`/`ink-900` with a
@@ -303,14 +333,40 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   masked overlay span in `DownloadJobCard`). This is intentional and owner-approved: it marks a
   download in progress at a glance. Keep it even though impeccable's
   side-tab rule flags it.
+- **Subscription cards.** The Subscriptions page is a grid (1–4 columns)
+  of one-row `ui-panel` cards: a 44px round avatar, the name (truncated) over
+  a muted `text-xs` line, small `rounded-full` `ink-800` chips for what is on
+  (auto-download, Ask, cleanup) on the same line as the video count, and a
+  quiet ⋯ icon button (named
+  "Settings for <channel>") that opens the channel settings sheet over the
+  page. Cards are tight (8px vertical padding, 40px avatar), up to 4 columns. Channels you do not subscribe to
+  sit below as plain hover rows. The add box is one input and a primary
+  **Subscribe** that stays disabled until a channel is found; a small spinner
+  sits inside the input's right edge while it looks, search results list
+  under it as hover rows (32px avatar, name, muted subscriber count), and the
+  found channel opens below a hairline (`Collapse`) as a card-like row with
+  `Toggle` switches for its options.
+- **New channel tag.** On a finished download card: an inline `rounded-lg`
+  strip with a 10% accent fill and a 30% accent ring, "New channel" in
+  accent, the channel name, a small accent **Subscribe** and a quiet **No
+  thanks**.
 - **Panels.** `ui-panel` sections with a section label header, optional
   collapse (the `Collapse` component, grid-rows 0fr→1fr) and a rotating arrow.
+  Actions sit at the right of the header as small outlined buttons, like
+  the watch page's Summary section: Regenerate, and Chat with a ↗ arrow,
+  the mark for an action that opens something elsewhere (here Ask).
 - **Rows and lists.** 4–8px padding, `hover:bg-ink-800`, drag handle on the left
   when reorderable, quiet remove button on the right.
 - **Inputs and selects.** `ink-800` fill, `ink-700` ring, accent focus ring;
   `ThemedSelect` for custom option lists.
 - **Menus and dialogs.** `ui-menu` / `MenuFlyout` drop from their trigger in
   150ms; dialogs centre. Both trap focus and close on Escape.
+- **Ask in the top bar.** Left of the search box: a square outlined
+  `ink-900` icon button the search box's height (34px) with a chat bubble,
+  named and titled "Ask" (accent border and icon while the panel is open). The
+  search box is 128px, 192px from `xl`, so the links still fit beside both. Under the hamburger layout it is a
+  chat icon beside the search icon, hidden while searching and in the
+  installed app (its tab bar has Ask).
 - **Floating panels.** The Ask chat is a non-modal floating
   panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
@@ -335,18 +391,23 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   with one primary button; a done card shows a `success` check and Undo.
   A link that leaves the site is followed by its host in `text-muted`
   ("Docs (example.com)"), so it cannot pass for one of Horde's own.
-  Beside the title sits the source, so the header reads "Ask Automatic",
-  "Ask Horde" or "Ask Northwind": accent `text-sm` semibold text with a
-  chevron, `rounded-md` with an `ink-800` hover ("<channel> or Horde" on a
-  channel's page; it truncates first). When the panel has tabs it sits
-  right after the Ask tab, then an `ink-700` hairline and the other tab
-  ("Ask Horde ▾ | Algorithm"); the tabs keep their width. It opens a `MenuFlyout` dropping across the panel under
-  the header (inside the panel rather than floating: the panel's
-  translucency would need a portal, and a phone keyboard moves the panel):
-  `menuitemradio` rows for Automatic and Horde, each with a one-line
-  description, then the channels under an uppercase "Channels" label, the
-  picked one in accent with a check. Each reply's small uppercase byline
-  names its source the same way.
+  Its header's minimize button (a chevron) folds it, docked or floating, to
+  just its header bar (52px) at the bottom-right, above the mini player when
+  that is there (full width above the tab bar on phones); the body stays
+  mounted, a docked panel gives the page its width back, and the bar, the
+  chevron or the top bar's Ask restores it as it was.
+  When Ask is focused on a video or channel, a chip sits beside the title
+  ("Ask · Cedar Notes ×"): `ink-800` fill, `rounded-md`, accent `text-sm`
+  semibold text that truncates first, and a small muted × that goes back
+  to asking about anything. When the panel has tabs it sits right after
+  the Ask tab, then an `ink-700` hairline and the other tab ("Ask ·
+  Northwind × | Algorithm"); the tabs keep their width. There is no source
+  menu: each reply's small uppercase byline names where it came from, and
+  under the latest reply muted `text-xs` links ("Ask Horde instead", "Ask
+  <video> instead") re-ask the same question from elsewhere, underlined in
+  accent on hover.
+  conversation offers three starter questions as the same outlined chips
+  as Horde's suggestions.
   The Recommended **Algorithm** panel uses the same frame (it shows only
   while that feed is on screen). With both open there is still one frame: its
   header turns into tabs (`ink-800` fill on the selected one, `text-muted`

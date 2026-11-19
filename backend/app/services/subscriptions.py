@@ -36,6 +36,7 @@ def list_for(session: Session, user_id: int) -> list[SubscriptionRead]:
 
     stats = library.channel_stats(session)
     count_by_name = {s.channel: s.count for s in stats}
+    subs_by_name = {s.channel: s.subscriber_count for s in stats}
     url_by_name = {s.channel: s.channel_url for s in stats if s.channel_url}
 
     for rule in session.exec(
@@ -65,6 +66,7 @@ def list_for(session: Session, user_id: int) -> list[SubscriptionRead]:
         # The library's name for the channel wins: it is what the sidebar shows.
         sub.channel_name = names_by_url.get(sub.channel_url) or sub.channel_name
         sub.video_count = count_by_name.get(sub.channel_name or "", 0)
+        sub.subscriber_count = subs_by_name.get(sub.channel_name or "")
     return sorted(
         rows.values(), key=lambda s: (s.channel_name or s.channel_url).casefold()
     )

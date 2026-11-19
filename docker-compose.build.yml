@@ -1,0 +1,24 @@
+# Build the Horde image from this checkout instead of pulling the published
+# release image. Turn it on in .env with:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml
+# update.sh then builds every update itself (several minutes on a NAS) and can
+# follow HORDE_UPDATE_CHANNEL=main. See docs/getting-started/updating.md.
+services:
+  horde:
+    # Always this local name, whatever HORDE_IMAGE says, so a local build never
+    # takes the published image's name. update.sh also tags horde:<shortsha>
+    # for rollback.
+    image: horde:latest
+    # Never pull: build when the image is missing, otherwise use it as is.
+    pull_policy: never
+    build:
+      context: .
+      args:
+        HORDE_GIT_SHA: ${HORDE_GIT_SHA:-unknown}
+        # `jellyfin` (default; hardware-encoder-capable) or `debian`. The build
+        # fails if the chosen flavor cannot be installed.
+        FFMPEG_FLAVOR: ${FFMPEG_FLAVOR:-jellyfin}
+        # Optional: fail the build unless the Jellyfin repository key has this
+        # fingerprint (40 hex characters, no spaces).
+        JELLYFIN_GPG_FPR: ${JELLYFIN_GPG_FPR:-}
+        HORDE_VERSION: ${HORDE_VERSION:-dev}

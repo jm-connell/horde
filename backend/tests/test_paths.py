@@ -19,6 +19,8 @@ def test_safe_filename_strips_control_chars_and_trailing_dots_and_spaces():
     assert safe_filename("a\x00b\x1f\tc\n") == "abc"
     assert safe_filename("Title... ") == "Title"
     assert safe_filename("  lead and trail . ") == "lead and trail"
+    assert safe_filename(".horde-staging") == "horde-staging"
+    assert safe_filename(" ..hidden") == "hidden"
     assert safe_filename("name\u2028x") == "namex"
 
 

@@ -292,3 +292,156 @@ def test_a_sidecar_symlinked_outside_the_media_folder_is_not_read(
     suggestion = _queue(client)[video.id]["suggestion"]
 
     assert suggestion is not None and suggestion["title"] != "Outside secret"
+
+
+def test_approve_from_youtube_fills_a_tube_archivist_file_in_place(
+    client, add_video, init_db, session, monkeypatch
+):
+    rel = "UCBa659QWEk1AI4Tg--mrJ2A/2tdiKTSdE9Y.mp4"
+    video = _review_item(add_video, rel)
+    asked: list[str] = []
+
+    def fake_extract(url, *, priority):
+        asked.append(url)
+        return {
+            "title": "From YouTube",
+            "channel": "Tube Channel",
+            "channel_url": "https://www.youtube.com/channel/UCBa659QWEk1AI4Tg--mrJ2A",
+            "upload_date": "20240514",
+            "description": "Desc",
+            "tags": ["x"],
+            "webpage_url": url,
+        }
+
+    monkeypatch.setattr(metadata_sync, "extract_source_info", fake_extract)
+
+    resp = client.post(f"/api/review/{video.id}/approve-from-youtube")
+
+    assert resp.status_code == 200
+    assert resp.json() == {"approved": 1, "remaining": 0}
+    assert asked == ["https://www.youtube.com/watch?v=2tdiKTSdE9Y"]
+    session.expire_all()
+    row = session.get(Video, video.id)
+    assert row is not None and row.needs_review is False
+    assert row.title == "From YouTube"
+    assert row.channel == "Tube Channel"
+    assert row.description == "Desc"
+    assert row.published_at is not None
+    assert row.source_url == "https://www.youtube.com/watch?v=2tdiKTSdE9Y"
+    assert row.file_path == rel  # not moved or renamed
+    assert (init_db["downloads"] / rel).is_file()
+
+
+def test_approve_from_youtube_leaves_a_failed_lookup_in_review(
+    client, add_video, session, monkeypatch
+):
+    video = _review_item(add_video, "UCBa659QWEk1AI4Tg--mrJ2A/2tdiKTSdE9Y.mp4")
+
+    def unavailable(url, *, priority):
+        raise RuntimeError("ERROR: [youtube] 2tdiKTSdE9Y: Video unavailable")
+
+    monkeypatch.setattr(metadata_sync, "extract_source_info", unavailable)
+
+    resp = client.post(f"/api/review/{video.id}/approve-from-youtube")
+
+    assert resp.status_code == 400
+    assert resp.json()["extra"]["error_kind"] == "unavailable"
+    session.expire_all()
+    row = session.get(Video, video.id)
+    assert row is not None and row.needs_review is True
+
+
+def test_approve_from_youtube_needs_a_review_item_with_an_id(
+    client, add_video, monkeypatch
+):
+    def no_network(*_a, **_k):
+        raise AssertionError("no lookup expected")
+
+    monkeypatch.setattr(metadata_sync, "extract_source_info", no_network)
+    unknown = _review_item(add_video, "imports/holiday.mp4")
+    approved = add_video(title="Done", channel="Chan", needs_review=False)
+
+    resp = client.post(f"/api/review/{unknown.id}/approve-from-youtube")
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "no_youtube_id"
+
+    resp = client.post(f"/api/review/{approved.id}/approve-from-youtube")
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "not_in_review"
+
+
+def _change_during_lookup(monkeypatch, change):
+    """Run ``change(db_session)`` while the YouTube lookup is in flight."""
+    from sqlmodel import Session
+
+    from app.context import get_engine
+
+    def slow_extract(url, *, priority):
+        with Session(get_engine()) as other:
+            change(other)
+        return {"title": "From YouTube", "channel": "Tube", "webpage_url": url}
+
+    monkeypatch.setattr(metadata_sync, "extract_source_info", slow_extract)
+
+
+def test_approve_from_youtube_keeps_an_approval_made_during_the_lookup(
+    client, add_video, session, monkeypatch
+):
+    video = _review_item(add_video, "UCBa659QWEk1AI4Tg--mrJ2A/2tdiKTSdE9Y.mp4")
+
+    def approve_by_hand(other):
+        row = other.get(Video, video.id)
+        row.title, row.channel, row.needs_review = "Mine", "My Channel", False
+        other.add(row)
+        other.commit()
+
+    _change_during_lookup(monkeypatch, approve_by_hand)
+
+    resp = client.post(f"/api/review/{video.id}/approve-from-youtube")
+
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "not_in_review"
+    session.expire_all()
+    row = session.get(Video, video.id)
+    assert row is not None
+    assert (row.title, row.channel) == ("Mine", "My Channel")
+
+
+def test_approve_from_youtube_of_a_file_deleted_during_the_lookup(
+    client, add_video, monkeypatch
+):
+    from app.services.video_delete import delete_video_cascade
+
+    video = _review_item(add_video, "UCBa659QWEk1AI4Tg--mrJ2A/2tdiKTSdE9Y.mp4")
+    _change_during_lookup(
+        monkeypatch,
+        lambda other: delete_video_cascade(
+            other, other.get(Video, video.id), delete_files=False
+        ),
+    )
+
+    resp = client.post(f"/api/review/{video.id}/approve-from-youtube")
+
+    assert resp.status_code == 409
+    assert resp.json()["code"] == "not_in_review"
+
+
+def test_approve_from_youtube_keeps_a_title_someone_set(
+    client, add_video, session, monkeypatch
+):
+    video = _review_item(add_video, "Downloads/clip [abcdefghijk].mp4")
+    row = session.get(Video, video.id)
+    assert row is not None
+    row.title = "Typed by hand"
+    session.add(row)
+    session.commit()
+    _change_during_lookup(monkeypatch, lambda other: None)
+
+    assert (
+        client.post(f"/api/review/{video.id}/approve-from-youtube").json()["approved"]
+        == 1
+    )
+    session.expire_all()
+    row = session.get(Video, video.id)
+    assert row is not None
+    assert (row.title, row.channel) == ("Typed by hand", "Tube")

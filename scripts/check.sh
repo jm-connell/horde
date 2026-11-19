@@ -10,6 +10,8 @@
 #   PW_CHROMIUM_EXECUTABLE   Chromium binary for Playwright when the preinstalled
 #                            browser does not match the pinned Playwright version
 #   E2E_APP_PORT/E2E_SETUP_PORT   Playwright web-server ports (default 8091/8092)
+#   E2E_SHARDS               run the browser suite as this many parallel shards
+#                            (scripts/e2e-shards.sh; ports from E2E_PORT_BASE)
 #
 # Every gate runs even if an earlier one fails; the exit status is non-zero if
 # any gate failed.
@@ -91,7 +93,11 @@ fi
 
 # --- browser suite (opt-in) --------------------------------------------------
 if [[ "$RUN_E2E" == 1 ]]; then
-  gate "playwright" in_dir "$ROOT/frontend" env E2E_PYTHON="$PYTHON" npx playwright test
+  if [[ "${E2E_SHARDS:-1}" -gt 1 ]]; then
+    gate "playwright (${E2E_SHARDS} shards)" env E2E_PYTHON="$PYTHON" "$ROOT/scripts/e2e-shards.sh"
+  else
+    gate "playwright" in_dir "$ROOT/frontend" env E2E_PYTHON="$PYTHON" npx playwright test
+  fi
 fi
 
 echo

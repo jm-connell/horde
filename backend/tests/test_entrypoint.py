@@ -103,3 +103,20 @@ def test_root_is_refused_unless_explicitly_allowed(tmp_path):
 
     allowed = _run(tmp_path, PUID="0", PGID="0", HORDE_ALLOW_ROOT="1")
     assert allowed.returncode == 0, allowed.stderr
+
+
+def test_unwritable_media_folder_is_reported_with_the_fix(tmp_path):
+    # The host owns the media folder; a root-owned one is the classic first-run
+    # mistake, and downloads would only fail later.
+    result = _run(tmp_path)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "is not writable by 1234:1234" in result.stderr
+    assert "chown -R 1234:1234" in result.stderr
+
+
+def test_writable_media_folder_starts_quietly(tmp_path):
+    (tmp_path / "downloads").mkdir()
+    os.chown(tmp_path / "downloads", 1234, 1234)
+    result = _run(tmp_path)
+    assert result.returncode == 0, result.stderr + result.stdout
+    assert "not writable" not in result.stderr

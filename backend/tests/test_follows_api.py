@@ -358,3 +358,122 @@ def test_bulk_download_records_the_requester(client, admin_user, no_runs, init_d
         rows = list(s.exec(select(DownloadRequester)).all())
     assert len(rows) == 2
     assert {r.user_id for r in rows} == {admin_user.id}
+
+
+# --- GET /api/follows/preview ----------------------------------------------------
+
+PREVIEW_PAGE = (
+    '<html><head><meta property="og:title" content="Tom &amp; Jerry">'
+    '<meta property="og:image" content="https://yt3.googleusercontent.com/abc=s900-c-k">'
+    "</head></html>"
+)
+
+
+def test_preview_reads_name_and_picture_from_the_channel_page(client, monkeypatch):
+    seen: list[str] = []
+
+    def page(url: str) -> str:
+        seen.append(url)
+        return PREVIEW_PAGE
+
+    monkeypatch.setattr("app.services.channel_avatar.read_channel_page", page)
+    resp = client.get("/api/follows/preview", params={"channel": "@TomAndJerry"})
+    assert resp.status_code == 200
+    assert resp.json() == {
+        "channel_url": "https://youtube.com/@tomandjerry",
+        "channel_name": "Tom & Jerry",
+        "avatar_url": "https://yt3.googleusercontent.com/abc=s176-c-k",
+    }
+    assert seen == ["https://youtube.com/@tomandjerry"]
+    # The picture is remembered for the card's avatar look-up.
+    avatar = client.get(
+        "/api/channels/avatar", params={"url": "https://youtube.com/@tomandjerry"}
+    )
+    assert avatar.json()["url"] == "https://yt3.googleusercontent.com/abc=s176-c-k"
+
+
+def _page_answers(monkeypatch, status: int) -> None:
+    from app.services import channel_avatar
+    from app.services.url_safety import UrlFetchError
+
+    def answer(url: str) -> str:
+        try:
+            raise UrlFetchError(f"Server answered {status}", status=status)
+        except UrlFetchError as exc:
+            raise channel_avatar.AvatarUnreadable(url) from exc
+
+    monkeypatch.setattr(channel_avatar, "read_channel_page", answer)
+
+
+def test_preview_of_a_missing_channel_is_404(client, monkeypatch):
+    _page_answers(monkeypatch, 404)
+    resp = client.get("/api/follows/preview", params={"channel": "@nobody-here"})
+    assert resp.status_code == 404
+    assert resp.json()["code"] == "channel_not_found"
+
+
+@pytest.mark.parametrize("status", [429, 503])
+def test_preview_when_youtube_is_throttling_is_not_a_missing_channel(
+    client, monkeypatch, status
+):
+    _page_answers(monkeypatch, status)
+    resp = client.get("/api/follows/preview", params={"channel": "@somebody"})
+    assert resp.status_code == 502
+    assert resp.json()["code"] == "youtube_unavailable"
+
+
+def test_preview_waits_while_youtube_rate_limits_us(client, monkeypatch):
+    import time
+
+    from app.context import current
+
+    def never(url: str) -> str:
+        raise AssertionError("fetched")
+
+    monkeypatch.setattr("app.services.channel_avatar.read_channel_page", never)
+    monkeypatch.setattr(current().live.directory, "paused_until", time.time() + 60)
+    resp = client.get("/api/follows/preview", params={"channel": "@somebody"})
+    assert resp.status_code == 502
+    assert resp.json()["code"] == "youtube_unavailable"
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "https://youtu.be/dQw4w9WgXcQ",
+        "https://www.youtube.com/playlist?list=PL123",
+    ],
+)
+def test_youtube_links_that_are_not_channels_are_refused_without_fetching(
+    client, fetched, monkeypatch, value
+):
+    def never(url: str) -> str:
+        raise AssertionError("fetched")
+
+    monkeypatch.setattr("app.services.channel_avatar.read_channel_page", never)
+    resp = client.get("/api/follows/preview", params={"channel": value})
+    assert resp.status_code == 400 and resp.json()["code"] == "not_followable"
+    resp = client.put("/api/follows", json={"channel_url": value})
+    assert resp.status_code == 400 and resp.json()["code"] == "not_followable"
+    assert client.get("/api/follows").json()["items"] == []
+    assert fetched == []
+
+
+def test_partial_hosts_are_refused_before_any_dns_lookup(client, monkeypatch):
+    def resolve(url: str) -> None:
+        raise AssertionError("looked up")
+
+    monkeypatch.setattr("app.api.follows.validate_public_url", resolve)
+    resp = client.get("/api/follows/preview", params={"channel": "https://www.yout"})
+    assert resp.status_code == 400 and resp.json()["code"] == "not_followable"
+
+
+def test_preview_refuses_other_sites_without_fetching(client, monkeypatch):
+    def never(url: str) -> str:
+        raise AssertionError("fetched")
+
+    monkeypatch.setattr("app.services.channel_avatar.read_channel_page", never)
+    resp = client.get("/api/follows/preview", params={"channel": "https://vimeo.com/x"})
+    assert resp.status_code == 400
+    assert resp.json()["code"] == "not_followable"

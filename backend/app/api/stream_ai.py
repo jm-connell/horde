@@ -1,7 +1,9 @@
-"""AI summary, chapters and chat for a streamed (not downloaded) video.
+"""AI summary and chapters for a streamed (not downloaded) video.
 
 The library routes live under ``/api/videos/{id}/ai``; these take the stream's
 URL instead. Results are saved per YouTube id (``services/stream_ai.py``).
+Questions about a stream go to Ask (``api/ask.py``), which saves its row with
+``prepared_state`` first.
 """
 
 from __future__ import annotations
@@ -9,23 +11,20 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlmodel import Session
 from starlette.concurrency import run_in_threadpool
 
 from .. import config
-from ..auth import StreamAuthGuard, current_user, require_permission
+from ..auth import current_user, require_permission
 from ..context import get_engine, get_session
 from ..errors import CodedHTTPException
 from ..models import StreamAiState, as_utc, require_id
-from ..openapi_responses import EVENT_STREAM, RAW
-from ..response_schemas import OkResponse, VideoAiChatHistory
-from ..schemas import ChapterRead, StreamAiAction, StreamAiChatRequest, StreamAiRead
-from ..services import stream_ai, stream_preview
+from ..parental_guard import NOT_ALLOWED, stream_guard
+from ..schemas import ChapterRead, StreamAiAction, StreamAiRead
+from ..services import parental, stream_ai, stream_preview
 from ..services.ai.provider import format_provider_error
 from ..services.ai.tasks import ChaptersError, SummarizeError
-from ..services.auth.accounts import AuthUser
 from ..services.url_clean import youtube_video_id
 from .preview import (
     _in_ytdlp_thread,
@@ -37,7 +36,7 @@ from .preview import (
 router = APIRouter(
     prefix="/api/preview/ai",
     tags=["preview"],
-    dependencies=[Depends(require_permission("use_ai"))],
+    dependencies=[Depends(require_permission("use_ai")), Depends(stream_guard)],
 )
 logger = logging.getLogger(__name__)
 
@@ -75,7 +74,7 @@ def _require_supported(youtube_id: str | None) -> str:
     return youtube_id
 
 
-async def _prepared_state(request: Request, url: str) -> tuple[str, int]:
+async def prepared_state(request: Request, url: str) -> tuple[str, int]:
     """Save (or refresh) the stream's row with its metadata and captions.
 
     Returns ``(youtube_id, row id)``. Captions are fetched once; a stream
@@ -83,6 +82,7 @@ async def _prepared_state(request: Request, url: str) -> tuple[str, int]:
     """
     cleaned, youtube_id = await _youtube_id(url)
     youtube_id = _require_supported(youtube_id)
+    await run_in_threadpool(_require_allowed, request, youtube_id)
     ready = await run_in_threadpool(_ready_state_id, youtube_id)
     if ready is not None:
         return youtube_id, ready
@@ -111,6 +111,17 @@ async def _prepared_state(request: Request, url: str) -> tuple[str, int]:
                     return youtube_id, state_id
         await run_in_threadpool(_store_captions, state_id, vtt)
     return youtube_id, state_id
+
+
+def _require_allowed(request: Request, youtube_id: str) -> None:
+    """Parental controls: the body names the stream, so the route guard (which
+    reads the query) cannot; check it here."""
+    user = current_user(request)
+    if user.allowed is None:
+        return
+    with Session(get_engine()) as session:
+        if not parental.stream_allowed(session, user.allowed, user.id, youtube_id):
+            raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
 
 
 def _ready_state_id(youtube_id: str) -> int | None:
@@ -202,7 +213,7 @@ def get_stream_ai(
 async def _act(request: Request, payload: StreamAiAction, action: str):
     feature = "summaries" if action == "summary" else "chapters"
     await run_in_threadpool(_refuse_if_off, feature)
-    youtube_id, state_id = await _prepared_state(request, payload.url)
+    youtube_id, state_id = await prepared_state(request, payload.url)
     await run_in_threadpool(_run_ai, state_id, action, payload.force)
     return await run_in_threadpool(_read_by_id, state_id, youtube_id)
 
@@ -215,50 +226,3 @@ async def summarize_stream(request: Request, payload: StreamAiAction):
 @router.post("/chapters", response_model=StreamAiRead)
 async def chapters_for_stream(request: Request, payload: StreamAiAction):
     return await _act(request, payload, "chapters")
-
-
-@router.get("/chat", response_model=VideoAiChatHistory)
-def get_stream_chat(
-    url: str = Query(..., max_length=4000),
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    youtube_id = _youtube_id_of(url)
-    state = stream_ai.find_state(session, youtube_id) if youtube_id else None
-    if state is None:
-        return {"messages": []}
-    return {"messages": stream_ai.list_messages(session, state, user.id)}
-
-
-@router.delete("/chat", response_model=OkResponse)
-def delete_stream_chat(
-    url: str = Query(..., max_length=4000),
-    session: Session = Depends(get_session),
-    user: AuthUser = Depends(current_user),
-):
-    youtube_id = _youtube_id_of(url)
-    state = stream_ai.find_state(session, youtube_id) if youtube_id else None
-    if state is not None:
-        stream_ai.clear_messages(session, state, user.id)
-    return {"ok": True}
-
-
-@router.post("/chat", response_class=RAW, responses=EVENT_STREAM)
-async def post_stream_chat(
-    request: Request,
-    payload: StreamAiChatRequest,
-    user: AuthUser = Depends(current_user),
-) -> Response:
-    await run_in_threadpool(_refuse_if_off, "chat")
-    youtube_id, state_id = await _prepared_state(request, payload.url)
-    return StreamingResponse(
-        stream_ai.stream_chat_events(
-            state_id,
-            youtube_id,
-            payload.message,
-            user.id,
-            StreamAuthGuard.of(request).still_valid,
-        ),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )

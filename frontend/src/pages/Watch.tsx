@@ -14,7 +14,7 @@ import { useStreamRelated } from "../queries/preview";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useSettings } from "../hooks/useSettings";
 import { useAuth } from "../context/AuthContext";
-import { useAskPageChannel } from "../context/HelpChatContext";
+import { useAskPageChannel, useAskPageVideo } from "../context/HelpChatContext";
 import { extractYouTubeId } from "../hooks/useSponsorBlock";
 import ClipPanel from "./watch/ClipPanel";
 import RedownloadDialog from "./watch/RedownloadDialog";
@@ -121,6 +121,8 @@ export default function Watch() {
       }
     : undefined;
   const ai = useWatchAi(source, setVideo);
+  // Ask answers questions on this page from this video (Summary's "Chat").
+  useAskPageVideo(location.pathname, ai.askVideo);
   const related = useRelatedFeed(video?.id);
   const streamRelated = useStreamRelated(
     source?.kind === "stream" ? source.url : undefined

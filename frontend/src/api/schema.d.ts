@@ -445,7 +445,8 @@ export interface paths {
         put?: never;
         /**
          * Chat
-         * @description One Ask turn (SSE): from channels when the question names one, else from Horde.
+         * @description One Ask turn (SSE): from the channels a question names, the video the
+         *     chat is about, the page's channel, else Horde (``ask_chat.pick_route``).
          */
         post: operations["chat_api_ask_chat_post"];
         delete?: never;
@@ -1801,7 +1802,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Preview Download */
+        /**
+         * Preview Download
+         * @description Read a link's title, presets and sizes.
+         *
+         *     ``background=true`` marks a lookup nobody is waiting on (a feed card's
+         *     resolution badge): it queues behind the videos people are opening.
+         */
         get: operations["preview_download_api_downloads_preview_get"];
         put?: never;
         post?: never;
@@ -2006,6 +2013,54 @@ export interface paths {
         patch: operations["update_follow_api_follows_patch"];
         trace?: never;
     };
+    "/api/follows/ask-index": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Index Subscribed Channel
+         * @description Turn Ask indexing on for a channel the caller subscribes to.
+         *
+         *     Up to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel
+         *     answers ``large`` and starts only with ``confirm_large``, which needs
+         *     ``manage_ask``. Members without ``manage_ask`` may do this while the
+         *     administrator includes their new channels (``follows.may_index_on_subscribe``).
+         *     Reads the channel's upload count from YouTube.
+         */
+        post: operations["index_subscribed_channel_api_follows_ask_index_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/follows/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Preview Channel
+         * @description Look a channel up by link or ``@handle`` before subscribing: its name and
+         *     picture, read from its YouTube page (404 ``channel_not_found`` when there is
+         *     no such page, 502 ``youtube_unavailable`` when YouTube does not answer).
+         */
+        get: operations["preview_channel_api_follows_preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fonts": {
         parameters: {
             query?: never;
@@ -2054,6 +2109,27 @@ export interface paths {
          * @description The full payload for a signed-in user; the bare minimum for anyone else.
          */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/history/continue-streams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Continue Streams
+         * @description Videos the user streamed without downloading and left part-way, within
+         *     the Continue watching window.
+         */
+        get: operations["continue_streams_api_history_continue_streams_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2744,25 +2820,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/preview/ai/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Stream Chat */
-        get: operations["get_stream_chat_api_preview_ai_chat_get"];
-        put?: never;
-        /** Post Stream Chat */
-        post: operations["post_stream_chat_api_preview_ai_chat_post"];
-        /** Delete Stream Chat */
-        delete: operations["delete_stream_chat_api_preview_ai_chat_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/preview/ai/summarize": {
         parameters: {
             query?: never;
@@ -3046,6 +3103,29 @@ export interface paths {
          * @description Stream a video into DOWNLOADS_DIR/imports and add it to the review queue.
          */
         post: operations["upload_import_api_review_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/review/{video_id}/approve-from-youtube": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve From Youtube
+         * @description Look this file up on YouTube by the id it is known by and approve it with
+         *     what YouTube says, filling only blanks (a title that is still the file name
+         *     counts as blank). The file stays where it is. The Import page calls this
+         *     once per file for a bulk lookup.
+         */
+        post: operations["approve_from_youtube_api_review__video_id__approve_from_youtube_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3371,6 +3451,8 @@ export interface paths {
         /**
          * Apply Takeout
          * @description Follow the chosen subscriptions and import the chosen playlists.
+         *
+         *     Without ``manage_subscriptions`` chosen subscriptions are refused (403).
          */
         post: operations["apply_takeout_api_takeout_apply_post"];
         delete?: never;
@@ -3695,6 +3777,30 @@ export interface paths {
         patch: operations["update_user_api_users__user_id__patch"];
         trace?: never;
     };
+    "/api/users/{user_id}/allowed-channels": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Allowed Channels
+         * @description Parental controls: limit a member to these channels (``null`` lifts it).
+         *
+         *     A restricted member sees and plays only these channels' videos, cannot
+         *     search YouTube, and keeps only the permissions that stay inside the list.
+         *     An administrator cannot be restricted.
+         */
+        put: operations["set_allowed_channels_api_users__user_id__allowed_channels_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users/{user_id}/sessions": {
         parameters: {
             query?: never;
@@ -3890,25 +3996,6 @@ export interface paths {
         /** Generate Video Chapters */
         post: operations["generate_video_chapters_api_videos__video_id__ai_chapters_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/videos/{video_id}/ai/chat": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Video Ai Chat */
-        get: operations["get_video_ai_chat_api_videos__video_id__ai_chat_get"];
-        put?: never;
-        /** Post Video Ai Chat */
-        post: operations["post_video_ai_chat_api_videos__video_id__ai_chat_post"];
-        /** Delete Video Ai Chat */
-        delete: operations["delete_video_ai_chat_api_videos__video_id__ai_chat_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -5092,6 +5179,24 @@ export interface components {
              */
             target: "chat" | "embed";
         };
+        /**
+         * AllowedChannelRead
+         * @description A channel a restricted member may watch (parental controls).
+         */
+        AllowedChannelRead: {
+            /** Name */
+            name?: string | null;
+            /** Url */
+            url?: string | null;
+        };
+        /**
+         * AllowedChannelsWrite
+         * @description The channels a member may watch; ``null`` lifts the restriction.
+         */
+        AllowedChannelsWrite: {
+            /** Channels */
+            channels?: components["schemas"]["AllowedChannelRead"][] | null;
+        };
         /** AppSettingsRead */
         AppSettingsRead: {
             ai?: components["schemas"]["AiSettingsRead"];
@@ -5137,6 +5242,17 @@ export interface components {
              * @default 24
              */
             metadata_sync_interval_hours: number;
+            /**
+             * New Channel Subscribe
+             * @default always
+             * @enum {string}
+             */
+            new_channel_subscribe: "always" | "ask" | "never";
+            /**
+             * New Channel Subscribe Members
+             * @default true
+             */
+            new_channel_subscribe_members: boolean;
             /** Progress Expiry Days */
             progress_expiry_days: number;
             /**
@@ -5186,6 +5302,10 @@ export interface components {
             media_server_sidecars?: boolean | null;
             /** Metadata Sync Interval Hours */
             metadata_sync_interval_hours?: number | null;
+            /** New Channel Subscribe */
+            new_channel_subscribe?: ("always" | "ask" | "never") | null;
+            /** New Channel Subscribe Members */
+            new_channel_subscribe_members?: boolean | null;
             /** Progress Expiry Days */
             progress_expiry_days?: number | null;
             /** Require Two Factor */
@@ -5312,9 +5432,11 @@ export interface components {
         };
         /**
          * AskChatRequest
-         * @description One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.
+         * @description One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.
          */
         AskChatRequest: {
+            /** Answer From */
+            answer_from?: ("horde" | "video") | null;
             /** Channel Ids */
             channel_ids?: number[];
             /**
@@ -5323,21 +5445,18 @@ export interface components {
              * @enum {string}
              */
             data_consent: "off" | "local" | "cloud";
-            /**
-             * Horde Only
-             * @default false
-             */
-            horde_only: boolean;
             /** Message */
             message: string;
             /** Page */
             page?: string | null;
             /** Page Channel Id */
             page_channel_id?: number | null;
+            page_video?: components["schemas"]["AskVideoRef"] | null;
             /** Page Video Id */
             page_video_id?: string | null;
             /** Thread Id */
             thread_id?: number | null;
+            video?: components["schemas"]["AskVideoRef"] | null;
         };
         /** AskSearchHit */
         AskSearchHit: {
@@ -5429,6 +5548,16 @@ export interface components {
              */
             updated_at: string;
         };
+        /**
+         * AskVideoRef
+         * @description A video Ask can answer from: a library video, or a stream by its URL.
+         */
+        AskVideoRef: {
+            /** Library Id */
+            library_id?: number | null;
+            /** Url */
+            url?: string | null;
+        };
         /** AuthLoginResult */
         AuthLoginResult: {
             user: components["schemas"]["AuthUserRead"];
@@ -5448,6 +5577,8 @@ export interface components {
          * @description The signed-in user. ``permissions`` is effective: all of them for an admin.
          */
         AuthUserRead: {
+            /** Allowed Channels */
+            allowed_channels?: components["schemas"]["AllowedChannelRead"][] | null;
             /** Avatar Version */
             avatar_version?: number | null;
             /** Id */
@@ -5762,6 +5893,7 @@ export interface components {
              * @default []
              */
             catalogs: components["schemas"]["ChannelCatalogStatusItem"][];
+            channel_catalog?: components["schemas"]["ChannelCatalogStatusItem"] | null;
             /** Current Channel */
             current_channel?: string | null;
             /** Current Channel Url */
@@ -6231,6 +6363,67 @@ export interface components {
             videos: number;
         };
         /**
+         * ContinueStreamRead
+         * @description A stream left part-way: ``duration`` is its length, when known.
+         */
+        ContinueStreamRead: {
+            /** Channel */
+            channel?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
+            /** Dislike Count */
+            dislike_count?: number | null;
+            /** Duration */
+            duration?: number | null;
+            /** Id */
+            id?: string | null;
+            /**
+             * In Library
+             * @default false
+             */
+            in_library: boolean;
+            /** Library Height Px */
+            library_height_px?: number | null;
+            /** Like Count */
+            like_count?: number | null;
+            /** Live Status */
+            live_status?: string | null;
+            match_reason?: components["schemas"]["SearchMatchReason"] | null;
+            /** Max Height */
+            max_height?: number | null;
+            /** Position Sec */
+            position_sec: number;
+            /** Published At */
+            published_at?: string | null;
+            /** Published Label */
+            published_label?: string | null;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Url */
+            url: string;
+            /** Video Id */
+            video_id?: number | null;
+            /** View Count */
+            view_count?: number | null;
+            /**
+             * Youtube Watched
+             * @default false
+             */
+            youtube_watched: boolean;
+        };
+        /**
+         * ContinueStreamsRead
+         * @description Streamed (not downloaded) videos to carry on with, newest first.
+         */
+        ContinueStreamsRead: {
+            /** Items */
+            items: components["schemas"]["ContinueStreamRead"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * ContinueYoutubeRead
          * @description Videos watched on YouTube lately (from the import), for Continue watching.
          */
@@ -6483,6 +6676,7 @@ export interface components {
             /** Replace Video Id */
             replace_video_id?: number | null;
             status: components["schemas"]["JobStatus"];
+            subscribe_prompt?: components["schemas"]["SubscribePrompt"] | null;
             /**
              * Superseded
              * @default false
@@ -6672,6 +6866,18 @@ export interface components {
             items: components["schemas"]["FollowedChannelRead"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * FollowPreviewRead
+         * @description A channel looked up by link or ``@handle`` before subscribing to it.
+         */
+        FollowPreviewRead: {
+            /** Avatar Url */
+            avatar_url?: string | null;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
         };
         /** FollowRequest */
         FollowRequest: {
@@ -8655,13 +8861,6 @@ export interface components {
             /** Url */
             url: string;
         };
-        /** StreamAiChatRequest */
-        StreamAiChatRequest: {
-            /** Message */
-            message: string;
-            /** Url */
-            url: string;
-        };
         /**
          * StreamAiRead
          * @description AI results saved for a streamed (not downloaded) video.
@@ -8716,6 +8915,11 @@ export interface components {
             library_video_id?: number | null;
             /** Preview Height */
             preview_height?: number | null;
+            /**
+             * Resume Sec
+             * @default 0
+             */
+            resume_sec: number;
             /** Source Url */
             source_url?: string | null;
             storyboard?: components["schemas"]["StoryboardRead"] | null;
@@ -8822,6 +9026,53 @@ export interface components {
              */
             throwback: number;
         };
+        /**
+         * SubscribeAskIndexRequest
+         * @description Turn Ask indexing on for a channel the caller subscribes to.
+         */
+        SubscribeAskIndexRequest: {
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Confirm Large
+             * @default false
+             */
+            confirm_large: boolean;
+        };
+        /** SubscribeAskIndexResult */
+        SubscribeAskIndexResult: {
+            /**
+             * Already
+             * @default false
+             */
+            already: boolean;
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+            /**
+             * Indexed
+             * @default false
+             */
+            indexed: boolean;
+            /**
+             * Large
+             * @default false
+             */
+            large: boolean;
+            /** Video Count */
+            video_count?: number | null;
+        };
+        /**
+         * SubscribePrompt
+         * @description A finished download from a channel its requester does not subscribe to.
+         */
+        SubscribePrompt: {
+            /** Channel Name */
+            channel_name?: string | null;
+            /** Channel Url */
+            channel_url: string;
+        };
         /** SubscriptionList */
         SubscriptionList: {
             /**
@@ -8856,6 +9107,8 @@ export interface components {
             /** Quality Preset */
             quality_preset?: string | null;
             retention?: components["schemas"]["ChannelRetentionSummary"] | null;
+            /** Subscriber Count */
+            subscriber_count?: number | null;
             /**
              * Video Count
              * @default 0
@@ -9524,6 +9777,8 @@ export interface components {
         };
         /** UserRead */
         UserRead: {
+            /** Allowed Channels */
+            allowed_channels?: components["schemas"]["AllowedChannelRead"][] | null;
             /** Avatar Version */
             avatar_version?: number | null;
             /**
@@ -9566,34 +9821,6 @@ export interface components {
             permissions?: string[] | null;
             /** Share Downloads */
             share_downloads?: boolean | null;
-        };
-        /** VideoAiChatHistory */
-        VideoAiChatHistory: {
-            /** Messages */
-            messages: components["schemas"]["VideoAiChatMessageRead"][];
-        };
-        /** VideoAiChatMessageRead */
-        VideoAiChatMessageRead: {
-            /** Content */
-            content: string;
-            /** Cost */
-            cost?: number | null;
-            /** Created At */
-            created_at?: string | null;
-            /** Id */
-            id?: number | null;
-            /** Model */
-            model?: string | null;
-            /**
-             * Role
-             * @enum {string}
-             */
-            role: "user" | "assistant";
-        };
-        /** VideoAiChatRequest */
-        VideoAiChatRequest: {
-            /** Message */
-            message: string;
         };
         /**
          * VideoCommentsRead
@@ -12518,7 +12745,12 @@ export interface operations {
     };
     channel_catalog_status_api_channels_catalog_status_get: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also return this channel's catalog as channel_catalog. */
+                channel_url?: string | null;
+                /** @description Channel name, for URL aliases. */
+                channel?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -14104,6 +14336,7 @@ export interface operations {
         parameters: {
             query: {
                 url: string;
+                background?: boolean;
             };
             header?: never;
             path?: never;
@@ -14747,6 +14980,88 @@ export interface operations {
             };
         };
     };
+    index_subscribed_channel_api_follows_ask_index_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubscribeAskIndexRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SubscribeAskIndexResult"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_channel_api_follows_preview_get: {
+        parameters: {
+            query: {
+                channel: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FollowPreviewRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_fonts_api_fonts_get: {
         parameters: {
             query?: never;
@@ -14924,6 +15239,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthFull"] | components["schemas"]["HealthPublic"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    continue_streams_api_history_continue_streams_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ContinueStreamsRead"];
                 };
             };
             /** @description Validation error */
@@ -16584,128 +16937,6 @@ export interface operations {
             };
         };
     };
-    get_stream_chat_api_preview_ai_chat_get: {
-        parameters: {
-            query: {
-                url: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VideoAiChatHistory"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    post_stream_chat_api_preview_ai_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["StreamAiChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Server-sent events, one JSON object per event */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_stream_chat_api_preview_ai_chat_delete: {
-        parameters: {
-            query: {
-                url: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
     summarize_stream_api_preview_ai_summarize_post: {
         parameters: {
             query?: never;
@@ -17292,6 +17523,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    approve_from_youtube_api_review__video_id__approve_from_youtube_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApproveSuggestedResult"];
                 };
             };
             /** @description Validation error */
@@ -18825,6 +19096,50 @@ export interface operations {
             };
         };
     };
+    set_allowed_channels_api_users__user_id__allowed_channels_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllowedChannelsWrite"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserRead"];
+                };
+            };
+            /** @description Validation error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_user_sessions_api_users__user_id__sessions_get: {
         parameters: {
             query?: never;
@@ -19347,130 +19662,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VideoRead"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    get_video_ai_chat_api_videos__video_id__ai_chat_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VideoAiChatHistory"];
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    post_video_ai_chat_api_videos__video_id__ai_chat_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["VideoAiChatRequest"];
-            };
-        };
-        responses: {
-            /** @description Server-sent events, one JSON object per event */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "text/event-stream": string;
-                };
-            };
-            /** @description Validation error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-            /** @description Error */
-            default: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
-                };
-            };
-        };
-    };
-    delete_video_ai_chat_api_videos__video_id__ai_chat_delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                video_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OkResponse"];
                 };
             };
             /** @description Validation error */

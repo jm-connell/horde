@@ -21,12 +21,14 @@ from ..errors import CodedHTTPException, extraction_error
 from ..models import (
     DownloadDestination,
     DownloadJob,
+    DownloadRequester,
     JobStatus,
     Playlist,
     Video,
     require_id,
 )
 from ..openapi_responses import EVENT_STREAM, FILE_DOWNLOAD, RAW
+from ..parental_guard import NOT_ALLOWED
 from ..schemas import (
     ClipCreate,
     DownloadBulkCreate,
@@ -38,10 +40,12 @@ from ..schemas import (
     DownloadPreview,
     DownloadQualityUpdate,
     DownloadQueueStatus,
+    SubscribePrompt,
 )
-from ..services import follows, playlists, ytdlp_extract, ytdlp_formats
+from ..services import follows, parental, playlists, ytdlp_extract, ytdlp_formats
 from ..services.auth.accounts import AuthUser
 from ..services.channel_catalog import skips as catalog_skips
+from ..services.channel_catalog.runtime import is_youtube_channel_url
 from ..services.downloads import clips, device_access
 from ..services.downloads import jobs as download_jobs
 from ..services.downloads import progress as download_progress
@@ -60,6 +64,8 @@ from ..services.workers import shutdown_requested
 from ..services.ytdlp_common import (
     ERROR_KIND_NETWORK,
     ERROR_KIND_UNKNOWN,
+    EXTRACT_PRIORITY_DOWNLOAD,
+    EXTRACT_PRIORITY_INTERACTIVE,
     MembersOnlyError,
     classify_ytdlp_error,
     http_detail_for_error,
@@ -106,6 +112,43 @@ def _visible_job(session: Session, user: AuthUser, job_id: int) -> DownloadJob:
     return job
 
 
+def _subscribe_prompts(
+    session: Session,
+    user: AuthUser,
+    jobs: list[DownloadJob],
+    video_by_id: dict[int, Video],
+) -> dict[int, SubscribePrompt]:
+    """Finished downloads the caller queued from channels new to them, when the
+    administrator chose to ask about new channels: job id -> its channel."""
+    if follows.new_channel_mode(user.is_admin, user.permissions) != "ask":
+        return {}
+    done = {
+        require_id(j): j
+        for j in jobs
+        if j.status == JobStatus.completed and j.video_id in video_by_id
+    }
+    if not done:
+        return {}
+    mine = set(
+        session.exec(
+            select(DownloadRequester.job_id).where(
+                DownloadRequester.user_id == user.id,
+                col(DownloadRequester.job_id).in_(list(done)),
+            )
+        ).all()
+    )
+    known = follows.known_urls(session, user.id)
+    out: dict[int, SubscribePrompt] = {}
+    for job_id, job in done.items():
+        if job_id not in mine or job.video_id is None:
+            continue
+        video = video_by_id[job.video_id]
+        url = follows.normalize_channel_url(video.channel_url or "")
+        if url and url not in known and is_youtube_channel_url(url):
+            out[job_id] = SubscribePrompt(channel_url=url, channel_name=video.channel)
+    return out
+
+
 def _enrich_jobs(
     session: Session, user: AuthUser, jobs: list[DownloadJob]
 ) -> list[DownloadJobRead]:
@@ -134,6 +177,7 @@ def _enrich_jobs(
     }
     existing: set[int] = set()
     height_by_video: dict[int, int | None] = {}
+    video_by_id: dict[int, Video] = {}
     if video_ids:
         videos = session.exec(
             select(Video).where(col(Video.id).in_(list(video_ids)))
@@ -143,6 +187,8 @@ def _enrich_jobs(
                 continue
             existing.add(video.id)
             height_by_video[video.id] = video.height_px
+            video_by_id[video.id] = video
+    prompts = _subscribe_prompts(session, user, jobs, video_by_id)
 
     # Newest completed job wins per video_id and per URL.
     latest_by_video: dict[int, int] = {}
@@ -185,6 +231,7 @@ def _enrich_jobs(
                     else None,
                     "video_missing": video_missing,
                     "superseded": superseded,
+                    "subscribe_prompt": prompts.get(require_id(j)),
                     "held_reason": download_queue.held_reason(j.id)
                     if j.id is not None and j.status == JobStatus.queued
                     else None,
@@ -216,9 +263,15 @@ def list_presets():
 )
 def preview_download(
     url: str,
+    background: bool = False,
     gate: ExtractionGate = Depends(extraction_gate),
     ctx: AppContext = Depends(get_ctx),
 ):
+    """Read a link's title, presets and sizes.
+
+    ``background=true`` marks a lookup nobody is waiting on (a feed card's
+    resolution badge): it queues behind the videos people are opening.
+    """
     if not url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(url)
@@ -238,7 +291,12 @@ def preview_download(
         )
     cleaned = clean_url(url, keep_playlist=True)
     try:
-        return gate.run(ytdlp_extract.extract_preview, cleaned)
+        # Not EXTRACT_PRIORITY_BACKGROUND: that waits behind catalog indexing for
+        # up to 3x as long, holding one of the gate's few slots all the while.
+        priority = (
+            EXTRACT_PRIORITY_DOWNLOAD if background else EXTRACT_PRIORITY_INTERACTIVE
+        )
+        return gate.run(ytdlp_extract.extract_preview, cleaned, priority=priority)
     except HTTPException:
         raise  # 429 / 504 from the gate
     except MembersOnlyError as exc:
@@ -371,6 +429,11 @@ def create_download(
     if not payload.url.strip():
         raise HTTPException(status_code=400, detail="URL is required")
     validate_public_url(payload.url)
+    if user.allowed is not None and not parental.stream_allowed(
+        session, user.allowed, user.id, youtube_video_id(payload.url)
+    ):
+        # Parental controls: only an allowed channel's video, to the device.
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
 
     if is_youtube_short_url(payload.url):
         raise HTTPException(status_code=400, detail="Don't watch Shorts")
@@ -544,6 +607,11 @@ def create_downloads_bulk(
         except UnsafeUrlError:
             skips.append(DownloadBulkSkip(url=raw.strip(), reason="invalid_url"))
             continue
+        if user.allowed is not None and not parental.stream_allowed(
+            session, user.allowed, user.id, youtube_video_id(raw)
+        ):
+            # Parental controls: only an allowed channel's video.
+            raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
         if is_youtube_short_url(raw):
             skips.append(DownloadBulkSkip(url=raw.strip(), reason="shorts"))
             continue

@@ -139,8 +139,8 @@ function FeedAction({
       aria-label={downloading ? "Downloading" : "Download"}
       title={downloading ? "Downloading" : "Download"}
       // A 16px line holds a 20px button: the margins keep the line's height,
-      // and the ::after widens what a finger can hit.
-      className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60"
+      // and the ::after widens what a finger can hit (44px on touch screens).
+      className="relative -my-0.5 flex h-5 w-5 items-center justify-center rounded-sm text-accent after:absolute after:-inset-2 hover:bg-accent/15 disabled:animate-pulse disabled:opacity-60 [@media(pointer:coarse)]:after:-inset-3"
     >
       <DownloadIcon className="text-sm" />
     </button>
@@ -180,7 +180,10 @@ function FeedThumbnail({
   previewActive,
   queueEntry,
   watchedOnYoutube = false,
+  progress,
 }: {
+  /** How much of it was watched (0 to 1): a bar along the bottom. */
+  progress?: number;
   /** Shows a "+ Queue" button on hover. */
   queueEntry?: QueueEntry | null;
   /** The viewer watched it on YouTube (their imported Takeout history). */
@@ -265,6 +268,14 @@ function FeedThumbnail({
             {duration}
           </span>
         )}
+        {progress !== undefined && progress > 0 && !previewing && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 h-1 bg-black/50">
+            <div
+              className="h-full bg-accent"
+              style={{ width: `${Math.min(100, progress * 100)}%` }}
+            />
+          </div>
+        )}
       </div>
       {queueEntry && <QueueButton entry={queueEntry} />}
       <MatchReasonBadge text={matchTip} />
@@ -283,7 +294,10 @@ export default function ChannelFeedCard({
   skipRemotePreview = false,
   searchQuery = "",
   onChannelClick,
+  progress,
 }: {
+  /** How much of it was watched (0 to 1), shown on the thumbnail. */
+  progress?: number;
   entry: ChannelFeedEntry;
   channelName: string;
   layout: "grid" | "list";
@@ -385,14 +399,17 @@ export default function ChannelFeedCard({
 
     const el = cardRef.current;
     if (!el) return;
-    let cancelled = false;
+    const controller = new AbortController();
     const observer = new IntersectionObserver(
       ([hit]) => {
         if (!hit?.isIntersecting) return;
         observer.disconnect();
-        enqueueYtPreview(() => api.previewDownload(entry.url))
+        enqueueYtPreview(
+          () => api.previewDownload(entry.url, { background: true }),
+          controller.signal
+        )
           .then((preview) => {
-            if (cancelled || preview.is_playlist) return;
+            if (controller.signal.aborted || preview.is_playlist) return;
             const label = maxPresetLabel(preview.available_presets);
             if (label) {
               maxResCache.set(entry.url, label);
@@ -405,7 +422,7 @@ export default function ChannelFeedCard({
     );
     observer.observe(el);
     return () => {
-      cancelled = true;
+      controller.abort();
       observer.disconnect();
     };
   }, [
@@ -504,6 +521,7 @@ export default function ChannelFeedCard({
           duration={duration}
           live={isLive}
           className="aspect-video w-full"
+          progress={progress}
           matchTip={matchTip}
           previewSrc={previewSrc}
           previewVideoId={libraryVideoId}

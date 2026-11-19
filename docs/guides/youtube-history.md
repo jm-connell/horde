@@ -19,9 +19,9 @@ Everything you import belongs to **your account only**. Another person on the sa
 Open **Settings → Library → YouTube history → Import from Google Takeout** (or the optional **YouTube history** step of the [setup wizard](../getting-started/first-run.md)). Choose the .zip (or the loose `watch-history.json` and CSV files of an unzipped export) and press **Import**.
 
 1. **Watch history** is stored straight away. Horde says how many views were new and how many it already had.
-2. **Subscriptions** are listed with a checkbox each, plus **Select all** and **Deselect all**. Ticked channels become channels you [follow](channels.md). Channels you already follow show as **Following**. A channel you unfollowed in Horde before starts unticked, so an old subscription does not undo that.
+2. **Subscriptions** are listed with a checkbox each, plus **Select all** and **Deselect all**. Ticked channels become [subscriptions](channels.md#subscriptions) in Horde. Channels you already subscribe to show as **Subscribed**. A channel you unsubscribed from in Horde before starts unticked, so an old subscription does not undo that.
 3. **Playlists** are listed the same way. Each ticked one becomes a **private** playlist of yours. Videos you have downloaded are linked to the library copy; the rest [play from YouTube](playlists.md) until you download them. Takeout lists only video ids, so a video Horde knows nothing about yet shows without a title.
-4. **Import selected** follows the channels and copies the playlists.
+4. **Import selected** subscribes to the channels and copies the playlists.
 
 Limits: 4 GB per upload; Horde reads at most 160 MB of watch history (a decade of heavy viewing is about 100 MB as JSON), 16 MB per CSV and 320 MB in all, and refuses a file that unpacks to more than 100 times its packed size. Views whose date it cannot read (an HTML export in a format or time zone it does not know) are left out, and the import says how many.
 
@@ -31,7 +31,7 @@ Keep using YouTube and Horde side by side, then import a newer export whenever y
 
 ## What Horde does with it
 
-The imported views appear in **History** (marked **On YouTube**), where you can remove them one by one or keep them out of your recommendations, and the newest few from the last week join **Continue watching** (see [History](history.md)). They are also used here:
+The imported views appear in **History** (marked **On YouTube**), where you can remove them one by one or keep them out of your recommendations, and the newest few from the last week join **Continue watching** on the Recommended tab (see [History](history.md)). They are also used here:
 
 | Where | What changes |
 |-------|--------------|
@@ -52,7 +52,7 @@ Takeout records **when** you watched, not **for how long**, so YouTube views nev
 
 ## Forget it again
 
-**Settings → Library → YouTube history → Forget** deletes your imported views. Channels you followed and playlists you imported stay; unfollow or delete them as usual. Deleting your account deletes the imported history with it.
+**Settings → Library → YouTube history → Forget** deletes your imported views. Channels you subscribed to and playlists you imported stay; unsubscribe or delete them as usual. Deleting your account deletes the imported history with it.
 
 ## API
 

@@ -469,10 +469,11 @@ class _HistoryHtml(HTMLParser):
         if tag == "a" and self._entry is not None and self._href is not None:
             self._entry["links"].append((self._href, "".join(self._link_text).strip()))
             self._href = None
-        elif tag == "div" and self._divs:
-            if self._divs.pop() and self._entry is not None:
-                self._finish(self._entry)
-                self._entry = None
+        elif (
+            tag == "div" and self._divs and self._divs.pop() and self._entry is not None
+        ):
+            self._finish(self._entry)
+            self._entry = None
 
     def handle_data(self, data: str) -> None:
         if self._entry is None:

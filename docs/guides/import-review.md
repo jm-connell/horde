@@ -59,6 +59,8 @@ The form list shows 20 files at a time (**Show more** adds the next 20), because
 
 On a file whose YouTube id Horde knows (from its name, a sidecar or the Tube Archivist layout), **Fetch details from YouTube** fills the form from YouTube: title, channel, date, description, tags and thumbnail. Check the result, then **Save & approve**. Without internet on the server the lookup fails with a "could not reach" message; the rest of the form still works. Needs `edit_metadata`.
 
+When more than one file has a YouTube id but no channel (a Tube Archivist library, or yt-dlp files in one flat folder), **Fetch N from YouTube** does this for all of them: it looks each one up in turn and approves it with YouTube's title, channel, date, description and tags, filling only empty fields (a title that is still the file name counts as empty). Files stay where they are on disk, and the thumbnail comes later from the metadata sync, as with **Approve N ready**. Each lookup takes a few seconds, and the page must stay open; **Stop** ends the run after the current file, and running it again picks up the files still waiting. A file YouTube cannot find (removed, private, members-only) stays in the queue, the run goes on, and the next run on the same visit skips it. A failure that would hit every file (no internet, YouTube blocking the server, too many lookups at once), or three unexplained failures in a row, stops the run with the reason.
+
 After approval, a video with a YouTube source link gets its view count, captions, chapters and (if it had none) thumbnail from the periodic [metadata sync](../settings/library.md).
 
 ### Approve

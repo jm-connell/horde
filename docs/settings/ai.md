@@ -66,7 +66,7 @@ Backend-only: `connection_version` (settings shape, for the one-time upgrade) an
 | AI video summaries | `ai_summaries` | `true` | After download when captions exist; regenerate on Watch |
 | AI video chapters | `ai_chapters` | `true` | Enable caption-based chapter markers |
 | Generate chapters | `ai_chapters_mode` | `"on_download"` | `on_download` queues after download; `on_watch` is a Watch-page button |
-| AI video chat | `ai_chat` | `true` | Ask-the-video on Watch |
+| AI video chat | `ai_chat` | `true` | Lets [Ask](../guides/ask.md#asking-about-a-video) answer questions about a video (**Chat** in its Summary section, or Ask on a watch page); off, they go to Horde |
 | Summary length | `summary_length` | `"short"` | `short` \| `medium` \| `long` |
 | Category match strictness | `category_min_score` | `0.55` | 0.2–0.9; a video must also fit the category nearly as well as its best one |
 | Enrich tags with LLM | `enrich_tags` | `true` | Suggest tags after download (skipped if you edit tags manually) |

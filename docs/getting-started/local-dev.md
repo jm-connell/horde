@@ -8,11 +8,12 @@ Run the FastAPI backend and Vite frontend on your machine for UI and API work. C
 ## Prerequisites
 
 - Python 3.14 with `venv` (the backend uses 3.14-only syntax; the Docker image and CI run 3.14)
-- Node.js and npm
+- Node.js 24 or newer, with npm (`.nvmrc` names the version CI uses)
 - Git (you need a clone of this repo)
 - `curl` (Linux/macOS helper scripts wait on `/api/health`)
+- FFmpeg (`ffmpeg` and `ffprobe` on `PATH`, or `FFMPEG_BIN` / `FFPROBE_BIN`) for downloads, thumbnails and imports; the UI and API start without it, but downloads fail with "ffmpeg is not installed"
 
-On Fedora, something like `sudo dnf install python3 nodejs npm curl` covers the basics.
+On Fedora, something like `sudo dnf install python3 nodejs npm curl ffmpeg` covers the basics.
 
 ## One-command start (recommended)
 
@@ -136,6 +137,21 @@ npm run build:sync
 
 That runs `npm run build` then copies `frontend/dist` into `backend/static` via `scripts/sync-static.mjs`. `backend/static` is gitignored: it is a local build artifact, never committed (the Docker image builds its own copy).
 
+## Retake the screenshots
+
+The README and docs screenshots come from a real library. Point the capture
+script at any running Horde (your own server works best) from `frontend/`:
+
+```bash
+npm run screenshots -- http://192.168.1.20:8686
+```
+
+A browser window opens: sign in there, then for each shot the script opens the
+page and says what to set up, and Enter saves it to
+`docs/assets/screenshots/<name>.webp` (`s` skips it). Name shots after the URL
+to retake only those, e.g. `... player ask`. The first run needs Playwright's
+browser: `npx playwright install chromium`.
+
 ## Optional: Docker-shaped local stack
 
 You can still use Compose on a laptop:
@@ -143,7 +159,7 @@ You can still use Compose on a laptop:
 ```bash
 cp .env.example .env
 # point DOWNLOADS_PATH / DATA_PATH at local dirs; set PUID/PGID
-docker compose up --build -d
+docker compose -f docker-compose.yml -f docker-compose.build.yml up --build -d
 ```
 
 UI: `http://127.0.0.1:8686` (host **8686** → container **8080**). `bgutil-pot` starts automatically; Ollama needs `docker compose --profile ai up -d`.

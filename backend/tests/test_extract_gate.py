@@ -83,3 +83,101 @@ def test_background_waiters_get_the_longer_timeout(monkeypatch):
         ytdlp_common._extract_held = False
         ytdlp_common._extract_waiters.clear()
     assert seen == [10.0, 10.0, 30.0]
+
+
+def test_slow_gated_requests_are_logged(monkeypatch, caplog):
+    """A request that held the gate long names itself, so stalls can be traced."""
+    ytdlp_common._extract_held = False
+    ytdlp_common._extract_waiters.clear()
+    monkeypatch.setattr(ytdlp_common, "_last_extract_at", 0.0)
+    url = "https://www.youtube.com/watch?v=slowslowslo"
+
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(lambda: None, url=url)
+    assert "Slow YouTube request" not in caplog.text
+
+    monkeypatch.setattr(ytdlp_common, "SLOW_EXTRACT_RUN_SEC", 0.0)
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(
+            lambda: None, url=url, priority=ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE
+        )
+    assert "Slow YouTube request (interactive)" in caplog.text
+    assert url in caplog.text
+    assert ytdlp_common._extract_held is False
+
+    # Background requests queue behind everything by design: debug, not warning.
+    caplog.clear()
+    with caplog.at_level("WARNING", logger=ytdlp_common.logger.name):
+        ytdlp_common.call_gated(
+            lambda: None, url=url, priority=ytdlp_common.EXTRACT_PRIORITY_BACKGROUND
+        )
+    assert "Slow YouTube request" not in caplog.text
+
+
+def _hold_gate_in_thread(url: str, priority: int, release: threading.Event):
+    def hold() -> None:
+        ytdlp_common._acquire_extract_gate(priority, url=url)
+        release.wait(5)
+        ytdlp_common._release_extract_gate()
+
+    thread = threading.Thread(target=hold)
+    thread.start()
+    deadline = time.monotonic() + 2
+    while ytdlp_common._extract_holder is None and time.monotonic() < deadline:
+        time.sleep(0.01)
+    return thread
+
+
+def test_a_long_wait_names_the_request_holding_the_queue(monkeypatch, caplog):
+    """A stalled preview logs what holds the queue, even if that never finishes."""
+    ytdlp_common._extract_held = False
+    ytdlp_common._extract_waiters.clear()
+    monkeypatch.setattr(ytdlp_common, "SLOW_EXTRACT_WAIT_SEC", 0.05)
+    holder_url = "https://www.youtube.com/@somechannel/videos"
+    waiter_url = "https://www.youtube.com/watch?v=waitingwait"
+    release = threading.Event()
+    holder = _hold_gate_in_thread(
+        holder_url, ytdlp_common.EXTRACT_PRIORITY_BACKGROUND, release
+    )
+    try:
+        with (
+            caplog.at_level("WARNING", logger=ytdlp_common.logger.name),
+            pytest.raises(ytdlp_common.ExtractQueueTimeout),
+        ):
+            ytdlp_common._acquire_extract_gate(
+                ytdlp_common.EXTRACT_PRIORITY_INTERACTIVE,
+                timeout=0.3,
+                url=waiter_url,
+            )
+    finally:
+        release.set()
+        holder.join(timeout=5)
+    assert "held by a background request" in caplog.text
+    assert holder_url in caplog.text
+    assert waiter_url in caplog.text
+    assert ytdlp_common._extract_held is False
+    assert ytdlp_common._extract_holder is None
+
+
+def test_background_waiters_do_not_report_the_holder(monkeypatch, caplog):
+    ytdlp_common._extract_held = False
+    ytdlp_common._extract_waiters.clear()
+    monkeypatch.setattr(ytdlp_common, "SLOW_EXTRACT_WAIT_SEC", 0.05)
+    release = threading.Event()
+    holder = _hold_gate_in_thread(
+        "https://www.youtube.com/watch?v=holderholdr",
+        ytdlp_common.EXTRACT_PRIORITY_DOWNLOAD,
+        release,
+    )
+    try:
+        with (
+            caplog.at_level("WARNING", logger=ytdlp_common.logger.name),
+            pytest.raises(ytdlp_common.ExtractQueueTimeout),
+        ):
+            ytdlp_common._acquire_extract_gate(
+                ytdlp_common.EXTRACT_PRIORITY_BACKGROUND, timeout=0.2
+            )
+    finally:
+        release.set()
+        holder.join(timeout=5)
+    assert "held by" not in caplog.text

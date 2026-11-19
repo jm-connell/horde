@@ -25,7 +25,7 @@ async function lookingOnYoutube(page: Page) {
 async function openRecommended(page: Page) {
   await lookingOnYoutube(page);
   await page.goto("/");
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await expect(page.getByText(FOUND)).toBeVisible();
 }
 
@@ -69,7 +69,7 @@ test("source marks tell downloaded, your channels and new apart", async ({
 
   // Always on: no toggle, and the legend sits beside the home tabs.
   await expect(page.getByRole("button", { name: "Sources" })).toHaveCount(0);
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await expect(legend).toHaveCount(0);
 });
 
@@ -83,7 +83,7 @@ test("there is one Recommended tab, and an old Recommended+ choice lands on it",
   await page.goto("/");
   await expect(page.getByText(FOUND)).toBeVisible();
   await expect(
-    page.getByRole("button", { name: "Recommended", exact: true })
+    page.getByRole("tab", { name: "Recommended", exact: true })
   ).toHaveAttribute("data-liquid-active", "true");
   await expect(page.getByRole("button", { name: "Recommended+" })).toHaveCount(
     0
@@ -95,7 +95,7 @@ test("the home tab is remembered between visits, and a search does not change it
 }) => {
   await lookingOnYoutube(page);
   await page.goto("/");
-  const recommended = page.getByRole("button", {
+  const recommended = page.getByRole("tab", {
     name: "Recommended",
     exact: true,
   });
@@ -123,10 +123,10 @@ test("the home tab is remembered between visits, and a search does not change it
   await expect(page.getByText(FOUND)).toBeVisible();
 
   // Library is remembered the same way.
-  await page.getByRole("button", { name: "Library", exact: true }).click();
+  await page.getByRole("tab", { name: "Library", exact: true }).click();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Library", exact: true })
+    page.getByRole("tab", { name: "Library", exact: true })
   ).toHaveAttribute("data-liquid-active", "true");
 });
 
@@ -143,7 +143,7 @@ test("the home tab follows the account to another browser", async ({
       r.request().method() === "PATCH" &&
       r.ok()
   );
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
   await saved;
 
   const other = await contextAs(browser, baseURL, "admin");
@@ -151,11 +151,30 @@ test("the home tab follows the account to another browser", async ({
     const elsewhere = await other.newPage();
     await elsewhere.goto("/");
     await expect(
-      elsewhere.getByRole("button", { name: "Recommended", exact: true })
+      elsewhere.getByRole("tab", { name: "Recommended", exact: true })
     ).toHaveAttribute("data-liquid-active", "true");
   } finally {
     await other.close();
   }
+});
+
+test("the card menu and + Queue do not cover each other", async ({ page }) => {
+  await openRecommended(page);
+  const card = page.locator(`[data-rec-key="discover001"]`);
+  await card.hover();
+  const menu = card.getByRole("button", { name: "Tune recommendations" });
+  const queue = card.getByRole("button", { name: "+ Queue" });
+  await expect(menu).toBeVisible();
+  await expect(queue).toBeVisible();
+  const a = await menu.boundingBox();
+  const b = await queue.boundingBox();
+  if (!a || !b) throw new Error("both controls should be laid out");
+  const apart =
+    a.x + a.width <= b.x ||
+    b.x + b.width <= a.x ||
+    a.y + a.height <= b.y ||
+    b.y + b.height <= a.y;
+  expect(apart).toBe(true);
 });
 
 test("not interested removes a video, and undo brings it back", async ({
@@ -207,7 +226,9 @@ test("blocking a channel removes all of its videos", async ({ page }) => {
   await expect(page.getByText("Rock pools at low tide")).toBeVisible();
 });
 
-test("suggested channels can be followed or dismissed", async ({ page }) => {
+test("suggested channels can be subscribed to or dismissed", async ({
+  page,
+}) => {
   await openRecommended(page);
   const shelf = page.getByRole("region", { name: "Channels you might like" });
   await expect(shelf.getByText("Northern Skies")).toBeVisible();
@@ -234,8 +255,8 @@ test("suggested channels can be followed or dismissed", async ({ page }) => {
     .click();
   await expect(shelf.getByText("Tidepool Notes")).toHaveCount(0);
 
-  await shelf.getByRole("button", { name: "Follow" }).click();
-  await expect(page.getByText("Following Northern Skies")).toBeVisible();
+  await shelf.getByRole("button", { name: "Subscribe" }).click();
+  await expect(page.getByText("Subscribed to Northern Skies")).toBeVisible();
   const follows = await page.request.get("/api/follows");
   const urls = (
     (await follows.json()) as { items: { channel_url: string }[] }
@@ -287,7 +308,38 @@ test("Recommended is loaded ahead and opens at once", async ({ page }) => {
     await held;
     await route.continue();
   });
-  await page.getByRole("button", { name: "Recommended", exact: true }).click();
+  await page.getByRole("tab", { name: "Recommended", exact: true }).click();
+  await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
+  release();
+});
+
+test("coming back to Recommended later shows the last page while it loads", async ({
+  page,
+}) => {
+  await page.clock.install();
+  await page.addInitScript(() =>
+    localStorage.setItem("horde.home.tab", "recommended")
+  );
+  await lookingOnYoutube(page);
+  await page.goto("/");
+  await expect(page.getByText(FOUND)).toBeVisible();
+  // Away for a while (watching something), long past the query cache's time.
+  // (An in-app navigation: a page load would start a new session.)
+  await page.evaluate(() => {
+    history.pushState({}, "", "/history");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  await expect(
+    page.getByRole("heading", { name: "History", level: 1 })
+  ).toBeVisible();
+  await page.clock.fastForward("20:00");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await page.route(/\/api\/discover\/feed\?/, async (route) => {
+    await held;
+    await route.continue();
+  });
+  await page.goBack();
   await expect(page.getByText(FOUND)).toBeVisible({ timeout: 1500 });
   release();
 });

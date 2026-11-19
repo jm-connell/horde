@@ -75,7 +75,6 @@ export default function WatchInfoPanels({
               target={ai.target}
               canSummarize={ai.canAiSummarize}
               canChat={ai.canAiChat}
-              showCosts={ai.showAiCosts}
               showToast={showToast}
             />
           </Suspense>

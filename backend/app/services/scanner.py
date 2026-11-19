@@ -217,7 +217,7 @@ def ingest_media_file(
 
         handle.update(engine="ffmpeg", detail=video.title)
         thumb_path = get_paths().thumbnails / f"{video.id}.jpg"
-        if grab_frame(path, thumb_path, cancel_event=cancel_event):
+        if grab_frame(path, thumb_path, cancel_event=cancel_event, low_priority=True):
             video.thumbnail_path = str(thumb_path)
             if video.id is not None:
                 write_list_thumbnail(video.id, thumb_path)

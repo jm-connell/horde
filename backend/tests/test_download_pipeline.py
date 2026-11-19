@@ -26,13 +26,21 @@ from app.models import (
     VideoAiMeta,
 )
 from app.services import activity, library, ytdlp_common
-from app.services.downloads import errors, jobs, postprocess, progress, runner
+from app.services.downloads import (
+    artifacts,
+    errors,
+    jobs,
+    postprocess,
+    progress,
+    runner,
+)
 from app.services.downloads.queue import download_queue
 from app.services.ffmpeg_progress import FfmpegCancelled
 from app.services.paths import STAGING_DIR_NAME
 from app.services.ytdlp_common import (
     ERROR_KIND_CANCELLED,
     ERROR_KIND_MEMBERS,
+    ERROR_KIND_POSTPROCESS,
     ERROR_KIND_UNKNOWN,
 )
 
@@ -49,10 +57,10 @@ def fake(init_db, monkeypatch):
     return f
 
 
-def _add_job(init_db, url: str = URL, **fields) -> int:
+def _add_job(init_db, url: str = URL, quality_preset: str = "best", **fields) -> int:
     with Session(init_db["engine"]) as s:
         job = DownloadJob(
-            url=url, quality_preset="best", status=JobStatus.queued, **fields
+            url=url, quality_preset=quality_preset, status=JobStatus.queued, **fields
         )
         s.add(job)
         s.commit()
@@ -150,6 +158,56 @@ def test_failed_format_falls_back_to_the_next_selector(init_db, fake):
     assert len(_videos(init_db)) == 1
 
 
+def test_a_height_cap_on_a_link_without_video_downloads_the_audio(init_db, fake):
+    """A default quality such as 1080p reaches audio-only links (podcasts,
+    SoundCloud) from places that cannot see the formats first. Every
+    height-capped selector matches nothing there, so the job falls back to
+    the selectors of "best" instead of failing."""
+    from app.services.ytdlp_formats import format_chain
+
+    url = "https://soundcloud.example.test/artist/track"
+    fake.add(
+        url,
+        make_info(
+            "track01",
+            "Track",
+            width=None,
+            height=None,
+            formats=[{"format_id": "mp3", "vcodec": "none", "acodec": "mp3"}],
+        ),
+    )
+
+    def no_video_formats(_path, _info):
+        if "height" in fake.downloads[-1]["opts"]["format"]:
+            raise RuntimeError("Requested format is not available")
+
+    fake.before_merge = no_video_formats
+    job_id = _add_job(init_db, url=url, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    tried = [d["opts"]["format"] for d in fake.downloads]
+    # Every capped selector first (the runner pins the link's own audio
+    # stream in them), then the first selector of "best", which has no cap.
+    capped = len(format_chain("1080p", "av1"))
+    assert len(tried) == capped + 1
+    assert all("height" in fmt for fmt in tried[:capped])
+    assert "height" not in tried[-1]
+    assert _job(init_db, job_id).status == JobStatus.completed
+
+
+def test_a_height_cap_never_falls_back_to_best_on_a_video(init_db, fake):
+    def nothing_under_the_cap(_path, _info):
+        if "height" in fake.downloads[-1]["opts"]["format"]:
+            raise RuntimeError("Requested format is not available")
+
+    fake.before_merge = nothing_under_the_cap
+    job_id = _add_job(init_db, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    assert all("height" in d["opts"]["format"] for d in fake.downloads)
+    assert _job(init_db, job_id).status == JobStatus.error
+
+
 def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     def always(_path, _info):
         raise RuntimeError("HTTP Error 500")
@@ -165,6 +223,44 @@ def test_every_selector_failing_ends_the_job_in_error(init_db, fake):
     assert progress.progress_store[job_id]["status"] == "error"
     assert _videos(init_db) == []
     assert not _staging(init_db, job_id).exists()
+
+
+@pytest.mark.parametrize("has_ffmpeg", [False, True])
+def test_unmerged_streams_without_ffmpeg_say_ffmpeg_is_missing(
+    init_db, fake, monkeypatch, has_ffmpeg
+):
+    # Without ffmpeg yt-dlp leaves the video and audio streams apart and
+    # reports no error, so the attempts end with no file at all.
+    fake.merge = False
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: has_ffmpeg)
+    job_id = _add_job(init_db)
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.error
+    if has_ffmpeg:
+        assert job.error_kind == ERROR_KIND_UNKNOWN
+        assert "Download produced no file" in job.error
+    else:
+        assert job.error_kind == ERROR_KIND_POSTPROCESS
+        assert "ffmpeg is not installed" in job.error
+        assert progress.progress_store[job_id]["error_kind"] == ERROR_KIND_POSTPROCESS
+    assert _videos(init_db) == []
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_yt_dlp_is_given_the_ffmpeg_horde_found(init_db, fake, monkeypatch):
+    # yt-dlp only searches PATH, and caches a failed lookup per path for the
+    # life of the process: an explicit path covers FFMPEG_BIN and a later install.
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: True)
+    monkeypatch.setattr(runner, "ffmpeg_bin", lambda: "/opt/ffmpeg/bin/ffmpeg")
+    run_job_inline(_add_job(init_db))
+    assert fake.downloads[0]["opts"]["ffmpeg_location"] == "/opt/ffmpeg/bin/ffmpeg"
+
+    monkeypatch.setattr(runner, "ffmpeg_available", lambda: False)
+    fake.downloads.clear()
+    run_job_inline(_add_job(init_db))
+    assert "ffmpeg_location" not in fake.downloads[0]["opts"]
 
 
 def test_postprocessor_error_after_the_merge_still_completes(init_db, fake):
@@ -245,6 +341,71 @@ def test_device_download_stays_out_of_the_library(init_db, fake):
     assert _videos(init_db) == []
     snap = progress.progress_store[job_id]
     assert (snap["status"], snap["destination"]) == ("completed", "device")
+
+
+@pytest.fixture
+def audio_file(fake, monkeypatch):
+    """yt-dlp writes one ``.m4a``; a file without video passes the playable
+    check only where the caller accepts audio."""
+    fake.audio_only = True
+    monkeypatch.setattr(
+        artifacts,
+        "validate_playable",
+        lambda _p, *, audio_ok=False: audio_ok,
+    )
+    return fake
+
+
+def test_audio_preset_downloads_to_the_device(init_db, audio_file):
+    job_id = _add_job(
+        init_db, quality_preset="audio", destination=DownloadDestination.device.value
+    )
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.completed, job.error
+    assert job.device_file_path.endswith(".m4a")
+    assert (init_db["downloads"] / job.device_file_path).is_file()
+
+
+def test_audio_preset_downloads_to_the_library_as_mp4(init_db, audio_file):
+    job_id = _add_job(init_db, quality_preset="audio")
+    run_job_inline(job_id)
+
+    job = _job(init_db, job_id)
+    assert job.status == JobStatus.completed, job.error
+    (video,) = _videos(init_db)
+    # The same MP4 container under the name the library scans and serves.
+    assert video.file_path.endswith(".mp4")
+    assert (init_db["downloads"] / video.file_path).is_file()
+    assert not _staging(init_db, job_id).exists()
+
+
+def test_a_link_without_video_downloads_its_audio_under_any_preset(init_db, audio_file):
+    url = "https://soundcloud.example.test/artist/song"
+    audio_file.add(
+        url,
+        make_info(
+            "song01",
+            "Song",
+            width=None,
+            height=None,
+            formats=[{"format_id": "m4a", "vcodec": "none", "acodec": "mp4a.40.2"}],
+        ),
+    )
+    job_id = _add_job(init_db, url=url, quality_preset="best")
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    assert len(_videos(init_db)) == 1
+
+
+def test_a_video_preset_still_rejects_a_file_without_video(init_db, audio_file):
+    job_id = _add_job(init_db, quality_preset="1080p")
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.error
+    assert _videos(init_db) == []
 
 
 def test_unplayable_download_ends_in_error_and_leaves_no_files(
@@ -374,6 +535,52 @@ def test_replacing_without_curation_takes_the_remote_copy(init_db, fake, add_vid
         "Remote description",
     )
     assert library.parse_tags(row.tags) == ["remote"]
+
+
+@pytest.mark.parametrize("explicit_id", [True, False], ids=["replace_id", "same_yt_id"])
+def test_a_download_of_another_source_never_replaces_a_video(
+    init_db, fake, add_video, explicit_id
+):
+    """An edited ``source_url`` must not let a download delete another file."""
+    video = add_video(
+        file_path="Alpha/Home movie.mp4", source_url=URL, title="Home movie"
+    )
+    assert video.youtube_id == YT  # derived from the edited source_url
+    old_media = init_db["downloads"] / video.file_path
+    old_media.parent.mkdir(parents=True, exist_ok=True)
+    old_media.write_bytes(b"home movie")
+    job_id = _add_job(init_db, replace_video_id=video.id if explicit_id else None)
+    run_job_inline(job_id)
+
+    assert _job(init_db, job_id).status == JobStatus.completed
+    assert old_media.read_bytes() == b"home movie"
+    rows = {row.id: row for row in _videos(init_db)}
+    assert len(rows) == 2
+    assert rows[video.id].file_path == "Alpha/Home movie.mp4"
+    assert _job(init_db, job_id).video_id != video.id
+
+
+def test_a_member_cannot_redownload_another_source_over_a_video(
+    init_db, fake, add_video, member_client
+):
+    """edit_metadata + download, without delete_videos, never deletes media."""
+    video = add_video(file_path="Alpha/Home movie.mp4", title="Home movie")
+    old_media = init_db["downloads"] / video.file_path
+    old_media.parent.mkdir(parents=True, exist_ok=True)
+    old_media.write_bytes(b"home movie")
+    assert member_client.delete(f"/api/videos/{video.id}").status_code == 403
+
+    patched = member_client.patch(f"/api/videos/{video.id}", json={"source_url": URL})
+    assert patched.status_code == 200
+    queued = member_client.post(f"/api/videos/{video.id}/redownload", json={})
+    assert queued.status_code == 200
+    with Session(init_db["engine"]) as s:
+        (job,) = s.exec(select(DownloadJob)).all()
+    run_job_inline(job.id)
+
+    assert _job(init_db, job.id).status == JobStatus.completed
+    assert old_media.read_bytes() == b"home movie"
+    assert len(_videos(init_db)) == 2
 
 
 def test_completed_snapshot_carries_quality_and_volume_warnings(
@@ -552,3 +759,22 @@ def test_finishing_a_restart_of_an_already_completed_job_keeps_its_quality(
     assert _job(init_db, job_id).quality_preset == "720p"
     assert _job(init_db, job_id).status == JobStatus.completed
     assert requeued == []
+
+
+@pytest.mark.parametrize(
+    ("info_id", "token", "same"),
+    [
+        ("pipeline001", "pipeline001", True),
+        ("pipeline001", "pipeline002", False),
+        ("pipeline-01", "pipeline_01", False),  # plain ids must match exactly
+        ("abc:def", "abc：def", True),  # yt-dlp's fullwidth rewrite
+        ("a/b", "a⧸b", True),
+        ("a/b", "a_b", True),
+        ("a/b", "a_c", False),
+    ],
+)
+def test_same_source_tolerates_ids_yt_dlp_rewrites_in_file_names(info_id, token, same):
+    from app.services.downloads.finalize import _same_source
+
+    video = Video(file_path=f"Chan/2024/Title [{token}].mp4", title="t")
+    assert _same_source(video, {"id": info_id}) is same

@@ -14,6 +14,7 @@ from ..auth import current_user, require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import ChannelRetention
+from ..parental_guard import NOT_ALLOWED, restricted_forbidden
 from ..response_schemas import ChannelRenameResult
 from ..schemas import (
     ChannelAutodownloadRead,
@@ -45,10 +46,12 @@ from ..services import (
     channel_avatar,
     channel_catalog,
     channel_retention,
+    feed_enrich,
     feed_meta_cache,
     follows,
     library,
     media_sidecars,
+    parental,
     subscriptions,
     trash,
     ytdlp_extract,
@@ -82,8 +85,10 @@ def list_channels(
     sort: str = Query("recent_download"),
     order: str = Query("desc"),
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ):
     rules = {r.channel: r for r in channel_retention.enabled_rows(session)}
+    allowed = user.allowed
     return [
         ChannelStat(
             channel=row.channel,
@@ -94,6 +99,7 @@ def list_channels(
             retention=_retention_summary(rules.get(row.channel)),
         )
         for row in library.channel_stats(session, sort=sort, order=order)
+        if allowed is None or allowed.allows_library(row.channel_url, row.channel)
     ]
 
 
@@ -155,10 +161,18 @@ def rename_channel(
     }
 
 
+def _require_allowed_channel(
+    user: AuthUser, channel_url: str | None, channel_name: str | None
+) -> None:
+    """Parental controls: a channel page outside the allowed list is refused."""
+    if user.allowed is not None and not user.allowed.allows(channel_url, channel_name):
+        raise CodedHTTPException(403, NOT_ALLOWED, "channel_not_allowed")
+
+
 @router.get(
     "/channels/search",
     response_model=ChannelSearchResponse,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(restricted_forbidden), Depends(ytdlp_slot)],
 )
 def search_channels(
     q: str = Query(..., min_length=1),
@@ -169,11 +183,47 @@ def search_channels(
 
 
 @router.get("/channels/catalog/status", response_model=ChannelCatalogStatusResponse)
-def channel_catalog_status(user: AuthUser = Depends(current_user)):
-    payload = channel_catalog.get_runtime_status()
+def channel_catalog_status(
+    channel_url: str | None = Query(
+        None, description="Also return this channel's catalog as channel_catalog."
+    ),
+    channel: str | None = Query(None, description="Channel name, for URL aliases."),
+    user: AuthUser = Depends(current_user),
+):
+    # Only matched against stored catalogs, never fetched: no URL safety check.
+    payload = channel_catalog.get_runtime_status(
+        (channel_url or "").strip() or None,
+        channel_name=(channel or "").strip() or None,
+    )
     if not user.is_admin:
         payload = member_view.catalog_status(payload)
+    if user.allowed is not None:
+        payload = _allowed_catalog_status(user.allowed, payload)
     return ChannelCatalogStatusResponse(**payload)
+
+
+def _allowed_catalog_status(
+    allowed: parental.AllowList, payload: dict[str, Any]
+) -> dict[str, Any]:
+    """Parental controls: only the allowed channels' catalogs."""
+
+    def ok(row: dict[str, Any] | None) -> bool:
+        return row is not None and allowed.allows(
+            row.get("channel_url"), row.get("channel_name")
+        )
+
+    current = allowed.allows(
+        payload.get("current_channel_url"), payload.get("current_channel")
+    )
+    return {
+        **payload,
+        "catalogs": [row for row in payload.get("catalogs") or [] if ok(row)],
+        "channel_catalog": payload.get("channel_catalog")
+        if ok(payload.get("channel_catalog"))
+        else None,
+        "current_channel": payload.get("current_channel") if current else None,
+        "current_channel_url": payload.get("current_channel_url") if current else None,
+    }
 
 
 @router.post(
@@ -259,7 +309,11 @@ def list_subscriptions(
 ) -> SubscriptionList:
     """Followed channels and every channel with automatic downloads or a cleanup
     rule, in one list (one page; ``next_cursor`` is always null)."""
-    return SubscriptionList(items=subscriptions.list_for(session, user.id))
+    items = subscriptions.list_for(session, user.id)
+    if user.allowed is not None:
+        allowed = user.allowed
+        items = [i for i in items if allowed.allows(i.channel_url, i.channel_name)]
+    return SubscriptionList(items=items)
 
 
 @router.get("/channels/autodownload", response_model=ChannelAutodownloadRead)
@@ -586,6 +640,7 @@ def channel_youtube_search(
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
+    _require_allowed_channel(user, channel_url, channel_name)
     empty = ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
@@ -623,7 +678,7 @@ def channel_youtube_search(
 @router.get(
     "/youtube/search",
     response_model=ChannelFeedPage,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(restricted_forbidden), Depends(ytdlp_slot)],
 )
 def youtube_video_search(
     q: str = Query(..., min_length=2),
@@ -694,6 +749,14 @@ def channel_catalog_search(
         channel_url=channel_url,
         global_search=global_search,
     )
+    if user.allowed is not None:
+        entries = [
+            e
+            for e in entries
+            if user.allowed.allows(
+                e.channel_url or channel_url, e.channel or channel_name
+            )
+        ]
     return ChannelFeedPage(
         channel=channel_name,
         channel_url=channel_url,
@@ -752,6 +815,7 @@ def channel_feed(
     channel_name = (channel or "").strip() or None
     if not channel_url and channel_name:
         channel_url = library.resolve_channel_url(session, channel_name)
+    _require_allowed_channel(user, channel_url, channel_name)
     if not channel_url:
         return ChannelFeedPage(
             channel=channel_name, channel_url=None, entries=[], has_more=False
@@ -962,92 +1026,12 @@ def channel_feed(
         e for e in entries if e.id and (e.like_count is None or e.dislike_count is None)
     ][:8]
     if missing_meta or missing_votes:
-        from ..services import return_youtube_dislike
-
-        def _enrich(
-            meta_rows: list[tuple[str, str]],
-            vote_ids: list[str],
-            catalog_url: str | None,
-        ) -> None:
-            from ..services import activity
-
-            total = len(meta_rows) + len(vote_ids)
-            with activity.track(
-                "feed_enrich",
-                "Enriching channel feed metadata",
-                reason="Channel feed opened with missing view counts, dates, or votes",
-                engine="yt-dlp",
-                detail=f"0/{total}" if total else None,
-                total=total or None,
-                done=0,
-            ) as handle:
-                updates: list[dict] = []
-                catalog_field_updates: list[dict] = []
-                done = 0
-                for yt_id, entry_url in meta_rows:
-                    try:
-                        preview = ytdlp_extract.extract_preview(entry_url)
-                    except Exception:
-                        logger.debug(
-                            "feed enrichment failed for %s", entry_url, exc_info=True
-                        )
-                        done += 1
-                        handle.update(done=done, detail=f"{done}/{total}")
-                        continue
-                    if preview.get("is_playlist"):
-                        done += 1
-                        handle.update(done=done, detail=f"{done}/{total}")
-                        continue
-                    row: dict = {"id": yt_id}
-                    if preview.get("view_count") is not None:
-                        row["view_count"] = preview["view_count"]
-                    if preview.get("thumbnail_url"):
-                        row["thumbnail_url"] = preview["thumbnail_url"]
-                    if preview.get("published_at") or preview.get("published_label"):
-                        row["published_at"] = preview.get("published_at")
-                        row["published_label"] = preview.get("published_label")
-                    if len(row) > 1:
-                        updates.append(row)
-                        catalog_field_updates.append(row)
-                    done += 1
-                    handle.update(done=done, detail=f"{done}/{total}")
-                for yt_id in vote_ids:
-                    votes = return_youtube_dislike.fetch_votes(yt_id)
-                    if votes:
-                        updates.append(
-                            {
-                                "id": yt_id,
-                                "like_count": votes["like_count"],
-                                "dislike_count": votes["dislike_count"],
-                            }
-                        )
-                    done += 1
-                    handle.update(done=done, detail=f"{done}/{total}")
-                if updates:
-                    feed_meta_cache.upsert_many(updates)
-                if catalog_url and catalog_field_updates:
-                    try:
-                        channel_catalog.update_catalog_video_fields(
-                            catalog_url, catalog_field_updates
-                        )
-                    except Exception:
-                        logger.warning(
-                            "could not store enriched feed metadata in the catalog for %s",
-                            catalog_url,
-                            exc_info=True,
-                        )
-
-        import threading
-
-        threading.Thread(
-            target=_enrich,
-            args=(
-                [(e.id, e.url) for e in missing_meta if e.id],
-                [e.id for e in missing_votes if e.id],
-                channel_url,
-            ),
-            daemon=True,
-        ).start()
+        feed_enrich.schedule(
+            [(e.id, e.url) for e in missing_meta if e.id],
+            [e.id for e in missing_votes if e.id],
+            channel_url,
+            channel_name or data.get("channel"),
+        )
 
     progress = channel_catalog.catalog_progress(session, channel_url)
     # Prefer live page flags when serving from catalog mid-index.

@@ -270,6 +270,16 @@ def has_audio(info: dict[str, Any]) -> bool:
     return False
 
 
+def accepts_audio_only(preset: str, info: dict[str, Any] | None) -> bool:
+    """True when a download may end as audio-only media rather than a video:
+    an audio preset, or a link that offers audio and no video (a podcast)."""
+    if is_audio_preset(preset):
+        return True
+    if not info:
+        return False
+    return not video_heights(info) and has_audio(info)
+
+
 def audio_abrs(info: dict[str, Any]) -> list[float]:
     """Collect known audio bitrates (kbps) from format metadata."""
     abrs: list[float] = []

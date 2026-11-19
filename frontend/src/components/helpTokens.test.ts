@@ -6,6 +6,7 @@ import { normalizeSettings } from "../hooks/settings/migrations";
 import type { HelpCatalog, HelpCatalogSetting } from "../types";
 import {
   cssBlocks,
+  findSetting,
   parseToken,
   personalPatch,
   readKey,
@@ -127,6 +128,45 @@ describe("resolveValue", () => {
     expect(resolveValue(byId("hold-speed"), "40").ok).toBe(false);
     expect(resolveValue(byId("accent-color"), "red").ok).toBe(false);
     expect(resolveValue(byId("reset"), "true").ok).toBe(false);
+  });
+});
+
+describe("findSetting", () => {
+  it("also finds a setting by its key or another casing of its id", () => {
+    // A live reply to "turn off autoplay" was [[set:autoplayRelated=false]].
+    expect(findSetting(catalog, "autoplayRelated")?.id).toBe(
+      "autoplay-related"
+    );
+    expect(findSetting(catalog, "Autoplay_Related")?.id).toBe(
+      "autoplay-related"
+    );
+    expect(findSetting(catalog, "no-such-setting")).toBeUndefined();
+  });
+
+  it("offers the change when a reply names the setting by its key", () => {
+    const { text, actions } = splitActions(
+      "Done. [[set:autoplayRelated=false]]"
+    );
+    expect(text).toBe("Done.");
+    expect(actions).toEqual([
+      { kind: "set", id: "autoplayRelated", value: "false" },
+    ]);
+    const action = actions[0];
+    if (action.kind !== "set") throw new Error(action.kind);
+    const setting = findSetting(catalog, action.id);
+    expect(setting?.id).toBe("autoplay-related");
+    expect(setting && resolveValue(setting, "false")).toMatchObject({
+      ok: true,
+      value: false,
+    });
+  });
+
+  it("never confuses two settings", () => {
+    for (const s of catalog.settings) {
+      for (const name of [s.id, s.key ?? s.id]) {
+        expect(findSetting(catalog, name)?.id, name).toBe(s.id);
+      }
+    }
   });
 });
 

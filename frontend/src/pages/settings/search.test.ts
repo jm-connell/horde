@@ -35,6 +35,9 @@ describe("settings search routing", () => {
     expect(firstMatchingAiPane("summary")).toBe("features");
     expect(firstMatchingAiPane("chapters")).toBe("features");
     expect(firstMatchingAiPane("on download")).toBe("features");
+    expect(firstMatchingTab("ai video chat")).toBe("ai");
+    expect(firstMatchingAiPane("ai video chat")).toBe("features");
+    expect(firstMatchingAiPane("video chat")).toBe("features");
     expect(firstMatchingAiPane("index missing")).toBe("jobs");
     expect(firstMatchingTab("index missing")).toBe("ai");
     expect(firstMatchingTab("direct youtube search")).toBe("library");

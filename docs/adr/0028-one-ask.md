@@ -1,6 +1,6 @@
 # 0028. One Ask: a single name, with the source on show and pickable
 
-Status: Accepted
+Status: Accepted; the source menu is superseded by [0030](0030-ask-routes-on-its-own.md)
 
 ## Context
 

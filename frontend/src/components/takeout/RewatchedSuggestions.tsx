@@ -9,6 +9,7 @@ import { watchHref } from "../../utils/watchHref";
 import { button } from "../buttons";
 import Collapse from "../Collapse";
 import { ChevronIcon } from "../icons";
+import { useSettings } from "../../hooks/useSettings";
 
 function lastWatched(iso: string): string {
   const d = new Date(iso);
@@ -26,6 +27,7 @@ export default function RewatchedSuggestions() {
   const [open, setOpen] = useState(false);
   const query = useRewatched();
   const { submitDownload } = useDownloads();
+  const [settings] = useSettings();
   const { showToast, showError } = useToast();
   const [queued, setQueued] = useState<Set<string>>(new Set());
   const items = query.data?.pages.flatMap((p) => p.items) ?? [];
@@ -34,7 +36,7 @@ export default function RewatchedSuggestions() {
   const download = (item: RewatchedVideo) => {
     const { entry } = item;
     setQueued((prev) => new Set(prev).add(entry.url));
-    submitDownload(entry.url, "1080p", {
+    submitDownload(entry.url, settings.defaultDownloadPreset, {
       title: entry.title ?? undefined,
       channel: entry.channel ?? "Unknown channel",
     })

@@ -34,6 +34,7 @@ GATES: dict[tuple[str, str], str] = {
             ("DELETE", "/api/users/{user_id}/sessions"),
             ("DELETE", "/api/users/{user_id}/sessions/{session_id}"),
             ("DELETE", "/api/users/{user_id}/two-factor"),
+            ("PUT", "/api/users/{user_id}/allowed-channels"),
             ("GET", "/api/users/invites"),
             ("POST", "/api/users/invites"),
             ("DELETE", "/api/users/invites/{invite_id}"),
@@ -139,6 +140,7 @@ GATES: dict[tuple[str, str], str] = {
             ("PATCH", "/api/videos/bulk-notes"),
             ("PATCH", "/api/videos/{video_id}"),
             ("POST", "/api/review/approve-suggested"),
+            ("POST", "/api/review/{video_id}/approve-from-youtube"),
             ("GET", "/api/review/{video_id}/youtube"),
             ("POST", "/api/videos/{video_id}/refresh-metadata"),
             ("POST", "/api/videos/{video_id}/comments/refresh"),
@@ -157,15 +159,9 @@ GATES: dict[tuple[str, str], str] = {
             ("POST", "/api/videos/{video_id}/ai/refresh-tags"),
             ("POST", "/api/videos/{video_id}/ai/summarize"),
             ("POST", "/api/videos/{video_id}/ai/chapters"),
-            ("GET", "/api/videos/{video_id}/ai/chat"),
-            ("DELETE", "/api/videos/{video_id}/ai/chat"),
-            ("POST", "/api/videos/{video_id}/ai/chat"),
             ("GET", "/api/preview/ai"),
             ("POST", "/api/preview/ai/summarize"),
             ("POST", "/api/preview/ai/chapters"),
-            ("GET", "/api/preview/ai/chat"),
-            ("DELETE", "/api/preview/ai/chat"),
-            ("POST", "/api/preview/ai/chat"),
             ("POST", "/api/ai/help/chat"),
             ("GET", "/api/ai/help/catalog"),
             ("GET", "/api/ai/help/info"),
@@ -173,6 +169,15 @@ GATES: dict[tuple[str, str], str] = {
             ("GET", "/api/ask/threads"),
             ("GET", "/api/ask/threads/{thread_id}"),
             ("DELETE", "/api/ask/threads/{thread_id}"),
+        ]
+    },
+    **{
+        (m, p): "manage_subscriptions"
+        for m, p in [
+            ("PUT", "/api/follows"),
+            ("DELETE", "/api/follows"),
+            # Also checks in the handler who may turn Ask on (follows.py).
+            ("POST", "/api/follows/ask-index"),
         ]
     },
     **{
@@ -212,6 +217,9 @@ CONDITIONAL = {
     ("PATCH", "/api/playlists/{playlist_id}/reorder"),
     ("POST", "/api/playlists/{playlist_id}/thumbnail"),
     ("POST", "/api/playlists/{playlist_id}/sync"),
+    # Your own Takeout: subscriptions chosen need manage_subscriptions; the
+    # private playlists it makes need nothing.
+    ("POST", "/api/takeout/apply"),
 }
 
 #: Mutations any signed-in user may make, on purpose. The compat and sprite
@@ -251,12 +259,9 @@ OPEN_MUTATIONS = {
     ("DELETE", "/api/auth/sessions/{session_id}"),
     ("POST", "/api/auth/avatar"),  # your own profile picture
     ("DELETE", "/api/auth/avatar"),
-    ("PUT", "/api/follows"),  # your own followed channels
-    ("PATCH", "/api/follows"),
-    ("DELETE", "/api/follows"),
-    # Your own YouTube history; apply follows channels and makes private playlists.
+    ("PATCH", "/api/follows"),  # how your own subscriptions show
+    # Your own YouTube history.
     ("POST", "/api/takeout/import"),
-    ("POST", "/api/takeout/apply"),
     ("DELETE", "/api/takeout/history"),
 }
 PUBLIC = {
@@ -331,6 +336,7 @@ def test_every_permission_is_used_and_documented():
         "offline_download",
         "edit_metadata",
         "manage_playlists",
+        "manage_subscriptions",
         "use_ai",
     } == permissions.DEFAULT_PERMISSIONS
 

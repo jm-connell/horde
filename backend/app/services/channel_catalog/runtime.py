@@ -281,7 +281,35 @@ def should_stop() -> bool:
     return _stop.is_set()
 
 
-def get_runtime_status() -> dict[str, Any]:
+def _status_item(c: ChannelCatalog, system_yt: bool) -> dict[str, Any]:
+    return {
+        "id": c.id,
+        "channel_url": c.channel_url,
+        "channel_name": c.channel_name,
+        "status": c.status.value if hasattr(c.status, "value") else str(c.status),
+        "indexed_count": c.indexed_count,
+        "channel_total": c.channel_total,
+        "complete": bool(c.complete),
+        "max_videos": c.max_videos,
+        "phase": c.phase,
+        "last_error": c.last_error,
+        "started_at": c.started_at.isoformat() if c.started_at else None,
+        "finished_at": c.finished_at.isoformat() if c.finished_at else None,
+        "updated_at": c.updated_at.isoformat() if c.updated_at else None,
+        "direct_youtube_search": c.direct_youtube_search,
+        "direct_youtube_search_effective": (
+            app_settings.direct_youtube_search_effective(
+                c.direct_youtube_search, system_yt
+            )
+        ),
+    }
+
+
+def get_runtime_status(
+    channel_url: str | None = None, *, channel_name: str | None = None
+) -> dict[str, Any]:
+    """Worker state and recent catalogs; ``channel_catalog`` is the row for
+    ``channel_url`` (matched like the indexer does: www, handle case, aliases)."""
     with _state_lock:
         runtime = dict(_runtime)
     with Session(get_engine()) as session:
@@ -299,37 +327,19 @@ def get_runtime_status() -> dict[str, Any]:
             .limit(40)
         ).all()
         system_yt = app_settings.direct_youtube_search_system()
-        items = [
-            {
-                "id": c.id,
-                "channel_url": c.channel_url,
-                "channel_name": c.channel_name,
-                "status": c.status.value
-                if hasattr(c.status, "value")
-                else str(c.status),
-                "indexed_count": c.indexed_count,
-                "channel_total": c.channel_total,
-                "complete": bool(c.complete),
-                "max_videos": c.max_videos,
-                "phase": c.phase,
-                "last_error": c.last_error,
-                "started_at": c.started_at.isoformat() if c.started_at else None,
-                "finished_at": c.finished_at.isoformat() if c.finished_at else None,
-                "updated_at": c.updated_at.isoformat() if c.updated_at else None,
-                "direct_youtube_search": c.direct_youtube_search,
-                "direct_youtube_search_effective": (
-                    app_settings.direct_youtube_search_effective(
-                        c.direct_youtube_search, system_yt
-                    )
-                ),
-            }
-            for c in catalogs
-        ]
+        items = [_status_item(c, system_yt) for c in catalogs]
+        match = (
+            get_catalog_by_url(session, channel_url, channel_name=channel_name)
+            if channel_url
+            else None
+        )
+        channel_catalog = _status_item(match, system_yt) if match else None
     return {
         **runtime,
         "enabled": _enabled(),
         "queue_depth": int(queued or 0),
         "catalogs": items,
+        "channel_catalog": channel_catalog,
         "direct_youtube_search": system_yt,
     }
 
@@ -657,10 +667,15 @@ def refresh_stale_catalogs() -> None:
 
 
 def _next_queued(session: Session) -> ChannelCatalog | None:
+    """Channels never indexed first, so one just asked for does not wait behind
+    the periodic refresh of every catalog; then oldest request first."""
     return session.exec(
         select(ChannelCatalog)
         .where(ChannelCatalog.status == ChannelCatalogStatus.queued)
-        .order_by(col(ChannelCatalog.updated_at).asc())
+        .order_by(
+            col(ChannelCatalog.finished_at).is_not(None),
+            col(ChannelCatalog.updated_at).asc(),
+        )
         .limit(1)
     ).first()
 

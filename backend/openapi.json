@@ -1884,6 +1884,59 @@
         "title": "AiTestRequest",
         "type": "object"
       },
+      "AllowedChannelRead": {
+        "description": "A channel a restricted member may watch (parental controls).",
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "AllowedChannelRead",
+        "type": "object"
+      },
+      "AllowedChannelsWrite": {
+        "description": "The channels a member may watch; ``null`` lifts the restriction.",
+        "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AllowedChannelRead"
+                },
+                "maxItems": 500,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          }
+        },
+        "title": "AllowedChannelsWrite",
+        "type": "object"
+      },
       "AppSettingsRead": {
         "properties": {
           "ai": {
@@ -1939,6 +1992,21 @@
             "default": 24,
             "title": "Metadata Sync Interval Hours",
             "type": "integer"
+          },
+          "new_channel_subscribe": {
+            "default": "always",
+            "enum": [
+              "always",
+              "ask",
+              "never"
+            ],
+            "title": "New Channel Subscribe",
+            "type": "string"
+          },
+          "new_channel_subscribe_members": {
+            "default": true,
+            "title": "New Channel Subscribe Members",
+            "type": "boolean"
           },
           "progress_expiry_days": {
             "title": "Progress Expiry Days",
@@ -2097,6 +2165,33 @@
               }
             ],
             "title": "Metadata Sync Interval Hours"
+          },
+          "new_channel_subscribe": {
+            "anyOf": [
+              {
+                "enum": [
+                  "always",
+                  "ask",
+                  "never"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Channel Subscribe"
+          },
+          "new_channel_subscribe_members": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "New Channel Subscribe Members"
           },
           "progress_expiry_days": {
             "anyOf": [
@@ -2400,8 +2495,23 @@
         "type": "object"
       },
       "AskChatRequest": {
-        "description": "One turn of Ask: answered from Horde (docs, settings, the user's data) or from channels.",
+        "description": "One turn of Ask: answered from Horde (docs, settings, the user's data), channels or a video.",
         "properties": {
+          "answer_from": {
+            "anyOf": [
+              {
+                "enum": [
+                  "horde",
+                  "video"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Answer From"
+          },
           "channel_ids": {
             "items": {
               "type": "integer"
@@ -2419,11 +2529,6 @@
             ],
             "title": "Data Consent",
             "type": "string"
-          },
-          "horde_only": {
-            "default": false,
-            "title": "Horde Only",
-            "type": "boolean"
           },
           "message": {
             "maxLength": 4000,
@@ -2454,6 +2559,16 @@
             ],
             "title": "Page Channel Id"
           },
+          "page_video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskVideoRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "page_video_id": {
             "anyOf": [
               {
@@ -2476,6 +2591,16 @@
               }
             ],
             "title": "Thread Id"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AskVideoRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2743,6 +2868,36 @@
         "title": "AskThreadSummary",
         "type": "object"
       },
+      "AskVideoRef": {
+        "description": "A video Ask can answer from: a library video, or a stream by its URL.",
+        "properties": {
+          "library_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Id"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "maxLength": 4000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          }
+        },
+        "title": "AskVideoRef",
+        "type": "object"
+      },
       "AuthLoginResult": {
         "properties": {
           "user": {
@@ -2791,6 +2946,20 @@
       "AuthUserRead": {
         "description": "The signed-in user. ``permissions`` is effective: all of them for an admin.",
         "properties": {
+          "allowed_channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AllowedChannelRead"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Channels"
+          },
           "avatar_version": {
             "anyOf": [
               {
@@ -3525,6 +3694,16 @@
             },
             "title": "Catalogs",
             "type": "array"
+          },
+          "channel_catalog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ChannelCatalogStatusItem"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "current_channel": {
             "anyOf": [
@@ -4828,6 +5007,238 @@
         "title": "CompatSummaryRead",
         "type": "object"
       },
+      "ContinueStreamRead": {
+        "description": "A stream left part-way: ``duration`` is its length, when known.",
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
+          "dislike_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dislike Count"
+          },
+          "duration": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "in_library": {
+            "default": false,
+            "title": "In Library",
+            "type": "boolean"
+          },
+          "library_height_px": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Library Height Px"
+          },
+          "like_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Like Count"
+          },
+          "live_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Live Status"
+          },
+          "match_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SearchMatchReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Height"
+          },
+          "position_sec": {
+            "title": "Position Sec",
+            "type": "number"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "published_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published Label"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          },
+          "video_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Id"
+          },
+          "view_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "View Count"
+          },
+          "youtube_watched": {
+            "default": false,
+            "title": "Youtube Watched",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "url",
+          "position_sec"
+        ],
+        "title": "ContinueStreamRead",
+        "type": "object"
+      },
+      "ContinueStreamsRead": {
+        "description": "Streamed (not downloaded) videos to carry on with, newest first.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ContinueStreamRead"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ContinueStreamsRead",
+        "type": "object"
+      },
       "ContinueYoutubeRead": {
         "description": "Videos watched on YouTube lately (from the import), for Continue watching.",
         "properties": {
@@ -5553,6 +5964,16 @@
           "status": {
             "$ref": "#/components/schemas/JobStatus"
           },
+          "subscribe_prompt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SubscribePrompt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "superseded": {
             "default": false,
             "title": "Superseded",
@@ -6219,6 +6640,42 @@
           }
         },
         "title": "FollowListResponse",
+        "type": "object"
+      },
+      "FollowPreviewRead": {
+        "description": "A channel looked up by link or ``@handle`` before subscribing to it.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "FollowPreviewRead",
         "type": "object"
       },
       "FollowRequest": {
@@ -11674,28 +12131,6 @@
         "title": "StreamAiAction",
         "type": "object"
       },
-      "StreamAiChatRequest": {
-        "properties": {
-          "message": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          },
-          "url": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Url",
-            "type": "string"
-          }
-        },
-        "required": [
-          "url",
-          "message"
-        ],
-        "title": "StreamAiChatRequest",
-        "type": "object"
-      },
       "StreamAiRead": {
         "description": "AI results saved for a streamed (not downloaded) video.",
         "properties": {
@@ -11874,6 +12309,11 @@
               }
             ],
             "title": "Preview Height"
+          },
+          "resume_sec": {
+            "default": 0.0,
+            "title": "Resume Sec",
+            "type": "number"
           },
           "source_url": {
             "anyOf": [
@@ -12137,6 +12577,102 @@
         "title": "Strictness",
         "type": "object"
       },
+      "SubscribeAskIndexRequest": {
+        "description": "Turn Ask indexing on for a channel the caller subscribes to.",
+        "properties": {
+          "channel_url": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "confirm_large": {
+            "default": false,
+            "title": "Confirm Large",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribeAskIndexRequest",
+        "type": "object"
+      },
+      "SubscribeAskIndexResult": {
+        "properties": {
+          "already": {
+            "default": false,
+            "title": "Already",
+            "type": "boolean"
+          },
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          },
+          "indexed": {
+            "default": false,
+            "title": "Indexed",
+            "type": "boolean"
+          },
+          "large": {
+            "default": false,
+            "title": "Large",
+            "type": "boolean"
+          },
+          "video_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Count"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribeAskIndexResult",
+        "type": "object"
+      },
+      "SubscribePrompt": {
+        "description": "A finished download from a channel its requester does not subscribe to.",
+        "properties": {
+          "channel_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Name"
+          },
+          "channel_url": {
+            "title": "Channel Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_url"
+        ],
+        "title": "SubscribePrompt",
+        "type": "object"
+      },
       "SubscriptionList": {
         "properties": {
           "items": {
@@ -12222,6 +12758,17 @@
                 "type": "null"
               }
             ]
+          },
+          "subscriber_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscriber Count"
           },
           "video_count": {
             "default": 0,
@@ -13902,6 +14449,20 @@
       },
       "UserRead": {
         "properties": {
+          "allowed_channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AllowedChannelRead"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Allowed Channels"
+          },
           "avatar_version": {
             "anyOf": [
               {
@@ -14038,103 +14599,6 @@
           }
         },
         "title": "UserUpdate",
-        "type": "object"
-      },
-      "VideoAiChatHistory": {
-        "properties": {
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/VideoAiChatMessageRead"
-            },
-            "title": "Messages",
-            "type": "array"
-          }
-        },
-        "required": [
-          "messages"
-        ],
-        "title": "VideoAiChatHistory",
-        "type": "object"
-      },
-      "VideoAiChatMessageRead": {
-        "properties": {
-          "content": {
-            "title": "Content",
-            "type": "string"
-          },
-          "cost": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cost"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
-          },
-          "id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Id"
-          },
-          "model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Model"
-          },
-          "role": {
-            "enum": [
-              "user",
-              "assistant"
-            ],
-            "title": "Role",
-            "type": "string"
-          }
-        },
-        "required": [
-          "role",
-          "content"
-        ],
-        "title": "VideoAiChatMessageRead",
-        "type": "object"
-      },
-      "VideoAiChatRequest": {
-        "properties": {
-          "message": {
-            "maxLength": 4000,
-            "minLength": 1,
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "message"
-        ],
-        "title": "VideoAiChatRequest",
         "type": "object"
       },
       "VideoCommentsRead": {
@@ -16244,7 +16708,7 @@
     },
     "/api/ask/chat": {
       "post": {
-        "description": "One Ask turn (SSE): from channels when the question names one, else from Horde.",
+        "description": "One Ask turn (SSE): from the channels a question names, the video the\nchat is about, the page's channel, else Horde (``ask_chat.pick_route``).",
         "operationId": "chat_api_ask_chat_post",
         "requestBody": {
           "content": {
@@ -18407,6 +18871,44 @@
     "/api/channels/catalog/status": {
       "get": {
         "operationId": "channel_catalog_status_api_channels_catalog_status_get",
+        "parameters": [
+          {
+            "description": "Also return this channel's catalog as channel_catalog.",
+            "in": "query",
+            "name": "channel_url",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Also return this channel's catalog as channel_catalog.",
+              "title": "Channel Url"
+            }
+          },
+          {
+            "description": "Channel name, for URL aliases.",
+            "in": "query",
+            "name": "channel",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Channel name, for URL aliases.",
+              "title": "Channel"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -20532,6 +21034,7 @@
     },
     "/api/downloads/preview": {
       "get": {
+        "description": "Read a link's title, presets and sizes.\n\n``background=true`` marks a lookup nobody is waiting on (a feed card's\nresolution badge): it queues behind the videos people are opening.",
         "operationId": "preview_download_api_downloads_preview_get",
         "parameters": [
           {
@@ -20541,6 +21044,16 @@
             "schema": {
               "title": "Url",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "background",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Background",
+              "type": "boolean"
             }
           }
         ],
@@ -21352,6 +21865,113 @@
         ]
       }
     },
+    "/api/follows/ask-index": {
+      "post": {
+        "description": "Turn Ask indexing on for a channel the caller subscribes to.\n\nUp to ``ASK_INDEX_AUTO_MAX`` uploads it starts by itself; a larger channel\nanswers ``large`` and starts only with ``confirm_large``, which needs\n``manage_ask``. Members without ``manage_ask`` may do this while the\nadministrator includes their new channels (``follows.may_index_on_subscribe``).\nReads the channel's upload count from YouTube.",
+        "operationId": "index_subscribed_channel_api_follows_ask_index_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubscribeAskIndexRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscribeAskIndexResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Index Subscribed Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
+    "/api/follows/preview": {
+      "get": {
+        "description": "Look a channel up by link or ``@handle`` before subscribing: its name and\npicture, read from its YouTube page (404 ``channel_not_found`` when there is\nno such page, 502 ``youtube_unavailable`` when YouTube does not answer).",
+        "operationId": "preview_channel_api_follows_preview_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "channel",
+            "required": true,
+            "schema": {
+              "maxLength": 500,
+              "minLength": 1,
+              "title": "Channel",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowPreviewRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Preview Channel",
+        "tags": [
+          "follows"
+        ]
+      }
+    },
     "/api/fonts": {
       "get": {
         "operationId": "list_fonts_api_fonts_get",
@@ -21596,6 +22216,48 @@
           }
         },
         "summary": "Health"
+      }
+    },
+    "/api/history/continue-streams": {
+      "get": {
+        "description": "Videos the user streamed without downloading and left part-way, within\nthe Continue watching window.",
+        "operationId": "continue_streams_api_history_continue_streams_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContinueStreamsRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Continue Streams",
+        "tags": [
+          "history"
+        ]
       }
     },
     "/api/history/continue-youtube": {
@@ -23810,160 +24472,6 @@
         ]
       }
     },
-    "/api/preview/ai/chat": {
-      "delete": {
-        "operationId": "delete_stream_chat_api_preview_ai_chat_delete",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "url",
-            "required": true,
-            "schema": {
-              "maxLength": 4000,
-              "title": "Url",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Delete Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      },
-      "get": {
-        "operationId": "get_stream_chat_api_preview_ai_chat_get",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "url",
-            "required": true,
-            "schema": {
-              "maxLength": 4000,
-              "title": "Url",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoAiChatHistory"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Get Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      },
-      "post": {
-        "operationId": "post_stream_chat_api_preview_ai_chat_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/StreamAiChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Server-sent events, one JSON object per event"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Post Stream Chat",
-        "tags": [
-          "preview"
-        ]
-      }
-    },
     "/api/preview/ai/summarize": {
       "post": {
         "operationId": "summarize_stream_api_preview_ai_summarize_post",
@@ -24829,6 +25337,59 @@
         ]
       }
     },
+    "/api/review/{video_id}/approve-from-youtube": {
+      "post": {
+        "description": "Look this file up on YouTube by the id it is known by and approve it with\nwhat YouTube says, filling only blanks (a title that is still the file name\ncounts as blank). The file stays where it is. The Import page calls this\nonce per file for a bulk lookup.",
+        "operationId": "approve_from_youtube_api_review__video_id__approve_from_youtube_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "video_id",
+            "required": true,
+            "schema": {
+              "title": "Video Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApproveSuggestedResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Approve From Youtube",
+        "tags": [
+          "review"
+        ]
+      }
+    },
     "/api/review/{video_id}/skip": {
       "post": {
         "description": "Dismiss a review item without requiring a channel. The file stays in the\nlibrary keeping its filename-derived title.",
@@ -25675,7 +26236,7 @@
     },
     "/api/takeout/apply": {
       "post": {
-        "description": "Follow the chosen subscriptions and import the chosen playlists.",
+        "description": "Follow the chosen subscriptions and import the chosen playlists.\n\nWithout ``manage_subscriptions`` chosen subscriptions are refused (403).",
         "operationId": "apply_takeout_api_takeout_apply_post",
         "requestBody": {
           "content": {
@@ -26747,6 +27308,69 @@
         ]
       }
     },
+    "/api/users/{user_id}/allowed-channels": {
+      "put": {
+        "description": "Parental controls: limit a member to these channels (``null`` lifts it).\n\nA restricted member sees and plays only these channels' videos, cannot\nsearch YouTube, and keeps only the permissions that stay inside the list.\nAn administrator cannot be restricted.",
+        "operationId": "set_allowed_channels_api_users__user_id__allowed_channels_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AllowedChannelsWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation error"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Set Allowed Channels",
+        "tags": [
+          "users"
+        ]
+      }
+    },
     "/api/users/{user_id}/sessions": {
       "delete": {
         "description": "Sign a user out of every device. For another account this needs a recent password check.",
@@ -27562,169 +28186,6 @@
           }
         },
         "summary": "Generate Video Chapters",
-        "tags": [
-          "videos"
-        ]
-      }
-    },
-    "/api/videos/{video_id}/ai/chat": {
-      "delete": {
-        "operationId": "delete_video_ai_chat_api_videos__video_id__ai_chat_delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/OkResponse"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Delete Video Ai Chat",
-        "tags": [
-          "videos"
-        ]
-      },
-      "get": {
-        "operationId": "get_video_ai_chat_api_videos__video_id__ai_chat_get",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VideoAiChatHistory"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Get Video Ai Chat",
-        "tags": [
-          "videos"
-        ]
-      },
-      "post": {
-        "operationId": "post_video_ai_chat_api_videos__video_id__ai_chat_post",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "video_id",
-            "required": true,
-            "schema": {
-              "title": "Video Id",
-              "type": "integer"
-            }
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/VideoAiChatRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "content": {
-              "text/event-stream": {
-                "schema": {
-                  "format": "binary",
-                  "type": "string"
-                }
-              }
-            },
-            "description": "Server-sent events, one JSON object per event"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Validation error"
-          },
-          "default": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponse"
-                }
-              }
-            },
-            "description": "Error"
-          }
-        },
-        "summary": "Post Video Ai Chat",
         "tags": [
           "videos"
         ]

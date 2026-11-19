@@ -11,7 +11,7 @@ body:
     attributes:
       label: Horde version
       description: Settings → System → Updates, or `curl -s http://<host>:8686/api/health` while signed in. "Report a bug or idea" in Horde's footer fills this in.
-      placeholder: "1.2.2"
+      placeholder: "1.4.0"
     validations:
       required: true
   - type: dropdown
@@ -19,7 +19,7 @@ body:
     attributes:
       label: How is Horde installed?
       options:
-        - Docker Compose, published image (HORDE_IMAGE)
+        - Docker Compose, published image (default)
         - Docker Compose, built from source
         - TrueNAS with Dockge
         - Unraid

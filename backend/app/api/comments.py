@@ -13,6 +13,7 @@ from ..auth import current_user, require_permission
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
 from ..models import Video, VideoComment, VideoCommentState, require_id
+from ..parental_guard import stream_guard, video_guard
 from ..schemas import CommentRead, LiveCommentsRead, VideoCommentsRead
 from ..services import comments as comments_svc
 from ..services.comments import fetch, live, store
@@ -22,7 +23,9 @@ from ..services.limits import ytdlp_slot
 from ..services.ytdlp_common import EXTRACT_PRIORITY_INTERACTIVE
 
 router = APIRouter(
-    prefix="/api", tags=["comments"], dependencies=[Depends(current_user)]
+    prefix="/api",
+    tags=["comments"],
+    dependencies=[Depends(current_user), Depends(video_guard)],
 )
 
 _YT_ID = re.compile(r"[A-Za-z0-9_-]{11}")
@@ -149,7 +152,7 @@ def _raise_for_failure(result: fetch.FetchResult) -> None:
 @router.get(
     "/comments/youtube/{youtube_id}",
     response_model=LiveCommentsRead,
-    dependencies=[Depends(ytdlp_slot)],
+    dependencies=[Depends(stream_guard), Depends(ytdlp_slot)],
 )
 def live_comments(youtube_id: str, limit: int = fetch.TOP_COMMENTS):
     """The top ``limit`` comments of any YouTube video, read from YouTube now.

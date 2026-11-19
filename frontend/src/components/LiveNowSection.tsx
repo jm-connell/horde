@@ -8,7 +8,7 @@ import { joinDotList } from "../utils";
 const VISIBLE_ROWS = 5;
 
 /**
- * Followed channels that are live, in the library sidebar. Renders nothing
+ * Subscribed channels that are live, in the library sidebar. Renders nothing
  * unless the setting is on and at least one stream is live.
  */
 export default function LiveNowSection() {

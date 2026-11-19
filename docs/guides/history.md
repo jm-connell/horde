@@ -50,6 +50,8 @@ Beside them, a strip shows each of the last 30 days. Click the band (or press En
 
 Every position save (about every 5 seconds while playing) adds how far the position moved since the previous save, but only when it moved forward by no more than twice the time that passed plus 3 seconds. Playing counts (at 2× speed it counts the video's seconds, so an hour of a 2× video is an hour); seeking forward or back does not, and neither does a seek after a pause (only the last 75 seconds of a gap between saves count as time that could have played). The last stretch after 90%, where the player saves 0, is counted when the video ends. A device that was offline sends its newest position per video with the time it was reached; the whole stretch counts, in the hour it was reached, unless you saved something newer elsewhere first.
 
+Videos you play without downloading (**Streamed**) count the same way, from the position the player reports about every 30 seconds. The first report comes once a stream has played 20 seconds; those opening seconds count when it started near the beginning, not when you jumped into the middle. Streamed videos count toward videos started and finished and toward their channel, not toward top tags (they have none). When you download a video you streamed, its time moves onto the library video, so it counts as one video. Streaming is timed from the first release after Horde 1.3.1; earlier streaming still counts toward **Videos started**, not toward watch time.
+
 The time is kept per hour in UTC (table `user_watch_time`) and the page asks for it in your browser's time zone, so "today", streaks and the weekday × hour grid follow your clock, not the server's. In zones whose offset is not a whole number of hours (India, Nepal, parts of Australia), each hour of watching is filed under the local hour it starts in, so the grid and the day boundary are off by that half or quarter hour.
 
 !!! note "Starts counting with this version"
@@ -67,8 +69,8 @@ If you [imported your YouTube history](youtube-history.md), **Include YouTube in
 
 ### Where it appears
 
-- **Library home** — a **Continue watching** row above the main grid
-- Not shown on the **Recommended** tab
+- **Library home** — a **Continue watching** row above the main grid, with library videos only
+- **Recommended** tab — the same row, followed by what is not in the library: videos you streamed without downloading and left part-way, then videos watched on YouTube lately
 - Not shown on **channel** pages
 
 ### Who qualifies
@@ -77,7 +79,9 @@ Roughly: videos with a saved resume position for you that still look in-progress
 
 Clicking a card opens `/watch/:id` and seeks to the saved position.
 
-After those come up to five videos you watched on YouTube inside the same window, newest first, if you [imported your YouTube history](youtube-history.md) (marked **Watched on YouTube**; Takeout does not say how far one played, so any recent view counts). Downloaded videos follow the library's rules instead. Dismissing one hides it on this device. API: `GET /api/history/continue-youtube`.
+On the **Recommended** tab, the library's videos are followed by videos you streamed without downloading, by the same rule (at least 30 seconds in, not past 90%, inside the window; newest first, with a progress bar). Clicking one opens the stream where you left it. A stream you download since follows the library's rules instead. API: `GET /api/history/continue-streams`.
+
+After those, also on **Recommended** only, come up to five videos you watched on YouTube inside the same window, newest first, if you [imported your YouTube history](youtube-history.md) (marked **Watched on YouTube**; Takeout does not say how far one played, so any recent view counts). Downloaded videos follow the library's rules instead. Dismissing a stream or a YouTube view hides it on this device (resuming a dismissed stream brings it back). API: `GET /api/history/continue-youtube`.
 
 ## How progress works
 
@@ -87,7 +91,7 @@ After those come up to five videos you watched on YouTube inside the same window
 | Save cadence | About every **5 seconds** while playing; the position you paused or sought to within 5 seconds; at once when the page is hidden or closed |
 | Finished | At **≥ 90%** of duration, progress is **cleared** (next open starts at 0) and the time is recorded as `finished_at` (watching it again clears it); a channel's [retention rule](channels.md#retention) uses it |
 | History stamp | `last_watched_at` updates as you watch |
-| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device |
+| Late saves | A position queued on a device while the server was unreachable is sent with the time it was reached, and only applies if you have saved nothing newer since on any device. History stores it as at most one day old (an older time counts as one day ago), so a late save cannot make a channel's [retention](channels.md#retention) "watched" rule remove a video early |
 
 Full watch-page behavior (related, autoplay, stream handoff) is in [Watching](watching.md).
 

@@ -18,7 +18,7 @@ Horde is built from source on the user's host (`build: .` in Compose) and update
 | `prerelease` | The same, counting `-rc` tags |
 | `main` | Fast-forward of the current branch, every commit |
 
-Until a first release tag exists the script follows `main`. It never goes backwards by accident: if the checkout is ahead of the newest release it stops, unless `HORDE_ALLOW_DOWNGRADE=1`. Installs that use the published image pin or follow a tag in `HORDE_IMAGE` instead. The in-app update notice compares the baked version with the latest GitHub release.
+Until a first release tag exists the script follows `main`. It never goes backwards by accident: if the checkout is ahead of the newest release it stops, unless `HORDE_ALLOW_DOWNGRADE=1`. Installs that use the published image pin or follow a tag in `HORDE_IMAGE` instead. (Since [0031](0031-published-image-by-default.md) the published image is the default, `update.sh` pulls the image of the release it checks out, and "backwards" is judged against the running image, not the checkout.) The in-app update notice compares the baked version with the latest GitHub release.
 
 **Update with a safety net.** `update.sh` never stashes or rewrites history and refuses to recreate with different host volumes. It builds an image tagged `horde:latest` and `horde:<shortsha>` (keeping the previous one), takes a consistent, integrity-checked **database backup** with SQLite's online backup just before recreating, records the previous commit, previous image id, backup path and Alembic revision in `.local/update-state.env`, recreates the containers and polls `GET /api/health`.
 

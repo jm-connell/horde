@@ -6,6 +6,8 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 
 ## Quality presets
 
+Every download you start uses your **Default quality** (Settings → Library → Downloads, or the setup wizard): this page, the watch page, the one-click download buttons, playlist subscriptions, channel pages and Ask. Change it per download in the **Quality** menu. A cap means "up to", and a link with no video (a podcast) downloads its audio. Channel [auto-download](channels.md#autodownload) uses its own per-channel quality.
+
 | Preset | Meaning |
 |--------|---------|
 | **best** | Highest resolution **AV1** (then other codecs) + AAC when YouTube offers it |
@@ -18,6 +20,8 @@ Horde does not download **YouTube Shorts** (Shorts URLs, `#shorts` titles, or su
 | **audio-160** / **128** / **64** | Audio-only capped at that bitrate (kbps) |
 
 After metadata loads, the UI may limit the preset list to formats actually available for that URL and show approximate sizes when known. Audio bitrate caps that are at or above the source’s best stream are omitted (use **Audio (best)** instead). Downloads pick the **original-language** audio track when YouTube also offers autodubs (same scoring as stream preview). Existing library files are not rewritten.
+
+An audio download saved **to this device** keeps its audio file (usually `.m4a`). One saved **to the library** is stored as an audio-only `.mp4`, which plays in the normal player with the thumbnail as its picture and has no seek-preview sprites.
 
 When you queue with **Best available** (the channel download panel default), Horde still fetches the highest source tier, but the download queue stores and shows that **actual resolution** (for example **4K**) instead of the “best” label. Finished cards use the probed file height, never **Best available**.
 
@@ -66,7 +70,7 @@ The same setting applies to one-off copies in the other modes. Devices that can'
 
 - **YouTube videos:** Horde first downloads **YouTube's own avc1 stream** after the main file finishes. That is an extra download, not a conversion, so there is no quality loss and almost no server work. If YouTube has no H.264 for the video, it falls back to encoding locally.
 - **Everything else** (imports, non-YouTube sites, existing library videos): encoded locally from the original with ffmpeg.
-- Sidecars are counted in [storage stats](../ops/storage-layout.md#h264-sidecars), deleted with the video, and moved with it when you rename a manual import. Re-downloading or changing the resolution of a video removes its old copy.
+- Sidecars are counted in [storage stats](../ops/storage-layout.md#h264-sidecars), deleted with the video, and moved with it when you rename a manual import. Re-downloading or changing the resolution of a video removes its old copy (a download of a different source is added as a new video instead).
 - A video that is already 8-bit H.264 within the copy resolution never gets a copy. Audio-only files never do either.
 
 Settings → Library shows the library size, how many copies exist, and a **Create N copies** button that backfills existing videos (with an estimated size and a cancel button). Copies of existing videos use YouTube's H.264 when available, otherwise a local encode.
@@ -251,4 +255,4 @@ See [Troubleshooting — error kinds](../ops/troubleshooting.md#download-error_k
 
 ## Upgrading: file and folder names
 
-New downloads use byte-limited names and a folder that matches the channel Horde stores for the video (see [storage layout](../ops/storage-layout.md)). Existing files are never renamed. For channels with a very long name (more than 80 bytes), or whose names end in a dot or space, new videos can therefore land in a different folder than older ones from the same channel. Re-downloading a video whose channel you edited also moves it to the edited channel's folder.
+New downloads use byte-limited names and a folder that matches the channel Horde stores for the video (see [storage layout](../ops/storage-layout.md)). Existing files are never renamed. For channels with a very long name (more than 80 bytes), or whose names start or end with a dot or space, new videos can therefore land in a different folder than older ones from the same channel. Re-downloading a video whose channel you edited also moves it to the edited channel's folder.

@@ -95,7 +95,7 @@ export default function ChannelHeader({
             <AskChannelButton channel={channel} channelUrl={channelUrl} />
           )}
           {youtube && (
-            <FollowButton channel={channel} channelUrl={channelUrl} />
+            <SubscribeButton channel={channel} channelUrl={channelUrl} />
           )}
           {youtube && channelUrl && can("download") && (
             <Link
@@ -187,20 +187,23 @@ function ChipButton({ chip, onClick }: { chip: Chip; onClick: () => void }) {
 const actionButton =
   "ui-panel ui-interactive inline-flex h-9 items-center justify-center rounded-lg border border-ink-700 bg-ink-900 px-3 text-sm text-gray-200 transition-colors hover:border-accent hover:text-accent disabled:opacity-50";
 
-function FollowButton({
+function SubscribeButton({
   channel,
   channelUrl,
 }: {
   channel: string;
   channelUrl: string | null;
 }) {
+  const { can } = useAuth();
+  const allowed = can("manage_subscriptions");
   const follow = useChannelFollow(channelUrl, channel);
   const [hover, setHover] = useState(false);
   return (
     <button
       type="button"
       aria-pressed={follow.followed}
-      disabled={follow.pending}
+      disabled={follow.pending || !allowed}
+      title={allowed ? undefined : "Changing subscriptions needs a permission"}
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       onClick={follow.toggle}
@@ -210,7 +213,11 @@ function FollowButton({
           : "inline-flex h-9 items-center justify-center rounded-lg bg-accent px-4 text-sm font-medium text-on-accent transition-colors hover:bg-accent-soft disabled:opacity-50"
       }
     >
-      {follow.followed ? (hover ? "Unfollow" : "Following") : "Follow"}
+      {follow.followed
+        ? hover && allowed
+          ? "Unsubscribe"
+          : "Subscribed"
+        : "Subscribe"}
     </button>
   );
 }

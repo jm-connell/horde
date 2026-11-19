@@ -19,15 +19,143 @@ All notable changes to Horde are documented here. The format follows
   motions (Tilt, Zoom). A reworked background can be compared with the
   effect it replaces in one click.
 
-- **Subscriptions.** A page in the top bar lists the channels you follow
-  and every channel that downloads or cleans up by itself, with Follow and
-  Auto-download toggles and a link to each channel's settings. Add a
-  channel by link or `@handle`, optionally downloading its new uploads.
+### Fixed
+
+- Audio downloads (the **Audio** presets, and podcasts or other links
+  without video) failed with "Download produced no file", to the library and
+  to a device: the finished file was thrown away because it had no video.
+  They now complete. A library audio download is stored as an audio-only
+  `.mp4`; a device download keeps its `.m4a`.
+- A download on a server without ffmpeg failed with "Download produced no
+  file"; it now says ffmpeg is not installed. An ffmpeg set with
+  `FFMPEG_BIN` (or installed after Horde started) is now used to merge
+  downloads too, without a restart.
+
+### Security
+
+- A failed *Process library* request in Settings → AI no longer sends
+  the raw error to the browser, which could quote the AI provider's URL.
+  The error is logged on the server instead.
+
+## [1.4.0] - 2026-11-16
+
+### Added
+
+- **Streamed videos pick up where you left off.** A video you streamed
+  without downloading starts from where your account stopped, on any device
+  (unless the link has a `?t=`). Live broadcasts start live.
+- **Continue watching on Recommended**, with library videos first, then
+  streams you left part-way, then videos you watched on YouTube lately. The
+  Library tab's row keeps to library videos.
+- **Streaming counts toward History watch time.** An hour of streaming
+  showed as "<1m this week"; it now counts like a library video, and a
+  video streamed then downloaded counts once.
+- **Autoplay after a stream.** With *Autoplay related* on, a streamed video
+  with no next part counts down to its first related video, skipping live
+  broadcasts.
+- **Ask knows your channels.** Questions about indexing, or about what a
+  channel says, get each Ask channel with its status and progress, and
+  "ltt" names Linus Tech Tips in a "what does X say" question.
+
+### Changed
+
+- **Comments load when you open a video** and more load as you scroll,
+  for streamed videos and library videos with nothing saved yet. The
+  *Load comments* and *Show more comments* buttons are gone.
+- **Recommended opens faster.** The last page you saw shows at once while
+  the fresh one loads, and re-ranking after a watch is about three times
+  faster. Throwbacks stay out of the first 12 cards, and a card's menu
+  moved to the top left so it no longer covers **+ Queue**.
+- **Ask routes ordinary questions better.** On a watch page, how-tos about
+  the app ("make subtitles bigger", "turn off autoplay") go to Horde
+  instead of the video. With *Use my data* on, "do I have any videos
+  about…", "what's downloading" and "recommend something" look up your
+  library instead of guessing or asking which one you mean, and say so
+  when nothing matches. Suggested setting changes show an **Apply**
+  button reliably.
+- **Channel indexing is quicker and more honest.** Reading a channel's
+  listing makes about a tenth of the requests it did (1,000 videos in
+  about 15 s), channels never indexed go ahead of the daily refresh, and a
+  run cut short at the cap no longer counts as complete.
+- The System page shows one "Filling in views and dates for <channel>" row
+  per channel instead of one per feed load, and those lookups run at
+  background priority so they no longer hold up a video you open.
+- **Redownloading replaces a video only with a fresh copy of the same
+  source** (matched by the `[id]` in its file name). Any other download is
+  added as a separate video and the old one is left alone; delete it
+  through the trash.
+- An edit by someone without *Delete videos* that would put a video in
+  reach of a channel's retention rule (moving it, changing its date,
+  clearing its notes or taking it out of review) keeps the video, as a
+  restore from the trash does. Kept videos no longer take a `keep_latest`
+  place.
+
+### Fixed
+
+- Every channel page said "Not indexed", and **Index channel** seemed to
+  do nothing.
+- A stream that froze (the clock stood still and Play did nothing) now
+  reloads at the same spot, staying in fullscreen; after two tries it falls
+  back to the compatible stream, which now keeps the playhead.
+- Streamed videos were slow to start, and the download menu could fail
+  with HTTP 429, while channel and Discover feed cards filled their
+  resolution badges. Badge lookups now stop when you leave the page and
+  wait behind the video you open. Slow YouTube requests are logged, with
+  what held the queue.
+- Searching Settings for "chat" or "ai video chat" hid the AI Features
+  section.
+
+### Security
+
+- The preview proxy connects only to addresses it has checked, on every
+  redirect, and drops `Cookie` and `Authorization` headers when a redirect
+  leaves the first site.
+- A file or folder name chosen by a user can no longer become one of
+  Horde's own folders (a leading dot is dropped), and the start-up cleanup
+  of the staging folder leaves anything a library video points at.
+- A late watch save from an offline device can backdate when you finished
+  a video by at most a day, so it cannot hand the video to a "remove
+  watched after N days" rule early.
+
+### Upgrade notes
+
+- Two database migrations run at start (one added column on stream
+  progress, one on watch time); nothing to do.
+- The stream preview and live stream proxy no longer go through
+  `HTTP_PROXY` / `HTTPS_PROXY`, which was never a documented setup.
+
+## [1.3.1] - 2026-11-08
+
+This is the release planned as 1.3.0. The `v1.3.0` tag was put on the wrong
+commit and never built, so there is no 1.3.0 image or release; update straight
+from 1.2.x to 1.3.1.
+
+### Added
+
+- **Subscriptions.** One name for keeping up with a channel: **Subscribe**
+  (it was Follow). The Subscriptions page in the top bar shows your
+  subscriptions as a grid with chips for what is on (auto-download, Ask,
+  cleanup); **Settings** on a card opens the channel's settings over the
+  page. Channels that download or clean up for everyone without your
+  subscription are listed under it. Add a channel by searching for it by
+  name or pasting its link or `@handle`; the box shows the channel it found
+  before you subscribe, with switches for automatic downloads and Ask.
+- **Ask indexing on subscribe.** Subscribing, by hand or through a download,
+  turns Ask on for a channel with up to 500 uploads; a bigger one gets a
+  notice with **Index anyway** (when subscribing by hand).
+- **New channels from downloads** (Settings → Library → Subscriptions): a
+  download from a channel you do not subscribe to can subscribe you (as
+  before), show **New channel · Subscribe / No thanks** on its card, or do
+  nothing, and **Include new channels from members** decides whether
+  members' downloads count.
+- A member permission, **Manage subscriptions** (on by default), for
+  subscribing and unsubscribing.
 - **Bring in an existing archive.** Files dropped into the media folder are
   filled in from a yt-dlp `.info.json`, a Kodi/Jellyfin `.nfo`, or a
   `Channel/Year/Title [id]` path (and Tube Archivist's names). **Approve N
   ready** takes every file with a known title and channel at once, without
-  moving it; **Fetch details from YouTube** fills one from its id. A new
+  moving it; **Fetch details from YouTube** fills one from its id, and **Fetch N from
+  YouTube** looks up and approves every file known only by its id. A new
   guide covers moving from yt-dlp, Tube Archivist, Pinchflat and others.
   `.m4v` and `.mov` files import too.
 - **Invite links.** Administrators can send a one-time link instead of a
@@ -42,9 +170,39 @@ All notable changes to Horde are documented here. The format follows
 - Issue forms, a security policy, and a footer bug link with your version
   filled in. New docs: other platforms (Portainer, Synology, Unraid,
   `docker run`) and Watch on your TV.
+- **Minimize Ask.** A button in its header folds the chat to a small bar at
+  the bottom of the window, keeping the conversation and a half-typed
+  question; the bar or the top bar's **Ask** brings it back as it was.
+- **Default quality.** Pick the quality every download you start uses
+  unless you choose another: the Download page, the watch page, the
+  one-click download buttons, playlist subscriptions, channel pages and
+  Ask. Set it in the setup wizard's Downloads step or Settings → Library →
+  Downloads (Best available by default); it is saved with your account.
+  Channel auto-download keeps its own per-channel quality.
 
 ### Changed
 
+- **Install guides for more platforms.** Other platforms now covers Windows
+  (WSL 2), macOS, Raspberry Pi and Proxmox next to Unraid, Synology and
+  Portainer, with a table of which guide to follow. Unraid's database path
+  moves to the pool (`/mnt/cache/...`), and the `docker run` recipe gets
+  Compose's 40-second stop timeout.
+- **A media folder Horde cannot write to is reported at start.** The
+  container log says so and prints the `chown` that fixes it, instead of
+  downloads failing later.
+- **Releases only, published image by default.** `docker-compose.yml` runs
+  the published release image and no longer has a build section, so a
+  failed download stops with an error instead of quietly starting a long
+  build on the host. `update.sh` (and **Update now**) pulls the image of
+  exactly the release it checks out and checks the commit baked into it; a
+  release whose image is still being published stops the update and leaves
+  everything as it was. Building from the checkout is opt-in:
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` in `.env`.
+- **Chat about a video is in Ask.** The watch page's AI section is now
+  **Summary** (with Regenerate) and a **Chat ↗** button that opens Ask on
+  the video ("Ask <video>"). On a watch page Ask answers from the video by
+  default, and still sends questions about Horde, your library or a channel
+  where they belong. Your earlier chats about videos are in Ask's History.
 - New installs pull the published image (`HORDE_IMAGE` in `.env.example`)
   instead of building on the host. Existing installs keep building until
   they set it.
@@ -55,20 +213,73 @@ All notable changes to Horde are documented here. The format follows
 - A download that cannot reach the site says so ("Can't reach site") instead
   of yt-dlp's raw error, and the link preview answers 502 for it. yt-dlp's
   "please report this issue" footer no longer appears in errors.
+- **Ask** moved from the footer to the top bar, left of the search box (a
+  chat icon beside the search icon on a phone).
+- Subscription cards open their settings from a **⋯** button.
+- Settings → Library has one **Ask** section (Use my data, and Channels Ask
+  can answer from) and a **Subscriptions** section; the old Followed
+  channels list there is gone (use the Subscriptions page).
 - **One Ask.** Ask about Horde and asking channels are one feature, **Ask**
-  (the footer button and the phone tab, which was Chat). The source shows
-  beside the title, "Ask Automatic", "Ask Horde" or "Ask <channel>"; press
-  it to pick another. Picking Horde keeps answers on Horde even when a
-  question names a channel. Settings → Library → Ask channels is now
-  **Channels Ask can answer from**, and the permission **Manage channel
-  indexing**. The button that docks the chat at the side is an expand arrow.
+  (the footer button and the phone tab, which was Chat). Each question goes
+  where it fits, each answer says where it came from, and links under an
+  answer ("Ask Horde instead", "Ask <channel> instead") ask it again from
+  elsewhere; a chip beside the title shows when Ask is focused on a channel
+  or video. Settings → Library → Ask channels is now **Channels Ask can
+  answer from**, and the permission **Manage channel indexing**. The button
+  that docks the chat at the side is an expand arrow.
+- The one-click download buttons (Recommended, Continue watching, search
+  results, History, rewatched suggestions) use your default quality. They
+  always downloaded 1080p before; set Default quality to 1080p to keep that.
+- A resolution picked on a channel page applies until you leave the page,
+  instead of being remembered in the browser; the default quality covers
+  the rest.
 
 ### Fixed
 
+- Settings → Library → **Import from Google Takeout** dimmed the page but
+  opened its dialog below the fold.
+- The SponsorBlock chip slides in and fades out instead of popping.
 - A failed download's error toast came back on every page load for ten
   minutes after the failure.
 - Casting to a Chromecast sent the original file even when an H.264 copy
   existed, so AV1 videos failed on most Chromecasts.
+- The first **Update now** (or `update.sh`) of a new install stopped with
+  "would go BACKWARDS": a fresh clone is on `main`, usually ahead of the
+  release its image runs. The guard now compares the release with the version
+  that runs, and the install guides check out the newest release after
+  `git clone`.
+- A broken link from Comments to "Chat about a video" in the AI features
+  guide.
+- A download capped at a resolution (such as 1080p) from a link with no
+  video, like a podcast or a SoundCloud track, downloads the audio instead
+  of failing.
+
+### Upgrade notes
+
+- Nothing to do for most installs. An install that builds from source (no
+  `HORDE_IMAGE` in `.env`) switches to the published image at its first
+  update to this release. To keep building, add
+  `COMPOSE_FILE=docker-compose.yml:docker-compose.build.yml` to `.env`
+  once you are on 1.3.1, not before: the file it names does not exist in
+  1.2.x, so a rollback to 1.2.x would leave Compose unable to start Horde.
+  If you have a `docker-compose.override.yml`, append
+  `:docker-compose.override.yml` to that line, since `COMPOSE_FILE`
+  replaces Compose's automatic use of it. On `HORDE_UPDATE_CHANNEL=main`,
+  the first update after 1.3.1 adds the line itself.
+- A `HORDE_IMAGE` pinned to a version (`:1.2.2`) stays on that version, and
+  from 1.3.1 on `update.sh` stops instead of reporting an update; remove the
+  line, or end it in `:latest`, to update.
+- Following `HORDE_UPDATE_CHANNEL=main` from 1.2.x: wait until this release
+  is out before updating. The old `update.sh` starts the newest release
+  image rather than building `main`; once on 1.3.1, the next update switches
+  to building.
+- An install already stopped by "would go BACKWARDS" (cloned from `main`,
+  running the published image) updates normally again once this release is
+  out, since it contains that checkout.
+- The update to this release still runs the previous `update.sh`, which
+  starts whatever `:latest` is. Update once the release page is up (that is
+  when the in-app notice appears); if you updated earlier and Horde still
+  reports 1.2.x, run `bash update.sh` again.
 
 ## [1.2.2] - 2026-11-03
 
@@ -1017,7 +1228,9 @@ level. Detailed per-area entries are added by the maintainer at release time.
 - The committed `backend/static` build output and the empty root
   `package-lock.json`.
 
-[Unreleased]: https://github.com/jm-connell/horde/compare/v1.2.2...main
+[Unreleased]: https://github.com/jm-connell/horde/compare/v1.4.0...main
+[1.4.0]: https://github.com/jm-connell/horde/compare/v1.3.1...v1.4.0
+[1.3.1]: https://github.com/jm-connell/horde/compare/v1.2.2...v1.3.1
 [1.2.2]: https://github.com/jm-connell/horde/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/jm-connell/horde/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/jm-connell/horde/compare/v1.1.1...v1.2.0

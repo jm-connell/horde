@@ -9,6 +9,8 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -718,6 +720,58 @@ def fetch_channel_feed(
     with _feed_cache_lock:
         _feed_cache[cache_key] = (now, result)
     return result
+
+
+@contextmanager
+def open_channel_listing(
+    channel_url: str, *, tab: str = "videos"
+) -> Iterator[dict[str, Any]]:
+    """One lazy listing of a channel tab, read front to back.
+
+    ``fetch_channel_feed`` with an offset makes yt-dlp walk every earlier page
+    again (YouTube only pages forward), so paging a 1000-video channel that way
+    costs about ten times the requests. This reads each page once.
+
+    Yields ``{channel, channel_url, playlist_count, entries}``. ``entries`` gives
+    one item per listed video: its feed fields, or None for one the feed skips
+    (shorts, playlists, members-only). Reading it may raise when a page fails.
+    """
+    import yt_dlp
+
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "extract_flat": "in_playlist",
+        "skip_download": True,
+        "ignoreerrors": True,
+        "logger": QuietYtdlpLogger(),
+        "extractor_args": youtube_extractor_args(),
+    }
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        try:
+            info = _as_info(
+                ydl.extract_info(
+                    _channel_videos_url(channel_url, tab), download=False, process=False
+                )
+            )
+            if info.get("_type") in ("url", "url_transparent") and info.get("url"):
+                info = _as_info(
+                    ydl.extract_info(str(info["url"]), download=False, process=False)
+                )
+        except Exception as exc:
+            kind, message = classify_ytdlp_error(exc, url=channel_url)
+            record_extract_failure(kind, message, url=channel_url)
+            raise
+        yield {
+            "channel": info.get("uploader") or info.get("channel"),
+            "channel_url": info.get("uploader_url")
+            or info.get("channel_url")
+            or channel_url,
+            "playlist_count": _playlist_count(info),
+            "entries": (
+                _map_flat_video_entry(entry) for entry in info.get("entries") or []
+            ),
+        }
 
 
 def estimate_playlist_sizes(

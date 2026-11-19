@@ -10,6 +10,7 @@ import enum
 import errno
 import logging
 import threading
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from sqlmodel import Session
 from ...context import get_engine
 from ...models import DownloadJob, JobStatus
 from .. import activity, scanner
+from ..ffmpeg_bin import ffmpeg_available, ffmpeg_bin
 from ..fsutil import safe_rel
 from ..live.sessions import is_live_info
 from ..outtmpl import windows_filenames_ok
@@ -27,6 +29,7 @@ from ..ytdlp_common import (
     ERROR_KIND_MEMBERS,
     ERROR_KIND_UNKNOWN,
     EXTRACT_PRIORITY_DOWNLOAD,
+    FfmpegMissingError,
     MembersOnlyError,
     QuietYtdlpLogger,
     apply_cookie_opts,
@@ -45,10 +48,14 @@ from ..ytdlp_common import (
 )
 from ..ytdlp_extract import estimate_download_bytes, is_youtube_short_entry
 from ..ytdlp_formats import (
+    PRESET_MAX_HEIGHT,
+    accepts_audio_only,
     apply_audio_format_id,
     format_chain,
     format_sort_for,
+    has_audio,
     pick_original_audio_format,
+    video_heights,
 )
 from . import clips, dbwrite, lifecycle
 from .artifacts import cleanup_partial_files, reject_unplayable, resolve_merged_video
@@ -214,6 +221,10 @@ class DownloadRun:
             "retry_sleep_functions": {"file_access": lambda n: 0.5 * (n + 1)},
             "extractor_args": youtube_extractor_args(),
         }
+        if ffmpeg_available():
+            # yt-dlp searches only PATH and caches a failed lookup per path for the
+            # life of the process: a resolved path also picks up a later install.
+            self.base_opts["ffmpeg_location"] = ffmpeg_bin()
 
     def _download_and_hand_off(self) -> None:
         if self._run_formats():
@@ -231,21 +242,54 @@ class DownloadRun:
         if self.ytdlp_logger.disk_full:
             raise OSError(errno.ENOSPC, "No space left on device")
 
+    def _audio_ok(self) -> bool:
+        """An audio-only file counts as the download (read late: the link's
+        formats are known only once its metadata is fetched)."""
+        return accepts_audio_only(self.spec.quality_preset, self.metadata_info)
+
     def _settled_final_path(self) -> Path:
         """Pick the finished file after the attempts, or fail with the last error."""
         path = self.final_path
         if path is None or not path.exists():
-            path = resolve_merged_video(self.prepared, self.active_paths)
-        path = reject_unplayable(path, self.active_paths)
+            path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
+        path = reject_unplayable(path, self.active_paths, audio_ok=self._audio_ok())
         if path is None or not path.exists() or path.stat().st_size <= 0:
-            raise self.last_exc or RuntimeError("Download produced no file")
+            if self.last_exc is not None:
+                raise self.last_exc
+            if not ffmpeg_available():
+                # yt-dlp only warns (silenced here) and leaves the streams apart.
+                raise FfmpegMissingError("ffmpeg not found")
+            raise RuntimeError("Download produced no file")
         return path
 
     # -- the attempt loop ------------------------------------------------------
 
+    def _format_selectors(self) -> Iterator[str]:
+        """The preset's selectors, then, for a link without video, those of best.
+
+        A height cap (a user's default quality such as 1080p) matches nothing on
+        an audio-only link (a podcast, a SoundCloud track) and Horde cannot
+        always see the formats before queueing. Read lazily, once the capped
+        selectors have failed and the metadata is known; a video keeps its cap.
+        """
+        spec = self.spec
+        chain = format_chain(spec.quality_preset, spec.video_codec)
+        yield from chain
+        info = self.metadata_info
+        if (
+            PRESET_MAX_HEIGHT.get(spec.quality_preset)
+            and not video_heights(info)
+            and has_audio(info)
+        ):
+            for fmt in format_chain("best", spec.video_codec):
+                if fmt not in chain:
+                    yield fmt
+
     def _run_formats(self) -> bool:
         """Try each format selector until one yields a file; True if the job was skipped."""
-        for fmt in format_chain(self.spec.quality_preset, self.spec.video_codec):
+        for fmt in self._format_selectors():
             self.attempt_paths = set()
             try:
                 outcome = self._attempt(fmt)
@@ -274,8 +318,12 @@ class DownloadRun:
         self.last_exc = exc
         if self.ytdlp_logger.members_only or is_members_only_error(exc):
             raise MembersOnlyError(_MEMBERS_ONLY_SKIPPED) from exc
-        recovered = resolve_merged_video(self.prepared, self.active_paths)
-        recovered = reject_unplayable(recovered, self.attempt_paths)
+        recovered = resolve_merged_video(
+            self.prepared, self.active_paths, audio_ok=self._audio_ok()
+        )
+        recovered = reject_unplayable(
+            recovered, self.attempt_paths, audio_ok=self._audio_ok()
+        )
         if recovered is not None:
             self.final_path = recovered
             return True
@@ -501,8 +549,12 @@ class DownloadRun:
         elif not is_recoverable_download_error(exc):
             raise exc
         else:
-            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
-            self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+            self.final_path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
+            self.final_path = reject_unplayable(
+                self.final_path, self.attempt_paths, audio_ok=self._audio_ok()
+            )
             if self.final_path is None:
                 raise exc
 
@@ -526,13 +578,17 @@ class DownloadRun:
     def _locate_output(self, ydl: Any) -> None:
         """Find the file the download wrote (yt-dlp may name it differently)."""
         if self.final_path is None:
-            self.final_path = resolve_merged_video(self.prepared, self.active_paths)
+            self.final_path = resolve_merged_video(
+                self.prepared, self.active_paths, audio_ok=self._audio_ok()
+            )
         if self.final_path is None and self.metadata_info:
             candidate = Path(ydl.prepare_filename(self.metadata_info))
             self.final_path = candidate.with_suffix(".mp4")
             if not self.final_path.exists():
                 self.final_path = candidate if candidate.exists() else None
-        self.final_path = reject_unplayable(self.final_path, self.attempt_paths)
+        self.final_path = reject_unplayable(
+            self.final_path, self.attempt_paths, audio_ok=self._audio_ok()
+        )
 
     # -- hand-off --------------------------------------------------------------
 
@@ -608,8 +664,12 @@ class DownloadRun:
 
     def _hand_off_recovered_file(self) -> bool:
         """A failure after yt-dlp finished the file still yields a download."""
-        recovered = resolve_merged_video(self.prepared, self.active_paths)
-        recovered = reject_unplayable(recovered, self.active_paths)
+        recovered = resolve_merged_video(
+            self.prepared, self.active_paths, audio_ok=self._audio_ok()
+        )
+        recovered = reject_unplayable(
+            recovered, self.active_paths, audio_ok=self._audio_ok()
+        )
         if (
             recovered is None
             or not recovered.exists()

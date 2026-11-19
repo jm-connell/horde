@@ -8,7 +8,7 @@ Followed channels that are live show up, quietly, at the top of the library side
 
 - A library download a user queued follows its channel when it finishes. The download API records the requester in `download_requesters`, and `finalize` calls `follows.follow_from_download`. Automatic jobs (auto-download, imports without a user) follow nothing.
 - At startup, an administrator who has no follow rows yet follows every library channel. Every download before follows existed was theirs.
-- Anyone can follow a channel by URL or `@handle` in **Settings → Library → Followed channels**, or with the **Follow** button on a channel page. The channel does not need any videos in the library.
+- Anyone can subscribe to a channel (the code calls this following) by name, URL or `@handle` on the **Subscriptions** page, or with the **Subscribe** button on a channel page. The channel does not need any videos in the library.
 - Unfollowing keeps the row with `followed = 0`. A later download from that channel does not follow it again, and the admin seed does not run again.
 
 Follows are YouTube-only, because only YouTube's live pages are checked.

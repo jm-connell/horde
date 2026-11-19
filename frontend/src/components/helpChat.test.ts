@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   type HelpMessage,
+  askVideoKey,
   isAskState,
+  parseAskVideo,
   isHelpThread,
   parseSources,
   savedSources,
@@ -64,11 +66,44 @@ describe("saved Ask messages", () => {
     expect(isAskState({ threadId: 4, scope: [] })).toBe(true);
     expect(isAskState({ threadId: "4", scope: [] })).toBe(false);
     // The picked source is kept with it; a malformed one is not trusted.
-    const picked = { scope: [], horde: true };
+    const picked = { scope: [], video: null };
     expect(isAskState({ threadId: null, scope: [], picked })).toBe(true);
-    expect(isAskState({ threadId: null, scope: [], horde: "yes" })).toBe(false);
     expect(
       isAskState({ threadId: null, scope: [], picked: { scope: 3 } })
     ).toBe(false);
+  });
+});
+
+describe("videos Ask answers from", () => {
+  const library = {
+    library_id: 4,
+    youtube_id: "ccccccccccc",
+    url: null,
+    title: "Belt basics",
+  };
+  const stream = {
+    library_id: null,
+    youtube_id: null,
+    url: "https://www.youtube.com/watch?v=ddddddddddd",
+    title: "Ridge",
+  };
+
+  it("reads a library video or a stream, and nothing else", () => {
+    expect(parseAskVideo(library)).toEqual(library);
+    expect(parseAskVideo(stream)).toEqual(stream);
+    expect(parseAskVideo({ title: "No id" })).toBeNull();
+    expect(parseAskVideo("video")).toBeNull();
+    expect(askVideoKey(library)).not.toBe(askVideoKey(stream));
+  });
+
+  it("keeps a saved answer's video and a picked one", () => {
+    expect(savedSources({ kind: "video", video: library })).toEqual({
+      video: library,
+    });
+    expect(savedSources({ kind: "video", video: {} })).toEqual({});
+    expect(isAskState({ threadId: null, scope: [], video: stream })).toBe(true);
+    expect(isAskState({ threadId: null, scope: [], video: { id: 1 } })).toBe(
+      false
+    );
   });
 });

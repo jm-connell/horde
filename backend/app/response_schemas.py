@@ -186,19 +186,6 @@ class ThumbnailCandidates(BaseModel):
     candidates: list[ThumbnailCandidate]
 
 
-class VideoAiChatMessageRead(BaseModel):
-    id: int | None = None
-    role: Literal["user", "assistant"]
-    content: str
-    cost: float | None = None
-    model: str | None = None
-    created_at: str | None = None
-
-
-class VideoAiChatHistory(BaseModel):
-    messages: list[VideoAiChatMessageRead]
-
-
 # --- Compat ------------------------------------------------------------------
 
 
@@ -567,6 +554,19 @@ class ContinueYoutubeRead(BaseModel):
     """Videos watched on YouTube lately (from the import), for Continue watching."""
 
     items: list[ChannelFeedEntry]
+    next_cursor: str | None = None
+
+
+class ContinueStreamRead(ChannelFeedEntry):
+    """A stream left part-way: ``duration`` is its length, when known."""
+
+    position_sec: float
+
+
+class ContinueStreamsRead(BaseModel):
+    """Streamed (not downloaded) videos to carry on with, newest first."""
+
+    items: list[ContinueStreamRead]
     next_cursor: str | None = None
 
 

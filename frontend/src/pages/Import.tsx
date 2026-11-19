@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { describeError } from "../apiErrors";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, ApiError } from "../api";
 import LoadingIndicator from "../components/LoadingIndicator";
 import VideoEditForm from "../components/VideoEditForm";
 import { useConfirm } from "../context/ConfirmContext";
@@ -67,6 +67,23 @@ function hasYoutubeSource(item: ReviewItem): boolean {
     isYoutubeUrl(item.source_url) ||
     isYoutubeUrl(item.suggestion?.source_url)
   );
+}
+
+// What a failed lookup says about the files after it. "file": only this one
+// (removed, private, members-only, no id). "stop": every later one would fail
+// too (no internet, YouTube blocking the server, a limit, the session).
+// "unclear": yt-dlp could not say; a few in a row stop the run as well.
+const PER_FILE_ERROR_KINDS = new Set(["unavailable", "cookies", "members"]);
+const SYSTEMIC_ERROR_KINDS = new Set(["network", "bot", "pot", "rate_limit"]);
+const UNCLEAR_FAILURES_TO_STOP = 3;
+
+function lookupFailure(err: unknown): "file" | "unclear" | "stop" {
+  if (!(err instanceof ApiError)) return "stop";
+  if (err.status === 404 || err.status === 409) return "file";
+  if (err.status !== 400) return "stop";
+  const kind = err.errorKind ?? "";
+  if (PER_FILE_ERROR_KINDS.has(kind)) return "file";
+  return SYSTEMIC_ERROR_KINDS.has(kind) ? "stop" : "unclear";
 }
 
 function verdictLabel(group: DuplicateGroup): string | null {
@@ -135,6 +152,23 @@ export default function Import() {
   const [lookingUp, setLookingUp] = useState<number | null>(null);
   const [approving, setApproving] = useState(false);
   const readyCount = useMemo(() => items.filter(isReady).length, [items]);
+  // Files YouTube could not find on this visit; another run would only fail again.
+  const [notOnYoutube, setNotOnYoutube] = useState<ReadonlySet<number>>(
+    () => new Set()
+  );
+  const fetchable = useMemo(
+    () =>
+      items.filter(
+        (i) => !isReady(i) && hasYoutubeSource(i) && !notOnYoutube.has(i.id)
+      ),
+    [items, notOnYoutube]
+  );
+  const [fetching, setFetching] = useState<{
+    done: number;
+    total: number;
+    stopping?: boolean;
+  } | null>(null);
+  const stopFetchRef = useRef(false);
   const [groups, setGroups] = useState<DuplicateGroup[]>([]);
   const [dismissedDupes, setDismissedDupes] = useState<Set<string>>(() =>
     loadDismissedDupes()
@@ -301,6 +335,81 @@ export default function Import() {
       load({ silent: true });
     }
   };
+
+  const fetchAllFromYoutube = async () => {
+    const ids = fetchable.map((i) => i.id);
+    // Reset before asking: leaving the page while the dialog is open sets it.
+    stopFetchRef.current = false;
+    const ok = await confirm({
+      title: `Fetch ${videoCount(ids.length)} from YouTube?`,
+      body: (
+        <p>
+          Horde looks up each file&rsquo;s YouTube id, one at a time, and
+          approves it with the title, channel, date, description and tags
+          YouTube has. That takes a few seconds per file, so keep this page
+          open. Files stay where they are on disk. Files YouTube cannot find
+          stay here.
+        </p>
+      ),
+      confirmLabel: "Fetch and approve",
+    });
+    if (!ok || stopFetchRef.current) return;
+    setFetching({ done: 0, total: ids.length });
+    let approved = 0;
+    let failed = 0;
+    let unclearInARow = 0;
+    let stoppedBy: unknown = null;
+    const notFound: number[] = [];
+    for (const id of ids) {
+      if (stopFetchRef.current) break;
+      try {
+        const res = await api.approveFromYoutube(id);
+        if (res.approved) {
+          approved += 1;
+          unclearInARow = 0;
+        } else {
+          failed += 1;
+          notFound.push(id);
+        }
+      } catch (err) {
+        failed += 1;
+        const failure = lookupFailure(err);
+        if (failure === "file") {
+          notFound.push(id);
+        } else if (
+          failure === "stop" ||
+          ++unclearInARow >= UNCLEAR_FAILURES_TO_STOP
+        ) {
+          stoppedBy = err;
+          break;
+        }
+      }
+      setFetching((prev) => prev && { ...prev, done: prev.done + 1 });
+    }
+    setFetching(null);
+    setNotOnYoutube((prev) => new Set([...prev, ...notFound]));
+    if (stoppedBy) {
+      showError(
+        `Approved ${videoCount(approved)}, then stopped: ${describeError(stoppedBy)}`
+      );
+    } else {
+      showToast(
+        failed
+          ? `Approved ${videoCount(approved)}. ${videoCount(failed)} could not be looked up and stay here.`
+          : `Approved ${videoCount(approved)}`
+      );
+    }
+    void queryClient.invalidateQueries({ queryKey: queryKeys.videos.all });
+    load({ silent: true });
+  };
+
+  // Leaving the page ends a bulk lookup after the file it is on.
+  useEffect(
+    () => () => {
+      stopFetchRef.current = true;
+    },
+    []
+  );
 
   const lookUp = async (item: ReviewItem) => {
     setLookingUp(item.id);
@@ -562,6 +671,42 @@ export default function Import() {
                   >
                     {approving ? "Approving…" : `Approve ${readyCount} ready`}
                   </button>
+                </div>
+              )}
+              {fetchable.length > 1 && can("edit_metadata") && (
+                <div
+                  className="ui-panel flex flex-wrap items-center justify-between gap-3 rounded-xl bg-ink-900 px-4 py-3 ring-1 ring-ink-700"
+                  role="status"
+                >
+                  <p className="text-sm text-gray-300">
+                    {fetching
+                      ? `Looked up ${fetching.done} of ${fetching.total} on YouTube…`
+                      : `${fetchable.length} files have a YouTube id but no channel. Horde can look them up on YouTube.`}
+                  </p>
+                  {fetching ? (
+                    <button
+                      type="button"
+                      disabled={fetching.stopping}
+                      onClick={() => {
+                        stopFetchRef.current = true;
+                        setFetching(
+                          (prev) => prev && { ...prev, stopping: true }
+                        );
+                      }}
+                      className={button("secondary")}
+                    >
+                      {fetching.stopping ? "Stopping…" : "Stop"}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void fetchAllFromYoutube()}
+                      className={button("primary")}
+                      title="Look each file up on YouTube and approve it with what YouTube says"
+                    >
+                      Fetch {fetchable.length} from YouTube
+                    </button>
+                  )}
                 </div>
               )}
               {items.slice(0, shownForms).map((v) => (

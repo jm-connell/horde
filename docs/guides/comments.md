@@ -1,6 +1,6 @@
 # Comments
 
-Horde saves the top YouTube comments of the videos in your library, so they are there to read under the video, they count in search, and the video chat knows how viewers reacted. They stay when a video later goes private or is removed from YouTube.
+Horde saves the top YouTube comments of the videos in your library, so they are there to read under the video, they count in search, and Ask, asked about a video, knows how viewers reacted. They stay when a video later goes private or is removed from YouTube.
 
 ## What is saved
 
@@ -17,18 +17,18 @@ Videos without a YouTube id (your own uploads, files from other sites, clips) ha
 
 ## On the watch page
 
-The **Comments** section sits under the description, with YouTube's total count beside the heading. The small **↻** button beside **On YouTube** fetches and saves the comments again now (hover it to see when they were saved); it needs the **Edit details** permission, and the background schedule carries on afterwards. A refresh that fails (YouTube busy or out of reach) changes nothing that was saved. It starts with five threads; **Show more comments** adds twenty at a time. A thread with saved replies has an **N replies** button that opens the discussion under it. Timestamps in a comment (`3:10`) seek the player, links open in a new tab, and a comment's date opens it on YouTube.
+The **Comments** section sits under the description, with YouTube's total count beside the heading. The small **↻** button beside the heading fetches and saves the comments again now (hover it to see when they were saved); it needs the **Edit details** permission, and the background schedule carries on afterwards. A refresh that fails (YouTube busy or out of reach) changes nothing that was saved. The comments sit in a box that scrolls on its own: it shows twenty threads at first, and scrolling to the end of the box adds twenty more at a time. A thread with saved replies has an **N replies** button that opens the discussion under it. Timestamps in a comment (`3:10`) seek the player and scroll the page back up to it, links open in a new tab, and a comment's date opens it on YouTube.
 
-Past the 100 saved comments, **Show more comments** reads more from YouTube on the spot: the top 300, then the top 1000 (this can take a little while; the button says **Loading from YouTube…**). These are not saved (they are kept in memory for half an hour), and YouTube has to be reachable; if it is not, what is already shown stays and **Try again** reads again. Until a video's comments are saved, **Load them now from YouTube** fetches them straight away (and saves them, for anyone with **Edit details**).
+Past the 100 saved comments, scrolling to the end of the box reads more from YouTube on the spot: the top 300, then the top 1000 (this can take a little while; a loading indicator shows at the end of the list). These are not saved (they are kept in memory for half an hour), and YouTube has to be reachable; if it is not, what is already shown stays and **Try again** reads again. Until a video's comments are saved, its top 100 are read from YouTube as soon as you open it (shown, not saved; the background schedule still saves them, and **↻** saves them now).
 
-A video you are only streaming (`/watch?url=…`) has nothing saved; **Load comments** reads its top 100 from YouTube.
+A video you are only streaming (`/watch?url=…`) has nothing saved; its top 100 are read from YouTube as soon as you open it.
 
 When comments are turned off on YouTube, or YouTube no longer shows them (the video is private, removed, members-only, or age-restricted and Horde has no YouTube cookies), the section says so and shows the comments saved before, with the date they were saved. A later fetch that finds no comments never removes saved ones.
 
 ## In search and chat
 
 - **Search**: a library video whose saved comments contain every word of your search shows up in **In your library**, after the videos that match by title, description, tags or notes. Its **?** badge quotes the comment ("In a YouTube comment: …"). Channel and tag filters apply as usual.
-- **Video chat**: the [AI chat](ai-features.md#chat) about a library video gets the top comments (about 3,000 characters, with the creator's replies) next to the description and captions, labelled as viewers' comments. Ask it what people thought, whether anyone pointed out a mistake, or what the creator answered. It is told never to pass off a viewer's claim as what the video says.
+- **Video chat**: the [AI chat](ai-features.md#chat-about-a-video) about a library video gets the top comments (about 3,000 characters, with the creator's replies) next to the description and captions, labelled as viewers' comments. Ask it what people thought, whether anyone pointed out a mistake, or what the creator answered. It is told never to pass off a viewer's claim as what the video says.
 
 ## Turning it off
 

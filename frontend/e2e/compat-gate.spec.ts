@@ -1,14 +1,11 @@
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { expect, test, videoCard } from "./fixtures";
+import { appDownloads } from "./runtime";
 
 // page.route cannot intercept <video> media requests, so these specs change the
 // seeded file on disk (e2e/serve.py's downloads dir) and restore it afterwards.
-const file = path.resolve(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "../../e2e/.runtime/app/downloads/Northwind/2024/Paper Kites.mp4"
-);
+const file = path.join(appDownloads, "Northwind/2024/Paper Kites.mp4");
 let original: Buffer;
 
 test.beforeEach(() => {

@@ -21,21 +21,34 @@ export default function FeaturesPane() {
       hidden={
         !match(
           "features",
-          "subtitles",
-          "enrich tags",
-          "duplicate",
-          "category",
-          "strictness",
-          "summary",
+          "use subtitles in search indexes",
+          "embeddings",
+          "ai video summaries",
           "summarize",
-          "chapters",
-          "captions",
-          "watch",
+          "ai video chapters",
+          "timestamps",
+          "transcript",
+          "generate chapters",
+          "automatic",
+          "button",
           "on download",
+          "ai video chat",
+          "ask",
+          "conversation",
+          "summary length",
           "short",
           "medium",
           "long",
-          "length"
+          "category match strictness",
+          "categories",
+          "score",
+          "enrich tags with llm",
+          "re-check tags after",
+          "rescan",
+          "tag days",
+          "ai duplicate confirmation",
+          "captions",
+          "watch"
         )
       }
     >
@@ -43,7 +56,9 @@ export default function FeaturesPane() {
         <SettingRow
           title="Use subtitles in search indexes"
           description="Caption text feeds search, related videos and categories."
-          hidden={!!q && !match("subtitles", "embeddings", "search indexes")}
+          hidden={
+            !!q && !match("Use subtitles in search indexes", "embeddings")
+          }
           control={
             <Toggle
               checked={aiDraft.use_subtitles}
@@ -54,7 +69,16 @@ export default function FeaturesPane() {
         <SettingRow
           title="AI video summaries"
           description="Needs captions."
-          hidden={!!q && !match("summary", "summarize", "captions", "watch")}
+          hidden={
+            !!q &&
+            !match(
+              "AI video summaries",
+              "summary",
+              "summarize",
+              "captions",
+              "watch"
+            )
+          }
           control={
             <Toggle
               checked={aiDraft.ai_summaries}
@@ -67,7 +91,13 @@ export default function FeaturesPane() {
           description="Only for videos without timestamps in the description."
           hidden={
             !!q &&
-            !match("chapters", "timestamps", "captions", "watch", "transcript")
+            !match(
+              "AI video chapters",
+              "timestamps",
+              "captions",
+              "watch",
+              "transcript"
+            )
           }
           control={
             <Toggle
@@ -82,7 +112,7 @@ export default function FeaturesPane() {
             hidden={
               !!q &&
               !match(
-                "chapters",
+                "Generate chapters",
                 "download",
                 "watch",
                 "automatic",
@@ -119,7 +149,8 @@ export default function FeaturesPane() {
         <SettingRow
           title="AI video chat"
           hidden={
-            !!q && !match("chat", "ask", "conversation", "watch", "captions")
+            !!q &&
+            !match("AI video chat", "ask", "conversation", "watch", "captions")
           }
           control={
             <Toggle
@@ -133,14 +164,7 @@ export default function FeaturesPane() {
             title="Summary length"
             hidden={
               !!q &&
-              !match(
-                "summary",
-                "summarize",
-                "length",
-                "short",
-                "medium",
-                "long"
-              )
+              !match("Summary length", "summarize", "short", "medium", "long")
             }
             control={
               <div className="flex items-center gap-2">
@@ -175,8 +199,7 @@ export default function FeaturesPane() {
           title="Category match strictness"
           description="Higher means fewer, closer matches."
           hidden={
-            !!q &&
-            !match("category", "categories", "strictness", "match", "score")
+            !!q && !match("Category match strictness", "categories", "score")
           }
           control={
             <input
@@ -210,7 +233,7 @@ export default function FeaturesPane() {
         <SettingRow
           title="Enrich tags with LLM"
           description="Skips videos whose tags you edited."
-          hidden={!!q && !match("enrich tags", "llm")}
+          hidden={!!q && !match("Enrich tags with LLM")}
           control={
             <Toggle
               checked={aiDraft.enrich_tags}
@@ -221,7 +244,7 @@ export default function FeaturesPane() {
         {aiDraft.enrich_tags && (
           <SettingRow
             title="Re-check tags after"
-            hidden={!!q && !match("re-check tags", "rescan", "tag days")}
+            hidden={!!q && !match("Re-check tags after", "rescan", "tag days")}
             control={
               <div className="flex items-center gap-2">
                 <input
@@ -258,7 +281,7 @@ export default function FeaturesPane() {
         <SettingRow
           title="AI duplicate confirmation"
           description="Checks likely duplicates on the Import page."
-          hidden={!!q && !match("duplicate", "confirmation")}
+          hidden={!!q && !match("AI duplicate confirmation")}
           control={
             <Toggle
               checked={aiDraft.ai_duplicates}

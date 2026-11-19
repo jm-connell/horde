@@ -31,6 +31,7 @@ import BackgroundEffect from "./components/BackgroundEffect";
 import HoverTilt from "./components/HoverTilt";
 import BottomTabBar from "./components/BottomTabBar";
 import EdgeSwipeBack from "./components/EdgeSwipeBack";
+import PullToRefresh from "./components/PullToRefresh";
 import LoadingIndicator from "./components/LoadingIndicator";
 import OverlayScrollThumb from "./components/OverlayScrollThumb";
 import { PlaybackProvider } from "./context/PlaybackContext";
@@ -210,6 +211,7 @@ function AppShell() {
       <HelpChatHost />
       <EdgeSwipeBack />
       <HoverTilt />
+      <PullToRefresh />
     </div>
   );
 }

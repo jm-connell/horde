@@ -275,3 +275,30 @@ def test_rehydrate_requeues_jobs_missing_metadata(init_db, monkeypatch):
     assert job_metadata.rehydrate_pending() == 2
     assert sorted(requested) == sorted([bare, no_presets])
     assert complete not in requested and done not in requested
+
+
+def test_subscribing_after_a_download_runs_off_the_ffmpeg_slot(monkeypatch):
+    # Following the channel can read YouTube for a while (Ask indexing); the
+    # next postprocess must not wait for it.
+    from types import SimpleNamespace
+
+    from app.services.downloads import ffmpeg_queue as fq
+
+    q = DownloadQueue()
+    queue = fq.FfmpegQueue(q)
+    seen: dict[str, object] = {}
+
+    def follow(job_id, video_id):
+        seen["video_id"] = video_id
+        seen["slot_held"] = job_id in q._ffmpeg_running
+        seen["dispatched"] = dispatched.is_set()
+
+    dispatched = threading.Event()
+    monkeypatch.setattr(fq, "complete_download", lambda task: 7)
+    monkeypatch.setattr(fq, "discard_staging_unless_requeued", lambda job_id: None)
+    monkeypatch.setattr(fq.follows, "follow_from_download", follow)
+    monkeypatch.setattr(queue, "_dispatch", dispatched.set)
+    q.claim_ffmpeg(42)
+    queue._run_task(SimpleNamespace(job_id=42, active_marks=[]))
+
+    assert seen == {"video_id": 7, "slot_held": False, "dispatched": True}

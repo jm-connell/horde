@@ -30,6 +30,8 @@ to Horde has their own position in the same video.
 
 Continue watching on the [Library](library.md) and [History](history.md) pages uses the same progress fields.
 
+A **stream preview** (a video you watch without downloading it) resumes too: where you left it is kept for your account (`user_stream_state.position_sec`) and reopening it, on any device, carries on from there. It is saved once 20 seconds have played, then about every 30 seconds and when you close the video or leave the page, and a stream watched to 90% starts over. `?t=` in the link wins over the saved position. Live broadcasts are not resumed.
+
 !!! note "Expiry"
     Stale positions are cleared by `progress_expiry_days` (default **14**). The continue-watching *list* only includes recent activity within a fixed **7-day** backend window. See [History](history.md).
 
@@ -41,7 +43,7 @@ Under the description, a YouTube video shows its saved top comments, with the mo
 
 When enabled in [Settings → Playback](../settings/playback.md), the watch page shows a **related videos** sidebar (library recommendations / neighbors). Related suggestions improve when AI embeddings are available ([AI features](ai-features.md)): they rank by how similar the videos are as a whole (title, description, tags, then captions), favour the same channel and shared distinctive tags, and push down videos you have already watched.
 
-When the channel's [next part](#autoplay-the-next-part) of the series is known, it leads the related list (on a library video only when it is downloaded). On a **stream preview** the related list also includes videos from channels you have indexed that are not downloaded yet; each downloaded one is marked **Downloaded** and opens the library copy, the others open as streams. On a **live** stream, the channel's other broadcasts that are live right now come first, marked **Live now**, so switching between a tournament's A and B streams is one click (read from the channel's Streams tab, cached for a few minutes). A stream also gets the AI panel (summary, chat, chapters); see [AI features](ai-features.md#streamed-videos).
+When the channel's [next part](#autoplay-the-next-part) of the series is known, it leads the related list (on a library video only when it is downloaded). On a **stream preview** the related list also includes videos from channels you have indexed that are not downloaded yet; each downloaded one is marked **Downloaded** and opens the library copy, the others open as streams. On a **live** stream, the channel's other broadcasts that are live right now come first, marked **Live now**, so switching between a tournament's A and B streams is one click (read from the channel's Streams tab, cached for a few minutes). A stream also gets the Summary section (with **Chat**, which opens Ask on it) and AI chapters; see [AI features](ai-features.md#streamed-videos).
 
 ## Autoplay related
 
@@ -65,7 +67,7 @@ If you customized a library video’s title and a metadata resync finds that the
 
 You can adopt the new source title or keep your custom title. This appears when `title_is_custom` is set and `source_title` ≠ current `title`. A similar banner appears for custom descriptions when `source_description` drifts.
 
-Redownload (“Change resolution”) and auto-replace of the same YouTube id keep curated title/description/notes (and locked tags); only the media file and non-custom metadata refresh.
+Redownload (“Change resolution”) and auto-replace of the same YouTube id keep curated title/description/notes (and locked tags); only the media file and non-custom metadata refresh. A download replaces a video only when it is a fresh copy of the same source: the old file's name must end in the same `[id]` yt-dlp wrote when it was first downloaded. Anything else, such as a manual import whose source URL was set or edited by hand, is added as a separate video and the old one is left untouched; delete whichever you no longer want (it goes to the trash).
 
 ## Watch overflow menu
 

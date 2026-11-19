@@ -59,6 +59,12 @@ if [[ "$current_owner" != "$PUID:$PGID" || -n "$stray" ]]; then
     log "WARNING: could not chown $DATA_DIR; the app may be unable to write there." >&2
   fi
 fi
+# The media folder is the host's to own, so it is only checked: an unwritable
+# one is the usual first-run mistake, and downloads would fail only later.
+if ! gosu "$PUID:$PGID" test -w "$DOWNLOADS_DIR"; then
+  log "WARNING: $DOWNLOADS_DIR (DOWNLOADS_PATH on the host) is not writable by $PUID:$PGID, so downloads will fail." >&2
+  log "Fix it on the host: sudo chown -R $PUID:$PGID <DOWNLOADS_PATH>, or set PUID/PGID in .env to the folder's owner." >&2
+fi
 # Subdirectories are created as the runtime user so they never end up root-owned.
 if ! gosu "$PUID:$PGID" mkdir -p "$DATA_DIR/thumbnails"; then
   log "WARNING: could not create $DATA_DIR/thumbnails as $PUID:$PGID." >&2

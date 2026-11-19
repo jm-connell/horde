@@ -67,6 +67,13 @@ PERMISSION_TABLE: tuple[Permission, ...] = (
         True,
     ),
     Permission(
+        "manage_subscriptions",
+        "Manage subscriptions",
+        "Subscribe to and unsubscribe from channels. Subscriptions are each "
+        "account's own; without this the list stays as it is.",
+        True,
+    ),
+    Permission(
         "manage_ask",
         "Manage channel indexing",
         "Turn Ask on or off for channels and pause or resume their indexing. "

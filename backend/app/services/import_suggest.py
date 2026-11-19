@@ -219,6 +219,11 @@ def _merge(*layers: tuple[str, dict[str, Any]]) -> tuple[dict[str, Any], list[st
     return merged, used
 
 
+def has_own_title(video: Video) -> bool:
+    """True when the title is not just the file name the scanner gave it."""
+    return video.title not in ("", Path(video.file_path).stem)
+
+
 def _blank_only(
     video: Video, fields: dict[str, Any], sources: list[str]
 ) -> ImportSuggestion:
@@ -228,10 +233,9 @@ def _blank_only(
     if youtube_id:
         fields.setdefault("source_url", youtube_watch_url(youtube_id))
         fields.setdefault("thumbnail_url", youtube_thumbnail_url(youtube_id))
-    stem = Path(video.file_path).stem
     suggestion = ImportSuggestion(sources=sources)
     title = fields.get("title")
-    if title and video.title in ("", stem) and title != video.title:
+    if title and not has_own_title(video) and title != video.title:
         suggestion.title = title
     if not video.channel:
         suggestion.channel = fields.get("channel")

@@ -11,6 +11,7 @@ from ..config import VIDEO_EXTENSIONS
 from ..context import AppContext, get_ctx, get_paths, get_session
 from ..errors import CodedHTTPException, extraction_error
 from ..models import Video, require_id
+from ..parental_guard import restricted_forbidden
 from ..response_schemas import VideoPage
 from ..schemas import (
     ApproveSuggestedResult,
@@ -18,8 +19,15 @@ from ..schemas import (
     ReviewItemRead,
     VideoRead,
 )
+from ..services import (
+    channel_retention,
+    import_suggest,
+    library,
+    media_sidecars,
+    metadata_sync,
+    uploads,
+)
 from ..services import duplicate_groups as duplicate_groups_svc
-from ..services import import_suggest, library, media_sidecars, metadata_sync, uploads
 from ..services.auth.accounts import AuthUser
 from ..services.limits import ExtractionGate, extraction_gate, ytdlp_slot
 from ..services.metadata import probe_is_playable
@@ -45,7 +53,12 @@ from .video_serialize import to_read_many as _to_read_many
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/review", tags=["review"])
+router = APIRouter(
+    prefix="/api/review",
+    tags=["review"],
+    # The import queue lists every channel's videos: not for a restricted member.
+    dependencies=[Depends(restricted_forbidden)],
+)
 
 
 class DuplicateGroupRead(BaseModel):
@@ -126,6 +139,7 @@ def review_queue(
 )
 def approve_suggested(
     session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
 ) -> ApproveSuggestedResult:
     """Approve every review item whose title and channel are known, from the
     video itself or its suggestion, in one pass. Files and thumbnails stay as
@@ -138,7 +152,11 @@ def approve_suggested(
     approved: list[int] = []
     for video in rows:
         suggestion = import_suggest.suggest(video) or ImportSuggestion()
+        before = channel_retention.Exposure.of(video)
         if import_suggest.approve_with(session, video, suggestion):
+            channel_retention.keep_if_exposed(
+                session, video, before, may_delete=user.can("delete_videos")
+            )
             approved.append(require_id(video))
     session.commit()
     for video_id in approved:
@@ -188,6 +206,61 @@ def lookup_on_youtube(
     video = session.get(Video, video_id)
     if video is None:
         raise CodedHTTPException(404, "Video not found", "not_found")
+    return _youtube_suggestion(video, youtube_id, gate, ctx)
+
+
+@router.post(
+    "/{video_id}/approve-from-youtube",
+    response_model=ApproveSuggestedResult,
+    dependencies=[Depends(require_permission("edit_metadata")), Depends(ytdlp_slot)],
+)
+def approve_from_youtube(
+    video_id: int,
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+    gate: ExtractionGate = Depends(extraction_gate),
+    ctx: AppContext = Depends(get_ctx),
+) -> ApproveSuggestedResult:
+    """Look this file up on YouTube by the id it is known by and approve it with
+    what YouTube says, filling only blanks (a title that is still the file name
+    counts as blank). The file stays where it is. The Import page calls this
+    once per file for a bulk lookup."""
+    not_in_review = CodedHTTPException(
+        409, "This file is no longer waiting for review", "not_in_review"
+    )
+    video = session.get(Video, video_id)
+    if video is None:
+        raise CodedHTTPException(404, "Video not found", "not_found")
+    if not video.needs_review:
+        raise not_in_review
+    suggestion = _youtube_suggestion(video, None, gate, ctx)
+    # The lookup can take a minute: someone may have approved or deleted the
+    # file meanwhile, so approve the row as it is now.
+    session.expire_all()
+    video = session.get(Video, video_id)
+    if video is None or not video.needs_review:
+        raise not_in_review
+    if import_suggest.has_own_title(video):
+        suggestion.title = None
+    before = channel_retention.Exposure.of(video)
+    approved = import_suggest.approve_with(session, video, suggestion)
+    if approved:
+        channel_retention.keep_if_exposed(
+            session, video, before, may_delete=user.can("delete_videos")
+        )
+    session.commit()
+    if approved:
+        _after_approval(session, video_id)
+    remaining = library.query_videos(
+        session, needs_review=True, sort="added_at", order="desc", count_only=True
+    )
+    return ApproveSuggestedResult(approved=int(approved), remaining=remaining)
+
+
+def _youtube_suggestion(
+    video: Video, youtube_id: str | None, gate: ExtractionGate, ctx: AppContext
+) -> ImportSuggestion:
+    """What YouTube says about ``youtube_id``, or the id ``video`` is known by."""
     if youtube_id is None:
         found = import_suggest.suggest(video)
         youtube_id = video.youtube_id or (
@@ -338,7 +411,11 @@ def skip_review(
     video = session.get(Video, video_id)
     if video is None:
         raise HTTPException(status_code=404, detail="Video not found")
+    before = channel_retention.Exposure.of(video)
     video.needs_review = False
+    channel_retention.keep_if_exposed(
+        session, video, before, may_delete=user.can("delete_videos")
+    )
     session.add(video)
     session.commit()
     session.refresh(video)

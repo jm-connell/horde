@@ -32,7 +32,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | `video_ai_meta` | Embed status, summary, AI/user tags, locks, LLM chapters |
 | `video_comments` | Saved YouTube comments of a library video: the top 100 and replies to the highest-ranked threads, in fetch order (`parent_comment_id` is null for a top-level comment); `video_comments_fts` indexes their text by trigger. See [Comments](../guides/comments.md) |
 | `video_comment_state` | Per video: whether its comments were saved (`saved` / `disabled` / `unavailable` / `failed`), when, YouTube's total count, and when to fetch again |
-| `video_ai_chat_messages` | User/assistant turns of one person's chat about a video (`user_id`; + optional OpenRouter cost/model) |
+| `video_ai_chat_messages` | User/assistant turns of one person's chat about a video, from before chat moved into Ask: revision `0029` copied them into `ask_threads` / `ask_messages`; only the trash writes here now, restoring the rows it saved (`user_id`; + optional OpenRouter cost/model) |
 | `openrouter_usage` | Append-only cost ledger |
 | `ai_categories` | Recommendation category chips (name, blurb, embedding) |
 | `discovery_videos` | YouTube videos the Recommended gatherer found outside the library and catalogs (metadata + its own vector); deleted when no hit or stream watch points at them |
@@ -48,7 +48,7 @@ SQLite database at **`DATA_DIR/horde.db`** (`sqlite:///{DB_PATH}`). ORM: SQLMode
 | Table | Purpose |
 |-------|---------|
 | `users` | Accounts: `username_norm` (unique), scrypt `password_hash`, `is_admin`, `disabled`, `permissions` (JSON list of granted names; admins implicitly have all) |
-| `user_stream_state` | Videos a user streamed without downloading (by YouTube id): furthest point, duration, finished; recommendations read it as history |
+| `user_stream_state` | Videos a user streamed without downloading (by YouTube id): furthest point, where it was left (to resume), duration, finished; recommendations read it as history |
 | `rec_feedback` | What a user told recommendations to leave out: `video`, `channel` or dismissed channel `suggestion` |
 | `rec_impressions` | How many separate visits a recommendation was shown on without being watched |
 | `user_sessions` | One row per signed-in browser: SHA-256 of the cookie token, `expires_at` (30 days from last use), user agent, address |

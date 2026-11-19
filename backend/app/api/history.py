@@ -11,8 +11,10 @@ from sqlmodel import Session, col, select
 from ..auth import current_user
 from ..context import AppContext, get_ctx, get_session
 from ..errors import CodedHTTPException
-from ..models import Video
+from ..models import Video, require_id
 from ..response_schemas import (
+    ContinueStreamRead,
+    ContinueStreamsRead,
     ContinueYoutubeRead,
     HistoryRemovedRead,
     HistoryTasteRead,
@@ -26,7 +28,7 @@ from ..schemas import (
     HistoryStatsRange,
     HistoryTasteWrite,
 )
-from ..services import app_settings, watch_history, watch_stats
+from ..services import app_settings, library, parental, watch_history, watch_stats
 from ..services.auth.accounts import AuthUser
 from ..services.library import CONTINUE_WATCHING_DAYS
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
@@ -63,9 +65,16 @@ def history_stats(
         raise CodedHTTPException(
             422, f"Unknown time zone: {tz}", "invalid_timezone"
         ) from None
-    return watch_stats.compute(
+    stats = watch_stats.compute(
         session, user.id, range_, tz_name, zone, include_youtube=include_youtube
     )
+    if user.allowed is not None:
+        # Parental controls: earlier watches of other channels are not named.
+        allowed = user.allowed
+        tags = set(library.all_tags(session, allowed))
+        stats.channels = [c for c in stats.channels if allowed.allows(None, c.name)]
+        stats.tags = [t for t in stats.tags if t.tag in tags]
+    return stats
 
 
 def _stream(entry: watch_history.Entry) -> ChannelFeedEntry:
@@ -102,6 +111,19 @@ def list_watches(
     ids = [e.video_id for e in entries if e.video_id is not None]
     videos = session.exec(select(Video).where(col(Video.id).in_(ids))).all()
     reads = {r.id: r for r in to_read_many(videos, session, viewer=user, compact=True)}
+    if user.allowed is not None:
+        # Parental controls: earlier watches of other channels are left out.
+        allowed = user.allowed
+        by_id = {require_id(v): v for v in videos}
+        entries = [
+            e
+            for e in entries
+            if (
+                parental.video_allowed(allowed, by_id[e.video_id])
+                if e.video_id in by_id
+                else e.video_id is None and allowed.allows(e.channel_url, e.channel)
+            )
+        ]
     items = []
     for e in entries:
         video = reads.get(e.video_id) if e.video_id is not None else None
@@ -122,7 +144,9 @@ def list_watches(
         next_cursor=offset_cursor(sort=_SORT, order="desc", offset=page.offset + limit)
         if more
         else None,
-        total=watch_history.count(session, user.id) if not cursor else None,
+        total=watch_history.count(session, user.id)
+        if not cursor and user.allowed is None
+        else None,
     )
 
 
@@ -162,6 +186,37 @@ def set_watch_taste(
     return HistoryTasteRead(keys=payload.keys, excluded=not payload.use)
 
 
+@router.get("/continue-streams", response_model=ContinueStreamsRead)
+def continue_streams(
+    session: Session = Depends(get_session),
+    user: AuthUser = Depends(current_user),
+):
+    """Videos the user streamed without downloading and left part-way, within
+    the Continue watching window."""
+    days = int(
+        app_settings.load().get("continue_watching_days", CONTINUE_WATCHING_DAYS)
+    )
+    rows = watch_history.continue_streams(
+        session, user.id, days=days, now=datetime.now(UTC)
+    )
+    return ContinueStreamsRead(
+        items=[
+            ContinueStreamRead(
+                id=row.yt_id,
+                url=row.url,
+                title=row.title,
+                duration=row.duration_sec,
+                thumbnail_url=youtube_thumbnail_url(row.yt_id),
+                channel=row.channel,
+                channel_url=row.channel_url,
+                position_sec=row.position_sec,
+            )
+            for row in rows
+            if user.allowed is None or user.allowed.allows(row.channel_url, row.channel)
+        ]
+    )
+
+
 @router.get("/continue-youtube", response_model=ContinueYoutubeRead)
 def continue_youtube(
     session: Session = Depends(get_session),
@@ -186,5 +241,6 @@ def continue_youtube(
                 channel_url=v.channel_url,
             )
             for v in views
+            if user.allowed is None or user.allowed.allows(v.channel_url, v.channel)
         ]
     )

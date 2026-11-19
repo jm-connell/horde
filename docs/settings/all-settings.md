@@ -29,7 +29,7 @@ See [Settings overview](index.md#three-layer-persistence) for hydration and migr
 | `youtube_video_search` | `true` | bool | Library home live YouTube video search (after pause / Enter) | Top-level |
 | `max_library_bytes` | `null` | int or null | Bytes, 1 GiB–1 PiB; `null` or `0` = no limit. Downloads wait while the library is at this size. Admin only: a member's `GET /api/settings` shows `null` | Top-level |
 | `media_server_sidecars` | `false` | bool | Write Jellyfin / Kodi / Plex files (`.nfo`, `-thumb.jpg`, `tvshow.nfo`) beside the media; turning it on queues a backfill. Admin only: a member's `GET /api/settings` shows `false`. See [Media servers](../guides/media-servers.md) | Top-level |
-| `comments_enabled` | `true` | bool | Comments of YouTube videos: saved in the background, shown under videos, used by search and the video chat. Off turns all of it off (saved comments are kept). Members see the real value. See [Comments](../guides/comments.md) | Top-level |
+| `comments_enabled` | `true` | bool | Comments of YouTube videos: saved in the background, shown under videos, used by search and by Ask when it answers about a video. Off turns all of it off (saved comments are kept). Members see the real value. See [Comments](../guides/comments.md) | Top-level |
 | `require_two_factor` | `"off"` | `off` \| `admins` \| `everyone` | Who must sign in with a second step (an authenticator code or recovery code). Accounts that must but have not set it up can only reach the setup screen. Administrators only; see [Two-step sign-in](../ops/authentication.md#requiring-two-step-sign-in).
 | `download_queue_paused` | `false` | bool | Restored on startup by download queue recover; set by Pause/Resume on Download | Top-level (**Backend-only** — no Settings control) |
 | `setup_completed` | `false` | bool | First-install wizard. Missing key on an existing `app_settings.json` is treated as **true** (grandfather). PATCH may set `true` only; factory reset sets `false`. | Top-level |
@@ -135,6 +135,7 @@ Written to localStorage always; synced to `app_settings.json` → `ui` as **snak
 | `channelSort` | `"recent_download"` | string | `recent_download` \| `video_count` \| `alphabetical` \| `subscriber_count` | UI blob |
 | `channelOrder` | `"desc"` | string | `asc` \| `desc` | UI blob |
 | `showDownloadNavBadge` | `true` | bool | | UI blob |
+| `defaultDownloadPreset` | `"best"` | string | `best` \| `2160p` \| `1440p` \| `1080p` \| `720p` \| `480p` \| `audio` \| `audio-160` \| `audio-128` \| `audio-64`: preselected whenever you start a download | UI blob (`default_download_preset`) |
 | `normalizeVolumeOnDownload` | `true` | bool | | UI blob |
 | `downloadVideoCodec` | `"av1"` | string | `av1` \| `h264_native` \| `h264_convert` \| `sidecar` (legacy `h264`/`h265` → `h264_convert`) | UI blob (`download_video_codec`) |
 | `compatCopyResolution` | `"1080p"` | string | `1080p` \| `source`: H.264 copy short-side cap (1080, or up to 4K) | UI blob (`compat_copy_resolution`) |

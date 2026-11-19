@@ -29,6 +29,7 @@ import { useIsMobile } from "../hooks/useIsMobile";
 import { useShakaDashLoad } from "../hooks/useShakaDash";
 import { clipBarRange, clipMarkAtBar } from "./player/clipMarkers";
 import { useLiveResume } from "./player/useLiveResume";
+import { useStallRecovery } from "./player/useStallRecovery";
 import { behindLive, useLiveWindow } from "./player/useLiveWindow";
 import type { ShakaPlayer } from "shaka-player/dist/shaka-player.dash.js";
 
@@ -302,6 +303,7 @@ export default function VideoPlayer({
   });
 
   const liveWindow = useLiveWindow(shakaPlayerRef, live, shakaReady);
+  /** Load the same stream again (a live reconnect, a stalled stream). */
   const reconnectLive = useCallback(() => {
     setMediaError(null);
     setBuffering(true);
@@ -313,6 +315,21 @@ export default function VideoPlayer({
     shakaPlayerRef,
     shakaReady,
     reconnect: reconnectLive,
+  });
+  useStallRecovery({
+    enabled:
+      effectiveStreamType === "dash" &&
+      !live &&
+      shakaReady &&
+      !mediaSuspended &&
+      !chromecastCasting &&
+      !mediaError,
+    videoRef,
+    shakaPlayerRef,
+    pendingSeekRef,
+    reload: reconnectLive,
+    fallback: enterCompatMode,
+    setMediaError,
   });
 
   const seekTo = useCallback(
@@ -689,15 +706,13 @@ export default function VideoPlayer({
           />
         )}
 
-        {skip.notice && (
-          <SkipNoticeChip
-            notice={skip.notice}
-            isMini={isMini}
-            controlsVisible={controlsVisible}
-            onSkip={skip.skipPromptedSegment}
-            onUndo={skip.undoSkip}
-          />
-        )}
+        <SkipNoticeChip
+          notice={skip.notice}
+          isMini={isMini}
+          controlsVisible={controlsVisible}
+          onSkip={skip.skipPromptedSegment}
+          onUndo={skip.undoSkip}
+        />
 
         {upNext && !isMini && (
           <UpNextOverlay

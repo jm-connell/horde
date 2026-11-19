@@ -20,6 +20,7 @@ def test_lists_follows_autodownloads_and_rules_by_channel(
         channel="Veritasium",
         channel_url="https://www.youtube.com/@veritasium",
         title="Two",
+        channel_subscriber_count=19_500_000,
     )
     with Session(init_db["engine"]) as s:
         follows.follow(s, admin_user.id, "https://www.youtube.com/@Veritasium", "Veri")
@@ -61,12 +62,14 @@ def test_lists_follows_autodownloads_and_rules_by_channel(
     assert nobody["following"] is True
     assert nobody["autodownload"] is False
     assert nobody["video_count"] == 0
+    assert nobody["subscriber_count"] is None
     assert veri["channel_name"] == "Veritasium"  # the library's name wins
     assert veri["following"] is True
     assert veri["autodownload"] is True
     assert veri["quality_preset"] == "720p"
     assert veri["retention"]["keep_latest"] == 20
     assert veri["video_count"] == 2
+    assert veri["subscriber_count"] == 19_500_000
     assert veri["checked_at"].startswith("2026-01-02")
 
 

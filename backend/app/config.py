@@ -46,6 +46,9 @@ TRASH_DAYS: int = _non_negative_int("HORDE_TRASH_DAYS", TRASH_DAYS_DEFAULT)
 # .m4v and .mov are MP4-family containers that browsers play when the streams are
 # H.264/HEVC + AAC, which is what phones and cameras write.
 VIDEO_EXTENSIONS: set[str] = {".mp4", ".mkv", ".webm", ".m4v", ".mov"}
+# What yt-dlp writes for an audio-only format ("Audio" presets, podcasts). Not
+# importable by the scanner: a library download of one is stored as .mp4.
+AUDIO_EXTENSIONS: set[str] = {".m4a", ".mp3", ".opus", ".ogg", ".aac", ".flac", ".wav"}
 
 # Host/port for uvicorn (entrypoint reads these too).
 HOST: str = os.environ.get("HOST", "0.0.0.0")  # noqa: S104 - container server; bind-all is the documented default

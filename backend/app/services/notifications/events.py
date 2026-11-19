@@ -91,8 +91,8 @@ EVENTS: tuple[EventSpec, ...] = (
     ),
     EventSpec(
         CHANNEL_LIVE,
-        "Followed channel went live",
-        "A channel somebody follows started a live broadcast.",
+        "Subscribed channel went live",
+        "A channel somebody subscribes to started a live broadcast.",
         default=False,
         coalesce=True,
     ),

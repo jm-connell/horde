@@ -169,6 +169,10 @@ class MembersOnlyError(Exception):
     """Raised when a video is YouTube members-only and should be skipped."""
 
 
+class FfmpegMissingError(Exception):
+    """Raised when a download left separate streams because ffmpeg is not installed."""
+
+
 class CatalogSkipError(Exception):
     """Per-video catalog skip (age-restricted, members-only, unavailable)."""
 
@@ -435,6 +439,13 @@ def classify_ytdlp_error(
             ERROR_KIND_MEMBERS,
             "Members-only video — skipped. Member videos can't be downloaded "
             "anonymously.",
+        )
+
+    if isinstance(exc_or_message, FfmpegMissingError):
+        return _finish(
+            ERROR_KIND_POSTPROCESS,
+            "ffmpeg is not installed on the server, so the video and audio "
+            "streams can't be merged. Install ffmpeg and retry.",
         )
 
     raw = _strip_ansi_local(str(exc_or_message or "")).strip()
@@ -789,6 +800,9 @@ _extract_gate_lock = threading.Lock()
 _extract_held = False
 _extract_waiter_seq = 0
 _extract_waiters: list[tuple[int, int, threading.Event]] = []
+#: Who holds the gate now: (url, priority, monotonic start). A waiter that waits
+#: long names it, so a stalled preview shows what it is stuck behind.
+_extract_holder: tuple[str, int, float] | None = None
 _last_extract_at = 0.0
 _EXTRACT_MIN_INTERVAL_SEC = 1.25
 _info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -815,14 +829,17 @@ EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC = float(
 )
 
 
-def _acquire_extract_gate(priority: int, timeout: float | None = None) -> None:
+def _acquire_extract_gate(
+    priority: int, timeout: float | None = None, *, url: str = ""
+) -> None:
     """One extract at a time; lower ``priority`` values run first.
 
     Waits at most ``timeout`` seconds and then raises ``ExtractQueueTimeout`` without
     holding the gate. The default is ``EXTRACT_QUEUE_TIMEOUT_SEC``, or the longer
-    ``EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC`` for background priority.
+    ``EXTRACT_QUEUE_TIMEOUT_BACKGROUND_SEC`` for background priority. A non-background
+    caller still waiting after ``SLOW_EXTRACT_WAIT_SEC`` logs who holds the gate.
     """
-    global _extract_held, _extract_waiter_seq
+    global _extract_held, _extract_holder, _extract_waiter_seq
     if timeout is not None:
         limit = timeout
     elif priority >= EXTRACT_PRIORITY_BACKGROUND:
@@ -832,15 +849,20 @@ def _acquire_extract_gate(priority: int, timeout: float | None = None) -> None:
     with _extract_gate_lock:
         if not _extract_held and not _extract_waiters:
             _extract_held = True
+            _extract_holder = (url, priority, time.monotonic())
             return
         waiter = threading.Event()
         heapq.heappush(_extract_waiters, (int(priority), _extract_waiter_seq, waiter))
         _extract_waiter_seq += 1
-    if waiter.wait(limit):
+    if _wait_for_gate(waiter, priority, limit, url):
+        with _extract_gate_lock:
+            _extract_holder = (url, priority, time.monotonic())
         return
     with _extract_gate_lock:
         if waiter.is_set():
-            return  # the gate was handed to us just as the wait expired
+            # The gate was handed to us just as the wait expired.
+            _extract_holder = (url, priority, time.monotonic())
+            return
         _extract_waiters[:] = [w for w in _extract_waiters if w[2] is not waiter]
         heapq.heapify(_extract_waiters)
     raise ExtractQueueTimeout(
@@ -848,14 +870,81 @@ def _acquire_extract_gate(priority: int, timeout: float | None = None) -> None:
     )
 
 
-def _release_extract_gate() -> None:
-    global _extract_held
+def _wait_for_gate(
+    waiter: threading.Event, priority: int, limit: float, url: str
+) -> bool:
+    """Wait up to ``limit`` for the gate; True once it is handed to ``waiter``.
+
+    Background callers wait behind everything by design, so only the others report
+    what holds the gate when the wait passes ``SLOW_EXTRACT_WAIT_SEC``.
+    """
+    if priority >= EXTRACT_PRIORITY_BACKGROUND or limit <= SLOW_EXTRACT_WAIT_SEC:
+        return waiter.wait(limit)
+    if waiter.wait(SLOW_EXTRACT_WAIT_SEC):
+        return True
     with _extract_gate_lock:
+        holder = _extract_holder
+    if holder is not None:
+        held_url, held_priority, held_since = holder
+        logger.warning(
+            "YouTube queue busy: %s request waited %.0fs so far, the queue is held "
+            "by a %s request running %.0fs: %s (waiting: %s)",
+            _PRIORITY_NAMES.get(priority, str(priority)),
+            SLOW_EXTRACT_WAIT_SEC,
+            _PRIORITY_NAMES.get(held_priority, str(held_priority)),
+            time.monotonic() - held_since,
+            held_url or "unknown",
+            url or "unknown",
+        )
+    return waiter.wait(limit - SLOW_EXTRACT_WAIT_SEC)
+
+
+def _release_extract_gate() -> None:
+    global _extract_held, _extract_holder
+    with _extract_gate_lock:
+        _extract_holder = None
         if _extract_waiters:
             _prio, _seq, waiter = heapq.heappop(_extract_waiters)
             waiter.set()
             return
         _extract_held = False
+
+
+#: A gated request that waited or ran this long is logged, so a slow stream preview
+#: can be traced to whatever held the gate.
+SLOW_EXTRACT_WAIT_SEC = 10.0
+SLOW_EXTRACT_RUN_SEC = 15.0
+_PRIORITY_NAMES = {
+    EXTRACT_PRIORITY_INTERACTIVE: "interactive",
+    EXTRACT_PRIORITY_DOWNLOAD: "download",
+    EXTRACT_PRIORITY_BACKGROUND: "background",
+}
+
+
+def _log_if_slow(
+    url: str, priority: int, queued_at: float, started_at: float | None
+) -> None:
+    """Log a gated request that waited for, or held, the gate a long time.
+
+    ``started_at`` is None when the request never ran (a cache hit after waiting).
+    Background requests wait behind everything else by design, so they log at debug.
+    """
+    now = time.monotonic()
+    waited = (started_at if started_at is not None else now) - queued_at
+    ran = now - started_at if started_at is not None else 0.0
+    if waited < SLOW_EXTRACT_WAIT_SEC and ran < SLOW_EXTRACT_RUN_SEC:
+        return
+    level = (
+        logging.DEBUG if priority == EXTRACT_PRIORITY_BACKGROUND else logging.WARNING
+    )
+    logger.log(
+        level,
+        "Slow YouTube request (%s): waited %.1fs for the queue, ran %.1fs: %s",
+        _PRIORITY_NAMES.get(priority, str(priority)),
+        waited,
+        ran,
+        url,
+    )
 
 
 def call_gated[T](
@@ -868,12 +957,15 @@ def call_gated[T](
     """
     global _last_extract_at
     ensure_plugins_loaded()
-    _acquire_extract_gate(priority)
+    queued_at = time.monotonic()
+    started_at: float | None = None
+    _acquire_extract_gate(priority, url=url)
     try:
         with _extract_gate_lock:
             wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
+        started_at = time.monotonic()
         try:
             return fn()
         except Exception as exc:
@@ -885,6 +977,7 @@ def call_gated[T](
                 _last_extract_at = time.time()
     finally:
         _release_extract_gate()
+        _log_if_slow(url, priority, queued_at, started_at)
 
 
 def ensure_plugins_loaded() -> None:
@@ -978,7 +1071,9 @@ def extract_info_gated(
         _cache_put(auth_key, info)
         return dict(info)
 
-    _acquire_extract_gate(priority)
+    queued_at = time.monotonic()
+    started_at: float | None = None
+    _acquire_extract_gate(priority, url=url)
     try:
         if not force:
             if prefer_cookies:
@@ -995,6 +1090,7 @@ def extract_info_gated(
             wait = _EXTRACT_MIN_INTERVAL_SEC - (time.time() - _last_extract_at)
         if wait > 0:
             time.sleep(wait)
+        started_at = time.monotonic()
 
         if prefer_cookies:
             try:
@@ -1031,3 +1127,4 @@ def extract_info_gated(
         return dict(info)
     finally:
         _release_extract_gate()
+        _log_if_slow(url, priority, queued_at, started_at)

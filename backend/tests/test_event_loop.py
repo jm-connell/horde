@@ -214,7 +214,7 @@ def test_requests_beyond_the_yt_dlp_slots_get_429_without_taking_threads(
     release = threading.Event()
     entered = threading.Event()
 
-    def slow_preview(url):
+    def slow_preview(url, *, priority=0):
         entered.set()
         release.wait(5)
         raise ValueError("boom")

@@ -15,6 +15,7 @@ import SidePanelFrame, { type PanelTab } from "../components/SidePanelFrame";
 import type { HelpFrame } from "../components/helpChatLayout";
 import {
   type AskScopeChannel,
+  type AskVideo,
   HELP_PANEL_STORAGE_KEY as PANEL_STORAGE_KEY,
 } from "../components/helpChat";
 import { getJson, setJson } from "../storage";
@@ -25,19 +26,31 @@ interface HelpChatValue {
   available: boolean;
   open: boolean;
   setOpen: (open: boolean) => void;
+  /** The footer / tab bar button: open, unfold a minimized chat, or close. */
+  toggleOpen: () => void;
   /** Set by a page to say which part of it is showing (see `useHelpPageDetail`). */
   setDetail: (detail: PageDetail) => void;
   /** Drop `detail` unless another page has replaced it already. */
   clearDetail: (detail: PageDetail) => void;
   /** Open the panel on a new conversation about this Ask channel. */
   askChannel: (channel: AskScopeChannel) => void;
+  /** Open the panel on a new conversation about this video ("Chat" on Watch). */
+  askVideo: (video: AskVideo) => void;
   /** Set by a page about one channel (see `useAskPageChannel`). */
   setPageChannel: (page: PageChannel | null) => void;
+  /** Set by the watch page (see `useAskPageVideo`). */
+  setPageVideo: (page: PageVideo | null) => void;
   /** The Recommended algorithm panel (shown only while that feed is). */
   algorithmOpen: boolean;
   setAlgorithmOpen: (open: boolean) => void;
   /** Called by the Recommended feed while it is on screen (see `useAlgorithmPanelHere`). */
   setAlgorithmHere: (here: boolean) => void;
+}
+
+/** The video the watch page shows: Ask answers from it when nothing is picked. */
+export interface PageVideo {
+  pathname: string;
+  video: AskVideo;
 }
 
 /** The channel (and video) a page is about, for routing Ask questions. */
@@ -60,22 +73,30 @@ interface HostValue {
   setDocked: (docked: boolean) => void;
   dockWidth: number | null;
   setDockWidth: (width: number) => void;
+  minimized: boolean;
+  setMinimized: (minimized: boolean) => void;
   pageDetail: () => PageDetail | null;
   /** True once the user opened it in this page load (not restored on reload). */
   openedHere: boolean;
-  /** The latest "Ask <channel>" request; a new one starts a new conversation. */
-  channelRequest: ChannelRequest | null;
+  /** The latest "Ask <channel>" or "Chat" request; a new one starts a new conversation. */
+  sourceRequest: SourceRequest | null;
   /** The channel the current page is about, if any. */
   pageChannel: PageChannel | null;
+  /** The video the watch page shows, if any. */
+  pageVideo: PageVideo | null;
   /** The request the panel has not acted on yet (null once it has). */
-  pendingChannelRequest: () => ChannelRequest | null;
+  pendingSourceRequest: () => SourceRequest | null;
   /** The panel acted on this request. */
-  consumeChannelRequest: (seq: number) => void;
+  consumeSourceRequest: (seq: number) => void;
 }
 
-/** A request to start a conversation about a channel (`seq` tells repeats apart). */
-export interface ChannelRequest {
-  channel: AskScopeChannel;
+/**
+ * A request to start a conversation about a channel or a video (one of the
+ * two; `seq` tells repeats apart).
+ */
+export interface SourceRequest {
+  channel?: AskScopeChannel;
+  video?: AskVideo;
   seq: number;
 }
 
@@ -102,6 +123,8 @@ interface PanelState {
   docked?: boolean;
   /** The docked panel's width, once the user has dragged it. */
   dockWidth?: number | null;
+  /** Folded to its header bar at the bottom of the window, still open. */
+  minimized?: boolean;
 }
 
 function isFrame(v: unknown): v is HelpFrame {
@@ -121,13 +144,14 @@ function isPanelState(v: unknown): v is PanelState {
     (s.tab === undefined || s.tab === "ask" || s.tab === "algorithm") &&
     (s.frame === null || isFrame(s.frame)) &&
     (s.docked === undefined || typeof s.docked === "boolean") &&
+    (s.minimized === undefined || typeof s.minimized === "boolean") &&
     (s.dockWidth == null ||
       (typeof s.dockWidth === "number" && Number.isFinite(s.dockWidth)))
   );
 }
 
 /**
- * Ask, available on every page: the footer opens it and it stays
+ * Ask, available on every page: the top bar opens it and it stays
  * open (same conversation, same spot) while the user moves around the app.
  */
 export function HelpChatProvider({ children }: { children: ReactNode }) {
@@ -148,16 +172,32 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const [openedHere, setOpenedHere] = useState(false);
   const setOpen = useCallback((open: boolean) => {
     if (open) setOpenedHere(true);
+    // Opening (again) unfolds a minimized panel; closing forgets it.
     setState((s) => ({
       ...s,
       open,
+      minimized: open ? false : s.algorithm ? s.minimized : false,
       tab: open ? "ask" : s.algorithm ? "algorithm" : s.tab,
     }));
+  }, []);
+  const toggleOpen = useCallback(() => {
+    setOpenedHere(true);
+    setState((s) => {
+      if (s.open && !s.minimized)
+        return {
+          ...s,
+          open: false,
+          minimized: s.algorithm ? s.minimized : false,
+          tab: s.algorithm ? "algorithm" : s.tab,
+        };
+      return { ...s, open: true, minimized: false, tab: "ask" };
+    });
   }, []);
   const setAlgorithmOpen = useCallback((algorithm: boolean) => {
     setState((s) => ({
       ...s,
       algorithm,
+      minimized: algorithm ? false : s.open ? s.minimized : false,
       tab: algorithm ? "algorithm" : s.open ? "ask" : s.tab,
     }));
   }, []);
@@ -173,24 +213,32 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
   const clearDetail = useCallback((mine: PageDetail) => {
     if (detail.current === mine) detail.current = null;
   }, []);
-  const [channelRequest, setChannelRequest] = useState<ChannelRequest | null>(
+  const [sourceRequest, setSourceRequest] = useState<SourceRequest | null>(
     null
   );
   const [pageChannel, setPageChannel] = useState<PageChannel | null>(null);
+  const [pageVideo, setPageVideo] = useState<PageVideo | null>(null);
   // Kept here, not in the panel: the panel mounts on open, after the request.
   const consumedSeq = useRef(0);
-  const latestRequest = useRef<ChannelRequest | null>(null);
-  latestRequest.current = channelRequest;
-  const pendingChannelRequest = useCallback(() => {
+  const latestRequest = useRef<SourceRequest | null>(null);
+  latestRequest.current = sourceRequest;
+  const pendingSourceRequest = useCallback(() => {
     const req = latestRequest.current;
     return req && req.seq > consumedSeq.current ? req : null;
   }, []);
-  const consumeChannelRequest = useCallback((seq: number) => {
+  const consumeSourceRequest = useCallback((seq: number) => {
     consumedSeq.current = Math.max(consumedSeq.current, seq);
   }, []);
   const askChannel = useCallback(
     (channel: AskScopeChannel) => {
-      setChannelRequest((prev) => ({ channel, seq: (prev?.seq ?? 0) + 1 }));
+      setSourceRequest((prev) => ({ channel, seq: (prev?.seq ?? 0) + 1 }));
+      setOpen(true);
+    },
+    [setOpen]
+  );
+  const askVideo = useCallback(
+    (video: AskVideo) => {
+      setSourceRequest((prev) => ({ video, seq: (prev?.seq ?? 0) + 1 }));
       setOpen(true);
     },
     [setOpen]
@@ -207,15 +255,22 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
     (dockWidth: number) => setState((s) => ({ ...s, dockWidth })),
     []
   );
+  const setMinimized = useCallback(
+    (minimized: boolean) => setState((s) => ({ ...s, minimized })),
+    []
+  );
   const value = useMemo(
     () => ({
       available,
       open: available && state.open,
       setOpen,
+      toggleOpen,
       setDetail,
       clearDetail,
       askChannel,
+      askVideo,
       setPageChannel,
+      setPageVideo,
       algorithmOpen: !!state.algorithm,
       setAlgorithmOpen,
       setAlgorithmHere,
@@ -224,9 +279,11 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       available,
       state.open,
       setOpen,
+      toggleOpen,
       setDetail,
       clearDetail,
       askChannel,
+      askVideo,
       state.algorithm,
       setAlgorithmOpen,
     ]
@@ -243,12 +300,15 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDocked,
       dockWidth: state.dockWidth ?? null,
       setDockWidth,
+      minimized: !!state.minimized,
+      setMinimized,
       pageDetail: () => detail.current,
       openedHere,
-      channelRequest,
+      sourceRequest,
       pageChannel,
-      pendingChannelRequest,
-      consumeChannelRequest,
+      pageVideo,
+      pendingSourceRequest,
+      consumeSourceRequest,
     }),
     [
       state.tab,
@@ -261,11 +321,14 @@ export function HelpChatProvider({ children }: { children: ReactNode }) {
       setDocked,
       state.dockWidth,
       setDockWidth,
+      state.minimized,
+      setMinimized,
       openedHere,
-      channelRequest,
+      sourceRequest,
       pageChannel,
-      pendingChannelRequest,
-      consumeChannelRequest,
+      pageVideo,
+      pendingSourceRequest,
+      consumeSourceRequest,
     ]
   );
 
@@ -296,10 +359,11 @@ export function HelpChatHost() {
           <HelpChatPanel
             pageDetail={host.pageDetail}
             focusOnOpen={host.openedHere}
-            channelRequest={host.channelRequest}
+            sourceRequest={host.sourceRequest}
             pageChannel={host.pageChannel}
-            pendingChannelRequest={host.pendingChannelRequest}
-            consumeChannelRequest={host.consumeChannelRequest}
+            pageVideo={host.pageVideo}
+            pendingSourceRequest={host.pendingSourceRequest}
+            consumeSourceRequest={host.consumeSourceRequest}
             onClose={() => setOpen(false)}
           />
         </ErrorBoundary>
@@ -334,6 +398,8 @@ export function HelpChatHost() {
       onDockedChange={host.setDocked}
       dockWidth={host.dockWidth}
       onDockWidthChange={host.setDockWidth}
+      minimized={host.minimized}
+      onMinimizedChange={host.setMinimized}
     />
   );
 }
@@ -379,6 +445,26 @@ export function useAskPageChannel(
     });
     return () => setPageChannel(null);
   }, [pathname, channelUrl, channelName, videoId, setPageChannel]);
+}
+
+/**
+ * Tell the chat which video the watch page shows. With nothing picked, a
+ * question on this page goes to it unless it is about Horde or a channel.
+ */
+export function useAskPageVideo(pathname: string, video: AskVideo | null) {
+  const { setPageVideo } = useHelpChat();
+  const libraryId = video?.library_id ?? null;
+  const youtubeId = video?.youtube_id ?? null;
+  const url = video?.url ?? null;
+  const title = video?.title ?? "";
+  useEffect(() => {
+    if (libraryId == null && !url) return;
+    setPageVideo({
+      pathname,
+      video: { library_id: libraryId, youtube_id: youtubeId, url, title },
+    });
+    return () => setPageVideo(null);
+  }, [pathname, libraryId, youtubeId, url, title, setPageVideo]);
 }
 
 /**

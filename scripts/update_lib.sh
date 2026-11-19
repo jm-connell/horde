@@ -184,7 +184,7 @@ horde_extract_horde_bind_mounts() {
   python3 "$parser"
 }
 
-HORDE_COMPOSE_FILES=(docker-compose.yml docker-compose.yaml compose.yml compose.yaml)
+HORDE_COMPOSE_FILES=(docker-compose.yml docker-compose.yaml compose.yml compose.yaml docker-compose.build.yml)
 
 # Print tracked compose files that have local modifications (one per line).
 horde_dirty_compose_files() {
@@ -290,10 +290,14 @@ horde_git_pull() {
 }
 
 # Move to release TAG on the local branch horde-release. Refuses to go backwards
-# (a checkout ahead of the release, or a moved tag) unless HORDE_ALLOW_DOWNGRADE=1:
-# a database migrated by newer code would not start on older code.
+# unless HORDE_ALLOW_DOWNGRADE=1: a database migrated by newer code would not
+# start on older code. "Backwards" is judged against the version that last ran,
+# HORDE_DEPLOYED_SHA (the commit baked into the running image, set by update.sh),
+# not the checkout: with the published image the checkout's code never runs, so
+# a fresh clone of main may move to the release it is ahead of. Without a known
+# deployed commit the checkout's HEAD stands in for it.
 _horde_checkout_release() {
-  local tag="$1" target head cur
+  local tag="$1" target head cur deployed
   target="$(git rev-parse "${tag}^{commit}")"
   head="$(git rev-parse HEAD)"
   cur="$(git rev-parse --abbrev-ref HEAD)"
@@ -301,11 +305,20 @@ _horde_checkout_release() {
     echo "Already on release ${tag}."
     return 0
   fi
-  if ! git merge-base --is-ancestor "$head" "$target" && [[ "${HORDE_ALLOW_DOWNGRADE:-}" != "1" ]]; then
+  deployed="$head"
+  if [[ -n "${HORDE_DEPLOYED_SHA:-}" ]] && git cat-file -e "${HORDE_DEPLOYED_SHA}^{commit}" 2>/dev/null; then
+    deployed="$HORDE_DEPLOYED_SHA"
+  fi
+  if ! git merge-base --is-ancestor "$deployed" "$target" && [[ "${HORDE_ALLOW_DOWNGRADE:-}" != "1" ]]; then
     {
       echo
-      echo "Stopping: the latest release ${tag} does not contain your current checkout"
-      echo "(${head:0:7} on ${cur}), so switching to it would go BACKWARDS. A database"
+      if [[ "$deployed" == "$head" ]]; then
+        echo "Stopping: the latest release ${tag} does not contain your current checkout"
+        echo "(${head:0:7} on ${cur}), so switching to it would go BACKWARDS. A database"
+      else
+        echo "Stopping: the latest release ${tag} does not contain the version you run"
+        echo "(${deployed:0:7}), so switching to it would go BACKWARDS. A database"
+      fi
       echo "already migrated by newer code may refuse to start on it. Nothing was changed."
       echo "Either keep following main:  HORDE_UPDATE_CHANNEL=main bash update.sh"
       echo "(set it in .env or your shell), or accept the downgrade:  HORDE_ALLOW_DOWNGRADE=1 bash update.sh"
