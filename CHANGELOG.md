@@ -21,6 +21,46 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Recommended's color coding is a setting, off by default.** The accent
+  outlines that mark a card as downloaded or from your channels, and their
+  key beside the tabs, now show only with Settings → Library →
+  **Color-code Recommended** on.
+- **Icons in Ask's title bar.** History and New chat are icon buttons
+  (a clock in a turning arrow, then a plus in a square), grouped left of a
+  hairline from the minimize, dock and close controls.
+- **References under an Ask answer are folded.** The numbers in the answer
+  already open each moment, so the full list is one "N references" line
+  with an arrow to expand it. "Ask … instead" puts a video's title in
+  quotes.
+- **Channel sidebar with pictures.** Each channel in the Home sidebar shows
+  its profile picture, and channels you subscribe to but have no downloads
+  from are listed after the others, so they are one click away.
+- **The Ask panel glides when minimized and restored**, as it already did
+  when docked.
+- **Turning Ask on for a channel subscribes you to it.** A channel you
+  only asked questions of was nowhere in Horde outside Settings; now it is
+  on your Subscriptions page. A channel you unsubscribed from stays so.
+- **Ask uses a stronger model by default on OpenRouter.** With the Budget
+  chat model, Ask now answers with `deepseek/deepseek-v4.1-flash` (about a
+  quarter of a cent per channel question) unless you pick an **Assistant model (Ask)**
+  in Settings → AI → Models; summaries and tags stay on the chat model.
+- **No resolution box on channel feeds.** The floating "Download
+  resolution" box is gone; it sat over the Ask panel. Clicking a video's
+  download arrow now shows a toast in the bottom-left corner that counts
+  down, with the resolution to change, Edit, Now and Cancel. A resolution
+  picked there is remembered for the next downloads.
+- **Shorter quotes under Ask answers.** Each reference quotes the sentence
+  it is cited for, not the whole caption line around it, with "…" where it
+  is cut.
+- **Ask answers channel questions from more of the channel.** A hosted model
+  now reads three times as many passages, from a dozen videos instead of two
+  or three. A follow-up ("what about its battery?") is searched as what it
+  refers to, a question about a product looks in that product's videos
+  first, "the best one right now" favors recent videos, and "what are his
+  latest videos about?" is answered from the newest uploads. The model is
+  told today's date and each video's own description, so it spells product
+  names correctly, says when a view is old and says plainly when the videos
+  do not cover a question.
 - **Recommended ranks faster.** Opening the tab ranks the feed once, not
   twice, and each ranking of a large library with indexed channels is
   about a quarter quicker.
@@ -31,6 +71,33 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **A streamed video opened at a moment started from the beginning.** A
+  link to a moment in a video that is not downloaded (an Ask reference, a
+  "said in videos" result, `?t=`) only jumped there when that video was
+  already open; opening it fresh played from 0:00. It also lost the place
+  you left a streamed video at.
+- **Squeezed video cards beside the docked chat.** Video grids (channel
+  feeds, Recommended, the library, search results) chose their columns from
+  the window's width, so with Ask docked at the side five cards were
+  squeezed into a narrow page. Columns now follow the space the grid has.
+- **Empty Ask answers from reasoning models.** With a model that thinks
+  before it answers (DeepSeek, some Gemini and GPT models), the thinking
+  used up the reply's token limit and Ask reported "Model returned an empty
+  reply". The limit now leaves room for both.
+- **Opening a channel from a transcript search result.** Clicking the
+  channel name on a result found by what was said in a video opened an
+  empty channel page ("No YouTube URL is known", "Only YouTube channels
+  can be subscribed to") unless you already had a download from it.
+- **Captions of videos with dubbed audio.** For a video that has dubbed
+  audio tracks, Horde asked YouTube for a dub's captions translated back to
+  English, not the video's own. YouTube answered most of those requests with
+  "too many requests", so Ask indexing of such a channel stalled at its
+  first video and downloads of those videos got no captions (or wrong ones).
+- **Ask knows when a video was uploaded.** No upload dates were stored for
+  Ask channels, so references showed no year and answers could not tell an
+  old view from a new one. Dates are now saved as captions are fetched;
+  videos indexed before this keep no date until their channel is removed
+  and added again.
 - **Recommended forgot older watching in a busy history.** It read only
   your newest 600 watches, so with a YouTube history import or heavy use,
   channels you watched before then showed as "New channel for you" and

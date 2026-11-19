@@ -92,7 +92,7 @@ Navigate away from the watch page while a session is active and the player becom
 - Session starts bottom-right after close/reopen of the mini shell
 - Stays pinned to that corner when the window resizes (a dragged player is clamped on-screen)
 
-Floating UI (download panel / queue) tracks the mini player on resize and avoids overlapping it when possible.
+Floating UI (the feed's download toast, the queue) tracks the mini player on resize and avoids overlapping it when possible.
 
 ## Casting
 

@@ -4,7 +4,7 @@ Channels organize your library on disk and in the UI. Every approved video belon
 
 ## Sidebar
 
-On the [Library](library.md) page, the left sidebar lists channels from your collection.
+On the [Library](library.md) page, the left sidebar lists channels from your collection, each with its profile picture and how many videos you have from it. Channels you subscribe to and have nothing from yet follow them, without a number, so a channel you subscribed to (or turned Ask on for) is one click away before its first download.
 
 ### Sort order
 
@@ -90,9 +90,9 @@ Toggle **Undownloaded** in the channel page toolbar (also available under [Playb
 
 Switch between **grid** and **list** layouts for the channel feed. The preference is stored in the browser.
 
-### Channel download panel
+### Downloading from a channel's feed
 
-From a channel page you can open the download panel to queue undownloaded items (quality preset, selection, etc.), similar in spirit to the [Downloads](downloads.md) page but scoped to that channel’s feed. The floating card stays in the bottom-right (or above the mini player when one is open) as the window resizes. Queued items count down a few seconds so you can edit or cancel; leaving the page (for example opening Downloads) **confirms** anything still counting down instead of dropping it. The panel’s **Best available** default still fetches the highest source tier; once the job is in the download queue it is labeled with that actual resolution (for example 4K), which you can change mid-download.
+Click the download arrow on a video in a channel's feed and a small toast appears in the bottom-left corner (clear of Ask, the mini player and other toasts, which open bottom-right; above the mini player if you dragged that to the left). It shows the video, counts down a few seconds and lets you pick the resolution, **Edit** the details, start it **Now** or **Cancel**. Nothing floats on the page while no download is waiting. A resolution you pick there is remembered for the next downloads from a feed. Leaving the page (for example opening Downloads) **confirms** anything still counting down instead of dropping it. **Best available** still fetches the highest source tier; once the job is in the download queue it is labeled with that actual resolution (for example 4K), which you can change mid-download.
 
 ### Autodownload
 

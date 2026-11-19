@@ -202,7 +202,7 @@ more on touch screens so iOS does not zoom.
 Single-column app shell under a fixed translucent header. Pages sit in a centred
 container with a 16px gutter on phones, wider on desktop; settings and forms cap
 at `max-w-2xl`, the library grid and watch page use the full width. The library
-is a responsive card grid with an optional channel sidebar; the watch page puts
+is a responsive card grid with an optional channel sidebar (one column on phones, then as many columns as fit the grid's own width at 200px or more each, at most five, four beside the open sidebar: `.video-grid`, so docking the chat drops a column and never squeezes the cards); the watch page puts
 the player first with metadata and a related-videos sidebar beside it on wide
 screens and below it on narrow ones. Spacing is a 4px rhythm, mostly 8px
 (`gap-2`) inside components and 12–16px between them; panels pad 16–20px.
@@ -296,7 +296,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   finger can hit with an `::after` inset (44px on coarse pointers where
   there is room). Cards rise in on mount
   with a short stagger.
-- **Recommendation source marks.** In Recommended, a
+- **Recommendation source marks.** Off by default (Settings → Library →
+  **Color-code Recommended**, `showRecommendedSources`). When on, in Recommended, a
   1px accent outline over each card says where it comes from: solid `accent`
   (downloaded), `accent/35` (not downloaded, from a channel the user follows or
   has indexed), none (a channel new to them); a live card keeps its red ring
@@ -367,6 +368,23 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   search box is 128px, 192px from `xl`, so the links still fit beside both. Under the hamburger layout it is a
   chat icon beside the search icon, hidden while searching and in the
   installed app (its tab bar has Ask).
+- **Channel sidebar.** One list of rows (`ChannelSidebar`): a 24px round
+  avatar (`ChannelAvatar`; the initial on `accent/15` when there is no
+  picture), the name (`text-sm`, truncated) and a muted `tabular-nums`
+  count at the right edge. Rows are `rounded-lg`, 8px side padding, 10px
+  gap, `ink-800` on hover and `accent/15` with accent text when current.
+  **All channels** leads with a four-tile glyph in an `ink-800` chip the
+  size of an avatar. Channels with downloads come first; channels only
+  subscribed to follow with no count and no heading (being listed says it).
+  Live rows above use the same avatar and padding. Pictures of rows folded
+  behind **Show more** load when they are shown.
+- **Feed download toast.** Queuing a download from a channel feed shows one
+  `ui-panel` card (20rem) in the bottom-left corner with the thumbnail,
+  title, a compact resolution select, "Downloading in Ns" and Edit / Now /
+  Cancel; it slides in from the left edge. Bottom-left because Ask, the mini
+  player and toasts open bottom-right; it lifts above a bottom-docked queue
+  and sits above a mini player dragged to the left. Nothing floats on a feed
+  while no download waits.
 - **Floating panels.** The Ask chat is a non-modal floating
   panel (`ink-900`, `rounded-xl`, `ring-ink-600`, `shadow-2xl`, `z-45`: above
   the mini player, below toasts and dialogs): it opens in the bottom-right corner (above or beside the mini
@@ -395,7 +413,8 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   just its header bar (52px) at the bottom-right, above the mini player when
   that is there (full width above the tab bar on phones); the body stays
   mounted, a docked panel gives the page its width back, and the bar, the
-  chevron or the top bar's Ask restores it as it was.
+  chevron or the top bar's Ask restores it as it was. Folding and restoring
+  glide the box (250ms, `ease-fluid`), like docking does.
   When Ask is focused on a video or channel, a chip sits beside the title
   ("Ask · Cedar Notes ×"): `ink-800` fill, `rounded-md`, accent `text-sm`
   semibold text that truncates first, and a small muted × that goes back
