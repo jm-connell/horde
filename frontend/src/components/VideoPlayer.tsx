@@ -266,6 +266,7 @@ export default function VideoPlayer({
     mediaSuspended,
     live,
     videoRef,
+    startTimeRef: pendingSeekRef,
     shakaPlayerRef,
     qualityChoiceRef,
     capabilityMaxHeightRef,

@@ -120,6 +120,12 @@ export interface UseShakaDashArgs {
    */
   live?: boolean;
   videoRef: RefObject<HTMLVideoElement | null>;
+  /**
+   * Where to begin, in seconds (`?t=`, a resume position, or the playhead kept
+   * across a reload). Given to Shaka's `load`: a seek at `loadedmetadata` is
+   * undone when Shaka then sets its own start (the beginning).
+   */
+  startTimeRef: MutableRefObject<number>;
   shakaPlayerRef: MutableRefObject<ShakaPlayer | null>;
   qualityChoiceRef: MutableRefObject<QualityChoice>;
   capabilityMaxHeightRef: MutableRefObject<number>;
@@ -146,6 +152,7 @@ export function useShakaDashLoad({
   mediaSuspended = false,
   live = false,
   videoRef,
+  startTimeRef,
   shakaPlayerRef,
   qualityChoiceRef,
   capabilityMaxHeightRef,
@@ -357,7 +364,8 @@ export function useShakaDashLoad({
             return;
           }
         }
-        await p.load(src);
+        const startAt = startTimeRef.current;
+        await p.load(src, !live && startAt > 1 ? startAt : undefined);
         if (cancelled) return;
 
         shakaPlayerRef.current = p;

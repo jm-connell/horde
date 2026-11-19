@@ -55,7 +55,8 @@ declare module "shaka-player/dist/shaka-player.dash.js" {
 
   export interface ShakaPlayer {
     attach(element: HTMLMediaElement): Promise<void>;
-    load(manifestUri: string): Promise<void>;
+    /** `startTime`: where playback begins, in seconds (the start when omitted). */
+    load(manifestUri: string, startTime?: number): Promise<void>;
     destroy(): Promise<void>;
     unload?(initializeMediaSource?: boolean): Promise<void>;
     configure(config: Record<string, unknown>): void;
