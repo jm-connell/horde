@@ -202,3 +202,40 @@ def test_metadata_sync_skips_captions_during_backoff(add_video, monkeypatch):
 
     refresh_video_metadata(video.id, fields=["captions"])
     assert called["n"] == 0
+
+
+def _track(lang: str, tlang: str | None = None) -> dict:
+    url = f"https://www.youtube.com/api/timedtext?v=x&kind=asr&lang={lang}"
+    return {"ext": "vtt", "url": url + (f"&tlang={tlang}" if tlang else "")}
+
+
+def test_a_dubbed_video_keeps_its_own_captions_not_a_translated_dub():
+    """An English video with a Spanish dub lists "en" twice: its own captions,
+    then the dub's translated back to English. yt-dlp takes the last one."""
+    from app.services.downloads.subtitles import (
+        download_with_subtitles,
+        drop_translated_captions,
+    )
+
+    info = {
+        "automatic_captions": {
+            "en": [_track("en"), _track("fr", "en"), _track("es", "en")],
+            # No captions of its own: the translations are all there is.
+            "de": [_track("en", "de"), _track("es", "de")],
+        }
+    }
+    drop_translated_captions(info)
+    assert info["automatic_captions"]["en"] == [_track("en")]
+    assert len(info["automatic_captions"]["de"]) == 2
+
+    class FakeYdl:
+        def extract_info(self, url, download, process):
+            assert (download, process) == (False, False)
+            return {"automatic_captions": {"en": [_track("en"), _track("es", "en")]}}
+
+        def process_ie_result(self, info, download):
+            assert download is True
+            return {"picked": info["automatic_captions"]["en"][-1]["url"]}
+
+    picked = download_with_subtitles(FakeYdl(), "https://youtu.be/x")["picked"]
+    assert "tlang" not in picked

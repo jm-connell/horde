@@ -103,6 +103,41 @@ def subtitle_ydl_opts(
     return apply_cookie_opts(opts) if with_cookies else opts
 
 
+def _is_translated(track: Any) -> bool:
+    """A caption track YouTube machine-translates on request (``&tlang=``)."""
+    return isinstance(track, dict) and "tlang=" in str(track.get("url") or "")
+
+
+def drop_translated_captions(info: dict[str, Any]) -> None:
+    """Keep a language's own automatic captions over machine translations of it.
+
+    A video with dubbed audio tracks has speech-recognition captions for each
+    dub, and YouTube offers every one of them translated into every language.
+    yt-dlp takes the last track listed for a language, so "en" for an English
+    video became its Spanish dub translated back to English: wrong words, and
+    a request YouTube rate limits (429) almost at once.
+    """
+    captions = info.get("automatic_captions")
+    if not isinstance(captions, dict):
+        return
+    for lang, tracks in captions.items():
+        if not isinstance(tracks, list):
+            continue
+        own = [t for t in tracks if not _is_translated(t)]
+        if own and len(own) != len(tracks):
+            captions[lang] = own
+
+
+def download_with_subtitles(ydl: Any, url: str) -> dict[str, Any]:
+    """``ydl.extract_info(url, download=True)`` with ``drop_translated_captions``
+    applied before yt-dlp picks the caption tracks to write."""
+    info = ydl.extract_info(url, download=False, process=False)
+    if not isinstance(info, dict):
+        return {}
+    drop_translated_captions(info)
+    return dict(ydl.process_ie_result(info, download=True) or {})
+
+
 def download_subtitles(media: Path, source_url: str):
     """Best-effort subtitle fetch; never raises. Uses a temp dir to avoid Windows locks.
 
@@ -136,7 +171,7 @@ def download_subtitles(media: Path, source_url: str):
                         ytdlp_logger=ytdlp_logger,
                     )
                 ) as ydl:
-                    ydl.download([source_url])
+                    download_with_subtitles(ydl, source_url)
             except Exception as exc:
                 if with_cookies or not should_retry_with_cookies({}, exc):
                     raise
@@ -147,7 +182,7 @@ def download_subtitles(media: Path, source_url: str):
                         ytdlp_logger=ytdlp_logger,
                     )
                 ) as ydl:
-                    ydl.download([source_url])
+                    download_with_subtitles(ydl, source_url)
 
             for entry in Path(tmpdir).iterdir():
                 if not entry.is_file() or entry.suffix.lower() != ".vtt":
