@@ -156,6 +156,8 @@ function entryFromHit(hit: AskSearchHit): ChannelFeedEntry {
     url: youtubeUrl(hit.yt_id),
     title: hit.title ?? null,
     channel: hit.channel_name ?? null,
+    // Its channel name opens the channel's page, which needs the URL.
+    channel_url: hit.channel_url ?? null,
     published_at: hit.published_at ?? null,
     in_library: false,
     youtube_watched: false,

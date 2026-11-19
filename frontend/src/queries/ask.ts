@@ -43,7 +43,12 @@ export function useAskChannelActions() {
   const add = useMutation({
     mutationFn: (v: { url: string; includeStreams: boolean }) =>
       api.addAskChannel(v.url, v.includeStreams),
-    onSuccess,
+    // Turning Ask on also subscribes whoever did it.
+    onSuccess: () =>
+      Promise.all([
+        onSuccess(),
+        qc.invalidateQueries({ queryKey: ["follows"] }),
+      ]),
   });
   const setStreams = useMutation({
     mutationFn: (v: { id: number; includeStreams: boolean }) =>

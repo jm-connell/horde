@@ -436,6 +436,8 @@ def test_search_endpoint_links_the_library_copy(client, session, add_video):
     by_id = {i["yt_id"]: i for i in page["items"] + rest["items"]}
     assert by_id["aaaaaaaaaaa"]["library_video_id"] == lib.id
     assert by_id["aaaaaaaaaaa"]["channel_name"] == "The Car Care Nut"
+    # The card's channel name opens the channel page, which needs its URL.
+    assert by_id["aaaaaaaaaaa"]["channel_url"].startswith("https://youtube.com/@")
 
 
 def test_search_endpoint_survives_hostile_queries(client, session):
@@ -563,3 +565,26 @@ def test_search_endpoint_covers_every_channel_unless_one_is_chosen(client, sessi
         "/api/ask/search", params={"q": "timing belt", "channel_id": fix.id}
     ).json()["items"]
     assert {h["channel_name"] for h in one} == {"ChrisFix"}
+
+
+def test_turning_ask_on_subscribes_whoever_did_it(client, fake_preview):
+    """Asking a channel and then not finding it anywhere in Horde was
+    disorienting: an indexed channel had no place outside Settings."""
+    url = "https://youtube.com/@thecarcarenut"
+
+    def subscribed() -> list[tuple[str, str]]:
+        items = client.get("/api/follows").json()["items"]
+        return [(i["channel_url"], i["source"]) for i in items]
+
+    created = client.post("/api/ask/channels", json={"url": "@TheCarCareNut"}).json()
+    assert subscribed() == [(url, "ask")]
+
+    # Unsubscribing is the user's choice: turning Ask on again leaves it.
+    r = client.request("DELETE", "/api/follows", params={"channel_url": url})
+    assert r.status_code == 200, r.text
+    assert client.delete(f"/api/ask/channels/{created['id']}").status_code == 204
+    assert (
+        client.post("/api/ask/channels", json={"url": "@TheCarCareNut"}).status_code
+        == 201
+    )
+    assert subscribed() == []

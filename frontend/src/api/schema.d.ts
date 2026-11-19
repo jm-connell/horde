@@ -351,6 +351,7 @@ export interface paths {
         /**
          * Add Channel
          * @description Turn Ask on for a channel; its captions are indexed in the background.
+         *     Whoever does it is subscribed to the channel (if they may subscribe).
          */
         post: operations["add_channel_api_ask_channels_post"];
         delete?: never;
@@ -5464,6 +5465,8 @@ export interface components {
             channel_id: number;
             /** Channel Name */
             channel_name?: string | null;
+            /** Channel Url */
+            channel_url?: string | null;
             /** End Sec */
             end_sec: number;
             /**
