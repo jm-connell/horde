@@ -419,6 +419,14 @@ are 1px rings in `ink-700`; selection and focus use the accent (2px outline or a
   picked). Its mix bar is a 10px rounded bar in accent tints (strongest for
   your channels, `ink-600` for rewatch) with a 4px bar under it for what the
   feed really got.
+- **New (preview) section.** Reworked and new options on trial sit in
+  their own **New** section on Settings → Appearance, between Font and
+  Background, never mixed into the established pickers: backgrounds as
+  text tiles (name, one line, "Rework of …" when one replaces another, the
+  picked tile in the active chip style), loaders as the same 80 px looping
+  chips, and nav indicators and hover motion beside a sample nav and a
+  sample card (`data-horde="card-sample"`) to try them on. A kept option
+  moves into its usual picker and leaves this section.
 - **Found setting.** A link that points at one setting (`?find=`) scrolls it
   to the middle of the screen, focuses it and rings it with a 2px accent
   outline and an 8% accent wash for 1.6s, fading in and out over 300ms.
@@ -439,7 +447,13 @@ new list items enter with `@starting-style` (Tailwind `starting:`). Modals fade
 and scale in from 0.97 (`components/dialogMotion.ts`) and close instantly;
 sheets, toasts and the bulk bar slide in from the edge they sit on. Hover motion
 only applies under `(hover: hover) and (pointer: fine)`. Under reduced motion,
-fades stay and movement goes.
+fades stay and movement goes. Loading marks show exactly when the page is
+busiest, so new ones move only by `transform` and `opacity` (those run off the
+main thread and keep their pace), and under reduced motion hold still and
+breathe (`.horde-load-new`). Something moving across the screen rather than
+entering (the Dot nav indicator) may use a strong ease-in-out,
+`cubic-bezier(0.77, 0, 0.175, 1)`, when `ease-fluid` would cover the trip in its
+first few frames.
 
 ## Do's and Don'ts
 

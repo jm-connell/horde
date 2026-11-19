@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
+  SHADER_FAILED,
   createBackgroundEffect,
   setFlowingGradientPresetGetter,
 } from "../effects";
@@ -55,8 +56,12 @@ export default function BackgroundEffect() {
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [playerCovering, setPlayerCovering] = useState(false);
   const [saveData, setSaveData] = useState(dataSaverOn);
+  // A shader effect whose WebGL start failed after it had claimed the canvas:
+  // its 2D stand-in runs instead, on a fresh canvas (see the key below).
+  const [shaderFailed, setShaderFailed] = useState<EffectId | null>(null);
 
   const effect = settings.backgroundEffect;
+  const shaders = shaderFailed !== effect;
   const opacity = settings.backgroundOpacity;
   const speed = settings.backgroundEffectSpeed;
   const size = settings.backgroundEffectSize;
@@ -125,7 +130,15 @@ export default function BackgroundEffect() {
 
     if (!canvas || !active || isCustom) return;
 
-    const controller = createBackgroundEffect(effect as EffectId, canvas);
+    const controller = createBackgroundEffect(
+      effect as EffectId,
+      canvas,
+      shaders
+    );
+    if (controller === SHADER_FAILED) {
+      setShaderFailed(effect);
+      return;
+    }
     if (!controller) return;
 
     controller.setOpacity(opacity);
@@ -145,7 +158,7 @@ export default function BackgroundEffect() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- opacity/speed/size/color/pause are pushed to the live controller by their own effects; rebuilding the canvas effect on them would restart the animation
-  }, [active, effect, isCustom, settings.flowingGradientPreset]);
+  }, [active, effect, isCustom, settings.flowingGradientPreset, shaders]);
 
   useEffect(() => {
     controllerRef.current?.setOpacity(opacity);
@@ -222,6 +235,10 @@ export default function BackgroundEffect() {
 
   return (
     <canvas
+      // A new canvas for each effect: one that has had a 2D context can
+      // never give a WebGL one, and a stopped WebGL effect gives its
+      // context back for good. The same for a failed shader's stand-in.
+      key={`${effect}:${settings.flowingGradientPreset}:${shaders ? "gl" : "2d"}`}
       ref={canvasRef}
       aria-hidden
       data-horde="background"

@@ -1,6 +1,7 @@
 import BackgroundSection from "./appearance/BackgroundSection";
 import FontSection from "./appearance/FontSection";
 import InterfaceSection from "./appearance/InterfaceSection";
+import NewSection from "./appearance/NewSection";
 import TabBarSection from "./appearance/TabBarSection";
 import ThemeSection from "./appearance/ThemeSection";
 import CustomCssSection from "./CustomCssSection";
@@ -13,6 +14,7 @@ export default function AppearanceTab() {
     <>
       <ThemeSection appearance={appearance} />
       <FontSection appearance={appearance} />
+      <NewSection />
       <BackgroundSection appearance={appearance} />
       <InterfaceSection appearance={appearance} />
       <TabBarSection />

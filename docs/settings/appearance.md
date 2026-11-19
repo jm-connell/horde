@@ -73,6 +73,57 @@ Oxanium, the default, ships with Horde (`@fontsource/oxanium`, SIL Open Font Lic
 
 Applied as `documentElement` font-size. Legacy `uiScale` percentages migrate into these four steps.
 
+## New (preview)
+
+The **New** section, between Font and Background, holds reworked and new backgrounds, loaders, nav indicators and hover motions to try before they join the usual lists. Picking one sets the same key the usual pickers do, so it syncs and persists like any other choice; the existing options are unchanged. The Background dropdown also lists the new effects under a **New** heading, and a reworked background offers **Compare with** (the effect it reworks) and **Back to** to flip between the two.
+
+New `backgroundEffect` values. The three shader effects run on the GPU (WebGL). Flowing gradient takes their place where the browser has no WebGL, warns that WebGL would be slow (as some do on a virtual machine or remote desktop, where it runs on the CPU), or cannot start the shader:
+
+| Value | Description | Reworks |
+|-------|-------------|---------|
+| `northern-lights` | Curtains of light with a bright hem and rising rays; faint stars on dark themes (shader) | |
+| `silk` | Slow folds of satin with a sheen along each crest (shader) | |
+| `mesh-gradient` | Five drifting colors blended per pixel, dithered so dark ramps do not band; takes the Flowing palette (shader) | `flowing-gradient` |
+| `spiral-galaxy` | A tilted galaxy whose arms come from stars on nested, twisted orbits, so they keep their shape | `galaxy` |
+| `plexus` | A linked node cloud turning in 3D, near links brighter, with signals passing along them | `constellation` |
+| `firefly-sync` | Fireflies with real flash timing that gradually fall into step, then drift apart, over about two minutes | `fireflies` |
+| `snowfall` | Snow in three depths (size, speed and softness agree) moved by one gusting wind | `snow` |
+| `contours` | Survey-map contour lines over land that slowly reshapes, every fifth line heavier | |
+| `projector` | A projector beam from above the page, dust glinting only where the light catches it | |
+| `film` | Grain at 24 fps from pre-made tiles, gate flicker, single-frame dust and the odd scratch | `grain` |
+| `halftone` | A dot screen whose dots swell and shrink with a slow wave | |
+
+New `loadingStyle` values. Each moves only by `transform` and `opacity`, so it keeps its pace while the page is busy, and under reduced motion it holds still and breathes instead:
+
+| Value | Notes |
+|-------|--------|
+| `arc` | An arc that grows and shrinks as it turns (reworks `spinner`) |
+| `orbit` | Two moons circling a planet in real 3D |
+| `helix` | A double strand twisting in place |
+| `infinity` | A comet looping a figure eight |
+| `cradle` | Newton's cradle, swinging end to end |
+| `spokes` | Fading spokes ticking round |
+| `sweep` | Two segments racing along a track (reworks `bar`, which animates width and left) |
+| `clapper` | A clapperboard snapping shut |
+| `play` | A glint circling a play button |
+
+New `navIndicator` values, moved by transform from wherever they are on screen:
+
+| Value | Behavior |
+|-------|----------|
+| `stretch` | The bar's leading end reaches the new item first, then the tail catches up (reworks `underline`) |
+| `dot` | A dot that stretches along its way, then squashes and settles under the item |
+| `focus` | Viewfinder corners that glide over, land a little wide and lock on |
+
+New `hoverMotion` values (mouse or trackpad only, like the others):
+
+| Value | Behavior |
+|-------|----------|
+| `tilt` | The video card under the pointer leans toward it, with a soft sheen over the picture |
+| `zoom` | The thumbnail eases closer; the card stays put |
+
+Both keep Subtle's brightness on buttons and fields.
+
 ## Background effects
 
 `backgroundEffect` options:
@@ -99,7 +150,7 @@ Applied as `documentElement` font-size. Legacy `uiScale` percentages migrate int
 
 ### Flowing gradient presets
 
-When effect is `flowing-gradient`, `flowingGradientPreset`:
+When effect is `flowing-gradient` (or the new `mesh-gradient`), `flowingGradientPreset`:
 
 | Value | Label |
 |-------|--------|

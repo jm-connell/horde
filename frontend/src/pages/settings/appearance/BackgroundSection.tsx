@@ -5,14 +5,33 @@ import type {
 import {
   BACKGROUND_EFFECT_OPTIONS,
   FLOWING_PRESET_OPTIONS,
+  NEW_BACKGROUND_EFFECT_OPTIONS,
 } from "../../../effects";
-import ThemedSelect from "../../../components/ThemedSelect";
+import ThemedSelect, {
+  type ThemedSelectOption,
+} from "../../../components/ThemedSelect";
 import { PANEL_BTN } from "../constants";
 import { Chip, Section, SettingRow, Toggle } from "../ui";
 import { useAuth } from "../../../context/AuthContext";
 import { useSettingsPage } from "../context";
 import type { AppearanceState } from "../useAppearanceState";
 import { CloseIcon } from "../../../components/icons";
+
+/** Every effect; the new (preview) ones under their own "New" heading. */
+const EFFECT_SELECT_OPTIONS: ThemedSelectOption<BackgroundEffect>[] = [
+  ...BACKGROUND_EFFECT_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+  ...NEW_BACKGROUND_EFFECT_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.label,
+    group: "New",
+  })),
+];
+
+/** Effects that take the Flowing palette. */
+const FLOWING_PALETTE_EFFECTS = new Set<BackgroundEffect>([
+  "flowing-gradient",
+  "mesh-gradient",
+]);
 
 export default function BackgroundSection({
   appearance,
@@ -70,10 +89,7 @@ export default function BackgroundSection({
           <ThemedSelect
             aria-label="Background animation"
             value={settings.backgroundEffect}
-            options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
-              value: o.value,
-              label: o.label,
-            }))}
+            options={EFFECT_SELECT_OPTIONS}
             onChange={(value) =>
               update({ backgroundEffect: value as BackgroundEffect })
             }
@@ -86,10 +102,7 @@ export default function BackgroundSection({
             <ThemedSelect
               aria-label="Background animation"
               value={settings.backgroundEffect}
-              options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
-                value: o.value,
-                label: o.label,
-              }))}
+              options={EFFECT_SELECT_OPTIONS}
               onChange={(value) =>
                 update({ backgroundEffect: value as BackgroundEffect })
               }
@@ -310,10 +323,7 @@ export default function BackgroundSection({
               <ThemedSelect
                 aria-label="Background animation"
                 value={settings.backgroundEffect}
-                options={BACKGROUND_EFFECT_OPTIONS.map((o) => ({
-                  value: o.value,
-                  label: o.label,
-                }))}
+                options={EFFECT_SELECT_OPTIONS}
                 onChange={(value) =>
                   update({
                     backgroundEffect: value as BackgroundEffect,
@@ -424,7 +434,7 @@ export default function BackgroundSection({
             />
           </label>
 
-          {settings.backgroundEffect === "flowing-gradient" && (
+          {FLOWING_PALETTE_EFFECTS.has(settings.backgroundEffect) && (
             <div>
               <p className="mb-2 text-sm text-gray-300">Flowing palette</p>
               <div className="flex flex-wrap gap-2">

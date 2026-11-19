@@ -1,8 +1,7 @@
 export type Rgb = [number, number, number];
 
-export interface EffectContext {
-  canvas: HTMLCanvasElement;
-  ctx: CanvasRenderingContext2D;
+/** One frame's state, whatever the canvas draws with. */
+export interface EffectFrame {
   width: number;
   height: number;
   dpr: number;
@@ -18,6 +17,11 @@ export interface EffectContext {
   speed: number;
   /** Particle density / scale multiplier (0.5–2). */
   size: number;
+}
+
+export interface EffectContext extends EffectFrame {
+  canvas: HTMLCanvasElement;
+  ctx: CanvasRenderingContext2D;
 }
 
 export interface EffectController {
@@ -93,15 +97,55 @@ const noopController: EffectController = {
  */
 export const DEFAULT_EFFECT_FPS = 30;
 
+export interface LoopOptions {
+  maxDpr?: number;
+  maxFps?: number;
+}
+
+/** What the loop needs from a canvas's drawing context (2D or WebGL). */
+export interface EffectSurface {
+  /** Size the backing store for a window of `width`×`height` CSS pixels. */
+  resize: (width: number, height: number, dpr: number) => void;
+  draw: (frame: EffectFrame) => void;
+  clear: () => void;
+  /** Free what the surface holds once the effect stops for good. */
+  dispose?: () => void;
+}
+
 export function createCanvasLoop(
   canvas: HTMLCanvasElement,
   draw: (ctx: EffectContext) => void,
-  options?: { maxDpr?: number; maxFps?: number }
+  options?: LoopOptions
+): EffectController {
+  const ctx = canvas.getContext("2d", { alpha: true });
+  if (!ctx) return noopController;
+  return createEffectLoop(
+    canvas,
+    {
+      resize(width, height, dpr) {
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      },
+      draw: (frame) => draw({ ...frame, canvas, ctx }),
+      clear: () => ctx.clearRect(0, 0, canvas.width, canvas.height),
+    },
+    options
+  );
+}
+
+/**
+ * The frame loop behind every canvas effect: window sizing, the fps budget,
+ * pausing (hidden tab, playback), and the opacity, speed, size and color the
+ * settings push to it.
+ */
+export function createEffectLoop(
+  canvas: HTMLCanvasElement,
+  surface: EffectSurface,
+  options?: LoopOptions
 ): EffectController {
   const maxDpr = options?.maxDpr ?? 1.5;
   const minFrameMs = 1000 / (options?.maxFps ?? DEFAULT_EFFECT_FPS);
-  const ctx = canvas.getContext("2d", { alpha: true });
-  if (!ctx) return noopController;
 
   let raf = 0;
   let running = false;
@@ -134,11 +178,9 @@ export function createCanvasLoop(
     dpr = nextDpr;
     width = nextW;
     height = nextH;
-    canvas.width = Math.floor(width * dpr);
-    canvas.height = Math.floor(height * dpr);
+    surface.resize(width, height, dpr);
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   };
 
   const onResize = () => {
@@ -178,9 +220,7 @@ export function createCanvasLoop(
     }
     const scaledDt = rawDt * speed;
     animTime += scaledDt;
-    draw({
-      canvas,
-      ctx,
+    surface.draw({
       width,
       height,
       dpr,
@@ -221,7 +261,8 @@ export function createCanvasLoop(
       document.removeEventListener("visibilitychange", onVisibility);
       themeObserver?.disconnect();
       themeObserver = null;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      surface.clear();
+      surface.dispose?.();
     },
     setPaused(next: boolean) {
       paused = next;

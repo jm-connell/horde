@@ -1,6 +1,14 @@
-import { LOADING_STYLE_SEARCH_KEYWORDS } from "../../loadingStyles";
+import { NEW_BACKGROUND_EFFECT_OPTIONS } from "../../effects";
+import {
+  LOADING_STYLE_SEARCH_KEYWORDS,
+  NEW_LOADING_STYLE_OPTIONS,
+} from "../../loadingStyles";
 import type { Permission } from "../../types";
-import { TABS } from "./constants";
+import {
+  NEW_HOVER_MOTION_OPTIONS,
+  NEW_NAV_INDICATOR_OPTIONS,
+  TABS,
+} from "./constants";
 import type { AiPane, SettingsTab } from "./types";
 
 /** Who sees a setting beyond its tab: administrators, or holders of a permission. */
@@ -19,6 +27,30 @@ export interface SearchRegistryEntry {
   /** Unset: whoever can open the tab sees it. */
   access?: SettingAccess;
 }
+
+/**
+ * Words in the new options' names that other tabs answer to: "play" is
+ * Playback's, "sync" and "arc" (as in search) are Library's. A query that
+ * matches here keeps the search on Appearance, so they are left out.
+ */
+const SHARED_WORDS = new Set(["play", "sync", "arc"]);
+
+/**
+ * Words that find Appearance's "New" (preview) section: the options' names,
+ * not their descriptions, whose everyday words ("system", "button") would
+ * pull other tabs' searches here. Not "preview" either: that is Playback's.
+ */
+export const NEW_SECTION_KEYWORDS = [
+  "new",
+  ...[
+    ...NEW_BACKGROUND_EFFECT_OPTIONS,
+    ...NEW_LOADING_STYLE_OPTIONS,
+    ...NEW_NAV_INDICATOR_OPTIONS,
+    ...NEW_HOVER_MOTION_OPTIONS,
+  ]
+    .flatMap((o) => o.label.toLowerCase().split(" "))
+    .filter((word) => !SHARED_WORDS.has(word)),
+].join(" ");
 
 /** Search keywords / synonyms → tab. Used for cross-tab search + auto-switch. */
 export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
@@ -52,6 +84,8 @@ export const SEARCH_REGISTRY: SearchRegistryEntry[] = [
     keywords:
       "background animation atmospheric effects intensity speed size color pause while watching custom image upload blur tint palette flowing rgb wave cool warm mono",
   },
+  // New (preview) options: their own section on Appearance.
+  { tab: "appearance", keywords: NEW_SECTION_KEYWORDS },
   // Library
   {
     tab: "library",

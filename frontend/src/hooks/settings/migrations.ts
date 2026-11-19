@@ -71,6 +71,17 @@ const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "flowing-gradient",
   "lightspeed",
   "galaxy",
+  "northern-lights",
+  "silk",
+  "mesh-gradient",
+  "spiral-galaxy",
+  "plexus",
+  "firefly-sync",
+  "snowfall",
+  "contours",
+  "projector",
+  "film",
+  "halftone",
 ]);
 
 const VALID_FLOWING_PRESETS = new Set<string>([
@@ -81,12 +92,22 @@ const VALID_FLOWING_PRESETS = new Set<string>([
   "mono",
 ]);
 
-const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
+const VALID_HOVER_MOTION = new Set<string>([
+  "off",
+  "subtle",
+  "lift",
+  "glow",
+  "tilt",
+  "zoom",
+]);
 const VALID_NAV_INDICATOR = new Set<string>([
   "none",
   "liquid",
   "underline",
   "fade",
+  "stretch",
+  "dot",
+  "focus",
 ]);
 
 function normalizeTheme(theme: string | undefined): Theme {

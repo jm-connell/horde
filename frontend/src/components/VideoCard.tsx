@@ -139,7 +139,7 @@ export default function VideoCard({
       data-preview-active={previewActive ? "true" : undefined}
       ref={previewRef}
     >
-      <div className="relative aspect-video w-full overflow-hidden bg-ink-800/60">
+      <div className="ui-card-media relative aspect-video w-full overflow-hidden bg-ink-800/60">
         {thumb ? (
           <FadeImage
             decoding="async"

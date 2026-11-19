@@ -7,6 +7,18 @@ All notable changes to Horde are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **New looks to try.** Settings → Appearance has a **New** section of
+  reworked and new options, kept apart from the existing ones: eleven
+  backgrounds (three of them GPU shaders: northern lights, silk and a
+  banding-free mesh gradient; and reworks of Galaxy, Constellation,
+  Fireflies, Snow and Film grain, plus contours, a projector beam and a
+  halftone screen), nine loading animations that keep their pace while a
+  page is busy, three nav indicators (Stretch, Dot, Focus) and two hover
+  motions (Tilt, Zoom). A reworked background can be compared with the
+  effect it replaces in one click.
+
 ### Changed
 
 - **Recommended ranks faster.** Opening the tab ranks the feed once, not
