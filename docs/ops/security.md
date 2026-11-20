@@ -100,6 +100,8 @@ Every response carries `Content-Security-Policy`, `X-Content-Type-Options: nosni
 - images: its own, plus remote thumbnails over HTTPS (YouTube's `i.ytimg.com` and other sites yt-dlp reads)
 - connections: its own API and SponsorBlock (`sponsor.ajay.app`)
 
+The browser calls SponsorBlock only when your SponsorBlock setting (Settings → Playback) is on. Separately, the server calls it for [Ask](../guides/ask.md): for each video whose captions Ask indexes, one request with the video's public YouTube id (no account, user or server details), so answers leave sponsor reads out. `HORDE_ASK_SPONSORBLOCK=0` turns that off ([ADR 0034](../adr/0034-ask-skips-sponsor-reads.md)).
+
 The wiki under `/wiki` has a separate, looser policy because the documentation theme uses inline scripts.
 
 ## Safari and iOS

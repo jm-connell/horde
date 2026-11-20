@@ -39,6 +39,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0031](0031-published-image-by-default.md) | Published release image by default; building is opt-in | Accepted |
 | [0032](0032-parental-controls.md) | Parental controls are an allowlist enforced on the server | Accepted |
 | [0033](0033-ask-answers-unnamed-questions-from-channels.md) | Ask sends a question that names no channel to the channels that cover it | Accepted |
+| [0034](0034-ask-skips-sponsor-reads.md) | Ask leaves sponsor reads out of answers using SponsorBlock | Accepted |
 
 ## Writing a new record
 

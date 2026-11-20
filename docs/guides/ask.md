@@ -78,6 +78,7 @@ Small local models (around 3B) are told to compare at most two channels and get 
 
 ## Privacy and disk space
 
+- To keep sponsor reads out of answers, Horde asks [SponsorBlock](https://sponsor.ajay.app) for each indexed video's ad segments, sending only the video's public YouTube id. This is the server's request and is separate from your player's SponsorBlock setting. An administrator can turn it off with `HORDE_ASK_SPONSORBLOCK=0`; answers then rely on the model spotting ads by itself.
 - With a **cloud embedding provider**, every caption passage is sent to it for embedding. With a **cloud chat model**, each question's passages are sent with it. Local providers keep everything on your network.
 - A channel of 500 videos of about 25 minutes takes about 45 MB in Horde's database, and the nightly and pre-update backups copy the database, so count on about half a gigabyte of disk per channel. Turning a channel off frees the space for new data but does not shrink the database file.
 

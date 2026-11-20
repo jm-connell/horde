@@ -21,6 +21,12 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Ask leaves sponsor reads out of answers.** A host's ad read ("this
+  episode is brought to you by…") is no longer cited as advice: Ask asks
+  SponsorBlock for each indexed video's ad segments, in the background, and
+  skips passages inside them (videos indexed earlier are caught up
+  gradually). Answers are no slower. Only each video's public YouTube id is
+  sent; `HORDE_ASK_SPONSORBLOCK=0` turns it off.
 - **Ask answers questions that name no channel from the channels that
   cover them.** "How much protein should I eat?" asked from the home page
   goes to the fitness channel you indexed instead of Horde; general
