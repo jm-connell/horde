@@ -27,13 +27,14 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import UTC, date, datetime
 
 from sqlmodel import Session, col, select
 
 from ...models import KbChannel, KbChunk, KbVideo, Video, require_id
 from ..ai.embeddings import embed_query
 from ..ai.provider import resolve_embed_model
-from . import chunking
+from . import chunking, routing
 from . import search as kb_search
 from .vectors import VectorCache, top_chunks
 
@@ -42,6 +43,9 @@ logger = logging.getLogger(__name__)
 _RRF_K = 60
 _CANDIDATES = 80
 _PER_VIDEO = 3
+# Passages shorter than this say nothing ("and happy gaming you", the last
+# caption line of a video) and only take an excerpt's place.
+_MIN_PASSAGE_CHARS = 80
 # Passages from a video the question names by its title ("summarize his
 # Retroid Pocket Duo in-depth review"): enough to cover the whole video.
 _NAMED_PER_VIDEO = 10
@@ -52,12 +56,21 @@ _SUBJECT_VIDEOS = 60
 # The conversation shown to the expansion: this many messages, each cut to this.
 _EXPAND_HISTORY = 4
 _EXPAND_HISTORY_CHARS = 600
-# A question about what is current: the channel's newest video scores this much
-# more than its oldest (in between, by its place in the channel's uploads).
-_RECENT_BOOST = 0.6
+# A question about what is current: a video's weight halves every this many
+# years above a floor (``_boost_recent``).
+_RECENT_HALF_LIFE_YEARS = 1.5
+_RECENT_FLOOR = 0.45
+_UNDATED_SPAN_YEARS = 5.0
 _RECENT = re.compile(
     r"\b(latest|newest|recent(ly)?|lately|right now|currently|current|nowadays|"
     r"these days|this year|today|up to date|so far)\b",
+    re.IGNORECASE,
+)
+# A question about the earliest of something ("his first Anbernic review"):
+# older videos count for more, and a subject's oldest videos are searched.
+_EARLIEST = re.compile(
+    r"\b(first|earliest|oldest|originally|initially|back when|when (he|she|they) "
+    r"(started|began)|in the beginning|used to)\b",
     re.IGNORECASE,
 )
 # "What are his latest videos about?": answered from the newest uploads themselves.
@@ -110,6 +123,11 @@ def asks_recent(question: str) -> bool:
     return bool(_RECENT.search(question or ""))
 
 
+def asks_earliest(question: str) -> bool:
+    """ "His first Anbernic review", "what did he originally think?"."""
+    return bool(_EARLIEST.search(question or ""))
+
+
 def asks_newest_videos(question: str) -> bool:
     """ "What are his latest videos about?": about the newest uploads themselves."""
     return bool(_NEWEST_VIDEOS.search(question or ""))
@@ -157,10 +175,22 @@ def _words(text: str) -> list[str]:
     return [w.casefold() for w in _TITLE_WORD.findall(text or "")]
 
 
+# A channel's branding after its titles ("10 Levels of Nachos | With Babish")
+# or a trailing aside ("… (ALL S TIER)"): not what people say.
+_TITLE_TAIL = re.compile(r"\s+[|•–—]\s+.*$|\s*[(\[][^()\[\]]*[)\]]\s*$")
+
+
+def _title_words(title: str) -> list[str]:
+    """The words of a title that a question naming it would contain."""
+    main = _TITLE_TAIL.sub("", title or "") or title or ""
+    return [w for w in _words(main) if w not in kb_search.STOPWORDS]
+
+
 def named_videos(session: Session, channel: KbChannel, question: str) -> list[str]:
-    """YouTube ids of the channel's videos whose whole title (three words or
-    more) is in the question: "summarize his Retroid Pocket Duo in-depth
-    review" is about that one video, not every video of the Duo."""
+    """YouTube ids of the channel's videos whose title (three words or more,
+    without branding after a "|" and small words) is all in the question:
+    "summarize his Retroid Pocket Duo in-depth review" or "the 10 levels of
+    nachos" is about that one video, not every video of the subject."""
     asked = set(_words(question))
     if len(asked) < 3:
         return []
@@ -170,7 +200,7 @@ def named_videos(session: Session, channel: KbChannel, question: str) -> list[st
             KbVideo.kb_channel_id == require_id(channel)
         )
     ).all():
-        words = _words(title or "")
+        words = _title_words(title or "")
         if len(words) >= 3 and set(words) <= asked:
             out.append(yt_id)
     return out
@@ -205,16 +235,20 @@ def expand(
         'channel would say. "subjects": the specific products, people, places '
         "or works the question is about, written the way a video title would "
         'write them, each with its usual short form ("Retroid Pocket 6", "RP6"); '
-        "at most 6, and empty when the question names nothing specific. "
+        "at most 6, never the channels themselves, and empty when the question "
+        "names nothing specific. "
         '"search": the question rewritten as one '
         "plain search sentence. When the question only makes sense with the "
         'conversation before it ("what about its battery?", "and the cheaper '
         'one?"), "terms", "subjects" and "search" name what it refers to; so '
         'do they for "this", "it" or "this device" when the user is watching '
         "a video (what that video is about). "
-        '"recent": true '
-        "when the right answer depends on what is newest (what to buy now, the "
-        "current best, the latest version), else false."
+        '"recent": true only when a newer video would give a better answer '
+        "because the subject itself changes over time: products and prices "
+        "(what to buy now, the current best), software versions, news. False "
+        "for advice that does not age: how to repair, maintain, cook, play or "
+        "set something up, the history of something, or a question about one "
+        'specific older model ("oil for a 2007 Camry"). When unsure, false.'
     )
     prompt = f"Channels: {', '.join(channel_names)}\n"
     if watching:
@@ -269,8 +303,11 @@ def _fuse(rankings: list[list[int]]) -> dict[int, float]:
     return scores
 
 
-def _subject_videos(session: Session, channel: KbChannel, subject: str) -> list[int]:
-    """The channel's videos whose title names ``subject``, newest first."""
+def _subject_videos(
+    session: Session, channel: KbChannel, subject: str, *, oldest: bool = False
+) -> list[int]:
+    """The channel's videos whose title names ``subject``, newest first (oldest
+    first for a question about the earliest)."""
     if len(subject) < 3:
         return []
     return [
@@ -281,7 +318,7 @@ def _subject_videos(session: Session, channel: KbChannel, subject: str) -> list[
                 KbVideo.kb_channel_id == require_id(channel),
                 col(KbVideo.title).icontains(subject, autoescape=True),
             )
-            .order_by(col(KbVideo.position))
+            .order_by(col(KbVideo.position).desc() if oldest else col(KbVideo.position))
             .limit(_SUBJECT_VIDEOS)
         ).all()
         if video_id is not None
@@ -296,6 +333,7 @@ def _channel_candidates(
     query_vector: list[float] | None,
     model: str,
     subjects: list[str],
+    oldest: bool = False,
 ) -> dict[int, float]:
     channel_id = require_id(channel)
     keyword = [
@@ -318,7 +356,9 @@ def _channel_candidates(
                 video_ids=about,
             )
         ]
-        for about in (_subject_videos(session, channel, s) for s in subjects)
+        for about in (
+            _subject_videos(session, channel, s, oldest=oldest) for s in subjects
+        )
         if about
     ]
     rankings += within * 2 if len(within) == 1 else within
@@ -377,6 +417,13 @@ def _pick(
         for chunk in by_video[video_id]:
             if len(kept) >= (_NAMED_PER_VIDEO if video.yt_id in wide else _PER_VIDEO):
                 break
+            if (
+                len(chunk.text) < _MIN_PASSAGE_CHARS
+                and chunk.chunk_index != chunking.META_CHUNK_INDEX
+            ):
+                # A title and description are kept however short: for a
+                # video without captions they are all there is.
+                continue
             if any(
                 chunk.start_sec < k.end_sec and k.start_sec < chunk.end_sec
                 for k in kept
@@ -420,10 +467,21 @@ def _boost_video(
 
 
 def _boost_recent(
-    session: Session, scores: dict[int, float], channel: KbChannel
+    session: Session,
+    scores: dict[int, float],
+    channel: KbChannel,
+    *,
+    earliest: bool = False,
 ) -> None:
-    """Scale each passage's score by how new its video is among the channel's
-    uploads (``KbVideo.position``, 0 = newest; known even without a date)."""
+    """Weigh each passage by how old its video is: a video from this month
+    counts in full, one from a year ago about four fifths, three years about
+    seven tenths, never less than ``_RECENT_FLOOR``. Only for a question whose
+    answer changes over time (``Expansion.recent``, or "right now"): advice
+    that does not age is never weighed by date. A gentler, rank-based lift let a
+    channel's many older videos outvote its newest roundup for "what would
+    he recommend?". A video without a date is placed by its rank among the
+    channel's uploads (``KbVideo.position``, 0 = newest). With ``earliest``
+    it runs the other way: the channel's oldest video counts in full."""
     if not scores:
         return
     channel_id = require_id(channel)
@@ -433,16 +491,46 @@ def _boost_recent(
         .order_by(col(KbVideo.position).desc())
         .limit(1)
     ).first()
-    if not last:
-        return
     rows = session.exec(
-        select(KbChunk.id, KbVideo.position)
+        select(KbChunk.id, KbVideo.position, KbVideo.published_at)
         .join(KbVideo, col(KbVideo.id) == col(KbChunk.kb_video_id))
         .where(col(KbChunk.id).in_(list(scores)))
     ).all()
-    for chunk_id, position in rows:
-        if chunk_id is not None:
-            scores[chunk_id] *= 1.0 + _RECENT_BOOST * (1.0 - min(position, last) / last)
+    today = datetime.now(UTC).date()
+    first = None
+    if earliest:
+        oldest = session.exec(
+            select(KbVideo.published_at)
+            .where(
+                KbVideo.kb_channel_id == channel_id,
+                col(KbVideo.published_at).is_not(None),
+            )
+            .order_by(col(KbVideo.published_at))
+            .limit(1)
+        ).first()
+        first = _age_years(oldest, today)
+    for chunk_id, position, published in rows:
+        if chunk_id is None:
+            continue
+        age = _age_years(published, today)
+        if age is None:
+            # Undated: as old as its share of the channel's uploads, over
+            # an assumed _UNDATED_SPAN_YEARS.
+            age = _UNDATED_SPAN_YEARS * (min(position, last) / last if last else 0.0)
+        if earliest:
+            # Years after the channel's first video, not before today.
+            age = max(0.0, (first if first is not None else _UNDATED_SPAN_YEARS) - age)
+        scores[chunk_id] *= _RECENT_FLOOR + (1 - _RECENT_FLOOR) * 0.5 ** (
+            age / _RECENT_HALF_LIFE_YEARS
+        )
+
+
+def _age_years(published: str | None, today: date) -> float | None:
+    try:
+        day = date.fromisoformat((published or "")[:10])
+    except ValueError:
+        return None
+    return max(0.0, (today - day).days / 365.25)
 
 
 def _newest_videos(
@@ -481,17 +569,35 @@ def retrieve(
     # Only vectors from the current model compare with the query's.
     model = resolve_embed_model()
     share = max(2000, budget_chars // max(1, len(channels)))
-    recent = expansion.recent or asks_recent(question)
+    # A channel's own name is not a subject: its title matches are the
+    # channel talking about itself (a Discord invite, a studio tour).
+    subjects = [
+        subject
+        for subject in expansion.subjects
+        if not any(
+            routing.names_channel(subject, c.channel_name, c.channel_url)
+            for c in channels
+        )
+    ]
+    earliest = asks_earliest(question)
+    recent = (expansion.recent or asks_recent(question)) and not earliest
     newest = asks_newest_videos(question)
     picked: list[tuple[KbChannel, KbChunk, KbVideo]] = []
     # Passages shown cut short (a newest video's description), by chunk id.
     cut: set[int] = set()
     for channel in channels:
         scores = _channel_candidates(
-            session, cache, channel, terms, query_vector, model, expansion.subjects
+            session,
+            cache,
+            channel,
+            terms,
+            query_vector,
+            model,
+            subjects,
+            oldest=earliest,
         )
-        if recent or newest:
-            _boost_recent(session, scores, channel)
+        if recent or newest or earliest:
+            _boost_recent(session, scores, channel, earliest=earliest)
         if focus_yt_id:
             _boost_video(session, scores, channel, focus_yt_id)
         named = frozenset(named_videos(session, channel, question))

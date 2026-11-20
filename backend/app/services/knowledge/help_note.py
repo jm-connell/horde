@@ -50,14 +50,28 @@ def _videos_of(session: Session, channel: str) -> list[str]:
 
 
 def _topic_note(question: str, kb: list[KbChannel]) -> str | None:
-    """A question about something a channel might cover ("the best handheld
-    for GBA games?") that named no channel, so it came here. Without this the
-    assistant told the user to index channels that already were."""
+    """A question that named no channel and came here. When unnamed questions
+    are matched to channels (``channel_guess``), none covers it; otherwise it
+    may be one a channel covers ("the best handheld for GBA games?"), and the
+    user is told how to ask it. Without a note the assistant told the user to
+    index channels that already were."""
     from ..ai import help_data
 
     if not kb or routing.about_horde(question) or help_data.topics(question):
         return None
     names = ", ".join(c.channel_name or c.channel_url for c in kb)
+    from . import channel_guess
+
+    if channel_guess.enabled():
+        # The question was already matched against the channels: none
+        # covers it, so naming one would not help.
+        return (
+            f"Ask's indexed channels are {names}; none of them covers this "
+            "question, so it came to you. If it is not about Horde, say in "
+            "one sentence that you answer questions about Horde and what its "
+            "indexed channels said, and that none of them covers this. Do not "
+            "suggest naming a channel or indexing one."
+        )
     return (
         f"Ask's indexed channels: {names}. This question may be about what one "
         "of them covers, but it named none, so it came to you. If it is not "

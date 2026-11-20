@@ -50,7 +50,7 @@ from ..ai.provider import (
 )
 from ..auth.accounts import AuthUser
 from ..url_clean import youtube_video_id
-from . import chunking, references, retrieval, routing, threads
+from . import channel_guess, chunking, references, retrieval, routing, threads
 from . import search as kb_search
 
 logger = logging.getLogger(__name__)
@@ -100,6 +100,19 @@ impressions. For what is best, recommended or worth buying now, go by the most \
 recent videos, say when a view was given if it is not recent ("in a 2023 review"), \
 and say so when an older video says otherwise. When a view changed over time, \
 describe the change with its dates.
+- Captions do not say who is speaking. In a conversation (a podcast, an interview, \
+a panel), credit a statement to the host or a guest only when the passage makes the \
+speaker clear; otherwise write "in the episode with <guest>". Answer whether \
+someone agrees with someone else only from what they said about it.
+- When asked what the user should do, report what the channel recommends ("He \
+advises against melatonin, because…"), not a yes or no of your own.
+- Skip sponsor reads and ads (the host promoting a product or service to the \
+viewer, a discount code, "thanks to … for sponsoring"): they are not the channel's \
+advice. Products the video is about, such as one under review, are not ads.
+- Never present a conclusion of your own as the channel's. When the videos do not \
+settle a question directly (they never compare the two things asked about), you \
+may draw one from what they do say, but mark it as yours ("From what he says, a \
+chain is the safer bet, because…").
 - Call the host what the question calls them; otherwise use the channel's name. \
 When several channels cover the question, name each, and say where they agree, \
 where they disagree and why.
@@ -138,7 +151,8 @@ _REMINDER = (
     "about 250 words unless it asks for detail, using only what bears on it, "
     "with an excerpt number in square brackets after every statement. Say "
     '"the videos", never "the excerpts" or "the passages". If the videos do '
-    "not cover the question, say so in one sentence and nothing more."
+    "not cover the question, say so in one sentence and nothing more. Answer "
+    "yes or no only when the videos settle it."
 )
 
 
@@ -273,7 +287,9 @@ def pick_route(
     Horde for one about Horde's features that is not about the video (once
     the video is picked, only a how-to: "how do I change the theme?"), else
     the video. Without one: the page's channel unless the question is about
-    Horde (a how-to about Horde even when it says "his"). Else Horde.
+    Horde (a how-to about Horde even when it says "his"); for a question
+    about neither Horde nor the user's things, the channels that clearly
+    cover it (``channel_guess``). Else Horde.
     """
     picked = video if video_picked else None
     if answer_from == "horde":
@@ -315,6 +331,17 @@ def pick_route(
     )
     if page and not horde:
         return Route(page)
+    if (
+        channels
+        and not routing.about_horde(message)
+        and not routing.names_horde(message)
+        and not help_data.topics(message)
+    ):
+        # Named no channel, away from any channel's page: the channels that
+        # clearly cover it ("how much protein should I eat?"), else Horde.
+        guessed = channel_guess.guess(session, message, channels)
+        if guessed:
+            return Route(guessed)
     return Route()
 
 

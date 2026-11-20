@@ -1385,6 +1385,13 @@ def test_a_video_named_by_its_title_gives_more_passages(session, init_db, monkey
     from_review = [e for e in excerpts if e.yt_id == "reviewvideo"]
     assert len(from_review) > retrieval._PER_VIDEO
     assert not retrieval.named_videos(session, nut, "timing belt")
+    # A channel's branding after "|" is not part of what people call it.
+    _indexed_video(
+        session, nut, "levels00000", long_talk, title="10 Levels of Belts | With Nut"
+    )
+    assert retrieval.named_videos(
+        session, nut, "what were the 10 levels of belts?"
+    ) == ["levels00000"]
 
 
 def test_from_a_watch_page_this_means_the_watched_video(client, session, llm):
@@ -1406,15 +1413,21 @@ def test_from_a_watch_page_this_means_the_watched_video(client, session, llm):
     assert 'The user is watching "Odin Belt Review"' in llm["calls"][0]["system"]
 
 
-def test_horde_is_told_which_channels_answer_an_unnamed_topic(session):
+def test_horde_is_told_which_channels_answer_an_unnamed_topic(session, monkeypatch):
     """It told the user to index channels that already were."""
-    from app.services.knowledge import help_note
+    from app.services.knowledge import channel_guess, help_note
 
     nut = _channel(session)
+    monkeypatch.setattr(channel_guess, "enabled", lambda: False)
     note = help_note._topic_note("What's the best oil for a 4Runner?", [nut])
     assert note and "The Car Care Nut" in note and "Do not tell them to index" in note
     assert help_note._topic_note("How do I change the theme?", [nut]) is None
     assert help_note._topic_note("What's the best oil?", []) is None
+    # When unnamed questions are matched to channels, reaching Horde means
+    # none covers it: naming one would not help.
+    monkeypatch.setattr(channel_guess, "enabled", lambda: True)
+    note = help_note._topic_note("What is the capital of Australia?", [nut])
+    assert note and "none of them covers" in note and "Do not" in note
 
 
 def test_thinking_is_turned_off_only_on_openrouter():
@@ -1426,3 +1439,229 @@ def test_thinking_is_turned_off_only_on_openrouter():
     # Another server may reject a field it does not know.
     local = OpenAICompatProvider(Connection("http://localhost:11434/v1", ""))
     assert local._reasoning_fields(think=False) == {}
+
+
+def test_for_buying_advice_a_dated_recent_roundup_beats_older_ones(
+    session, init_db, monkeypatch
+):
+    """Many older videos saying "budget handheld" outvoted the newest roundup
+    for "what would he recommend?" under a lift by rank alone."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(session, "Retro Game Corps", "https://youtube.com/@rgc")
+    talk = {s: f"my favorite budget handheld pick, point {s}" for s in range(0, 120, 3)}
+    now = datetime.now(UTC)
+    for i in range(6):
+        _indexed_video(
+            session,
+            channel,
+            f"old{i:08d}",
+            _vtt(talk),
+            title=f"Old roundup {i}",
+            position=10 + i,
+            published_at=(now - timedelta(days=900 + i)).date().isoformat(),
+        )
+    _indexed_video(
+        session,
+        channel,
+        "new00000000",
+        _vtt(talk),
+        title="New roundup",
+        position=0,
+        published_at=(now - timedelta(days=30)).date().isoformat(),
+    )
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [channel],
+        "which budget handheld would he recommend?",
+        retrieval.Expansion(terms=["budget handheld"], recent=True),
+        budget_chars=10,
+    )
+    assert {e.yt_id for e in excerpts} == {"new00000000"}
+
+
+def test_a_question_about_the_earliest_prefers_older_videos(
+    session, init_db, monkeypatch
+):
+    """ "His first Anbernic review" answered from a 2022 video when the
+    channel reviewed Anbernic devices in 2020."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(session, "Retro Game Corps", "https://youtube.com/@rgc")
+    # Long enough that one video fills the smallest share of the budget.
+    talk = _vtt(
+        {
+            s: f"this anbernic review covers the screen, the sticks and more, point {s}"
+            for s in range(0, 300, 3)
+        },
+        seconds=300,
+    )
+    now = datetime.now(UTC)
+    for i, days in enumerate([30, 400, 800, 1200, 2000]):
+        _indexed_video(
+            session,
+            channel,
+            f"video{i:06d}",
+            talk,
+            title=f"Anbernic review {i}",
+            position=i,
+            published_at=(now - timedelta(days=days)).date().isoformat(),
+        )
+
+    def top(question: str) -> set[str]:
+        excerpts = retrieval.retrieve(
+            session,
+            init_db["ctx"].knowledge.vectors,
+            [channel],
+            question,
+            retrieval.Expansion(terms=["anbernic review"], subjects=["Anbernic"]),
+            budget_chars=10,
+        )
+        return {e.yt_id for e in excerpts}
+
+    assert top("what was his first anbernic review?") == {"video000004"}
+    assert not retrieval.asks_earliest("what does he think of anbernic?")
+
+
+def test_a_person_s_channel_is_named_by_surname_or_bare_handle():
+    """ "What does Huberman say…" missed "Andrew Huberman" (@hubermanlab)."""
+    hub = KbChannel(
+        id=1,
+        channel_name="Andrew Huberman",
+        channel_url="https://youtube.com/@hubermanlab",
+    )
+    rgc = KbChannel(
+        id=2,
+        channel_name="Retro Game Corps",
+        channel_url="https://youtube.com/@retrogamecorps",
+    )
+    ltt = KbChannel(
+        id=3,
+        channel_name="Linus Tech Tips",
+        channel_url="https://youtube.com/@linustechtips",
+    )
+    channels = [hub, rgc, ltt]
+    assert routing.named_channels("What does Huberman say about sleep?", channels) == [
+        hub
+    ]
+    assert routing.named_channels("huberman lab on caffeine", channels) == [hub]
+    # An ordinary last word is not a surname.
+    assert routing.named_channels("the marine corps fitness test", channels) == []
+    assert routing.named_channels("any tips for sleep?", channels) == []
+
+
+def test_the_channel_s_own_name_is_not_a_subject(session, init_db, monkeypatch):
+    """The rewrite listed "Retro Game Corps" as a subject, so the channel's
+    videos about itself (a Discord invite) crowded out the ones on topic."""
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    rgc = _channel(session, "Retro Game Corps", "https://youtube.com/@retrogamecorps")
+    long_talk = {
+        s: f"the battery lasts eight hours on this handheld, test {s}"
+        for s in range(0, 300, 3)
+    }
+    chatter = {s: f"join the discord and say hello, line {s}" for s in range(0, 300, 3)}
+    chatter[150] = "and the battery"
+    _indexed_video(
+        session, rgc, "battery0000", _vtt(long_talk, 300), title="Battery test"
+    )
+    _indexed_video(
+        session,
+        rgc,
+        "discord0000",
+        _vtt(chatter, 300),
+        title="Retro Game Corps Discord",
+    )
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [rgc],
+        "what does retro game corps say about batteries?",
+        retrieval.Expansion(terms=["battery"], subjects=["Retro Game Corps"]),
+        budget_chars=10,
+    )
+    assert {e.yt_id for e in excerpts} == {"battery0000"}
+
+
+# --- a question that names no channel ----------------------------------------
+
+
+@pytest.fixture
+def guesser(monkeypatch):
+    """A stub chat model for ``channel_guess``: answers ``state["pick"]``."""
+    from app.services.knowledge import channel_guess
+
+    state: dict = {"pick": [], "prompts": []}
+
+    class Provider:
+        last_cost = 0.0
+
+        def chat(self, prompt, model, **kwargs):
+            state["prompts"].append(prompt)
+            state["kwargs"] = kwargs
+            return json.dumps({"channels": state["pick"]})
+
+    monkeypatch.setattr(channel_guess, "get_llm_provider", lambda: Provider())
+    monkeypatch.setattr(channel_guess, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(channel_guess, "embed_query", lambda q: None)
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "test-model-14b")
+    return state
+
+
+def test_an_unnamed_question_goes_to_the_channel_that_covers_it(session, guesser):
+    """ "How often should I change the belt?" from the home page went to
+    Horde, which cannot answer it."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT, title="Belt Service")
+    guesser["pick"] = ["The Car Care Nut"]
+    route = ask_chat.pick_route(
+        session, "When should the timing belt be changed?", channel_ids=None
+    )
+    assert route.channels == [nut]
+    # The model saw the channel with the title of the video that matched.
+    assert "The Car Care Nut:\n- Belt Service" in guesser["prompts"][0]
+    assert guesser["kwargs"]["think"] is False
+
+
+def test_an_unnamed_question_no_channel_covers_stays_with_horde(session, guesser):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    guesser["pick"] = []
+    assert (
+        ask_chat.pick_route(
+            session, "what is the timing of the eclipse?", channel_ids=None
+        ).channels
+        == []
+    )
+    # About Horde or the user's own things: no guess at all.
+    guesser["pick"] = ["The Car Care Nut"]
+    for question in ("How do I download a video?", "what have I watched recently?"):
+        assert ask_chat.pick_route(session, question, channel_ids=None).channels == []
+    assert len(guesser["prompts"]) == 1
+
+
+def test_a_small_model_does_not_guess(session, guesser, monkeypatch):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    guesser["pick"] = ["The Car Care Nut"]
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "llama3.2:3b")
+    assert ask_chat.pick_route(session, "timing belt?", channel_ids=None).channels == []
+
+
+def test_a_quote_keeps_the_number_said_just_before_it():
+    """ "…per pound of body weight per day" left out the "0.7 to 1 g" said in
+    the line before, and a line with the cited number should win."""
+    from app.services.knowledge import moments
+
+    lines = [
+        (10.0, "the best science shows that 0.7 to 1 g of protein"),
+        (15.0, "per pound of body weight per day is plenty"),
+        (20.0, "and protein powders are convenient"),
+    ]
+    wanted = moments.words("He says 0.7 to 1 g of protein per pound of body weight")
+    best = moments.best_line(lines, 0.0, 30.0, wanted)
+    assert best == lines[0]
+    later = moments.quote(lines, lines[1], wanted)
+    assert "0.7 to 1 g of protein" in later and "per pound of body weight" in later
