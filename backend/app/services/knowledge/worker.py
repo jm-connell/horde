@@ -4,8 +4,9 @@ Each pass does one unit of work, in this order:
 
 1. list a channel that is new, failed listing an hour ago, or was last listed a
    day ago (new uploads join this way);
-2. fetch the next video's captions, newest uploads first, oldest-added channel
-   first. A library copy is read straight away; a YouTube fetch waits until no
+2. fetch the next video's captions, newest uploads first and channels in
+   turn (each channel's newest, then each one's next). A library copy is
+   read straight away; a YouTube fetch waits until no
    library caption retry is due and the pacer's background slot is free
    (``services/timedtext.py``), so library caption work always goes first.
 """
@@ -90,6 +91,8 @@ def list_due_channel() -> bool:
             )
     except Exception as exc:
         _, message = classify_ytdlp_error(exc, url=url)
+        if isinstance(exc, listing.ChannelNotFound):
+            message = "YouTube has no channel at this address"
         logger.warning("Ask: listing %s failed", url, exc_info=True)
         with Session(get_engine()) as session:
             channel = session.get(KbChannel, channel_id)
@@ -128,7 +131,10 @@ def _next_video(session: Session) -> KbVideo | None:
                 col(KbVideo.next_attempt_at) <= now,
             ),
         )
-        .order_by(col(KbChannel.created_at), col(KbVideo.position))
+        # Channels in turn, newest uploads first: each channel's newest
+        # video, then each one's next. One at a time, the last channel added
+        # waited hours for its first answer.
+        .order_by(col(KbVideo.position), col(KbChannel.created_at))
         .limit(1)
     ).first()
 

@@ -143,6 +143,22 @@ def _tokens(term: str) -> list[str]:
     return [t.casefold() for t in _WORD.findall(term)]
 
 
+# Endings stripped from a term's last word, so "fasting" finds "fast",
+# "recommended" finds "recommend" and "batteries" finds "battery". The
+# FTS5 table has no stemmer; a prefix query on the stem covers the forms.
+_SUFFIXES = ("ies", "ing", "ed", "es", "s")
+_MIN_STEM = 4
+
+
+def _stem(word: str) -> str:
+    if len(word) < 6:
+        return word
+    for suffix in _SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= _MIN_STEM:
+            return word[: -len(suffix)]
+    return word
+
+
 def match_expression(terms: list[str]) -> str | None:
     """An FTS5 MATCH string ORing ``terms``; None when nothing searchable is left."""
     parts: list[str] = []
@@ -153,13 +169,16 @@ def match_expression(terms: list[str]) -> str | None:
             continue
         if not tokens:
             continue
-        phrase = " ".join(tokens)
+        last = _stem(tokens[-1])
+        phrase = " ".join([*tokens[:-1], last])
         if phrase in seen:
             continue
         seen.add(phrase)
         quoted = f'"{phrase}"'
-        # A lone longer word also matches its plurals and other endings.
-        if len(tokens) == 1 and len(tokens[0]) >= 4:
+        # The last word matches its other endings ("dopamine fast*" finds
+        # "dopamine fasting"): always for a lone longer word, and for a
+        # phrase whose last word was cut to its stem.
+        if len(last) >= 4 and (len(tokens) == 1 or last != tokens[-1]):
             quoted += "*"
         parts.append(quoted)
         if len(parts) >= _MAX_TERMS:

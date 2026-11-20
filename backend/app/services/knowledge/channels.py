@@ -55,6 +55,10 @@ def preview(raw: str) -> listing.Preview:
     url = parse_channel_input(raw)
     try:
         return listing.preview(url)
+    except listing.ChannelNotFound as exc:
+        raise CodedHTTPException(
+            404, "No YouTube channel at that address", "not_found"
+        ) from exc
     except Exception as exc:
         raise _youtube_error(exc, url) from exc
 

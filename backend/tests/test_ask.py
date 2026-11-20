@@ -88,7 +88,20 @@ def test_match_expression_keeps_phrases_and_drops_stopwords():
     expr = kb_search.match_expression(
         kb_search.query_terms('what does he say about "for runner" gaskets')
     )
-    assert expr == '"for runner" OR "gaskets"*'
+    assert expr == '"for runner" OR "gasket"*'
+
+
+def test_terms_match_other_endings_of_their_last_word():
+    """ "Dopamine fasting" missed a podcast's "the dopamine fast"; no stemmer
+    in the index, so a term's last word is cut to its stem and prefixed."""
+    expr = kb_search.match_expression(
+        ["dopamine fasting", "recommended", "batteries", "oil change", "torque"]
+    )
+    assert expr == (
+        '"dopamine fast"* OR "recommend"* OR "batter"* OR "oil change" OR "torque"*'
+    )
+    # Short words are left alone: "string" is not "str".
+    assert kb_search.match_expression(["string"]) == '"string"*'
 
 
 def test_match_expression_empty_when_only_stopwords():
@@ -588,3 +601,55 @@ def test_turning_ask_on_subscribes_whoever_did_it(client, fake_preview):
         == 201
     )
     assert subscribed() == []
+
+
+# The real look-up: conftest swaps it for one that refuses to read YouTube.
+_REAL_PREVIEW = listing.preview
+
+
+def test_a_channel_youtube_does_not_have_is_not_found(client, monkeypatch):
+    """The feed fetch ignores YouTube's 404, so a mistyped handle came back as
+    a nameless channel with no uploads, was added, and showed as ready."""
+    monkeypatch.setattr(listing, "preview", _REAL_PREVIEW)
+    monkeypatch.setattr(
+        listing,
+        "_page",
+        lambda *a, **k: {"channel": None, "entries": [], "has_more": False},
+    )
+    r = client.get("/api/ask/channels/preview", params={"url": "@nosuchchannel"})
+    assert r.status_code == 404 and r.json()["code"] == "not_found"
+    with pytest.raises(listing.ChannelNotFound):
+        listing.list_channel(
+            "https://youtube.com/@nosuchchannel", include_streams=False, max_videos=5
+        )
+
+
+def test_channels_are_indexed_in_turn_newest_first(session):
+    """Added together, the last channel waited for every video of the others."""
+    from app.services.knowledge import worker
+
+    first = _channel(
+        session, channel_url="https://youtube.com/@first", channel_name="First"
+    )
+    second = _channel(
+        session, channel_url="https://youtube.com/@second", channel_name="Second"
+    )
+    for channel in (first, second):
+        for position in range(3):
+            session.add(
+                KbVideo(
+                    kb_channel_id=channel.id,
+                    yt_id=f"{channel.channel_name}{position}"[:11].ljust(11, "x"),
+                    position=position,
+                )
+            )
+    session.commit()
+    order = []
+    for _ in range(4):
+        video = worker._next_video(session)
+        assert video is not None
+        order.append((video.kb_channel_id, video.position))
+        video.fetch_status = "fetched"
+        session.add(video)
+        session.commit()
+    assert order == [(first.id, 0), (second.id, 0), (first.id, 1), (second.id, 1)]
