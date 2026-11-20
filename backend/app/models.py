@@ -1161,6 +1161,7 @@ class KbVideo(SQLModel, table=True):
     __table_args__ = (
         UniqueConstraint("kb_channel_id", "yt_id"),
         Index("ix_kb_videos_channel_status", "kb_channel_id", "fetch_status"),
+        Index("ix_kb_videos_sponsor_checked_at", "sponsor_checked_at"),
         _AUTOINCREMENT,
     )
 
@@ -1186,6 +1187,11 @@ class KbVideo(SQLModel, table=True):
     cues: bytes | None = None
     # Model the chunks were embedded with (None until embedded).
     embedded_model: str | None = None
+    # JSON ``[[start_sec, end_sec, category], ...]`` of SponsorBlock's ad segments
+    # (``knowledge/sponsorblock.py``); passages inside them are left out of answers.
+    sponsor_segments: str | None = None
+    # When SponsorBlock was last asked (None = not yet, or due again).
+    sponsor_checked_at: datetime | None = None
     updated_at: datetime = Field(default_factory=utcnow)
 
 
