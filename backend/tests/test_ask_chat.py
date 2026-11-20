@@ -1322,3 +1322,107 @@ def test_a_reference_quotes_the_sentence_it_cites_not_the_whole_line():
     assert (
         battery == "…so yeah the battery on this thing lasts about six hours which is"
     )
+
+
+# --- routing and retrieval fixes found by asking a live channel -----------------
+
+
+def test_an_indexing_question_goes_to_horde_though_it_names_the_channel(session):
+    """The channel's videos cannot say whether Horde indexed them."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    route = ask_chat.pick_route(
+        session, "Is The Car Care Nut indexed for Ask?", channel_ids=None
+    )
+    assert route.channels == [] and route.video is None
+
+
+def test_a_horde_how_to_on_a_channel_page_goes_to_horde(session):
+    """ "How do I download his latest video?" says "his", but asks Horde how."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+
+    def scope(message: str) -> list[KbChannel]:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=nut.id
+        ).channels
+
+    assert scope("How do I download his latest video?") == []
+    # What he does stays with the channel, how-to or not.
+    assert scope("How does he change the timing belt?") == [nut]
+    assert scope("what does he think of synthetic oil?") == [nut]
+
+
+def test_a_video_named_by_its_title_gives_more_passages(session, init_db, monkeypatch):
+    """ "Summarize his Belt Service In-Depth Review" is about that one video;
+    other videos of the same subject must not crowd it out."""
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    nut = _channel(session)
+    long_talk = _vtt(
+        {
+            s: f"the timing belt part {s} of the full service walk"
+            for s in range(0, 900, 3)
+        },
+        seconds=900,
+    )
+    _indexed_video(
+        session, nut, "reviewvideo", long_talk, title="Belt Service In-Depth Review"
+    )
+    for i in range(4):
+        _indexed_video(
+            session, nut, f"othervideo{i}", long_talk, title=f"Belt Tips Part {i}"
+        )
+    question = "Summarize his Belt Service In-Depth Review"
+    assert retrieval.named_videos(session, nut, question) == ["reviewvideo"]
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [nut],
+        question,
+        retrieval.Expansion(terms=["timing belt"]),
+        budget_chars=60000,
+    )
+    from_review = [e for e in excerpts if e.yt_id == "reviewvideo"]
+    assert len(from_review) > retrieval._PER_VIDEO
+    assert not retrieval.named_videos(session, nut, "timing belt")
+
+
+def test_from_a_watch_page_this_means_the_watched_video(client, session, llm):
+    """ "Has he talked about this device in his other videos?" asked under a
+    video: the search and the answer are told which video that is."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "watched0000", BELT_VTT, title="Odin Belt Review")
+    llm["replies"] = ["Yes [1]."]
+    llm["expand"] = {"terms": ["timing belt"], "search": "Odin timing belt"}
+    client.post(
+        "/api/ask/chat",
+        json={
+            "message": "Has he talked about this device in his other videos?",
+            "page_channel_id": nut.id,
+            "page_video_id": "watched0000",
+        },
+    )
+    assert 'The user is watching: "Odin Belt Review"' in llm["expansions"][0]
+    assert 'The user is watching "Odin Belt Review"' in llm["calls"][0]["system"]
+
+
+def test_horde_is_told_which_channels_answer_an_unnamed_topic(session):
+    """It told the user to index channels that already were."""
+    from app.services.knowledge import help_note
+
+    nut = _channel(session)
+    note = help_note._topic_note("What's the best oil for a 4Runner?", [nut])
+    assert note and "The Car Care Nut" in note and "Do not tell them to index" in note
+    assert help_note._topic_note("How do I change the theme?", [nut]) is None
+    assert help_note._topic_note("What's the best oil?", []) is None
+
+
+def test_thinking_is_turned_off_only_on_openrouter():
+    from app.services.ai.provider import Connection, OpenAICompatProvider
+
+    router = OpenAICompatProvider(Connection("https://openrouter.ai/api/v1", "k"))
+    assert router._reasoning_fields(think=False) == {"reasoning": {"enabled": False}}
+    assert router._reasoning_fields(think=True) == {}
+    # Another server may reject a field it does not know.
+    local = OpenAICompatProvider(Connection("http://localhost:11434/v1", ""))
+    assert local._reasoning_fields(think=False) == {}

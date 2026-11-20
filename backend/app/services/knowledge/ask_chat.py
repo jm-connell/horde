@@ -94,7 +94,9 @@ prefers if the videos say. Leave out what the two have in common.
 passages or the search: the reader sees only your answer and its numbered links.
 - Be specific, as the videos are: names, models, prices, numbers, settings, steps, \
 and the reasons and caveats the host gives. A short exact quote is welcome.
-- Things change. For what is best, recommended or worth buying now, go by the most \
+- Things change. A later video supersedes an earlier one on the same subject: a \
+year-end roundup replaces a mid-year "so far" one, a long-term review replaces first \
+impressions. For what is best, recommended or worth buying now, go by the most \
 recent videos, say when a view was given if it is not recent ("in a 2023 review"), \
 and say so when an older video says otherwise. When a view changed over time, \
 describe the change with its dates.
@@ -134,7 +136,9 @@ _NEWEST_NOTE = (
 _REMINDER = (
     "End of the excerpts. Answer the question in the first sentence, in at most "
     "about 250 words unless it asks for detail, using only what bears on it, "
-    "with an excerpt number in square brackets after every statement."
+    "with an excerpt number in square brackets after every statement. Say "
+    '"the videos", never "the excerpts" or "the passages". If the videos do '
+    "not cover the question, say so in one sentence and nothing more."
 )
 
 
@@ -260,15 +264,16 @@ def pick_route(
 ) -> Route:
     """Where this turn is answered from.
 
-    In order: the source "Ask … instead" asked for (``answer_from``); every
-    channel ("all my channels"); the channels the question names; the
+    In order: the source "Ask … instead" asked for (``answer_from``); Horde
+    for a question about Ask's indexing ("is X indexed?"); every channel
+    ("all my channels"); the channels the question names; the
     channels the chat is about. Then, with a video (picked, or the watch page's): Horde when the
     question names Horde or asks about the user's own things (unless it is
     about the video), the page's channel for one about the whole channel,
     Horde for one about Horde's features that is not about the video (once
     the video is picked, only a how-to: "how do I change the theme?"), else
     the video. Without one: the page's channel unless the question is about
-    Horde. Else Horde.
+    Horde (a how-to about Horde even when it says "his"). Else Horde.
     """
     picked = video if video_picked else None
     if answer_from == "horde":
@@ -276,6 +281,10 @@ def pick_route(
     if answer_from == "video" and video is not None:
         return Route(video=video, picked=picked)
     channels = searchable_channels(session)
+    if routing.about_ask_channels(message):
+        # "Is Retro Game Corps indexed?" names the channel, but its videos
+        # cannot say; Horde knows each channel's indexing state.
+        return Route(picked=picked)
     if routing.asks_all_channels(message):
         return Route(channels, picked=picked)
     named = routing.named_channels(message, channels)
@@ -299,7 +308,12 @@ def pick_route(
         ):
             return Route(picked=picked)
         return Route(video=video, picked=picked)
-    if page and (routing.about_video(message) or not routing.about_horde(message)):
+    # On a channel's page: the channel, unless it is about Horde ("how do I
+    # download his latest video?" is a how-to, though it says "his").
+    horde = routing.about_horde(message) and (
+        routing.asks_how_to(message) or not routing.about_video(message)
+    )
+    if page and not horde:
         return Route(page)
     return Route()
 
@@ -558,10 +572,13 @@ def _channel_turn(
     ]
     yield _sse({"type": "status", "text": f"Searching {', '.join(names)}"})
 
+    watching = retrieval.watched_title(session, channels, focus_yt_id)
     expansion = retrieval.Expansion()
     extra_cost: float | None = None
     if strength != "small":
-        expansion = retrieval.expand(provider, model, message, names, history)
+        expansion = retrieval.expand(
+            provider, model, message, names, history, watching=watching
+        )
         last = getattr(provider, "last_cost", None)
         extra_cost = float(last) if isinstance(last, int | float) else None
     if authorized is not None and not authorized():
@@ -596,6 +613,10 @@ def _channel_turn(
         "Channels: " + ", ".join(names),
         _progress_note(session, channels),
         _NEWEST_NOTE if retrieval.asks_newest_videos(message) else "",
+        f'The user is watching "{watching}": "this", "it" or "this device" in '
+        "the question means what that video is about."
+        if watching
+        else "",
         # A follow-up, spelled out: a weaker model otherwise answers "is it good
         # for PS1 games?" for every handheld in the excerpts.
         f"The question is a follow-up. It asks: {expansion.search}"
@@ -623,6 +644,10 @@ def _channel_turn(
         system_prompt=system_prompt(date.today()),
         model=model,
         num_predict=_NUM_PREDICT,
+        # Thinking first (DeepSeek, some Gemini and GPT models) made answers
+        # three times slower and sometimes used the whole budget without an
+        # answer; with the excerpts in hand it answered as well without.
+        think=False,
     ):
         if _event_type(event) == "done":
             yield _sse(
@@ -720,6 +745,7 @@ def _turn_events(
                 user.id,
                 authorized,
                 model=help_model.assistant_model(),
+                think=False,
             )
             return
         if channels:

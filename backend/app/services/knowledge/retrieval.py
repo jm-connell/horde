@@ -42,6 +42,10 @@ logger = logging.getLogger(__name__)
 _RRF_K = 60
 _CANDIDATES = 80
 _PER_VIDEO = 3
+# Passages from a video the question names by its title ("summarize his
+# Retroid Pocket Duo in-depth review"): enough to cover the whole video.
+_NAMED_PER_VIDEO = 10
+_TITLE_WORD = re.compile(r"[^\W_]+")
 _EXPAND_TIMEOUT = 45.0
 # Videos searched once more because their title names a subject of the question.
 _SUBJECT_VIDEOS = 60
@@ -133,6 +137,45 @@ def search_question(
     return f"{asked[-1]} {question}" if asked else question
 
 
+def watched_title(
+    session: Session, channels: list[KbChannel], yt_id: str | None
+) -> str | None:
+    """The title of the video the user is watching, when one of ``channels``
+    has it (a question from its page about "this" means what it is about)."""
+    if not yt_id:
+        return None
+    title = session.exec(
+        select(KbVideo.title).where(
+            col(KbVideo.kb_channel_id).in_([require_id(c) for c in channels]),
+            KbVideo.yt_id == yt_id,
+        )
+    ).first()
+    return title or None
+
+
+def _words(text: str) -> list[str]:
+    return [w.casefold() for w in _TITLE_WORD.findall(text or "")]
+
+
+def named_videos(session: Session, channel: KbChannel, question: str) -> list[str]:
+    """YouTube ids of the channel's videos whose whole title (three words or
+    more) is in the question: "summarize his Retroid Pocket Duo in-depth
+    review" is about that one video, not every video of the Duo."""
+    asked = set(_words(question))
+    if len(asked) < 3:
+        return []
+    out = []
+    for yt_id, title in session.exec(
+        select(KbVideo.yt_id, KbVideo.title).where(
+            KbVideo.kb_channel_id == require_id(channel)
+        )
+    ).all():
+        words = _words(title or "")
+        if len(words) >= 3 and set(words) <= asked:
+            out.append(yt_id)
+    return out
+
+
 def _conversation(history: list[dict[str, str]]) -> str:
     lines = []
     for turn in history[-_EXPAND_HISTORY:]:
@@ -147,6 +190,7 @@ def expand(
     question: str,
     channel_names: list[str],
     history: list[dict[str, str]] | None = None,
+    watching: str | None = None,
 ) -> Expansion:
     """Spellings and synonyms to search for. Empty on failure (the caller falls back)."""
     system = (
@@ -165,12 +209,16 @@ def expand(
         '"search": the question rewritten as one '
         "plain search sentence. When the question only makes sense with the "
         'conversation before it ("what about its battery?", "and the cheaper '
-        'one?"), "terms", "subjects" and "search" name what it refers to. '
+        'one?"), "terms", "subjects" and "search" name what it refers to; so '
+        'do they for "this", "it" or "this device" when the user is watching '
+        "a video (what that video is about). "
         '"recent": true '
         "when the right answer depends on what is newest (what to buy now, the "
         "current best, the latest version), else false."
     )
     prompt = f"Channels: {', '.join(channel_names)}\n"
+    if watching:
+        prompt += f'The user is watching: "{watching}"\n'
     if history:
         prompt += f"Conversation so far:\n{_conversation(history)}\n"
     prompt += f"Question: {question}"
@@ -181,8 +229,11 @@ def expand(
             system=system,
             format="json",
             timeout=_EXPAND_TIMEOUT,
-            num_predict=300,
+            num_predict=600,
             usage_kind="ask",
+            # A thinking model spent the whole budget thinking and the JSON
+            # came back cut off, so every search fell back to the bare question.
+            think=False,
         )
         data = json.loads(raw)
         raw_terms = data.get("terms") if isinstance(data, dict) else None
@@ -284,9 +335,14 @@ def _channel_candidates(
 
 
 def _pick(
-    session: Session, channel: KbChannel, scores: dict[int, float], budget: int
+    session: Session,
+    channel: KbChannel,
+    scores: dict[int, float],
+    budget: int,
+    wide: frozenset[str] = frozenset(),
 ) -> list[tuple[KbChunk, KbVideo]]:
-    """Best videos first; per video its best non-overlapping passages, within budget."""
+    """Best videos first; per video its best non-overlapping passages, within
+    budget. Videos in ``wide`` (by YouTube id) may give more passages."""
     if not scores:
         return []
     chunks = {
@@ -319,7 +375,7 @@ def _pick(
             continue
         kept: list[KbChunk] = []
         for chunk in by_video[video_id]:
-            if len(kept) >= _PER_VIDEO:
+            if len(kept) >= (_NAMED_PER_VIDEO if video.yt_id in wide else _PER_VIDEO):
                 break
             if any(
                 chunk.start_sec < k.end_sec and k.start_sec < chunk.end_sec
@@ -438,6 +494,9 @@ def retrieve(
             _boost_recent(session, scores, channel)
         if focus_yt_id:
             _boost_video(session, scores, channel, focus_yt_id)
+        named = frozenset(named_videos(session, channel, question))
+        for yt_id in named:
+            _boost_video(session, scores, channel, yt_id)
         left = share
         if newest:
             latest = _newest_videos(
@@ -450,7 +509,7 @@ def retrieve(
             left = max(0, share - _NEWEST_CHARS * len(latest))
         if left:
             picked.extend(
-                (channel, c, v) for c, v in _pick(session, channel, scores, left)
+                (channel, c, v) for c, v in _pick(session, channel, scores, left, named)
             )
     yt_ids = {v.yt_id for _, _, v in picked}
     library = {

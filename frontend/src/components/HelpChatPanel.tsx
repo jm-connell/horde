@@ -688,6 +688,17 @@ export default function HelpChatPanel({
     const channel = pageAsk
       ? { id: pageAsk.id, name: pageAsk.channel_name || pageAsk.channel_url }
       : null;
+    // A question that named no channel, asked away from any channel's page,
+    // went to Horde: offer the indexed channels too, while there are few
+    // enough to list (with many, naming one in the question is the way).
+    const searchable = (askChannels ?? []).filter((c) => c.passages > 0);
+    const others =
+      !channel && from === "horde" && searchable.length <= 2
+        ? searchable.map((c) => ({
+            id: c.id,
+            name: c.channel_name || c.channel_url,
+          }))
+        : [];
     if (from !== "video" && video)
       insteads.push({
         // A title in quotes reads as a title, not as part of the sentence.
@@ -696,10 +707,10 @@ export default function HelpChatPanel({
           : "Ask this video instead",
         instead: { kind: "video", video },
       });
-    if (from !== "channel" && channel)
+    for (const c of channel && from !== "channel" ? [channel] : others)
       insteads.push({
-        label: `Ask ${channel.name} instead`,
-        instead: { kind: "channel", channel },
+        label: `Ask ${c.name} instead`,
+        instead: { kind: "channel", channel: c },
       });
     if (from !== "horde")
       insteads.push({ label: "Ask Horde instead", instead: { kind: "horde" } });

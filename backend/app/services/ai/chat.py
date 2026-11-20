@@ -118,11 +118,13 @@ def run_chat_turn(
     system_prompt: str | None = None,
     model: str | None = None,
     num_predict: int = _NUM_PREDICT,
+    think: bool = True,
 ) -> Generator[str]:
     """Yield SSE event strings for a chat turn.
 
     ``system_prompt`` replaces the video-chat persona (the context still follows);
-    ``model`` replaces the chat model and ``num_predict`` the reply length cap.
+    ``model`` replaces the chat model and ``num_predict`` the reply length cap;
+    ``think=False`` turns a reasoning model's thinking off.
 
     Events:
     - ``data: {"type":"token","text":"..."}\n\n``
@@ -194,6 +196,7 @@ def run_chat_turn(
         temperature=0.4,
         usage_kind="chat",
         video_id=target.usage_video_id,
+        think=think,
     )
     try:
         for delta in stream:

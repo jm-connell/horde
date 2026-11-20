@@ -77,6 +77,21 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **Ask with a model that thinks first.** DeepSeek and other reasoning
+  models spent their whole token budget thinking: the search rewrite came
+  back cut off (so follow-ups and product names were not used) and some
+  answers came back empty. Ask now turns thinking off on OpenRouter;
+  answers arrive in about 3–6 seconds instead of 8–27, as good as before.
+- **Ask sent some questions to the wrong place.** "Is <channel> indexed?"
+  went to the channel's videos instead of Horde; "how do I download his
+  latest video?" on a channel page answered from the videos; "has he
+  covered this device before?" on a watch page did not know which device;
+  and a question naming no channel got told to index channels that already
+  were. Each now goes where it belongs, and Horde's answer offers
+  **Ask <channel> instead** when one or two channels are indexed.
+- **Ask on a named video or a year's roundup.** "Summarize his <title>"
+  reads that whole video instead of three passages of it, and a year-end
+  roundup now outranks the same year's mid-year "so far" video.
 - **A streamed video opened at a moment started from the beginning.** A
   link to a moment in a video that is not downloaded (an Ask reference, a
   "said in videos" result, `?t=`) only jumped there when that video was

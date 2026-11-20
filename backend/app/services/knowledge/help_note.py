@@ -49,15 +49,35 @@ def _videos_of(session: Session, channel: str) -> list[str]:
     return [f'  #{v.id} "{(v.title or "")[:_TITLE_CHARS]}"' for v in rows]
 
 
+def _topic_note(question: str, kb: list[KbChannel]) -> str | None:
+    """A question about something a channel might cover ("the best handheld
+    for GBA games?") that named no channel, so it came here. Without this the
+    assistant told the user to index channels that already were."""
+    from ..ai import help_data
+
+    if not kb or routing.about_horde(question) or help_data.topics(question):
+        return None
+    names = ", ".join(c.channel_name or c.channel_url for c in kb)
+    return (
+        f"Ask's indexed channels: {names}. This question may be about what one "
+        "of them covers, but it named none, so it came to you. If it is not "
+        "about Horde, say in one sentence that you answer questions about "
+        "Horde, and that to hear what a channel says they can name it "
+        f'("what does {kb[0].channel_name or "the channel"} say about …") or '
+        "use Ask <channel> instead under this answer. Do not tell them to "
+        "index a channel that is listed here."
+    )
+
+
 def for_question(
     session: Session, question: str, user: AuthUser, *, use_data: bool
 ) -> str | None:
     """The note on Ask's channels this question needs, or None."""
     about_ask = routing.about_ask_channels(question)
     said = routing.asks_what_said(question)
-    if not (about_ask or said):
-        return None
     kb = kb_channels.list_channels(session)
+    if not (about_ask or said):
+        return _topic_note(question, kb)
     unindexed = [
         (name, n)
         for name, url, n in _library_channels(session)
