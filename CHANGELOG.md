@@ -21,6 +21,14 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **Ask answers questions that name no channel from the channels that
+  cover them.** "How much protein should I eat?" asked from the home page
+  goes to the fitness channel you indexed instead of Horde; general
+  questions and anything about Horde still go to Horde. Reference quotes
+  now keep the number a point is about.
+- **Channels added together index side by side.** Ask fetches each
+  channel's newest video in turn, so every new channel answers within
+  minutes instead of waiting for the ones added before it to finish.
 - **"Chat model" is now "Background model", and the Assistant model comes
   first.** The old name read as the model you talk to in Ask; it runs the
   jobs for every video (summaries, chapters, tags, categories, duplicates).
@@ -77,6 +85,15 @@ All notable changes to Horde are documented here. The format follows
 
 ### Fixed
 
+- **Turning Ask on for a channel that does not exist.** A mistyped handle
+  was looked up as a nameless channel, could be added, and showed as ready
+  with nothing in it. The look-up now says no YouTube channel is there.
+- **Ask on podcasts and people's channels.** "What does Huberman say…"
+  now finds the channel "Andrew Huberman" (@hubermanlab); answers no
+  longer credit a guest's words to the host; and a word in a question now
+  matches its other forms in the captions ("dopamine fasting" finds "the
+  dopamine fast"). Questions that named a channel no longer pull in its
+  videos about itself (a Discord invite, a studio tour).
 - **Ask with a model that thinks first.** DeepSeek and other reasoning
   models spent their whole token budget thinking: the search rewrite came
   back cut off (so follow-ups and product names were not used) and some
@@ -89,6 +106,12 @@ All notable changes to Horde are documented here. The format follows
   and a question naming no channel got told to index channels that already
   were. Each now goes where it belongs, and Horde's answer offers
   **Ask <channel> instead** when one or two channels are indexed.
+- **Ask on what to buy now, and on firsts.** For a question whose answer
+  changes over time (what to buy now, the current best), newer videos
+  weigh more, so a channel's many older videos no longer outvote its newest
+  roundup. Advice that does not age (repairs, maintenance, cooking, setup)
+  is never weighed by date. "His first …" or
+  "what he originally thought" now reads the oldest videos instead.
 - **Ask on a named video or a year's roundup.** "Summarize his <title>"
   reads that whole video instead of three passages of it, and a year-end
   roundup now outranks the same year's mid-year "so far" video.

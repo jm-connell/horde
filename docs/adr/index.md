@@ -38,6 +38,7 @@ For the system as a whole see the [architecture map](../design/architecture.md).
 | [0030](0030-ask-routes-on-its-own.md) | Ask routes each question itself; no source menu | Accepted |
 | [0031](0031-published-image-by-default.md) | Published release image by default; building is opt-in | Accepted |
 | [0032](0032-parental-controls.md) | Parental controls are an allowlist enforced on the server | Accepted |
+| [0033](0033-ask-answers-unnamed-questions-from-channels.md) | Ask sends a question that names no channel to the channels that cover it | Accepted |
 
 ## Writing a new record
 
