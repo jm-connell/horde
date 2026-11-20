@@ -19,6 +19,8 @@ class SponsorPacer:
 
     _lock: threading.Lock = field(default_factory=threading.Lock)
     _next_at: float = 0.0
+    #: Videos whose last request failed (only the worker thread touches it).
+    failed: set[int] = field(default_factory=set)
 
     def try_reserve(self, spacing: float = SPACING_SEC) -> bool:
         with self._lock:

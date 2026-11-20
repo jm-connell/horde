@@ -17,6 +17,7 @@ Each pass does one unit of work, in this order:
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, col, or_, select
@@ -204,6 +205,9 @@ def _loop(worker: BackgroundWorker) -> None:
         logger.warning("Ask: recovering channels failed", exc_info=True)
     if worker.sleep(STARTUP_DELAY_SEC):
         return
+    # Idle passes come every 3 s during a SponsorBlock backfill: check
+    # embeddings no more often than captions are fetched.
+    embeddings_checked = -float(FETCH_SPACING_SEC)
     while not worker.stopping:
         worked = False
         try:
@@ -213,7 +217,9 @@ def _loop(worker: BackgroundWorker) -> None:
         if worked:
             continue
         # Also catches a changed embedding model or a provider set up later.
-        _queue_embedding()
+        if time.monotonic() - embeddings_checked >= FETCH_SPACING_SEC:
+            embeddings_checked = time.monotonic()
+            _queue_embedding()
         wait: float = IDLE_POLL_SEC
         if _has_pending():
             wait = min(wait, current().timedtext.seconds_until_background())

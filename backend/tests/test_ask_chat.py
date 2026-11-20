@@ -1665,3 +1665,36 @@ def test_a_quote_keeps_the_number_said_just_before_it():
     assert best == lines[0]
     later = moments.quote(lines, lines[1], wanted)
     assert "0.7 to 1 g of protein" in later and "per pound of body weight" in later
+
+
+def test_a_reference_never_opens_at_a_sponsor_read(client, session, llm):
+    """An ad inside a passage that is mostly not ad: the passage is cited,
+    but its reference opens at, and quotes, the host's own words."""
+    channel = _channel(
+        session, name="Huberman Lab", url="https://youtube.com/@hubermanlab"
+    )
+    video = _indexed_video(
+        session,
+        channel,
+        "aaaaaaaaaaa",
+        _vtt(
+            {
+                30: "brought to you by david bars one gram of protein per pound",
+                60: "the research says protein of one point six grams per kilogram",
+            }
+        ),
+        title="Protein",
+        published_at="2024-01-01T00:00:00Z",
+    )
+    video.sponsor_segments = '[[28.0, 40.0, "sponsor"]]'
+    session.add(video)
+    session.commit()
+    llm["replies"] = ["Eat one gram of protein per pound [1]."]
+    r = client.post(
+        "/api/ask/chat", json={"message": "How much protein does Huberman Lab say?"}
+    )
+    assert r.status_code == 200, r.text
+    events = _events(r.text)
+    [ref] = events[-2]["references"]
+    assert "david" not in ref["line"]
+    assert not 26.0 <= ref["start_sec"] < 40.0

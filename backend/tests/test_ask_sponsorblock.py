@@ -341,7 +341,7 @@ def test_ad_passages_are_left_out_of_answers(session, init_db):
     video = _video(session, channel, "abcdefghijk", title="Protein")
     before = _excerpts(session, init_db, channel, ["protein"])
     assert any("david" in e.text for e in before)  # without segments it is cited
-    _ads(session, video, (90, 170))
+    _ads(session, video, (90, 171))
     after = _excerpts(session, init_db, channel, ["protein"])
     assert after, "the real talk about protein stays"
     assert any("one point six grams" in e.text for e in after)
@@ -377,7 +377,7 @@ def test_said_in_videos_skips_ad_reads(client, session):
     video = _video(session, channel, "abcdefghijk")
     r = client.get("/api/ask/search", params={"q": "david bars"})
     assert r.json()["items"], r.text
-    _ads(session, video, (90, 170))
+    _ads(session, video, (90, 171))
     r = client.get("/api/ask/search", params={"q": "david bars"})
     assert r.status_code == 200, r.text
     assert r.json()["items"] == []
@@ -395,3 +395,60 @@ def test_overlapping_segments_merge():
     assert sponsorblock.mostly_ad(0, 40, spans)
     assert not sponsorblock.mostly_ad(0, 41, spans)
     assert sponsorblock.parse("not json") == []
+
+
+def test_millisecond_bounds_keep_exactly_the_passages_lines():
+    """Stored lines are rounded to 1/100 s; passage bounds come from the VTT."""
+    lines = [(0.0, "a"), (5.0, "b"), (10.0, "ad"), (15.0, "c"), (78.1, "next")]
+    kept = sponsorblock.without_ads(lines, 0.0, 78.104, [(10.0, 15.0)])
+    assert kept is not None
+    assert kept[2] == "a b c"  # not the next passage's first line
+    kept = sponsorblock.without_ads(
+        [(198.26, "first"), (204.27, "ad"), (210.0, "last")],
+        198.264,
+        215.0,
+        [(204.0, 209.0)],
+    )
+    assert kept is not None
+    assert kept[0] == pytest.approx(198.264) and kept[2] == "first last"
+
+
+def test_a_video_that_keeps_failing_does_not_stall_the_backfill(
+    session, init_db, sponsor_api
+):
+    channel = _channel(session)
+    bad = _video(session, channel, "badbadbad01", position=0)
+    good = _video(session, channel, "goodgood001", position=1)
+    sponsor_api["reply"] = lambda r: httpx.Response(
+        500 if r.url.params["videoID"] == bad.yt_id else 404
+    )
+    pacer = init_db["ctx"].knowledge.sponsor
+    for _ in range(3):
+        pacer._next_at = 0.0
+        assert sponsorblock.step()
+    asked = [r.url.params["videoID"] for r in sponsor_api["calls"]]
+    assert asked == [bad.yt_id, good.yt_id, bad.yt_id]
+    session.refresh(good)
+    assert good.sponsor_checked_at is not None
+
+
+def test_said_in_videos_keeps_a_hit_that_also_matches_outside_the_ad(client, session):
+    channel = _channel(session)
+    video = _video(
+        session,
+        channel,
+        "abcdefghijk",
+        _vtt(
+            60,
+            lambda s: (
+                "david protein bar ad"
+                if s == 30
+                else "protein research talk"
+                if s == 45
+                else "filler"
+            ),
+        ),
+    )
+    _ads(session, video, (29, 34))
+    [hit] = client.get("/api/ask/search", params={"q": "protein"}).json()["items"]
+    assert hit["start_sec"] == pytest.approx(40.0)  # the talk, not the ad at 28

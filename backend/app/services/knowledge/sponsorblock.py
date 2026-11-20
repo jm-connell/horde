@@ -43,7 +43,7 @@ API_URL = "https://sponsor.ajay.app/api/skipSegments"
 # outros are left in: a podcast's intro previews what the episode covers.
 CATEGORIES = ("sponsor", "selfpromo", "interaction")
 _ACTION_TYPES = ("skip", "mute")
-TIMEOUT_SEC = 8.0
+TIMEOUT = httpx.Timeout(5.0, connect=3.0)
 FAILURE_PAUSE_SEC = 600.0
 RECENT_DAYS = 30
 # Asked again on a listing only when the last answer is older than this (a
@@ -93,7 +93,7 @@ def fetch(yt_id: str) -> list[Segment] | None:
                 "categories": json.dumps(list(CATEGORIES)),
                 "actionTypes": json.dumps(list(_ACTION_TYPES)),
             },
-            timeout=TIMEOUT_SEC,
+            timeout=TIMEOUT,
             headers={"Accept": "application/json"},
         )
     except httpx.HTTPError:
@@ -140,13 +140,16 @@ def refresh(video_id: int, yt_id: str) -> bool:
     segments = fetch(yt_id)
     if segments is None:
         pacer.pause(FAILURE_PAUSE_SEC)
+        # The backfill tries the others before this one again.
+        pacer.failed.add(video_id)
         return True
+    pacer.failed.discard(video_id)
     store(video_id, segments)
     return True
 
 
-def _due(session: Session) -> KbVideo | None:
-    return session.exec(
+def _due(session: Session, skip: set[int] | None = None) -> KbVideo | None:
+    query = (
         select(KbVideo)
         .join(KbChannel, col(KbChannel.id) == col(KbVideo.kb_channel_id))
         .where(
@@ -156,7 +159,10 @@ def _due(session: Session) -> KbVideo | None:
         )
         .order_by(col(KbVideo.position), col(KbVideo.id))
         .limit(1)
-    ).first()
+    )
+    if skip:
+        query = query.where(col(KbVideo.id).not_in(skip))
+    return session.exec(query).first()
 
 
 def has_due() -> bool:
@@ -168,11 +174,17 @@ def has_due() -> bool:
 
 def step() -> bool:
     """Backfill: ask about the next video that has not been asked (newest
-    uploads first). True when a request ran."""
-    if not enabled() or current().knowledge.sponsor.seconds_until_free() > 0:
+    uploads first; ones whose request failed after the rest, so one video
+    SponsorBlock keeps failing on does not stall the others). True when a
+    request ran."""
+    pacer = current().knowledge.sponsor
+    if not enabled() or pacer.seconds_until_free() > 0:
         return False
     with Session(get_engine()) as session:
-        video = _due(session)
+        video = _due(session, pacer.failed)
+        if video is None and pacer.failed:
+            pacer.failed.clear()  # every other video is asked: try them again
+            video = _due(session)
         if video is None:
             return False
         video_id, yt_id = require_id(video), video.yt_id
@@ -232,10 +244,21 @@ def mostly_ad(start: float, end: float, spans: list[tuple[float, float]]) -> boo
     return bool(spans) and ad_share(start, end, spans) >= MOSTLY_AD
 
 
-def in_ad(line_start: float, spans: list[tuple[float, float]]) -> bool:
-    """Whether the caption line starting at ``line_start`` is mostly ad."""
-    middle = line_start + LINE_WINDOW_SEC / 2
-    return any(s <= middle < e for s, e in spans)
+def lines_outside(lines: list[Line], spans: list[tuple[float, float]]) -> list[Line]:
+    """``lines`` without the ones mostly inside an ad (a line lasts until the
+    next one starts; the last ``LINE_WINDOW_SEC``)."""
+    if not spans:
+        return lines
+    out: list[Line] = []
+    for i, (t, text) in enumerate(lines):
+        end = lines[i + 1][0] if i + 1 < len(lines) else t + LINE_WINDOW_SEC
+        if not mostly_ad(t, max(end, t + 0.01), spans):
+            out.append((t, text))
+    return out
+
+
+# Stored lines are rounded to 1/100 s, passage bounds are not.
+_ROUNDING = 0.01
 
 
 def without_ads(
@@ -243,10 +266,13 @@ def without_ads(
 ) -> tuple[float, float, str] | None:
     """The passage ``start``–``end`` rebuilt from its caption lines without the
     ones inside an ad: ``(start, end, text)``, or None when nothing is left."""
-    kept = [(t, text) for t, text in lines if start <= t < end and not in_ad(t, spans)]
+    outside = lines_outside(lines, spans)
+    kept = [
+        (t, text) for t, text in outside if start - _ROUNDING <= t < end - _ROUNDING
+    ]
     if not kept:
         return None
     last = kept[-1][0]
     following = [t for t, _ in lines if t > last]
     new_end = min(end, following[0]) if following else end
-    return kept[0][0], new_end, " ".join(text for _, text in kept)
+    return max(start, kept[0][0]), new_end, " ".join(text for _, text in kept)

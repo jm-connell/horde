@@ -282,11 +282,14 @@ def search(
                 continue  # a sponsor read (SponsorBlock)
             if video.id not in lines_of:
                 lines_of[video.id] = chunking.unpack_lines(video.cues)
-            lines = lines_of[video.id]
-            if spans:
-                line = moments.best_line(lines, hit.start_sec, hit.end_sec, wanted)
-                if line is not None and sponsorblock.in_ad(line[0], spans):
-                    continue  # the words matched in its sponsor read
+            every = lines_of[video.id]
+            lines = sponsorblock.lines_outside(every, spans)
+            if (
+                spans
+                and moments.best_line(lines, hit.start_sec, hit.end_sec, wanted) is None
+                and moments.best_line(every, hit.start_sec, hit.end_sec, wanted)
+            ):
+                continue  # its words match only in its sponsor read
             start = moments.moment(lines, hit.start_sec, hit.end_sec, wanted)
         items.append(
             AskSearchHit(

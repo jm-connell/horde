@@ -50,7 +50,15 @@ from ..ai.provider import (
 )
 from ..auth.accounts import AuthUser
 from ..url_clean import youtube_video_id
-from . import channel_guess, chunking, references, retrieval, routing, threads
+from . import (
+    channel_guess,
+    chunking,
+    references,
+    retrieval,
+    routing,
+    sponsorblock,
+    threads,
+)
 from . import search as kb_search
 
 logger = logging.getLogger(__name__)
@@ -426,7 +434,15 @@ class _ChannelChat:
         def lines_of(video_id: int) -> list[chunking.Line]:
             if video_id not in lines:
                 video = session.get(KbVideo, video_id)
-                lines[video_id] = chunking.unpack_lines(video.cues if video else None)
+                # A reference never opens at or quotes a sponsor read.
+                lines[video_id] = (
+                    sponsorblock.lines_outside(
+                        chunking.unpack_lines(video.cues),
+                        sponsorblock.parse(video.sponsor_segments),
+                    )
+                    if video
+                    else []
+                )
             return lines[video_id]
 
         content, self.references = references.resolve(content, self._excerpts, lines_of)
