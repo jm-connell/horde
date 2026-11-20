@@ -7,7 +7,7 @@ Optional AI turns Horde from a downloader into a smarter archive: semantic searc
 AI features need **providers ready**:
 
 - **Embeddings** — the provider's embedding model, or a second server's (for search indexes, related, catalog embeds, categories)
-- **Chat / LLM** — the provider's chat model (summaries, chapters, chat, enrich tags, category invention, duplicate confirmation)
+- **Chat / LLM** — the **Background model** (summaries, chapters, enrich tags, category invention, duplicate confirmation) and the **Assistant model** (Ask)
 
 Configure under [Settings → AI](../settings/ai.md) and follow [AI setup](../ops/ai-setup.md). Until embed/chat models are present and healthy, Library stays on a single home tab (no Recommended), hybrid search degrades to keyword-only, and LLM actions stay unavailable.
 
@@ -83,7 +83,7 @@ Describe a change to how Horde looks ("rounder video cards", "a frosted top bar"
 
 ### Which model it uses
 
-The assistant uses the chat model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. On OpenRouter with the Budget chat model it already uses `deepseek/deepseek-v4.1-flash` until you choose another. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
+The assistant uses the background model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. On OpenRouter with the Budget chat model it already uses `deepseek/deepseek-v4.1-flash` until you choose another. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
 
 ## Streamed videos
 
@@ -101,7 +101,7 @@ Summaries still require downloaded captions; tag enrichment does not.
 
 The home page's **Recommended** tab works with AI off: it then ranks by what your history says (channels you watch, tags, follows, freshness). With embeddings it matches videos by their content to what you watched recently and watched through, which also finds videos from channels you have never opened. How it mixes and how to tune it: [Library → Library and Recommended](library.md#library-and-recommended).
 
-**Categories** are invented by the chat model from a sample of the library, with the sample videos that belong to each, and refreshed under **Settings → AI → Jobs**. They show as chips above Recommended; a video is shown only under the categories it fits best, so a category does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
+**Categories** are invented by the background model from a sample of the library, with the sample videos that belong to each, and refreshed under **Settings → AI → Jobs**. They show as chips above Recommended; a video is shown only under the categories it fits best, so a category does not fill up with videos that belong to another one. Match strictness is tunable (`category_min_score`). How the scores work: [AI pipeline](../architecture/ai-pipeline.md#recommendations). Without an AI provider there are no category chips.
 
 ## Duplicate confirmation
 

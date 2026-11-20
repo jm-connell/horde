@@ -4,7 +4,7 @@ import HelpTip from "../../../components/HelpTip";
 import { useAiModels } from "../../../queries/status";
 import type { AiSettings } from "../../../types";
 import {
-  CHAT_MODEL_TIP,
+  BACKGROUND_MODEL_TIP,
   HELP_MODEL_TIP,
   EMBED_MODEL_TIP,
   INPUT_COMPACT,
@@ -156,6 +156,7 @@ export default function ConnectionPane() {
           !match(
             "models",
             "chat model",
+            "background model",
             "assistant model",
             "embedding",
             "budget",
@@ -166,6 +167,45 @@ export default function ConnectionPane() {
         }
       >
         <div className="max-w-3xl space-y-5">
+          <ModelField
+            label="Assistant model (Ask)"
+            tip={HELP_MODEL_TIP}
+            value={aiDraft.help_model}
+            models={chatModels?.models ?? []}
+            pinRecommended={isOpenRouter}
+            emptyOption={
+              assistantDefault
+                ? `Default (${assistantDefault})`
+                : "Same as the background model"
+            }
+            placeholder={
+              assistantDefault
+                ? `Empty = ${assistantDefault}`
+                : "Empty = the background model"
+            }
+            onSave={(v) => void saveModels({ help_model: v })}
+          />
+          <ModelField
+            label="Background model"
+            tip={BACKGROUND_MODEL_TIP}
+            value={aiDraft.chat_model}
+            models={chatModels?.models ?? []}
+            pinRecommended={isOpenRouter}
+            placeholder="e.g. llama3.2:3b or google/gemini-2.5-flash-lite"
+            onSave={(v) => void saveModels({ chat_model: v })}
+          />
+          {aiStatus?.configured &&
+            aiStatus.reachable &&
+            aiDraft.chat_model &&
+            !aiStatus.chat_model_present && (
+              <p className="text-xs text-warning">
+                {usesOllama
+                  ? aiStatus.pulling.includes(aiDraft.chat_model)
+                    ? "Downloading this model on Ollama…"
+                    : "This model is not installed on Ollama yet."
+                  : "The provider did not accept this model."}
+              </p>
+            )}
           {isOpenRouter && (
             <div className="grid max-w-xl grid-cols-2 gap-2">
               {OPENROUTER_PRESETS.map((preset) => {
@@ -216,45 +256,6 @@ export default function ConnectionPane() {
               })}
             </div>
           )}
-          <ModelField
-            label="Chat model"
-            tip={CHAT_MODEL_TIP}
-            value={aiDraft.chat_model}
-            models={chatModels?.models ?? []}
-            pinRecommended={isOpenRouter}
-            placeholder="e.g. llama3.2:3b or google/gemini-2.5-flash-lite"
-            onSave={(v) => void saveModels({ chat_model: v })}
-          />
-          {aiStatus?.configured &&
-            aiStatus.reachable &&
-            aiDraft.chat_model &&
-            !aiStatus.chat_model_present && (
-              <p className="text-xs text-warning">
-                {usesOllama
-                  ? aiStatus.pulling.includes(aiDraft.chat_model)
-                    ? "Downloading this model on Ollama…"
-                    : "This model is not installed on Ollama yet."
-                  : "The provider did not accept this model."}
-              </p>
-            )}
-          <ModelField
-            label="Assistant model (Ask)"
-            tip={HELP_MODEL_TIP}
-            value={aiDraft.help_model}
-            models={chatModels?.models ?? []}
-            pinRecommended={isOpenRouter}
-            emptyOption={
-              assistantDefault
-                ? `Default (${assistantDefault})`
-                : "Same as the chat model"
-            }
-            placeholder={
-              assistantDefault
-                ? `Empty = ${assistantDefault}`
-                : "Empty = the chat model"
-            }
-            onSave={(v) => void saveModels({ help_model: v })}
-          />
           <ModelField
             label="Embedding model"
             tip={EMBED_MODEL_TIP}

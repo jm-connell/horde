@@ -69,7 +69,7 @@ Conversations are saved on the server for your account (nobody else sees them). 
 | Part | Needs |
 |------|-------|
 | Indexing and **Said in videos** in search results | Nothing beyond Horde: no AI provider |
-| Asking a channel | A chat model (Settings → AI). It uses the **Assistant model** when one is set; a stronger model answers noticeably better here, and Settings → AI → Models → **Assistant model (Ask)** swaps it without touching the model summaries and tags use |
+| Asking a channel | An AI model (Settings → AI). It uses the **Assistant model** when one is set; a stronger model answers noticeably better here, and Settings → AI → Models → **Assistant model (Ask)** swaps it without touching the model summaries and tags use |
 | Finding passages by meaning, not just words | An embedding model; without one Ask searches by keyword (and by the spellings the chat model suggests) |
 
 Small local models (around 3B) are told to compare at most two channels and get fewer passages; a 14B model or a cloud model gives noticeably better answers and follows the citation rules more reliably.

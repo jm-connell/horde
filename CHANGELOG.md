@@ -21,6 +21,12 @@ All notable changes to Horde are documented here. The format follows
 
 ### Changed
 
+- **"Chat model" is now "Background model", and the Assistant model comes
+  first.** The old name read as the model you talk to in Ask; it runs the
+  jobs for every video (summaries, chapters, tags, categories, duplicates).
+  Settings → AI → Models lists the Assistant model (Ask), then the
+  Background model with its Budget / Best presets, then the embedding
+  model. The saved setting is unchanged.
 - **Recommended's color coding is a setting, off by default.** The accent
   outlines that mark a card as downloaded or from your channels, and their
   key beside the tabs, now show only with Settings → Library →

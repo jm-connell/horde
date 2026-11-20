@@ -31,8 +31,8 @@ One connection to any OpenAI-compatible endpoint serves chat, and embeddings unl
 
 | Setting | Key | Default | Notes |
 |---------|-----|---------|--------|
-| Chat model | `chat_model` | `""` | Summaries, chapters, chat, tags, categories, duplicates. A list when the server lists its models (OpenRouter rows show USD per 1M tokens and Budget / Best presets), otherwise typed |
-| Assistant model (Ask) | `help_model` | `""` | The model Ask answers with (channels, a video, Horde). Pick any model from the list; summaries and tags stay on the chat model, so a stronger one here costs more only when someone asks. Empty = the chat model, except on OpenRouter while the chat model is the Budget preset (`google/gemini-2.5-flash-lite`): then Ask uses `deepseek/deepseek-v4.1-flash`, because answering from dozens of passages with a correct reference for each needs a stronger model (it thinks before answering, so the first word takes a few seconds longer) |
+| Assistant model (Ask) | `help_model` | `""` | The model Ask answers with (channels, a video, Horde). Pick any model from the list; summaries and tags stay on the background model, so a stronger one here costs more only when someone asks. Empty = the background model, except on OpenRouter while the background model is the Budget preset (`google/gemini-2.5-flash-lite`): then Ask uses `deepseek/deepseek-v4.1-flash`, because answering from dozens of passages with a correct reference for each needs a stronger model (it thinks before answering, so the first word takes a few seconds longer) |
+| Background model | `chat_model` | `""` | The jobs that run for every video: summaries, chapters, tags, categories, duplicates (named **Chat model** before; the key is unchanged). A list when the server lists its models (OpenRouter rows show USD per 1M tokens and Budget / Best presets), otherwise typed |
 | Embedding model | `embed_model` | `""` | Semantic search, related videos, category shelves. Empty = those stay off. Changing it offers to rebuild the indexes |
 | Use a different server for embeddings | `embed_base_url`, `embed_api_key` | `""` | Empty = embeddings use the chat connection. For providers without `/v1/embeddings` (Groq, DeepSeek, Anthropic) |
 | Show costs in Watch | `show_costs` | `false` | Only shown when the provider reports cost (OpenRouter) |
@@ -89,7 +89,7 @@ Live queue status appears here and on System:
 - **Blocked** state + reason when jobs cannot run (provider down, paused, budget hard limit)
 - Current job (with attempt number when retrying)
 - **Failed jobs** list with Retry, Retry all, Clear failed
-- **Provider** kind and chat model, and, when the provider reports cost, **Spend** (24h / 7-day totals from the local usage ledger, weekly budget if set, 24h call count)
+- **Provider** kind and background model, and, when the provider reports cost, **Spend** (24h / 7-day totals from the local usage ledger, weekly budget if set, 24h call count)
 
 ### Automatic schedule
 
@@ -116,7 +116,7 @@ Backend-only bookkeeping: `last_daily_run` (`YYYY-MM-DD` when `set_time` last ra
 | `all_full` | Process full library | Same across the whole library, then categories |
 | `embeds` | Index missing videos | Search indexes for missing/stale/wrong-model embeds |
 | `reindex_embeds` | Rebuild search indexes | Force re-queue indexing; prefer after changing embed model |
-| `missing_tags` | Enrich missing tags | Chat model tags only where AI tags are absent |
+| `missing_tags` | Enrich missing tags | Background model tags only where AI tags are absent |
 | `full_tags` | Re-tag entire library | Re-run enrichment for every unlocked video |
 | `categories` | Refresh categories | Invent browse categories, rematch shelves via indexes |
 

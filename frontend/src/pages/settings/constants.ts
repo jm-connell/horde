@@ -135,7 +135,7 @@ export const AI_PROCESS_JOBS: {
     action: "missing_tags",
     label: "Enrich missing tags",
     description:
-      "Ask the chat model to suggest tags only for videos that do not have AI tags yet.",
+      "Ask the background model to suggest tags only for videos that do not have AI tags yet.",
   },
   {
     action: "full_tags",
@@ -153,11 +153,11 @@ export const AI_PROCESS_JOBS: {
 
 export const EMBED_MODEL_TIP =
   "Search index model — used for semantic search, related videos, and filling category shelves. On Ollama, nomic-embed-text is a solid default (~0.5–1GB VRAM); on OpenRouter or OpenAI, openai/text-embedding-3-small. Leave empty to turn search indexes off. Changing it requires re-indexing the library.";
-export const CHAT_MODEL_TIP =
-  "Chat model — writes summaries, chapters and chat replies, enriches tags, invents category chips and checks duplicates. On Ollama, 3B-class models need about 3–6GB of VRAM.";
+export const BACKGROUND_MODEL_TIP =
+  "Background model — the jobs that run for every video: summaries, chapters, tags, category chips and duplicate checks. A cheap, fast model is right here. Ask answers with the Assistant model above. On Ollama, 3B-class models need about 3–6GB of VRAM.";
 
 export const HELP_MODEL_TIP =
-  "Assistant model — the model Ask answers with: questions about channels, about a video and about Horde. Ask reads dozens of passages and cites each one, so a stronger model answers noticeably better; pick any model here without paying more for summaries and tags, which stay on the chat model. Left empty it is the chat model, except on OpenRouter with the Budget chat model, where it is deepseek/deepseek-v4.1-flash.";
+  "Assistant model — the model Ask answers with: questions about channels, about a video and about Horde. Ask reads dozens of passages and cites each one, so a stronger model answers noticeably better; pick any model here without paying more for summaries and tags, which stay on the background model. Left empty it is the background model, except on OpenRouter with the Budget chat model, where it is deepseek/deepseek-v4.1-flash.";
 
 export const SUBTITLE_SIZES: { value: SubtitleSize; label: string }[] = [
   { value: "small", label: "Small" },
@@ -369,9 +369,9 @@ export const OPENROUTER_PRESETS = [
 export const OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash";
 
 /**
- * What an empty Assistant model means on OpenRouter while the chat model is
+ * What an empty Assistant model means on OpenRouter while the background model is
  * the Budget preset (the server's `help_model.default_model`). "" when the
- * assistant follows the chat model.
+ * assistant follows the background model.
  */
 export function assistantDefaultModel(
   isOpenRouter: boolean,
