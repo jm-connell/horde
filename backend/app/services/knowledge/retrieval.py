@@ -16,7 +16,9 @@
    what is current ("the best budget handheld right now"), newer videos count for
    more.
 3. **Pick** the best videos and their best passages within a character budget
-   shared fairly between the channels, and number them in date order, so the model
+   shared fairly between the channels, leaving out passages that are mostly a
+   sponsor read and cutting the ad lines out of the rest (SponsorBlock's
+   segments, ``sponsorblock.py``), and number them in date order, so the model
    can cite ``[n]`` and notice an opinion that changed over time. A question about
    the channel's newest videos also gets their titles and descriptions.
 """
@@ -34,7 +36,7 @@ from sqlmodel import Session, col, select
 from ...models import KbChannel, KbChunk, KbVideo, Video, require_id
 from ..ai.embeddings import embed_query
 from ..ai.provider import resolve_embed_model
-from . import chunking, routing
+from . import chunking, routing, sponsorblock
 from . import search as kb_search
 from .vectors import VectorCache, top_chunks
 
@@ -382,7 +384,8 @@ def _pick(
     wide: frozenset[str] = frozenset(),
 ) -> list[tuple[KbChunk, KbVideo]]:
     """Best videos first; per video its best non-overlapping passages, within
-    budget. Videos in ``wide`` (by YouTube id) may give more passages."""
+    budget. Videos in ``wide`` (by YouTube id) may give more passages. Sponsor
+    reads are left out (``_without_ads``)."""
     if not scores:
         return []
     chunks = {
@@ -391,22 +394,36 @@ def _pick(
             select(KbChunk).where(col(KbChunk.id).in_(list(scores)))
         ).all()
     }
+    videos = {
+        v.id: v
+        for v in session.exec(
+            select(KbVideo).where(
+                col(KbVideo.id).in_({c.kb_video_id for c in chunks.values()})
+            )
+        ).all()
+    }
+    ads = {
+        video_id: found
+        for video_id, video in videos.items()
+        if (found := sponsorblock.parse(video.sponsor_segments))
+    }
+    lines: dict[int, list[chunking.Line]] = {}
     by_video: dict[int, list[KbChunk]] = {}
     for chunk_id in sorted(scores, key=lambda c: -scores[c]):
         chunk = chunks.get(chunk_id)
-        if chunk is not None:
-            by_video.setdefault(chunk.kb_video_id, []).append(chunk)
+        if chunk is None:
+            continue
+        spans = ads.get(chunk.kb_video_id)
+        if spans and chunk.chunk_index != chunking.META_CHUNK_INDEX:
+            chunk = _without_ads(chunk, videos[chunk.kb_video_id], spans, lines)
+            if chunk is None:
+                continue
+        by_video.setdefault(chunk.kb_video_id, []).append(chunk)
 
     def video_score(video_id: int) -> float:
         hits = by_video[video_id]
         return scores[hits[0].id or 0] + 0.25 * sum(scores[h.id or 0] for h in hits[1:])
 
-    videos = {
-        v.id: v
-        for v in session.exec(
-            select(KbVideo).where(col(KbVideo.id).in_(list(by_video)))
-        ).all()
-    }
     picked: list[tuple[KbChunk, KbVideo]] = []
     used = 0
     for video_id in sorted(by_video, key=video_score, reverse=True):
@@ -438,6 +455,40 @@ def _pick(
         if used >= budget:
             break
     return picked
+
+
+def _without_ads(
+    chunk: KbChunk,
+    video: KbVideo,
+    spans: list[tuple[float, float]],
+    lines: dict[int, list[chunking.Line]],
+) -> KbChunk | None:
+    """``chunk`` without its sponsor read: None when it is mostly ad, else a
+    copy (never added to the session) rebuilt from the caption lines outside
+    the ad. ``lines`` caches each video's unpacked captions."""
+    if sponsorblock.ad_share(chunk.start_sec, chunk.end_sec, spans) == 0:
+        return chunk
+    if sponsorblock.mostly_ad(chunk.start_sec, chunk.end_sec, spans):
+        return None
+    video_id = require_id(video)
+    if video_id not in lines:
+        lines[video_id] = chunking.unpack_lines(video.cues)
+    kept = sponsorblock.without_ads(
+        lines[video_id], chunk.start_sec, chunk.end_sec, spans
+    )
+    if kept is None:
+        # No stored lines to cut with: the passage is mostly not ad, keep it.
+        return chunk if not lines[video_id] else None
+    start, end, text = kept
+    return KbChunk(
+        id=chunk.id,
+        kb_video_id=chunk.kb_video_id,
+        kb_channel_id=chunk.kb_channel_id,
+        chunk_index=chunk.chunk_index,
+        start_sec=start,
+        end_sec=end,
+        text=text,
+    )
 
 
 # Above any fused score (at most about 2 / (k + 1)): the watched video's

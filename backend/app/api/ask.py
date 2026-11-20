@@ -32,7 +32,7 @@ from ..schemas import (
 from ..services import follows
 from ..services.auth.accounts import AuthUser
 from ..services.follows import normalize_channel_url
-from ..services.knowledge import ask_chat, chunking, moments, threads
+from ..services.knowledge import ask_chat, chunking, moments, sponsorblock, threads
 from ..services.knowledge import channels as kb_channels
 from ..services.knowledge import search as kb_search
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
@@ -266,6 +266,7 @@ def search(
             select(Video.id, Video.youtube_id).where(col(Video.youtube_id).in_(yt_ids))
         ).all()
     }
+    ads = {vid: sponsorblock.parse(v.sponsor_segments) for vid, v in videos.items()}
     wanted = moments.words(q)
     items = []
     lines_of: dict[int, list[chunking.Line]] = {}
@@ -276,11 +277,17 @@ def search(
         channel = channels.get(hit.kb_channel_id)
         start = hit.start_sec
         if hit.chunk_index != chunking.META_CHUNK_INDEX and video.id is not None:
+            spans = ads[video.id]
+            if sponsorblock.mostly_ad(hit.start_sec, hit.end_sec, spans):
+                continue  # a sponsor read (SponsorBlock)
             if video.id not in lines_of:
                 lines_of[video.id] = chunking.unpack_lines(video.cues)
-            start = moments.moment(
-                lines_of[video.id], hit.start_sec, hit.end_sec, wanted
-            )
+            lines = lines_of[video.id]
+            if spans:
+                line = moments.best_line(lines, hit.start_sec, hit.end_sec, wanted)
+                if line is not None and sponsorblock.in_ad(line[0], spans):
+                    continue  # the words matched in its sponsor read
+            start = moments.moment(lines, hit.start_sec, hit.end_sec, wanted)
         items.append(
             AskSearchHit(
                 channel_id=hit.kb_channel_id,

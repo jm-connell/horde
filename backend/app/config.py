@@ -28,6 +28,18 @@ STREAM_AI_RETENTION_DAYS: int = max(
 )
 
 
+# Ask asks SponsorBlock (sponsor.ajay.app) for each indexed video's ad segments,
+# sending only its public YouTube id, so answers leave sponsor reads out. "0" off.
+ASK_SPONSORBLOCK: bool = os.environ.get(
+    "HORDE_ASK_SPONSORBLOCK", "1"
+).strip().lower() not in (
+    "0",
+    "false",
+    "no",
+    "off",
+)
+
+
 # A video the user deletes waits in the trash this many days before it is erased
 # for good. 0 turns the trash off: a delete is immediate, as it used to be.
 def _non_negative_int(name: str, default: int) -> int:
