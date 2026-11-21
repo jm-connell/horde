@@ -371,3 +371,95 @@ def test_a_server_that_rejects_the_key_is_reachable_not_down(session, serve_ai):
     assert not provider.OpenAICompatProvider(
         provider.Connection("http://vllm.lan:8000/v1")
     ).ping(strict=True)
+
+
+_THINKING_ALOUD = "We need answer JSON only. Need summary 75-120 words. Captions show"
+
+
+def _chat_reply(content: str, *, finish: str = "stop", reasoning: str | None = None):
+    message: dict = {"content": content}
+    if reasoning is not None:
+        message["reasoning"] = reasoning
+    return httpx.Response(
+        200, json={"choices": [{"message": message, "finish_reason": finish}]}
+    )
+
+
+def test_a_reply_cut_off_while_thinking_is_not_an_answer(session, serve_ai):
+    """A thinking model that spends the whole token limit on reasoning returns no
+    content. Its reasoning used to be handed back as the reply, and was stored as
+    the video's summary."""
+    serve_ai(
+        lambda request: _chat_reply("", finish="length", reasoning=_THINKING_ALOUD)
+    )
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+    assert llm.chat("summarize", "deepseek/x", num_predict=1100) == ""
+
+
+def test_a_finished_reply_may_still_carry_its_answer_as_reasoning(session, serve_ai):
+    """The case the stand-in exists for: JSON mode leaves ``{ }`` as content and
+    the finished answer under ``reasoning``."""
+    answer = json.dumps({"summary": "A ride up the ridge."})
+    serve_ai(lambda request: _chat_reply("{  }", reasoning=answer))
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+    assert llm.chat("summarize", "google/x") == answer
+
+
+def _always_thinks(ok: httpx.Response):
+    """OpenRouter in front of a model whose reasoning cannot be switched off."""
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content)
+        bodies.append(body)
+        if body.get("reasoning") == {"enabled": False}:
+            message = "Reasoning is mandatory for this endpoint and cannot be disabled."
+            return httpx.Response(
+                400, json={"error": {"message": message, "code": 400}}
+            )
+        return ok
+
+    return handler, bodies
+
+
+def test_thinking_off_means_minimal_for_a_model_that_always_thinks(session, serve_ai):
+    handler, bodies = _always_thinks(_chat_reply('{"answer": "Paris"}'))
+    serve_ai(handler)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+
+    assert llm.chat("capital?", "openai/x", think=False) == '{"answer": "Paris"}'
+    assert [b.get("reasoning") for b in bodies] == [
+        {"enabled": False},
+        {"effort": "minimal"},
+    ]
+    # Nothing else about the request changed: the JSON format was not the problem.
+    assert bodies[1]["response_format"] == bodies[0]["response_format"]
+
+
+def test_a_stream_also_falls_back_to_minimal_thinking(session, serve_ai):
+    handler, bodies = _always_thinks(httpx.Response(200, text=_STREAM))
+    serve_ai(handler)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+
+    assert "".join(llm.chat_stream("hi", "openai/x", think=False)) == "hi there"
+    assert [b.get("reasoning") for b in bodies] == [
+        {"enabled": False},
+        {"effort": "minimal"},
+    ]
+
+
+def test_another_400_is_not_retried_as_a_thinking_problem(session, serve_ai):
+    calls: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        calls.append(json.loads(request.content))
+        return httpx.Response(400, json={"error": {"message": "model not found"}})
+
+    serve_ai(handler)
+    llm = provider.OpenAICompatProvider(provider.Connection(OR_URL, "k"))
+    try:
+        llm.chat("hi", "nope/x", think=False, format=None)
+        raise AssertionError("expected the 400 to surface")
+    except httpx.HTTPStatusError as exc:
+        assert exc.response.status_code == 400
+    assert [c.get("reasoning") for c in calls] == [{"enabled": False}]

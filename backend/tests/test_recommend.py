@@ -308,9 +308,11 @@ class FakeLlm:
     def __init__(self, reply):
         self.reply = reply
         self.prompts: list[str] = []
+        self.kwargs: list[dict] = []
 
     def chat(self, prompt, model, **kwargs):
         self.prompts.append(prompt)
+        self.kwargs.append(kwargs)
         return json.dumps(self.reply(prompt))
 
 
@@ -398,6 +400,8 @@ def test_refresh_categories_uses_labelled_examples(
     tasks.run_refresh_categories(session)
 
     assert "[1] Title:" in llm.prompts[0]
+    # A thinking model reasoned past the request timeout over this prompt.
+    assert llm.kwargs[0]["think"] is False
     stored = _stored(session)
     assert set(stored) == set(GROUPS)
     for group, vec in GROUPS.items():
@@ -435,8 +439,10 @@ def test_enrich_tags_reuses_the_librarys_spelling(session, add_video, monkeypatc
     target = add_video(title="Game three", channel="C", tags=[])
     llm = SimpleNamespace(
         prompts=[],
+        kwargs=[],
         chat=lambda prompt, model, **kw: (
             llm.prompts.append(prompt)
+            or llm.kwargs.append(kw)
             or json.dumps({"tags": ["gaming", "speedrun"], "remove": []})
         ),
     )
@@ -445,6 +451,7 @@ def test_enrich_tags_reuses_the_librarys_spelling(session, add_video, monkeypatc
 
     assert tasks.run_enrich_tags(session, target.id) is None
 
+    assert llm.kwargs[0]["think"] is False
     prompt = llm.prompts[0]
     assert "Library tags:" in prompt
     assert "Gaming" in prompt

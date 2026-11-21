@@ -38,6 +38,10 @@ When **AI video summaries** is on, a summary is queued after download once capti
 
 When **AI video chapters** is on, choose **On download** or **Watch page**. On download queues a chapter job after captions exist if the description (and yt-dlp chapter list) do not already provide markers. Watch page only generates when you click the button on a video. Videos under 3 minutes and lyric-heavy captions are skipped automatically; Watch **Generate** still runs for those. After AI markers exist, Watch shows a short “AI generated chapters” note and **Regenerate** on the Description row. Markers are stored beside the video; the description is not rewritten. Description timestamps always win over yt-dlp and AI.
 
+Chapters follow the video, not the clock. The model reads the timed captions, lists the major parts of the video as a table of contents, and then gives the moment each part begins; a chapter starts only where the video moves on to something else, so one may last a minute and the next twenty. The number is capped by length (about 6 for a 10-minute video, 11 for 40 minutes, 16 for 80, never more than 30) and is usually lower. A long video is read in sections so no captions are left out, and a chapter that comes out far longer than the rest is read once more on its own (when it fits in one call), in case several parts were filed under one title. That costs one model call for most videos and a few for a long one.
+
+If the model finds a single part, the video gets no chapters ("No clear chapter breaks in this video"); **Regenerate** that ends this way removes the chapters the video had. If its reply cannot be used, generating fails with an error and what was stored stays: Horde does not fill in markers of its own. Chapters made before this changed stay as they are until you press **Regenerate**.
+
 ## Chat about a video
 
 The watch page's **Summary** section has a **Chat ↗** button next to **Regenerate**: it opens [Ask](ask.md#asking-about-a-video) on that video. Answers are built from the video's metadata and captions when available, and from its saved [comments](comments.md) (labelled as viewers'), so you can ask how people reacted. A saved summary stays readable in the section even when it cannot be generated again (summaries switched off, or no captions). Requires a working chat provider and **AI video chat**.
@@ -83,7 +87,7 @@ Describe a change to how Horde looks ("rounder video cards", "a frosted top bar"
 
 ### Which model it uses
 
-The assistant uses the background model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. On OpenRouter with the Budget chat model it already uses `deepseek/deepseek-v4.1-flash` until you choose another. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
+The assistant uses the background model unless the administrator sets an **Assistant model** under [Settings → AI → Models](../settings/ai.md#models), which lets it use a stronger model without making summaries and tags cost more. On OpenRouter the Budget background model is `deepseek/deepseek-v4.1-flash`, so Ask uses it too; an install still on the former Budget model (`google/gemini-2.5-flash-lite`) also gets it for Ask until you choose another. It knows roughly how capable its model is: on a small local model (3B or so) links, settings and how-to answers work, but it will say its CSS may be rough and suggest something better, such as `google/gemini-2.5-flash` on OpenRouter or a 14B local model.
 
 ## Streamed videos
 

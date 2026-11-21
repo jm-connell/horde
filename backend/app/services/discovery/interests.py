@@ -368,6 +368,7 @@ def llm_queries(groups: list[Interest]) -> bool:
             temperature=0.4,
             timeout=90.0,
             usage_kind="discovery",
+            think=False,
         )
     except Exception:
         logger.warning("could not ask the chat model for searches", exc_info=True)

@@ -24,7 +24,7 @@ from ...models import (
 )
 from .. import app_settings, library, media_sidecars
 from .. import chapters as chapters_svc
-from . import embeddings, vector_index
+from . import embeddings, help_model, vector_index
 from . import text as ai_text
 from .provider import (
     get_embed_provider,
@@ -298,6 +298,7 @@ def run_enrich_tags(session: Session, video_id: int | None) -> SkipReason | None
         ),
         usage_kind="tags",
         video_id=video_id,
+        think=False,
     )
     data = _parse_json_object(raw)
     suggested_raw = data.get("tags")
@@ -431,6 +432,9 @@ def generate_summary(
             temperature=0.2 if use_schema else 0.5,
             usage_kind="summary",
             video_id=usage_video_id,
+            # Thinking counts against num_predict: a thinking model spent the
+            # whole limit on it and the summary came back cut short or empty.
+            think=False,
         )
         _accumulate_cost()
         summary = _extract_summary_text(raw)
@@ -471,6 +475,7 @@ def generate_summary(
             format=ai_text.SUMMARY_JSON_SCHEMA,
             usage_kind="summary",
             video_id=usage_video_id,
+            think=False,
         )
         _accumulate_cost()
         continuation = _extract_summary_text(cont_raw)
@@ -580,7 +585,12 @@ _CHAPTER_SKIP_MESSAGES = {
     "no_subtitles": "Chapters require downloaded subtitles for this video",
     "too_short": "Video is shorter than 3 minutes",
     "music_like": "Captions look like music or lyrics",
+    "no_breaks": "No clear chapter breaks in this video",
 }
+
+_CHAPTERS_TIMEOUT = 300.0
+# Room for 30 parts, their start times, and a model that thinks anyway.
+_CHAPTERS_NUM_PREDICT = 2000
 
 
 def generate_chapters(
@@ -606,82 +616,101 @@ def generate_chapters(
     if missing:
         raise ChaptersError(missing, status_code=503)
 
-    max_chars = chapters_svc.transcript_char_cap(ai.get("workload_profile"))
-    transcript = chapters_svc.format_timed_transcript(cues, max_chars=max_chars)
-    if not transcript.strip():
+    max_chars = chapters_svc.transcript_char_cap(
+        ai.get("workload_profile"),
+        hosted=not help_model.stays_local(
+            getattr(provider, "connection", None), chat_model
+        ),
+    )
+    sections = chapters_svc.transcript_sections(cues, max_chars=max_chars)
+    if not sections:
         raise ChaptersError(
             "Chapters require downloaded subtitles for this video",
             status_code=400,
         )
-    prompt = chapters_svc.chapters_prompt(
-        video, transcript, duration_sec=video.duration_sec
-    )
     system = chapters_svc.chapters_system_prompt()
-    _CHAPTERS_TIMEOUT = 300.0
+    all_lines = [line for lines in sections for line in lines]
 
-    cleaned: list[dict] = []
-    for attempt in range(2):
-        use_schema = attempt == 0
-        raw = provider.chat(
-            prompt,
-            chat_model,
-            system=system,
-            num_predict=1200,
-            timeout=_CHAPTERS_TIMEOUT,
-            format=chapters_svc.CHAPTERS_JSON_SCHEMA if use_schema else None,
-            temperature=0.2 if use_schema else 0.4,
-            usage_kind="chapters",
-            video_id=usage_video_id,
+    def ask(lines: list[tuple[float, str]], **scope: Any) -> list[dict] | None:
+        """The parts the model finds in ``lines``; None when its reply is unusable."""
+        prompt = chapters_svc.chapters_prompt(
+            video,
+            lines,
+            limit=chapters_svc.section_chapter_limit(
+                lines, len(all_lines), video.duration_sec
+            ),
+            **scope,
         )
-        payload = chapters_svc.chapters_from_model_output(raw)
-        cleaned = chapters_svc.snap_and_validate(payload, cues, video.duration_sec)
-        if cleaned:
-            break
-        logger.warning(
-            "chapters empty for %s attempt=%s raw_len=%s raw_prefix=%r",
-            log_id,
-            attempt + 1,
-            len(raw or ""),
-            (raw or "")[:240],
-        )
-    if cleaned and chapters_svc.titles_need_rewrite(cleaned, cues):
-        try:
-            rewritten = provider.chat(
-                chapters_svc.title_rewrite_prompt(cleaned, cues),
+        for attempt in range(2):
+            use_schema = attempt == 0
+            raw = provider.chat(
+                prompt,
                 chat_model,
-                system=chapters_svc.title_rewrite_system_prompt(),
-                num_predict=1200,
+                system=system,
+                num_predict=_CHAPTERS_NUM_PREDICT,
                 timeout=_CHAPTERS_TIMEOUT,
-                format=chapters_svc.CHAPTERS_JSON_SCHEMA,
-                temperature=0.2,
+                format=chapters_svc.CHAPTERS_JSON_SCHEMA if use_schema else None,
+                temperature=0.2 if use_schema else 0.4,
                 usage_kind="chapters",
                 video_id=usage_video_id,
+                think=False,
             )
-        except Exception:
+            parts = chapters_svc.section_chapters(
+                chapters_svc.chapters_from_model_output(raw), lines
+            )
+            if parts:
+                return parts
             logger.warning(
-                "chapter title rewrite failed for %s",
+                "chapters unusable for %s (%s) attempt=%s raw_len=%s raw_prefix=%r",
                 log_id,
-                exc_info=True,
+                scope or "whole video",
+                attempt + 1,
+                len(raw or ""),
+                (raw or "")[:240],
             )
-            rewritten = ""
-        cleaned = chapters_svc.apply_title_rewrites(
-            cleaned,
-            chapters_svc.chapters_from_model_output(rewritten),
-            cues,
-        )
-    if not cleaned:
-        cleaned = chapters_svc.fallback_chapters_from_cues(cues, video.duration_sec)
-        if cleaned:
-            logger.warning(
-                "chapters fallback from captions %s count=%s",
-                log_id,
-                len(cleaned),
-            )
-    if cleaned:
-        cleaned = chapters_svc.replace_spoken_titles(cleaned, cues)
-    if not cleaned:
-        raise ChaptersError("Model returned unusable chapters", status_code=502)
+        return None
 
+    found: list[dict] = []
+    for number, lines in enumerate(sections, start=1):
+        previous_title = str(found[-1]["title"]) if found else None
+        parts = ask(
+            lines, section=(number, len(sections)), previous_title=previous_title
+        )
+        if parts is None:
+            # No stand-in: markers made up from the captions look like
+            # chapters and tell the viewer nothing.
+            raise ChaptersError("Model returned unusable chapters", status_code=502)
+        if chapters_svc.same_title(parts[0]["title"], previous_title):
+            del parts[0]  # the section opens still in the previous chapter
+        found.extend(parts)
+    no_breaks = ChaptersError(
+        _CHAPTER_SKIP_MESSAGES["no_breaks"], status_code=400, code="no_breaks"
+    )
+    if len(found) < 2:
+        # The model read the video and found one part: an answer, not a failure.
+        raise no_breaks
+    cleaned = chapters_svc.snap_and_validate(found, cues, video.duration_sec)
+
+    # A second look at each very long chapter, on its own. It may stay whole.
+    split: list[dict] = []
+    gap = chapters_svc.min_segment_sec(video.duration_sec)
+    for index, end in chapters_svc.long_chapters(cleaned, video.duration_sec):
+        chapter = cleaned[index]
+        lines = [ln for ln in all_lines if chapter["start_sec"] <= ln[0] < end]
+        if not lines or len(chapters_svc.render_transcript(lines)) > max_chars:
+            continue
+        parts = ask(lines, within=str(chapter["title"])) or []
+        later = [p for p in parts[1:] if p["start_sec"] - chapter["start_sec"] >= gap]
+        if later:
+            chapter["title"] = parts[0]["title"]
+            split.extend(later)
+    if split:
+        cleaned = chapters_svc.snap_and_validate(
+            cleaned + split, cues, video.duration_sec
+        )
+
+    if not cleaned:
+        raise no_breaks
     return cleaned
 
 
@@ -705,6 +734,7 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
     skip = chapters_svc.skip_reason(video, meta, force=force, cues=cues)
     if skip == "already_generated" and meta is not None:
         return chapters_svc.ai_chapters_for(meta)
+
     if skip:
         if chapters_svc.persist_skip_reason(skip):
             if meta is None:
@@ -719,9 +749,22 @@ def run_chapters(session: Session, video_id: int, *, force: bool = False) -> lis
         )
 
     session.commit()
-    cleaned = generate_chapters(
-        video, cues, usage_video_id=video_id, log_id=f"video_id={video_id}"
-    )
+    try:
+        cleaned = generate_chapters(
+            video, cues, usage_video_id=video_id, log_id=f"video_id={video_id}"
+        )
+    except ChaptersError as exc:
+        if (
+            exc.code == "no_breaks"
+            and meta is not None
+            and chapters_svc.ai_chapters_for(meta)
+        ):
+            # Regenerate found a single part: the old markers do not stand.
+            meta.chapters = None
+            meta.updated_at = utcnow()
+            session.add(meta)
+            session.commit()
+        raise
     if meta is None:
         meta = VideoAiMeta(video_id=video_id)
     meta.chapters = chapters_svc.dump_chapter_list(cleaned)
@@ -938,6 +981,9 @@ def run_refresh_categories(session: Session, _video_id: int | None = None) -> No
         chat_model,
         system=ai_text.category_system_prompt(),
         usage_kind="categories",
+        # A thinking model reasoned for two minutes over a small sample, past
+        # the request timeout.
+        think=False,
     )
     data = _parse_json_object(raw)
     categories_value = data.get("categories")

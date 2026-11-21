@@ -21,7 +21,7 @@ from .. import app_settings
 from ..auth.accounts import AuthUser
 from .provider import (
     OPENROUTER_ASSISTANT_MODEL,
-    OPENROUTER_PRESETS,
+    OPENROUTER_FORMER_BUDGET_MODEL,
     Connection,
     chat_connection,
     llm_features_allowed,
@@ -52,13 +52,18 @@ _CLOUD_TAG = re.compile(r"(?::|-)cloud$")
 
 def default_model() -> str:
     """The assistant's model while none is chosen and the chat model is still
-    OpenRouter's budget default: ``OPENROUTER_ASSISTANT_MODEL``. Ask reads
-    dozens of passages and must cite them correctly, which the budget model,
+    OpenRouter's former budget default: ``OPENROUTER_ASSISTANT_MODEL``. Ask
+    reads dozens of passages and must cite them correctly, which that model,
     picked for cheap summaries and tags, does noticeably worse. "" otherwise:
-    a chat model someone chose is theirs to keep."""
+    the assistant follows the chat model (today's budget default is the
+    assistant model itself), and a chat model someone chose is theirs to keep."""
     conn = chat_connection()
     chat = str(app_settings.ai_settings().get("chat_model") or "").strip()
-    if conn is not None and conn.is_openrouter and chat == OPENROUTER_PRESETS["budget"]:
+    if (
+        conn is not None
+        and conn.is_openrouter
+        and chat == OPENROUTER_FORMER_BUDGET_MODEL
+    ):
         return OPENROUTER_ASSISTANT_MODEL
     return ""
 
