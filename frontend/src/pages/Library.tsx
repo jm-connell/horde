@@ -20,11 +20,12 @@ import {
 } from "../hooks/useContinueWatchingDismiss";
 import { useSettings } from "../hooks/useSettings";
 import { useOfflineMode } from "../offline/hooks";
-import { useChannelLive } from "../queries/follows";
+import { useChannelLive, useFollows } from "../queries/follows";
 import { useContinueStreams, useContinueYoutube } from "../queries/history";
 import { usePrefetchDiscover } from "../queries/discover";
 import { OfflinePage } from "./lazy";
 import ChannelControls from "./library/ChannelControls";
+import { withSubscribedChannels } from "./library/sidebarChannels";
 import ChannelHeader from "./library/ChannelHeader";
 import ChannelSettingsSheet from "./library/channelSettings/ChannelSettingsSheet";
 import {
@@ -186,6 +187,12 @@ function OnlineLibrary() {
       null
     );
   }, [activeChannel, channels, channelNav.channelUrlOverrides]);
+  // Subscribed channels are listed too, before their first download.
+  const { follows } = useFollows();
+  const sidebarChannels = useMemo(
+    () => withSubscribedChannels(channels, follows),
+    [channels, follows]
+  );
   const catalog = useChannelCatalog(activeChannel, activeChannelUrl);
   // On a channel page the chat answers questions about it from Ask.
   useAskPageChannel("/", activeChannelUrl, activeChannel);
@@ -289,7 +296,7 @@ function OnlineLibrary() {
         <QueueSidePanel />
       )}
       <LibrarySidebar
-        channels={channels}
+        channels={sidebarChannels}
         activeChannel={activeChannel}
         channelSort={settings.channelSort}
         sidebarCollapsed={settings.sidebarCollapsed}

@@ -270,7 +270,10 @@ def test_a_named_channel_answers_with_references(client, session, llm):
     assert "timing belt" in ref["line"]
     # The model saw numbered excerpts without times, and the citation rules.
     call = llm["calls"][0]
-    assert "[1] The Car Care Nut" in call["system"]
+    assert (
+        '=== The Car Care Nut · "Maintenance" · 2020-01-01 ===\n\n[1] '
+        in call["system"]
+    )
     assert "Never write times" in call["system"]
     assert "0:30" not in call["system"]
 
@@ -519,7 +522,7 @@ def test_two_named_channels_are_compared_from_both(client, session, llm):
     }
     system = llm["calls"][0]["system"]
     assert "ChrisFix ·" in system and "The Car Care Nut ·" in system
-    assert "where they agree and where they disagree" in system
+    assert "where they agree, where they disagree" in system
     assert {r["channel"] for r in events[-2]["references"]} == {
         "ChrisFix",
         "The Car Care Nut",
@@ -1092,3 +1095,606 @@ def test_a_downloaded_stream_is_asked_about_as_its_library_copy(
     assert ref == ask_chat.VideoRef(
         library_id=video.id, youtube_id="ddddddddddd", title="Ridge at dawn"
     )
+
+
+# --- follow-ups, recency and the newest videos -------------------------------------
+
+
+def test_a_follow_up_is_searched_with_the_conversation(client, session, llm):
+    """ "What about its battery?" names nothing: the expansion sees the turns
+    before it, and its rewritten question is what gets searched."""
+    channel = _channel(
+        session, "Retro Game Corps", "https://youtube.com/@retrogamecorps"
+    )
+    _indexed_video(
+        session, channel, "aaaaaaaaaaa", _vtt({30: "the odin lasts six hours a charge"})
+    )
+    llm["expand"] = {"terms": ["odin"], "search": "odin review", "recent": False}
+    llm["replies"] = ["It is good [1].", "Six hours[1]."]
+    first = _events(
+        client.post(
+            "/api/ask/chat", json={"message": "retro game corps on the Odin?"}
+        ).text
+    )
+    assert first[-1]["message"]["content"] == "It is good[1]."
+    llm["expand"] = {"terms": ["odin", "battery", "hours"], "search": "odin battery"}
+    second = _events(
+        client.post(
+            "/api/ask/chat",
+            json={
+                "message": "what about its battery?",
+                "thread_id": first[0]["id"],
+                "channel_ids": [channel.id],
+            },
+        ).text
+    )
+    assert second[-1]["type"] == "done"
+    asked = llm["expansions"][1]
+    assert "Conversation so far:" in asked
+    assert "retro game corps on the Odin?" in asked
+    # The first answer's marker belonged to that turn's excerpts: not repeated.
+    earlier = llm["calls"][1]["messages"][1]
+    assert earlier == {"role": "assistant", "content": "It is good."}
+
+
+def test_without_expansion_a_follow_up_takes_the_question_before_it():
+    history = [
+        {"role": "user", "content": "what does he think of the Odin 3?"},
+        {"role": "assistant", "content": "He likes it."},
+    ]
+    none = retrieval.Expansion()
+    assert (
+        retrieval.search_question("what about its battery?", history, none)
+        == "what does he think of the Odin 3? what about its battery?"
+    )
+    # A question that stands by itself, a rewritten one, the first one: as asked.
+    alone = "which handheld has the best screen for game boy games?"
+    assert retrieval.search_question(alone, history, none) == alone
+    rewritten = retrieval.Expansion(search="odin 3 battery")
+    assert (
+        retrieval.search_question("and battery?", history, rewritten) == "and battery?"
+    )
+    assert retrieval.search_question("and battery?", [], none) == "and battery?"
+
+
+def _two_reviews(session):
+    channel = _channel(
+        session, "Retro Game Corps", "https://youtube.com/@retrogamecorps"
+    )
+    # The old review says "budget handheld" more often, so it ranks first. Both
+    # fill their passages, so the smallest budget takes one video.
+    old = _vtt(
+        {
+            s: f"this budget handheld is the budget handheld pick, point {s}"
+            for s in range(0, 120, 3)
+        }
+    )
+    new = _vtt(
+        {
+            s: f"my new budget handheld pick this year, and more talk {s}"
+            for s in range(0, 120, 3)
+        }
+    )
+    _indexed_video(session, channel, "old00000000", old, title="Old pick", position=9)
+    _indexed_video(session, channel, "new00000000", new, title="New pick", position=0)
+    return channel
+
+
+def test_a_question_about_now_prefers_newer_videos(session, init_db, monkeypatch):
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _two_reviews(session)
+    cache = init_db["ctx"].knowledge.vectors
+
+    def top_video(question, expansion=None):
+        # A budget one video's passages fill: only the best video is picked.
+        excerpts = retrieval.retrieve(
+            session,
+            cache,
+            [channel],
+            question,
+            expansion or retrieval.Expansion(),
+            budget_chars=10,
+        )
+        return {e.yt_id for e in excerpts}
+
+    assert top_video("budget handheld") == {"old00000000"}
+    assert top_video("best budget handheld right now") == {"new00000000"}
+    recent = retrieval.Expansion(recent=True)
+    assert top_video("budget handheld", recent) == {"new00000000"}
+
+
+def test_a_question_about_the_latest_videos_gets_them(session, init_db, monkeypatch):
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _two_reviews(session)
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [channel],
+        "what are his latest videos about?",
+        retrieval.Expansion(),
+        budget_chars=6000,
+    )
+    titles = [e.title for e in excerpts if e.is_description]
+    assert titles == ["Old pick", "New pick"] or titles == ["New pick", "Old pick"]
+    assert not retrieval.asks_newest_videos("what does he think of the new Odin?")
+
+
+def test_the_prompt_says_what_day_it_is(client, session, llm):
+    channel = _channel(session)
+    _indexed_video(session, channel, "aaaaaaaaaaa", BELT_VTT)
+    llm["replies"] = ["Ninety thousand [1]."]
+    client.post("/api/ask/chat", json={"message": "car care nut timing belt?"})
+    from datetime import date
+
+    assert f"Today is {date.today():%B}" in llm["calls"][0]["system"]
+
+
+def test_a_hosted_model_reads_more_than_a_local_one(monkeypatch):
+    from app.services.ai.provider import Connection
+
+    monkeypatch.setattr(
+        ask_chat, "chat_connection", lambda: Connection("http://localhost:11434/v1", "")
+    )
+    local = ask_chat._budget("medium", "qwen2.5:14b")
+    monkeypatch.setattr(
+        ask_chat,
+        "chat_connection",
+        lambda: Connection("https://openrouter.ai/api/v1", "k"),
+    )
+    assert ask_chat._budget("medium", "google/gemini-2.5-flash-lite") > local
+
+
+def test_the_upload_date_comes_from_the_video(session):
+    """The channel listing only knows "3 years ago": no date at all was stored."""
+    channel = _channel(session)
+    assert channel.id is not None
+    video = KbVideo(kb_channel_id=channel.id, yt_id="aaaaaaaaaaa")
+    session.add(video)
+    session.commit()
+    indexing.apply_result(
+        session,
+        video,
+        captions.CaptionResult(
+            captions.FETCHED, vtt=BELT_VTT, published_at="2024-03-02T00:00:00+00:00"
+        ),
+    )
+    session.refresh(video)
+    assert video.published_at == "2024-03-02T00:00:00+00:00"
+
+
+def test_the_videos_about_the_subject_are_searched_first(session, init_db, monkeypatch):
+    """ "Its battery life" is in the Odin review's battery passage, which never
+    says "Odin"; every other review has a battery passage too."""
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(
+        session, "Retro Game Corps", "https://youtube.com/@retrogamecorps"
+    )
+    battery = {
+        s: f"battery life is great, the battery lasts long, battery point {s}"
+        for s in range(0, 120, 3)
+    }
+    for i in range(4):
+        _indexed_video(
+            session, channel, f"other00000{i}", _vtt(battery), title=f"Handheld {i}"
+        )
+    odin = {s: f"some talk about the screen and controls {s}" for s in range(0, 120, 3)}
+    odin[60] = "the battery gets six hours"
+    _indexed_video(
+        session, channel, "odin0000000", _vtt(odin), title="AYN Odin 3 Review"
+    )
+
+    def found(expansion):
+        excerpts = retrieval.retrieve(
+            session,
+            init_db["ctx"].knowledge.vectors,
+            [channel],
+            "what about its battery life?",
+            expansion,
+            budget_chars=2000,
+        )
+        return {e.yt_id for e in excerpts}
+
+    assert "odin0000000" not in found(retrieval.Expansion(terms=["battery"]))
+    about = retrieval.Expansion(terms=["battery"], subjects=["AYN Odin 3", "Odin 3"])
+    assert "odin0000000" in found(about)
+
+
+def test_a_reference_quotes_the_sentence_it_cites_not_the_whole_line():
+    """A caption line is five seconds of speech: the tail of one sentence and
+    the head of the next."""
+    from app.services.knowledge import moments
+
+    lines = [
+        (10.0, "DS-like. Okay, so wrapping up, how do I feel about the Pocket Duo and"),
+        (15.0, "whether it is worth the price. I think it is great."),
+        (30.0, "um so yeah the battery on this thing lasts about six hours which is"),
+        (35.0, "pretty good for a device like this and then the screen is also fine"),
+    ]
+    wrap = moments.words("He wraps up with how he feels about the Pocket Duo")
+    assert moments.quote(lines, lines[0], wrap) == (
+        "Okay, so wrapping up, how do I feel about the Pocket Duo and "
+        "whether it is worth the price."
+    )
+    # No punctuation: a few words before the first shared one, marked as cut.
+    battery = moments.quote(
+        lines, lines[2], moments.words("The battery lasts six hours")
+    )
+    assert (
+        battery == "…so yeah the battery on this thing lasts about six hours which is"
+    )
+
+
+# --- routing and retrieval fixes found by asking a live channel -----------------
+
+
+def test_an_indexing_question_goes_to_horde_though_it_names_the_channel(session):
+    """The channel's videos cannot say whether Horde indexed them."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    route = ask_chat.pick_route(
+        session, "Is The Car Care Nut indexed for Ask?", channel_ids=None
+    )
+    assert route.channels == [] and route.video is None
+
+
+def test_a_horde_how_to_on_a_channel_page_goes_to_horde(session):
+    """ "How do I download his latest video?" says "his", but asks Horde how."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+
+    def scope(message: str) -> list[KbChannel]:
+        return ask_chat.pick_route(
+            session, message, channel_ids=None, page_channel_id=nut.id
+        ).channels
+
+    assert scope("How do I download his latest video?") == []
+    # What he does stays with the channel, how-to or not.
+    assert scope("How does he change the timing belt?") == [nut]
+    assert scope("what does he think of synthetic oil?") == [nut]
+
+
+def test_a_video_named_by_its_title_gives_more_passages(session, init_db, monkeypatch):
+    """ "Summarize his Belt Service In-Depth Review" is about that one video;
+    other videos of the same subject must not crowd it out."""
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    nut = _channel(session)
+    long_talk = _vtt(
+        {
+            s: f"the timing belt part {s} of the full service walk"
+            for s in range(0, 900, 3)
+        },
+        seconds=900,
+    )
+    _indexed_video(
+        session, nut, "reviewvideo", long_talk, title="Belt Service In-Depth Review"
+    )
+    for i in range(4):
+        _indexed_video(
+            session, nut, f"othervideo{i}", long_talk, title=f"Belt Tips Part {i}"
+        )
+    question = "Summarize his Belt Service In-Depth Review"
+    assert retrieval.named_videos(session, nut, question) == ["reviewvideo"]
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [nut],
+        question,
+        retrieval.Expansion(terms=["timing belt"]),
+        budget_chars=60000,
+    )
+    from_review = [e for e in excerpts if e.yt_id == "reviewvideo"]
+    assert len(from_review) > retrieval._PER_VIDEO
+    assert not retrieval.named_videos(session, nut, "timing belt")
+    # A channel's branding after "|" is not part of what people call it.
+    _indexed_video(
+        session, nut, "levels00000", long_talk, title="10 Levels of Belts | With Nut"
+    )
+    assert retrieval.named_videos(
+        session, nut, "what were the 10 levels of belts?"
+    ) == ["levels00000"]
+
+
+def test_from_a_watch_page_this_means_the_watched_video(client, session, llm):
+    """ "Has he talked about this device in his other videos?" asked under a
+    video: the search and the answer are told which video that is."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "watched0000", BELT_VTT, title="Odin Belt Review")
+    llm["replies"] = ["Yes [1]."]
+    llm["expand"] = {"terms": ["timing belt"], "search": "Odin timing belt"}
+    client.post(
+        "/api/ask/chat",
+        json={
+            "message": "Has he talked about this device in his other videos?",
+            "page_channel_id": nut.id,
+            "page_video_id": "watched0000",
+        },
+    )
+    assert 'The user is watching: "Odin Belt Review"' in llm["expansions"][0]
+    assert 'The user is watching "Odin Belt Review"' in llm["calls"][0]["system"]
+
+
+def test_horde_is_told_which_channels_answer_an_unnamed_topic(session, monkeypatch):
+    """It told the user to index channels that already were."""
+    from app.services.knowledge import channel_guess, help_note
+
+    nut = _channel(session)
+    monkeypatch.setattr(channel_guess, "enabled", lambda: False)
+    note = help_note._topic_note("What's the best oil for a 4Runner?", [nut])
+    assert note and "The Car Care Nut" in note and "Do not tell them to index" in note
+    assert help_note._topic_note("How do I change the theme?", [nut]) is None
+    assert help_note._topic_note("What's the best oil?", []) is None
+    # When unnamed questions are matched to channels, reaching Horde means
+    # none covers it: naming one would not help.
+    monkeypatch.setattr(channel_guess, "enabled", lambda: True)
+    note = help_note._topic_note("What is the capital of Australia?", [nut])
+    assert note and "none of them covers" in note and "Do not" in note
+
+
+def test_thinking_is_turned_off_only_on_openrouter():
+    from app.services.ai.provider import Connection, OpenAICompatProvider
+
+    router = OpenAICompatProvider(Connection("https://openrouter.ai/api/v1", "k"))
+    assert router._reasoning_fields(think=False) == {"reasoning": {"enabled": False}}
+    assert router._reasoning_fields(think=True) == {}
+    # Another server may reject a field it does not know.
+    local = OpenAICompatProvider(Connection("http://localhost:11434/v1", ""))
+    assert local._reasoning_fields(think=False) == {}
+
+
+def test_for_buying_advice_a_dated_recent_roundup_beats_older_ones(
+    session, init_db, monkeypatch
+):
+    """Many older videos saying "budget handheld" outvoted the newest roundup
+    for "what would he recommend?" under a lift by rank alone."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(session, "Retro Game Corps", "https://youtube.com/@rgc")
+    talk = {s: f"my favorite budget handheld pick, point {s}" for s in range(0, 120, 3)}
+    now = datetime.now(UTC)
+    for i in range(6):
+        _indexed_video(
+            session,
+            channel,
+            f"old{i:08d}",
+            _vtt(talk),
+            title=f"Old roundup {i}",
+            position=10 + i,
+            published_at=(now - timedelta(days=900 + i)).date().isoformat(),
+        )
+    _indexed_video(
+        session,
+        channel,
+        "new00000000",
+        _vtt(talk),
+        title="New roundup",
+        position=0,
+        published_at=(now - timedelta(days=30)).date().isoformat(),
+    )
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [channel],
+        "which budget handheld would he recommend?",
+        retrieval.Expansion(terms=["budget handheld"], recent=True),
+        budget_chars=10,
+    )
+    assert {e.yt_id for e in excerpts} == {"new00000000"}
+
+
+def test_a_question_about_the_earliest_prefers_older_videos(
+    session, init_db, monkeypatch
+):
+    """ "His first Anbernic review" answered from a 2022 video when the
+    channel reviewed Anbernic devices in 2020."""
+    from datetime import UTC, datetime, timedelta
+
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    channel = _channel(session, "Retro Game Corps", "https://youtube.com/@rgc")
+    # Long enough that one video fills the smallest share of the budget.
+    talk = _vtt(
+        {
+            s: f"this anbernic review covers the screen, the sticks and more, point {s}"
+            for s in range(0, 300, 3)
+        },
+        seconds=300,
+    )
+    now = datetime.now(UTC)
+    for i, days in enumerate([30, 400, 800, 1200, 2000]):
+        _indexed_video(
+            session,
+            channel,
+            f"video{i:06d}",
+            talk,
+            title=f"Anbernic review {i}",
+            position=i,
+            published_at=(now - timedelta(days=days)).date().isoformat(),
+        )
+
+    def top(question: str) -> set[str]:
+        excerpts = retrieval.retrieve(
+            session,
+            init_db["ctx"].knowledge.vectors,
+            [channel],
+            question,
+            retrieval.Expansion(terms=["anbernic review"], subjects=["Anbernic"]),
+            budget_chars=10,
+        )
+        return {e.yt_id for e in excerpts}
+
+    assert top("what was his first anbernic review?") == {"video000004"}
+    assert not retrieval.asks_earliest("what does he think of anbernic?")
+
+
+def test_a_person_s_channel_is_named_by_surname_or_bare_handle():
+    """ "What does Huberman say…" missed "Andrew Huberman" (@hubermanlab)."""
+    hub = KbChannel(
+        id=1,
+        channel_name="Andrew Huberman",
+        channel_url="https://youtube.com/@hubermanlab",
+    )
+    rgc = KbChannel(
+        id=2,
+        channel_name="Retro Game Corps",
+        channel_url="https://youtube.com/@retrogamecorps",
+    )
+    ltt = KbChannel(
+        id=3,
+        channel_name="Linus Tech Tips",
+        channel_url="https://youtube.com/@linustechtips",
+    )
+    channels = [hub, rgc, ltt]
+    assert routing.named_channels("What does Huberman say about sleep?", channels) == [
+        hub
+    ]
+    assert routing.named_channels("huberman lab on caffeine", channels) == [hub]
+    # An ordinary last word is not a surname.
+    assert routing.named_channels("the marine corps fitness test", channels) == []
+    assert routing.named_channels("any tips for sleep?", channels) == []
+
+
+def test_the_channel_s_own_name_is_not_a_subject(session, init_db, monkeypatch):
+    """The rewrite listed "Retro Game Corps" as a subject, so the channel's
+    videos about itself (a Discord invite) crowded out the ones on topic."""
+    monkeypatch.setattr(retrieval, "embed_query", lambda q: None)
+    rgc = _channel(session, "Retro Game Corps", "https://youtube.com/@retrogamecorps")
+    long_talk = {
+        s: f"the battery lasts eight hours on this handheld, test {s}"
+        for s in range(0, 300, 3)
+    }
+    chatter = {s: f"join the discord and say hello, line {s}" for s in range(0, 300, 3)}
+    chatter[150] = "and the battery"
+    _indexed_video(
+        session, rgc, "battery0000", _vtt(long_talk, 300), title="Battery test"
+    )
+    _indexed_video(
+        session,
+        rgc,
+        "discord0000",
+        _vtt(chatter, 300),
+        title="Retro Game Corps Discord",
+    )
+    excerpts = retrieval.retrieve(
+        session,
+        init_db["ctx"].knowledge.vectors,
+        [rgc],
+        "what does retro game corps say about batteries?",
+        retrieval.Expansion(terms=["battery"], subjects=["Retro Game Corps"]),
+        budget_chars=10,
+    )
+    assert {e.yt_id for e in excerpts} == {"battery0000"}
+
+
+# --- a question that names no channel ----------------------------------------
+
+
+@pytest.fixture
+def guesser(monkeypatch):
+    """A stub chat model for ``channel_guess``: answers ``state["pick"]``."""
+    from app.services.knowledge import channel_guess
+
+    state: dict = {"pick": [], "prompts": []}
+
+    class Provider:
+        last_cost = 0.0
+
+        def chat(self, prompt, model, **kwargs):
+            state["prompts"].append(prompt)
+            state["kwargs"] = kwargs
+            return json.dumps({"channels": state["pick"]})
+
+    monkeypatch.setattr(channel_guess, "get_llm_provider", lambda: Provider())
+    monkeypatch.setattr(channel_guess, "llm_features_allowed", lambda: (True, None))
+    monkeypatch.setattr(channel_guess, "embed_query", lambda q: None)
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "test-model-14b")
+    return state
+
+
+def test_an_unnamed_question_goes_to_the_channel_that_covers_it(session, guesser):
+    """ "How often should I change the belt?" from the home page went to
+    Horde, which cannot answer it."""
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT, title="Belt Service")
+    guesser["pick"] = ["The Car Care Nut"]
+    route = ask_chat.pick_route(
+        session, "When should the timing belt be changed?", channel_ids=None
+    )
+    assert route.channels == [nut]
+    # The model saw the channel with the title of the video that matched.
+    assert "The Car Care Nut:\n- Belt Service" in guesser["prompts"][0]
+    assert guesser["kwargs"]["think"] is False
+
+
+def test_an_unnamed_question_no_channel_covers_stays_with_horde(session, guesser):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    guesser["pick"] = []
+    assert (
+        ask_chat.pick_route(
+            session, "what is the timing of the eclipse?", channel_ids=None
+        ).channels
+        == []
+    )
+    # About Horde or the user's own things: no guess at all.
+    guesser["pick"] = ["The Car Care Nut"]
+    for question in ("How do I download a video?", "what have I watched recently?"):
+        assert ask_chat.pick_route(session, question, channel_ids=None).channels == []
+    assert len(guesser["prompts"]) == 1
+
+
+def test_a_small_model_does_not_guess(session, guesser, monkeypatch):
+    nut = _channel(session)
+    _indexed_video(session, nut, "aaaaaaaaaaa", BELT_VTT)
+    guesser["pick"] = ["The Car Care Nut"]
+    monkeypatch.setattr(help_model, "assistant_model", lambda: "llama3.2:3b")
+    assert ask_chat.pick_route(session, "timing belt?", channel_ids=None).channels == []
+
+
+def test_a_quote_keeps_the_number_said_just_before_it():
+    """ "…per pound of body weight per day" left out the "0.7 to 1 g" said in
+    the line before, and a line with the cited number should win."""
+    from app.services.knowledge import moments
+
+    lines = [
+        (10.0, "the best science shows that 0.7 to 1 g of protein"),
+        (15.0, "per pound of body weight per day is plenty"),
+        (20.0, "and protein powders are convenient"),
+    ]
+    wanted = moments.words("He says 0.7 to 1 g of protein per pound of body weight")
+    best = moments.best_line(lines, 0.0, 30.0, wanted)
+    assert best == lines[0]
+    later = moments.quote(lines, lines[1], wanted)
+    assert "0.7 to 1 g of protein" in later and "per pound of body weight" in later
+
+
+def test_a_reference_never_opens_at_a_sponsor_read(client, session, llm):
+    """An ad inside a passage that is mostly not ad: the passage is cited,
+    but its reference opens at, and quotes, the host's own words."""
+    channel = _channel(
+        session, name="Huberman Lab", url="https://youtube.com/@hubermanlab"
+    )
+    video = _indexed_video(
+        session,
+        channel,
+        "aaaaaaaaaaa",
+        _vtt(
+            {
+                30: "brought to you by david bars one gram of protein per pound",
+                60: "the research says protein of one point six grams per kilogram",
+            }
+        ),
+        title="Protein",
+        published_at="2024-01-01T00:00:00Z",
+    )
+    video.sponsor_segments = '[[28.0, 40.0, "sponsor"]]'
+    session.add(video)
+    session.commit()
+    llm["replies"] = ["Eat one gram of protein per pound [1]."]
+    r = client.post(
+        "/api/ask/chat", json={"message": "How much protein does Huberman Lab say?"}
+    )
+    assert r.status_code == 200, r.text
+    events = _events(r.text)
+    [ref] = events[-2]["references"]
+    assert "david" not in ref["line"]
+    assert not 26.0 <= ref["start_sec"] < 40.0

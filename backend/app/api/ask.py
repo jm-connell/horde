@@ -29,9 +29,10 @@ from ..schemas import (
     AskThreadSummary,
     AskVideoRef,
 )
+from ..services import follows
 from ..services.auth.accounts import AuthUser
 from ..services.follows import normalize_channel_url
-from ..services.knowledge import ask_chat, chunking, moments, threads
+from ..services.knowledge import ask_chat, chunking, moments, sponsorblock, threads
 from ..services.knowledge import channels as kb_channels
 from ..services.knowledge import search as kb_search
 from ..services.pagination import InvalidCursor, offset_cursor, parse_cursor
@@ -136,11 +137,16 @@ def add_channel(
     session: Session = Depends(get_session),
     user: AuthUser = Depends(current_user),
 ):
-    """Turn Ask on for a channel; its captions are indexed in the background."""
+    """Turn Ask on for a channel; its captions are indexed in the background.
+    Whoever does it is subscribed to the channel (if they may subscribe)."""
     _require_available(session)
     channel = kb_channels.add(
         session, body.url, include_streams=body.include_streams, user_id=user.id
     )
+    if "manage_subscriptions" in user.permissions:
+        follows.follow_from_ask(
+            session, user.id, channel.channel_url, channel.channel_name
+        )
     return _one(session, channel, user)
 
 
@@ -245,8 +251,8 @@ def search(
             select(KbVideo).where(col(KbVideo.id).in_({h.kb_video_id for h in hits}))
         ).all()
     }
-    names = {
-        c.id: c.channel_name
+    channels = {
+        c.id: c
         for c in session.exec(
             select(KbChannel).where(
                 col(KbChannel.id).in_({h.kb_channel_id for h in hits})
@@ -260,24 +266,40 @@ def search(
             select(Video.id, Video.youtube_id).where(col(Video.youtube_id).in_(yt_ids))
         ).all()
     }
+    ads = {vid: sponsorblock.parse(v.sponsor_segments) for vid, v in videos.items()}
     wanted = moments.words(q)
     items = []
     lines_of: dict[int, list[chunking.Line]] = {}
+    outside_of: dict[int, list[chunking.Line]] = {}
     for hit in hits:
         video = videos.get(hit.kb_video_id)
         if video is None:
             continue
+        channel = channels.get(hit.kb_channel_id)
         start = hit.start_sec
         if hit.chunk_index != chunking.META_CHUNK_INDEX and video.id is not None:
+            spans = ads[video.id]
+            if sponsorblock.mostly_ad(hit.start_sec, hit.end_sec, spans):
+                continue  # a sponsor read (SponsorBlock)
             if video.id not in lines_of:
                 lines_of[video.id] = chunking.unpack_lines(video.cues)
-            start = moments.moment(
-                lines_of[video.id], hit.start_sec, hit.end_sec, wanted
-            )
+                outside_of[video.id] = sponsorblock.lines_outside(
+                    lines_of[video.id], spans
+                )
+            every = lines_of[video.id]
+            lines = outside_of[video.id]
+            if (
+                spans
+                and moments.best_line(lines, hit.start_sec, hit.end_sec, wanted) is None
+                and moments.best_line(every, hit.start_sec, hit.end_sec, wanted)
+            ):
+                continue  # its words match only in its sponsor read
+            start = moments.moment(lines, hit.start_sec, hit.end_sec, wanted)
         items.append(
             AskSearchHit(
                 channel_id=hit.kb_channel_id,
-                channel_name=names.get(hit.kb_channel_id),
+                channel_name=channel.channel_name if channel else None,
+                channel_url=channel.channel_url if channel else None,
                 yt_id=video.yt_id,
                 title=video.title,
                 published_at=video.published_at,

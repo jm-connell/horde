@@ -1,7 +1,8 @@
 """Which model Ask about Horde runs on, and what that means for the user.
 
 The assistant uses the administrator's Assistant model when one is set, else
-the chat model every other AI feature uses. Its rough strength (``tier``)
+the chat model every other AI feature uses (on OpenRouter with its budget chat
+model, a stronger one: ``default_model``). Its rough strength (``tier``)
 comes from the model's name: small local models can link to settings and
 answer how-to questions but write poor CSS, so the chat says so and suggests
 something better. Whether the provider runs on this network decides how the
@@ -18,7 +19,13 @@ from urllib.parse import urlparse
 from ...schemas import HelpAssistantInfo
 from .. import app_settings
 from ..auth.accounts import AuthUser
-from .provider import Connection, chat_connection, llm_features_allowed
+from .provider import (
+    OPENROUTER_ASSISTANT_MODEL,
+    OPENROUTER_PRESETS,
+    Connection,
+    chat_connection,
+    llm_features_allowed,
+)
 
 Tier = Literal["small", "medium", "large"]
 
@@ -43,12 +50,26 @@ _LOCAL_SUFFIXES = (".local", ".lan", ".internal", ".home.arpa", ".localdomain")
 _CLOUD_TAG = re.compile(r"(?::|-)cloud$")
 
 
+def default_model() -> str:
+    """The assistant's model while none is chosen and the chat model is still
+    OpenRouter's budget default: ``OPENROUTER_ASSISTANT_MODEL``. Ask reads
+    dozens of passages and must cite them correctly, which the budget model,
+    picked for cheap summaries and tags, does noticeably worse. "" otherwise:
+    a chat model someone chose is theirs to keep."""
+    conn = chat_connection()
+    chat = str(app_settings.ai_settings().get("chat_model") or "").strip()
+    if conn is not None and conn.is_openrouter and chat == OPENROUTER_PRESETS["budget"]:
+        return OPENROUTER_ASSISTANT_MODEL
+    return ""
+
+
 def assistant_model() -> str:
-    """The model the assistant asks: the Assistant model, else the chat model."""
+    """The model the assistant asks: the Assistant model, else ``default_model``,
+    else the chat model."""
     from .workload import ensure_quality_chat_model
 
     chosen = str(app_settings.ai_settings().get("help_model") or "").strip()
-    return chosen or ensure_quality_chat_model()
+    return chosen or default_model() or ensure_quality_chat_model()
 
 
 def tier(model: str) -> Tier:
@@ -116,7 +137,8 @@ def provider_label(conn: Connection | None, *, is_admin: bool, model: str = "") 
 def configured_model() -> str:
     """The assistant's model as saved, without checking or pulling anything."""
     ai = app_settings.ai_settings()
-    return str(ai.get("help_model") or ai.get("chat_model") or "").strip()
+    chosen = str(ai.get("help_model") or "").strip()
+    return chosen or default_model() or str(ai.get("chat_model") or "").strip()
 
 
 def info(user: AuthUser) -> HelpAssistantInfo:

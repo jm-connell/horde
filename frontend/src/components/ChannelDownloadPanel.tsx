@@ -17,11 +17,17 @@ import type { PendingChannelDownload } from "../hooks/useChannelDownloadQueue";
 import { youtubeThumbnailUrl } from "../utils";
 import ChannelDownloadEditModal from "./ChannelDownloadEditModal";
 import ThemedSelect from "./ThemedSelect";
-import { CloseIcon } from "./icons";
 import { button } from "./buttons";
 
+/**
+ * The toast a channel feed shows while a download waits out its few seconds:
+ * what is about to download and at which resolution, with time to change it,
+ * start it now or cancel. Nothing shows while nothing is waiting.
+ *
+ * It sits in the bottom-left corner: Ask, the mini player and the app's own
+ * toasts all open bottom-right, and it must not cover what the user is typing.
+ */
 export default function ChannelDownloadPanel({
-  defaultPreset,
   onDefaultPresetChange,
   allPresets,
   pending,
@@ -32,9 +38,8 @@ export default function ChannelDownloadPanel({
   onCancel,
   onSubmitNow,
   queueDockedBottom = false,
-  onDismiss,
 }: {
-  defaultPreset: string;
+  /** Remembers a resolution picked here for the downloads that follow. */
   onDefaultPresetChange: (preset: string) => void;
   allPresets: string[];
   pending: PendingChannelDownload[];
@@ -49,12 +54,11 @@ export default function ChannelDownloadPanel({
   onSubmitNow: (tempId: number) => void;
   /** When true, lift panel above the bottom-docked playback queue. */
   queueDockedBottom?: boolean;
-  onDismiss?: () => void;
 }) {
   const { queue, miniPlayerActive } = usePlaybackSession();
   const { miniPlayerRect, miniPlayerCornerAnchor } = usePlaybackLayout();
   const queueVisible = queue.length > 0;
-  const liftAboveQueue = queueVisible && queueDockedBottom && !miniPlayerActive;
+  const liftAboveQueue = queueVisible && queueDockedBottom;
   const [viewport, setViewport] = useState(() => ({
     width: typeof window !== "undefined" ? window.innerWidth : 0,
     height: typeof window !== "undefined" ? window.innerHeight : 0,
@@ -72,7 +76,7 @@ export default function ChannelDownloadPanel({
     {
       viewportWidth: viewport.width,
       viewportHeight: viewport.height,
-      panelWidthRem: pending.length === 0 ? 14 : 18,
+      panelWidthRem: 20,
       cornerAnchor: miniPlayerActive && miniPlayerCornerAnchor,
       queueBottomLiftPx: liftAboveQueue
         ? Math.min(viewport.height * 0.34, 272)
@@ -94,68 +98,15 @@ export default function ChannelDownloadPanel({
   const panelShell =
     "ui-panel ui-panel-legible pointer-events-auto rounded-xl border border-ink-700 bg-ink-900 p-3 shadow-2xl ring-1 ring-ink-700";
 
-  const dismissBtn = onDismiss ? (
-    <button
-      type="button"
-      onClick={onDismiss}
-      title="Hide download panel"
-      aria-label="Hide download panel"
-      className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-sm text-sm text-muted hover:bg-ink-800 hover:text-gray-300"
-    >
-      <CloseIcon />
-    </button>
-  ) : null;
+  if (pending.length === 0) return null;
 
-  if (pending.length === 0) {
-    return createPortal(
-      <div ref={panelRef} style={positionStyle}>
-        <div className={`${panelShell} relative p-4 pr-8`}>
-          {dismissBtn}
-          <span className="mb-1 block text-xs font-medium text-gray-400">
-            Download resolution
-          </span>
-          <ThemedSelect
-            aria-label="Download resolution"
-            value={defaultPreset}
-            options={presetOptions.map((p) => ({
-              value: p,
-              label: presetOptionLabel(p, undefined),
-            }))}
-            onChange={onDefaultPresetChange}
-            className="w-full"
-            buttonClassName="w-full"
-          />
-        </div>
-      </div>,
-      document.body
-    );
-  }
-
-  // Show at most one pending card (+ resolution picker) to stay ~1 video tall.
+  // One card, however many wait: the rest are counted on it.
   const visiblePending = pending.slice(0, 1);
   const hiddenCount = pending.length - visiblePending.length;
 
   return createPortal(
     <>
       <div ref={panelRef} style={positionStyle} className="flex flex-col gap-2">
-        <div className={`${panelShell} relative pr-8`}>
-          {dismissBtn}
-          <span className="mb-1 block text-xs font-medium text-gray-400">
-            Download resolution
-          </span>
-          <ThemedSelect
-            aria-label="Download resolution"
-            value={defaultPreset}
-            options={presetOptions.map((p) => ({
-              value: p,
-              label: presetOptionLabel(p, undefined),
-            }))}
-            onChange={onDefaultPresetChange}
-            className="w-full"
-            buttonClassName="w-full"
-          />
-        </div>
-
         {visiblePending.map((item) => {
           const preview = item.preview;
           const qualityOptions =
@@ -173,7 +124,11 @@ export default function ChannelDownloadPanel({
           );
 
           return (
-            <div key={item.tempId} className={panelShell}>
+            <div
+              key={item.tempId}
+              data-horde="download-toast"
+              className={`${panelShell} transition-[opacity,translate] duration-200 ease-fluid starting:-translate-x-2 starting:opacity-0 motion-reduce:starting:translate-x-0`}
+            >
               <div className="flex gap-3">
                 <div className="h-14 w-24 shrink-0 overflow-hidden rounded-lg bg-ink-800">
                   {thumbSrc ? (
@@ -206,9 +161,10 @@ export default function ChannelDownloadPanel({
                         value: p,
                         label: presetOptionLabel(p, preview?.preset_sizes),
                       }))}
-                      onChange={(preset) =>
-                        onUpdatePending(item.tempId, { preset })
-                      }
+                      onChange={(preset) => {
+                        onUpdatePending(item.tempId, { preset });
+                        onDefaultPresetChange(preset);
+                      }}
                       className="max-w-full min-w-0 flex-1"
                       buttonClassName="w-full"
                     />

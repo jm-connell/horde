@@ -163,6 +163,20 @@ describe("scoreResults", () => {
     expect(keys(promoted)).toEqual([`v${lib.id}`]);
   });
 
+  it("keeps the channel's URL on a card found only by what was said", () => {
+    // The card's channel name opens the channel page; without the URL that
+    // page could not subscribe or list the channel's videos.
+    const said = {
+      ...hit("zzzzzzzzzzz", "the \u0002belt\u0003"),
+      channel_url: "https://youtube.com/@talker",
+    };
+    const [item] = mix({ query: "belt", said: [said] });
+    expect(item.kind).toBe("remote");
+    expect(item.kind === "remote" && item.entry.channel_url).toBe(
+      "https://youtube.com/@talker"
+    );
+  });
+
   it("shows a library video found only by its captions as the library copy", () => {
     const other = video("Engine work");
     const items = mix({

@@ -2626,6 +2626,17 @@
             ],
             "title": "Channel Name"
           },
+          "channel_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel Url"
+          },
           "end_sec": {
             "title": "End Sec",
             "type": "number"
@@ -16391,7 +16402,7 @@
         ]
       },
       "post": {
-        "description": "Turn Ask on for a channel; its captions are indexed in the background.",
+        "description": "Turn Ask on for a channel; its captions are indexed in the background.\nWhoever does it is subscribed to the channel (if they may subscribe).",
         "operationId": "add_channel_api_ask_channels_post",
         "requestBody": {
           "content": {

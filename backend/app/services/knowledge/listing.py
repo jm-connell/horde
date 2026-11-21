@@ -101,11 +101,20 @@ def list_tab(channel_url: str, tab: str, limit: int | None, into: Listing) -> No
 def list_channel(
     channel_url: str, *, include_streams: bool, max_videos: int | None
 ) -> Listing:
+    """The channel's uploads. Raises ``ChannelNotFound`` when YouTube has no
+    such channel (rather than listing it as a channel with nothing in it)."""
     listing = Listing()
     list_tab(channel_url, "videos", max_videos, listing)
     if include_streams:
         list_tab(channel_url, "streams", max_videos, listing)
+    if not listing.channel_name and not listing.uploads:
+        raise ChannelNotFound(channel_url)
     return listing
+
+
+class ChannelNotFound(Exception):
+    """YouTube has no channel at that address. The feed fetch ignores errors,
+    so its 404 shows only as a page with no channel and no uploads."""
 
 
 @dataclass
@@ -128,6 +137,8 @@ def preview(channel_url: str) -> Preview:
     """Name, canonical URL, upload count and whether there are past live streams."""
     # Someone is waiting on the dialog: ahead of background extracts.
     first = _page(channel_url, 0, 1, "videos", EXTRACT_PRIORITY_INTERACTIVE)
+    if not first.get("channel") and not first.get("entries"):
+        raise ChannelNotFound(channel_url)
     try:
         streams = _page(channel_url, 0, 5, "streams", EXTRACT_PRIORITY_INTERACTIVE)
         has_streams = any(_keep(e, "streams") for e in streams.get("entries") or [])

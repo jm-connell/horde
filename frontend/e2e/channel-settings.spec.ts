@@ -210,7 +210,12 @@ test("the header shows the channel's picture and its index beside Subscribe", as
   );
   await page.goto("/?channel=Kiln");
 
-  const picture = page.locator(`img[src="${avatar}"]`);
+  // The sidebar's row for the channel carries the picture too.
+  const inSidebar = '[data-horde="channel-list"] *';
+  await expect(
+    page.locator(`[data-horde="channel-list"] img[src="${avatar}"]`)
+  ).toBeVisible();
+  const picture = page.locator(`img[src="${avatar}"]:not(${inSidebar})`);
   await expect(picture).toBeVisible();
   await expect
     .poll(() => picture.evaluate((img: HTMLImageElement) => img.naturalWidth))

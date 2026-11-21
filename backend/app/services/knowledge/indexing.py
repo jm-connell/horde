@@ -100,6 +100,9 @@ def apply_result(
     video.updated_at = now
     if result.description and not video.description:
         video.description = result.description
+    if result.published_at:
+        # From the video itself: the listing only knows "3 years ago".
+        video.published_at = result.published_at
     backoff: int | None = None
     if result.status == captions.FETCHED:
         lines = chunking.lines_from_vtt(result.vtt)

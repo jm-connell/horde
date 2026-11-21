@@ -32,6 +32,7 @@ logger = logging.getLogger(__name__)
 SOURCE_MANUAL = "manual"
 SOURCE_DOWNLOAD = "download"
 SOURCE_LIBRARY = "library"
+SOURCE_ASK = "ask"
 
 NewChannelMode = Literal["always", "ask", "never"]
 NEW_CHANNEL_MODES: tuple[NewChannelMode, ...] = ("always", "ask", "never")
@@ -282,6 +283,19 @@ def seed_administrators() -> int:
             )
         ).all()
         return sum(seed_from_library(session, uid) for uid in admin_ids if uid)
+
+
+def follow_from_ask(
+    session: Session, user_id: int, channel_url: str, channel_name: str | None
+) -> bool:
+    """Turning Ask on for a channel subscribes whoever did it, so the channel
+    they are asking is one they can find again (Subscriptions, Recommended)
+    without a download from it. A channel they unsubscribed from stays so.
+    True when it subscribed them."""
+    if not _auto_follow(session, user_id, channel_url, channel_name, SOURCE_ASK):
+        return False
+    session.commit()
+    return True
 
 
 def record_requester(session: Session, job_id: int, user_id: int) -> None:

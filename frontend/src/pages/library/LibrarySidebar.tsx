@@ -88,7 +88,9 @@ export default function LibrarySidebar({
         <div className="sticky top-20">
           {!narrowViewport && !sidebarCollapsed ? (
             <div className="ui-panel h-fit w-56 rounded-xl bg-ink-900 p-2 ring-1 ring-ink-700">
-              <div className="mb-2 flex items-center gap-1 px-2 pt-1">
+              {/* The toggle sits 8px in from the rail's corner, open or
+                  closed, so it can be clicked twice without moving. */}
+              <div className="mb-2 flex items-center gap-1">
                 <button
                   onClick={onClose}
                   title="Collapse sidebar"
@@ -116,7 +118,7 @@ export default function LibrarySidebar({
                   ? "Collapse sidebar"
                   : "Expand channels"
               }
-              className="ui-panel ui-interactive flex h-8 w-8 items-center justify-center rounded-md text-base text-muted ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
+              className="ui-panel ui-interactive ml-2 mt-2 flex h-8 w-8 items-center justify-center rounded-md text-base text-muted ring-1 ring-ink-700 hover:bg-ink-800 hover:text-accent"
             >
               <ChevronIcon
                 className={

@@ -117,15 +117,89 @@ def _handle(channel_url: str) -> str | None:
     return None
 
 
+# Handle endings that are not part of the name people say ("hubermanlab").
+_HANDLE_SUFFIXES = (
+    "official",
+    "channel",
+    "podcast",
+    "clips",
+    "show",
+    "lab",
+    "tv",
+    "hq",
+)
+# Last words of channel names that are ordinary words, not a surname.
+_GENERIC_LAST = frozenset(
+    [
+        "corps",
+        "tips",
+        "tech",
+        "news",
+        "daily",
+        "official",
+        "games",
+        "gaming",
+        "reviews",
+        "review",
+        "channel",
+        "media",
+        "studio",
+        "studios",
+        "world",
+        "show",
+        "network",
+        "radio",
+        "music",
+        "kitchen",
+        "garage",
+        "podcast",
+        "clips",
+        "central",
+        "nation",
+        "crew",
+        "labs",
+        "lab",
+        "life",
+        "films",
+        "productions",
+        "academy",
+        "school",
+        "explained",
+        "guide",
+        "guides",
+        "minute",
+        "minutes",
+        "today",
+        "weekly",
+    ]
+)
+_SURNAME_MIN = 5
+
+
 def _names(name: str | None, url: str | None) -> set[str]:
+    """What people call the channel: its name and handle (without "the" and
+    a handle ending such as "lab"), and for a person's name its surname
+    ("Andrew Huberman" is asked about as "Huberman")."""
     names = set()
-    for raw in (name or "", _handle(url) if url else ""):
+    handle = _handle(url) if url else ""
+    for raw in (name or "", handle or ""):
         norm = _norm(raw or "")
         if not norm:
             continue
         names.add(norm)
         if norm.startswith("the "):
             names.add(norm[4:])
+    if handle:
+        bare = _norm(handle)
+        for suffix in _HANDLE_SUFFIXES:
+            if bare.endswith(suffix) and len(bare) - len(suffix) >= 6:
+                names.add(bare[: -len(suffix)])
+                break
+    words = _norm(name or "").split()
+    if 2 <= len(words) <= 3 and words[0] != "the":
+        last = words[-1]
+        if len(last) >= _SURNAME_MIN and last not in _GENERIC_LAST:
+            names.add(last)
     return {n for n in names if len(n.replace(" ", "")) >= _MIN_LEN}
 
 

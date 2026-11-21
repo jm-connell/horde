@@ -136,6 +136,15 @@ def _no_ask_channel_lookups(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_sponsorblock(monkeypatch):
+    """Ask's SponsorBlock requests are off in tests; ``test_ask_sponsorblock``
+    turns them on with a stubbed HTTP call."""
+    from app import config
+
+    monkeypatch.setattr(config, "ASK_SPONSORBLOCK", False)
+
+
+@pytest.fixture(autouse=True)
 def _empty_compat_tables():
     """Start each test with no compat jobs or remembered failures.
 

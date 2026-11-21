@@ -4,15 +4,20 @@ Each pass does one unit of work, in this order:
 
 1. list a channel that is new, failed listing an hour ago, or was last listed a
    day ago (new uploads join this way);
-2. fetch the next video's captions, newest uploads first, oldest-added channel
-   first. A library copy is read straight away; a YouTube fetch waits until no
+2. fetch the next video's captions, newest uploads first and channels in
+   turn (each channel's newest, then each one's next). A library copy is
+   read straight away; a YouTube fetch waits until no
    library caption retry is due and the pacer's background slot is free
-   (``services/timedtext.py``), so library caption work always goes first.
+   (``services/timedtext.py``), so library caption work always goes first;
+3. ask SponsorBlock about the next video not asked yet (``sponsorblock.step``).
+   A video whose captions were just stored is asked right away when the
+   SponsorBlock pacer allows, after the captions are committed.
 """
 
 from __future__ import annotations
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlmodel import Session, col, or_, select
@@ -23,7 +28,7 @@ from .. import activity
 from ..subtitle_retry import next_due_video
 from ..workers import BackgroundWorker
 from ..ytdlp_common import classify_ytdlp_error
-from . import captions, embed, indexing, listing
+from . import captions, embed, indexing, listing, sponsorblock
 
 logger = logging.getLogger(__name__)
 
@@ -90,6 +95,8 @@ def list_due_channel() -> bool:
             )
     except Exception as exc:
         _, message = classify_ytdlp_error(exc, url=url)
+        if isinstance(exc, listing.ChannelNotFound):
+            message = "YouTube has no channel at this address"
         logger.warning("Ask: listing %s failed", url, exc_info=True)
         with Session(get_engine()) as session:
             channel = session.get(KbChannel, channel_id)
@@ -110,6 +117,8 @@ def list_due_channel() -> bool:
         ):
             return True
         added = indexing.apply_listing(session, channel, found)
+        # SponsorBlock segments are often submitted days after upload.
+        sponsorblock.mark_recent_due(session, channel_id)
         indexing.finish_if_done(session, channel_id)
     logger.info("Ask: listed %s (%s new)", name, added)
     return True
@@ -128,7 +137,10 @@ def _next_video(session: Session) -> KbVideo | None:
                 col(KbVideo.next_attempt_at) <= now,
             ),
         )
-        .order_by(col(KbChannel.created_at), col(KbVideo.position))
+        # Channels in turn, newest uploads first: each channel's newest
+        # video, then each one's next. One at a time, the last channel added
+        # waited hours for its first answer.
+        .order_by(col(KbVideo.position), col(KbChannel.created_at))
         .limit(1)
     ).first()
 
@@ -160,12 +172,23 @@ def fetch_next_video() -> bool:
             return True
         backoff = indexing.apply_result(session, video, result)
         indexing.finish_if_done(session, video.kb_channel_id)
+        has_captions = video.fetch_status == captions.FETCHED
     if result.status in (captions.FETCHED, captions.NO_CAPTIONS):
         _queue_embedding()
+    if has_captions:
+        # Committed above: the request holds no database lock.
+        _refresh_sponsor_segments(video_id, yt_id)
     if backoff:
         current().timedtext.block(backoff)
         logger.info("Ask: captions rate limited; everyone waits %ss", backoff)
     return True
+
+
+def _refresh_sponsor_segments(video_id: int, yt_id: str) -> None:
+    try:
+        sponsorblock.refresh(video_id, yt_id)
+    except Exception:
+        logger.warning("Ask: storing SponsorBlock segments failed", exc_info=True)
 
 
 def _queue_embedding() -> None:
@@ -182,20 +205,27 @@ def _loop(worker: BackgroundWorker) -> None:
         logger.warning("Ask: recovering channels failed", exc_info=True)
     if worker.sleep(STARTUP_DELAY_SEC):
         return
+    # Idle passes come every 3 s during a SponsorBlock backfill: check
+    # embeddings no more often than captions are fetched.
+    embeddings_checked = -float(FETCH_SPACING_SEC)
     while not worker.stopping:
         worked = False
         try:
-            worked = list_due_channel() or fetch_next_video()
+            worked = list_due_channel() or fetch_next_video() or sponsorblock.step()
         except Exception:
             logger.warning("Ask: worker pass failed", exc_info=True)
         if worked:
             continue
         # Also catches a changed embedding model or a provider set up later.
-        _queue_embedding()
-        wait = max(
-            1.0, min(IDLE_POLL_SEC, current().timedtext.seconds_until_background())
-        )
-        if worker.wait_for_wake(wait if _has_pending() else IDLE_POLL_SEC):
+        if time.monotonic() - embeddings_checked >= FETCH_SPACING_SEC:
+            embeddings_checked = time.monotonic()
+            _queue_embedding()
+        wait: float = IDLE_POLL_SEC
+        if _has_pending():
+            wait = min(wait, current().timedtext.seconds_until_background())
+        if sponsorblock.has_due():
+            wait = min(wait, current().knowledge.sponsor.seconds_until_free())
+        if worker.wait_for_wake(max(1.0, wait)):
             return
 
 

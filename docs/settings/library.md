@@ -18,8 +18,9 @@ Controls under **Settings → Library** (`?tab=library`). Display and download p
 | Setting | Key | Default | Storage |
 |---------|-----|---------|---------|
 | Show live streams | `showLiveStreams` | `true` | UI blob |
+| Color-code Recommended | `showRecommendedSources` | `false` | UI blob |
 
-It lists subscribed channels that are live. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
+**Show live streams** lists subscribed channels that are live. **Color-code Recommended** outlines each Recommended card by where it is from (a solid accent outline for a video you have downloaded, a faded one for a channel you follow or have indexed, none for a channel new to you) and shows the key beside the home tabs; it is off by default. Your subscriptions themselves are on the [Subscriptions](../guides/channels.md#subscriptions) page.
 
 ### Progress expiry
 

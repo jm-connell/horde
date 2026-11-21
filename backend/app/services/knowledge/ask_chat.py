@@ -21,6 +21,7 @@ import json
 import logging
 from collections.abc import Generator
 from dataclasses import dataclass, field, replace
+from datetime import date
 from typing import Any
 
 from sqlmodel import Session, col, func, select
@@ -41,34 +42,137 @@ from .. import stream_ai
 from ..ai import chat as ai_chat
 from ..ai import embeddings as ai_embeddings
 from ..ai import help_chat, help_data, help_model
-from ..ai.provider import get_llm_provider, llm_features_allowed, require_llm_chat_model
+from ..ai.provider import (
+    chat_connection,
+    get_llm_provider,
+    llm_features_allowed,
+    require_llm_chat_model,
+)
 from ..auth.accounts import AuthUser
 from ..url_clean import youtube_video_id
-from . import chunking, references, retrieval, routing, threads
+from . import (
+    channel_guess,
+    chunking,
+    references,
+    retrieval,
+    routing,
+    sponsorblock,
+    threads,
+)
 from . import search as kb_search
 
 logger = logging.getLogger(__name__)
 
-_NUM_PREDICT = 1400
+# The cap on a reply, thinking included: a reasoning model (DeepSeek, Gemini
+# with thinking) spends tokens before its first word, and with too low a cap
+# the answer came back empty. The prompt, not this, keeps answers short.
+_NUM_PREDICT = 4000
+# Characters of excerpts the model reads. A local model has a small context
+# window; a hosted one reads several times as much for a fraction of a cent, and
+# an answer drawn from a dozen videos is far better than one drawn from three.
 _BUDGET = {"small": 6000, "medium": 12000, "large": 20000}
+_HOSTED_BUDGET = {"small": 12000, "medium": 36000, "large": 60000}
 MAX_CHANNELS = {"small": 2, "medium": 4, "large": 4}
 
-SYSTEM_PROMPT = """You answer questions about what YouTube channels say in their videos, \
-using only the numbered excerpts below. They come from the videos' captions, which are \
-often generated automatically and may misspell names.
+_SYSTEM_PROMPT = """You answer questions from what YouTube channels say in their \
+videos, using only the numbered excerpts below. The excerpts are passages of the \
+videos' captions, usually generated automatically: they have little punctuation and \
+garble names. When a name in an excerpt sounds like one in its video's title, in \
+the channel's description of that video or in the question, it is that one: write \
+it the way they do.
 
-Rules:
-- Every sentence that says what a channel or its host said, recommends, thinks or showed \
-ends with the number of the excerpt it comes from in square brackets, like [3] or [3][7]. \
-Use only the numbers given. Never write times or timestamps; the app links each number \
-to the exact moment.
-- Use nothing but the excerpts for what a channel says. If they do not answer the \
-question, say so plainly and say what they do cover.
-- Name the channel when you report what it says. When several channels cover the \
-question, say where they agree and where they disagree, and why each says what it says.
-- When a channel's view changed over time, say so with the years (excerpts are in \
-date order).
-- Short exact quotes are welcome. Be concise; use short paragraphs or bullet points."""
+Today is {today}. The excerpts are grouped by video, oldest video first, under a \
+line with the channel, the video's title and the date it was uploaded, and usually \
+how the channel describes the video. An excerpt \
+is about what its video's title names unless it says otherwise itself: never report \
+what is said in one product's video as being about another product.
+
+Answering:
+- Give the answer in the first sentence, then what supports it. Do not restate the \
+question, introduce the channel or go through the excerpts one after another: \
+combine what they say into one answer.
+- Use only the excerpts that bear on the question; the search also returns \
+passages that do not. A follow-up question is about the same things as the \
+conversation before it: answer for those, not for everything the excerpts mention.
+- For a comparison ("X vs Y", "which is better"), give a verdict, not a spec \
+sheet: one or two sentences on the main difference and whom each suits, then at \
+most five bullets, one for each difference that matters, then which one the host \
+prefers if the videos say. Leave out what the two have in common.
+- Speak of the videos and what the host says in them. Never mention excerpts, \
+passages or the search: the reader sees only your answer and its numbered links.
+- Be specific, as the videos are: names, models, prices, numbers, settings, steps, \
+and the reasons and caveats the host gives. A short exact quote is welcome.
+- Things change. A later video supersedes an earlier one on the same subject: a \
+year-end roundup replaces a mid-year "so far" one, a long-term review replaces first \
+impressions. For what is best, recommended or worth buying now, go by the most \
+recent videos, say when a view was given if it is not recent ("in a 2023 review"), \
+and say so when an older video says otherwise. When a view changed over time, \
+describe the change with its dates.
+- Captions do not say who is speaking. In a conversation (a podcast, an interview, \
+a panel), credit a statement to the host or a guest only when the passage makes the \
+speaker clear; otherwise write "in the episode with <guest>". Answer whether \
+someone agrees with someone else only from what they said about it.
+- When asked what the user should do, report what the channel recommends ("He \
+advises against melatonin, because…"), not a yes or no of your own.
+- Skip sponsor reads and ads (the host promoting a product or service to the \
+viewer, a discount code, "thanks to … for sponsoring"): they are not the channel's \
+advice. Products the video is about, such as one under review, are not ads.
+- Never present a conclusion of your own as the channel's. When the videos do not \
+settle a question directly (they never compare the two things asked about), you \
+may draw one from what they do say, but mark it as yours ("From what he says, a \
+chain is the safer bet, because…").
+- Call the host what the question calls them; otherwise use the channel's name. \
+When several channels cover the question, name each, and say where they agree, \
+where they disagree and why.
+
+Citations:
+- End every statement taken from a video with the number of the excerpt that says \
+it, in square brackets, like [3] or [3][7]. Use only the numbers given, and only \
+for excerpts that really say it.
+- Never write times, timestamps or links: the app turns each number into a link to \
+the exact moment.
+
+Limits:
+- What a channel says comes from the excerpts and nothing else. Do not fill gaps \
+from your own knowledge.
+- If the videos do not cover what the question asks about, say so in one sentence \
+and stop. Something that only shares a word or a number with it (another product \
+with a similar name) is not an answer: leave it out. If the videos answer part of \
+the question, answer that part and say what is missing.
+
+Write plainly and briefly: at most about 250 words, however much the excerpts \
+hold, unless the question asks for detail or a full guide. Pick what matters most \
+to the question and leave the rest out. Short paragraphs, with a flat bulleted or \
+numbered list for steps or for several things compared. No nested lists, no tables \
+and no headings."""
+
+
+_NEWEST_NOTE = (
+    "The excerpts marked as a video's description are the newest videos of each "
+    "channel: for a question about what is new, go through them newest first, "
+    "with a line on what each is about."
+)
+
+
+_REMINDER = (
+    "End of the excerpts. Answer the question in the first sentence, in at most "
+    "about 250 words unless it asks for detail, using only what bears on it, "
+    "with an excerpt number in square brackets after every statement. Say "
+    '"the videos", never "the excerpts" or "the passages". If the videos do '
+    "not cover the question, say so in one sentence and nothing more. Answer "
+    "yes or no only when the videos settle it."
+)
+
+
+def system_prompt(today: date) -> str:
+    """The channel-turn prompt; the date lets the model tell what is recent."""
+    return _SYSTEM_PROMPT.format(today=f"{today:%B} {today.day}, {today.year}")
+
+
+def _budget(strength: help_model.Tier, model: str) -> int:
+    """Characters of excerpts for a turn: more when the model is hosted."""
+    local = help_model.stays_local(chat_connection(), model)
+    return (_BUDGET if local else _HOSTED_BUDGET)[strength]
 
 
 def _sse(payload: dict[str, Any]) -> str:
@@ -182,15 +286,18 @@ def pick_route(
 ) -> Route:
     """Where this turn is answered from.
 
-    In order: the source "Ask … instead" asked for (``answer_from``); every
-    channel ("all my channels"); the channels the question names; the
+    In order: the source "Ask … instead" asked for (``answer_from``); Horde
+    for a question about Ask's indexing ("is X indexed?"); every channel
+    ("all my channels"); the channels the question names; the
     channels the chat is about. Then, with a video (picked, or the watch page's): Horde when the
     question names Horde or asks about the user's own things (unless it is
     about the video), the page's channel for one about the whole channel,
     Horde for one about Horde's features that is not about the video (once
     the video is picked, only a how-to: "how do I change the theme?"), else
     the video. Without one: the page's channel unless the question is about
-    Horde. Else Horde.
+    Horde (a how-to about Horde even when it says "his"); for a question
+    about neither Horde nor the user's things, the channels that clearly
+    cover it (``channel_guess``). Else Horde.
     """
     picked = video if video_picked else None
     if answer_from == "horde":
@@ -198,6 +305,10 @@ def pick_route(
     if answer_from == "video" and video is not None:
         return Route(video=video, picked=picked)
     channels = searchable_channels(session)
+    if routing.about_ask_channels(message):
+        # "Is Retro Game Corps indexed?" names the channel, but its videos
+        # cannot say; Horde knows each channel's indexing state.
+        return Route(picked=picked)
     if routing.asks_all_channels(message):
         return Route(channels, picked=picked)
     named = routing.named_channels(message, channels)
@@ -221,8 +332,24 @@ def pick_route(
         ):
             return Route(picked=picked)
         return Route(video=video, picked=picked)
-    if page and (routing.about_video(message) or not routing.about_horde(message)):
+    # On a channel's page: the channel, unless it is about Horde ("how do I
+    # download his latest video?" is a how-to, though it says "his").
+    horde = routing.about_horde(message) and (
+        routing.asks_how_to(message) or not routing.about_video(message)
+    )
+    if page and not horde:
         return Route(page)
+    if (
+        channels
+        and not routing.about_horde(message)
+        and not routing.names_horde(message)
+        and not help_data.topics(message)
+    ):
+        # Named no channel, away from any channel's page: the channels that
+        # clearly cover it ("how much protein should I eat?"), else Horde.
+        guessed = channel_guess.guess(session, message, channels)
+        if guessed:
+            return Route(guessed)
     return Route()
 
 
@@ -307,7 +434,15 @@ class _ChannelChat:
         def lines_of(video_id: int) -> list[chunking.Line]:
             if video_id not in lines:
                 video = session.get(KbVideo, video_id)
-                lines[video_id] = chunking.unpack_lines(video.cues if video else None)
+                # A reference never opens at or quotes a sponsor read.
+                lines[video_id] = (
+                    sponsorblock.lines_outside(
+                        chunking.unpack_lines(video.cues),
+                        sponsorblock.parse(video.sponsor_segments),
+                    )
+                    if video
+                    else []
+                )
             return lines[video_id]
 
         content, self.references = references.resolve(content, self._excerpts, lines_of)
@@ -470,13 +605,23 @@ def _channel_turn(
     strength = help_model.tier(model)
     channels = most_relevant(session, channels, message, MAX_CHANNELS[strength])
     names = [c.channel_name or c.channel_url for c in channels]
-    history = threads.history(session, thread_id)
+    # Earlier answers were numbered against their own excerpts: without the
+    # markers the model cannot mistake them for this turn's numbers.
+    history = [
+        {**turn, "content": references.without_markers(turn["content"])}
+        if turn["role"] == "assistant"
+        else turn
+        for turn in threads.history(session, thread_id)
+    ]
     yield _sse({"type": "status", "text": f"Searching {', '.join(names)}"})
 
+    watching = retrieval.watched_title(session, channels, focus_yt_id)
     expansion = retrieval.Expansion()
     extra_cost: float | None = None
     if strength != "small":
-        expansion = retrieval.expand(provider, model, message, names)
+        expansion = retrieval.expand(
+            provider, model, message, names, history, watching=watching
+        )
         last = getattr(provider, "last_cost", None)
         extra_cost = float(last) if isinstance(last, int | float) else None
     if authorized is not None and not authorized():
@@ -486,9 +631,9 @@ def _channel_turn(
         session,
         current().knowledge.vectors,
         channels,
-        message,
+        retrieval.search_question(message, history, expansion),
         expansion,
-        budget_chars=_BUDGET[strength],
+        budget_chars=_budget(strength, model),
         focus_yt_id=focus_yt_id,
     )
     scope = {"channels": [{"id": c.id, "name": c.channel_name} for c in channels]}
@@ -510,7 +655,20 @@ def _channel_turn(
     context_parts = [
         "Channels: " + ", ".join(names),
         _progress_note(session, channels),
+        _NEWEST_NOTE if retrieval.asks_newest_videos(message) else "",
+        f'The user is watching "{watching}": "this", "it" or "this device" in '
+        "the question means what that video is about."
+        if watching
+        else "",
+        # A follow-up, spelled out: a weaker model otherwise answers "is it good
+        # for PS1 games?" for every handheld in the excerpts.
+        f"The question is a follow-up. It asks: {expansion.search}"
+        if history and expansion.search
+        else "",
         "Excerpts:\n\n" + retrieval.format_excerpts(excerpts),
+        # After the excerpts, which are most of the prompt: a model follows
+        # what it read last, and otherwise retells all of them.
+        _REMINDER,
     ]
     target = _ChannelChat(
         thread_id,
@@ -526,9 +684,13 @@ def _channel_turn(
         message,
         user.id,
         authorized,
-        system_prompt=SYSTEM_PROMPT,
+        system_prompt=system_prompt(date.today()),
         model=model,
         num_predict=_NUM_PREDICT,
+        # Thinking first (DeepSeek, some Gemini and GPT models) made answers
+        # three times slower and sometimes used the whole budget without an
+        # answer; with the excerpts in hand it answered as well without.
+        think=False,
     ):
         if _event_type(event) == "done":
             yield _sse(
@@ -626,6 +788,7 @@ def _turn_events(
                 user.id,
                 authorized,
                 model=help_model.assistant_model(),
+                think=False,
             )
             return
         if channels:

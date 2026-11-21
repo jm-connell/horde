@@ -34,6 +34,11 @@ OPENROUTER_PRESETS: dict[str, str] = {
     "best": "google/gemini-2.5-flash",
 }
 OPENROUTER_DEFAULT_MODEL = OPENROUTER_PRESETS["budget"]
+#: What Ask answers with on OpenRouter until an Assistant model is chosen
+#: (``help_model.default_model``). In a comparison on one indexed channel it
+#: gave the best-grounded answers of the cheap models, for less than half the
+#: cost of the Best preset; it thinks first, so its first word takes longer.
+OPENROUTER_ASSISTANT_MODEL = "deepseek/deepseek-v4.1-flash"
 
 ProviderKind = Literal["openrouter", "ollama", "openai_compatible"]
 Target = Literal["chat", "embed"]
@@ -507,6 +512,16 @@ class OpenAICompatProvider:
         # OpenRouter-only request field; strict servers (OpenAI) reject unknown ones.
         return {"usage": {"include": True}} if self.connection.is_openrouter else {}
 
+    def _reasoning_fields(self, think: bool) -> dict[str, Any]:
+        """``think=False`` turns a reasoning model's thinking off (OpenRouter's
+        unified ``reasoning`` field; other servers get nothing, so it is safe
+        for models that never think). Thinking counts against ``max_tokens``:
+        left on for a short structured call, it used the whole budget and the
+        reply came back cut off or empty."""
+        if think or not self.connection.is_openrouter:
+            return {}
+        return {"reasoning": {"enabled": False}}
+
     def chat(
         self,
         prompt: str,
@@ -520,6 +535,7 @@ class OpenAICompatProvider:
         temperature: float = 0.2,
         usage_kind: str | None = None,
         video_id: int | None = None,
+        think: bool = True,
     ) -> str:
         global _last_error
         self.last_cost = None
@@ -531,6 +547,7 @@ class OpenAICompatProvider:
             "temperature": float(temperature),
             "stream": False,
             **self._usage_fields(),
+            **self._reasoning_fields(think),
         }
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)
@@ -609,6 +626,7 @@ class OpenAICompatProvider:
         temperature: float = 0.4,
         usage_kind: str | None = None,
         video_id: int | None = None,
+        think: bool = True,
     ) -> Iterator[str]:
         global _last_error
         self.last_cost = None
@@ -622,6 +640,7 @@ class OpenAICompatProvider:
             # Ask for a final usage chunk (part of the OpenAI API).
             "stream_options": {"include_usage": True},
             **self._usage_fields(),
+            **self._reasoning_fields(think),
         }
         if num_predict is not None and num_predict > 0:
             payload["max_tokens"] = int(num_predict)

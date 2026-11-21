@@ -1308,7 +1308,7 @@ class UserUpdate(BaseModel):
 class FollowedChannelRead(BaseModel):
     channel_url: str
     channel_name: str | None = None
-    #: download | manual | library
+    #: download | manual | library | ask
     source: str
     created_at: datetime
     #: Its live streams are left out of the Live list and the feeds.
@@ -1811,6 +1811,8 @@ class AskChannelUpdate(BaseModel):
 class AskSearchHit(BaseModel):
     channel_id: int
     channel_name: str | None = None
+    #: So a result's channel name can open the channel's page.
+    channel_url: str | None = None
     yt_id: str
     title: str | None = None
     published_at: str | None = None

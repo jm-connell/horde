@@ -413,7 +413,7 @@ export default function JobsPane() {
                   <div className="divide-y divide-ink-800">
                     <ProcessActionRow
                       label="Tag untagged videos"
-                      description="Ask the chat model to suggest tags only for videos that do not have AI tags yet."
+                      description="Ask the background model to suggest tags only for videos that do not have AI tags yet."
                       busy={aiProcessingAction === "missing_tags"}
                       disabled={!!aiProcessingAction || !!aiStatus?.paused}
                       onClick={() => runAiProcess("missing_tags")}

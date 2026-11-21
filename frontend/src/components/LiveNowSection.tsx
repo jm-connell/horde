@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSettings } from "../hooks/useSettings";
+import ChannelAvatar from "./ChannelAvatar";
 import { useLiveNow } from "../queries/follows";
 import { formatViewers } from "../utils/followUrl";
 import { joinDotList } from "../utils";
@@ -20,7 +21,7 @@ export default function LiveNowSection() {
   const rows = expanded ? live : live.slice(0, VISIBLE_ROWS);
   return (
     <section aria-label="Live now" className="mb-2" data-horde="live-now">
-      <h3 className="flex items-center gap-1.5 px-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
+      <h3 className="flex items-center gap-1.5 px-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-muted">
         <span
           aria-hidden="true"
           className="inline-block h-1.5 w-1.5 rounded-full bg-red-500/80"
@@ -45,16 +46,23 @@ export default function LiveNowSection() {
                     `/watch?url=${encodeURIComponent(item.watch_url)}&channel=${encodeURIComponent(item.channel_name ?? "")}`
                   )
                 }
-                className="w-full min-w-0 rounded-lg px-3 py-1 text-left hover:bg-ink-800"
+                className="flex w-full min-w-0 items-center gap-2.5 rounded-lg px-2 py-1 text-left hover:bg-ink-800"
               >
-                <span className="block truncate text-sm text-gray-300">
-                  {item.channel_name ?? item.channel_url}
-                </span>
-                {sub && (
-                  <span className="block truncate text-xs text-muted">
-                    {sub}
+                <ChannelAvatar
+                  channel={item.channel_name ?? "?"}
+                  channelUrl={item.channel_url}
+                  size="h-6 w-6 text-[11px]"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm text-gray-300">
+                    {item.channel_name ?? item.channel_url}
                   </span>
-                )}
+                  {sub && (
+                    <span className="block truncate text-xs text-muted">
+                      {sub}
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           );
@@ -64,7 +72,7 @@ export default function LiveNowSection() {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full rounded-lg px-3 py-1 text-left text-xs text-muted hover:bg-ink-800 hover:text-gray-300"
+          className="w-full rounded-lg px-2 py-1 text-left text-xs text-muted hover:bg-ink-800 hover:text-gray-300"
         >
           {expanded ? "Show less" : `Show all (${live.length})`}
         </button>

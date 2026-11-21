@@ -19,7 +19,12 @@ from sqlmodel import Session
 
 from ...context import get_paths
 from .. import library
-from ..downloads.subtitles import SubtitleYtdlpLogger, subtitle_ydl_opts
+from ..downloads.subtitles import (
+    SubtitleYtdlpLogger,
+    download_with_subtitles,
+    subtitle_ydl_opts,
+)
+from ..feed_meta_cache import parse_upload_date
 from ..subtitle_retry import subtitle_failure_retryable
 from ..ytdlp_common import (
     ERROR_KIND_BOT,
@@ -53,6 +58,8 @@ class CaptionResult:
     vtt: str = ""
     auto: bool | None = None
     description: str | None = None
+    #: The upload date (ISO), which the channel listing does not give exactly.
+    published_at: str | None = None
     message: str | None = None
 
 
@@ -83,6 +90,9 @@ def from_library(session: Session, yt_id: str) -> CaptionResult | None:
                 vtt=vtt,
                 auto=bool(track.get("auto")),
                 description=video.description,
+                published_at=(
+                    video.published_at.isoformat() if video.published_at else None
+                ),
             )
     return None
 
@@ -98,8 +108,7 @@ def _download(
         ytdlp_logger=ytdlp_logger,
     )
     with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=True)
-    return dict(info or {})
+        return download_with_subtitles(ydl, url)
 
 
 def _read_vtt(tmpdir: str) -> str:
@@ -121,15 +130,20 @@ def _fetch(url: str) -> CaptionResult:
             info = _download(url, tmpdir, ytdlp_logger, with_cookies=True)
         vtt = _read_vtt(tmpdir)
     description = info.get("description")
+    published = parse_upload_date(info.get("upload_date") or info.get("timestamp"))
     if not vtt.strip():
         # A subtitle 429 is logged, not raised: the video itself loaded.
         logged = " ".join(ytdlp_logger.messages)
         if logged and subtitle_failure_retryable(logged):
             return CaptionResult(RETRY, description=description, message=logged[:300])
-        return CaptionResult(NO_CAPTIONS, description=description)
+        return CaptionResult(
+            NO_CAPTIONS, description=description, published_at=published
+        )
     manual = info.get("subtitles") or {}
     auto = not any(str(lang).lower().startswith("en") for lang in manual)
-    return CaptionResult(FETCHED, vtt=vtt, auto=auto, description=description)
+    return CaptionResult(
+        FETCHED, vtt=vtt, auto=auto, description=description, published_at=published
+    )
 
 
 def fetch_remote(yt_id: str) -> CaptionResult:

@@ -235,7 +235,7 @@ export default function Setup() {
         setAiStatus(
           chat
             ? `Connected to ${providerLabel(saved, result.kind)}. You can continue.`
-            : `Connected to ${providerLabel(saved, result.kind)}. Pick a chat model later in Settings → AI.`
+            : `Connected to ${providerLabel(saved, result.kind)}. Pick the models later in Settings → AI.`
         );
       }
       goNext();

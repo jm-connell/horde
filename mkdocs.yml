@@ -145,6 +145,8 @@ nav:
       - 0030 Ask routes on its own: adr/0030-ask-routes-on-its-own.md
       - 0031 Published image by default: adr/0031-published-image-by-default.md
       - 0032 Parental controls: adr/0032-parental-controls.md
+      - 0033 Unnamed questions go to channels: adr/0033-ask-answers-unnamed-questions-from-channels.md
+      - 0034 Ask skips sponsor reads: adr/0034-ask-skips-sponsor-reads.md
   - Development:
       - Dependencies & reproducible builds: development/dependencies.md
       - Release process: development/release-process.md
