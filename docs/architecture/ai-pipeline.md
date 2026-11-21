@@ -12,7 +12,7 @@ Background and on-demand AI for search, tags, chat, recommendations, and catalog
 | `embed_catalog_video` | Embed a channel-catalog upload |
 | `embed_kb_channel` | Embed one batch (25 videos) of an [Ask](../design/channel-knowledge.md) channel's passages, then queue the next. Picked only when no library job is runnable |
 | `summarize` | Generate a Watch summary from captions (after download) |
-| `chapters` | Generate Watch chapter markers from a timed transcript (after download when `ai_chapters_mode` is `on_download`, or from Watch) |
+| `chapters` | Generate Watch chapter markers from a timed transcript (after download when `ai_chapters_mode` is `on_download`, or from Watch). The model lists the video's parts, then one start time per part; long transcripts go in sections (`services/chapters.py`, `tasks.generate_chapters`) |
 
 The worker is single-flight with up to **3 attempts** and `run_after` backoff ([Workers](workers.md), [Single-flight AI](../design/single-flight-ai.md)).
 

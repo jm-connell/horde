@@ -43,37 +43,50 @@ MIN_SEGMENT_SHORT_SEC = 8.0
 SHORT_VIDEO_SEC = 360.0
 FIRST_SNAP_TO_ZERO_SEC = 20.0
 CUE_WINDOW_SEC = 12.0
-TOPIC_LOOKBACK_SEC = 75.0
-TOPIC_NEIGHBOR_SEC = 10.0
 SNAP_EARLIER_TIE_SEC = 3.0
 MUSIC_UNIQUE_RATIO = 0.35
 MUSIC_MIN_LINES = 10
-MAX_CHAPTERS_HARD = 40
+MAX_CHAPTERS_HARD = 30
 
+# Characters of timed transcript sent in one model call. A longer transcript is
+# read in sections (``transcript_sections``): a local model's context is small
+# (by workload profile), and a hosted model with a large one still loses the
+# middle of a very long prompt. Whole is better while it fits: a model that
+# sees the entire video picks fewer, broader parts than one shown a section.
 _TRANSCRIPT_CHARS = {
     "light": 16_000,
     "normal": 32_000,
     "heavy": 48_000,
 }
+_HOSTED_TRANSCRIPT_CHARS = 48_000
 
+# A chapter this long, and this many times the video's average, is read again
+# on its own (``long_chapters``): cheap models sometimes spend their chapters
+# on the first half of a long video and file the rest under one title.
+LONG_CHAPTER_MIN_SEC = 600.0
+LONG_CHAPTER_FACTOR = 2.0
+
+# The model lists the major parts first (a table of contents, no times), then
+# gives one start time per part. Asked for timed chapters straight away, cheap
+# models mark nearly every transcript line.
 CHAPTERS_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {
+        "parts": {"type": "array", "items": {"type": "string"}},
         "chapters": {
             "type": "array",
-            "minItems": 2,
             "items": {
                 "type": "object",
                 "properties": {
-                    "start_sec": {"type": "number"},
-                    "title": {"type": "string"},
+                    "part": {"type": "string"},
+                    "start": {"type": "string"},
                 },
-                "required": ["start_sec", "title"],
+                "required": ["part", "start"],
                 "additionalProperties": False,
             },
-        }
+        },
     },
-    "required": ["chapters"],
+    "required": ["parts", "chapters"],
     "additionalProperties": False,
 }
 
@@ -188,7 +201,9 @@ def resolve_chapters(
     return [], None
 
 
-def transcript_char_cap(profile: Any = None) -> int:
+def transcript_char_cap(profile: Any = None, *, hosted: bool = False) -> int:
+    if hosted:
+        return _HOSTED_TRANSCRIPT_CHARS
     key = str(profile or "normal").strip().lower()
     return int(_TRANSCRIPT_CHARS.get(key, _TRANSCRIPT_CHARS["normal"]))
 
@@ -272,9 +287,15 @@ def caption_lines(raw_vtt: str, window_sec: float = 5.0) -> list[tuple[float, st
     Each line holds only the words new since the previous one, so joining the
     lines gives the transcript once (Ask stores these to cite exact moments).
     """
+    return _fresh_lines(parse_vtt_cues(raw_vtt), window_sec)
+
+
+def _fresh_lines(
+    cues: list[tuple[float, str]], window_sec: float
+) -> list[tuple[float, str]]:
     lines: list[tuple[float, str]] = []
     prev = ""
-    for start, text in _downsample_cues(parse_vtt_cues(raw_vtt), window_sec):
+    for start, text in _downsample_cues(cues, window_sec):
         merged = _merge_rolling(prev, text)
         fresh = merged.split()[len(prev.split()) :]
         if fresh:
@@ -283,31 +304,35 @@ def caption_lines(raw_vtt: str, window_sec: float = 5.0) -> list[tuple[float, st
     return lines
 
 
-def format_timed_transcript(cues: list[tuple[float, str]], *, max_chars: int) -> str:
-    windows = _downsample_cues(cues, CUE_WINDOW_SEC)
-    if not windows:
-        return ""
-    compressed = _fit_transcript_windows(windows, max_chars)
-    if compressed:
-        return compressed
-    lines = []
-    for start, text in windows:
-        word = text.split()[:1]
-        body = word[0] if word else ""
-        lines.append(f"[{_fmt_ts(start)}] {body}".rstrip())
-    n = len(lines)
-    lo, hi = 2, n
-    best = _truncate_transcript("\n".join([lines[0], lines[-1]]), max_chars)
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        idxs = _even_indices(n, mid)
-        text = "\n".join(lines[i] for i in idxs)
-        if len(text) <= max_chars:
-            best = text
-            lo = mid + 1
-        else:
-            hi = mid - 1
-    return best
+def transcript_sections(
+    cues: list[tuple[float, str]], *, max_chars: int
+) -> list[list[tuple[float, str]]]:
+    """The timed transcript as lines, in consecutive sections of about
+    ``max_chars`` each (one section when it fits).
+
+    Every word is kept: a transcript too long for one model call is read in
+    several, not thinned out.
+    """
+    lines = _fresh_lines(cues, CUE_WINDOW_SEC)
+    if not lines:
+        return []
+    sizes = [len(_render_line(line)) + 1 for line in lines]
+    count = max(1, math.ceil(sum(sizes) / max(1, max_chars)))
+    per_section = sum(sizes) / count
+    sections: list[list[tuple[float, str]]] = [[] for _ in range(count)]
+    offset = 0
+    for line, size in zip(lines, sizes, strict=True):
+        sections[min(count - 1, int(offset / per_section))].append(line)
+        offset += size
+    return [section for section in sections if section]
+
+
+def render_transcript(lines: list[tuple[float, str]]) -> str:
+    return "\n".join(_render_line(line) for line in lines)
+
+
+def _render_line(line: tuple[float, str]) -> str:
+    return f"[{_fmt_ts(line[0])}] {line[1]}"
 
 
 def is_music_like(cues: list[tuple[float, str]]) -> bool:
@@ -363,9 +388,22 @@ def min_segment_sec(duration_sec: float | None) -> float:
 
 
 def max_chapter_count(duration_sec: float | None) -> int:
+    """The most chapters a video of this length may get (a ceiling the model is
+    told, not a target): about 6 for 10 minutes, 11 for 40, 16 for 80."""
     if duration_sec is None or duration_sec <= 0:
         return 12
-    return max(2, min(MAX_CHAPTERS_HARD, int(math.ceil(float(duration_sec) / 120.0))))
+    minutes = float(duration_sec) / 60.0
+    return max(2, min(MAX_CHAPTERS_HARD, round(1.8 * math.sqrt(minutes))))
+
+
+def section_chapter_limit(
+    lines: list[tuple[float, str]],
+    total_lines: int,
+    duration_sec: float | None,
+) -> int:
+    """The share of ``max_chapter_count`` for one transcript section."""
+    share = len(lines) / max(1, total_lines)
+    return max(2, round(max_chapter_count(duration_sec) * share))
 
 
 def snap_and_validate(
@@ -397,29 +435,6 @@ def snap_and_validate(
     duration = float(duration_sec) if duration_sec and duration_sec > 0 else None
     if duration is not None:
         deduped = [c for c in deduped if c["start_sec"] < duration]
-    nudged: list[Chapter] = []
-    prev_start: float | None = None
-    for chapter in deduped:
-        start = float(chapter["start_sec"])
-        if start <= 0.05:
-            nudged.append({"start_sec": 0.0, "title": chapter["title"]})
-            prev_start = 0.0
-            continue
-        onset = _topic_onset(
-            start,
-            str(chapter["title"]),
-            cues,
-            prev_start=prev_start,
-        )
-        if prev_start is not None and onset <= prev_start:
-            onset = start
-        nudged.append({"start_sec": onset, "title": chapter["title"]})
-        prev_start = onset
-    deduped = []
-    for chapter in nudged:
-        if deduped and chapter["start_sec"] <= deduped[-1]["start_sec"]:
-            continue
-        deduped.append(chapter)
     filtered: list[Chapter] = []
     for i, chapter in enumerate(deduped):
         next_start = (
@@ -432,46 +447,24 @@ def snap_and_validate(
         if next_start - chapter["start_sec"] < min_seg:
             continue
         filtered.append(chapter)
-    if len(filtered) < 2 and len(deduped) >= 2:
-        first, last = deduped[0], deduped[-1]
-        if last["start_sec"] - first["start_sec"] >= min_seg:
-            filtered = [first, last]
-    if len(filtered) < 2:
-        filtered = _ensure_two_chapters(
-            filtered or deduped, cue_starts, duration, min_seg
-        )
-    cap = max_chapter_count(duration)
-    if len(filtered) > cap:
-        idxs = _even_indices(len(filtered), cap)
-        filtered = [filtered[i] for i in idxs]
-        filtered = _require_ascending(filtered)
+    filtered = _merge_shortest(filtered, max_chapter_count(duration), duration)
     if len(filtered) < 2:
         return []
     return filtered
 
 
-def fallback_chapters_from_cues(
-    cues: list[tuple[float, str]],
-    duration_sec: float | None,
+def _merge_shortest(
+    chapters: list[Chapter], limit: int, duration: float | None
 ) -> list[Chapter]:
-    """Last-resort markers from timed captions when the model output is unusable."""
-    windows = _downsample_cues(cues, CUE_WINDOW_SEC)
-    if len(windows) < 2:
-        return []
-    cap = max_chapter_count(duration_sec)
-    n = min(len(windows), cap)
-    idxs = _even_indices(len(windows), n)
-    raw: list[Chapter] = []
-    for i, idx in enumerate(idxs):
-        start, text = windows[idx]
-        if i == 0:
-            title = "Intro"
-        else:
-            next_idx = idxs[i + 1] if i + 1 < len(idxs) else len(windows)
-            texts = [windows[j][1] for j in range(idx, next_idx)]
-            title = topic_title_from_texts(texts or [text])
-        raw.append({"start_sec": start, "title": title})
-    return snap_and_validate(raw, cues, duration_sec)
+    """Over ``limit``, fold the shortest chapter into the one before it, again
+    and again. The first chapter stays: it holds the start of the video."""
+    out = list(chapters)
+    while len(out) > max(2, limit):
+        ends = [c["start_sec"] for c in out[1:]]
+        ends.append(duration if duration is not None else out[-1]["start_sec"] + 1e9)
+        shortest = min(range(1, len(out)), key=lambda i: ends[i] - out[i]["start_sec"])
+        del out[shortest]
+    return out
 
 
 def chapters_from_model_output(raw: str) -> list[Any]:
@@ -506,48 +499,149 @@ def chapters_from_model_output(raw: str) -> list[Any]:
 
 def chapters_system_prompt() -> str:
     return (
-        "You write video chapter markers for a personal library. "
-        "Reply with JSON only: "
-        '{"chapters":[{"start_sec":0,"title":"..."}, ...]}. '
-        "start_sec is seconds from the start (a number, not a clock string). "
-        "Use only timestamps that appear in the transcript. "
-        "Put each chapter at the first line where that topic begins, "
-        "not after it is already underway. If two nearby times fit, pick the earlier. "
-        "Always include a chapter at 0 and at least one later chapter. "
-        "Titles are 2–6 word topic labels for the section, "
-        'like "Digging for treasure" or "Installing the GPU". '
-        "Name the activity or subject. Do not quote a spoken line, "
-        "copy transcript text, or include a timestamp or speaker marker. "
-        "Do not invent times that are not in the transcript."
+        "You divide a video into chapters so a viewer can jump straight to the "
+        "part they want.\n\n"
+        "You get the video's title, channel, duration and a timed transcript. "
+        "The transcript is auto-generated captions: expect wrong words, no "
+        "punctuation and several speakers run together. Each line starts with "
+        "the time it is spoken, like [12:34] or [1:02:03].\n\n"
+        "Work in two steps, both in one JSON reply.\n\n"
+        'Step 1, "parts": read the whole transcript, then list its major parts '
+        "in order, as a table of contents written from memory, without times. "
+        "A part is a stretch where the video is about one thing: a topic, an "
+        "activity or task, a place, a game or match, a guest, a stage of the "
+        "story. Think big: a part usually runs for several minutes and holds "
+        "many smaller moments. A new sentence, a joke, a short tangent or one "
+        "step of a longer task is not a part. A video that stays on one subject "
+        "has only 2 or 3 parts. Never list more parts than the limit in the "
+        "request; if you count more, your parts are too small, so combine "
+        "neighbours under a broader title.\n"
+        "Each part is written as its chapter title: 2 to 6 words saying what "
+        "happens in it, specific enough that it could not be the title of any "
+        "other part. Name the people, places, things, numbers or the event "
+        '("Rescuing Tony from the hospital", "4K gaming benchmarks", "Why the '
+        'first design failed"). Never a generic label ("Conversation", "Driving '
+        'around", "Discussion continues", "More gameplay"), never a line someone '
+        "said. Shorter is better: 3 or 4 words is ideal. To quote a word inside "
+        "a title use single quotes ('the claw'), never double quotes.\n\n"
+        'Step 2, "chapters": find where each part begins. One entry per part, in '
+        "the same order, and nothing else:\n"
+        '- "part" is the title copied exactly from the parts list.\n'
+        '- "start" is the time of the transcript line where that part begins, '
+        'copied exactly as written in the brackets (for example "12:34"). Pick '
+        "the line where the part starts, not one where it is already under way. "
+        "The first part starts at the first line.\n"
+        "Parts follow the video, not the clock: one may last a minute, the next "
+        "twenty-five.\n\n"
+        "Reply with compact JSON only (no line breaks or indentation): "
+        '{"parts": ["...", "..."], '
+        '"chapters": [{"part": "...", "start": "0:00"}, ...]}'
     )
 
 
 def chapters_prompt(
     video: Video,
-    transcript: str,
+    lines: list[tuple[float, str]],
     *,
-    duration_sec: float | None,
+    limit: int,
+    section: tuple[int, int] = (1, 1),
+    previous_title: str | None = None,
+    within: str | None = None,
 ) -> str:
-    duration_label = (
-        _fmt_ts(float(duration_sec)) if duration_sec and duration_sec > 0 else "unknown"
+    """The request to divide ``lines`` into parts.
+
+    ``lines`` is the whole transcript, one of its sections (``section`` is its
+    1-based number and the section count; ``previous_title`` the chapter the
+    video is in when a later section begins) or the stretch of one long chapter
+    titled ``within``.
+    """
+    duration = video.duration_sec
+    known = bool(duration and duration > 0)
+    duration_label = _fmt_ts(float(duration or 0)) if known else "unknown"
+    video_label = (
+        f"{round(float(duration or 0) / 60)}-minute video" if known else "video"
     )
-    cap = max_chapter_count(duration_sec)
     title = (video.title or "").strip() or "Untitled"
     channel = (video.channel or "").strip()
+    span = f"from {_fmt_ts(lines[0][0])} to {_fmt_ts(lines[-1][0])}"
+    number, total = section
+    if within:
+        ask = (
+            f"This is one stretch of a {video_label}, {span}. It is one chapter "
+            f'so far, "{within}". Divide the stretch into its major parts: at '
+            f"most {limit}. If it stays on that one subject, list a single part."
+        )
+    elif total > 1:
+        ask = (
+            f"This is section {number} of {total} of the transcript of a "
+            f"{video_label}, {span}. Divide this section into its major parts: "
+            f"at most {limit}, fewer if it has fewer."
+        )
+    else:
+        ask = (
+            f"Now divide this {video_label} into its major parts: at most "
+            f"{limit}, fewer if it has fewer."
+        )
+    if previous_title:
+        ask += (
+            f' Before this section the video was on "{previous_title}". If the '
+            "section opens still on that subject, give its first part that "
+            "same title, word for word."
+        )
     return (
         f"Title: {title}\n"
         f"Channel: {channel}\n"
-        f"Duration: {duration_label}\n"
-        f"Return between 2 and {cap} chapters. Short videos still need at least 2.\n"
-        "Pick the earliest transcript timestamp where each new section starts.\n"
-        "Do not wait until the topic is fully underway.\n"
-        "Use numeric start_sec values in seconds (example: 0, 95, 180).\n"
-        "Each title names the topic of that section in 2–6 words. "
-        'A stretch of talk about digging and getting rich is "Digging for treasure", '
-        "not a line someone said.\n\n"
+        f"Duration: {duration_label}\n\n"
         "Timed transcript:\n"
-        f"{transcript}"
+        f"{render_transcript(lines)}\n\n"
+        f"{ask}"
     )
+
+
+def long_chapters(
+    chapters: list[Chapter], duration_sec: float | None
+) -> list[tuple[int, float]]:
+    """``(index, end_sec)`` of the chapters long enough to be read again."""
+    if not chapters or not duration_sec or duration_sec <= 0:
+        return []
+    duration = float(duration_sec)
+    threshold = max(
+        LONG_CHAPTER_MIN_SEC,
+        # Half the video at most, so two or three chapters can still qualify.
+        min(LONG_CHAPTER_FACTOR * duration / len(chapters), duration / 2),
+    )
+    out: list[tuple[int, float]] = []
+    for i, chapter in enumerate(chapters):
+        end = (
+            float(chapters[i + 1]["start_sec"])
+            if i + 1 < len(chapters)
+            else float(duration_sec)
+        )
+        if end - float(chapter["start_sec"]) > threshold:
+            out.append((i, end))
+    return out
+
+
+def section_chapters(
+    payload: list[Any], lines: list[tuple[float, str]]
+) -> list[Chapter]:
+    """The usable chapters of a model reply about ``lines``: well formed, inside
+    the lines it was shown, in order."""
+    first, last = lines[0][0], lines[-1][0]
+    found: list[Chapter] = []
+    for item in payload:
+        chapter = _coerce_chapter(item)
+        if chapter is None:
+            continue
+        if not first - CUE_WINDOW_SEC <= chapter["start_sec"] <= last + CUE_WINDOW_SEC:
+            continue  # a time from outside what the model was shown
+        found.append(chapter)
+    found.sort(key=lambda c: c["start_sec"])
+    return found
+
+
+def same_title(title: str, other: str | None) -> bool:
+    return bool(other) and _cmp_words(title) == _cmp_words(other or "")
 
 
 def _coerce_chapter(item: Any) -> Chapter | None:
@@ -568,7 +662,11 @@ def _coerce_chapter(item: Any) -> Chapter | None:
             start = item.get(key)
             break
     title = str(
-        item.get("title") or item.get("name") or item.get("label") or ""
+        item.get("title")
+        or item.get("part")
+        or item.get("name")
+        or item.get("label")
+        or ""
     ).strip()
     start_sec = _parse_start_value(start)
     if start_sec is None or not title:
@@ -605,27 +703,6 @@ def _parse_start_value(raw: Any) -> float | None:
     if embedded:
         return _parse_cue_ts(embedded.group(0))
     return None
-
-
-def _ensure_two_chapters(
-    chapters: list[Chapter],
-    cue_starts: list[float],
-    duration: float | None,
-    min_seg: float,
-) -> list[Chapter]:
-    if len(chapters) >= 2:
-        return chapters
-    if not cue_starts:
-        return []
-    first = dict(chapters[0]) if chapters else {"start_sec": 0.0, "title": "Intro"}
-    first["start_sec"] = 0.0
-    if not first.get("title"):
-        first["title"] = "Intro"
-    end = duration if duration is not None else cue_starts[-1] + min_seg + 1
-    later = [t for t in cue_starts if t >= min_seg and t < end]
-    if not later:
-        return []
-    return [first, {"start_sec": later[-1], "title": "Rest of video"}]
 
 
 def _require_ascending(chapters: list[Chapter]) -> list[Chapter]:
@@ -685,28 +762,6 @@ _SOUND_TAG_RE = re.compile(
 _LEADING_CLOCK_RE = re.compile(
     r"^\s*(?:\[\s*)?(?:(?:\d{1,2}):)?\d{1,2}:\d{2}(?:\.\d{1,3})?\s*\]?\s*"
 )
-_SPEECH_OPENERS = (
-    "all right",
-    "alright",
-    "okay so",
-    "ok so",
-    "okay",
-    "ok",
-    "let's",
-    "lets",
-    "let us",
-    "i'm",
-    "i am",
-    "we're",
-    "we are",
-    "you're",
-    "you know",
-    "hold on",
-    "yeah",
-    "um",
-    "uh",
-)
-_QUOTE_CUE_WINDOW_SEC = 90.0
 
 
 def _clean_cue_text(raw: str) -> str:
@@ -750,25 +805,6 @@ def _fmt_ts(sec: float) -> str:
     if hours:
         return f"{hours}:{minutes:02d}:{seconds:02d}"
     return f"{minutes}:{seconds:02d}"
-
-
-def _even_indices(n: int, k: int) -> list[int]:
-    if n <= 0:
-        return []
-    if k >= n:
-        return list(range(n))
-    if k <= 1:
-        return [0]
-    if k == 2:
-        return [0, n - 1]
-    out = [round(i * (n - 1) / (k - 1)) for i in range(k)]
-    deduped: list[int] = []
-    for idx in out:
-        if not deduped or idx != deduped[-1]:
-            deduped.append(idx)
-    if deduped[-1] != n - 1:
-        deduped[-1] = n - 1
-    return deduped
 
 
 def _norm_words(text: str) -> list[str]:
@@ -860,395 +896,6 @@ def _sanitize_chapter_title(title: str) -> str:
         text = nxt
     text = re.sub(r"\s+", " ", text).strip(" -–—:|.,;")
     return text
-
-
-def _opens_like_speech(text: str) -> bool:
-    words = _norm_words(text)
-    if not words:
-        return False
-    for opener in _SPEECH_OPENERS:
-        op_words = opener.split()
-        if words[: len(op_words)] == op_words:
-            return True
-    return False
-
-
-def _repeats_clause(text: str) -> bool:
-    parts = [p.strip() for p in re.split(r"[.!?]+", text) if p.strip()]
-    if len(parts) >= 2:
-        keys = [_cmp_words(p) for p in parts]
-        for i in range(len(keys) - 1):
-            a, b = keys[i], keys[i + 1]
-            if not a or not b:
-                continue
-            if a == b or a[: len(b)] == b or b[: len(a)] == a or a[-len(b) :] == b:
-                return True
-        return False
-    words = _cmp_words(text)
-    if len(words) < 4:
-        return False
-    return any(words[:n] == words[n : n * 2] for n in range(2, len(words) // 2 + 1))
-
-
-def _cue_words_near(
-    cues: list[tuple[float, str]],
-    start_sec: float,
-    window: float = _QUOTE_CUE_WINDOW_SEC,
-) -> list[str]:
-    words: list[str] = []
-    for ts, text in cues:
-        if start_sec - 8.0 <= ts <= start_sec + window:
-            words.extend(_norm_words(text))
-    return words
-
-
-def _is_contiguous_quote(title_words: list[str], cue_words: list[str]) -> bool:
-    n = len(title_words)
-    if n < 4 or n > len(cue_words):
-        return False
-    return any(
-        cue_words[i : i + n] == title_words for i in range(len(cue_words) - n + 1)
-    )
-
-
-def title_is_spoken_quote(
-    title: str,
-    cues: list[tuple[float, str]],
-    start_sec: float,
-) -> bool:
-    """True when a title is still a caption line rather than a topic label."""
-    text = _sanitize_chapter_title(title)
-    if not text:
-        return True
-    if ">>" in text or _LEADING_CLOCK_RE.match(text):
-        return True
-    if _opens_like_speech(text) or _repeats_clause(text):
-        return True
-    words = _norm_words(text)
-    return _is_contiguous_quote(words, _cue_words_near(cues, start_sec))
-
-
-def titles_need_rewrite(chapters: list[Chapter], cues: list[tuple[float, str]]) -> bool:
-    return any(
-        title_is_spoken_quote(str(chapter["title"]), cues, float(chapter["start_sec"]))
-        for chapter in chapters
-    )
-
-
-def _topic_words(text: str) -> list[str]:
-    out: list[str] = []
-    for word in _norm_words(text):
-        if word.isdigit() or len(word) <= 2 or word in _STOPWORDS:
-            continue
-        out.append(word)
-    return out
-
-
-def topic_title_from_texts(texts: list[str]) -> str:
-    """2–3 distinctive words from a segment, not the opening line of a cue."""
-    counts: dict[str, int] = {}
-    order: list[str] = []
-    for text in texts:
-        for word in _topic_words(text):
-            if word not in counts:
-                order.append(word)
-            counts[word] = counts.get(word, 0) + 1
-    if not counts:
-        return "Chapter"
-    ranked = sorted(order, key=lambda w: (-counts[w], order.index(w)))
-    repeated = [w for w in ranked if counts[w] >= 2]
-    picked = repeated[:3] if len(repeated) >= 2 else ranked[:3]
-    return " ".join(word.capitalize() for word in picked) or "Chapter"
-
-
-def _segment_texts(
-    chapters: list[Chapter],
-    cues: list[tuple[float, str]],
-    index: int,
-) -> list[str]:
-    start = float(chapters[index]["start_sec"])
-    if index + 1 < len(chapters):
-        end = float(chapters[index + 1]["start_sec"])
-    else:
-        end = start + 300.0
-    texts = [text for ts, text in cues if start - 1.0 <= ts < end]
-    if texts:
-        return texts
-    return [text for ts, text in cues if abs(ts - start) <= 30.0]
-
-
-def replace_spoken_titles(
-    chapters: list[Chapter], cues: list[tuple[float, str]]
-) -> list[Chapter]:
-    """Swap any remaining caption quotes for a keyword label from that segment."""
-    out: list[Chapter] = []
-    for i, chapter in enumerate(chapters):
-        start = float(chapter["start_sec"])
-        title = _sanitize_chapter_title(str(chapter["title"]))
-        if not title or title_is_spoken_quote(title, cues, start):
-            title = topic_title_from_texts(_segment_texts(chapters, cues, i))
-        out.append({"start_sec": start, "title": title})
-    return out
-
-
-def apply_title_rewrites(
-    chapters: list[Chapter],
-    payload: list[Any],
-    cues: list[tuple[float, str]],
-) -> list[Chapter]:
-    """Keep snapped start times; take a rewrite title when it is a topic label."""
-    candidates: list[Chapter] = []
-    for item in payload:
-        chapter = _coerce_chapter(item)
-        if chapter is not None:
-            candidates.append(chapter)
-    out: list[Chapter] = []
-    used: set[int] = set()
-    for index, chapter in enumerate(chapters):
-        start = float(chapter["start_sec"])
-        title = str(chapter["title"])
-        cand_i: int | None = None
-        if len(candidates) == len(chapters):
-            cand_i = index
-        else:
-            best_delta = 20.0
-            for i, cand in enumerate(candidates):
-                if i in used:
-                    continue
-                delta = abs(float(cand["start_sec"]) - start)
-                if delta < best_delta:
-                    best_delta = delta
-                    cand_i = i
-        if cand_i is not None:
-            used.add(cand_i)
-            cand_title = str(candidates[cand_i]["title"])
-            if cand_title and not title_is_spoken_quote(cand_title, cues, start):
-                title = cand_title
-        out.append({"start_sec": start, "title": title})
-    return out
-
-
-def title_rewrite_system_prompt() -> str:
-    return (
-        "You rewrite video chapter titles into short topic labels. "
-        "Reply with JSON only: "
-        '{"chapters":[{"start_sec":0,"title":"..."}, ...]}. '
-        "Keep each start_sec unchanged. "
-        'Titles are 2–6 words naming the topic, like "Digging for treasure". '
-        "Do not quote dialogue or include timestamps or speaker markers."
-    )
-
-
-def title_rewrite_prompt(chapters: list[Chapter], cues: list[tuple[float, str]]) -> str:
-    blocks: list[str] = []
-    for i, chapter in enumerate(chapters):
-        start = float(chapter["start_sec"])
-        lines: list[str] = []
-        used = 0
-        for ts, text in cues:
-            end = (
-                float(chapters[i + 1]["start_sec"])
-                if i + 1 < len(chapters)
-                else start + 300.0
-            )
-            if ts < start - 1.0 or ts >= end:
-                continue
-            line = f"[{_fmt_ts(ts)}] {text}"
-            if used and used + len(line) > 800:
-                break
-            lines.append(line)
-            used += len(line) + 1
-        start_label = int(start) if start == int(start) else start
-        blocks.append(
-            f"start_sec: {start_label}\n"
-            f"current_title: {chapter['title']}\n"
-            "transcript:\n" + ("\n".join(lines) if lines else "(no captions)")
-        )
-    return (
-        "Rewrite every current_title into a 2–6 word topic label. "
-        "Keep start_sec the same. "
-        "If the transcript is people talking about digging and getting rich, "
-        'write "Digging for treasure", not a line they said.\n\n' + "\n\n".join(blocks)
-    )
-
-
-def _truncate_transcript(text: str, max_chars: int) -> str:
-    if len(text) <= max_chars:
-        return text
-    cut = text[:max_chars].rsplit("\n", 1)[0].strip()
-    return cut or text[:max_chars]
-
-
-_STOPWORDS = frozenset(
-    {
-        "a",
-        "an",
-        "the",
-        "and",
-        "or",
-        "to",
-        "of",
-        "in",
-        "on",
-        "for",
-        "with",
-        "at",
-        "by",
-        "from",
-        "as",
-        "is",
-        "are",
-        "was",
-        "be",
-        "this",
-        "that",
-        "it",
-        "its",
-        "into",
-        "about",
-        "over",
-        "just",
-        "so",
-        "we",
-        "you",
-        "they",
-        "i",
-        "i'm",
-        "we're",
-        "gonna",
-        "going",
-        "get",
-        "got",
-        "like",
-        "right",
-        "okay",
-        "ok",
-        "yeah",
-        "um",
-        "uh",
-        "really",
-        "very",
-        "some",
-        "more",
-        "new",
-        "one",
-        "our",
-        "your",
-        "here",
-        "there",
-        "then",
-        "than",
-        "but",
-        "not",
-        "can",
-        "will",
-        "let's",
-        "lets",
-        "talk",
-        "talking",
-        "start",
-        "starting",
-    }
-)
-
-
-def _content_tokens(text: str) -> set[str]:
-    words = re.findall(r"[a-z0-9']+", (text or "").lower())
-    toks = {w for w in words if len(w) > 2 and w not in _STOPWORDS}
-    extra: set[str] = set()
-    for w in toks:
-        if w.endswith("s") and len(w) > 4:
-            extra.add(w[:-1])
-        elif len(w) > 3:
-            extra.add(w + "s")
-        if w in {"chassis", "case", "cases"}:
-            extra.update({"chassis", "case", "cases", "sff"})
-        if w == "sff":
-            extra.update({"chassis", "case", "cases"})
-    return toks | extra
-
-
-def _fit_transcript_windows(windows: list[tuple[float, str]], max_chars: int) -> str:
-    """Keep every window timestamp if possible by shortening cue text first."""
-
-    def render(max_words: int) -> str:
-        lines: list[str] = []
-        for start, text in windows:
-            words = text.split()
-            body = " ".join(words[:max_words]) if max_words > 0 else ""
-            if body:
-                lines.append(f"[{_fmt_ts(start)}] {body}")
-            else:
-                lines.append(f"[{_fmt_ts(start)}]")
-        return "\n".join(lines)
-
-    full = render(10_000)
-    if len(full) <= max_chars:
-        return full
-    lo, hi = 1, 24
-    best = ""
-    while lo <= hi:
-        mid = (lo + hi) // 2
-        text = render(mid)
-        if len(text) <= max_chars:
-            best = text
-            lo = mid + 1
-        else:
-            hi = mid - 1
-    if best:
-        return best
-    short = render(1)
-    if len(short) <= max_chars:
-        return short
-    return ""
-
-
-def _topic_onset(
-    start_sec: float,
-    title: str,
-    cues: list[tuple[float, str]],
-    *,
-    prev_start: float | None,
-    lookback: float = TOPIC_LOOKBACK_SEC,
-) -> float:
-    """Walk captions backward from a late marker to the first on-topic cue."""
-    if not cues:
-        return max(0.0, start_sec)
-    idx = 0
-    best = abs(cues[0][0] - start_sec)
-    for i, (ts, _) in enumerate(cues[1:], start=1):
-        delta = abs(ts - start_sec)
-        if delta < best or (
-            abs(delta - best) <= SNAP_EARLIER_TIE_SEC and ts < cues[idx][0]
-        ):
-            idx = i
-            best = delta
-    sig = _content_tokens(title)
-    for ts, text in cues:
-        if abs(ts - start_sec) <= TOPIC_NEIGHBOR_SEC:
-            sig |= _content_tokens(text)
-    if len(sig) < 2:
-        return cues[idx][0]
-    floor = start_sec - lookback
-    if prev_start is not None:
-        floor = max(floor, float(prev_start) + 1.0)
-    earliest = idx
-    gaps = 0
-    for i in range(idx - 1, -1, -1):
-        ts, text = cues[i]
-        if ts < floor:
-            break
-        tok = _content_tokens(text)
-        if not tok:
-            continue
-        if tok & sig:
-            earliest = i
-            gaps = 0
-        else:
-            gaps += 1
-            if gaps >= 2:
-                break
-    return cues[earliest][0]
 
 
 def _snap_to_cues(start_sec: float, cue_starts: list[float]) -> float:
