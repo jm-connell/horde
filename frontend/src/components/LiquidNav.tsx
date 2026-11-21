@@ -9,12 +9,10 @@ import {
 import { useSettings, type NavIndicator } from "../hooks/useSettings";
 import { JELLY_MS, jellyKeyframes, type PillRect } from "./liquidJelly";
 import {
-  BAR_BASE,
   CORNERS,
   CORNER_ARM,
   DOT_EASE,
   DOT_SIZE,
-  barTransform,
   cornerKeyframes,
   cornerTransform,
   dotKeyframes,
@@ -22,8 +20,6 @@ import {
   dotTransform,
   focusCorners,
   isStackedRow,
-  stretchBar,
-  stretchKeyframes,
   type Point,
 } from "./navIndicatorMotion";
 import { EASE_FLUID } from "../motion";
@@ -32,8 +28,8 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** The new (preview) styles, which move by transform (navIndicatorMotion). */
-const TRANSFORM_STYLES = new Set<NavIndicator>(["stretch", "dot", "focus"]);
+/** The styles that move by transform (navIndicatorMotion). */
+const TRANSFORM_STYLES = new Set<NavIndicator>(["dot", "focus"]);
 /** Each Focus corner's two borders, in `CORNERS` order. */
 const CORNER_CLASSES = [
   "border-l-2 border-t-2 rounded-tl-[3px]",
@@ -50,12 +46,12 @@ function currentMatrix(el: Element): DOMMatrixReadOnly {
 }
 
 /**
- * Sliding nav indicator (liquid / underline / fade, and the new stretch /
- * dot / focus) that follows the child marked with data-liquid-active="true".
+ * Sliding nav indicator (liquid / underline / fade / dot / focus) that
+ * follows the child marked with data-liquid-active="true".
  *
  * Liquid mode: the pill pours into the clicked item like liquid (see
- * `jellyKeyframes`); a click mid-move carries on from where it is. The new
- * styles do the same with transforms (`navIndicatorMotion`).
+ * `jellyKeyframes`); a click mid-move carries on from where it is. Dot and
+ * Focus do the same with transforms (`navIndicatorMotion`).
  */
 export default function LiquidNav({
   children,
@@ -156,10 +152,6 @@ export default function LiquidNav({
       const timing = { duration: TRANSFORM_MS, easing: EASE_FLUID };
       moves.current = pieces.map((piece, i) => {
         const at: Point = { x: from[i].m41, y: from[i].m42 };
-        if (style === "stretch") {
-          const bar = { ...at, w: from[i].a * BAR_BASE };
-          return piece.animate(stretchKeyframes(bar, stretchBar(next)), timing);
-        }
         if (style === "dot") {
           return piece.animate(dotKeyframes(at, dotPoint(next, nextStacked)), {
             ...timing,
@@ -228,26 +220,16 @@ export default function LiquidNav({
       role={role}
       aria-label={ariaLabel}
     >
-      {pill && (style === "stretch" || style === "dot") && (
+      {pill && style === "dot" && (
         <span
           ref={pillRef}
           aria-hidden
-          className={`pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-accent ${
-            style === "stretch" ? "origin-top-left" : ""
-          }`}
-          style={
-            style === "stretch"
-              ? {
-                  width: BAR_BASE,
-                  height: 3,
-                  transform: barTransform(stretchBar(pill)),
-                }
-              : {
-                  width: DOT_SIZE,
-                  height: DOT_SIZE,
-                  transform: dotTransform(dotPoint(pill, stacked)),
-                }
-          }
+          className="pointer-events-none absolute left-0 top-0 z-0 rounded-full bg-accent"
+          style={{
+            width: DOT_SIZE,
+            height: DOT_SIZE,
+            transform: dotTransform(dotPoint(pill, stacked)),
+          }}
         />
       )}
       {pill &&

@@ -4,14 +4,14 @@ import { rgba, type Rgb } from "./shared";
 export type GlowShape = "soft" | "core" | "disc";
 
 const STOPS: Record<GlowShape, [number, number][]> = {
-  // A wide, even bloom (bokeh, nebula clouds).
+  // A wide, even bloom (nebula clouds).
   soft: [
     [0, 1],
     [0.3, 0.6],
     [0.65, 0.18],
     [1, 0],
   ],
-  // A bright point inside a faint halo (stars, fireflies, motes).
+  // A bright point inside a faint halo (a galaxy's core).
   core: [
     [0, 1],
     [0.1, 0.85],

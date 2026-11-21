@@ -1,50 +1,56 @@
-import { fbm2 } from "./noise";
+import { createFastNoise } from "./fastNoise";
 import { createCanvasLoop, rgba, type EffectController } from "./shared";
 
 export function createWarpGridEffect(
   canvas: HTMLCanvasElement
 ): EffectController {
-  return createCanvasLoop(canvas, ({ ctx, width, height, accent, time }) => {
-    ctx.clearRect(0, 0, width, height);
+  const field = createFastNoise();
+  let points = new Float32Array(0);
 
-    const spacing = Math.max(28, Math.min(48, Math.floor(width / 36)));
-    const amp = spacing * 0.35;
-    const cols = Math.ceil(width / spacing) + 2;
-    const rows = Math.ceil(height / spacing) + 2;
+  return createCanvasLoop(
+    canvas,
+    ({ ctx, width, height, accent, time, size, options }) => {
+      ctx.clearRect(0, 0, width, height);
 
-    ctx.strokeStyle = rgba(accent, 0.18);
-    ctx.lineWidth = 1;
-
-    for (let row = 0; row < rows; row++) {
-      ctx.beginPath();
-      for (let col = 0; col < cols; col++) {
-        const bx = col * spacing;
-        const by = row * spacing;
-        const n = fbm2(col * 0.18 + time * 0.08, row * 0.18, 3, 2);
-        const x = bx + (n - 0.5) * amp * 2;
-        const y =
-          by +
-          (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
-        if (col === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+      const spacing = Math.max(28, Math.min(48, Math.floor(width / 36))) * size;
+      const amp = spacing * 0.7 * options.warp;
+      // One cell beyond every edge, so the grid's own border never shows.
+      const cols = Math.ceil(width / spacing) + 3;
+      const rows = Math.ceil(height / spacing) + 3;
+      if (points.length < cols * rows * 2) {
+        points = new Float32Array(cols * rows * 2);
       }
-      ctx.stroke();
-    }
 
-    for (let col = 0; col < cols; col++) {
+      // Where each crossing has drifted to; both sets of lines share them.
+      const drift = time * 0.08;
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const i = (row * cols + col) * 2;
+          const nx = field.fbm(col * 0.18 + drift, row * 0.18, 3);
+          const ny = field.fbm(row * 0.18 + 31.7, col * 0.18 + drift + 57.3, 3);
+          points[i] = (col - 1) * spacing + (nx - 0.5) * amp;
+          points[i + 1] = (row - 1) * spacing + (ny - 0.5) * amp;
+        }
+      }
+
+      ctx.strokeStyle = rgba(accent, 0.18);
+      ctx.lineWidth = 1;
       ctx.beginPath();
       for (let row = 0; row < rows; row++) {
-        const bx = col * spacing;
-        const by = row * spacing;
-        const n = fbm2(col * 0.18 + time * 0.08, row * 0.18, 3, 2);
-        const x = bx + (n - 0.5) * amp * 2;
-        const y =
-          by +
-          (fbm2(row * 0.18, col * 0.18 + time * 0.08, 3, 9) - 0.5) * amp * 2;
-        if (row === 0) ctx.moveTo(x, y);
-        else ctx.lineTo(x, y);
+        for (let col = 0; col < cols; col++) {
+          const i = (row * cols + col) * 2;
+          if (col === 0) ctx.moveTo(points[i], points[i + 1]);
+          else ctx.lineTo(points[i], points[i + 1]);
+        }
+      }
+      for (let col = 0; col < cols; col++) {
+        for (let row = 0; row < rows; row++) {
+          const i = (row * cols + col) * 2;
+          if (row === 0) ctx.moveTo(points[i], points[i + 1]);
+          else ctx.lineTo(points[i], points[i + 1]);
+        }
       }
       ctx.stroke();
     }
-  });
+  );
 }

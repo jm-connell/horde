@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  BAR_BASE,
   CORNERS,
   DOT_SIZE,
   cornerKeyframes,
@@ -8,8 +7,6 @@ import {
   dotPoint,
   focusCorners,
   isStackedRow,
-  stretchBar,
-  stretchKeyframes,
 } from "./navIndicatorMotion";
 
 /** translate(x, y) and optional scale(sx, sy) out of a keyframe's transform. */
@@ -26,41 +23,6 @@ function parse(k: Keyframe) {
 
 const home = { left: 0, top: 0, width: 80, height: 36 };
 const settings = { left: 200, top: 0, width: 100, height: 36 };
-
-describe("stretchKeyframes", () => {
-  it("reaches the new item with its leading end first, thinning as it goes", () => {
-    const frames = stretchKeyframes(stretchBar(home), stretchBar(settings));
-    const reach = parse(frames[1]);
-    const to = stretchBar(settings);
-    // The tail has barely left; the head is already at the far edge.
-    expect(reach.x).toBeLessThan(to.x / 2);
-    expect(reach.x + reach.sx * BAR_BASE).toBeCloseTo(to.x + to.w);
-    expect(reach.sy).toBeLessThan(1);
-    expect(parse(frames[frames.length - 1])).toEqual({
-      x: to.x,
-      y: to.y,
-      sx: to.w / BAR_BASE,
-      sy: 1,
-    });
-  });
-
-  it("leads with its left end when it moves left", () => {
-    const frames = stretchKeyframes(stretchBar(settings), stretchBar(home));
-    const reach = parse(frames[1]);
-    expect(reach.x).toBe(stretchBar(home).x);
-    // The right end is still near where it started.
-    expect(reach.x + reach.sx * BAR_BASE).toBeGreaterThan(
-      stretchBar(settings).x
-    );
-  });
-
-  it("just glides between stacked items", () => {
-    const below = { ...home, top: 48 };
-    expect(stretchKeyframes(stretchBar(home), stretchBar(below))).toHaveLength(
-      2
-    );
-  });
-});
 
 describe("dotKeyframes", () => {
   it("stretches along the way and lands round", () => {

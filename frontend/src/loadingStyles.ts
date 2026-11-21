@@ -1,51 +1,64 @@
 export const LOADING_STYLES = [
-  "dots",
   "spinner",
-  "bar",
+  "orbit",
+  "helix",
+  "infinity",
+  "sweep",
+  "spokes",
+  "dots",
   "pulse",
   "wave",
-  "comet",
-  "tiles",
-  "petal",
   "cube",
   "spiral",
   "swarm",
   "leapfrog",
-  "plus",
-  "ringwalk",
-  // New (preview) styles, listed under "New" in Settings.
-  "arc",
-  "orbit",
-  "helix",
-  "infinity",
-  "cradle",
-  "spokes",
-  "sweep",
-  "clapper",
-  "play",
 ] as const;
 
 export type LoadingStyle = (typeof LOADING_STYLES)[number];
 
+/**
+ * Every mark moves only by transform and opacity, so it keeps its pace while
+ * the page is busy.
+ */
 export const LOADING_STYLE_OPTIONS: {
   value: LoadingStyle;
   label: string;
   description: string;
 }[] = [
   {
+    value: "spinner",
+    label: "Spinner",
+    description: "An arc that grows and shrinks as it turns",
+  },
+  {
+    value: "orbit",
+    label: "Orbit",
+    description: "Two moons circling a planet, seen at a tilt",
+  },
+  {
+    value: "helix",
+    label: "Helix",
+    description: "A double strand twisting in place",
+  },
+  {
+    value: "infinity",
+    label: "Infinity",
+    description: "A comet looping a figure eight",
+  },
+  {
+    value: "sweep",
+    label: "Sweep",
+    description: "Two segments racing along a track",
+  },
+  {
+    value: "spokes",
+    label: "Spokes",
+    description: "Fading spokes ticking round",
+  },
+  {
     value: "dots",
     label: "Dots",
     description: "Three beads bouncing in sequence",
-  },
-  {
-    value: "spinner",
-    label: "Spinner",
-    description: "Classic rotating ring",
-  },
-  {
-    value: "bar",
-    label: "Bar",
-    description: "Indeterminate sweep on a track",
   },
   {
     value: "pulse",
@@ -56,21 +69,6 @@ export const LOADING_STYLE_OPTIONS: {
     value: "wave",
     label: "Wave",
     description: "Equalizer bars",
-  },
-  {
-    value: "comet",
-    label: "Comet",
-    description: "A bright head with a fading tail",
-  },
-  {
-    value: "tiles",
-    label: "Tiles",
-    description: "Squares lighting up in a spiral",
-  },
-  {
-    value: "petal",
-    label: "Petal",
-    description: "A ring of beads blooming around the center",
   },
   {
     value: "cube",
@@ -92,76 +90,6 @@ export const LOADING_STYLE_OPTIONS: {
     label: "Leapfrog",
     description: "Beads hopping over each other",
   },
-  {
-    value: "plus",
-    label: "Plus",
-    description: "Arms fold in, then the plus turns",
-  },
-  {
-    value: "ringwalk",
-    label: "Ring walk",
-    description: "A pentagon stepping on a spinning ring",
-  },
-];
-
-/**
- * New (preview) styles, shown in their own "New" group. Each moves only by
- * transform and opacity, so it keeps its pace while the page is busy.
- */
-export const NEW_LOADING_STYLE_OPTIONS: {
-  value: LoadingStyle;
-  label: string;
-  description: string;
-  /** The existing style this one reworks. */
-  reworks?: string;
-}[] = [
-  {
-    value: "arc",
-    label: "Arc",
-    description: "An arc that grows and shrinks as it turns",
-    reworks: "Spinner",
-  },
-  {
-    value: "orbit",
-    label: "Orbit",
-    description: "Two moons circling a planet, seen at a tilt",
-  },
-  {
-    value: "helix",
-    label: "Helix",
-    description: "A double strand twisting in place",
-  },
-  {
-    value: "infinity",
-    label: "Infinity",
-    description: "A comet looping a figure eight",
-  },
-  {
-    value: "cradle",
-    label: "Cradle",
-    description: "Newton's cradle, swinging end to end",
-  },
-  {
-    value: "spokes",
-    label: "Spokes",
-    description: "Fading spokes ticking round, like a system spinner",
-  },
-  {
-    value: "sweep",
-    label: "Sweep",
-    description: "Two segments racing along a track",
-    reworks: "Bar",
-  },
-  {
-    value: "clapper",
-    label: "Clapper",
-    description: "A clapperboard snapping shut",
-  },
-  {
-    value: "play",
-    label: "Play",
-    description: "A glint circling a play button",
-  },
 ];
 
 export const LOADING_STYLE_SEARCH_KEYWORDS = [
@@ -172,7 +100,7 @@ export const LOADING_STYLE_SEARCH_KEYWORDS = [
     o.label.toLowerCase(),
     o.description.toLowerCase(),
   ]),
-  "equalizer sonar radar bloom galaxy fireflies leapfrog plus ringwalk",
+  "equalizer sonar radar galaxy fireflies leapfrog",
 ].join(" ");
 
 export function isLoadingStyle(value: unknown): value is LoadingStyle {
@@ -180,4 +108,15 @@ export function isLoadingStyle(value: unknown): value is LoadingStyle {
     typeof value === "string" &&
     (LOADING_STYLES as readonly string[]).includes(value)
   );
+}
+
+/**
+ * Map any stored value to a kept style: `arc` became `spinner`, `bar` became
+ * `sweep`, and any other removed or unknown value falls back to `dots`.
+ */
+export function normalizeLoadingStyle(value: unknown): LoadingStyle {
+  if (isLoadingStyle(value)) return value;
+  if (value === "arc") return "spinner";
+  if (value === "bar") return "sweep";
+  return "dots";
 }

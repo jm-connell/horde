@@ -8,7 +8,12 @@ import {
 import { normalizeHotkeyOverrides } from "../../hotkeys";
 import { PRESET_ORDER } from "../../presets";
 import { normalizeTabBarItems } from "../../tabBar";
-import { isLoadingStyle } from "../../loadingStyles";
+import {
+  EFFECT_CONTROLS,
+  effectOptions,
+  type AnimatedEffect,
+} from "../../effects/controls";
+import { normalizeLoadingStyle } from "../../loadingStyles";
 import {
   normalizeSponsorBlockCategories,
   normalizeSponsorBlockSkipMode,
@@ -16,6 +21,7 @@ import {
 import { DEFAULTS, DEFAULT_CUSTOM_COLORS, PANEL_BLUR_MAX_PX } from "./defaults";
 import type {
   BackgroundEffect,
+  BackgroundEffectOptions,
   CustomColors,
   CustomThemePreset,
   DownloadVideoCodec,
@@ -56,32 +62,16 @@ const VALID_THEMES = new Set<string>([
 const VALID_BACKGROUND_EFFECTS = new Set<string>([
   "none",
   "custom-image",
-  "rain",
-  "constellation",
-  "perlin-flow",
-  "matrix",
-  "snow",
-  "fireflies",
-  "dust",
-  "bokeh",
-  "warp-grid",
-  "scanlines",
-  "grain",
-  "modern-grid",
-  "flowing-gradient",
-  "lightspeed",
-  "galaxy",
-  "northern-lights",
-  "silk",
-  "mesh-gradient",
-  "spiral-galaxy",
-  "plexus",
-  "firefly-sync",
-  "snowfall",
-  "contours",
-  "projector",
-  "film",
-  "halftone",
+  ...Object.keys(EFFECT_CONTROLS),
+]);
+
+/** Backgrounds that were removed, and the kept one closest to each. */
+const REPLACED_BACKGROUND_EFFECTS = new Map<string, BackgroundEffect>([
+  ["aurora", "mesh-gradient"],
+  ["flowing-gradient", "mesh-gradient"],
+  ["snow", "snowfall"],
+  ["galaxy", "spiral-galaxy"],
+  ["plexus", "constellation"],
 ]);
 
 const VALID_FLOWING_PRESETS = new Set<string>([
@@ -92,20 +82,12 @@ const VALID_FLOWING_PRESETS = new Set<string>([
   "mono",
 ]);
 
-const VALID_HOVER_MOTION = new Set<string>([
-  "off",
-  "subtle",
-  "lift",
-  "glow",
-  "tilt",
-  "zoom",
-]);
+const VALID_HOVER_MOTION = new Set<string>(["off", "subtle", "lift", "glow"]);
 const VALID_NAV_INDICATOR = new Set<string>([
   "none",
   "liquid",
   "underline",
   "fade",
-  "stretch",
   "dot",
   "focus",
 ]);
@@ -120,11 +102,27 @@ function normalizeTheme(theme: string | undefined): Theme {
 function normalizeBackgroundEffect(
   effect: string | undefined
 ): BackgroundEffect {
-  if (effect === "aurora") return "flowing-gradient";
   if (effect && VALID_BACKGROUND_EFFECTS.has(effect)) {
     return effect as BackgroundEffect;
   }
-  return DEFAULTS.backgroundEffect;
+  // A removed effect with no close relative falls back to no animation.
+  return (
+    (effect && REPLACED_BACKGROUND_EFFECTS.get(effect)) ||
+    DEFAULTS.backgroundEffect
+  );
+}
+
+/** Keep the kept effects' slider values, clamped; drop everything else. */
+function normalizeBackgroundEffectOptions(
+  value: unknown
+): BackgroundEffectOptions {
+  if (!value || typeof value !== "object") return {};
+  const stored = value as Record<string, unknown>;
+  const out: BackgroundEffectOptions = {};
+  for (const effect of Object.keys(EFFECT_CONTROLS) as AnimatedEffect[]) {
+    if (effect in stored) out[effect] = effectOptions(effect, stored[effect]);
+  }
+  return out;
 }
 
 function normalizeHoldPlaybackRate(value: unknown): number {
@@ -231,6 +229,7 @@ function normalizeHoverMotion(value: unknown): HoverMotion {
   if (typeof value === "string" && VALID_HOVER_MOTION.has(value)) {
     return value as HoverMotion;
   }
+  // The removed tilt and zoom kept Subtle's brightness; so does the default.
   return DEFAULTS.hoverMotion;
 }
 
@@ -241,6 +240,8 @@ function normalizeNavIndicator(
   if (typeof value === "string" && VALID_NAV_INDICATOR.has(value)) {
     return value as NavIndicator;
   }
+  // Stretch was a rework of the underline bar.
+  if (value === "stretch") return "underline";
   // Migrate old liquidNav boolean
   if (typeof legacyLiquid === "boolean") {
     return legacyLiquid ? "liquid" : "none";
@@ -355,6 +356,9 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
         r.backgroundEffectColorMode
       ),
       backgroundEffectColor: normalizeBackgroundColor(r.backgroundEffectColor),
+      backgroundEffectOptions: normalizeBackgroundEffectOptions(
+        r.backgroundEffectOptions
+      ),
       flowingGradientPreset: normalizeFlowingPreset(r.flowingGradientPreset),
       customBackgroundId: normalizeCustomBgId(r.customBackgroundId),
       customBackgroundMime:
@@ -391,9 +395,7 @@ function normalizeCustomThemes(value: unknown): CustomThemePreset[] {
         r.translucentPanelLegibility,
         DEFAULTS.translucentPanelLegibility
       ),
-      loadingStyle: isLoadingStyle(r.loadingStyle)
-        ? r.loadingStyle
-        : DEFAULTS.loadingStyle,
+      loadingStyle: normalizeLoadingStyle(r.loadingStyle),
       fontSize: normalizeFontSize(r.fontSize),
       uiFont:
         typeof r.uiFont === "string" &&
@@ -452,6 +454,9 @@ export function normalizeSettings(
     backgroundEffectColor: normalizeBackgroundColor(
       parsed.backgroundEffectColor
     ),
+    backgroundEffectOptions: normalizeBackgroundEffectOptions(
+      parsed.backgroundEffectOptions
+    ),
     flowingGradientPreset: normalizeFlowingPreset(parsed.flowingGradientPreset),
     customBackgroundId: normalizeCustomBgId(parsed.customBackgroundId),
     customBackgroundMime:
@@ -474,6 +479,7 @@ export function normalizeSettings(
       (parsed as { liquidNav?: boolean }).liquidNav
     ),
     hoverMotion: normalizeHoverMotion(parsed.hoverMotion),
+    loadingStyle: normalizeLoadingStyle(parsed.loadingStyle),
     translucentPanelStrength: panel.translucentPanelStrength,
     translucentPanelBlur: panel.translucentPanelBlur,
     translucentPanelTintEnabled: normalizeBool(

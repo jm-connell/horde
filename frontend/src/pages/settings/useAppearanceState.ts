@@ -120,6 +120,16 @@ export function useAppearanceState() {
       backgroundEffectSize: current.backgroundEffectSize,
       backgroundEffectColorMode: current.backgroundEffectColorMode,
       backgroundEffectColor: current.backgroundEffectColor,
+      // Only the saved background's own sliders: the others are not part of
+      // this look.
+      backgroundEffectOptions:
+        current.backgroundEffect in current.backgroundEffectOptions
+          ? {
+              [current.backgroundEffect]: {
+                ...current.backgroundEffectOptions[current.backgroundEffect],
+              },
+            }
+          : {},
       flowingGradientPreset: current.flowingGradientPreset,
       customBackgroundId: current.customBackgroundId,
       customBackgroundMime: current.customBackgroundMime,
@@ -189,6 +199,10 @@ export function useAppearanceState() {
       backgroundEffectSize: preset.backgroundEffectSize,
       backgroundEffectColorMode: preset.backgroundEffectColorMode,
       backgroundEffectColor: preset.backgroundEffectColor,
+      backgroundEffectOptions: {
+        ...settings.backgroundEffectOptions,
+        ...preset.backgroundEffectOptions,
+      },
       flowingGradientPreset: preset.flowingGradientPreset,
       customBackgroundId: preset.customBackgroundId,
       customBackgroundMime: preset.customBackgroundMime,

@@ -1,15 +1,26 @@
-import { createCanvasLoop, rand, rgba, type EffectController } from "./shared";
+import {
+  createCanvasLoop,
+  rand,
+  resizePool,
+  rgba,
+  type EffectController,
+} from "./shared";
 
 interface Column {
-  x: number;
   y: number;
   speed: number;
-  chars: string[];
+  /** Glyphs in the trail before the Trail length slider scales it. */
   trail: number;
+  chars: string[];
 }
 
 const GLYPHS =
   "ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ0123456789ABCDEF<>{}[]/*+#";
+const BASE_FONT = 14;
+const MIN_TRAIL = 8;
+const MAX_TRAIL = 22;
+/** Longest trail the slider can ask for: every column holds this many. */
+const MAX_GLYPHS = MAX_TRAIL * 2;
 
 function randomGlyph(): string {
   return GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
@@ -18,66 +29,48 @@ function randomGlyph(): string {
 export function createMatrixEffect(
   canvas: HTMLCanvasElement
 ): EffectController {
-  let columns: Column[] = [];
-  let lastW = 0;
-  let lastH = 0;
-  let lastSize = 0;
-  const baseFont = 14;
-
-  const rebuild = (w: number, h: number, size: number) => {
-    const step = Math.max(10, baseFont / Math.sqrt(size));
-    const count = Math.floor(w / step);
-    columns = Array.from({ length: count }, (_, i) => {
-      const trail = Math.floor(rand(8, 22) * size);
-      return {
-        x: i * step,
-        y: rand(-h, 0),
-        speed: rand(40, 120),
-        chars: Array.from({ length: Math.max(4, trail) }, randomGlyph),
-        trail: Math.max(4, trail),
-      };
-    });
-  };
+  const columns: Column[] = [];
 
   return createCanvasLoop(
     canvas,
-    ({ ctx, width, height, accent, dt, size }) => {
-      if (
-        width !== lastW ||
-        height !== lastH ||
-        Math.abs(size - lastSize) > 0.05
-      ) {
-        lastW = width;
-        lastH = height;
-        lastSize = size;
-        rebuild(width, height, size);
-      }
+    ({ ctx, width, height, accent, dt, size, options }) => {
+      // Size is the glyph size; columns sit one glyph apart, so a new size
+      // spreads the same columns out instead of restarting them.
+      const fs = BASE_FONT * Math.sqrt(size);
+      resizePool(columns, Math.ceil(width / fs), () => ({
+        y: rand(-height, height),
+        speed: rand(40, 120),
+        trail: Math.floor(rand(MIN_TRAIL, MAX_TRAIL)),
+        chars: Array.from({ length: MAX_GLYPHS }, randomGlyph),
+      }));
 
       ctx.clearRect(0, 0, width, height);
-      const fs = baseFont * Math.sqrt(size);
       ctx.font = `${fs}px ui-monospace, SFMono-Regular, Menlo, monospace`;
       ctx.textBaseline = "top";
+      ctx.fillStyle = rgba(accent, 1);
 
-      for (const col of columns) {
+      for (let c = 0; c < columns.length; c++) {
+        const col = columns[c];
+        const trail = Math.round(col.trail * options.trail);
         col.y += col.speed * dt;
-        if (col.y - col.trail * fs > height) {
-          col.y = rand(-height * 0.3, 0);
+        if (col.y - trail * fs > height) {
+          // Start again above the top edge.
+          col.y = -fs - rand(0, height * 0.3);
           col.speed = rand(40, 120);
-          col.chars = Array.from({ length: col.trail }, randomGlyph);
         }
 
-        for (let i = 0; i < col.chars.length; i++) {
+        const x = c * fs;
+        for (let i = 0; i < trail; i++) {
           if (Math.random() < 0.02) col.chars[i] = randomGlyph();
           const gy = col.y - i * fs;
           if (gy < -fs || gy > height) continue;
-          const head = i === 0;
-          ctx.fillStyle = rgba(
-            accent,
-            head ? 0.85 : Math.max(0.08, 0.45 - i * 0.03)
-          );
-          ctx.fillText(col.chars[i], col.x, gy);
+          // A bright head, then a tail that fades out to nothing.
+          const left = 1 - i / trail;
+          ctx.globalAlpha = i === 0 ? 0.85 : 0.5 * left * Math.sqrt(left);
+          ctx.fillText(col.chars[i], x, gy);
         }
       }
+      ctx.globalAlpha = 1;
     }
   );
 }

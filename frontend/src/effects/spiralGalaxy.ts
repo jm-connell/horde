@@ -15,8 +15,6 @@ import { createSpriteCache } from "./sprites";
  * turns (the density-wave picture, rather than arms that wind up).
  */
 
-/** How flat the disc looks: 1 is face on. */
-const INCLINATION = 0.46;
 /** The disc's slant on screen, radians. */
 const SLANT = -0.36;
 /** Radians each ellipse turns from the core to the rim. */
@@ -24,6 +22,7 @@ const TWIST = 3.4;
 /** How fast the arm pattern itself turns, radians per second. */
 const PATTERN_SPEED = 0.006;
 
+/** An ellipse's half axes are fractions of the galaxy's radius. */
 interface Orbiter {
   a: number;
   b: number;
@@ -38,6 +37,7 @@ interface Star extends Orbiter {
 }
 
 interface Cloud extends Orbiter {
+  /** As a fraction of the galaxy's radius. */
   radius: number;
   alpha: number;
   tone: number;
@@ -82,14 +82,13 @@ function inArm(phase: number): number {
   return 0.2 + 0.8 * c * c;
 }
 
-function orbit(r: number, R: number, phase: number): Orbiter {
+function orbit(r: number, phase: number): Orbiter {
   // Rounder towards the rim; inner orbits turn faster. Each ellipse turns
   // back against the rotation the further out it is, so the arms trail.
-  const a = r * R;
   const tilt = -r * TWIST;
   return {
-    a,
-    b: a * (0.5 + 0.36 * Math.min(1, r)),
+    a: r,
+    b: r * (0.5 + 0.36 * Math.min(1, r)),
     cosT: Math.cos(tilt),
     sinT: Math.sin(tilt),
     phase,
@@ -107,20 +106,21 @@ export function createSpiralGalaxyEffect(
   let field: FieldStar[] = [];
   let lastW = 0;
   let lastH = 0;
-  let lastSize = 0;
   const sprite = createSpriteCache();
 
-  const rebuild = (w: number, h: number, size: number) => {
-    const R = Math.hypot(w, h) * 0.3 * size;
+  // Orbits are in units of the galaxy's radius, so Size only scales the
+  // drawing. Enough stars are made for the largest size; a frame draws the
+  // share its size calls for.
+  const rebuild = (w: number, h: number) => {
     const area = Math.min(1.5, Math.max(0.4, (w * h) / (1920 * 1080)));
-    const discCount = Math.round(3600 * area * Math.sqrt(size));
+    const discCount = Math.round(3600 * area * Math.SQRT2);
     buckets = Array.from({ length: 3 * LEVELS.length }, () => []);
     const add = (tone: number, star: Star) =>
       buckets[tone * LEVELS.length + pickLevel()].push(star);
 
     for (let i = 0; i < discCount; i++) {
       const r = discRadius();
-      const star = orbit(r, R, Math.random() * Math.PI * 2);
+      const star = orbit(r, Math.random() * Math.PI * 2);
       // Stars wander a little off their ellipse, or the arms look drawn.
       const scatter = 1 + (Math.random() - 0.5) * 0.12;
       add(Math.random() < 0.16 ? 2 : 1, {
@@ -134,15 +134,15 @@ export function createSpiralGalaxyEffect(
     const bulgeCount = Math.round(discCount * 0.24);
     for (let i = 0; i < bulgeCount; i++) {
       const r = Math.abs(rand(-1, 1) * rand(0, 1)) * 0.16;
-      const star = orbit(r, R, Math.random() * Math.PI * 2);
+      const star = orbit(r, Math.random() * Math.PI * 2);
       add(0, { ...star, b: star.a * rand(0.8, 1), size: 1.3 });
     }
 
     clouds = Array.from({ length: Math.round(90 * area) }, () => {
       const r = rand(0.18, 1.05);
       return {
-        ...orbit(r, R, Math.random() * Math.PI * 2),
-        radius: rand(0.05, 0.13) * R,
+        ...orbit(r, Math.random() * Math.PI * 2),
+        radius: rand(0.05, 0.13),
         alpha: rand(0.08, 0.2),
         tone: Math.floor(Math.random() * 3),
       };
@@ -161,22 +161,19 @@ export function createSpiralGalaxyEffect(
 
   return createCanvasLoop(
     canvas,
-    ({ ctx, width, height, accent, time, dt, size, isLight }) => {
-      if (
-        width !== lastW ||
-        height !== lastH ||
-        Math.abs(size - lastSize) > 0.05
-      ) {
+    ({ ctx, width, height, accent, time, dt, size, options, isLight }) => {
+      if (width !== lastW || height !== lastH) {
         lastW = width;
         lastH = height;
-        lastSize = size;
-        rebuild(width, height, size);
+        rebuild(width, height);
       }
       ctx.clearRect(0, 0, width, height);
 
       const cx = width * 0.5;
       const cy = height * 0.5;
       const R = Math.hypot(width, height) * 0.3 * size;
+      // How flat the disc looks: 1 is face on.
+      const inclination = Math.cos((options.tilt * Math.PI) / 180);
       pattern += dt * PATTERN_SPEED;
       const cosP = Math.cos(pattern);
       const sinP = Math.sin(pattern);
@@ -189,13 +186,13 @@ export function createSpiralGalaxyEffect(
       let sy = 0;
       const place = (o: Orbiter) => {
         o.phase += o.omega * dt;
-        const ex = o.a * Math.cos(o.phase);
-        const ey = o.b * Math.sin(o.phase);
+        const ex = o.a * R * Math.cos(o.phase);
+        const ey = o.b * R * Math.sin(o.phase);
         // Turn the ellipse (its own twist plus the pattern), flatten, slant.
         const ct = o.cosT * cosP - o.sinT * sinP;
         const st = o.sinT * cosP + o.cosT * sinP;
         const x = ex * ct - ey * st;
-        const y = (ex * st + ey * ct) * INCLINATION;
+        const y = (ex * st + ey * ct) * inclination;
         sx = cx + x * cosS - y * sinS;
         sy = cy + x * sinS + y * cosS;
       };
@@ -228,13 +225,13 @@ export function createSpiralGalaxyEffect(
         place(c);
         // Gas lights up as it passes through an arm (its orbit's ends).
         ctx.globalAlpha = c.alpha * dim * inArm(c.phase);
-        const r = c.radius;
+        const r = c.radius * R;
         ctx.drawImage(sprite(cloudTones[c.tone]), sx - r, sy - r, r * 2, r * 2);
       }
       ctx.save();
       ctx.translate(cx, cy);
       ctx.rotate(SLANT);
-      ctx.scale(1, INCLINATION * 1.25);
+      ctx.scale(1, Math.min(1, inclination * 1.25));
       const halo = R * 0.42;
       ctx.globalAlpha = 0.5 * dim;
       ctx.drawImage(sprite(tones[0]), -halo, -halo, halo * 2, halo * 2);
@@ -244,6 +241,7 @@ export function createSpiralGalaxyEffect(
       ctx.restore();
       ctx.globalAlpha = 1;
 
+      const share = Math.sqrt(size) / Math.SQRT2;
       // The stars themselves, one fill style per bucket. The young (accent)
       // stars shine brightest in the arms, where they are born.
       for (let b = 0; b < buckets.length; b++) {
@@ -251,7 +249,10 @@ export function createSpiralGalaxyEffect(
         const level = LEVELS[b % LEVELS.length];
         const young = tone === 2;
         ctx.fillStyle = rgba(tones[tone], young ? 1 : level * dim);
-        for (const s of buckets[b]) {
+        const bucket = buckets[b];
+        const shown = Math.ceil(bucket.length * share);
+        for (let i = 0; i < shown; i++) {
+          const s = bucket[i];
           place(s);
           if (young) ctx.globalAlpha = level * dim * inArm(s.phase);
           ctx.fillRect(sx, sy, s.size, s.size);

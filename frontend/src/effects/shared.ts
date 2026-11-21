@@ -17,6 +17,8 @@ export interface EffectFrame {
   speed: number;
   /** Particle density / scale multiplier (0.5–2). */
   size: number;
+  /** The effect's own slider values, by key (see `controls.ts`). */
+  options: Record<string, number>;
 }
 
 export interface EffectContext extends EffectFrame {
@@ -32,6 +34,7 @@ export interface EffectController {
   setSpeed: (speed: number) => void;
   setColor: (color: Rgb | null) => void;
   setSize: (size: number) => void;
+  setOptions: (options: Record<string, number>) => void;
 }
 
 export function readAccent(): Rgb {
@@ -81,6 +84,16 @@ export function rand(min: number, max: number): number {
   return min + Math.random() * (max - min);
 }
 
+/**
+ * Grow or shrink a particle list to `count` in place, keeping the particles
+ * it has, so dragging a slider thins or fills the screen instead of
+ * reshuffling it.
+ */
+export function resizePool<T>(list: T[], count: number, make: () => T): void {
+  if (list.length > count) list.length = count;
+  while (list.length < count) list.push(make());
+}
+
 const noopController: EffectController = {
   start: () => undefined,
   stop: () => undefined,
@@ -89,6 +102,7 @@ const noopController: EffectController = {
   setSpeed: () => undefined,
   setColor: () => undefined,
   setSize: () => undefined,
+  setOptions: () => undefined,
 };
 
 /**
@@ -136,8 +150,8 @@ export function createCanvasLoop(
 
 /**
  * The frame loop behind every canvas effect: window sizing, the fps budget,
- * pausing (hidden tab, playback), and the opacity, speed, size and color the
- * settings push to it.
+ * pausing (hidden tab, playback), and the opacity, speed, size, color and
+ * per-effect options the settings push to it.
  */
 export function createEffectLoop(
   canvas: HTMLCanvasElement,
@@ -153,6 +167,7 @@ export function createEffectLoop(
   let opacity = 1;
   let speed = 1;
   let effectSize = 1;
+  let effectOptions: Record<string, number> = {};
   let customColor: Rgb | null = null;
   let cachedAccent = readAccent();
   let last = performance.now();
@@ -231,6 +246,7 @@ export function createEffectLoop(
       rawDt,
       speed,
       size: effectSize,
+      options: effectOptions,
     });
     raf = requestAnimationFrame(frame);
   };
@@ -284,6 +300,9 @@ export function createEffectLoop(
     },
     setSize(next: number) {
       effectSize = clamp(next, 0.5, 2);
+    },
+    setOptions(next: Record<string, number>) {
+      effectOptions = next;
     },
     setColor(color: Rgb | null) {
       customColor = color;

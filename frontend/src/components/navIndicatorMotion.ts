@@ -1,10 +1,9 @@
 import type { PillRect } from "./liquidJelly";
 
 /**
- * Geometry and keyframes for the new (preview) nav indicators: Stretch,
- * Dot and Focus. They move by transform only (the older styles animate
- * left and width), each from where it is on screen, so a click mid-move
- * carries on smoothly.
+ * Geometry and keyframes for the Dot and Focus nav indicators. They move
+ * by transform only (the other styles animate left and width), each from
+ * where it is on screen, so a click mid-move carries on smoothly.
  */
 
 export interface Point {
@@ -12,58 +11,16 @@ export interface Point {
   y: number;
 }
 
-/** A bar's left edge, top and width. */
-export interface Bar extends Point {
-  w: number;
-}
-
-/** The stretch bar's layout width; its transform scales it to `Bar.w`. */
-export const BAR_BASE = 100;
 export const DOT_SIZE = 5;
 /**
  * The dot travels on a strong ease-in-out: the house ease-out covers the
- * trip in its first few frames, so the stretch along the way never shows.
+ * trip in its first few frames, so the dot's stretch along the way never shows.
  */
 export const DOT_EASE = "cubic-bezier(0.77, 0, 0.175, 1)";
 /** Length of each Focus corner's arms. */
 export const CORNER_ARM = 7;
 /** How far the Focus corners overshoot before they lock on. */
 const LOCK_GAP = 3;
-
-/** Same place as the Underline bar: inset 8 px, 4 px above the bottom. */
-export function stretchBar(item: PillRect): Bar {
-  return {
-    x: item.left + 8,
-    y: item.top + item.height - 4,
-    w: Math.max(16, item.width - 16),
-  };
-}
-
-export function barTransform(bar: Bar, thin = 1): string {
-  return `translate(${bar.x}px, ${bar.y}px) scale(${bar.w / BAR_BASE}, ${thin})`;
-}
-
-/**
- * Sideways, the edge nearest the new item gets there first and the bar
- * thins as it stretches; then the tail catches up. Up or down (a stacked
- * menu) it just glides.
- */
-export function stretchKeyframes(from: Bar, to: Bar): Keyframe[] {
-  if (Math.abs(to.y - from.y) > Math.abs(to.x - from.x)) {
-    return [{ transform: barTransform(from) }, { transform: barTransform(to) }];
-  }
-  const fromEnd = from.x + from.w;
-  const toEnd = to.x + to.w;
-  const forward = to.x >= from.x;
-  const start = forward ? from.x + (to.x - from.x) * 0.1 : to.x;
-  const end = forward ? toEnd : fromEnd - (fromEnd - toEnd) * 0.1;
-  const reach: Bar = { x: start, y: to.y, w: Math.max(4, end - start) };
-  return [
-    { offset: 0, transform: barTransform(from) },
-    { offset: 0.4, transform: barTransform(reach, 0.7) },
-    { offset: 1, transform: barTransform(to) },
-  ];
-}
 
 /**
  * Centred under the item, a little above the bottom edge; in a stacked
