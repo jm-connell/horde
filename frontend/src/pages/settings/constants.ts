@@ -35,11 +35,11 @@ export const INPUT_KEY =
   "ui-panel w-48 max-w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-gray-100 outline-hidden focus:border-accent";
 
 export const CATALOG_INDEX_TIP =
-  "YouTube channels only. When you download from a channel or open its feed, Horde indexes that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full reindex re-walks every channel.";
+  "YouTube channels only. When you download from a channel or open its feed, Horde lists that channel’s uploads in the background (titles, then descriptions for the newest 200) so feed search works across the library without loading every page from YouTube. Non-YouTube sources are skipped. Settings → System → Refresh catalogs catches new channels and new uploads on ready catalogs; Full relist re-walks every channel. What Ask indexes (what channels say in their videos) is separate: Settings → Library → Ask.";
 export const STORAGE_LIMIT_TIP =
   "Downloads wait, and start again by themselves, while the library is at this size. A download that has already started is allowed to finish, so the library can pass the limit by about one video per download slot. Imports are not held. Downloads also wait when the disk is nearly full (less than HORDE_MIN_FREE_GB free, 2 GB by default).";
 export const CATALOG_MAX_TIP =
-  "How many of each YouTube channel’s uploads Horde indexes, newest first, for channel feed search and auto-download. It does not limit how many videos you can download. Values above 1000 can take a long time and may slow other YouTube work while indexing.";
+  "How many of each YouTube channel’s uploads Horde lists, newest first, for channel feed search and auto-download. It does not limit how many videos you can download or how many Ask indexes. Values above 1000 can take a long time and may slow other YouTube work while listing.";
 export const DIRECT_YOUTUBE_SEARCH_TIP =
   "When on, a channel page’s search box also asks YouTube for that channel’s uploads that are not already in the results. Search text is sent to YouTube. YouTube-linked channels only; the YT control in a channel’s search box can override this per channel.";
 export const DIRECT_YOUTUBE_SEARCH_CHANNEL_TIP =

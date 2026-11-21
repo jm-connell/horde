@@ -191,7 +191,7 @@ export default function StatusSection({ system }: { system: SystemState }) {
               </StatusRow>
               <StatusRow label="Catalog queue" tip={STATUS_TIPS.catalogQueue}>
                 {health.workers.catalog_queue_depth}
-                {health.workers.catalog_indexing ? " · indexing" : ""}
+                {health.workers.catalog_indexing ? " · listing" : ""}
               </StatusRow>
             </>
           )}

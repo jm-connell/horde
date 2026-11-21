@@ -287,8 +287,8 @@ export default function AiQueueStatus({
               aiStatus.queue_breakdown.embed_catalog_video
                 ? plural(
                     aiStatus.queue_breakdown.embed_catalog_video,
-                    "catalog index",
-                    "catalog indexes"
+                    "catalog embedding",
+                    "catalog embeddings"
                   )
                 : null,
               aiStatus.queue_breakdown.enrich_tags

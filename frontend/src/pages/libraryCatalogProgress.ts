@@ -2,7 +2,7 @@ export type CatalogProgress = {
   indexed: number;
   /** Full YouTube library size when known. */
   total: number | null | undefined;
-  /** Per-channel index cap from settings. */
+  /** Per-channel video list cap from settings. */
   maxVideos: number;
   complete: boolean;
   status: string | null;
@@ -28,7 +28,7 @@ export function formatSearchMatchCount(n: number): string {
 }
 
 export function feedSearchStatusLabel(phase: FeedSearchPhase): string | null {
-  if (phase === "keywords") return "Searching indexed catalog…";
+  if (phase === "keywords") return "Searching the video list…";
   if (phase === "related") return "Finding related matches…";
   return null;
 }
@@ -99,7 +99,7 @@ export function visibleMatchReasonTip(
   return formatMatchReasonTip(reason, query);
 }
 
-/** Indexed to the real library size or the max-videos cap — not still running. */
+/** Listed to the real library size or the max-videos cap — not still running. */
 export function isCatalogFullyIndexed(p: CatalogProgress): boolean {
   if (p.indexing || p.indexed <= 0) return false;
   return p.complete || p.indexed >= catalogDenominator(p);
@@ -110,25 +110,27 @@ export function formatCatalogProgress(p: CatalogProgress): string {
   const denom = catalogDenominator(p);
 
   if (indexing) {
-    return `Indexing… ${indexed}/${denom}`;
+    return `Listing… ${indexed}/${denom}`;
   }
   if (p.status === "error") {
-    return indexed > 0 ? `Index failed (${indexed}/${denom})` : "Index failed";
+    return indexed > 0
+      ? `Listing failed (${indexed}/${denom})`
+      : "Listing failed";
   }
   if (isCatalogFullyIndexed(p)) {
-    return `Fully indexed (${indexed})`;
+    return `All ${indexed} listed`;
   }
   if (indexed > 0) {
-    return `${indexed}/${denom} indexed`;
+    return `${indexed}/${denom} listed`;
   }
-  return "Not indexed";
+  return "Not listed";
 }
 
-/** Header control is only for kick-starting a missing, incomplete, or failed index. */
+/** The control is only for kick-starting a missing, incomplete, or failed list. */
 export function showChannelIndexButton(p: CatalogProgress | null): boolean {
   if (p == null || p.indexing) return false;
   return !isCatalogFullyIndexed(p);
 }
 
 export const FEED_INDEX_TIP =
-  "Horde indexes this channel’s uploads (descriptions+captions for 200 recent, titles for up to 1000) so search uses as much as possible. Indexing runs in the background and respects your max-videos setting.";
+  "Horde keeps a list of this channel’s uploads (descriptions+captions for 200 recent, titles for up to 1000) so the channel’s search box finds them. Listing runs in the background and respects your max-videos setting. What Ask indexes is set under Ask above.";

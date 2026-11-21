@@ -78,7 +78,7 @@ export default function SystemTab() {
       <Section
         anchor="background-activity"
         title="Background activity"
-        description="Live and recent jobs — ffmpeg, downloads, AI, catalog indexing, folder scans — with why each started. Refresh catalogs indexes new channels and checks ready ones for new uploads; Full reindex re-walks every channel."
+        description="Live and recent jobs — ffmpeg, downloads, AI, channel video lists, folder scans — with why each started. Refresh catalogs lists new channels and checks ready ones for new uploads; Full relist re-walks every channel."
         hidden={
           !match(
             "background tasks",
@@ -100,6 +100,7 @@ export default function SystemTab() {
             "metadata sync",
             "refresh catalogs",
             "full reindex",
+            "full relist",
             "gpu jobs",
             "index missing"
           )
@@ -151,9 +152,9 @@ export default function SystemTab() {
                     onClick={async () => {
                       if (catalogIndexing) return;
                       const ok = await confirm({
-                        title: "Full channel reindex?",
+                        title: "List every channel again?",
                         body: "Re-walk every channel’s upload list up to the max-videos cap. This can take a long time on large libraries.",
-                        confirmLabel: "Reindex",
+                        confirmLabel: "Relist",
                       });
                       if (!ok) return;
                       setCatalogIndexing(true);
@@ -162,14 +163,14 @@ export default function SystemTab() {
                           mode: "full",
                         });
                         showToast(
-                          result.detail || "Full channel reindex queued"
+                          result.detail || "Full channel relist queued"
                         );
                         refreshCatalogStatus();
                       } catch (err) {
                         showToast(
                           err instanceof Error && err.message
                             ? err.message
-                            : "Could not start full reindex"
+                            : "Could not start the full relist"
                         );
                       } finally {
                         setCatalogIndexing(false);
@@ -180,7 +181,7 @@ export default function SystemTab() {
                       " px-2.5! py-1! text-xs! border-ink-600! text-gray-400! hover:text-gray-200!"
                     }
                   >
-                    Full reindex…
+                    Full relist…
                   </button>
                 </div>
               </div>
@@ -236,7 +237,7 @@ export default function SystemTab() {
                               catalogStatus.catalogs.filter(
                                 (c) => c.status === "ready"
                               ).length
-                            } channel(s) indexed`
+                            } channel video list(s) ready`
                           : ""}
                       </p>
                     )}
